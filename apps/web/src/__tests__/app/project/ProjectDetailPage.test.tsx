@@ -31,8 +31,22 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/canvas', () => ({
-  CanvasWorkspace: ({ projectName }: { projectName: string }) => (
-    <div data-testid="canvas-workspace">{projectName}</div>
+  CanvasWorkspace: ({
+    embedded,
+    focusedBranch,
+    projectName,
+  }: {
+    embedded?: boolean;
+    focusedBranch?: string;
+    projectName: string;
+  }) => (
+    <div
+      data-embedded={String(embedded)}
+      data-focused-branch={focusedBranch}
+      data-testid="canvas-workspace"
+    >
+      {projectName}
+    </div>
   ),
 }));
 
@@ -263,6 +277,22 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
   });
 
+  it('renders Canvas inside State and starts Canvas I/O from the canonical repository route', async () => {
+    searchParamsValue = new URLSearchParams('view=canvas&branch=main');
+
+    renderProjectContent();
+
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('canvas-workspace')).toHaveAttribute('data-embedded', 'true');
+    expect(screen.getByTestId('canvas-workspace')).toHaveAttribute('data-focused-branch', 'main');
+    expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(true);
+    await waitFor(() => {
+      expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
+      expect(canvasSurfaceMocks.fetchPins).toHaveBeenCalledWith('proj_test');
+    });
+  });
+
   it('renders a verified YSchema badge from the latest validation run', async () => {
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
@@ -391,7 +421,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
 
@@ -480,7 +510,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });

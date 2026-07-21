@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Maximize } from 'lucide-react';
+import { ArrowLeft, Maximize, Network } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
@@ -11,6 +11,8 @@ import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 
 interface CanvasToolbarProps {
+  embedded?: boolean;
+  focusedBranch?: string;
   projectName: string;
   onFitView: () => void;
   showChatSidebarToggle?: boolean;
@@ -18,6 +20,8 @@ interface CanvasToolbarProps {
 }
 
 export function CanvasToolbar({
+  embedded = false,
+  focusedBranch,
   projectName,
   onFitView,
   showChatSidebarToggle = false,
@@ -56,6 +60,48 @@ export function CanvasToolbar({
       mainCommits,
     };
   }, [nodes]);
+
+  if (embedded) {
+    return (
+      <header
+        className={cn(
+          'relative flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-2',
+          glass.panelBase,
+          glass.highlight
+        )}
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[var(--text-primary)]">
+            <Network aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />
+            State evolution
+          </span>
+          <span className="rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+            all branches
+          </span>
+          {focusedBranch ? (
+            <span className="rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-branch)]">
+              State focus · {focusedBranch}
+            </span>
+          ) : null}
+          <span className="rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-commit)]">
+            {stats.mainCommits} main commit{stats.mainCommits === 1 ? '' : 's'}
+          </span>
+          <span className="rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-leaf)]">
+            {stats.leaves} output leaf{stats.leaves === 1 ? '' : 's'}
+          </span>
+        </div>
+        <Button
+          className="h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+          onClick={onFitView}
+          size="icon"
+          title="Fit View"
+          variant="ghost"
+        >
+          <Maximize className="h-4 w-4" />
+        </Button>
+      </header>
+    );
+  }
 
   return (
     <header

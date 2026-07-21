@@ -420,8 +420,8 @@ function RequirementRow({
       </td>
       <td className="px-3 py-3 align-top">
         {requirement.acceptance
-          ? requirement.acceptance.split('\n').map((criterion) => (
-              <span className="block" key={criterion}>
+          ? requirement.acceptance.split('\n').map((criterion, criterionIndex) => (
+              <span className="block" key={`${criterion}:${String(criterionIndex)}`}>
                 {criterion}
               </span>
             ))

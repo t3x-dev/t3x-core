@@ -1,28 +1,30 @@
-// @vitest-environment jsdom
-
-import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const detailProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
+const redirectMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/app/project/[projectId]/page', () => ({
-  ProjectDetailPageContent: (props: Record<string, unknown>) => {
-    detailProps.current = props;
-    return <div data-testid="project-detail-content" />;
-  },
+vi.mock('next/navigation', () => ({
+  redirect: redirectMock,
 }));
 
-import ChatProjectCanvasPage from '@/app/chat/project/[projectId]/canvas/page';
+import ChatProjectCanvasPage, {
+  buildStateCanvasRedirect,
+} from '@/app/chat/project/[projectId]/canvas/page';
 
 describe('ChatProjectCanvasPage', () => {
-  it('selects the independent Canvas surface', () => {
-    render(<ChatProjectCanvasPage />);
+  it('preserves old deep-link state while redirecting Canvas into State', async () => {
+    expect(
+      buildStateCanvasRedirect('proj/test', {
+        introDemo: '1',
+        selected: 'sha256:commit',
+        view: 'render',
+      })
+    ).toBe('/project/proj%2Ftest?view=canvas&introDemo=1&selected=sha256%3Acommit');
 
-    expect(screen.getByTestId('project-detail-content')).toBeInTheDocument();
-    expect(detailProps.current).toMatchObject({
-      showChatSidebarToggle: true,
-      surface: 'canvas',
+    await ChatProjectCanvasPage({
+      params: Promise.resolve({ projectId: 'proj_test' }),
+      searchParams: Promise.resolve({ introDemo: '1' }),
     });
+
+    expect(redirectMock).toHaveBeenCalledWith('/project/proj_test?view=canvas&introDemo=1');
   });
 });

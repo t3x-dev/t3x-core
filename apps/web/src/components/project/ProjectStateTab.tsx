@@ -3,6 +3,7 @@
 import {
   Code2,
   FileText,
+  GitCommit,
   GitCompare,
   History,
   Network,
@@ -12,7 +13,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CanvasWorkspace } from '@/components/canvas';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { Badge } from '@/components/ui/badge';
@@ -32,16 +35,20 @@ import {
   getYSchemaValidationPrimaryLabel,
   type YSchemaValidationSummary,
 } from '@/domain/project/yschemaValidation';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
-export type ProjectStateView = 'points' | 'render' | 'code';
+export type ProjectSnapshotView = 'structure' | 'render' | 'code';
+export type ProjectStateView = ProjectSnapshotView | 'canvas';
+type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
@@ -63,19 +70,27 @@ interface StateSnapshot {
   primaryError: string | null;
 }
 
-const STATE_VIEWS: Array<{
-  id: ProjectStateView;
+const SNAPSHOT_VIEWS: Array<{
+  id: ProjectSnapshotView;
   label: string;
   subtitle: string;
   icon: typeof TableProperties;
 }> = [
-  { id: 'points', label: 'Points', subtitle: 'YAML nodes', icon: TableProperties },
+  { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
   { id: 'render', label: 'Render', subtitle: 'schema reader', icon: FileText },
   { id: 'code', label: 'Code', subtitle: 'canonical code', icon: Code2 },
 ];
 
+function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
+  if (value === 'canvas') return 'canvas';
+  if (value === 'points') return 'structure';
+  return SNAPSHOT_VIEWS.some((view) => view.id === value)
+    ? (value as ProjectSnapshotView)
+    : fallback;
+}
+
 export function ProjectStateTab({
-  initialView = 'points',
+  initialView = 'structure',
   onRunValidation,
   projectId,
   projectName,
@@ -87,7 +102,13 @@ export function ProjectStateTab({
   const { replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
-  const [activeView, setActiveView] = useState<ProjectStateView>(initialView);
+  const routeQueryRef = useRef(routeQuery);
+  routeQueryRef.current = routeQuery;
+  const routeView = parseStateView(searchParams.get('view'), initialView);
+  const [activeView, setActiveView] = useState<ProjectStateView>(routeView);
+  const [lastSnapshotView, setLastSnapshotView] = useState<ProjectSnapshotView>(
+    routeView === 'canvas' ? 'structure' : routeView
+  );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
@@ -109,6 +130,24 @@ export function ProjectStateTab({
     primaryError: null,
   });
 
+  useEffect(() => {
+    setActiveView(routeView);
+    if (routeView !== 'canvas') setLastSnapshotView(routeView);
+  }, [routeView]);
+
+  const updateActiveView = useCallback(
+    (view: ProjectStateView) => {
+      setActiveView(view);
+      if (view !== 'canvas') setLastSnapshotView(view);
+      const params = new URLSearchParams(routeQueryRef.current);
+      if (view === 'structure') params.delete('view');
+      else params.set('view', view);
+      const query = params.toString();
+      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    },
+    [pathname, replaceRoute]
+  );
+
   const branchOptions = useMemo(
     () =>
       mergeBranchNames([
@@ -122,13 +161,13 @@ export function ProjectStateTab({
 
   const updateBranchFocus = useCallback(
     (focus: BranchFocus) => {
-      const params = new URLSearchParams(routeQuery);
+      const params = new URLSearchParams(routeQueryRef.current);
       if (focus === 'main') params.delete('branch');
       else params.set('branch', focus);
       const query = params.toString();
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [pathname, replaceRoute, routeQuery]
+    [pathname, replaceRoute]
   );
 
   useEffect(() => {
@@ -284,32 +323,39 @@ export function ProjectStateTab({
       )
     : null;
   const workspaceHref = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
-  const graphHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
-
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
       data-state-view={activeView}
     >
-      <StateOverviewHeader
-        branch={branchFocus || 'main'}
-        headCommit={headCommit}
-        onRunValidation={
-          headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
-        }
-        schemaLabel={schemaLabel(schemaName)}
-        validation={currentValidation}
-        validationError={validationError}
-        validationGapCount={validationGapCount}
-        validationReady={validationReady}
-        validationRunning={validationRunning}
-        workspaceHref={workspaceHref}
+      <StateModeTabs
+        activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
+        onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
       />
+
+      {activeView !== 'canvas' ? (
+        <div className="mt-4">
+          <StateOverviewHeader
+            branch={branchFocus || 'main'}
+            headCommit={headCommit}
+            onRunValidation={
+              headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
+            }
+            schemaLabel={schemaLabel(schemaName)}
+            validation={currentValidation}
+            validationError={validationError}
+            validationGapCount={validationGapCount}
+            validationReady={validationReady}
+            validationRunning={validationRunning}
+            workspaceHref={workspaceHref}
+          />
+        </div>
+      ) : null}
 
       <div
         className={cn(
           'mt-4 grid min-h-0 flex-1 gap-4',
-          activeView !== 'render' && 'xl:grid-cols-[minmax(0,1fr)_330px]'
+          activeView !== 'render' && activeView !== 'canvas' && 'xl:grid-cols-[minmax(0,1fr)_330px]'
         )}
       >
         <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
@@ -329,68 +375,74 @@ export function ProjectStateTab({
             }}
             schemaName={schemaName}
           />
-          <StateCommitRow
-            commitCount={commitCount}
-            hash={headCommit?.hash ?? null}
-            relativeTime={formatRelativeTime(headCommit?.committed_at)}
-            summary={commitSummary}
-            title={commitTitle}
-            yopsCount={yopsCount}
-          />
-          <StateObjectLine
-            activeView={activeView}
-            commitHref={commitHref}
-            headCommit={headCommit}
-            parentDiffHref={parentDiffHref}
-            rootKey={rootKey}
-            validationGapCount={validationGapCount}
-            validationKnown={Boolean(currentValidation)}
-          />
-          <StateViewTabs
-            activeView={activeView}
-            graphHref={graphHref}
-            onViewChange={setActiveView}
-          />
-
-          {snapshot.primaryError ? (
-            <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
-          ) : null}
-          {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
-            <StateEmpty
-              message="Create or select a committed branch to inspect state as Points, Render, or Code."
-              title="No commit on this branch"
-            />
-          ) : null}
-          {!snapshot.primaryError && snapshot.loading ? (
-            <StateEmpty
-              message="Loading commit, YOps, and validation context."
-              title="Loading state"
-            />
-          ) : null}
-          {!snapshot.primaryError && !snapshot.loading && headCommit ? (
+          {activeView !== 'canvas' ? (
             <>
-              {activeView === 'points' ? (
-                <StatePointsView
-                  onPathQueryChange={setPathQuery}
-                  pathQuery={pathQuery}
-                  rows={filteredRows}
+              <StateCommitRow
+                commitCount={commitCount}
+                hash={headCommit?.hash ?? null}
+                relativeTime={formatRelativeTime(headCommit?.committed_at)}
+                summary={commitSummary}
+                title={commitTitle}
+                yopsCount={yopsCount}
+              />
+              <StateObjectLine
+                activeView={activeView}
+                commitHref={commitHref}
+                headCommit={headCommit}
+                parentDiffHref={parentDiffHref}
+                rootKey={rootKey}
+                validationGapCount={validationGapCount}
+                validationKnown={Boolean(currentValidation)}
+              />
+              <StateViewTabs activeView={activeView} onViewChange={updateActiveView} />
+
+              {snapshot.primaryError ? (
+                <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
+              ) : null}
+              {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
+                <StateEmpty
+                  message="Create or select a committed branch to inspect state as Structure, Render, or Code."
+                  title="No commit on this branch"
                 />
               ) : null}
-              {activeView === 'render' && renderModel ? (
-                <StatePrdReader
-                  model={renderModel}
-                  schemaName={schemaName}
-                  validationGapCount={validationGapCount}
-                  validationReady={validationReady}
-                  yamlText={yamlText}
+              {!snapshot.primaryError && snapshot.loading ? (
+                <StateEmpty
+                  message="Loading commit, YOps, and validation context."
+                  title="Loading state"
                 />
               ) : null}
-              {activeView === 'code' ? <StateCodeView yamlText={yamlText} /> : null}
+              {!snapshot.primaryError && !snapshot.loading && headCommit ? (
+                <>
+                  {activeView === 'structure' ? (
+                    <StateStructureView
+                      onPathQueryChange={setPathQuery}
+                      pathQuery={pathQuery}
+                      rows={filteredRows}
+                    />
+                  ) : null}
+                  {activeView === 'render' && renderModel ? (
+                    <StatePrdReader
+                      model={renderModel}
+                      schemaName={schemaName}
+                      validationGapCount={validationGapCount}
+                      validationReady={validationReady}
+                      yamlText={yamlText}
+                    />
+                  ) : null}
+                  {activeView === 'code' ? <StateCodeView yamlText={yamlText} /> : null}
+                </>
+              ) : null}
             </>
-          ) : null}
+          ) : (
+            <StateCanvasView
+              branch={branchFocus || 'main'}
+              projectId={projectId}
+              projectName={projectName}
+            />
+          )}
         </main>
 
-        {activeView !== 'render' ? (
+        {activeView !== 'render' && activeView !== 'canvas' ? (
           <StateContextRail
             commitCount={commitCount}
             edgeCount={headCommit?.content.relations.length ?? 0}
@@ -663,14 +715,76 @@ function StateObjectLine({
   );
 }
 
+function StateModeTabs({
+  activeMode,
+  onModeChange,
+}: {
+  activeMode: ProjectStateMode;
+  onModeChange: (mode: ProjectStateMode) => void;
+}) {
+  const modes: Array<{
+    id: ProjectStateMode;
+    icon: typeof GitCommit;
+    label: string;
+    subtitle: string;
+  }> = [
+    {
+      id: 'snapshot',
+      icon: GitCommit,
+      label: 'Snapshot',
+      subtitle: 'one committed state',
+    },
+    {
+      id: 'canvas',
+      icon: Network,
+      label: 'Canvas',
+      subtitle: 'multi-commit evolution',
+    },
+  ];
+
+  return (
+    <div
+      aria-label="State modes"
+      className="flex min-h-16 items-stretch rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 shadow-sm"
+      role="tablist"
+    >
+      {modes.map((mode) => {
+        const Icon = mode.icon;
+        const selected = activeMode === mode.id;
+        return (
+          <button
+            aria-selected={selected}
+            className={cn(
+              'min-w-36 border-b-2 px-3 py-2 text-left transition-colors',
+              selected
+                ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            )}
+            key={mode.id}
+            onClick={() => onModeChange(mode.id)}
+            role="tab"
+            type="button"
+          >
+            <span className="flex items-center gap-1.5 text-sm font-bold">
+              <Icon aria-hidden="true" className="size-4" />
+              {mode.label}
+            </span>
+            <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
+              {mode.subtitle}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function StateViewTabs({
   activeView,
-  graphHref,
   onViewChange,
 }: {
-  activeView: ProjectStateView;
-  graphHref: string;
-  onViewChange: (view: ProjectStateView) => void;
+  activeView: ProjectSnapshotView;
+  onViewChange: (view: ProjectSnapshotView) => void;
 }) {
   return (
     <div
@@ -679,7 +793,7 @@ function StateViewTabs({
       role="tablist"
     >
       <div className="flex shrink-0 items-stretch gap-0">
-        {STATE_VIEWS.map((view) => {
+        {SNAPSHOT_VIEWS.map((view) => {
           const Icon = view.icon;
           const selected = activeView === view.id;
           return (
@@ -706,20 +820,6 @@ function StateViewTabs({
             </button>
           );
         })}
-        <Link
-          aria-selected="false"
-          className="min-w-28 border-b-2 border-transparent px-3 py-2 text-left text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
-          href={graphHref}
-          role="tab"
-        >
-          <span className="flex items-center gap-1.5 text-sm font-bold">
-            <Network aria-hidden="true" className="size-4" />
-            Graph
-          </span>
-          <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
-            version canvas
-          </span>
-        </Link>
       </div>
       <div className="hidden flex-wrap items-center gap-2 md:flex">
         <Badge variant="pending-subtle">adapter prd.document</Badge>
@@ -729,7 +829,53 @@ function StateViewTabs({
   );
 }
 
-function StatePointsView({
+function StateCanvasView({
+  branch,
+  projectId,
+  projectName,
+}: {
+  branch: string;
+  projectId: string;
+  projectName: string;
+}) {
+  const canvasProjectId = useCanvasStore((state) => state.projectId);
+  const canvasLoading = useCanvasStore((state) => state.loading);
+  const canvasError = useCanvasStore((state) => state.loadError);
+  const { load: loadCanvas } = useCanvasNodeActions();
+
+  if (canvasLoading || canvasProjectId !== projectId) {
+    return (
+      <section
+        aria-label="Multi-commit state canvas"
+        className="flex min-h-[560px] items-center justify-center"
+      >
+        <LoadingSpinner message="Loading state evolution..." />
+      </section>
+    );
+  }
+
+  if (canvasError) {
+    return (
+      <section
+        aria-label="Multi-commit state canvas"
+        className="flex min-h-[560px] items-center justify-center p-6"
+      >
+        <ErrorMessage error={canvasError} onRetry={() => void loadCanvas(projectId)} />
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-label="Multi-commit state canvas"
+      className="h-[680px] min-h-[560px] overflow-hidden xl:h-[calc(100vh-21rem)]"
+    >
+      <CanvasWorkspace embedded focusedBranch={branch} projectName={projectName} />
+    </section>
+  );
+}
+
+function StateStructureView({
   onPathQueryChange,
   pathQuery,
   rows,
@@ -739,7 +885,7 @@ function StatePointsView({
   rows: StatePointRow[];
 }) {
   return (
-    <section aria-label="YAML node points" className="min-h-[460px]">
+    <section aria-label="Structured state tree" className="min-h-[460px]">
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
         <label className="relative h-9 w-full max-w-[260px]">
           <Search
@@ -908,12 +1054,12 @@ function StateContextRail({
       </RailCard>
       <RailCard title="View model">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
-          <RailRow label="Points" value="YAML-shaped node browser" />
+          <RailRow label="Structure" value="YAML-shaped state tree" />
           <RailRow label="Render" value="Schema-selected reader" />
           <RailRow label="Code" value="Canonical committed state" />
         </dl>
         <p className="mt-3">
-          Points keep the YAML form intact as nodes. Render is a schema projection, not a new
+          Structure keeps the YAML form intact as nodes. Render is a schema projection, not a new
           authoring surface.
         </p>
       </RailCard>

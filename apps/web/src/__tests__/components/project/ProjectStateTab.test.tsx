@@ -11,11 +11,32 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   createBranch: vi.fn(),
+  loadCanvas: vi.fn(),
   loadCommits: vi.fn(),
   loadOperations: vi.fn(),
   projectWorkspaces: [] as WorkspaceCandidate[],
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
+}));
+
+vi.mock('@/components/canvas', () => ({
+  CanvasWorkspace: ({
+    embedded,
+    focusedBranch,
+    projectName,
+  }: {
+    embedded?: boolean;
+    focusedBranch?: string;
+    projectName: string;
+  }) => (
+    <div
+      data-embedded={String(embedded)}
+      data-focused-branch={focusedBranch}
+      data-testid="state-canvas-workspace"
+    >
+      {projectName}
+    </div>
+  ),
 }));
 
 const navigationMocks = vi.hoisted(() => ({
@@ -54,6 +75,10 @@ vi.mock('@/hooks/commits/useCommitsList', () => ({
 
 vi.mock('@/hooks/commits/useCommitOperations', () => ({
   useCommitOperations: () => ({ loadOperations: hookMocks.loadOperations }),
+}));
+
+vi.mock('@/hooks/canvas/useCanvasNodeActions', () => ({
+  useCanvasNodeActions: () => ({ load: hookMocks.loadCanvas }),
 }));
 
 const PRD_COMMIT: ApiCommit = {
@@ -180,21 +205,28 @@ describe('ProjectStateTab', () => {
     });
     setupHookMocks();
     hookMocks.projectWorkspaces = [];
-    useCanvasStore.setState({ edges: [], nodes: [] } as never);
+    useCanvasStore.setState({
+      edges: [],
+      loadError: null,
+      loading: false,
+      nodes: [],
+      projectId: 'proj_test',
+    } as never);
   });
 
-  it('loads the branch HEAD and renders YAML-shaped Points as the default view', async () => {
+  it('loads the branch HEAD and renders the structured state tree by default', async () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Path / Key')).toBeInTheDocument();
     expect(screen.getByText('summary')).toBeInTheDocument();
     expect(screen.getByText('problem')).toBeInTheDocument();
     expect(screen.getByText('audience')).toBeInTheDocument();
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.getByText('YAML-shaped node browser')).toBeInTheDocument();
+    expect(screen.getByText('YAML-shaped state tree')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
@@ -214,10 +246,7 @@ describe('ProjectStateTab', () => {
       `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0]!)}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Graph/ })).toHaveAttribute(
-      'href',
-      '/chat/project/proj_test/canvas'
-    );
+    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
@@ -292,6 +321,32 @@ describe('ProjectStateTab', () => {
     expect(codeView).not.toHaveTextContent('slots:');
     expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
     expect(within(codeView).queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
+  });
+
+  it('opens Canvas as a separate State mode without leaving the repository route', async () => {
+    renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?view=canvas',
+      { scroll: false }
+    );
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Multi-commit state canvas' })).toBeInTheDocument();
+    expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
+      'data-focused-branch',
+      'main'
+    );
+    expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Snapshot/ }));
+
+    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith('/t3x-dev/test-project', {
+      scroll: false,
+    });
+    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
@@ -381,7 +436,7 @@ describe('ProjectStateTab', () => {
         schemaReview: { gaps: ['prd.summary.audience'] },
         status: 'committed',
         yopsDraft: { operations: [] },
-      } as WorkspaceCandidate,
+      } as unknown as WorkspaceCandidate,
     ];
 
     renderStateTab({
