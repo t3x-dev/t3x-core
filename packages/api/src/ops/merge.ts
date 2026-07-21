@@ -2,14 +2,14 @@
  * mergePrepareOp + mergeExecuteOp — unified pipeline operations for merge.
  *
  * mergePrepareOp:
- *   load      — fetch source and target commits from DB
- *   transform — call prepareMerge() from core (two-way, empty base)
+ *   load      — fetch source, target, and their nearest common ancestor
+ *   transform — call prepareMerge() from core (three-way)
  *
  * mergeExecuteOp:
  *   validate  — verify all conflicts have resolutions
  *   load      — fetch source and target commits from DB
  *   transform — call executeMerge() from core
- *   persist   — create merged commit and optionally update branch head
+ *   persist   — create merged commit (which atomically advances the branch head)
  */
 
 import type {
@@ -27,13 +27,7 @@ import {
   type MergeResult,
   prepareMerge,
 } from '@t3x-dev/core';
-import {
-  type AnyDB,
-  createCommit,
-  findBranchByName,
-  getCommitUnified,
-  updateBranchHead,
-} from '@t3x-dev/storage';
+import { type AnyDB, createCommit, findBranchByName, getCommitUnified } from '@t3x-dev/storage';
 import type { ApiPipelineContext } from './context';
 
 // ---------------------------------------------------------------------------
@@ -73,9 +67,11 @@ export const mergePrepareOp: Operation<MergePrepareInput, MergePrepareOutput> = 
     }
     yield { type: 'step_done', step: 'load' };
 
-    // transform: prepare frame-level merge (empty base = two-way mode)
+    const baseCommit = await findMergeBase(db, sourceCommit, targetCommit);
+
+    // transform: prepare a real three-way merge from the nearest common ancestor
     yield { type: 'step_start', step: 'transform' };
-    const baseContent: SemanticContent = { trees: [], relations: [] };
+    const baseContent: SemanticContent = baseCommit?.content ?? { trees: [], relations: [] };
     const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
     yield { type: 'step_done', step: 'transform' };
 
@@ -147,13 +143,14 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
       );
     }
     const targetBranch = input.branch ?? targetCommit.branch;
-    const emptyContent: SemanticContent = { trees: [], relations: [] };
+    const baseCommit = await findMergeBase(db, sourceCommit, targetCommit);
+    const baseContent: SemanticContent = baseCommit?.content ?? { trees: [], relations: [] };
     yield { type: 'step_done', step: 'load' };
 
     // transform: execute merge
     yield { type: 'step_start', step: 'transform' };
     const mergedContent = executeMerge(
-      emptyContent,
+      baseContent,
       sourceCommit.content,
       targetCommit.content,
       input.prepared as unknown as MergeResult,
@@ -174,7 +171,7 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
     };
     yield { type: 'step_done', step: 'transform' };
 
-    // persist: create merged commit and update branch head
+    // persist: create merged commit; createCommit advances the branch head atomically
     yield { type: 'step_start', step: 'persist' };
     const persist = async (txOrDb: AnyDB): Promise<Commit> => {
       if (input.branch) {
@@ -200,12 +197,6 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
         enforceBranchLinearity: true,
       });
 
-      if (input.branch) {
-        const updated = await updateBranchHead(txOrDb, projectId, targetBranch, saved.hash);
-        if (!updated) {
-          throw new MergeError('NOT_FOUND', `Target branch not found: ${targetBranch}`);
-        }
-      }
       return saved;
     };
 
@@ -222,6 +213,74 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
     return { commit: savedCommit, merge_summary: mergeSummary };
   },
 };
+
+interface CommitDistance {
+  commit: Commit;
+  distance: number;
+}
+
+/** Find a deterministic nearest common ancestor in the commit DAG. */
+async function findMergeBase(
+  db: AnyDB,
+  sourceCommit: Commit,
+  targetCommit: Commit
+): Promise<Commit | null> {
+  const projectId = sourceCommit.project_id;
+  if (!projectId) return null;
+
+  const cache = new Map<string, Commit>([
+    [sourceCommit.hash, sourceCommit],
+    [targetCommit.hash, targetCommit],
+  ]);
+
+  const collectAncestors = async (start: Commit): Promise<Map<string, CommitDistance>> => {
+    const distances = new Map<string, CommitDistance>();
+    const queue: CommitDistance[] = [{ commit: start, distance: 0 }];
+
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      const previous = distances.get(current.commit.hash);
+      if (previous && previous.distance <= current.distance) continue;
+      distances.set(current.commit.hash, current);
+
+      for (const parentHash of current.commit.parents) {
+        let parent = cache.get(parentHash) ?? null;
+        if (!parent) {
+          parent = await getCommitUnified(db, parentHash);
+          if (parent) cache.set(parentHash, parent);
+        }
+        if (parent?.project_id === projectId) {
+          queue.push({ commit: parent, distance: current.distance + 1 });
+        }
+      }
+    }
+
+    return distances;
+  };
+
+  const [sourceAncestors, targetAncestors] = await Promise.all([
+    collectAncestors(sourceCommit),
+    collectAncestors(targetCommit),
+  ]);
+
+  const candidates = [...sourceAncestors.entries()]
+    .filter(([hash]) => targetAncestors.has(hash))
+    .map(([hash, source]) => ({
+      hash,
+      commit: source.commit,
+      sourceDistance: source.distance,
+      targetDistance: targetAncestors.get(hash)!.distance,
+    }))
+    .sort(
+      (a, b) =>
+        a.sourceDistance + a.targetDistance - (b.sourceDistance + b.targetDistance) ||
+        Math.max(a.sourceDistance, a.targetDistance) -
+          Math.max(b.sourceDistance, b.targetDistance) ||
+        a.hash.localeCompare(b.hash)
+    );
+
+  return candidates[0]?.commit ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // Typed error for merge operations

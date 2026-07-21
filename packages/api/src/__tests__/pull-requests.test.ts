@@ -9,7 +9,6 @@ import {
   insertBranch,
   insertProject,
   listCommits,
-  updateBranchHead,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -56,8 +55,8 @@ describe('Pull request routes', () => {
       project_id: project.projectId,
       message: 'main baseline',
       branch: 'main',
+      enforceBranchLinearity: true,
     });
-    await updateBranchHead(mockDB, project.projectId, 'main', target.hash);
 
     await insertBranch(mockDB, {
       projectId: project.projectId,
@@ -83,9 +82,23 @@ describe('Pull request routes', () => {
       message: 'feature update',
       branch: 'feature/pr-flow',
       sources: [{ type: 'import', id: 'spec_1' }],
+      enforceBranchLinearity: true,
     });
-    await updateBranchHead(mockDB, project.projectId, 'feature/pr-flow', source.hash);
-    return { projectId: project.projectId, source, target };
+    const targetHead = options.conflict
+      ? await createCommit(mockDB, {
+          parents: [target.hash],
+          author: { type: 'human', name: 'Target User' },
+          content: {
+            trees: [{ key: 'product', slots: { version: 3 }, children: [] }],
+            relations: [],
+          },
+          project_id: project.projectId,
+          message: 'conflicting main update',
+          branch: 'main',
+          enforceBranchLinearity: true,
+        })
+      : target;
+    return { projectId: project.projectId, source, target: targetHead };
   }
 
   async function openPullRequest(projectId: string) {
@@ -337,7 +350,7 @@ describe('Pull request routes', () => {
       fixture.target.hash
     );
     expect((await getMergeDraft(mockDB, draftId))?.status).toBe('pending');
-    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(2);
+    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(3);
   });
 
   it('records preparation failures as blocked instead of leaving a PR checking', async () => {
@@ -369,7 +382,7 @@ describe('Pull request routes', () => {
     );
   });
 
-  it('blocks readiness when the target branch moved after PR creation', async () => {
+  it('refreshes the reviewed snapshots when a branch moved after PR creation', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
     const movedTarget = await createCommit(mockDB, {
@@ -382,8 +395,8 @@ describe('Pull request routes', () => {
       project_id: fixture.projectId,
       message: 'target moved',
       branch: 'main',
+      enforceBranchLinearity: true,
     });
-    await updateBranchHead(mockDB, fixture.projectId, 'main', movedTarget.hash);
 
     const rerun = await app.request(
       `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/checks/rerun`,
@@ -391,12 +404,19 @@ describe('Pull request routes', () => {
     );
     expect(rerun.status).toBe(200);
     const readiness = (await rerun.json()) as ApiResponse;
-    expect(readiness.data.status).toBe('blocked');
-    expect(readiness.data.merge_draft_id).toBeNull();
+    expect(readiness.data).toMatchObject({
+      status: 'ready',
+      source_commit_id: fixture.source.hash,
+      target_base_commit_id: movedTarget.hash,
+    });
+    expect(readiness.data.merge_draft_id).toBeTruthy();
     expect(readiness.data.checks).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: 'base_freshness', status: 'blocked' }),
+        expect.objectContaining({ kind: 'base_freshness', status: 'passed' }),
       ])
+    );
+    expect(readiness.data.activity).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'base_updated' })])
     );
   });
 
@@ -492,8 +512,8 @@ describe('Pull request routes', () => {
       project_id: fixture.projectId,
       message: 'source moved',
       branch: 'feature/pr-flow',
+      enforceBranchLinearity: true,
     });
-    await updateBranchHead(mockDB, fixture.projectId, 'feature/pr-flow', movedSource.hash);
 
     const response = await app.request(
       `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
@@ -518,6 +538,17 @@ describe('Pull request routes', () => {
       status: 'blocked',
       merge_draft_id: null,
       merge_commit_id: null,
+    });
+
+    const refreshed = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    expect(refreshed.status).toBe(200);
+    expect(((await refreshed.json()) as ApiResponse).data).toMatchObject({
+      status: 'ready',
+      source_commit_id: movedSource.hash,
+      target_base_commit_id: fixture.target.hash,
     });
   });
 

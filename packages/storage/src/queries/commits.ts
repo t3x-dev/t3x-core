@@ -8,12 +8,13 @@
  */
 
 import type { Author, Commit, CommitSchemaTag, Provenance, SemanticContent } from '@t3x-dev/core';
-import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
+import { COMMIT_SCHEMA, computeCommitHash, generateBranchId } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { branches } from '../schema';
 import { type CommitRecord, commits } from '../schema-commits';
 import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
@@ -146,7 +147,11 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       await assertCommitParentIntegrity(txOrDb, input.project_id, parents);
       await assertBranchLinearity(txOrDb, input.project_id, branch, parents);
     }
-    return insertCommit(txOrDb);
+    const row = await insertCommit(txOrDb);
+    if (enforceLinearity) {
+      await advanceBranchHead(txOrDb, input.project_id, branch, parents[0] ?? null, hash);
+    }
+    return row;
   };
 
   // Fast path: nothing to lock. Skip the transaction entirely.
@@ -214,6 +219,66 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       : await insertWithGuards(db);
 
   return rowToCommit(result as CommitRecord);
+}
+
+/**
+ * Keep the registered branch pointer in the same transaction as the commit.
+ *
+ * Some callers create a branch implicitly by committing to a new branch name.
+ * In that case, infer its parent branch from the first parent commit and register
+ * the branch before publishing its new head.
+ */
+async function advanceBranchHead(
+  db: AnyDB,
+  projectId: string,
+  branchName: string,
+  firstParentHash: string | null,
+  headCommitHash: string
+): Promise<void> {
+  const [existingBranch] = await db
+    .select({ branchId: branches.branchId })
+    .from(branches)
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
+    .limit(1);
+
+  const now = new Date();
+  if (existingBranch) {
+    await db
+      .update(branches)
+      .set({ headCommitHash, updatedAt: now })
+      .where(eq(branches.branchId, existingBranch.branchId));
+    return;
+  }
+
+  const [anyProjectBranch] = await db
+    .select({ branchId: branches.branchId })
+    .from(branches)
+    .where(eq(branches.projectId, projectId))
+    .limit(1);
+
+  let parentBranch: string | null = null;
+  if (firstParentHash) {
+    const [parentCommit] = await db
+      .select({ branch: commits.branch })
+      .from(commits)
+      .where(and(eq(commits.hash, firstParentHash), eq(commits.projectId, projectId)))
+      .limit(1);
+    if (parentCommit && parentCommit.branch !== branchName) {
+      parentBranch = parentCommit.branch;
+    }
+  }
+
+  await db.insert(branches).values({
+    branchId: generateBranchId(),
+    projectId,
+    name: branchName,
+    parentBranch,
+    headCommitHash,
+    description: null,
+    isCurrent: anyProjectBranch ? 0 : 1,
+    createdAt: now,
+    updatedAt: now,
+  });
 }
 
 /**

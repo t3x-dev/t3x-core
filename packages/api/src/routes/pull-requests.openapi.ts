@@ -803,7 +803,7 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
   try {
     const updated = await db.transaction(async (tx) => {
       await acquirePullRequestLock(tx, projectId, number);
-      const pullRequest = await findPullRequestByNumber(tx, projectId, number);
+      let pullRequest = await findPullRequestByNumber(tx, projectId, number);
       if (!pullRequest) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
       if (FINISHED_STATUSES.includes(pullRequest.status as PullRequestStatus)) {
         throw new MergeError(
@@ -812,16 +812,25 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         );
       }
 
-      const [sourceBranch, targetBranch, sourceCommit, targetCommit] = await Promise.all([
+      const [sourceBranch, targetBranch] = await Promise.all([
         findBranchByName(tx, projectId, pullRequest.sourceBranch),
         findBranchByName(tx, projectId, pullRequest.targetBranch),
-        getCommit(tx, pullRequest.sourceCommitHash),
-        getCommit(tx, pullRequest.targetBaseCommitHash),
       ]);
-      if (!sourceBranch || !targetBranch || !sourceCommit || !targetCommit) {
+      if (!sourceBranch?.headCommitHash || !targetBranch?.headCommitHash) {
         throw new MergeError(
           'PULL_REQUEST_REVIEW_INPUT_NOT_FOUND',
-          'A reviewed branch or commit no longer exists.'
+          'A reviewed branch or branch head no longer exists.'
+        );
+      }
+
+      const [sourceCommit, targetCommit] = await Promise.all([
+        getCommit(tx, sourceBranch.headCommitHash),
+        getCommit(tx, targetBranch.headCommitHash),
+      ]);
+      if (!sourceCommit || !targetCommit) {
+        throw new MergeError(
+          'PULL_REQUEST_REVIEW_INPUT_NOT_FOUND',
+          'A current branch head commit no longer exists.'
         );
       }
 
@@ -829,63 +838,27 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
       const sourceFresh = sourceBranch.headCommitHash === pullRequest.sourceCommitHash;
       const targetFresh = targetBranch.headCommitHash === pullRequest.targetBaseCommitHash;
       if (!sourceFresh || !targetFresh) {
-        const blocked = await updatePullRequest(tx, pullRequest.pullRequestId, {
-          status: 'blocked',
+        const refreshed = await updatePullRequest(tx, pullRequest.pullRequestId, {
+          sourceCommitHash: sourceCommit.hash,
+          targetBaseCommitHash: targetCommit.hash,
+          status: 'checking',
           mergeDraftId: null,
         });
-        if (!blocked) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
-        const now = blocked.updatedAt;
-        await replacePullRequestChecks(tx, blocked.pullRequestId, [
-          {
-            kind: 'source_commit',
-            status: sourceFresh ? 'passed' : 'blocked',
-            title: 'Source branch snapshot',
-            message: sourceFresh
-              ? `${pullRequest.sourceCommitHash} is still the source branch head.`
-              : `${pullRequest.sourceBranch} moved after this PR snapshot was created.`,
-            startedAt: now,
-            completedAt: now,
-          },
-          {
-            kind: 'base_freshness',
-            status: targetFresh ? 'passed' : 'blocked',
-            title: 'Target branch freshness',
-            message: targetFresh
-              ? `${pullRequest.targetBaseCommitHash} is still the target branch head.`
-              : `${pullRequest.targetBranch} moved after readiness was last prepared.`,
-            startedAt: now,
-            completedAt: now,
-          },
-          {
-            kind: 'merge_simulation',
-            status: 'blocked',
-            title: 'Merge preparation',
-            message: 'Refresh the PR commit snapshot before deterministic merge preparation.',
-            startedAt: now,
-            completedAt: now,
-          },
-        ]);
-        await addPullRequestActivity(tx, blocked.pullRequestId, {
+        if (!refreshed) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
+        await addPullRequestActivity(tx, refreshed.pullRequestId, {
           actorId,
-          type: 'checks_reran',
-          message: 'Readiness blocked because a reviewed branch head changed.',
-          createdAt: now,
+          type: 'base_updated',
+          message: `Refreshed reviewed commits to ${sourceCommit.hash} -> ${targetCommit.hash}.`,
+          createdAt: refreshed.updatedAt,
         });
-        if (previousStatus !== blocked.status) {
-          await addPullRequestActivity(tx, blocked.pullRequestId, {
-            actorId,
-            type: 'status_changed',
-            message: `Pull request moved from ${previousStatus} to blocked.`,
-            createdAt: now,
-          });
-        }
-        return blocked;
+        pullRequest = refreshed;
+      } else {
+        const checking = await updatePullRequest(tx, pullRequest.pullRequestId, {
+          status: 'checking',
+        });
+        if (!checking) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
+        pullRequest = checking;
       }
-
-      const checking = await updatePullRequest(tx, pullRequest.pullRequestId, {
-        status: 'checking',
-      });
-      if (!checking) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
 
       try {
         const context = { ...pipelineContext, db: tx as AnyDB };

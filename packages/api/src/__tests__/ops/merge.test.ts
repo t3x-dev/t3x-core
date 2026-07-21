@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: op tests use broad casts for concise event fixture assertions */
 
 import type { PipelineEvent } from '@t3x-dev/core';
-import { collectResult, runOperation } from '@t3x-dev/core';
+import { collectResult, executeMerge, prepareMerge, runOperation } from '@t3x-dev/core';
 import { createCommit } from '@t3x-dev/storage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiPipelineContext } from '../../ops/context';
@@ -20,7 +20,7 @@ const mockContent = {
 const mockSourceCommit = {
   hash: 'sha256:source',
   schema: 't3x/commit',
-  parents: [],
+  parents: ['sha256:base'],
   author: { type: 'human' as const, name: 'alice' },
   committed_at: '2026-04-03T00:00:00.000Z',
   content: mockContent,
@@ -36,6 +36,17 @@ const mockTargetCommit = {
   ...mockSourceCommit,
   hash: 'sha256:target',
   message: 'target',
+};
+
+const mockBaseCommit = {
+  ...mockSourceCommit,
+  hash: 'sha256:base',
+  parents: [],
+  content: {
+    trees: [{ key: 'base', type: 'topic', slots: { version: 1 }, children: [] }],
+    relations: [],
+  },
+  message: 'base',
 };
 
 const mockForeignTargetCommit = {
@@ -70,6 +81,7 @@ vi.mock('@t3x-dev/storage', () => ({
   getCommitUnified: vi.fn((_, hash: string) => {
     if (hash === 'sha256:source') return Promise.resolve(mockSourceCommit);
     if (hash === 'sha256:target') return Promise.resolve(mockTargetCommit);
+    if (hash === 'sha256:base') return Promise.resolve(mockBaseCommit);
     if (hash === 'sha256:foreign-target') return Promise.resolve(mockForeignTargetCommit);
     if (hash === 'sha256:missing') return Promise.resolve(null);
     return Promise.resolve(null);
@@ -145,6 +157,11 @@ describe('mergePrepareOp', () => {
 
     expect(result.prepared).toEqual(mockPrepared);
     expect(result.source_project_id).toBe('proj_123');
+    expect(prepareMerge).toHaveBeenCalledWith(
+      mockBaseCommit.content,
+      mockSourceCommit.content,
+      mockTargetCommit.content
+    );
   });
 
   it('throws MergeError when source commit not found', async () => {
@@ -223,6 +240,13 @@ describe('mergeExecuteOp', () => {
         parents: ['sha256:target', 'sha256:source'],
         branch: 'main',
       })
+    );
+    expect(executeMerge).toHaveBeenCalledWith(
+      mockBaseCommit.content,
+      mockSourceCommit.content,
+      mockTargetCommit.content,
+      mockPrepared,
+      input.decisions
     );
     expect(result.merge_summary).toEqual({
       kept_identical: 1,

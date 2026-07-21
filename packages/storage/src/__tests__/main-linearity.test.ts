@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { findBranchByName } from '../queries/branches';
 import {
   type BranchLinearityError,
   type CommitParentIntegrityError,
@@ -52,6 +53,10 @@ describe('branch linearity', () => {
 
     expect(child.parents).toEqual([root.hash]);
     expect(child.branch).toBe('main');
+    expect(await findBranchByName(db, project.projectId, 'main')).toMatchObject({
+      headCommitHash: child.hash,
+      parentBranch: null,
+    });
   });
 
   it('rejects a second root main commit when enforcement is enabled', async () => {
@@ -119,6 +124,10 @@ describe('branch linearity', () => {
       enforceBranchLinearity: true,
     });
     expect(branchCommit.branch).toBe('branch-one');
+    expect(await findBranchByName(db, project.projectId, 'branch-one')).toMatchObject({
+      headCommitHash: branchCommit.hash,
+      parentBranch: 'main',
+    });
   });
 
   it('rejects reusing an existing branch name from a different fork point', async () => {

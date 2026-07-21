@@ -32,6 +32,49 @@ describe('executeMerge', () => {
     expect(nodes[0].id).toBe('topic_a');
   });
 
+  it('preserves a unilateral node and relation deletion', () => {
+    const relation = { from: 'topic_a', to: 'topic_b', type: 'causes' as const };
+    const base = sc([t('topic_a', { a: 1 }), t('topic_b', { b: 2 })], [relation]);
+    const source = sc([t('topic_b', { b: 2 })], []);
+    const prepared = prepareMerge(base, source, base);
+
+    const result = executeMerge(base, source, base, prepared, {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    });
+
+    expect(flattenTrees(result.trees).map((node) => node.id)).toEqual(['topic_b']);
+    expect(result.relations).toEqual([]);
+  });
+
+  it('resolves a modify/delete conflict to deletion or modification', () => {
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([]);
+    const target = sc([t('topic_a', { a: 2 })]);
+    const prepared = prepareMerge(base, source, target);
+
+    const deleted = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: 'source' },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+    expect(deleted.trees).toEqual([]);
+
+    const modified = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: 'target' },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+    expect(flattenTrees(modified.trees)[0]?.slots.a).toBe(2);
+  });
+
   it('resolves conflict with source choice', () => {
     const base = sc([t('topic_a', { a: 1 })]);
     const source = sc([t('topic_a', { a: 10 })]);
