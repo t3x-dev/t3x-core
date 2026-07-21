@@ -5,6 +5,7 @@ import {
   FileText,
   GitCompare,
   History,
+  Network,
   RotateCw,
   Search,
   TableProperties,
@@ -12,6 +13,8 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { commitHashLabel, shortHash } from '@/domain/format/formatters';
@@ -19,7 +22,6 @@ import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
-  type PrdRenderModel,
   type StateOperationEntry,
   type StatePointRow,
   type StateValidationGapLike,
@@ -89,7 +91,12 @@ export function ProjectStateTab({
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
-  const { branches, loading: branchesLoading, refresh } = useBranches(projectId, true);
+  const {
+    branches,
+    create: createBranch,
+    loading: branchesLoading,
+    refresh,
+  } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -240,8 +247,14 @@ export function ProjectStateTab({
     [headCommit]
   );
   const renderModel = useMemo(
-    () => (headCommit ? selectPrdRenderModel(headCommit.content, { gaps: validationGaps }) : null),
-    [headCommit, validationGaps]
+    () =>
+      headCommit
+        ? selectPrdRenderModel(headCommit.content, {
+            gaps: validationGaps,
+            operations: effectiveOperations,
+          })
+        : null,
+    [effectiveOperations, headCommit, validationGaps]
   );
   const schemaName = currentValidation?.schemaName ?? inferSchemaName(headCommit);
   const validationReady = currentValidation?.status === 'verified';
@@ -271,6 +284,7 @@ export function ProjectStateTab({
       )
     : null;
   const workspaceHref = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const graphHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
 
   return (
     <section
@@ -292,15 +306,22 @@ export function ProjectStateTab({
         workspaceHref={workspaceHref}
       />
 
-      <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+      <div
+        className={cn(
+          'mt-4 grid min-h-0 flex-1 gap-4',
+          activeView !== 'render' && 'xl:grid-cols-[minmax(0,1fr)_330px]'
+        )}
+      >
         <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
           <StateRepositoryToolbar
             branch={branchFocus || 'main'}
             branchCount={branchCount}
             branchOptions={branchOptions}
+            headCommitHash={headCommit?.hash ?? null}
             historyHref={historyHref}
             loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
             onBranchChange={updateBranchFocus}
+            onCreateBranch={createBranch}
             onRefresh={() => {
               setSnapshotRefreshVersion((version) => version + 1);
               void refresh();
@@ -325,7 +346,11 @@ export function ProjectStateTab({
             validationGapCount={validationGapCount}
             validationKnown={Boolean(currentValidation)}
           />
-          <StateViewTabs activeView={activeView} onViewChange={setActiveView} />
+          <StateViewTabs
+            activeView={activeView}
+            graphHref={graphHref}
+            onViewChange={setActiveView}
+          />
 
           {snapshot.primaryError ? (
             <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
@@ -352,25 +377,33 @@ export function ProjectStateTab({
                 />
               ) : null}
               {activeView === 'render' && renderModel ? (
-                <StateRenderView model={renderModel} />
+                <StatePrdReader
+                  model={renderModel}
+                  schemaName={schemaName}
+                  validationGapCount={validationGapCount}
+                  validationReady={validationReady}
+                  yamlText={yamlText}
+                />
               ) : null}
               {activeView === 'code' ? <StateCodeView yamlText={yamlText} /> : null}
             </>
           ) : null}
         </main>
 
-        <StateContextRail
-          commitCount={commitCount}
-          edgeCount={headCommit?.content.relations.length ?? 0}
-          headCommit={headCommit}
-          operations={effectiveOperations}
-          projectName={projectName}
-          schemaName={schemaName}
-          validation={currentValidation}
-          validationGapCount={validationGapCount}
-          validationReady={validationReady}
-          warning={stateWarning}
-        />
+        {activeView !== 'render' ? (
+          <StateContextRail
+            commitCount={commitCount}
+            edgeCount={headCommit?.content.relations.length ?? 0}
+            headCommit={headCommit}
+            operations={effectiveOperations}
+            projectName={projectName}
+            schemaName={schemaName}
+            validation={currentValidation}
+            validationGapCount={validationGapCount}
+            validationReady={validationReady}
+            warning={stateWarning}
+          />
+        ) : null}
       </div>
     </section>
   );
@@ -482,39 +515,35 @@ function StateRepositoryToolbar({
   branch,
   branchCount,
   branchOptions,
+  headCommitHash,
   historyHref,
   loading,
   onBranchChange,
+  onCreateBranch,
   onRefresh,
   schemaName,
 }: {
   branch: string;
   branchCount: number;
   branchOptions: string[];
+  headCommitHash: string | null;
   historyHref: string;
   loading: boolean;
   onBranchChange: (branch: string) => void;
+  onCreateBranch: (name: string, parentBranch: string) => Promise<void>;
   onRefresh: () => void;
   schemaName: string;
 }) {
   return (
     <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <label className="inline-flex h-9 min-w-0 items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-sm font-bold text-[var(--text-primary)]">
-          <span className="font-mono text-xs text-[var(--text-tertiary)]">branch</span>
-          <select
-            aria-label="Branch focus"
-            className="min-w-0 bg-transparent font-mono text-sm font-bold outline-none"
-            onChange={(event) => onBranchChange(event.target.value)}
-            value={branch}
-          >
-            {branchOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <StateBranchControls
+          branch={branch}
+          branchOptions={branchOptions}
+          headCommitHash={headCommitHash}
+          onBranchChange={onBranchChange}
+          onCreateBranch={onCreateBranch}
+        />
         <Badge variant="branch">{branchCount} branches</Badge>
         <Badge variant="outline">{schemaName}</Badge>
       </div>
@@ -636,18 +665,20 @@ function StateObjectLine({
 
 function StateViewTabs({
   activeView,
+  graphHref,
   onViewChange,
 }: {
   activeView: ProjectStateView;
+  graphHref: string;
   onViewChange: (view: ProjectStateView) => void;
 }) {
   return (
     <div
       aria-label="State views"
-      className="flex min-h-14 items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4"
+      className="flex min-h-14 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-4"
       role="tablist"
     >
-      <div className="flex min-w-0 items-stretch gap-0">
+      <div className="flex shrink-0 items-stretch gap-0">
         {STATE_VIEWS.map((view) => {
           const Icon = view.icon;
           const selected = activeView === view.id;
@@ -675,6 +706,20 @@ function StateViewTabs({
             </button>
           );
         })}
+        <Link
+          aria-selected="false"
+          className="min-w-28 border-b-2 border-transparent px-3 py-2 text-left text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+          href={graphHref}
+          role="tab"
+        >
+          <span className="flex items-center gap-1.5 text-sm font-bold">
+            <Network aria-hidden="true" className="size-4" />
+            Graph
+          </span>
+          <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
+            version canvas
+          </span>
+        </Link>
       </div>
       <div className="hidden flex-wrap items-center gap-2 md:flex">
         <Badge variant="pending-subtle">adapter prd.document</Badge>
@@ -787,96 +832,6 @@ function StatusPill({ row }: { row: StatePointRow }) {
     <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-bold', tone)}>
       {row.statusLabel}
     </span>
-  );
-}
-
-function StateRenderView({ model }: { model: PrdRenderModel }) {
-  return (
-    <section
-      aria-label="Schema render"
-      className="min-h-[560px] bg-[var(--surface-card)] px-6 py-6"
-    >
-      <article className="mx-auto max-w-3xl rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">{model.title}</h1>
-        <div className="mt-4 border-t border-[var(--stroke-divider)] pt-5">
-          <RenderSection title="1. Problem">
-            <RenderValue>{model.problem || 'No problem statement'}</RenderValue>
-          </RenderSection>
-          <RenderSection title="2. Audience">
-            {model.audienceMissing ? (
-              <div className="rounded-md border border-dashed border-[var(--status-warning)] bg-[var(--status-warning-muted)] px-4 py-3">
-                <div className="text-sm font-bold text-[var(--status-warning)]">Missing</div>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  This field is required by the schema.
-                </p>
-              </div>
-            ) : (
-              <RenderValue>{model.audience}</RenderValue>
-            )}
-          </RenderSection>
-          <RenderSection title="3. Outcome">
-            <RenderValue>{model.outcome || 'No outcome yet'}</RenderValue>
-          </RenderSection>
-          <RenderSection title="4. Requirements">
-            <div className="grid gap-3">
-              {model.requirements.map((requirement, index) => (
-                <div
-                  className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
-                  key={requirement.title + String(index)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--accent-commit)] text-xs font-bold text-[var(--on-accent)]">
-                      {index + 1}
-                    </span>
-                    <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      {requirement.title}
-                    </h3>
-                  </div>
-                  <dl className="mt-3 grid grid-cols-[90px_minmax(0,1fr)] gap-2 text-sm">
-                    <dt className="text-xs font-bold text-[var(--text-tertiary)]">Priority</dt>
-                    <dd>
-                      <Badge variant="pending-subtle">{requirement.priority || 'P?'}</Badge>
-                    </dd>
-                    <dt className="text-xs font-bold text-[var(--text-tertiary)]">Acceptance</dt>
-                    <dd className="text-[var(--text-secondary)]">
-                      {requirement.acceptance || 'Not specified'}
-                    </dd>
-                  </dl>
-                </div>
-              ))}
-            </div>
-          </RenderSection>
-          <section className="mt-5 rounded-md bg-[var(--surface-card)] p-4">
-            <h2 className="text-sm font-bold text-[var(--text-primary)]">Meta</h2>
-            <dl className="mt-2 grid gap-1 font-mono text-xs text-[var(--text-secondary)]">
-              {Object.entries(model.metadata).map(([key, value]) => (
-                <div className="grid grid-cols-[110px_minmax(0,1fr)]" key={key}>
-                  <dt className="font-bold text-[var(--text-primary)]">{key}:</dt>
-                  <dd className="truncate">{String(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </div>
-      </article>
-    </section>
-  );
-}
-
-function RenderSection({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className="mb-5">
-      <h2 className="mb-2 text-lg font-bold text-[var(--text-primary)]">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function RenderValue({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-md border border-[var(--status-success)]/20 bg-[var(--status-success-muted)] px-4 py-3 text-sm font-semibold text-[var(--status-success)]">
-      {children}
-    </div>
   );
 }
 

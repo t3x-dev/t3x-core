@@ -10,6 +10,7 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
+  createBranch: vi.fn(),
   loadCommits: vi.fn(),
   loadOperations: vi.fn(),
   projectWorkspaces: [] as WorkspaceCandidate[],
@@ -32,6 +33,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branches: ['main', 'feature/prd-audience'],
+    create: hookMocks.createBranch,
     loading: false,
     refresh: hookMocks.refreshBranches,
   }),
@@ -130,6 +132,7 @@ const VALIDATION: YSchemaValidationSummary = {
 };
 
 function setupHookMocks() {
+  hookMocks.createBranch.mockResolvedValue(undefined);
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
   hookMocks.loadOperations.mockResolvedValue({
     commit_hash: PRD_COMMIT.hash,
@@ -211,7 +214,10 @@ describe('ProjectStateTab', () => {
       `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0]!)}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Graph/ })).toHaveAttribute(
+      'href',
+      '/chat/project/proj_test/canvas'
+    );
     expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
@@ -236,9 +242,40 @@ describe('ProjectStateTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
 
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
-    expect(screen.getByText('1. Problem')).toBeInTheDocument();
+    expect(screen.getByText('Executive summary')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Problem, audience, and intended outcome' })
+    ).toBeInTheDocument();
     expect(screen.getByText('This field is required by the schema.')).toBeInTheDocument();
     expect(screen.getByText('找到食物和饮品')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Evidence 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Changes 3/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Changes 3/ }));
+    expect(screen.getByText('Materialized changes')).toBeInTheDocument();
+    expect(screen.getByText('prd/summary/problem')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'raw' }));
+    expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
+  });
+
+  it('creates a new branch from the visible branch and switches State focus to it', async () => {
+    renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
+    fireEvent.change(screen.getByLabelText('Branch name'), {
+      target: { value: 'feature/checkout-retry' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create branch' }));
+
+    await waitFor(() => {
+      expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/checkout-retry', 'main');
+    });
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fcheckout-retry',
+      { scroll: false }
+    );
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {

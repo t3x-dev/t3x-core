@@ -507,6 +507,7 @@ export function ProjectDetailPageContent({
           key={projectId}
           projectName={project.name}
           showChatSidebarToggle={showChatSidebarToggle}
+          stateHref={getProjectRepoPath(project)}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />

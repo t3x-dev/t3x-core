@@ -70,6 +70,7 @@ type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 interface CanvasWorkspaceProps {
   projectName: string;
   showChatSidebarToggle?: boolean;
+  stateHref?: string;
   /** Initial viewport from URL params */
   initialViewport?: { x: number; y: number; zoom: number };
   /** Called when viewport changes (debounced externally) */
@@ -88,6 +89,7 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 function CanvasWorkspaceInner({
   projectName,
   showChatSidebarToggle,
+  stateHref,
   initialViewport,
   onViewportChange,
 }: CanvasWorkspaceProps) {
@@ -562,6 +564,7 @@ function CanvasWorkspaceInner({
       <CanvasToolbar
         projectName={projectName}
         showChatSidebarToggle={showChatSidebarToggle}
+        stateHref={stateHref}
         onFitView={() =>
           fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })
         }

@@ -136,6 +136,7 @@ describe('stateViewModel', () => {
         path: 'prd/summary/problem',
         summary: 'Set problem',
         afterValue: 'You: i need food and drink',
+        sourceRefs: ['support-session'],
       },
       {
         id: 'draft_op_2',
@@ -155,6 +156,7 @@ describe('stateViewModel', () => {
 
     const rows = buildStatePointRows(PRD_CONTENT, { operations });
 
+    expect(operations[0]?.source).toBe('support-session');
     expect(rows.find((row) => row.path === 'prd/summary')).toMatchObject({
       status: 'changed',
       statusLabel: '2 changes',
@@ -207,11 +209,49 @@ describe('stateViewModel', () => {
     expect(model.problem).toBe('You: i need food and drink');
     expect(model.audienceMissing).toBe(true);
     expect(model.requirements).toEqual([
-      {
+      expect.objectContaining({
         acceptance: '用户能快速找到并满意',
+        key: '0',
         priority: 'P1',
         title: '找到食物和饮品',
-      },
+      }),
+    ]);
+    expect(model.changes).toEqual([]);
+    expect(model.evidence).toEqual([]);
+  });
+
+  it('builds PRD reader evidence and materialized change rows from committed YOps', () => {
+    const model = selectPrdRenderModel(PRD_CONTENT, {
+      operations: [
+        {
+          created_at: '2026-07-09T00:00:00.000Z',
+          id: 'op_1',
+          source: 'source_chat',
+          turn_hash: 'turn_1',
+          yops: [
+            { set: { path: 'prd.summary.problem', value: 'You: i need food and drink' } },
+            {
+              populate: {
+                path: 'prd.requirements.0',
+                values: { priority: 'P1', title: '找到食物和饮品' },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(model.evidence).toEqual([
+      expect.objectContaining({
+        fieldPaths: ['prd/summary/problem', 'prd/requirements/0'],
+        label: 'S1',
+        sourceId: 'turn_1',
+        title: 'Source Chat',
+      }),
+    ]);
+    expect(model.changes).toEqual([
+      expect.objectContaining({ kind: 'SET', path: 'prd/summary/problem', title: 'Problem' }),
+      expect.objectContaining({ kind: 'POPULATE', path: 'prd/requirements/0', title: '0' }),
     ]);
   });
 });

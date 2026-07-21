@@ -52,17 +52,50 @@ interface OperationMark {
 
 export interface PrdRenderRequirement {
   acceptance: string;
+  description: string;
+  key: string;
   priority: string;
+  title: string;
+}
+
+export interface PrdRenderSection {
+  key: string;
+  title: string;
+  value: unknown;
+}
+
+export interface PrdRenderEvidence {
+  fieldPaths: string[];
+  id: string;
+  label: string;
+  sourceId: string;
+  title: string;
+}
+
+export interface PrdRenderChange {
+  evidenceId: string | null;
+  id: string;
+  kind: string;
+  path: string;
+  summary: string;
   title: string;
 }
 
 export interface PrdRenderModel {
   audience: string;
   audienceMissing: boolean;
+  changes: PrdRenderChange[];
+  documentId: string;
+  evidence: PrdRenderEvidence[];
+  lede: string;
   metadata: Record<string, unknown>;
+  owner: string;
   outcome: string;
   problem: string;
   requirements: PrdRenderRequirement[];
+  schemaVersion: string;
+  sections: PrdRenderSection[];
+  target: string;
   title: string;
 }
 
@@ -124,7 +157,7 @@ export function workspaceDraftOperationsToStateOperations(
         created_at: '',
         id: operation.id || 'workspace_draft_op_' + String(index + 1),
         model: null,
-        source: 'workspace_draft',
+        source: operation.sourceRefs?.[0] || 'workspace_draft',
         turn_hash: null,
         yops: [yOp],
       },
@@ -134,7 +167,7 @@ export function workspaceDraftOperationsToStateOperations(
 
 export function selectPrdRenderModel(
   content: SemanticContent,
-  options: { gaps?: StateValidationGapLike[] } = {}
+  options: { gaps?: StateValidationGapLike[]; operations?: StateOperationEntry[] } = {}
 ): PrdRenderModel {
   const plain = semanticContentToPlain(content);
   const rootKey = Object.hasOwn(plain, 'prd') ? 'prd' : Object.keys(plain)[0];
@@ -143,17 +176,119 @@ export function selectPrdRenderModel(
   const metadata = toRecord(root.metadata);
   const gapPaths = buildGapPathSet(options.gaps ?? [], rootKey ? [rootKey] : []);
   const audience = scalarToString(summary.audience);
+  const { changes, evidence } = buildPrdRenderTrace(options.operations ?? []);
+  const excludedSectionKeys = new Set([
+    'description',
+    'id',
+    'lede',
+    'metadata',
+    'owner',
+    'requirements',
+    'schema',
+    'summary',
+    'target',
+    'title',
+  ]);
 
   return {
     audience,
     audienceMissing:
-      isEmptyScalar(summary.audience) || gapPaths.has(normalizePath('prd/summary/audience')),
+      isEmptyScalar(summary.audience) ||
+      gapPaths.has(normalizePath(`${rootKey || 'prd'}/summary/audience`)),
+    changes,
+    documentId: scalarToString(root.id) || scalarToString(metadata.id),
+    evidence,
+    lede:
+      firstScalar(
+        root.lede,
+        root.description,
+        summary.description,
+        summary.outcome,
+        summary.problem
+      ) || '',
     metadata,
+    owner: scalarToString(root.owner) || scalarToString(metadata.owner),
     outcome: scalarToString(summary.outcome),
     problem: scalarToString(summary.problem),
     requirements: requirementsToRenderModel(root.requirements),
+    schemaVersion:
+      firstScalar(root.schema, metadata.schema, metadata.schema_version, metadata.version) || '',
+    sections: Object.entries(root)
+      .filter(([key]) => !excludedSectionKeys.has(key))
+      .map(([key, value]) => ({ key, title: humanizeKey(key), value })),
+    target: scalarToString(root.target) || scalarToString(metadata.target),
     title: scalarToString(root.title) || 'State document',
   };
+}
+
+function buildPrdRenderTrace(operations: StateOperationEntry[]): {
+  changes: PrdRenderChange[];
+  evidence: PrdRenderEvidence[];
+} {
+  const evidence: PrdRenderEvidence[] = [];
+  const evidenceByEntry = new Map<string, PrdRenderEvidence>();
+  const changes: PrdRenderChange[] = [];
+  let changeIndex = 0;
+
+  operations.forEach((entry, entryIndex) => {
+    const yOps = normalizeYOps(entry.yops);
+    if (yOps.length === 0) return;
+
+    const sourceKey = entry.turn_hash || entry.source || entry.id;
+    let sourceEvidence = evidenceByEntry.get(sourceKey);
+    if (!sourceEvidence) {
+      sourceEvidence = {
+        fieldPaths: [],
+        id: `evidence-${String(evidence.length + 1)}`,
+        label: `S${String(evidence.length + 1)}`,
+        sourceId: entry.turn_hash || entry.source || entry.id,
+        title: humanizeKey(entry.source || `source-${String(entryIndex + 1)}`),
+      };
+      evidenceByEntry.set(sourceKey, sourceEvidence);
+      evidence.push(sourceEvidence);
+    }
+
+    yOps.forEach((yOp) => {
+      const opName = yOpName(yOp);
+      if (!opName) return;
+      const payload = toRecord(yOp[opName]);
+      const path = firstString(payload.path, payload.to, payload.from) ?? 'prd';
+      const normalizedPath = normalizePath(path);
+      changeIndex += 1;
+      const title = humanizeKey(normalizedPath.split('/').filter(Boolean).at(-1) || opName);
+      changes.push({
+        evidenceId: sourceEvidence?.id ?? null,
+        id: `${entry.id}:${String(changeIndex)}`,
+        kind: opName.toUpperCase(),
+        path: normalizedPath,
+        summary: summarizeYOp(opName, payload, title),
+        title,
+      });
+      if (sourceEvidence && !sourceEvidence.fieldPaths.includes(normalizedPath)) {
+        sourceEvidence.fieldPaths.push(normalizedPath);
+      }
+    });
+  });
+
+  return { changes, evidence };
+}
+
+function summarizeYOp(opName: string, payload: Record<string, unknown>, title: string): string {
+  if (opName === 'set' && !isEmptyScalar(payload.value)) {
+    return `Set ${title} to ${shortValue(payload.value)}.`;
+  }
+  if (opName === 'populate') {
+    const fieldCount = Object.keys(toRecord(payload.values)).length;
+    return `Populated ${title} with ${String(fieldCount)} field${fieldCount === 1 ? '' : 's'}.`;
+  }
+  if (opName === 'append') return `Appended a materialized value to ${title}.`;
+  return `${humanizeKey(opName)} operation materialized ${title}.`;
+}
+
+function shortValue(value: unknown): string {
+  const text = scalarToString(value);
+  if (!text) return 'the proposed value';
+  return text.length > 72 ? `“${text.slice(0, 69)}…”` : `“${text}”`;
 }
 
 function appendRows(
@@ -413,11 +548,29 @@ function requirementToRenderModel(value: unknown, fallbackTitle = ''): PrdRender
   if (!record) return [];
   return [
     {
-      acceptance: scalarToString(record.acceptance),
+      acceptance: valueToStringList(record.acceptance).join('\n'),
+      description: firstScalar(record.description, record.summary, record.detail) || '',
+      key: fallbackTitle,
       priority: scalarToString(record.priority),
       title: scalarToString(record.title) || fallbackTitle,
     },
   ];
+}
+
+function valueToStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(scalarToString).filter(Boolean);
+  const record = toRecordOrNull(value);
+  if (record) {
+    return Object.entries(record)
+      .sort(([left], [right]) => {
+        if (/^\d+$/.test(left) && /^\d+$/.test(right)) return Number(left) - Number(right);
+        return left.localeCompare(right);
+      })
+      .map(([, item]) => scalarToString(item))
+      .filter(Boolean);
+  }
+  const scalar = scalarToString(value);
+  return scalar ? [scalar] : [];
 }
 
 function valueType(value: unknown): string {
@@ -458,6 +611,21 @@ function scalarToString(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return '';
+}
+
+function firstScalar(...values: unknown[]): string | null {
+  for (const value of values) {
+    const scalar = scalarToString(value);
+    if (scalar) return scalar;
+  }
+  return null;
+}
+
+function humanizeKey(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function normalizePath(path: string): string {

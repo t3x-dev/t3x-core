@@ -1,6 +1,7 @@
 'use client';
 
-import { Maximize } from 'lucide-react';
+import { ArrowLeft, Maximize } from 'lucide-react';
+import Link from 'next/link';
 import { useMemo } from 'react';
 import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,14 @@ interface CanvasToolbarProps {
   projectName: string;
   onFitView: () => void;
   showChatSidebarToggle?: boolean;
+  stateHref?: string;
 }
 
 export function CanvasToolbar({
   projectName,
   onFitView,
   showChatSidebarToggle = false,
+  stateHref,
 }: CanvasToolbarProps) {
   const nodes = useCanvasStore((state) => state.nodes);
   const stats = useMemo(() => {
@@ -98,6 +101,14 @@ export function CanvasToolbar({
       </div>
       <div className="hidden items-center gap-3 text-xs text-[var(--text-tertiary)] lg:flex">
         <span>Canvas view · not a navigation hub</span>
+        {stateHref ? (
+          <Button asChild size="sm" variant="canvas-outline">
+            <Link href={stateHref}>
+              <ArrowLeft className="size-4" />
+              State
+            </Link>
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon"
@@ -111,6 +122,13 @@ export function CanvasToolbar({
           <Maximize className="h-4 w-4" />
         </Button>
       </div>
+      {stateHref ? (
+        <Button asChild className="lg:hidden" size="icon-sm" variant="canvas-outline">
+          <Link aria-label="Back to State" href={stateHref}>
+            <ArrowLeft className="size-4" />
+          </Link>
+        </Button>
+      ) : null}
       <Button
         variant="ghost"
         size="icon"
