@@ -160,6 +160,9 @@ export function ProjectDetailPageContent({
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
   const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
+  const isEmbeddedCanvasSurface =
+    !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
+  const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
   const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
@@ -191,7 +194,7 @@ export function ProjectDetailPageContent({
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
-  useCanvasDeletionWiring(isCanvasSurface);
+  useCanvasDeletionWiring(isCanvasActive);
 
   useEffect(() => {
     if (project) {
@@ -220,16 +223,16 @@ export function ProjectDetailPageContent({
   // Open selected node from URL on first load
   const selectedFromUrl = useRef(showIntroDemo ? null : searchParams.get('selected'));
   useEffect(() => {
-    if (isCanvasSurface && selectedFromUrl.current && !canvasLoading && !canvasError) {
+    if (isCanvasActive && selectedFromUrl.current && !canvasLoading && !canvasError) {
       useCanvasStore.getState().openNodeModal(selectedFromUrl.current, 'commit');
       selectedFromUrl.current = null;
     }
-  }, [canvasLoading, canvasError, isCanvasSurface]);
+  }, [canvasLoading, canvasError, isCanvasActive]);
   useEffect(() => {
-    if (!isCanvasSurface || !showIntroDemo) return;
+    if (!isCanvasActive || !showIntroDemo) return;
     selectedFromUrl.current = null;
     closeNodeModal();
-  }, [closeNodeModal, isCanvasSurface, showIntroDemo]);
+  }, [closeNodeModal, isCanvasActive, showIntroDemo]);
 
   useEffect(() => {
     if (isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
@@ -330,14 +333,14 @@ export function ProjectDetailPageContent({
   // persists across routes, so returning from Chat after a commit must not
   // reuse a stale draft/staging view for the same project.
   useEffect(() => {
-    if (isCanvasSurface && projectId) {
+    if (isCanvasActive && projectId) {
       void loadCanvas(projectId);
     }
-  }, [isCanvasSurface, projectId, loadCanvas]);
+  }, [isCanvasActive, projectId, loadCanvas]);
 
   useEffect(() => {
     if (
-      !isCanvasSurface ||
+      !isCanvasActive ||
       !showIntroDemo ||
       canvasLoading ||
       canvasError ||
@@ -367,7 +370,7 @@ export function ProjectDetailPageContent({
     canvasError,
     canvasLoading,
     canvasNodeCount,
-    isCanvasSurface,
+    isCanvasActive,
     loadedProjectId,
     projectId,
     showIntroDemo,
@@ -377,7 +380,7 @@ export function ProjectDetailPageContent({
   // This ensures canvas stays up-to-date when commits are created from Chat.
   const lastRefreshRef = useRef(0);
   useEffect(() => {
-    if (!isCanvasSurface || !projectId) return;
+    if (!isCanvasActive || !projectId) return;
 
     const refreshIfStale = () => {
       const now = Date.now();
@@ -416,14 +419,14 @@ export function ProjectDetailPageContent({
       clearInterval(interval);
       channel?.close();
     };
-  }, [isCanvasSurface, projectId, loadCanvas]);
+  }, [isCanvasActive, projectId, loadCanvas]);
 
   // Initialize pins store for the project
   useEffect(() => {
-    if (isCanvasSurface && projectId) {
+    if (isCanvasActive && projectId) {
       void fetchPins(projectId);
     }
-  }, [isCanvasSurface, projectId, fetchPins]);
+  }, [isCanvasActive, projectId, fetchPins]);
 
   // Show loading while projects list is still loading, or while confirming a
   // direct/new project URL that is not present in the list cache yet.
@@ -511,6 +514,7 @@ export function ProjectDetailPageContent({
           key={projectId}
           projectName={project.name}
           showChatSidebarToggle={showChatSidebarToggle}
+          stateHref={getProjectRepoPath(project)}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />
@@ -560,8 +564,20 @@ export function ProjectDetailPageContent({
   })();
 
   return (
-    <ProjectShell activeTab={activeTab} project={project}>
-      {activeContent}
-    </ProjectShell>
+    <>
+      <ProjectShell activeTab={activeTab} project={project}>
+        {activeContent}
+      </ProjectShell>
+      {isEmbeddedCanvasSurface ? (
+        <ProjectDemoTourOverlay
+          interactionMode="guided"
+          onClose={() => setProjectTourOpen(false)}
+          onDone={() => setProjectTourOpen(false)}
+          onSkip={() => void completeIntroDemo()}
+          open={projectTourOpen}
+          stage={projectTourStage}
+        />
+      ) : null}
+    </>
   );
 }
