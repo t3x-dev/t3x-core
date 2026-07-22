@@ -27,6 +27,7 @@ const storageMock = vi.hoisted(() => {
       workspaceDraft = null;
     },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
+    findBranchByName: vi.fn(() => Promise.resolve(null)),
     findWorkspaceDraft: vi.fn((_db, projectId: string, workspaceId: string) =>
       Promise.resolve(
         workspaceDraft
@@ -124,6 +125,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
   return {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
+    findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     getCommit: storageMock.getCommit,
     getLatestCommit: storageMock.getLatestCommit,
@@ -146,6 +148,7 @@ describe('Workspace routes', () => {
   beforeEach(() => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
+    storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
     storageMock.createCommit.mockClear();
     storageMock.getCommit.mockClear();
@@ -688,6 +691,70 @@ describe('Workspace routes', () => {
         }),
       })
     );
+  });
+
+  it('rejects a feature workspace base when committing to an empty main branch', async () => {
+    await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'PRD audience handoff',
+          status: 'schema_review',
+          baseCommitHash: 'sha256:feature-base',
+          targetBranch: 'main',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+          yopsDraft: { id: 'draft:reviewed', operations: [] },
+        },
+      }),
+    });
+    storageMock.getCommit.mockResolvedValueOnce({
+      hash: 'sha256:feature-base',
+      schema: 't3x/commit',
+      parents: [],
+      author: { type: 'human', name: 'api' },
+      committed_at: '2026-07-03T00:00:00.000Z',
+      content: { trees: [], relations: [] },
+      project_id: 'proj_sources',
+      message: 'Feature commit',
+      branch: 'feature/prd-audience',
+      provenance: { method: 'human_curation' },
+      yops_log_ids: [],
+    });
+
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: {
+            trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+            relations: [],
+          },
+        }),
+      }
+    );
+
+    expect(res.status).toBe(409);
+    const body: ApiResponse = await res.json();
+    expect(body).toEqual({
+      success: false,
+      error: {
+        code: 'WORKSPACE_BASE_BRANCH_MISMATCH',
+        message:
+          'Workspace base commit sha256:feature-base belongs to feature/prd-audience, but the commit target is main. Rebuild the workspace from main before committing.',
+        details: {
+          base_branch: 'feature/prd-audience',
+          base_commit_hash: 'sha256:feature-base',
+          target_branch: 'main',
+        },
+      },
+    });
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
   });
 
   it('uses the current branch head instead of a stale workspace base commit', async () => {

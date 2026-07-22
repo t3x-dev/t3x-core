@@ -1452,9 +1452,19 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'main' },
     });
-    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeDisabled();
+    expect(
+      screen.getByText(
+        'Target branch changed from feature/prd-audience to main. Rebuild this workspace from main before committing.'
+      )
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
+      target: { value: 'feature/prd-audience' },
+    });
+    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ }));
 
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(2)
@@ -1503,7 +1513,7 @@ describe('WorkspaceWorkbench', () => {
       workspace: {
         id: 'workspace_ready',
         projectId: 'proj_1',
-        targetBranch: 'main',
+        targetBranch: 'feature/prd-audience',
         yopsDraft: { id: 'draft:candidate:backend' },
       },
     });
