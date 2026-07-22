@@ -68,8 +68,11 @@ const CANVAS_MINIMAP_HEIGHT = 96;
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 
 interface CanvasWorkspaceProps {
+  embedded?: boolean;
+  focusedBranch?: string;
   projectName: string;
   showChatSidebarToggle?: boolean;
+  stateHref?: string;
   /** Initial viewport from URL params */
   initialViewport?: { x: number; y: number; zoom: number };
   /** Called when viewport changes (debounced externally) */
@@ -86,8 +89,11 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 }
 
 function CanvasWorkspaceInner({
+  embedded = false,
+  focusedBranch,
   projectName,
   showChatSidebarToggle,
+  stateHref,
   initialViewport,
   onViewportChange,
 }: CanvasWorkspaceProps) {
@@ -558,10 +564,13 @@ function CanvasWorkspaceInner({
   });
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col">
       <CanvasToolbar
+        embedded={embedded}
+        focusedBranch={focusedBranch}
         projectName={projectName}
         showChatSidebarToggle={showChatSidebarToggle}
+        stateHref={stateHref}
         onFitView={() =>
           fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })
         }

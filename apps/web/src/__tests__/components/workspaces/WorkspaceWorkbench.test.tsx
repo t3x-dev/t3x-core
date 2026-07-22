@@ -563,10 +563,17 @@ describe('WorkspaceWorkbench', () => {
     const applyResponse = new Promise<Response>((resolve) => {
       resolveApplyResponse = resolve;
     });
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(createValidateResponse())
-      .mockImplementationOnce(() => applyResponse);
+    let yopsValidateCallCount = 0;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      if (String(input) !== yopsValidateUrl) {
+        return Promise.reject(new Error(`Unexpected background request: ${String(input)}`));
+      }
+
+      yopsValidateCallCount += 1;
+      return yopsValidateCallCount === 1
+        ? Promise.resolve(createValidateResponse())
+        : applyResponse;
+    });
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/Validation/);

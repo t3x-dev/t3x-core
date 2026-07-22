@@ -340,6 +340,23 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(style).toContain('--surface-canvas');
   });
 
+  it('links the independent canvas surface back to repository State', () => {
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+
+    render(
+      <CanvasWorkspace projectName="Trust Gate" stateHref="/chat/project/t3x-dev/trust-gate" />
+    );
+
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
+      'href',
+      '/chat/project/t3x-dev/trust-gate'
+    );
+    expect(screen.getByRole('link', { name: 'Back to State' })).toHaveAttribute(
+      'href',
+      '/chat/project/t3x-dev/trust-gate'
+    );
+  });
+
   it('lays out committed version paths from left to right even when DB positions exist', async () => {
     const nodes = [
       {
