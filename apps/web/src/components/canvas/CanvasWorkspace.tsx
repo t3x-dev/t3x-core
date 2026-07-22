@@ -70,6 +70,7 @@ type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 interface CanvasWorkspaceProps {
   embedded?: boolean;
   focusedBranch?: string;
+  focusedCommitHash?: string;
   projectName: string;
   showChatSidebarToggle?: boolean;
   stateHref?: string;
@@ -91,6 +92,7 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 function CanvasWorkspaceInner({
   embedded = false,
   focusedBranch,
+  focusedCommitHash,
   projectName,
   showChatSidebarToggle,
   stateHref,
@@ -111,6 +113,7 @@ function CanvasWorkspaceInner({
     nodeId: string;
   } | null>(null);
   const reopenActionPanelNodeRef = useRef<string | null>(null);
+  const focusedCommitAppliedRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -360,6 +363,55 @@ function CanvasWorkspaceInner({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topoFingerprint, useVersionPathLayout]);
+
+  useEffect(() => {
+    if (!focusedCommitHash) {
+      focusedCommitAppliedRef.current = null;
+      return;
+    }
+    if (!initialLayoutDone) return;
+
+    const targetNode = nodes.find(
+      (node) =>
+        node.id === focusedCommitHash ||
+        node.data.commitHash === focusedCommitHash ||
+        node.data.commit?.hash === focusedCommitHash
+    );
+    if (!targetNode) return;
+
+    const focusKey = `${projectId ?? 'project'}:${focusedCommitHash}:${targetNode.id}`;
+    if (focusedCommitAppliedRef.current === focusKey) return;
+    focusedCommitAppliedRef.current = focusKey;
+
+    setHighlight({ mode: 'node', nodeId: targetNode.id });
+    const currentNodes = getNodes();
+    setNodes(
+      currentNodes.map((node) => ({
+        ...node,
+        selected: node.id === targetNode.id,
+      }))
+    );
+
+    const measuredTarget = currentNodes.find((node) => node.id === targetNode.id) ?? targetNode;
+    const width = measuredTarget.measured?.width ?? measuredTarget.width ?? 288;
+    const height = measuredTarget.measured?.height ?? measuredTarget.height ?? 160;
+    const frame = requestAnimationFrame(() => {
+      setCenter(measuredTarget.position.x + width / 2, measuredTarget.position.y + height / 2, {
+        duration: 300,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [
+    focusedCommitHash,
+    getNodes,
+    initialLayoutDone,
+    nodes,
+    projectId,
+    setCenter,
+    setHighlight,
+    setNodes,
+  ]);
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
@@ -18,6 +18,7 @@ interface ProjectWorkspacesTabProps {
 }
 
 export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectMaterials = useProjectMaterials(projectId);
@@ -49,6 +50,21 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [router, searchParams]
   );
 
+  const handleViewCommitInState = useCallback(
+    (commitHash: string, branch: string) => {
+      const repositoryPath = pathname.endsWith('/workspaces')
+        ? pathname.slice(0, -'/workspaces'.length)
+        : pathname;
+      const params = new URLSearchParams({
+        branch,
+        commit: commitHash,
+        view: 'canvas',
+      });
+      router.push(`${repositoryPath}?${params.toString()}`);
+    },
+    [pathname, router]
+  );
+
   return (
     <WorkspaceWorkbench
       candidates={candidates}
@@ -56,6 +72,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       selectedWorkspaceId={selectedWorkspaceId}
       onSelectedWorkspaceChange={handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
+      onViewCommitInState={handleViewCommitInState}
     />
   );
 }

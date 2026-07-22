@@ -12,6 +12,9 @@ interface WorkspaceFlowState {
   candidateId?: string;
   yopsDraftId?: string;
   commitHash?: string;
+  sourceConversationId?: string;
+  sourceParentCommitHash?: string;
+  continuationBusy?: boolean;
   extracting?: boolean;
   sendingToYOps?: boolean;
   error?: string;
@@ -25,12 +28,14 @@ interface WorkspaceWorkbenchProps {
   selectedWorkspaceId?: string | null;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
 }
 
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
   onSourceMaterialUploaded,
+  onViewCommitInState,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
@@ -43,7 +48,7 @@ export function WorkspaceWorkbench({
     {}
   );
   const pins = usePinsStore((state) => state.pins);
-  const { extractCandidate, sendToYOps } = useWorkspaceFlow();
+  const { extractCandidate, sendToYOps, startNextIteration } = useWorkspaceFlow();
 
   const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
   const selectedWorkspace = baseSelectedWorkspace
@@ -160,6 +165,43 @@ export function WorkspaceWorkbench({
     setActiveWorkflowTab('commit');
   };
 
+  const handleContinueFromCommit = async (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => {
+    if (!selectedWorkspace) return;
+
+    updateSelectedFlow({ continuationBusy: true, error: undefined });
+    try {
+      const result = await startNextIteration({
+        candidate: selectedWorkspace,
+        createBranchFrom,
+        parentCommitHash: commitHash,
+        targetBranch,
+      });
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [result.workspace.id]: result.workspace,
+      }));
+      updateSelectedFlow({
+        candidateId: undefined,
+        commitHash: undefined,
+        continuationBusy: false,
+        error: undefined,
+        sourceConversationId: result.conversationId,
+        sourceParentCommitHash: commitHash,
+        yopsDraftId: undefined,
+      });
+      setActiveWorkflowTab('chat');
+    } catch (err) {
+      updateSelectedFlow({
+        continuationBusy: false,
+        error: err instanceof Error ? err.message : 'Unable to start the next workspace iteration.',
+      });
+    }
+  };
+
   const handleYOpsApplied = () => {
     setActiveWorkflowTab('preview');
   };
@@ -207,7 +249,9 @@ export function WorkspaceWorkbench({
             flowState={selectedFlow}
             onExtractCandidate={handleExtractCandidate}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
+            onContinueFromCommit={handleContinueFromCommit}
             onSendToYOps={handleSendToYOps}
+            onViewCommitInState={onViewCommitInState}
             onWorkflowTabChange={setActiveWorkflowTab}
             onYOpsApplied={handleYOpsApplied}
             onYOpsCommitted={handleCommitted}
@@ -255,22 +299,30 @@ function WorkspaceDetail({
   flowState,
   onExtractCandidate,
   onChatSourceEvidenceChange,
+  onContinueFromCommit,
   onSendToYOps,
   onSourceMaterialUploaded,
   onWorkflowTabChange,
   onYOpsApplied,
   onYOpsCommitted,
+  onViewCommitInState,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
   onExtractCandidate: () => void;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
+  onContinueFromCommit: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void>;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   onYOpsApplied: () => void;
-  onYOpsCommitted: (commitHash: string) => void;
+  onYOpsCommitted: (commitHash: string, branch: string) => void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
 }) {
   if (!candidate) return null;
 
@@ -291,12 +343,17 @@ function WorkspaceDetail({
           candidateExtracted={Boolean(flowState?.candidateId)}
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
+          continuationBusy={Boolean(flowState?.continuationBusy)}
+          sourceConversationId={flowState?.sourceConversationId}
+          sourceParentCommitHash={flowState?.sourceParentCommitHash}
           onSourceMaterialUploaded={onSourceMaterialUploaded}
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
+          onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}
           onSendToYOps={onSendToYOps}
           onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
+          onViewCommitInState={onViewCommitInState}
           onWorkflowTabChange={onWorkflowTabChange}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
           yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}

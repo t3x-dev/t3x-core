@@ -114,6 +114,7 @@ export function ProjectStateTab({
     routeView === 'canvas' ? 'structure' : routeView
   );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
+  const focusedCommitHash = searchParams.get('commit')?.trim() || undefined;
   const [pathQuery, setPathQuery] = useState('');
   const [diffOpen, setDiffOpen] = useState(false);
   const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
@@ -491,6 +492,7 @@ export function ProjectStateTab({
           ) : (
             <StateCanvasView
               branch={branchFocus || 'main'}
+              focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}
             />
@@ -895,10 +897,12 @@ function StateViewTabs({
 
 function StateCanvasView({
   branch,
+  focusedCommitHash,
   projectId,
   projectName,
 }: {
   branch: string;
+  focusedCommitHash?: string;
   projectId: string;
   projectName: string;
 }) {
@@ -934,7 +938,12 @@ function StateCanvasView({
       aria-label="Multi-commit state canvas"
       className="h-[680px] min-h-[560px] overflow-hidden xl:h-[calc(100vh-21rem)]"
     >
-      <CanvasWorkspace embedded focusedBranch={branch} projectName={projectName} />
+      <CanvasWorkspace
+        embedded
+        focusedBranch={branch}
+        focusedCommitHash={focusedCommitHash}
+        projectName={projectName}
+      />
     </section>
   );
 }
