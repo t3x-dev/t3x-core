@@ -1,7 +1,9 @@
-import { ArrowRight, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Code2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { StructuredDiffChange, StructuredDiffKind } from '@/domain/diff/structuredStateDiff';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -19,13 +21,6 @@ interface ProposalReviewViewProps {
   statusText: string;
   yopsDraftSent: boolean;
   yopsLines: string[];
-}
-
-interface ProposalPathNode {
-  children: ProposalPathNode[];
-  key: string;
-  operation?: WorkspaceYOpsDraftOperation;
-  path: string;
 }
 
 export function ProposalReviewView({
@@ -326,231 +321,33 @@ export function WorkspaceDiff({
   selectedOperation: WorkspaceYOpsDraftOperation;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const pathTree = useMemo(() => buildProposalPathTree(operations), [operations]);
-  const evidenceCount = new Set(operations.flatMap((operation) => operation.sourceRefs ?? [])).size;
-  const removedCount = operations.filter((operation) => /delete|remove/i.test(operation.op)).length;
-  const source = getPrimaryOperationSource(candidate, selectedOperation);
-
-  return (
-    <section
-      aria-label="T3X Diff"
-      className="border-t border-[var(--stroke-divider)] bg-[var(--surface-card)]"
-    >
-      <header className="flex min-h-[54px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2.5">
-        <div>
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">T3X Diff</h4>
-          <p className="mt-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
-            {phase === 'validation'
-              ? 'Validated projection · Baseline → Projected'
-              : 'Proposal · Baseline → Projected'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="branch-subtle">{operations.length} field changes</Badge>
-          {phase === 'validation' ? (
-            <Badge variant={schemaPassed ? 'success' : 'pending-subtle'}>
-              YSchema {schemaPassed ? 'pass' : 'pending'}
-            </Badge>
-          ) : (
-            <Badge variant="success">{evidenceCount} evidence matched</Badge>
-          )}
-          <Badge variant="success">{removedCount} removed</Badge>
-        </div>
-        <button
-          aria-expanded={open}
-          className="ml-auto text-xs font-semibold text-[var(--accent-commit)] hover:underline"
-          onClick={onOpenChange}
-          type="button"
-        >
-          {open ? 'Hide Diff' : 'Show Diff'}
-        </button>
-      </header>
-
-      {open ? (
-        <div className="grid min-h-[330px] grid-cols-1 overflow-hidden lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
-          <aside className="border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:border-r lg:border-b-0">
-            <div className="flex min-h-[54px] items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-2.5">
-              <div>
-                <h5 className="text-xs font-semibold text-[var(--text-primary)]">Changed paths</h5>
-                <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
-                  Preview component · node-level result
-                </p>
-              </div>
-              <Badge variant="warning">{operations.length} touched</Badge>
-            </div>
-            <div className="overflow-auto p-2" role="tree" aria-label="Proposal changed paths">
-              {pathTree.map((node) => (
-                <ProposalPathTreeNode
-                  key={node.path}
-                  node={node}
-                  onSelectOperation={onSelectOperation}
-                  selectedOperationId={selectedOperation.id}
-                />
-              ))}
-            </div>
-          </aside>
-
-          <section className="min-w-0 border-b border-[var(--stroke-divider)] lg:border-b-0 xl:border-r">
-            <header className="border-b border-[var(--stroke-divider)] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                Node / field
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge variant="warning">Modified</Badge>
-                <Badge variant="outline">{selectedOperation.op.toUpperCase()}</Badge>
-                <h5 className="text-sm font-semibold text-[var(--text-primary)]">
-                  {selectedOperation.summary}
-                </h5>
-              </div>
-              <p className="mt-1 break-all font-mono text-[10px] text-[var(--text-tertiary)]">
-                {selectedOperation.path}
-              </p>
-            </header>
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              <DiffValue
-                meta="Baseline"
-                title="Before"
-                value={formatDisplayValue(selectedOperation.beforeValue)}
-                variant="before"
-              />
-              <DiffValue
-                meta="Projected"
-                title="After"
-                value={formatDisplayValue(selectedOperation.afterValue)}
-                variant="after"
-              />
-            </div>
-          </section>
-
-          <aside className="min-w-0 bg-[var(--surface-card)] p-4 lg:col-span-2 lg:border-t lg:border-[var(--stroke-divider)] xl:col-span-1 xl:border-t-0">
-            <SectionLabel>3 · Reason</SectionLabel>
-            <p className="mt-2 text-sm leading-6 text-[var(--text-primary)]">
-              {selectedOperation.reason ?? 'No operation rationale provided.'}
-            </p>
-            <div className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
-              <SectionLabel>4 · Evidence</SectionLabel>
-              <blockquote className="mt-2 rounded-md border border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation)]/5 p-3 text-xs leading-5 text-[var(--text-primary)]">
-                “{getSourceExcerpt(source, selectedOperation)}”
-              </blockquote>
-              <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">
-                {source?.title ?? 'Source reference unavailable'}
-              </p>
-            </div>
-          </aside>
-        </div>
-      ) : null}
-    </section>
+  const changes = operations.map((operation) =>
+    workspaceOperationToDiffChange(candidate, operation)
   );
-}
-
-function ProposalPathTreeNode({
-  node,
-  onSelectOperation,
-  selectedOperationId,
-}: {
-  node: ProposalPathNode;
-  onSelectOperation: (operationId: string) => void;
-  selectedOperationId: string;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const hasChildren = node.children.length > 0;
-  const selected = node.operation?.id === selectedOperationId;
 
   return (
-    <div aria-expanded={hasChildren ? expanded : undefined} role="treeitem" tabIndex={-1}>
-      <div
-        className={cn(
-          'flex min-h-8 items-center gap-1.5 rounded px-1.5 text-xs',
-          selected ? 'bg-[var(--diff-modified-bg)] text-[var(--accent-branch)]' : ''
-        )}
-      >
-        {hasChildren ? (
-          <button
-            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${node.path}`}
-            className="inline-flex size-5 items-center justify-center rounded text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
-            onClick={() => setExpanded((current) => !current)}
-            type="button"
-          >
-            {expanded ? (
-              <ChevronDown aria-hidden="true" className="size-3.5" />
-            ) : (
-              <ChevronRight aria-hidden="true" className="size-3.5" />
-            )}
-          </button>
-        ) : (
-          <span className="size-5" aria-hidden="true" />
-        )}
-        {node.operation ? (
-          <button
-            aria-current={selected ? 'true' : undefined}
-            className="min-w-0 flex-1 truncate text-left font-mono font-semibold hover:underline"
-            onClick={() => onSelectOperation(node.operation?.id ?? '')}
-            type="button"
-          >
-            {node.key}
-          </button>
-        ) : (
-          <span className="min-w-0 flex-1 truncate font-mono font-semibold text-[var(--text-primary)]">
-            {node.key}
-          </span>
-        )}
-        {node.operation ? (
-          <span className="text-[10px] font-medium text-[var(--status-success)]">
-            {getOperationChangeLabel(node.operation)}
-          </span>
-        ) : null}
-      </div>
-      {hasChildren && expanded ? (
-        // biome-ignore lint/a11y/useSemanticElements: ARIA tree child containers use role="group".
-        <div className="ml-3 border-l border-[var(--stroke-divider)] pl-2" role="group">
-          {node.children.map((child) => (
-            <ProposalPathTreeNode
-              key={child.path}
-              node={child}
-              onSelectOperation={onSelectOperation}
-              selectedOperationId={selectedOperationId}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DiffValue({
-  meta,
-  title,
-  value,
-  variant,
-}: {
-  meta: string;
-  title: string;
-  value: string;
-  variant: 'after' | 'before';
-}) {
-  return (
-    <section
-      className={cn(
-        'min-h-32 overflow-hidden rounded-md border',
-        variant === 'after'
-          ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)]'
-          : 'border-[var(--stroke-divider)] bg-[var(--surface-panel)]'
-      )}
-    >
-      <header className="flex items-center justify-between gap-2 border-b border-inherit px-3 py-2 text-[10px] uppercase tracking-[0.08em]">
-        <strong
-          className={
-            variant === 'after' ? 'text-[var(--status-success)]' : 'text-[var(--text-tertiary)]'
-          }
-        >
-          {title}
-        </strong>
-        <span className="normal-case tracking-normal text-[var(--text-tertiary)]">{meta}</span>
-      </header>
-      <pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-[var(--text-primary)]">
-        {value}
-      </pre>
-    </section>
+    <T3XDiff
+      baselineLabel="Baseline"
+      changes={changes}
+      headerSubtitle={
+        phase === 'validation'
+          ? 'Validated projection · Baseline → Projected'
+          : 'Proposal · Baseline → Projected'
+      }
+      onOpenChange={onOpenChange}
+      onSelectChange={onSelectOperation}
+      open={open}
+      pathSubtitle="Preview component · node-level result"
+      projectedLabel="Projected"
+      secondaryStat={
+        phase === 'validation' ? (
+          <Badge variant={schemaPassed ? 'success' : 'pending-subtle'}>
+            YSchema {schemaPassed ? 'pass' : 'pending'}
+          </Badge>
+        ) : undefined
+      }
+      selectedChangeId={selectedOperation.id}
+    />
   );
 }
 
@@ -574,6 +371,32 @@ function YOpsScriptPanel({ lines }: { lines: string[] }) {
       </pre>
     </section>
   );
+}
+
+function workspaceOperationToDiffChange(
+  candidate: WorkspaceCandidate,
+  operation: WorkspaceYOpsDraftOperation
+): StructuredDiffChange {
+  const source = getPrimaryOperationSource(candidate, operation);
+  const kind = workspaceOperationKind(operation);
+  return {
+    afterValue: formatDisplayValue(operation.afterValue),
+    beforeValue: formatDisplayValue(operation.beforeValue),
+    evidence: source ? getSourceExcerpt(source, operation) : undefined,
+    evidenceSource: source?.title,
+    id: operation.id,
+    kind,
+    op: operation.op.toUpperCase(),
+    path: operation.path,
+    reason: operation.reason ?? 'No operation rationale provided.',
+    summary: operation.summary,
+  };
+}
+
+function workspaceOperationKind(operation: WorkspaceYOpsDraftOperation): StructuredDiffKind {
+  if (/delete|drop|remove|unset/i.test(operation.op)) return 'removed';
+  if (/append|add|create|define|populate/i.test(operation.op)) return 'added';
+  return 'modified';
 }
 
 function getPrimaryOperationSource(
@@ -602,34 +425,4 @@ function getSourceExcerpt(
 function formatDisplayValue(value: string | undefined): string {
   if (value === undefined || value === '') return 'Empty';
   return value;
-}
-
-function getOperationChangeLabel(operation: WorkspaceYOpsDraftOperation): string {
-  if (/append|add/i.test(operation.op)) return '+1 item';
-  if (/delete|remove/i.test(operation.op)) return 'removed';
-  return 'modified';
-}
-
-function buildProposalPathTree(operations: WorkspaceYOpsDraftOperation[]): ProposalPathNode[] {
-  const roots: ProposalPathNode[] = [];
-
-  for (const operation of operations) {
-    const segments = operation.path.split('/').filter(Boolean);
-    let siblings = roots;
-    let parentPath = '';
-
-    segments.forEach((segment, index) => {
-      const path = `${parentPath}/${segment}`;
-      let node = siblings.find((candidate) => candidate.path === path);
-      if (!node) {
-        node = { children: [], key: segment, path };
-        siblings.push(node);
-      }
-      if (index === segments.length - 1) node.operation = operation;
-      siblings = node.children;
-      parentPath = path;
-    });
-  }
-
-  return roots;
 }

@@ -18,8 +18,10 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
+import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { commitHashLabel, shortHash } from '@/domain/format/formatters';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
@@ -36,6 +38,7 @@ import {
   type YSchemaValidationSummary,
 } from '@/domain/project/yschemaValidation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useBranches } from '@/hooks/shared/useBranches';
@@ -67,6 +70,7 @@ interface StateSnapshot {
   headCommit: ApiCommit | null;
   loading: boolean;
   operations: StateOperationEntry[];
+  parentCommit: ApiCommit | null;
   primaryError: string | null;
 }
 
@@ -111,6 +115,8 @@ export function ProjectStateTab({
   );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const {
     branches,
@@ -119,6 +125,7 @@ export function ProjectStateTab({
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
   const [snapshot, setSnapshot] = useState<StateSnapshot>({
@@ -127,6 +134,7 @@ export function ProjectStateTab({
     headCommit: null,
     loading: true,
     operations: [],
+    parentCommit: null,
     primaryError: null,
   });
 
@@ -179,6 +187,7 @@ export function ProjectStateTab({
         headCommit: null,
         loading: true,
         operations: [],
+        parentCommit: null,
         primaryError: null,
       });
       try {
@@ -205,6 +214,7 @@ export function ProjectStateTab({
         }
         const headCommit = selectVisibleBranchHead(commits);
         let operations: StateOperationEntry[] = [];
+        let parentCommit: ApiCommit | null = null;
         const auxiliaryErrors: string[] = [];
 
         if (headCommit) {
@@ -212,6 +222,19 @@ export function ProjectStateTab({
             operations = (await loadOperations(headCommit.hash)).operations;
           } catch {
             auxiliaryErrors.push('YOps log unavailable.');
+          }
+
+          const parentHash = headCommit.parents[0];
+          if (parentHash) {
+            try {
+              parentCommit = commits.find((commit) => commit.hash === parentHash) ?? null;
+              if (!parentCommit) parentCommit = await loadCommit(parentHash);
+              if (parentCommit.project_id !== projectId || parentCommit.hash !== parentHash) {
+                throw new Error('Parent commit response does not match the selected project.');
+              }
+            } catch {
+              auxiliaryErrors.push('Parent commit unavailable.');
+            }
           }
         }
 
@@ -222,6 +245,7 @@ export function ProjectStateTab({
             headCommit,
             loading: false,
             operations,
+            parentCommit,
             primaryError: null,
           });
         }
@@ -233,6 +257,7 @@ export function ProjectStateTab({
             headCommit: null,
             loading: false,
             operations: [],
+            parentCommit: null,
             primaryError: formatError(error, 'Committed state is unavailable.'),
           });
         }
@@ -245,6 +270,7 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
+    loadCommit,
     loadCommits,
     loadOperations,
     projectId,
@@ -302,8 +328,28 @@ export function ProjectStateTab({
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
   const yopsCount = visibleYOpsCount(headCommit, effectiveOperations);
-  const commitSummary = commitSummaryFor(headCommit, yopsCount);
   const branchCount = branchOptions.length;
+  const committedDiffChanges = useMemo(
+    () =>
+      headCommit && snapshot.parentCommit
+        ? buildStructuredStateDiff({
+            baseline: snapshot.parentCommit.content,
+            head: headCommit.content,
+            workspace: committedWorkspace,
+          })
+        : [],
+    [committedWorkspace, headCommit, snapshot.parentCommit]
+  );
+  const effectiveSelectedDiffChangeId = committedDiffChanges.some(
+    (change) => change.id === selectedDiffChangeId
+  )
+    ? selectedDiffChangeId
+    : (committedDiffChanges.at(-1)?.id ?? '');
+  const showingInlineDiff =
+    activeView !== 'canvas' &&
+    diffOpen &&
+    committedDiffChanges.length > 0 &&
+    Boolean(snapshot.parentCommit);
   const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
   const currentReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = withReturnTo(
@@ -313,12 +359,6 @@ export function ProjectStateTab({
   const commitHref = headCommit
     ? withReturnTo(
         `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}`,
-        currentReturnTo
-      )
-    : null;
-  const parentDiffHref = headCommit?.parents[0]
-    ? withReturnTo(
-        `/project/${encodeURIComponent(projectId)}/diff?base=${encodeURIComponent(headCommit.parents[0])}&target=${encodeURIComponent(headCommit.hash)}`,
         currentReturnTo
       )
     : null;
@@ -355,7 +395,8 @@ export function ProjectStateTab({
       <div
         className={cn(
           'mt-4 grid min-h-0 flex-1 gap-4',
-          activeView !== 'render' && activeView !== 'canvas' && 'xl:grid-cols-[minmax(0,1fr)_330px]'
+          (showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas')) &&
+            'xl:grid-cols-[minmax(0,1fr)_330px]'
         )}
       >
         <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
@@ -381,37 +422,51 @@ export function ProjectStateTab({
                 commitCount={commitCount}
                 hash={headCommit?.hash ?? null}
                 relativeTime={formatRelativeTime(headCommit?.committed_at)}
-                summary={commitSummary}
                 title={commitTitle}
                 yopsCount={yopsCount}
               />
               <StateObjectLine
                 activeView={activeView}
                 commitHref={commitHref}
+                diffCount={committedDiffChanges.length}
+                diffOpen={showingInlineDiff}
                 headCommit={headCommit}
-                parentDiffHref={parentDiffHref}
+                onDiffToggle={() => setDiffOpen((current) => !current)}
                 rootKey={rootKey}
                 validationGapCount={validationGapCount}
                 validationKnown={Boolean(currentValidation)}
               />
-              <StateViewTabs activeView={activeView} onViewChange={updateActiveView} />
+              {!showingInlineDiff ? (
+                <StateViewTabs activeView={activeView} onViewChange={updateActiveView} />
+              ) : null}
 
-              {snapshot.primaryError ? (
+              {showingInlineDiff && headCommit && snapshot.parentCommit ? (
+                <T3XDiff
+                  baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
+                  changes={committedDiffChanges}
+                  headerSubtitle="Commit · Parent → HEAD"
+                  onSelectChange={setSelectedDiffChangeId}
+                  pathSubtitle="Committed state · node-level result"
+                  projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
+                  selectedChangeId={effectiveSelectedDiffChangeId}
+                />
+              ) : null}
+              {!showingInlineDiff && snapshot.primaryError ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
               ) : null}
-              {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
+              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 <StateEmpty
                   message="Create or select a committed branch to inspect state as Structure, Render, or Code."
                   title="No commit on this branch"
                 />
               ) : null}
-              {!snapshot.primaryError && snapshot.loading ? (
+              {!showingInlineDiff && !snapshot.primaryError && snapshot.loading ? (
                 <StateEmpty
                   message="Loading commit, YOps, and validation context."
                   title="Loading state"
                 />
               ) : null}
-              {!snapshot.primaryError && !snapshot.loading && headCommit ? (
+              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && headCommit ? (
                 <>
                   {activeView === 'structure' ? (
                     <StateStructureView
@@ -442,7 +497,7 @@ export function ProjectStateTab({
           )}
         </main>
 
-        {activeView !== 'render' && activeView !== 'canvas' ? (
+        {showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas') ? (
           <StateContextRail
             commitCount={commitCount}
             edgeCount={headCommit?.content.relations.length ?? 0}
@@ -453,6 +508,7 @@ export function ProjectStateTab({
             validation={currentValidation}
             validationGapCount={validationGapCount}
             validationReady={validationReady}
+            viewModelVisible={!showingInlineDiff}
             warning={stateWarning}
           />
         ) : null}
@@ -625,14 +681,12 @@ function StateCommitRow({
   commitCount,
   hash,
   relativeTime,
-  summary,
   title,
   yopsCount,
 }: {
   commitCount: number;
   hash: string | null;
   relativeTime: string;
-  summary: string;
   title: string;
   yopsCount: number;
 }) {
@@ -645,9 +699,10 @@ function StateCommitRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-bold text-[var(--text-primary)]">{title}</h2>
-            <Badge variant="outline">{yopsCount} YOps</Badge>
+            <Badge variant="outline">
+              {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
+            </Badge>
           </div>
-          <p className="truncate text-xs text-[var(--text-secondary)]">{summary}</p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
@@ -662,16 +717,20 @@ function StateCommitRow({
 function StateObjectLine({
   activeView,
   commitHref,
+  diffCount,
+  diffOpen,
   headCommit,
-  parentDiffHref,
+  onDiffToggle,
   rootKey,
   validationGapCount,
   validationKnown,
 }: {
   activeView: ProjectStateView;
   commitHref: string | null;
+  diffCount: number;
+  diffOpen: boolean;
   headCommit: ApiCommit | null;
-  parentDiffHref: string | null;
+  onDiffToggle: () => void;
   rootKey: string;
   validationGapCount: number;
   validationKnown: boolean;
@@ -697,17 +756,22 @@ function StateObjectLine({
               : 'not validated'}
         </Badge>
         <Badge variant="outline">{activeView}</Badge>
+        {diffCount > 0 ? <Badge variant="warning">{diffCount} changes</Badge> : null}
         {commitHref ? (
           <Button asChild size="sm" variant="canvas-outline">
             <Link href={commitHref}>Open commit</Link>
           </Button>
         ) : null}
-        {parentDiffHref ? (
-          <Button asChild size="sm" variant="canvas-outline">
-            <Link href={parentDiffHref}>
-              <GitCompare className="size-4" />
-              Parent diff
-            </Link>
+        {diffCount > 0 ? (
+          <Button
+            aria-expanded={diffOpen}
+            onClick={onDiffToggle}
+            size="sm"
+            type="button"
+            variant={diffOpen ? 'commit' : 'canvas-outline'}
+          >
+            <GitCompare className="size-4" />
+            {diffOpen ? 'Hide changes' : `View ${String(diffCount)} changes`}
           </Button>
         ) : null}
       </div>
@@ -1023,6 +1087,7 @@ function StateContextRail({
   validation,
   validationGapCount,
   validationReady,
+  viewModelVisible,
   warning,
 }: {
   commitCount: number;
@@ -1034,15 +1099,13 @@ function StateContextRail({
   validation?: YSchemaValidationSummary | null;
   validationGapCount: number;
   validationReady: boolean;
+  viewModelVisible: boolean;
   warning: string | null;
 }) {
   return (
     <aside className="grid content-start gap-4">
       <RailCard title="About this state">
-        <p>
-          Structured state extracted from source evidence and changed through YOps. The current HEAD
-          is readable, but output readiness depends on YSchema.
-        </p>
+        <p>Committed state built from source evidence through YOps.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge variant="pending-subtle">prd</Badge>
           <Badge variant="outline">yaml</Badge>
@@ -1052,17 +1115,18 @@ function StateContextRail({
           </Badge>
         </div>
       </RailCard>
-      <RailCard title="View model">
-        <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
-          <RailRow label="Structure" value="YAML-shaped state tree" />
-          <RailRow label="Render" value="Schema-selected reader" />
-          <RailRow label="Code" value="Canonical committed state" />
-        </dl>
-        <p className="mt-3">
-          Structure keeps the YAML form intact as nodes. Render is a schema projection, not a new
-          authoring surface.
-        </p>
-      </RailCard>
+      {viewModelVisible ? (
+        <RailCard title="View model">
+          <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
+            <RailRow label="Structure" value="YAML-shaped state tree" />
+            <RailRow label="Render" value="Schema-selected reader" />
+            <RailRow label="Code" value="Canonical committed state" />
+          </dl>
+          <p className="mt-3">
+            Structure preserves YAML nodes; Render applies the selected schema.
+          </p>
+        </RailCard>
+      ) : null}
       <RailCard title="State metadata">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
           <RailRow label="Project" value={projectName} />
@@ -1165,16 +1229,6 @@ function commitTitleFor(commit: ApiCommit | null): string {
   if (!commit) return 'No committed state';
   const title = commit.content.trees?.[0]?.slots?.title;
   return commit.message || (typeof title === 'string' && title.trim() ? title : 'State committed');
-}
-
-function commitSummaryFor(commit: ApiCommit | null, yopsCount: number): string {
-  if (!commit) return 'Select a branch with committed state.';
-  return (
-    commitHashLabel(commit.hash) +
-    ' from workspace source and ' +
-    String(yopsCount) +
-    ' deterministic YOps'
-  );
 }
 
 function validationLabel(
