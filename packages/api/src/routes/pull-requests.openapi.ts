@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   type Commit,
   collectResult,
+  diffCommits,
   type MergeDecision,
   type MergeResult,
   runOperation,
@@ -14,6 +15,7 @@ import {
   commitMergeDraft,
   createMergeDraft,
   createPullRequest,
+  ensureMainBranch,
   findActivePullRequestByBranches,
   findBranchByName,
   findBranchesByProject,
@@ -149,7 +151,7 @@ const PullRequestCompareCandidateSchema = z.object({
   title: z.string(),
   description: z.string(),
   head_commit_id: z.string(),
-  base_commit_id: z.string(),
+  base_commit_id: z.string().nullable(),
   updated_at: z.string(),
   ahead_by: z.number().int().nonnegative(),
   behind_by: z.number().int().nonnegative(),
@@ -158,7 +160,7 @@ const PullRequestCompareCandidateSchema = z.object({
   output_impacts: z.number().int().nonnegative(),
   source_refs: z.number().int().nonnegative(),
   schema: z.string(),
-  status: z.enum(['ready', 'already_open', 'no_changes']),
+  status: z.enum(['ready', 'already_open', 'no_changes', 'base_empty']),
   status_label: z.string(),
   open_pull_request_number: z.number().int().positive().nullable(),
 });
@@ -255,33 +257,11 @@ async function requireProject(c: Parameters<typeof assertProjectAccess>[0], proj
   return { access, db };
 }
 
-function flattenContent(content: unknown): Map<string, string> {
-  const nodes = new Map<string, string>();
-  const trees = (content as { trees?: unknown[] } | null)?.trees;
-  if (!Array.isArray(trees)) return nodes;
-
-  const visit = (node: unknown, path: string) => {
-    if (!node || typeof node !== 'object') return;
-    const record = node as { key?: unknown; slots?: unknown; children?: unknown[] };
-    const key = typeof record.key === 'string' ? record.key : path;
-    nodes.set(key, JSON.stringify(record.slots ?? null));
-    if (Array.isArray(record.children)) {
-      record.children.forEach((child, index) => visit(child, `${path}.${index}`));
-    }
-  };
-  trees.forEach((tree, index) => visit(tree, String(index)));
-  return nodes;
-}
-
-function countChangedNodes(source: Commit, target: Commit): number {
-  const sourceNodes = flattenContent(source.content);
-  const targetNodes = flattenContent(target.content);
-  const keys = new Set([...sourceNodes.keys(), ...targetNodes.keys()]);
-  let changed = 0;
-  for (const key of keys) {
-    if (sourceNodes.get(key) !== targetNodes.get(key)) changed += 1;
-  }
-  return changed;
+function summarizeCommitChanges(source: Commit, target: Commit) {
+  const diff = diffCommits(target.content, source.content);
+  const changedNodes = diff.modified.length + diff.onlyInSource.length + diff.onlyInTarget.length;
+  const changedRelations = diff.relationsAdded.length + diff.relationsRemoved.length;
+  return { changedNodes, hasChanges: changedNodes > 0 || changedRelations > 0 };
 }
 
 async function collectAncestorDistances(db: AnyDB, projectId: string, startHash: string) {
@@ -330,9 +310,12 @@ async function buildCompareCandidates(
   branches: Branch[],
   activePullRequests: StoredPullRequest[]
 ): Promise<PullRequestCompareCandidate[]> {
-  if (!baseBranch.headCommitHash) return [];
-  const targetCommit = await getCommit(db, baseBranch.headCommitHash);
-  if (!targetCommit || targetCommit.project_id !== projectId) return [];
+  const targetCommit = baseBranch.headCommitHash
+    ? await getCommit(db, baseBranch.headCommitHash)
+    : null;
+  if (baseBranch.headCommitHash && (!targetCommit || targetCommit.project_id !== projectId)) {
+    return [];
+  }
 
   const openByBranch = new Map(
     activePullRequests.map((pullRequest) => [
@@ -347,16 +330,27 @@ async function buildCompareCandidates(
       .map(async (branch): Promise<PullRequestCompareCandidate | null> => {
         const sourceCommit = await getCommit(db, branch.headCommitHash as string);
         if (!sourceCommit || sourceCommit.project_id !== projectId) return null;
-        const distances = await commitDistances(
-          db,
-          projectId,
-          sourceCommit.hash,
-          targetCommit.hash
-        );
+        const distances = targetCommit
+          ? await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash)
+          : {
+              ahead: (await collectAncestorDistances(db, projectId, sourceCommit.hash)).size,
+              behind: 0,
+            };
         const openPullRequestNumber = openByBranch.get(`${baseBranch.name}:${branch.name}`) ?? null;
-        const changedNodes = countChangedNodes(sourceCommit, targetCommit);
-        const hasChanges = sourceCommit.hash !== targetCommit.hash && changedNodes > 0;
-        const status = openPullRequestNumber ? 'already_open' : hasChanges ? 'ready' : 'no_changes';
+        const { changedNodes, hasChanges: hasSemanticChanges } = targetCommit
+          ? summarizeCommitChanges(sourceCommit, targetCommit)
+          : summarizeCommitChanges(sourceCommit, {
+              ...sourceCommit,
+              content: { trees: [], relations: [] },
+            });
+        const hasChanges = distances.ahead > 0 && hasSemanticChanges;
+        const status = !targetCommit
+          ? 'base_empty'
+          : openPullRequestNumber
+            ? 'already_open'
+            : hasChanges
+              ? 'ready'
+              : 'no_changes';
         return {
           id: `${projectId}:compare:${branch.branchId}`,
           branch: branch.name,
@@ -366,7 +360,7 @@ async function buildCompareCandidates(
             branch.description?.trim() ||
             `Review ${branch.name} before merging into ${baseBranch.name}.`,
           head_commit_id: sourceCommit.hash,
-          base_commit_id: targetCommit.hash,
+          base_commit_id: targetCommit?.hash ?? null,
           updated_at: branch.updatedAt.toISOString(),
           ahead_by: distances.ahead,
           behind_by: distances.behind,
@@ -381,7 +375,13 @@ async function buildCompareCandidates(
               ? `PR #${openPullRequestNumber} already open`
               : status === 'ready'
                 ? 'Available'
-                : 'No changes',
+                : status === 'base_empty'
+                  ? 'Base has no commit'
+                  : distances.ahead === 0 && distances.behind > 0
+                    ? 'Behind base'
+                    : hasSemanticChanges
+                      ? 'No changes'
+                      : 'No semantic changes',
           open_pull_request_number: openPullRequestNumber,
         };
       })
@@ -491,33 +491,18 @@ pullRequestRoutes.openapi(comparePullRequestsRoute, async (c) => {
   const { base } = c.req.valid('query');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
+  await ensureMainBranch(db, projectId);
   const branches = await findBranchesByProject(db, { projectId });
   const baseBranch = branches.find((branch) => branch.name === base);
   if (!baseBranch)
     return c.json(errorBody('BASE_BRANCH_NOT_FOUND', `Branch ${base} not found.`), 404);
-  if (!baseBranch.headCommitHash) {
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          base_branches: branches
-            .filter((branch) => branch.headCommitHash)
-            .map((branch) => branch.name),
-          compare_branches: [],
-        },
-      },
-      200
-    );
-  }
   const active = await listPullRequestsByProject(db, projectId, ACTIVE_STATUSES);
   const candidates = await buildCompareCandidates(db, projectId, baseBranch, branches, active);
   return c.json(
     {
       success: true as const,
       data: {
-        base_branches: branches
-          .filter((branch) => branch.headCommitHash)
-          .map((branch) => branch.name),
+        base_branches: branches.map((branch) => branch.name),
         compare_branches: candidates,
       },
     },
@@ -540,6 +525,8 @@ const createPullRequestRoute = createRoute({
             description: z.string().default(''),
             source_branch: z.string().min(1),
             target_branch: z.string().min(1),
+            expected_source_commit_id: z.string().min(1),
+            expected_target_commit_id: z.string().min(1),
             draft: z.boolean().default(false),
             review_owner_id: z.string().optional(),
             linked_work: z.string().optional(),
@@ -565,7 +552,7 @@ const createPullRequestRoute = createRoute({
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
-      description: 'A pull request already exists',
+      description: 'A pull request already exists or a compared branch head moved',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -576,6 +563,7 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
   const body = c.req.valid('json');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
+  await ensureMainBranch(db, projectId);
   if (body.source_branch === body.target_branch) {
     return c.json(
       errorBody('PULL_REQUEST_BRANCHES_IDENTICAL', 'Source and target branches must be different.'),
@@ -600,6 +588,18 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
         'Source and target branches must both contain a commit.'
       ),
       400
+    );
+  }
+  if (
+    sourceBranch.headCommitHash !== body.expected_source_commit_id ||
+    targetBranch.headCommitHash !== body.expected_target_commit_id
+  ) {
+    return c.json(
+      errorBody(
+        'PULL_REQUEST_BRANCH_HEAD_CHANGED',
+        'A branch moved after comparison. Refresh the comparison before creating the pull request.'
+      ),
+      409
     );
   }
   const existing = await findActivePullRequestByBranches(
@@ -635,8 +635,9 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
       404
     );
   }
-  const changedNodes = countChangedNodes(sourceCommit, targetCommit);
-  if (sourceCommit.hash === targetCommit.hash || changedNodes === 0) {
+  const distances = await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash);
+  const { changedNodes, hasChanges } = summarizeCommitChanges(sourceCommit, targetCommit);
+  if (distances.ahead === 0 || !hasChanges) {
     return c.json(
       errorBody(
         'PULL_REQUEST_NO_CHANGES',

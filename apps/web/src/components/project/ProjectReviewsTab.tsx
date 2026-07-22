@@ -28,7 +28,7 @@ type PullRequestStatus = 'draft' | 'open' | 'checking' | 'ready' | 'blocked' | '
 type PullRequestListMode = 'open' | 'closed';
 type PullRequestView = 'list' | 'create' | 'detail';
 type PullRequestDetailTab = 'overview' | 'structured-diff' | 'checks' | 'activity' | 'merge';
-type PullRequestCompareStatus = 'ready' | 'already_open' | 'no_changes';
+type PullRequestCompareStatus = 'ready' | 'already_open' | 'no_changes' | 'base_empty';
 
 interface ProjectPullRequest {
   id: string;
@@ -84,7 +84,7 @@ interface PullRequestCompareCandidate {
   title: string;
   description: string;
   headCommitId: string;
-  baseCommitId: string;
+  baseCommitId: string | null;
   updatedAt: string;
   aheadBy: number;
   behindBy: number;
@@ -105,7 +105,7 @@ interface ApiProjectPullRequestCompareCandidate {
   title: string;
   description: string;
   head_commit_id: string;
-  base_commit_id: string;
+  base_commit_id: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;
@@ -474,15 +474,18 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareRefreshKey, setCompareRefreshKey] = useState(0);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [createForm, setCreateForm] = useState({
-    title: 'Output bundle refresh',
-    description:
-      '## Summary\n- Refresh generated output bundle state after release-note source changes.\n- Review structured diff and output impact before merging into main.\n- Merge readiness runs after the PR opens.',
-    sourceBranch: 'outputs/bundle-refresh',
+  const [createForm, setCreateForm] = useState(() => ({
+    title: projectId ? '' : 'Output bundle refresh',
+    description: projectId
+      ? ''
+      : '## Summary\n- Refresh generated output bundle state after release-note source changes.\n- Review structured diff and output impact before merging into main.\n- Merge readiness runs after the PR opens.',
+    sourceBranch: projectId ? '' : 'outputs/bundle-refresh',
     targetBranch: 'main',
-  });
+  }));
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -509,23 +512,73 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     if (!projectId || view !== 'create') return;
 
     let cancelled = false;
+    setApiError(null);
+    setCompareCandidates([]);
+    setCompareLoading(true);
     fetchCompareCandidates(projectId, createForm.targetBranch)
       .then((data) => {
         if (cancelled) return;
-        const mappedCandidates = data.compare_branches.map(toCompareCandidate);
         setBaseBranches(data.base_branches);
+        if (!data.base_branches.includes(createForm.targetBranch)) {
+          const nextBaseBranch = data.base_branches[0];
+          setCompareCandidates([]);
+          if (nextBaseBranch) {
+            setCreateForm((form) => ({
+              ...form,
+              sourceBranch: '',
+              targetBranch: nextBaseBranch,
+            }));
+          }
+          return;
+        }
+        const mappedCandidates = data.compare_branches.map(toCompareCandidate);
         setCompareCandidates(mappedCandidates);
       })
       .catch((err) => {
         if (!cancelled) {
           setApiError(err instanceof Error ? err.message : 'Could not load comparable branches');
         }
+      })
+      .finally(() => {
+        if (!cancelled) setCompareLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [createForm.targetBranch, fetchCompareCandidates, projectId, view]);
+  }, [compareRefreshKey, createForm.targetBranch, fetchCompareCandidates, projectId, view]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const refreshForProject = (payload: unknown) => {
+      if (!payload || typeof payload !== 'object') return;
+      if (!('projectId' in payload) || payload.projectId !== projectId) return;
+      setCompareRefreshKey((key) => key + 1);
+    };
+    const handleWindowCommit = (event: Event) => {
+      refreshForProject((event as CustomEvent<unknown>).detail);
+    };
+    const handleWindowFocus = (event: FocusEvent) => {
+      if (event.target !== window) return;
+      setCompareRefreshKey((key) => key + 1);
+    };
+
+    window.addEventListener('t3x:commit-created', handleWindowCommit);
+    window.addEventListener('focus', handleWindowFocus);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('t3x-commits');
+      channel.onmessage = (event: MessageEvent<unknown>) => refreshForProject(event.data);
+    }
+
+    return () => {
+      window.removeEventListener('t3x:commit-created', handleWindowCommit);
+      window.removeEventListener('focus', handleWindowFocus);
+      channel?.close();
+    };
+  }, [projectId]);
 
   const openPullRequests = pullRequests.filter((item) =>
     ['draft', 'open', 'checking', 'ready', 'blocked'].includes(item.status)
@@ -559,25 +612,39 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     );
   }, [closedPullRequests, mode, openPullRequests, query]);
 
-  const availableCompareCandidates = useMemo(
+  const visibleCompareCandidates = useMemo(
     () =>
       compareCandidates.filter(
         (candidate) =>
-          candidate.status === 'ready' &&
-          candidate.branch !== createForm.targetBranch &&
-          (candidate.aheadBy > 0 || candidate.yopsChanges > 0)
+          candidate.baseBranch === createForm.targetBranch &&
+          candidate.branch !== createForm.targetBranch
       ),
     [compareCandidates, createForm.targetBranch]
   );
+  const availableCompareCandidates = useMemo(
+    () =>
+      visibleCompareCandidates.filter(
+        (candidate) => candidate.status === 'ready' && candidate.aheadBy > 0
+      ),
+    [visibleCompareCandidates]
+  );
   const selectedCompareCandidate =
-    compareCandidates.find(
+    visibleCompareCandidates.find(
       (candidate) =>
         candidate.branch === createForm.sourceBranch &&
         candidate.baseBranch === createForm.targetBranch
     ) ??
     availableCompareCandidates[0] ??
+    visibleCompareCandidates[0] ??
     null;
-  const canCreatePullRequest = selectedCompareCandidate?.status === 'ready';
+  const canCreatePullRequest = Boolean(
+    !compareLoading &&
+      selectedCompareCandidate?.status === 'ready' &&
+      Boolean(selectedCompareCandidate.baseCommitId) &&
+      selectedCompareCandidate.aheadBy > 0 &&
+      selectedCompareCandidate.branch === createForm.sourceBranch &&
+      selectedCompareCandidate.baseBranch === createForm.targetBranch
+  );
 
   useEffect(() => {
     if (view !== 'create') return;
@@ -678,7 +745,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   };
 
   const createPullRequest = () => {
-    if (!canCreatePullRequest || creating) return;
+    if (!canCreatePullRequest || creating || !selectedCompareCandidate?.baseCommitId) return;
 
     if (!projectId) {
       createLocalPullRequest();
@@ -689,8 +756,10 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setApiError(null);
     createProjectPullRequest(projectId, {
       description: createForm.description,
-      source_branch: createForm.sourceBranch,
-      target_branch: createForm.targetBranch,
+      expected_source_commit_id: selectedCompareCandidate.headCommitId,
+      expected_target_commit_id: selectedCompareCandidate.baseCommitId,
+      source_branch: selectedCompareCandidate.branch,
+      target_branch: selectedCompareCandidate.baseBranch,
       title: createForm.title.trim() || 'Untitled pull request',
     })
       .then((created) => {
@@ -858,13 +927,15 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       <PullRequestCreateView
         baseBranches={baseBranches}
         canCreate={canCreatePullRequest}
-        candidates={availableCompareCandidates}
+        candidates={visibleCompareCandidates}
+        compareLoading={compareLoading}
         creating={creating}
         error={apiError}
         form={createForm}
         onBack={() => setView('list')}
         onChange={setCreateForm}
         onCreate={createPullRequest}
+        onRefresh={() => setCompareRefreshKey((key) => key + 1)}
         selectedCandidate={selectedCompareCandidate}
       />
     );
@@ -1081,17 +1152,20 @@ function PullRequestCreateView({
   baseBranches,
   canCreate,
   candidates,
+  compareLoading,
   creating,
   error,
   form,
   onBack,
   onChange,
   onCreate,
+  onRefresh,
   selectedCandidate,
 }: {
   baseBranches: string[];
   canCreate: boolean;
   candidates: PullRequestCompareCandidate[];
+  compareLoading: boolean;
   creating: boolean;
   error: string | null;
   form: {
@@ -1108,6 +1182,7 @@ function PullRequestCreateView({
     title: string;
   }) => void;
   onCreate: () => void;
+  onRefresh: () => void;
   selectedCandidate: PullRequestCompareCandidate | null;
 }) {
   const update = (patch: Partial<typeof form>) => onChange({ ...form, ...patch });
@@ -1146,16 +1221,32 @@ function PullRequestCreateView({
                 title and description before opening it for review.
               </p>
             </div>
-            <Badge variant={canCreate ? 'branch' : 'secondary'}>
-              {canCreate ? 'Available' : 'Choose branch'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                aria-label="Refresh branch comparisons"
+                disabled={compareLoading}
+                onClick={onRefresh}
+                size="sm"
+                type="button"
+                variant="canvas-outline"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={cn('h-4 w-4', compareLoading && 'animate-spin')}
+                />
+                Refresh
+              </Button>
+              <Badge variant={canCreate ? 'branch' : 'secondary'}>
+                {compareLoading ? 'Comparing...' : canCreate ? 'Available' : 'Choose branch'}
+              </Badge>
+            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
             <GitBranch aria-hidden="true" className="h-4 w-4 text-[var(--text-tertiary)]" />
             <BranchSelect
               label="base"
-              onChange={(targetBranch) => update({ targetBranch })}
+              onChange={(targetBranch) => update({ sourceBranch: '', targetBranch })}
               options={baseBranches}
               value={form.targetBranch}
             />
@@ -1178,8 +1269,8 @@ function PullRequestCreateView({
           <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[var(--status-warning)]/10 p-4 text-sm text-[var(--text-secondary)]">
             <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-[var(--status-warning)]" />
             <span>
-              Branches that already have an open PR are omitted here. Validation remains in the
-              workspace flow; this page only prepares a branch comparison for PR review.
+              Every registered branch with a HEAD commit stays visible. Branches with an open PR, no
+              semantic changes, or no commits ahead of the base cannot create another PR.
             </span>
           </div>
         </section>
@@ -1187,13 +1278,18 @@ function PullRequestCreateView({
         <div className="grid gap-4 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
           <section className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
             <div className="border-b border-[var(--stroke-divider)] p-4">
-              <h3 className="font-semibold text-[var(--text-primary)]">Available branches</h3>
+              <h3 className="font-semibold text-[var(--text-primary)]">Branches with commits</h3>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Branches with changes against {form.targetBranch} and no open PR.
+                Registered branches with a HEAD commit, compared against {form.targetBranch}.
               </p>
             </div>
             <div className="grid gap-2 p-3">
-              {candidates.length > 0 ? (
+              {compareLoading ? (
+                <div className="flex items-center gap-2 rounded-2xl bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
+                  <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  Loading branch comparisons...
+                </div>
+              ) : candidates.length > 0 ? (
                 candidates.map((candidate) => (
                   <CompareCandidateRow
                     active={candidate.branch === form.sourceBranch}
@@ -1204,7 +1300,7 @@ function PullRequestCreateView({
                 ))
               ) : (
                 <div className="rounded-2xl bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
-                  No branches are currently available for a new pull request.
+                  No other committed branches can be compared with this base.
                 </div>
               )}
             </div>
@@ -1248,7 +1344,10 @@ function PullRequestCreateView({
 
                   <div className="grid gap-2">
                     <ReadinessRow label="Head commit" value={selectedCandidate.headCommitId} />
-                    <ReadinessRow label="Base commit" value={selectedCandidate.baseCommitId} />
+                    <ReadinessRow
+                      label="Base commit"
+                      value={selectedCandidate.baseCommitId ?? 'No commit'}
+                    />
                     <ReadinessRow label="Schema" value={selectedCandidate.schema} />
                   </div>
                 </>
@@ -1328,12 +1427,15 @@ function CompareCandidateRow({
         <span className="min-w-0 truncate font-mono text-sm font-semibold text-[var(--status-info)]">
           {candidate.branch}
         </span>
-        <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{candidate.updatedAt}</span>
+        <Badge variant={candidate.status === 'ready' ? 'branch' : 'secondary'}>
+          {candidate.statusLabel}
+        </Badge>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
         <span>{candidate.aheadBy} ahead</span>
         <span>{candidate.behindBy} behind</span>
         <span>{candidate.yopsChanges} YOps</span>
+        <span>{candidate.updatedAt}</span>
       </div>
       <p className="line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">
         {candidate.description}

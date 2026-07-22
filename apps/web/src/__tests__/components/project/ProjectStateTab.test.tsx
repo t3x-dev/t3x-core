@@ -358,6 +358,20 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('clarifies that an empty focused branch does not own commits shown on the all-branch canvas', async () => {
+    hookMocks.loadCommits.mockResolvedValue([]);
+    renderStateTab();
+
+    await screen.findByText('No commit on this branch');
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('main has no HEAD commit.');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Canvas shows the evolution of all branches'
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('cannot serve as the main PR base');
+  });
+
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
     hookMocks.loadCommits.mockResolvedValue([{ ...PRD_COMMIT, parents: [], yops_log_ids: [] }]);
     hookMocks.loadOperations.mockResolvedValue({ commit_hash: PRD_COMMIT.hash, operations: [] });

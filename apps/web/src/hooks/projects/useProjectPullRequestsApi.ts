@@ -31,6 +31,8 @@ export function useProjectPullRequestsApi() {
       projectId: string,
       input: {
         description: string;
+        expected_source_commit_id: string;
+        expected_target_commit_id: string;
         source_branch: string;
         target_branch: string;
         title: string;

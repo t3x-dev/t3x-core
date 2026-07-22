@@ -9,6 +9,7 @@ import {
   insertBranch,
   insertProject,
   listCommits,
+  updateBranchHead,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -101,10 +102,19 @@ describe('Pull request routes', () => {
     return { projectId: project.projectId, source, target: targetHead };
   }
 
-  async function openPullRequest(projectId: string) {
+  async function openPullRequest(projectId: string, expected?: { source: string; target: string }) {
+    const [sourceBranch, targetBranch] = await Promise.all([
+      findBranchByName(mockDB, projectId, 'feature/pr-flow'),
+      findBranchByName(mockDB, projectId, 'main'),
+    ]);
+    if (!sourceBranch?.headCommitHash || !targetBranch?.headCommitHash) {
+      throw new Error('Pull request fixture branches must have heads');
+    }
     const response = await app.request(`/v1/projects/${projectId}/pull-requests`, {
       body: JSON.stringify({
         description: 'Review the feature branch',
+        expected_source_commit_id: expected?.source ?? sourceBranch.headCommitHash,
+        expected_target_commit_id: expected?.target ?? targetBranch.headCommitHash,
         source_branch: 'feature/pr-flow',
         target_branch: 'main',
         title: 'Feature PR flow',
@@ -143,6 +153,137 @@ describe('Pull request routes', () => {
     ]);
   });
 
+  it('repairs a legacy main branch before listing pull request comparisons', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Legacy PR project' }));
+    const target = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Legacy User' },
+      content: {
+        trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'legacy main baseline',
+      branch: 'main',
+    });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/pr-flow',
+      parentBranch: 'main',
+    });
+    await createCommit(mockDB, {
+      parents: [target.hash],
+      author: { type: 'human', name: 'Legacy User' },
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'release', slots: { ready: true }, children: [] },
+        ],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'legacy feature update',
+      branch: 'feature/pr-flow',
+      enforceBranchLinearity: true,
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+
+    expect(response.status).toBe(200);
+    expect((await findBranchByName(mockDB, project.projectId, 'main'))?.headCommitHash).toBe(
+      target.hash
+    );
+    expect(((await response.json()) as ApiResponse).data.base_branches).toContain('main');
+  });
+
+  it('does not offer or create a pull request when the source is only behind the target', async () => {
+    const fixture = await createBranchFixture();
+    const target = await createCommit(mockDB, {
+      parents: [fixture.source.hash],
+      author: { type: 'human', name: 'Fast-forward User' },
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'release', slots: { ready: true, reviewed: true }, children: [] },
+        ],
+        relations: [],
+      },
+      project_id: fixture.projectId,
+      message: 'main contains feature',
+      branch: 'main',
+    });
+    await updateBranchHead(mockDB, fixture.projectId, 'main', target.hash);
+
+    const comparison = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/compare?base=main`
+    );
+    const comparisonData = (await comparison.json()) as ApiResponse;
+    expect(comparisonData.data.compare_branches).toEqual([
+      expect.objectContaining({
+        branch: 'feature/pr-flow',
+        ahead_by: 0,
+        behind_by: 1,
+        status: 'no_changes',
+        status_label: 'Behind base',
+      }),
+    ]);
+
+    const opened = await openPullRequest(fixture.projectId);
+    expect(opened.response.status).toBe(400);
+    expect(opened.data.error.code).toBe('PULL_REQUEST_NO_CHANGES');
+  });
+
+  it('recognizes relation-only semantic changes as a valid comparison', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Relation PR project' }));
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    const trees = [
+      { key: 'product', slots: { version: 1 }, children: [] },
+      { key: 'release', slots: { ready: true }, children: [] },
+    ];
+    const target = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Relation User' },
+      content: { trees, relations: [] },
+      project_id: project.projectId,
+      message: 'relation baseline',
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/pr-flow',
+      parentBranch: 'main',
+    });
+    const source = await createCommit(mockDB, {
+      parents: [target.hash],
+      author: { type: 'human', name: 'Relation User' },
+      content: {
+        trees,
+        relations: [{ from: 'release', to: 'product', type: 'depends' }],
+      },
+      project_id: project.projectId,
+      message: 'add relation',
+      branch: 'feature/pr-flow',
+      enforceBranchLinearity: true,
+    });
+
+    const comparison = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    const comparisonData = (await comparison.json()) as ApiResponse;
+    expect(comparisonData.data.compare_branches).toEqual([
+      expect.objectContaining({ status: 'ready', changed_nodes: 0 }),
+    ]);
+
+    const opened = await openPullRequest(project.projectId, {
+      source: source.hash,
+      target: target.hash,
+    });
+    expect(opened.response.status).toBe(201);
+  });
+
   it('returns an empty comparison set when the base branch has no commits yet', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Empty PR project' }));
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
@@ -152,9 +293,51 @@ describe('Pull request routes', () => {
     );
     expect(response.status).toBe(200);
     expect(((await response.json()) as ApiResponse).data).toEqual({
-      base_branches: [],
+      base_branches: ['main'],
       compare_branches: [],
     });
+  });
+
+  it('lists committed source branches when the selected base branch is empty', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Empty main PR project' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/first-commit',
+      parentBranch: 'main',
+    });
+    const source = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Feature User' },
+      content: {
+        trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'first feature commit',
+      branch: 'feature/first-commit',
+      enforceBranchLinearity: true,
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    const data = (await response.json()) as ApiResponse;
+
+    expect(response.status).toBe(200);
+    expect(data.data.base_branches).toEqual(['main', 'feature/first-commit']);
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        branch: 'feature/first-commit',
+        head_commit_id: source.hash,
+        base_commit_id: null,
+        status: 'base_empty',
+        status_label: 'Base has no commit',
+      }),
+    ]);
   });
 
   it('creates and reloads a persistent pull request from branch heads', async () => {
@@ -188,6 +371,32 @@ describe('Pull request routes', () => {
     const listData = (await list.json()) as ApiResponse;
     expect(listData.data.counts).toEqual({ active: 1, merged: 0 });
     expect(listData.data.pull_requests[0].id).toBe(data.data.id);
+  });
+
+  it('rejects creation when a previewed branch head has moved', async () => {
+    const fixture = await createBranchFixture();
+    await createCommit(mockDB, {
+      parents: [fixture.source.hash],
+      author: { type: 'human', name: 'Concurrent User' },
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'release', slots: { ready: true, amended: true }, children: [] },
+        ],
+        relations: [],
+      },
+      project_id: fixture.projectId,
+      message: 'source moved after preview',
+      branch: 'feature/pr-flow',
+      enforceBranchLinearity: true,
+    });
+
+    const opened = await openPullRequest(fixture.projectId, {
+      source: fixture.source.hash,
+      target: fixture.target.hash,
+    });
+    expect(opened.response.status).toBe(409);
+    expect(opened.data.error.code).toBe('PULL_REQUEST_BRANCH_HEAD_CHANGED');
   });
 
   it('rejects duplicate active pull requests for the same branch pair', async () => {

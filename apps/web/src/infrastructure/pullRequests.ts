@@ -98,7 +98,7 @@ export interface ApiProjectPullRequestCompareCandidate {
   title: string;
   description: string;
   head_commit_id: string;
-  base_commit_id: string;
+  base_commit_id: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;
@@ -107,7 +107,7 @@ export interface ApiProjectPullRequestCompareCandidate {
   output_impacts: number;
   source_refs: number;
   schema: string;
-  status: 'ready' | 'already_open' | 'no_changes';
+  status: 'ready' | 'already_open' | 'no_changes' | 'base_empty';
   status_label: string;
   open_pull_request_number: number | null;
 }
@@ -122,6 +122,8 @@ export interface CreateProjectPullRequestInput {
   description: string;
   source_branch: string;
   target_branch: string;
+  expected_source_commit_id: string;
+  expected_target_commit_id: string;
   draft?: boolean;
   review_owner_id?: string;
   steward_id?: string;
