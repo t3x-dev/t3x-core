@@ -24,15 +24,18 @@ vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({
     embedded,
     focusedBranch,
+    focusedCommitHash,
     projectName,
   }: {
     embedded?: boolean;
     focusedBranch?: string;
+    focusedCommitHash?: string;
     projectName: string;
   }) => (
     <div
       data-embedded={String(embedded)}
       data-focused-branch={focusedBranch}
+      data-focused-commit={focusedCommitHash}
       data-testid="state-canvas-workspace"
     >
       {projectName}
@@ -409,6 +412,16 @@ describe('ProjectStateTab', () => {
       scroll: false,
     });
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('passes a deep-linked commit to Canvas for selection and centering', async () => {
+    navigationMocks.search = `view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+
+    renderStateTab();
+
+    const canvas = await screen.findByTestId('state-canvas-workspace');
+    expect(canvas).toHaveAttribute('data-focused-branch', 'main');
+    expect(canvas).toHaveAttribute('data-focused-commit', PRD_COMMIT.hash);
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {

@@ -3,6 +3,8 @@ import {
   ClipboardPaste,
   FileText,
   FileUp,
+  GitBranch,
+  GitCommitHorizontal,
   ImagePlus,
   Link,
   MessageSquareText,
@@ -75,19 +77,25 @@ const SOURCE_SEGMENT_EDITING_DISABLED_TITLE =
 export function SourcesTab({
   candidate,
   candidateExtracted,
+  conversationId,
   extracting,
   flowError,
   onChatSourceEvidenceChange,
   onExtractCandidate,
   onMaterialUploaded,
+  parentCommitHash,
+  targetBranch,
 }: {
   candidate: WorkspaceCandidate;
   candidateExtracted?: boolean;
+  conversationId?: string;
   extracting?: boolean;
   flowError?: string;
   onChatSourceEvidenceChange?: ChatSourceEvidenceChange;
   onExtractCandidate?: () => Promise<void> | void;
   onMaterialUploaded?: () => Promise<void> | void;
+  parentCommitHash?: string;
+  targetBranch?: string;
 }) {
   const sources = candidate.sourceBundle;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(sources[0]?.id ?? null);
@@ -285,7 +293,7 @@ export function SourcesTab({
           {extracting
             ? 'Generating...'
             : candidateExtracted
-              ? 'Review candidate'
+              ? 'Regenerate candidate proposal'
               : 'Generate candidate proposal'}
         </Button>
       </header>
@@ -301,7 +309,7 @@ export function SourcesTab({
 
       <Tabs
         className="min-h-[680px] overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
-        defaultValue="materials"
+        defaultValue={parentCommitHash ? 'chat' : 'materials'}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2">
           <TabsList className="h-auto justify-start rounded-none bg-transparent p-0">
@@ -366,10 +374,13 @@ export function SourcesTab({
             <SourceChatPanel
               addPin={addPin}
               candidate={candidate}
+              conversationId={conversationId}
               onChatSourceEvidenceChange={onChatSourceEvidenceChange}
+              parentCommitHash={parentCommitHash}
               pins={pins}
               removePin={removePin}
               selectedSource={selectedSource}
+              targetBranch={targetBranch}
             />
           </section>
         </TabsContent>
@@ -769,20 +780,28 @@ function ParsedTextPreview({
 function SourceChatPanel({
   addPin,
   candidate,
+  conversationId,
   onChatSourceEvidenceChange,
+  parentCommitHash,
   pins,
   removePin,
   selectedSource,
+  targetBranch,
 }: {
   addPin: (projectId: string, type: Pin['type'], refId: string) => Promise<Pin | null>;
   candidate: WorkspaceCandidate;
+  conversationId?: string;
   onChatSourceEvidenceChange?: ChatSourceEvidenceChange;
+  parentCommitHash?: string;
   pins: Pin[];
   removePin: (pinId: string) => Promise<void>;
   selectedSource: SourceBundleItem | null;
+  targetBranch?: string;
 }) {
   const [sourceConversationId, setSourceConversationId] = useState<string | undefined>(() =>
-    readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+    parentCommitHash
+      ? conversationId
+      : (conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id))
   );
   const [turnSourceError, setTurnSourceError] = useState<string | null>(null);
   const [pinningTurnId, setPinningTurnId] = useState<string | null>(null);
@@ -795,8 +814,20 @@ function SourceChatPanel({
   } = useChatModelSelection({});
 
   useEffect(() => {
-    setSourceConversationId(readStoredSourceChatConversationId(candidate.projectId, candidate.id));
-  }, [candidate.id, candidate.projectId]);
+    if (parentCommitHash) {
+      setSourceConversationId(conversationId);
+      if (conversationId) {
+        writeStoredSourceChatConversationId(candidate.projectId, candidate.id, conversationId);
+      } else {
+        removeStoredSourceChatConversationId(candidate.projectId, candidate.id);
+      }
+      return;
+    }
+
+    setSourceConversationId(
+      conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+    );
+  }, [candidate.id, candidate.projectId, conversationId, parentCommitHash]);
 
   const handleConversationCreated = useCallback(
     (conversationId: string) => {
@@ -812,6 +843,7 @@ function SourceChatPanel({
     title: `${candidate.title} source chat`,
     provider: selectedProvider ?? undefined,
     model: selectedModel ?? undefined,
+    parentCommitHash,
     onConversationCreated: handleConversationCreated,
   });
 
@@ -949,6 +981,23 @@ function SourceChatPanel({
         </div>
       </header>
 
+      {parentCommitHash ? (
+        <output className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+          <span className="inline-flex items-center gap-1.5">
+            <GitCommitHorizontal
+              aria-hidden="true"
+              className="size-3.5 text-[var(--accent-commit)]"
+            />
+            Based on{' '}
+            <span className="font-mono font-semibold">{shortSourceHash(parentCommitHash)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <GitBranch aria-hidden="true" className="size-3.5 text-[var(--accent-branch)]" />
+            Next commit to <span className="font-mono font-semibold">{targetBranch ?? 'main'}</span>
+          </span>
+        </output>
+      ) : null}
+
       {chat.error || chat.warning || turnSourceError ? (
         <div
           className="border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2 text-sm text-[var(--status-error)]"
@@ -1036,6 +1085,19 @@ function writeStoredSourceChatConversationId(
   } catch {
     // Source chat can still work for the current session without persisted localStorage.
   }
+}
+
+function removeStoredSourceChatConversationId(projectId: string, workspaceId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(sourceChatConversationStorageKey(projectId, workspaceId));
+  } catch {
+    // A fresh in-memory conversation can still start without localStorage.
+  }
+}
+
+function shortSourceHash(hash: string): string {
+  return hash.replace(/^sha256:/, '').slice(0, 12);
 }
 
 function getSourceChatSourceId(

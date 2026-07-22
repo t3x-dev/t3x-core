@@ -89,47 +89,66 @@ export function WorkspaceTabs({
   activeTab,
   candidate,
   candidateExtracted,
+  continuationBusy,
   extractingCandidate,
   flowError,
   onChatSourceEvidenceChange,
+  onContinueFromCommit,
   onExtractCandidate,
   onSourceMaterialUploaded,
   onSendToYOps,
   onYOpsApplied,
   onYOpsCommitted,
+  onViewCommitInState,
   onWorkflowTabChange,
   sendingToYOps,
+  sourceConversationId,
+  sourceParentCommitHash,
   yopsDraftSent,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate;
   candidateExtracted?: boolean;
+  continuationBusy?: boolean;
   extractingCandidate?: boolean;
   flowError?: string;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
+  onContinueFromCommit?: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void> | void;
   onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onYOpsApplied?: () => void;
-  onYOpsCommitted?: (commitHash: string) => void;
+  onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
+  sourceConversationId?: string;
+  sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
 }) {
   return (
     <div role="tabpanel">
       {renderWorkspaceTab(activeTab, candidate, {
         candidateExtracted,
+        continuationBusy,
         extractingCandidate,
         flowError,
         onChatSourceEvidenceChange,
+        onContinueFromCommit,
         onExtractCandidate,
         onSendToYOps,
         onSourceMaterialUploaded,
         onYOpsApplied,
         onYOpsCommitted,
+        onViewCommitInState,
         onWorkflowTabChange,
         sendingToYOps,
+        sourceConversationId,
+        sourceParentCommitHash,
         yopsDraftSent,
       })}
     </div>
@@ -138,16 +157,25 @@ export function WorkspaceTabs({
 
 interface RenderWorkspaceTabOptions {
   candidateExtracted?: boolean;
+  continuationBusy?: boolean;
   extractingCandidate?: boolean;
   flowError?: string;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
+  onContinueFromCommit?: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void> | void;
   onExtractCandidate?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onYOpsApplied?: () => void;
-  onYOpsCommitted?: (commitHash: string) => void;
+  onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
+  sourceConversationId?: string;
+  sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
 }
 
@@ -160,10 +188,13 @@ function renderWorkspaceTab(
     return (
       <YOpsDraftTab
         candidate={candidate}
+        continuationBusy={options.continuationBusy}
         flowError={options.flowError}
+        onContinueFromCommit={options.onContinueFromCommit}
         onSendToYOps={options.onSendToYOps}
         onApplied={options.onYOpsApplied}
         onCommitted={options.onYOpsCommitted}
+        onViewCommitInState={options.onViewCommitInState}
         sendingToYOps={options.sendingToYOps}
         onViewChange={options.onWorkflowTabChange}
         view={activeTab}
@@ -177,6 +208,9 @@ function renderWorkspaceTab(
       candidateExtracted={options.candidateExtracted}
       extracting={options.extractingCandidate}
       flowError={options.flowError}
+      conversationId={options.sourceConversationId}
+      parentCommitHash={options.sourceParentCommitHash}
+      targetBranch={candidate.targetBranch}
       onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
       onExtractCandidate={options.onExtractCandidate}
       onMaterialUploaded={options.onSourceMaterialUploaded}
