@@ -4,6 +4,11 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: vi.fn(),
+});
+
 const pullRequestApi = vi.hoisted(() => ({
   closePullRequest: vi.fn(),
   createPullRequest: vi.fn(),
@@ -214,9 +219,8 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
     expect(await screen.findByText('Real feature')).toBeInTheDocument();
-    fireEvent.change(screen.getByRole('combobox', { name: 'base:' }), {
-      target: { value: 'release/2026-07' },
-    });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'base:' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'release/2026-07' }));
 
     await waitFor(() => {
       expect(pullRequestApi.fetchCompareCandidates).toHaveBeenLastCalledWith(
@@ -250,7 +254,9 @@ describe('ProjectReviewsTab', () => {
         'feature/prd-audience'
       );
     });
-    expect(screen.getByRole('combobox', { name: 'base:' })).toHaveValue('feature/prd-audience');
+    expect(screen.getByRole('combobox', { name: 'base:' })).toHaveTextContent(
+      'feature/prd-audience'
+    );
     expect(
       screen.getByText(
         'Registered branches with a HEAD commit, compared against feature/prd-audience.'

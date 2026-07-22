@@ -15,6 +15,13 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type {
   ApiProjectPullRequest,
   ApiProjectPullRequestActivity,
@@ -1860,21 +1867,36 @@ function BranchSelect({
   options: string[];
   value: string;
 }) {
+  const accessibleLabel = label ? `${label}:` : 'compare branch';
+
   return (
-    <label className="flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
+    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
       {label ? `${label}:` : null}
-      <select
-        className="h-10 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-sm font-semibold text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+      <Select onValueChange={onChange} value={value}>
+        <SelectTrigger
+          aria-label={accessibleLabel}
+          className="h-11 w-[min(17rem,calc(100vw-5rem))] rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3.5 font-semibold text-[var(--text-primary)] shadow-none transition-[background-color,border-color,box-shadow] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:border-[var(--status-info)] focus-visible:ring-4 focus-visible:ring-[var(--status-info)]/12 data-[size=default]:h-11 data-[state=open]:border-[var(--status-info)] data-[state=open]:bg-[var(--surface-panel)] data-[state=open]:ring-4 data-[state=open]:ring-[var(--status-info)]/12 sm:w-60"
+        >
+          <SelectValue className="min-w-0 flex-1 truncate text-left" placeholder="Choose branch" />
+        </SelectTrigger>
+        <SelectContent
+          align="start"
+          className="min-w-60 rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
+          position="popper"
+          sideOffset={8}
+        >
+          {options.map((option) => (
+            <SelectItem
+              className="h-10 rounded-xl pr-9 pl-3 font-medium text-[var(--text-primary)] focus:bg-[var(--hover-bg)] focus:text-[var(--text-primary)] data-[state=checked]:bg-[var(--status-info)]/10 data-[state=checked]:font-semibold data-[state=checked]:text-[var(--status-info)]"
+              key={option}
+              value={option}
+            >
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
