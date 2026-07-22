@@ -110,6 +110,7 @@ app.delete('/outbox', async (_req, res) => {
 });
 
 app.listen(PORT, () => {
+  console.log('[practice-pr] PR branch workflow check');
   console.log(`Agent Demo running on http://localhost:${PORT}`);
   console.log('Endpoints:');
   console.log('  GET  /health  - Health check');
