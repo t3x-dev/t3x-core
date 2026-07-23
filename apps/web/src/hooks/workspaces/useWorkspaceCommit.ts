@@ -1,17 +1,21 @@
 import { useCallback } from 'react';
 import { commitWorkspaceDraft, saveWorkspaceDraft } from '@/queries/workspaces';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceValidationOverride } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 
 export function useWorkspaceCommit(candidate: WorkspaceCandidate) {
   const commit = useCallback(
-    async (materializedTrees: WorkspaceYOpsTreeNode[]) => {
+    async (
+      content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
+      validationOverride?: WorkspaceValidationOverride
+    ) => {
       await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
       const result = await commitWorkspaceDraft(
         candidate.projectId,
         candidate.id,
-        { trees: materializedTrees, relations: [] },
-        `Workspace commit: ${candidate.title}`
+        content,
+        `Workspace commit: ${candidate.title}`,
+        validationOverride
       );
 
       return result.commit.hash;

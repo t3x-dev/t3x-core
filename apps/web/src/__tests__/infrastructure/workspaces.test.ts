@@ -111,4 +111,43 @@ describe('infrastructure/workspaces', () => {
     );
     expect(handleResponseMock).toHaveBeenCalledWith(response);
   });
+
+  it('includes an explicit schema review override in a workspace commit request', async () => {
+    const response = new Response('{}');
+    const content = {
+      relations: [],
+      trees: [{ key: 'prd', slots: { title: 'Draft PRD' }, children: [] }],
+    };
+    const validationOverride = {
+      kind: 'schema_review' as const,
+      reason: 'User explicitly confirmed unresolved schema review gaps.',
+      blockers: ['Schema review gap: requirements.trip.acceptance'],
+    };
+
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      commit: { hash: 'sha256:workspace-commit' },
+      workspace: { id: 'workspace_prd_handoff' },
+    });
+
+    await commitProjectWorkspace(
+      'proj_1',
+      'workspace_prd_handoff',
+      content,
+      'Workspace commit: Draft PRD',
+      validationOverride
+    );
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      'https://api.test/api/v1/projects/proj_1/workspaces/workspace_prd_handoff/commit',
+      expect.objectContaining({
+        body: JSON.stringify({
+          content,
+          message: 'Workspace commit: Draft PRD',
+          validationOverride,
+        }),
+      })
+    );
+  });
 });

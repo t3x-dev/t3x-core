@@ -33,6 +33,7 @@ const candidate: WorkspaceCandidate = {
 const materializedTrees: WorkspaceYOpsTreeNode[] = [
   { key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] },
 ];
+const materializedRelations = [{ from: 'prd/summary', to: 'prd/requirements', type: 'depends_on' }];
 
 describe('useWorkspaceCommit', () => {
   beforeEach(() => {
@@ -57,7 +58,10 @@ describe('useWorkspaceCommit', () => {
 
     let hash = '';
     await act(async () => {
-      hash = await result.current.commit(materializedTrees);
+      hash = await result.current.commit({
+        trees: materializedTrees,
+        relations: materializedRelations,
+      });
     });
 
     expect(hash).toBe('sha256:workspace-commit');
@@ -65,11 +69,36 @@ describe('useWorkspaceCommit', () => {
     expect(commitWorkspaceDraft).toHaveBeenCalledWith(
       'proj_1',
       'workspace_prd_handoff',
-      { trees: materializedTrees, relations: [] },
-      'Workspace commit: PRD audience handoff'
+      { trees: materializedTrees, relations: materializedRelations },
+      'Workspace commit: PRD audience handoff',
+      undefined
     );
     expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(commitWorkspaceDraft).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('forwards an explicitly confirmed schema review override', async () => {
+    const { result } = renderHook(() => useWorkspaceCommit(candidate));
+    const validationOverride = {
+      kind: 'schema_review' as const,
+      reason: 'User explicitly confirmed unresolved schema review gaps.',
+      blockers: ['Schema review gap: requirements.trip.acceptance'],
+    };
+
+    await act(async () => {
+      await result.current.commit(
+        { trees: materializedTrees, relations: materializedRelations },
+        validationOverride
+      );
+    });
+
+    expect(commitWorkspaceDraft).toHaveBeenCalledWith(
+      'proj_1',
+      'workspace_prd_handoff',
+      { trees: materializedTrees, relations: materializedRelations },
+      'Workspace commit: PRD audience handoff',
+      validationOverride
     );
   });
 });

@@ -5,7 +5,7 @@ import {
   type WorkspaceCommitResponse,
   type WorkspaceSaveResponse,
 } from '@/infrastructure/workspaces';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceValidationOverride } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 
 export function fetchProjectWorkspaces(projectId: string): Promise<WorkspaceCandidate[]> {
@@ -24,7 +24,8 @@ export function commitWorkspaceDraft(
   projectId: string,
   workspaceId: string,
   content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
-  message?: string
+  message?: string,
+  validationOverride?: WorkspaceValidationOverride
 ): Promise<WorkspaceCommitResponse> {
-  return commitProjectWorkspace(projectId, workspaceId, content, message);
+  return commitProjectWorkspace(projectId, workspaceId, content, message, validationOverride);
 }

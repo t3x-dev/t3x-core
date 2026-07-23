@@ -17,6 +17,7 @@ interface WorkspaceFlowState {
   continuationBusy?: boolean;
   extracting?: boolean;
   sendingToYOps?: boolean;
+  validationGapCount?: number;
   error?: string;
 }
 
@@ -119,6 +120,7 @@ export function WorkspaceWorkbench({
         commitHash: undefined,
         error: undefined,
         extracting: false,
+        validationGapCount: undefined,
       });
       setActiveWorkflowTab('ops');
     } catch (err) {
@@ -147,6 +149,7 @@ export function WorkspaceWorkbench({
           ? undefined
           : 'No YOps operations were generated. Add source evidence, regenerate the candidate proposal, then send it to YOps.',
         sendingToYOps: false,
+        validationGapCount: undefined,
         yopsDraftId: hasOperations
           ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
           : undefined,
@@ -191,6 +194,7 @@ export function WorkspaceWorkbench({
         error: undefined,
         sourceConversationId: result.conversationId,
         sourceParentCommitHash: commitHash,
+        validationGapCount: undefined,
         yopsDraftId: undefined,
       });
       setActiveWorkflowTab('chat');
@@ -202,7 +206,8 @@ export function WorkspaceWorkbench({
     }
   };
 
-  const handleYOpsApplied = () => {
+  const handleYOpsApplied = (validationGapCount: number) => {
+    updateSelectedFlow({ validationGapCount });
     setActiveWorkflowTab('preview');
   };
 
@@ -238,6 +243,7 @@ export function WorkspaceWorkbench({
           activeWorkflowTab={activeWorkflowTab}
           selectedWorkspace={selectedWorkspaceWithFlow}
           onWorkflowTabChange={setActiveWorkflowTab}
+          validationGapCount={selectedFlow?.validationGapCount}
         />
 
         {candidates.length === 0 ? (
@@ -277,10 +283,12 @@ function WorkspaceToolbar({
   activeWorkflowTab,
   onWorkflowTabChange,
   selectedWorkspace,
+  validationGapCount,
 }: {
   activeWorkflowTab: WorkspaceTabId;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   selectedWorkspace: WorkspaceCandidate | null;
+  validationGapCount?: number;
 }) {
   return (
     <div className="border-y border-[var(--stroke-divider)]">
@@ -288,6 +296,7 @@ function WorkspaceToolbar({
         activeTab={activeWorkflowTab}
         candidate={selectedWorkspace}
         onTabChange={onWorkflowTabChange}
+        validationGapCount={validationGapCount}
       />
     </div>
   );
@@ -320,7 +329,7 @@ function WorkspaceDetail({
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
-  onYOpsApplied: () => void;
+  onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
 }) {
@@ -378,7 +387,7 @@ function mergeWorkspaceOverride(
     ...override,
     outputTargets: candidate.outputTargets,
     schemaBindings: candidate.schemaBindings,
-    sourceBundle: override.sourceBundle ?? candidate.sourceBundle,
+    sourceBundle: mergeWorkspaceOverrideSources(candidate.sourceBundle, override.sourceBundle),
   };
 
   if (override.status !== 'committed' && !override.lastCommitHash) {
@@ -386,6 +395,19 @@ function mergeWorkspaceOverride(
   }
 
   return merged;
+}
+
+function mergeWorkspaceOverrideSources(
+  candidateSources: SourceBundleItem[],
+  overrideSources: SourceBundleItem[]
+): SourceBundleItem[] {
+  const merged = new Map(overrideSources.map((source) => [source.id, source] as const));
+
+  for (const source of candidateSources) {
+    if (source.materialId && !merged.has(source.id)) merged.set(source.id, source);
+  }
+
+  return Array.from(merged.values());
 }
 
 function upsertWorkspaceSourceBundle(

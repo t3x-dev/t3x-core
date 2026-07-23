@@ -26,11 +26,22 @@ interface ValidateYOpsResponse {
   };
 }
 
+export interface WorkspaceYOpsBaseline {
+  trees: WorkspaceYOpsTreeNode[];
+  relations: unknown[];
+}
+
 export async function validateWorkspaceYOps(
-  candidate: WorkspaceCandidate
+  candidate: WorkspaceCandidate,
+  inheritedBaseline?: WorkspaceYOpsBaseline
 ): Promise<WorkspaceYOpsValidationResult> {
   const rootKey = getWorkspaceYOpsRootKey(candidate.schemaBindings);
-  const baselineTrees = buildWorkspaceBaselineTrees(candidate, rootKey);
+  const baselineTrees = buildWorkspaceBaselineTrees(
+    candidate,
+    rootKey,
+    inheritedBaseline?.trees ?? []
+  );
+  const baselineRelations = inheritedBaseline?.relations ?? [];
   const yops = candidate.yopsDraft.operations.map((operation) =>
     operationToYOp(operation, rootKey)
   );
@@ -40,7 +51,7 @@ export async function validateWorkspaceYOps(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       trees: baselineTrees,
-      relations: [],
+      relations: baselineRelations,
       yops,
     }),
   });
@@ -51,7 +62,9 @@ export async function validateWorkspaceYOps(
     applied: data.applied,
     yops,
     baselineTrees,
+    baselineRelations,
     previewTrees: data.preview?.trees,
+    previewRelations: data.preview?.relations,
     error: data.error,
   };
 }
@@ -63,7 +76,8 @@ export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): str
 
 function buildWorkspaceBaselineTrees(
   candidate: WorkspaceCandidate,
-  rootKey: string
+  rootKey: string,
+  inheritedTrees: WorkspaceYOpsTreeNode[]
 ): WorkspaceYOpsTreeNode[] {
   const root: WorkspaceYOpsTreeNode = {
     key: rootKey,
@@ -79,7 +93,54 @@ function buildWorkspaceBaselineTrees(
     seedOperationBaseline(root, operation, rootKey);
   }
 
-  return [root];
+  return mergeWorkspaceBaselineTrees(inheritedTrees, [root]);
+}
+
+function mergeWorkspaceBaselineTrees(
+  inheritedTrees: WorkspaceYOpsTreeNode[],
+  scaffoldTrees: WorkspaceYOpsTreeNode[]
+): WorkspaceYOpsTreeNode[] {
+  const merged = inheritedTrees.map(cloneWorkspaceTree);
+
+  for (const scaffold of scaffoldTrees) {
+    const inheritedIndex = merged.findIndex((tree) => tree.key === scaffold.key);
+    if (inheritedIndex < 0) {
+      merged.push(cloneWorkspaceTree(scaffold));
+      continue;
+    }
+    merged[inheritedIndex] = mergeWorkspaceTree(merged[inheritedIndex], scaffold);
+  }
+
+  return merged;
+}
+
+function mergeWorkspaceTree(
+  inherited: WorkspaceYOpsTreeNode,
+  scaffold: WorkspaceYOpsTreeNode
+): WorkspaceYOpsTreeNode {
+  const children = inherited.children.map(cloneWorkspaceTree);
+  for (const scaffoldChild of scaffold.children) {
+    const inheritedIndex = children.findIndex((child) => child.key === scaffoldChild.key);
+    if (inheritedIndex < 0) {
+      children.push(cloneWorkspaceTree(scaffoldChild));
+      continue;
+    }
+    children[inheritedIndex] = mergeWorkspaceTree(children[inheritedIndex], scaffoldChild);
+  }
+
+  return {
+    key: inherited.key,
+    slots: { ...scaffold.slots, ...inherited.slots },
+    children,
+  };
+}
+
+function cloneWorkspaceTree(tree: WorkspaceYOpsTreeNode): WorkspaceYOpsTreeNode {
+  return {
+    key: tree.key,
+    slots: { ...tree.slots },
+    children: tree.children.map(cloneWorkspaceTree),
+  };
 }
 
 function addFieldToTree(root: WorkspaceYOpsTreeNode, field: WorkspaceSchemaCandidateField) {

@@ -24,7 +24,9 @@ export interface WorkspaceYOpsValidationResult {
   applied: number;
   yops: WorkspaceYOp[];
   baselineTrees: WorkspaceYOpsTreeNode[];
+  baselineRelations: unknown[];
   previewTrees?: WorkspaceYOpsTreeNode[];
+  previewRelations?: unknown[];
   error?: {
     op_index: number;
     code: string;

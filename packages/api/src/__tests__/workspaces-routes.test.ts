@@ -105,6 +105,7 @@ const storageMock = vi.hoisted(() => {
       )
     ),
     getLatestCommit: vi.fn(() => Promise.resolve(null)),
+    updateBranchHead: vi.fn(() => Promise.resolve({ name: 'feature/reviewed-prd' })),
     insertYOpsLogEntry: vi.fn(() =>
       Promise.resolve({
         id: 'yl_workspace',
@@ -127,6 +128,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     getCommit: storageMock.getCommit,
     getLatestCommit: storageMock.getLatestCommit,
+    updateBranchHead: storageMock.updateBranchHead,
     createCommit: storageMock.createCommit,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
@@ -148,6 +150,7 @@ describe('Workspace routes', () => {
     storageMock.findMaterialsByProject.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
     storageMock.createCommit.mockClear();
+    storageMock.updateBranchHead.mockClear();
     storageMock.getCommit.mockClear();
     storageMock.getLatestCommit.mockClear();
     storageMock.insertYOpsLogEntry.mockClear();
@@ -227,6 +230,73 @@ describe('Workspace routes', () => {
           evidence: 'New PRD: must',
         }),
       ])
+    );
+  });
+
+  it('merges complementary evidence for the same repeated requirement', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [],
+          },
+          sources: [
+            {
+              id: 'src_requirement',
+              type: 'document',
+              title: 'Requirement source',
+              previewText: [
+                'Problem: Users cannot recover failed checkouts',
+                'Audience: Checkout customers',
+                'Outcome: More customers complete checkout',
+                'Requirement: Retry eligible failed payments',
+                'Priority: must',
+              ].join('\n'),
+            },
+            {
+              id: 'src_acceptance',
+              type: 'document',
+              title: 'Acceptance source',
+              previewText: [
+                'Requirement: Retry eligible failed payments',
+                'Acceptance: An eligible failed payment is retried exactly once after 30 minutes',
+              ].join('\n'),
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    const requirements = body.data.workspace.schemaCandidate.fields.find(
+      (field: ApiResponse) => field.path === 'requirements'
+    );
+
+    expect(requirements.children).toHaveLength(1);
+    expect(requirements.children[0].children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'requirements.retry_eligible_failed_payments.priority',
+          value: 'must',
+          evidence: 'Requirement source: must',
+        }),
+        expect.objectContaining({
+          path: 'requirements.retry_eligible_failed_payments.acceptance',
+          value: 'An eligible failed payment is retried exactly once after 30 minutes',
+          evidence:
+            'Acceptance source: An eligible failed payment is retried exactly once after 30 minutes',
+        }),
+      ])
+    );
+    expect(body.data.workspace.schemaReview).toEqual(
+      expect.objectContaining({ verdict: 'ready', gaps: [] })
     );
   });
 
@@ -677,6 +747,12 @@ describe('Workspace routes', () => {
         yops_log_ids: ['yl_workspace'],
       })
     );
+    expect(storageMock.updateBranchHead).toHaveBeenCalledWith(
+      expect.anything(),
+      'proj_sources',
+      'feature/reviewed-prd',
+      'sha256:workspace-commit'
+    );
     expect(storageMock.upsertWorkspaceDraft).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -686,6 +762,88 @@ describe('Workspace routes', () => {
           status: 'committed',
           lastCommitHash: 'sha256:workspace-commit',
         }),
+      })
+    );
+  });
+
+  it('requires explicit confirmation for schema review gaps and audits the override', async () => {
+    const blocker = 'Schema review gap: requirements.trip.acceptance';
+    await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'Trip PRD with a review gap',
+          status: 'schema_review',
+          targetBranch: 'feature/trip-prd',
+          sourceBundle: [{ id: 'source_chat:conv_prd', type: 'chat', title: 'Trip source' }],
+          schemaReview: {
+            verdict: 'needs_review',
+            summary: 'Acceptance criteria are incomplete.',
+            gaps: ['requirements.trip.acceptance'],
+          },
+          yopsDraft: { id: 'draft:trip', operations: [] },
+        },
+      }),
+    });
+    const content = {
+      trees: [
+        {
+          key: 'prd',
+          slots: { title: 'Trip PRD' },
+          children: [
+            {
+              key: 'requirements',
+              slots: {},
+              children: [{ key: 'trip', slots: {}, children: [] }],
+            },
+          ],
+        },
+      ],
+      relations: [],
+    };
+    const commitPath = '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit';
+
+    const blocked = await app.request(commitPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+
+    expect(blocked.status).toBe(409);
+    await expect(blocked.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'REVIEW_REQUIRED',
+          details: { blockers: [blocker] },
+        }),
+      })
+    );
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
+
+    const validationOverride = {
+      kind: 'schema_review',
+      reason: 'User explicitly confirmed unresolved schema review gaps.',
+      blockers: [blocker],
+    };
+    const committed = await app.request(commitPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, validationOverride }),
+    });
+
+    expect(committed.status).toBe(200);
+    const body: ApiResponse = await committed.json();
+    expect(body.data.workspace.commitOverride).toEqual(expect.objectContaining(validationOverride));
+    expect(storageMock.createCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provenance: {
+          method: 'human_curation',
+          validation_override: validationOverride,
+        },
       })
     );
   });
@@ -812,5 +970,11 @@ describe('Workspace routes', () => {
       })
     );
     expect(storageMock.createCommit).not.toHaveBeenCalled();
+    expect(storageMock.updateBranchHead).toHaveBeenCalledWith(
+      expect.anything(),
+      'proj_sources',
+      'feature/reviewed-prd',
+      'sha256:feature-head'
+    );
   });
 });

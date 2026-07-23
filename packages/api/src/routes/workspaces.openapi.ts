@@ -18,6 +18,7 @@ import {
   getLatestCommit,
   insertYOpsLogEntry,
   listWorkspaceDrafts,
+  updateBranchHead,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
@@ -62,12 +63,19 @@ const SaveWorkspaceRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
 });
 
+const WorkspaceValidationOverrideSchema = z.object({
+  kind: z.literal('schema_review'),
+  reason: z.string().trim().min(1).max(500),
+  blockers: z.array(z.string().trim().min(1)).min(1).max(100),
+});
+
 const CommitWorkspaceRequestSchema = z.object({
   content: z.object({
     trees: z.any(),
     relations: z.any().optional(),
   }),
   message: z.string().optional(),
+  validationOverride: WorkspaceValidationOverrideSchema.optional(),
 });
 
 const WorkspaceResponseSchema = z.object({
@@ -267,7 +275,7 @@ const commitWorkspaceRoute = createRoute({
       },
     },
     409: {
-      description: 'Branch is not at the expected head',
+      description: 'Review confirmation is required or the branch is not at the expected head',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -361,7 +369,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
 
 workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { content, message } = c.req.valid('json');
+  const { content, message, validationOverride } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -375,6 +383,27 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       const storedWorkspace = storedDraft.workspace_state;
       const targetBranch = stringFromWorkspace(storedWorkspace, 'targetBranch', 'main');
       const commitContent = workspaceCommitContent(content);
+      const schemaReviewBlockers = workspaceSchemaReviewBlockers(storedWorkspace, commitContent);
+      if (schemaReviewBlockers.length > 0 && !validationOverride) {
+        return {
+          reviewRequired: errorResponse(
+            c,
+            'REVIEW_REQUIRED',
+            'Explicit confirmation is required to commit unresolved schema review gaps.',
+            { blockers: schemaReviewBlockers }
+          ),
+        };
+      }
+      if (validationOverride && !sameStringSet(validationOverride.blockers, schemaReviewBlockers)) {
+        return {
+          reviewRequired: errorResponse(
+            c,
+            'REVIEW_REQUIRED',
+            'Schema review blockers changed. Review them again before forcing the commit.',
+            { blockers: schemaReviewBlockers }
+          ),
+        };
+      }
       const branchHead = await getLatestCommit(txOrDb, projectId, targetBranch);
       const commit = contentMatches(branchHead?.content, commitContent)
         ? branchHead
@@ -394,7 +423,18 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
               branchHead
             ),
             project_id: projectId,
-            provenance: { method: 'human_curation' },
+            provenance: {
+              method: 'human_curation',
+              ...(validationOverride
+                ? {
+                    validation_override: {
+                      kind: validationOverride.kind,
+                      reason: validationOverride.reason,
+                      blockers: validationOverride.blockers,
+                    },
+                  }
+                : {}),
+            },
             sources: commitSourcesFromWorkspace(storedWorkspace),
             yops_log_ids: await materializeWorkspaceYOpsLog(
               txOrDb,
@@ -403,6 +443,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
               storedWorkspace
             ),
           });
+      await updateBranchHead(txOrDb, projectId, targetBranch, commit.hash);
       const committedAt = new Date().toISOString();
       const committedWorkspace = {
         ...storedWorkspace,
@@ -411,6 +452,14 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         lastCommitHash: commit.hash,
         status: 'committed',
         updatedAt: committedAt,
+        ...(validationOverride
+          ? {
+              commitOverride: {
+                ...validationOverride,
+                confirmedAt: committedAt,
+              },
+            }
+          : {}),
       };
       const draft = await upsertWorkspaceDraft(txOrDb, {
         project_id: projectId,
@@ -432,6 +481,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     if (!result) {
       return c.json(notFoundError('Workspace not found'), 404);
     }
+    if ('reviewRequired' in result) return result.reviewRequired;
 
     return c.json({
       success: true as const,
@@ -489,6 +539,69 @@ function workspaceCommitContent(
     trees: content.trees,
     relations: content.relations ?? [],
   };
+}
+
+function workspaceSchemaReviewBlockers(
+  workspace: Record<string, unknown>,
+  content: SemanticContent
+): string[] {
+  const schemaReview = workspace.schemaReview;
+  if (!isRecord(schemaReview)) return [];
+  const gaps = Array.isArray(schemaReview.gaps)
+    ? schemaReview.gaps.filter(
+        (gap): gap is string => typeof gap === 'string' && gap.trim().length > 0
+      )
+    : [];
+  const unresolvedGaps = gaps.filter((gap) => !semanticContentHasPathValue(content, gap));
+  if (unresolvedGaps.length > 0) {
+    return unresolvedGaps.map((gap) => `Schema review gap: ${gap}`);
+  }
+  return schemaReview.verdict === 'ready' ? [] : ['Resolve schema review before committing.'];
+}
+
+function semanticContentHasPathValue(content: SemanticContent, path: string): boolean {
+  if (!Array.isArray(content.trees)) return false;
+  const segments = path
+    .replaceAll('/', '.')
+    .split('.')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length === 0) return false;
+
+  return content.trees.some((tree) => treeHasPathValue(tree, segments));
+}
+
+function treeHasPathValue(tree: unknown, pathSegments: string[]): boolean {
+  if (!isRecord(tree) || typeof tree.key !== 'string') return false;
+  const segments = pathSegments[0] === tree.key ? pathSegments.slice(1) : [...pathSegments];
+  if (segments.length === 0) return false;
+  let node = tree;
+
+  for (const [index, segment] of segments.entries()) {
+    const isLast = index === segments.length - 1;
+    const slots = isRecord(node.slots) ? node.slots : {};
+    if (isLast && segment in slots) return hasWorkspaceValue(slots[segment]);
+    const children = Array.isArray(node.children) ? node.children : [];
+    const child = children.find((candidate) => isRecord(candidate) && candidate.key === segment);
+    if (!child || !isRecord(child)) return false;
+    node = child;
+  }
+
+  return false;
+}
+
+function hasWorkspaceValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((value) => rightSet.has(value));
 }
 
 async function resolveWorkspaceCommitParents(
@@ -888,8 +1001,16 @@ function repeatedNodeToCandidateField(
   node: NodeSchema,
   sources: WorkspaceSourceText[]
 ): CandidateField {
-  const itemFields = sources.flatMap((source, index) =>
-    repeatedNodeItemFields(nodeKey, node, source, index)
+  const sourcesByItemKey = new Map<string, WorkspaceSourceText[]>();
+  for (const [index, source] of sources.entries()) {
+    const itemKey = repeatedItemKey(nodeKey, source.text, source, index);
+    const itemSources = sourcesByItemKey.get(itemKey) ?? [];
+    itemSources.push(source);
+    sourcesByItemKey.set(itemKey, itemSources);
+  }
+
+  const itemFields = [...sourcesByItemKey.entries()].flatMap(([itemKey, itemSources]) =>
+    repeatedNodeItemFields(nodeKey, node, itemKey, itemSources)
   );
   const children =
     itemFields.length > 0
@@ -913,22 +1034,22 @@ function repeatedNodeToCandidateField(
 function repeatedNodeItemFields(
   nodeKey: string,
   node: NodeSchema,
-  source: WorkspaceSourceText,
-  index: number
+  itemKey: string,
+  sources: WorkspaceSourceText[]
 ): CandidateField[] {
   const requiredSlots = new Set(node.requiredSlots ?? []);
-  const itemKey = repeatedItemKey(nodeKey, source.text, source, index);
   const itemPath = `${nodeKey}.${itemKey}`;
-  const itemChildren = Object.entries(node.slots ?? {}).map(([slotKey, slot]) =>
-    slotToCandidateField(
+  const itemChildren = Object.entries(node.slots ?? {}).map(([slotKey, slot]) => {
+    const extraction = extractSlotFromSources(nodeKey, slotKey, slot, sources);
+    return slotToCandidateField(
       `${itemPath}.${slotKey}`,
       slotKey,
       slot,
-      extractSchemaSlotValue(nodeKey, slotKey, slot, source.text),
-      [source],
+      extraction.value,
+      extraction.source ? [extraction.source] : sources,
       Boolean(node.required) && requiredSlots.has(slotKey)
-    )
-  );
+    );
+  });
 
   if (!itemChildren.some((child) => child.sourceRefs > 0)) return [];
 

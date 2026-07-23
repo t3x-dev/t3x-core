@@ -622,6 +622,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
       'Product and engineering reviewers'
     );
+    expect(screen.getByRole('button', { name: 'Continue to Commit' })).toBeEnabled();
     fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
       'Materialized preview'
@@ -652,8 +653,31 @@ describe('WorkspaceWorkbench', () => {
 
   it('allows YOps validation and preview when schema review still has blocking gaps', async () => {
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-      jsonResponse({
+    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_draft';
+    const commitUrl = `${workspaceUrl}/commit`;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === workspaceUrl) {
+        return jsonResponse({
+          success: true,
+          data: { candidate_id: 'candidate:workspace_draft', workspace: workspaceCandidates[1] },
+        });
+      }
+      if (url === commitUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:workspace_draft',
+            commit: { hash: 'sha256:forced-workspace-commit' },
+            workspace: {
+              ...workspaceCandidates[1],
+              lastCommitHash: 'sha256:forced-workspace-commit',
+              status: 'committed',
+            },
+          },
+        });
+      }
+      return jsonResponse({
         success: true,
         data: {
           ok: true,
@@ -675,8 +699,8 @@ describe('WorkspaceWorkbench', () => {
             relations: [],
           },
         },
-      })
-    );
+      });
+    });
 
     render(
       <WorkspaceWorkbench
@@ -704,15 +728,48 @@ describe('WorkspaceWorkbench', () => {
       'One draft release-note section'
     );
 
-    activateTab(/Commit/);
-    expect(screen.getByRole('button', { name: /Commit · release\/notes/ })).toBeDisabled();
-    expect(screen.getByText('Resolve these blockers before committing.')).toBeInTheDocument();
+    expect(screen.getByText('Review required')).toBeInTheDocument();
+    expect(screen.getByText('1 schema gap')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review Commit blockers' }));
+    const commitButton = screen.getByRole('button', { name: /Commit · release\/notes/ });
+    expect(commitButton).toBeEnabled();
+    expect(
+      screen.getByText('Resolve these schema gaps, or click Commit to review and confirm the risk.')
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Schema review gap: Confirm release-note required fields.')
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commit · release\/notes/ })).toHaveAttribute(
+    expect(commitButton).toHaveAttribute(
       'title',
-      'Schema review gap: Confirm release-note required fields.'
+      'Review unresolved schema gaps before committing.'
+    );
+    fireEvent.click(commitButton);
+
+    expect(
+      screen.getByRole('dialog', { name: 'Commit despite unresolved schema gaps?' })
+    ).toBeInTheDocument();
+    const confirmButton = screen.getByRole('button', {
+      name: 'Commit anyway · release/notes',
+    });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'I understand this commit will retain unresolved schema gaps.',
+      })
+    );
+    expect(confirmButton).toBeEnabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, commitUrl)).toBe(1));
+    const commitRequest = findFetchCall(fetchMock.mock.calls, commitUrl)[1];
+    const commitBody = JSON.parse(String(commitRequest?.body)) as {
+      validationOverride?: { kind: string; blockers: string[] };
+    };
+    expect(commitBody.validationOverride).toEqual(
+      expect.objectContaining({
+        kind: 'schema_review',
+        blockers: ['Schema review gap: Confirm release-note required fields.'],
+      })
     );
   });
 
@@ -954,6 +1011,25 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
   });
 
+  it('keeps committed materialization and validation metrics complete', () => {
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:workspace-commit',
+    };
+
+    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    activateTab(/Commit/);
+
+    const readiness = screen.getByRole('region', { name: 'Commit readiness' });
+    expect(
+      screen.getByText(`Materialized ${committedCandidate.yopsDraft.operations.length}`)
+    ).toBeInTheDocument();
+    expect(screen.getByText('Pending 0')).toBeInTheDocument();
+    expect(within(readiness).getByText('Passed')).toBeInTheDocument();
+    expect(within(readiness).getByText('Done')).toBeInTheDocument();
+  });
+
   it('starts a fresh source conversation from the committed baseline in the same workspace', async () => {
     const committedCandidate: WorkspaceCandidate = {
       ...workspaceCandidates[0],
@@ -1014,6 +1090,31 @@ describe('WorkspaceWorkbench', () => {
                 token_estimate: 2,
               },
             ],
+            parse_quality: { status: 'ready', score: 1, message: 'Ready' },
+          },
+        });
+      }
+      if (url.endsWith('/projects/proj_1/materials/mat_prd')) {
+        return jsonResponse({
+          success: true,
+          data: {
+            id: 'mat_prd',
+            project_id: 'proj_1',
+            source_type: 'document',
+            title: 'PRD import',
+            filename: 'prd.md',
+            mime_type: 'text/markdown',
+            content_hash: 'hash_prd',
+            content_excerpt: 'PRD source',
+            token_estimate: 2,
+            metadata: {},
+            created_at: '2026-07-22T08:00:00.000Z',
+            archived_at: null,
+            created_by: null,
+            content_text: 'PRD source',
+            page_count: null,
+            segment_count: 1,
+            segments: [],
             parse_quality: { status: 'ready', score: 1, message: 'Ready' },
           },
         });
@@ -1148,6 +1249,94 @@ describe('WorkspaceWorkbench', () => {
         targetBranch: 'feature/next-round',
       },
     });
+  });
+
+  it('adds newly refreshed materials to a continued workspace without restoring stale chat', async () => {
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:workspace-commit',
+    };
+    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === workspaceUrl) {
+        const body = JSON.parse(String(init?.body)) as { workspace: WorkspaceCandidate };
+        return jsonResponse({
+          success: true,
+          data: { candidate_id: 'candidate:workspace_ready', workspace: body.workspace },
+        });
+      }
+      if (url === conversationsUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            conversation_id: 'conv_refreshed_material',
+            project_id: 'proj_1',
+            created_at: '2026-07-22T08:00:00.000Z',
+          },
+        });
+      }
+      if (url.endsWith('/projects/proj_1/materials/mat_prd')) {
+        return jsonResponse({
+          success: true,
+          data: {
+            id: 'mat_prd',
+            project_id: 'proj_1',
+            source_type: 'document',
+            title: 'PRD import',
+            filename: 'prd.md',
+            mime_type: 'text/markdown',
+            content_hash: 'hash_prd',
+            content_excerpt: 'PRD source',
+            token_estimate: 2,
+            metadata: {},
+            created_at: '2026-07-22T08:00:00.000Z',
+            archived_at: null,
+            created_by: null,
+            content_text: 'PRD source',
+            page_count: null,
+            segment_count: 1,
+            segments: [],
+            parse_quality: { status: 'ready', score: 1, message: 'Ready' },
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    const { rerender } = render(
+      <WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />
+    );
+    activateTab(/Commit/);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue on feature/prd-audience' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+    );
+
+    const refreshedCandidate: WorkspaceCandidate = {
+      ...committedCandidate,
+      sourceBundle: [
+        ...committedCandidate.sourceBundle,
+        {
+          id: 'material:mat_next',
+          type: 'text',
+          title: 'continued-branch-evidence.txt',
+          materialId: 'mat_next',
+        },
+      ],
+    };
+    act(() => {
+      rerender(<WorkspaceWorkbench candidates={[refreshedCandidate]} projectId="proj_1" />);
+    });
+    const materialsTab = screen.getByRole('tab', { name: /Materials/ });
+    fireEvent.mouseDown(materialsTab, { button: 0, ctrlKey: false });
+    fireEvent.click(materialsTab);
+
+    const sourceList = await screen.findByRole('list', { name: 'Source list' });
+    expect(within(sourceList).getByText('continued-branch-evidence.txt')).toBeInTheDocument();
+    expect(within(sourceList).queryByText('Audience chat')).not.toBeInTheDocument();
   });
 
   it('sends View in State to the newly committed branch and commit', () => {
@@ -1609,13 +1798,14 @@ describe('WorkspaceWorkbench', () => {
       within(prdPreview).getByRole('complementary', {
         name: 'PRD source and validation summary',
       })
-    ).toHaveTextContent('Why this PRD can be trusted');
+    ).toHaveTextContent('Preview readiness');
     expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
     expect(screen.getByRole('heading', { name: 'Evidence coverage' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'PRD' }));
 
-    activateTab(/Commit/);
+    expect(screen.getByText('Preview ready for commit')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Commit' }));
     expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'main' },

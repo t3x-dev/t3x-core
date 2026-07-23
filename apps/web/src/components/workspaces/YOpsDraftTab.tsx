@@ -26,6 +26,7 @@ import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
   WorkspaceSchemaFieldStatus,
+  WorkspaceValidationOverride,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
@@ -53,7 +54,7 @@ export function YOpsDraftTab({
   candidate: WorkspaceCandidate;
   continuationBusy?: boolean;
   flowError?: string;
-  onApplied?: () => void;
+  onApplied?: (remainingSchemaGapCount: number) => void;
   onCommitted?: (commitHash: string, branch: string) => void;
   onContinueFromCommit?: (
     commitHash: string,
@@ -78,6 +79,7 @@ export function YOpsDraftTab({
   >(null);
   const [validationPassed, setValidationPassed] = useState(false);
   const [materializedTrees, setMaterializedTrees] = useState<WorkspaceYOpsTreeNode[] | null>(null);
+  const [materializedRelations, setMaterializedRelations] = useState<unknown[] | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
   const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -118,12 +120,19 @@ export function YOpsDraftTab({
     [draft.operations, generatedYOps, rootKey]
   );
   const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
-  const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
+  const materializedCount = committedHash ? draft.operations.length : appliedCount;
+  const pendingCount = Math.max(draft.operations.length - materializedCount, 0);
   const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
+  const unresolvedSchemaGaps = getUnresolvedSchemaGaps(
+    candidate.schemaReview.gaps,
+    materializedTrees,
+    rootKey
+  );
+  const schemaReviewReady =
+    candidate.schemaReview.verdict === 'ready' ||
+    (candidate.schemaReview.gaps.length > 0 && unresolvedSchemaGaps.length === 0);
   const commitPrerequisitesMet =
-    candidate.schemaReview.gaps.length === 0 &&
-    candidate.schemaReview.verdict === 'ready' &&
-    candidate.sourceBundle.length > 0;
+    unresolvedSchemaGaps.length === 0 && schemaReviewReady && candidate.sourceBundle.length > 0;
   const visibleErrorMessage = errorMessage ?? flowError ?? null;
   const yopsValidationBlocked = Boolean(visibleErrorMessage);
   const canValidateProposal =
@@ -134,13 +143,19 @@ export function YOpsDraftTab({
   const commitBlockers = getCommitBlockers({
     appliedCount,
     hasMaterializedTrees: Boolean(materializedTrees),
-    schemaGaps: candidate.schemaReview.gaps,
-    schemaVerdict: candidate.schemaReview.verdict,
+    schemaGaps: unresolvedSchemaGaps,
+    schemaVerdict: schemaReviewReady ? 'ready' : candidate.schemaReview.verdict,
     sourceBundleCount: candidate.sourceBundle.length,
     validationPassed,
     visibleErrorMessage,
   });
   const canCommit = commitBlockers.length === 0 && !isBusy && !committedHash;
+  const schemaOverrideBlockers = commitBlockers.filter(isSchemaOverrideBlocker);
+  const canOverrideCommit =
+    schemaOverrideBlockers.length > 0 &&
+    schemaOverrideBlockers.length === commitBlockers.length &&
+    !isBusy &&
+    !committedHash;
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
@@ -167,6 +182,7 @@ export function YOpsDraftTab({
     setValidatedPreviewTrees(null);
     setValidationPassed(false);
     setMaterializedTrees(null);
+    setMaterializedRelations(null);
     setAppliedCount(0);
     setCommittedHash(candidate.lastCommitHash ?? null);
     setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
@@ -188,6 +204,7 @@ export function YOpsDraftTab({
       setValidationPassed(result.ok);
       setAppliedCount(0);
       setMaterializedTrees(null);
+      setMaterializedRelations(null);
       if (!result.ok) {
         setStatus('idle');
         setErrorMessage(
@@ -220,9 +237,12 @@ export function YOpsDraftTab({
         return;
       }
       setMaterializedTrees(result.previewTrees);
+      setMaterializedRelations(result.previewRelations ?? []);
       setAppliedCount(result.applied);
       setStatus('applied');
-      onApplied?.();
+      onApplied?.(
+        getUnresolvedSchemaGaps(candidate.schemaReview.gaps, result.previewTrees, rootKey).length
+      );
     } catch (error) {
       setValidationPassed(false);
       setStatus(generatedYOps ? 'generated' : 'idle');
@@ -230,13 +250,17 @@ export function YOpsDraftTab({
     }
   }
 
-  async function handleCommit() {
-    if (!materializedTrees || !canCommit) return;
+  async function handleCommit(validationOverride?: WorkspaceValidationOverride) {
+    const commitAllowed = validationOverride ? canOverrideCommit : canCommit;
+    if (!materializedTrees || !materializedRelations || !commitAllowed) return;
     setStatus('committing');
     setErrorMessage(null);
 
     try {
-      const hash = await commit(materializedTrees);
+      const hash = await commit(
+        { trees: materializedTrees, relations: materializedRelations },
+        validationOverride
+      );
       setCommittedHash(hash);
       setStatus('committed');
       onCommitted?.(hash, targetBranch);
@@ -259,7 +283,7 @@ export function YOpsDraftTab({
             </p>
           </div>
           <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-            <Badge variant="commit-subtle">Materialized {appliedCount}</Badge>
+            <Badge variant="commit-subtle">Materialized {materializedCount}</Badge>
             <Badge variant="pending-subtle">Pending {pendingCount}</Badge>
             {committedHash ? <Badge variant="commit">{shortHash(committedHash)}</Badge> : null}
             <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
@@ -318,10 +342,14 @@ export function YOpsDraftTab({
           appliedCount={appliedCount}
           baselineTrees={baselineTrees}
           candidate={candidate}
+          canOverrideCommit={canOverrideCommit}
+          commitBlockers={commitBlockers}
           committedHash={committedHash}
           generatedYOpsCount={generatedYOps?.length ?? draft.operations.length}
           yopsExtracted={Boolean(generatedYOps)}
           materializedTrees={materializedTrees}
+          onContinueToCommit={() => onViewChange?.('commit')}
+          schemaGapCount={unresolvedSchemaGaps.length}
           treeLines={treeLines}
           validatedPreviewTrees={validatedPreviewTrees}
           validationPassed={validationPassed}
@@ -331,22 +359,31 @@ export function YOpsDraftTab({
 
       {view === 'commit' ? (
         <CommitReviewView
-          appliedCount={appliedCount}
+          appliedCount={materializedCount}
           branchOptions={branchOptions}
           candidate={candidate}
           canCommit={canCommit}
+          canOverrideCommit={canOverrideCommit}
           commitBlockers={commitBlockers}
           commitTitle={commitTitle}
           committedHash={committedHash}
           continuationBusy={Boolean(continuationBusy)}
           isBusy={isBusy}
           onCommit={handleCommit}
+          onOverrideCommit={() =>
+            handleCommit({
+              kind: 'schema_review',
+              reason: 'User explicitly confirmed unresolved schema review gaps.',
+              blockers: schemaOverrideBlockers,
+            })
+          }
           onContinueFromCommit={onContinueFromCommit}
           onTargetBranchChange={setTargetBranch}
           onViewCommitInState={onViewCommitInState}
           status={status}
+          schemaOverrideBlockers={schemaOverrideBlockers}
           targetBranch={targetBranch}
-          validationReady={validationPassed && !validationBlocked}
+          validationReady={Boolean(committedHash) || (validationPassed && !validationBlocked)}
         />
       ) : null}
     </div>
@@ -663,9 +700,13 @@ function PreviewReviewView({
   appliedCount,
   baselineTrees,
   candidate,
+  canOverrideCommit,
+  commitBlockers,
   committedHash,
   generatedYOpsCount,
   materializedTrees,
+  onContinueToCommit,
+  schemaGapCount,
   treeLines,
   validatedPreviewTrees,
   validationPassed,
@@ -675,9 +716,13 @@ function PreviewReviewView({
   appliedCount: number;
   baselineTrees: WorkspaceYOpsTreeNode[] | null;
   candidate: WorkspaceCandidate;
+  canOverrideCommit: boolean;
+  commitBlockers: string[];
   committedHash: string | null;
   generatedYOpsCount: number;
   materializedTrees: WorkspaceYOpsTreeNode[] | null;
+  onContinueToCommit: () => void;
+  schemaGapCount: number;
   treeLines: YamlTreeLine[];
   validatedPreviewTrees: WorkspaceYOpsTreeNode[] | null;
   validationPassed: boolean;
@@ -724,9 +769,11 @@ function PreviewReviewView({
             }}
           />
         }
+        commitReady={commitBlockers.length === 0}
         operationCount={generatedYOpsCount}
         previewReady={Boolean(materializedTrees)}
         previewTrees={materializedTrees ?? validatedPreviewTrees}
+        schemaGapCount={schemaGapCount}
         validationPassed={validationPassed}
         yamlView={
           <RenderedYOpsTree
@@ -738,6 +785,31 @@ function PreviewReviewView({
           />
         }
       />
+      <section
+        aria-label="Preview actions"
+        className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-[var(--text-primary)]">
+            {commitBlockers.length === 0 ? 'Preview ready for commit' : 'Commit review required'}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+            {commitBlockers.length === 0
+              ? 'The inherited baseline and this iteration’s YOps are materialized together.'
+              : canOverrideCommit
+                ? `${commitBlockers.length} schema ${commitBlockers.length === 1 ? 'gap remains' : 'gaps remain'}. Resolve it or explicitly override it in Commit.`
+                : `${commitBlockers.length} ${commitBlockers.length === 1 ? 'blocker remains' : 'blockers remain'} before this result can be committed.`}
+          </p>
+        </div>
+        <Button onClick={onContinueToCommit} type="button" variant="commit">
+          {commitBlockers.length === 0 ? (
+            <ArrowRight aria-hidden="true" className="size-4" />
+          ) : (
+            <AlertTriangle aria-hidden="true" className="size-4" />
+          )}
+          {commitBlockers.length === 0 ? 'Continue to Commit' : 'Review Commit blockers'}
+        </Button>
+      </section>
     </div>
   );
 }
@@ -785,16 +857,19 @@ function CommitReviewView({
   branchOptions,
   candidate,
   canCommit,
+  canOverrideCommit,
   commitBlockers,
   commitTitle,
   committedHash,
   continuationBusy,
   isBusy,
   onCommit,
+  onOverrideCommit,
   onContinueFromCommit,
   onTargetBranchChange,
   onViewCommitInState,
   status,
+  schemaOverrideBlockers,
   targetBranch,
   validationReady,
 }: {
@@ -802,12 +877,14 @@ function CommitReviewView({
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   canCommit: boolean;
+  canOverrideCommit: boolean;
   commitBlockers: string[];
   commitTitle: string;
   committedHash: string | null;
   continuationBusy: boolean;
   isBusy: boolean;
   onCommit: () => void;
+  onOverrideCommit: () => void;
   onContinueFromCommit?: (
     commitHash: string,
     targetBranch: string,
@@ -816,9 +893,24 @@ function CommitReviewView({
   onTargetBranchChange: (branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
+  schemaOverrideBlockers: string[];
   targetBranch: string;
   validationReady: boolean;
 }) {
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (overrideDialogOpen) return;
+    setOverrideConfirmed(false);
+  }, [overrideDialogOpen]);
+
+  function handleOverrideCommit() {
+    if (!overrideConfirmed || !canOverrideCommit || isBusy) return;
+    setOverrideDialogOpen(false);
+    onOverrideCommit();
+  }
+
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section
@@ -839,7 +931,9 @@ function CommitReviewView({
           <ValidationMetric
             label="Commit"
             tone={committedHash ? 'success' : canCommit ? 'success' : 'warning'}
-            value={committedHash ? 'Done' : canCommit ? 'Ready' : 'Return'}
+            value={
+              committedHash ? 'Done' : canCommit ? 'Ready' : canOverrideCommit ? 'Review' : 'Return'
+            }
           />
         </div>
         <dl className="mt-3 grid gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs">
@@ -858,7 +952,11 @@ function CommitReviewView({
         </dl>
         {commitBlockers.length > 0 && !committedHash ? (
           <div className="mt-3 grid gap-2 text-sm text-[var(--text-secondary)]">
-            <p>Resolve these blockers before committing.</p>
+            <p>
+              {canOverrideCommit
+                ? 'Resolve these schema gaps, or click Commit to review and confirm the risk.'
+                : 'Resolve these blockers before committing.'}
+            </p>
             <ul className="grid gap-1">
               {commitBlockers.map((blocker) => (
                 <li className="rounded-md bg-[var(--surface-card)] px-2 py-1" key={blocker}>
@@ -905,10 +1003,12 @@ function CommitReviewView({
             </select>
           </label>
           <Button
-            disabled={!canCommit}
-            onClick={onCommit}
+            disabled={!canCommit && !canOverrideCommit}
+            onClick={canOverrideCommit ? () => setOverrideDialogOpen(true) : () => onCommit()}
             size="sm"
-            title={commitTitle}
+            title={
+              canOverrideCommit ? 'Review unresolved schema gaps before committing.' : commitTitle
+            }
             type="button"
             variant="commit"
           >
@@ -917,6 +1017,62 @@ function CommitReviewView({
           </Button>
         </aside>
       )}
+
+      <Dialog onOpenChange={setOverrideDialogOpen} open={overrideDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Commit despite unresolved schema gaps?</DialogTitle>
+            <DialogDescription>
+              This writes the materialized result to {targetBranch} while preserving the unresolved
+              schema review gaps in the commit audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 grid gap-3">
+            <div
+              className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3"
+              role="alert"
+            >
+              <p className="text-sm font-semibold text-[var(--status-warning)]">
+                {schemaOverrideBlockers.length}{' '}
+                {schemaOverrideBlockers.length === 1 ? 'schema gap remains' : 'schema gaps remain'}
+              </p>
+              <ul className="mt-2 grid gap-1 text-xs leading-5 text-[var(--text-secondary)]">
+                {schemaOverrideBlockers.map((blocker) => (
+                  <li className="break-words font-mono" key={blocker}>
+                    {blocker}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <label className="flex items-start gap-2 rounded-md border border-[var(--stroke-divider)] p-3 text-sm text-[var(--text-secondary)]">
+              <input
+                checked={overrideConfirmed}
+                className="mt-0.5"
+                onChange={(event) => setOverrideConfirmed(event.target.checked)}
+                type="checkbox"
+              />
+              <span>I understand this commit will retain unresolved schema gaps.</span>
+            </label>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button
+              onClick={() => setOverrideDialogOpen(false)}
+              type="button"
+              variant="canvas-outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!overrideConfirmed || isBusy}
+              onClick={handleOverrideCommit}
+              type="button"
+              variant="destructive"
+            >
+              Commit anyway · {targetBranch}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1153,6 +1309,51 @@ function getCommitTitle({
   return `Commit the materialized YAML result to ${targetBranch}.`;
 }
 
+function getUnresolvedSchemaGaps(
+  gaps: string[],
+  materializedTrees: WorkspaceYOpsTreeNode[] | null,
+  rootKey: string
+): string[] {
+  if (!materializedTrees) return gaps;
+  return gaps.filter((gap) => !materializedTreeHasPathValue(materializedTrees, gap, rootKey));
+}
+
+function materializedTreeHasPathValue(
+  trees: WorkspaceYOpsTreeNode[],
+  path: string,
+  rootKey: string
+): boolean {
+  const segments = path
+    .replaceAll('/', '.')
+    .split('.')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments[0] === rootKey) segments.shift();
+  if (segments.length === 0) return false;
+
+  const root = trees.find((tree) => tree.key === rootKey);
+  if (!root) return false;
+  let node: WorkspaceYOpsTreeNode = root;
+
+  for (const [index, segment] of segments.entries()) {
+    const isLast = index === segments.length - 1;
+    if (isLast && segment in node.slots) return hasMaterializedValue(node.slots[segment]);
+    const child = node.children.find((candidate) => candidate.key === segment);
+    if (!child) return false;
+    node = child;
+  }
+
+  return false;
+}
+
+function hasMaterializedValue(value: WorkspaceYOpsTreeNode['slots'][string]): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return true;
+}
+
 function getCommitBlockers({
   appliedCount,
   hasMaterializedTrees,
@@ -1191,6 +1392,13 @@ function getCommitBlockers({
   }
 
   return blockers;
+}
+
+function isSchemaOverrideBlocker(blocker: string): boolean {
+  return (
+    blocker.startsWith('Schema review gap: ') ||
+    blocker === 'Resolve schema review before committing.'
+  );
 }
 
 function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
