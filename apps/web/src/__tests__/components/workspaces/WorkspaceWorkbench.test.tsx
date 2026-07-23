@@ -701,6 +701,13 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
+
+    activateTab(/Source/);
+    activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+      'Product and engineering reviewers'
+    );
+    expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2);
   });
 
   it('allows YOps validation and preview when schema review still has blocking gaps', async () => {
@@ -822,6 +829,11 @@ describe('WorkspaceWorkbench', () => {
         kind: 'schema_review',
         blockers: ['Schema review gap: Confirm release-note required fields.'],
       })
+    );
+
+    activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+      'One draft release-note section'
     );
   });
 
@@ -1082,6 +1094,63 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Pending 0')).toBeInTheDocument();
     expect(within(readiness).getByText('Passed')).toBeInTheDocument();
     expect(within(readiness).getByText('Done')).toBeInTheDocument();
+  });
+
+  it('loads the frozen committed preview after the workspace is reopened', async () => {
+    const commitHash = `sha256:${'a'.repeat(64)}`;
+    const commitUrl = `http://localhost:8000/api/v1/commits/${encodeURIComponent(commitHash)}`;
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: commitHash,
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input) !== commitUrl) {
+        throw new Error(`Unexpected background request: ${String(input)}`);
+      }
+      return jsonResponse({
+        success: true,
+        data: {
+          commit: {
+            hash: commitHash,
+            schema: 't3x/commit',
+            parents: [],
+            author: { type: 'human' },
+            committed_at: '2026-07-23T00:00:00.000Z',
+            content: {
+              trees: [
+                {
+                  key: 'prd',
+                  slots: { title: 'PRD audience handoff' },
+                  children: [
+                    {
+                      key: 'summary',
+                      slots: { audience: 'Frozen committed audience' },
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+              relations: [],
+            },
+            project_id: 'proj_1',
+            message: 'Workspace commit',
+            branch: 'feature/prd-audience',
+            sources: null,
+            provenance: null,
+          },
+        },
+      });
+    });
+
+    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    activateTab(/Preview/);
+
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, commitUrl)).toBe(1));
+    expect(await screen.findByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+      'Frozen committed audience'
+    );
+    expect(screen.queryByRole('region', { name: 'Preview unavailable' })).not.toBeInTheDocument();
   });
 
   it('starts a fresh source conversation from the committed baseline in the same workspace', async () => {

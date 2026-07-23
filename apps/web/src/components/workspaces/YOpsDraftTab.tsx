@@ -38,6 +38,7 @@ import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
 export function YOpsDraftTab({
+  active = true,
   candidate,
   continuationBusy,
   flowError,
@@ -51,6 +52,7 @@ export function YOpsDraftTab({
   view = 'ops',
   yopsDraftSent,
 }: {
+  active?: boolean;
   candidate: WorkspaceCandidate;
   continuationBusy?: boolean;
   flowError?: string;
@@ -82,6 +84,9 @@ export function YOpsDraftTab({
   const [materializedRelations, setMaterializedRelations] = useState<unknown[] | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
   const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
+  const [committedPreviewLoading, setCommittedPreviewLoading] = useState(
+    isCanonicalCommitHash(candidate.lastCommitHash)
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
 
@@ -90,7 +95,7 @@ export function YOpsDraftTab({
     [candidate, targetBranch]
   );
   const { commit } = useWorkspaceCommit(commitCandidate);
-  const { rootKey, validate } = useWorkspaceYOps(candidate);
+  const { loadCommittedContent, rootKey, validate } = useWorkspaceYOps(candidate);
   const branchOptions = useMemo(() => getCommitBranchOptions(candidate), [candidate]);
   const draftFingerprint = useMemo(
     () =>
@@ -188,9 +193,68 @@ export function YOpsDraftTab({
     setMaterializedRelations(null);
     setAppliedCount(0);
     setCommittedHash(candidate.lastCommitHash ?? null);
+    setCommittedPreviewLoading(isCanonicalCommitHash(candidate.lastCommitHash));
     setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
     setErrorMessage(null);
-  }, [candidate.id, candidate.lastCommitHash, draft.id, draftFingerprint]);
+  }, [candidate.id, draft.id, draftFingerprint]);
+
+  useEffect(() => {
+    const hash = candidate.lastCommitHash;
+    if (!hash || isCanonicalCommitHash(hash) || committedHash === hash) return;
+    setCommittedHash(hash);
+    setStatus('committed');
+  }, [candidate.lastCommitHash, committedHash]);
+
+  useEffect(() => {
+    const hash = candidate.lastCommitHash;
+    if (!isCanonicalCommitHash(hash)) {
+      setCommittedPreviewLoading(false);
+      return;
+    }
+    if (committedHash === hash && materializedTrees) {
+      setCommittedPreviewLoading(false);
+      return;
+    }
+
+    let active = true;
+    setCommittedPreviewLoading(true);
+    void loadCommittedContent(hash)
+      .then((content) => {
+        if (!active) return;
+        const { relations, trees } = content;
+        setGeneratedYOps(null);
+        setBaselineTrees(null);
+        setValidatedPreviewTrees(trees);
+        setValidationPassed(true);
+        setMaterializedTrees(trees);
+        setMaterializedRelations(relations);
+        setAppliedCount(draft.operations.length);
+        setCommittedHash(hash);
+        setStatus('committed');
+        setErrorMessage(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setErrorMessage(
+          error instanceof Error ? error.message : 'Unable to load the committed preview.'
+        );
+      })
+      .finally(() => {
+        if (active) setCommittedPreviewLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    candidate.id,
+    candidate.lastCommitHash,
+    committedHash,
+    draft.id,
+    draft.operations.length,
+    loadCommittedContent,
+    materializedTrees,
+  ]);
 
   useEffect(() => {
     setTargetBranch(getInitialTargetBranch(candidate));
@@ -273,6 +337,8 @@ export function YOpsDraftTab({
     }
   }
 
+  if (!active) return null;
+
   return (
     <div className="flex min-h-[620px] flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)]">
       {view === 'preview' || view === 'commit' ? (
@@ -348,6 +414,7 @@ export function YOpsDraftTab({
           canOverrideCommit={canOverrideCommit}
           commitBlockers={commitBlockers}
           committedHash={committedHash}
+          committedPreviewLoading={committedPreviewLoading}
           generatedYOpsCount={generatedYOps?.length ?? draft.operations.length}
           yopsExtracted={Boolean(generatedYOps)}
           materializedTrees={materializedTrees}
@@ -706,6 +773,7 @@ function PreviewReviewView({
   canOverrideCommit,
   commitBlockers,
   committedHash,
+  committedPreviewLoading,
   generatedYOpsCount,
   materializedTrees,
   onContinueToCommit,
@@ -722,6 +790,7 @@ function PreviewReviewView({
   canOverrideCommit: boolean;
   commitBlockers: string[];
   committedHash: string | null;
+  committedPreviewLoading: boolean;
   generatedYOpsCount: number;
   materializedTrees: WorkspaceYOpsTreeNode[] | null;
   onContinueToCommit: () => void;
@@ -735,17 +804,25 @@ function PreviewReviewView({
   const previewAvailable = validationPassed && !visibleErrorMessage;
 
   if (!previewAvailable) {
+    const unavailableTitle = committedHash
+      ? committedPreviewLoading
+        ? 'Loading committed preview'
+        : 'Committed preview unavailable'
+      : 'Complete Validation before reviewing the preview';
+    const unavailableDescription = committedHash
+      ? committedPreviewLoading
+        ? 'Reading the frozen result stored by this commit.'
+        : 'The frozen commit result could not be loaded. Retry by reopening this workspace.'
+      : 'Validate the YOps proposal to open the pre-commit diff.';
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-3">
         <section
           aria-label="Preview unavailable"
           className="max-w-lg rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 text-center"
         >
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-            Complete Validation before reviewing the preview
-          </h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{unavailableTitle}</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-            Validate the YOps proposal to open the pre-commit diff.
+            {unavailableDescription}
           </p>
         </section>
       </div>
@@ -772,7 +849,7 @@ function PreviewReviewView({
             }}
           />
         }
-        commitReady={commitBlockers.length === 0}
+        commitReady={Boolean(committedHash) || commitBlockers.length === 0}
         operationCount={generatedYOpsCount}
         previewReady={Boolean(materializedTrees)}
         previewTrees={materializedTrees ?? validatedPreviewTrees}
@@ -794,24 +871,32 @@ function PreviewReviewView({
       >
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-[var(--text-primary)]">
-            {commitBlockers.length === 0 ? 'Preview ready for commit' : 'Commit review required'}
+            {committedHash
+              ? 'Committed preview'
+              : commitBlockers.length === 0
+                ? 'Preview ready for commit'
+                : 'Commit review required'}
           </div>
           <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-            {commitBlockers.length === 0
-              ? 'The inherited baseline and this iteration’s YOps are materialized together.'
-              : canOverrideCommit
-                ? `${commitBlockers.length} schema ${commitBlockers.length === 1 ? 'gap remains' : 'gaps remain'}. Resolve it or explicitly override it in Commit.`
-                : `${commitBlockers.length} ${commitBlockers.length === 1 ? 'blocker remains' : 'blockers remain'} before this result can be committed.`}
+            {committedHash
+              ? `This is the frozen result stored in ${shortHash(committedHash)} on ${candidate.targetBranch}.`
+              : commitBlockers.length === 0
+                ? 'The inherited baseline and this iteration’s YOps are materialized together.'
+                : canOverrideCommit
+                  ? `${commitBlockers.length} schema ${commitBlockers.length === 1 ? 'gap remains' : 'gaps remain'}. Resolve it or explicitly override it in Commit.`
+                  : `${commitBlockers.length} ${commitBlockers.length === 1 ? 'blocker remains' : 'blockers remain'} before this result can be committed.`}
           </p>
         </div>
-        <Button onClick={onContinueToCommit} type="button" variant="commit">
-          {commitBlockers.length === 0 ? (
-            <ArrowRight aria-hidden="true" className="size-4" />
-          ) : (
-            <AlertTriangle aria-hidden="true" className="size-4" />
-          )}
-          {commitBlockers.length === 0 ? 'Continue to Commit' : 'Review Commit blockers'}
-        </Button>
+        {!committedHash ? (
+          <Button onClick={onContinueToCommit} type="button" variant="commit">
+            {commitBlockers.length === 0 ? (
+              <ArrowRight aria-hidden="true" className="size-4" />
+            ) : (
+              <AlertTriangle aria-hidden="true" className="size-4" />
+            )}
+            {commitBlockers.length === 0 ? 'Continue to Commit' : 'Review Commit blockers'}
+          </Button>
+        ) : null}
       </section>
     </div>
   );
@@ -1558,6 +1643,10 @@ function getYOpsStatusText(
   if (status === 'committing') return 'Creating commit';
   if (status === 'committed') return 'Committed to state';
   return 'Deterministic validator ready';
+}
+
+function isCanonicalCommitHash(hash: string | null | undefined): hash is string {
+  return /^sha256:[a-f\d]{64}$/i.test(hash ?? '');
 }
 
 function formatProposalMode(mode: string): string {

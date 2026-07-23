@@ -191,9 +191,24 @@ function renderWorkspaceTab(
   candidate: WorkspaceCandidate,
   options: RenderWorkspaceTabOptions
 ) {
-  if (activeTab !== 'chat') {
-    return (
+  return (
+    <>
+      {activeTab === 'chat' ? (
+        <SourcesTab
+          candidate={candidate}
+          candidateExtracted={options.candidateExtracted}
+          extracting={options.extractingCandidate}
+          flowError={options.flowError}
+          conversationId={options.sourceConversationId}
+          parentCommitHash={options.sourceParentCommitHash}
+          targetBranch={candidate.targetBranch}
+          onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
+          onExtractCandidate={options.onExtractCandidate}
+          onMaterialUploaded={options.onSourceMaterialUploaded}
+        />
+      ) : null}
       <YOpsDraftTab
+        active={activeTab !== 'chat'}
         candidate={candidate}
         continuationBusy={options.continuationBusy}
         flowError={options.flowError}
@@ -204,23 +219,9 @@ function renderWorkspaceTab(
         onViewCommitInState={options.onViewCommitInState}
         sendingToYOps={options.sendingToYOps}
         onViewChange={options.onWorkflowTabChange}
-        view={activeTab}
+        view={activeTab === 'chat' ? 'ops' : activeTab}
         yopsDraftSent={options.yopsDraftSent}
       />
-    );
-  }
-  return (
-    <SourcesTab
-      candidate={candidate}
-      candidateExtracted={options.candidateExtracted}
-      extracting={options.extractingCandidate}
-      flowError={options.flowError}
-      conversationId={options.sourceConversationId}
-      parentCommitHash={options.sourceParentCommitHash}
-      targetBranch={candidate.targetBranch}
-      onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
-      onExtractCandidate={options.onExtractCandidate}
-      onMaterialUploaded={options.onSourceMaterialUploaded}
-    />
+    </>
   );
 }

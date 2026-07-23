@@ -11,9 +11,16 @@ export function useWorkspaceYOps(candidate: WorkspaceCandidate) {
       : undefined;
     return validateWorkspaceYOps(candidate, inheritedBaseline);
   }, [candidate]);
+  const loadCommittedContent = useCallback(async (hash: string) => {
+    const commit = await fetchCommitByHash(hash);
+    return {
+      trees: commit.content.trees as WorkspaceYOpsTreeNode[],
+      relations: commit.content.relations ?? [],
+    };
+  }, []);
   const rootKey = getWorkspaceYOpsRootKey(candidate.schemaBindings);
 
-  return { rootKey, validate };
+  return { loadCommittedContent, rootKey, validate };
 }
 
 async function loadWorkspaceBaseline(hash: string) {
