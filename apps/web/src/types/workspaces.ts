@@ -56,6 +56,13 @@ export interface WorkspaceCandidate {
   yopsDraft: WorkspaceYOpsDraft;
   outputTargets: WorkspaceOutputTarget[];
   lastCommitHash?: string;
+  commitOverride?: WorkspaceValidationOverride & { confirmedAt?: string };
+}
+
+export interface WorkspaceValidationOverride {
+  kind: 'schema_review';
+  reason: string;
+  blockers: string[];
 }
 
 export type WorkspaceStatusCounts = Record<WorkspaceStatusFilter, number>;

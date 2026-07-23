@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 71 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(71);
+  it('has 73 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(73);
   });
 
   it('key equals value for every code', () => {
@@ -78,6 +78,7 @@ describe('ErrorCodes', () => {
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "REVIEW_REQUIRED": "REVIEW_REQUIRED",
         "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
@@ -92,6 +93,7 @@ describe('ErrorCodes', () => {
         "VALIDATION_FAILED": "VALIDATION_FAILED",
         "VERIFY_FAILED": "VERIFY_FAILED",
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
+        "WORKSPACE_BASE_BRANCH_MISMATCH": "WORKSPACE_BASE_BRANCH_MISMATCH",
         "YOPS_LOG_SUPERSEDED": "YOPS_LOG_SUPERSEDED",
       }
     `);
@@ -126,6 +128,7 @@ describe('ErrorStatusCodes', () => {
     expect(ErrorStatusCodes.HASH_CONFLICT).toBe(409);
     expect(ErrorStatusCodes.BRANCH_NOT_HEAD).toBe(409);
     expect(ErrorStatusCodes.BRANCH_ROOT_EXISTS).toBe(409);
+    expect(ErrorStatusCodes.REVIEW_REQUIRED).toBe(409);
   });
 
   it('maps operation failures to 500', () => {

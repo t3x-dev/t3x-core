@@ -131,4 +131,131 @@ describe('validateWorkspaceYOps', () => {
       },
     ]);
   });
+
+  it('applies a later iteration on top of the inherited commit state and relations', async () => {
+    const candidate: WorkspaceCandidate = {
+      id: 'workspace_prd',
+      projectId: 'proj_1',
+      title: 'PRD audience handoff',
+      summary: 'Continue the PRD from its committed baseline.',
+      status: 'schema_review',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+      baseCommitHash: `sha256:${'a'.repeat(64)}`,
+      targetBranch: 'main',
+      sourceBundle: [{ id: 'source_chat:conv_2', type: 'chat', title: 'Second source chat' }],
+      schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+      schemaCandidate: {
+        summary: 'Second iteration candidate.',
+        fields: [
+          {
+            id: 'field_summary',
+            path: 'summary',
+            label: 'Summary',
+            type: 'object',
+            required: true,
+            status: 'needs_confirmation',
+            sourceRefs: 1,
+            children: [
+              {
+                id: 'field_summary_outcome',
+                path: 'summary.outcome',
+                label: 'Outcome',
+                type: 'string',
+                required: true,
+                status: 'covered',
+                value: 'Plan a week in Chengdu',
+                sourceRefs: 1,
+              },
+            ],
+          },
+        ],
+      },
+      schemaReview: { verdict: 'needs_review', summary: 'Audience is inherited.', gaps: [] },
+      yopsDraft: {
+        id: 'draft_second_iteration',
+        operations: [
+          {
+            id: 'op_outcome',
+            op: 'set',
+            path: 'prd/summary/outcome',
+            summary: 'Set the new outcome.',
+            beforeValue: '',
+            afterValue: 'Plan a week in Chengdu',
+          },
+        ],
+      },
+      outputTargets: [],
+    };
+    const inheritedRelations = [
+      { from: 'prd/summary', to: 'prd/requirements/legal_trip', type: 'depends_on' },
+    ];
+    let requestBody: {
+      trees: Array<{
+        key: string;
+        slots: Record<string, unknown>;
+        children: Array<{
+          key: string;
+          slots: Record<string, unknown>;
+          children: unknown[];
+        }>;
+      }>;
+      relations: unknown[];
+    } | null = null;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        success: true,
+        data: {
+          ok: true,
+          applied: 1,
+          preview: {
+            trees: requestBody?.trees ?? [],
+            relations: requestBody?.relations ?? [],
+          },
+        },
+      });
+    });
+
+    const result = await validateWorkspaceYOps(candidate, {
+      trees: [
+        {
+          key: 'prd',
+          slots: { title: 'PRD audience handoff' },
+          children: [
+            {
+              key: 'summary',
+              slots: { audience: 'Product reviewers', outcome: 'Previous outcome' },
+              children: [],
+            },
+            {
+              key: 'requirements',
+              slots: {},
+              children: [
+                {
+                  key: 'legal_trip',
+                  slots: { acceptance: ['Keep the existing acceptance criteria.'] },
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      relations: inheritedRelations,
+    });
+
+    const prd = requestBody?.trees.find((tree) => tree.key === 'prd');
+    const summary = prd?.children.find((node) => node.key === 'summary');
+    const requirements = prd?.children.find((node) => node.key === 'requirements');
+
+    expect(summary?.slots).toEqual({ audience: 'Product reviewers', outcome: 'Previous outcome' });
+    expect(requirements?.children).toEqual([
+      expect.objectContaining({
+        key: 'legal_trip',
+        slots: { acceptance: ['Keep the existing acceptance criteria.'] },
+      }),
+    ]);
+    expect(requestBody?.relations).toEqual(inheritedRelations);
+    expect(result.previewRelations).toEqual(inheritedRelations);
+  });
 });

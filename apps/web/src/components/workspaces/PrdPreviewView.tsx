@@ -10,9 +10,11 @@ interface PrdPreviewViewProps {
   appliedCount: number;
   candidate: WorkspaceCandidate;
   changesView: ReactNode;
+  commitReady: boolean;
   operationCount: number;
   previewReady: boolean;
   previewTrees: WorkspaceYOpsTreeNode[] | null;
+  schemaGapCount: number;
   validationPassed: boolean;
   yamlView: ReactNode;
 }
@@ -43,9 +45,11 @@ export function PrdPreviewView({
   appliedCount,
   candidate,
   changesView,
+  commitReady,
   operationCount,
   previewReady,
   previewTrees,
+  schemaGapCount,
   validationPassed,
   yamlView,
 }: PrdPreviewViewProps) {
@@ -99,9 +103,11 @@ export function PrdPreviewView({
         <PrdReadingView
           appliedCount={appliedCount}
           candidate={candidate}
+          commitReady={commitReady}
           model={model}
           operationCount={operationCount}
           previewReady={previewReady}
+          schemaGapCount={schemaGapCount}
           validationPassed={validationPassed}
         />
       </div>
@@ -117,6 +123,7 @@ export function PrdPreviewView({
           candidate={candidate}
           operationCount={operationCount}
           previewReady={previewReady}
+          schemaGapCount={schemaGapCount}
           validationPassed={validationPassed}
         />
       </div>
@@ -147,16 +154,20 @@ export function PrdPreviewView({
 function PrdReadingView({
   appliedCount,
   candidate,
+  commitReady,
   model,
   operationCount,
   previewReady,
+  schemaGapCount,
   validationPassed,
 }: {
   appliedCount: number;
   candidate: WorkspaceCandidate;
+  commitReady: boolean;
   model: PrdDocumentModel;
   operationCount: number;
   previewReady: boolean;
+  schemaGapCount: number;
   validationPassed: boolean;
 }) {
   const primarySource = candidate.sourceBundle[0] ?? null;
@@ -174,8 +185,8 @@ function PrdReadingView({
               <h2 className="text-3xl font-bold tracking-[-0.025em] text-[var(--text-primary)]">
                 {model.title}
               </h2>
-              <Badge variant={validationPassed ? 'success' : 'pending-subtle'}>
-                {validationPassed ? 'Validated preview' : 'Preview'}
+              <Badge variant={commitReady ? 'success' : 'pending-subtle'}>
+                {commitReady ? 'Ready to commit' : 'Review required'}
               </Badge>
             </div>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">
@@ -265,12 +276,14 @@ function PrdReadingView({
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
               Source &amp; validation
             </div>
-            <h3 className="mt-2 text-sm font-bold text-[var(--text-primary)]">
-              Why this PRD can be trusted
-            </h3>
+            <h3 className="mt-2 text-sm font-bold text-[var(--text-primary)]">Preview readiness</h3>
           </div>
-          <Badge variant={validationPassed ? 'success' : 'pending-subtle'}>
-            {validationPassed ? `${operationCount} / ${operationCount} pass` : 'Pending'}
+          <Badge variant={commitReady ? 'success' : 'pending-subtle'}>
+            {commitReady
+              ? 'Ready to commit'
+              : schemaGapCount > 0
+                ? `${schemaGapCount} ${schemaGapCount === 1 ? 'schema gap' : 'schema gaps'}`
+                : 'Review required'}
           </Badge>
         </header>
 
@@ -304,6 +317,14 @@ function PrdReadingView({
           <ProofMetric label="Proposal" value={`${operationCount} reviewed`} />
           <ProofMetric label="YOps" value={validationPassed ? 'Validated' : 'Pending'} />
           <ProofMetric label="Render" value={previewReady ? 'Materialized' : 'Dry-run'} />
+          <ProofMetric
+            label="Schema"
+            value={
+              schemaGapCount === 0
+                ? 'Satisfied'
+                : `${schemaGapCount} ${schemaGapCount === 1 ? 'gap' : 'gaps'}`
+            }
+          />
         </section>
 
         <p className="px-5 py-5 text-xs leading-5 text-[var(--text-tertiary)]">
@@ -377,12 +398,14 @@ function EvidenceView({
   candidate,
   operationCount,
   previewReady,
+  schemaGapCount,
   validationPassed,
 }: {
   appliedCount: number;
   candidate: WorkspaceCandidate;
   operationCount: number;
   previewReady: boolean;
+  schemaGapCount: number;
   validationPassed: boolean;
 }) {
   return (
@@ -440,6 +463,14 @@ function EvidenceView({
           <ValidationRow label="Sources" value={String(candidate.sourceBundle.length)} />
           <ValidationRow label="Proposed changes" value={String(operationCount)} />
           <ValidationRow label="YOps validation" value={validationPassed ? 'Passed' : 'Pending'} />
+          <ValidationRow
+            label="Schema review"
+            value={
+              schemaGapCount === 0
+                ? 'Satisfied'
+                : `${schemaGapCount} ${schemaGapCount === 1 ? 'gap' : 'gaps'}`
+            }
+          />
           <ValidationRow
             label="Preview state"
             value={previewReady ? `${appliedCount} materialized` : 'Dry-run only'}

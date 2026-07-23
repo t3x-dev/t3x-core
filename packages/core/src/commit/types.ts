@@ -29,6 +29,12 @@ export interface Provenance {
   method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash' | 'fixture_replay';
   model?: string;
   extracted_at?: string;
+  /** Explicit human confirmation used to commit despite validation review blockers. */
+  validation_override?: {
+    kind: 'schema_review';
+    reason: string;
+    blockers: string[];
+  };
   /** For squash/rebase: the original commit hashes that were replaced */
   source_commits?: string[];
 }

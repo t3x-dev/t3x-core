@@ -40,10 +40,12 @@ export function WorkspaceWorkflowTabs({
   activeTab,
   candidate,
   onTabChange,
+  validationGapCount,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate | null;
   onTabChange: (tab: WorkspaceTabId) => void;
+  validationGapCount?: number;
 }) {
   return (
     <div
@@ -53,7 +55,12 @@ export function WorkspaceWorkflowTabs({
     >
       {WORKSPACE_TABS.map((tab) => {
         const selected = activeTab === tab.id;
-        const count = candidate ? tab.count?.(candidate) : undefined;
+        const count =
+          tab.id === 'validation' && validationGapCount !== undefined
+            ? validationGapCount
+            : candidate
+              ? tab.count?.(candidate)
+              : undefined;
 
         return (
           <button
@@ -121,7 +128,7 @@ export function WorkspaceTabs({
   onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
-  onYOpsApplied?: () => void;
+  onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
@@ -169,7 +176,7 @@ interface RenderWorkspaceTabOptions {
   onExtractCandidate?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
-  onYOpsApplied?: () => void;
+  onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
@@ -184,9 +191,24 @@ function renderWorkspaceTab(
   candidate: WorkspaceCandidate,
   options: RenderWorkspaceTabOptions
 ) {
-  if (activeTab !== 'chat') {
-    return (
+  return (
+    <>
+      {activeTab === 'chat' ? (
+        <SourcesTab
+          candidate={candidate}
+          candidateExtracted={options.candidateExtracted}
+          extracting={options.extractingCandidate}
+          flowError={options.flowError}
+          conversationId={options.sourceConversationId}
+          parentCommitHash={options.sourceParentCommitHash}
+          targetBranch={candidate.targetBranch}
+          onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
+          onExtractCandidate={options.onExtractCandidate}
+          onMaterialUploaded={options.onSourceMaterialUploaded}
+        />
+      ) : null}
       <YOpsDraftTab
+        active={activeTab !== 'chat'}
         candidate={candidate}
         continuationBusy={options.continuationBusy}
         flowError={options.flowError}
@@ -197,23 +219,9 @@ function renderWorkspaceTab(
         onViewCommitInState={options.onViewCommitInState}
         sendingToYOps={options.sendingToYOps}
         onViewChange={options.onWorkflowTabChange}
-        view={activeTab}
+        view={activeTab === 'chat' ? 'ops' : activeTab}
         yopsDraftSent={options.yopsDraftSent}
       />
-    );
-  }
-  return (
-    <SourcesTab
-      candidate={candidate}
-      candidateExtracted={options.candidateExtracted}
-      extracting={options.extractingCandidate}
-      flowError={options.flowError}
-      conversationId={options.sourceConversationId}
-      parentCommitHash={options.sourceParentCommitHash}
-      targetBranch={candidate.targetBranch}
-      onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
-      onExtractCandidate={options.onExtractCandidate}
-      onMaterialUploaded={options.onSourceMaterialUploaded}
-    />
+    </>
   );
 }

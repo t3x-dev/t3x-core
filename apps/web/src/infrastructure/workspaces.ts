@@ -1,4 +1,4 @@
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceValidationOverride } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
@@ -46,14 +46,19 @@ export async function commitProjectWorkspace(
   projectId: string,
   workspaceId: string,
   content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
-  message?: string
+  message?: string,
+  validationOverride?: WorkspaceValidationOverride
 ): Promise<WorkspaceCommitResponse> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
       workspaceId
     )}/commit`,
     {
-      body: JSON.stringify({ content, ...(message ? { message } : {}) }),
+      body: JSON.stringify({
+        content,
+        ...(message ? { message } : {}),
+        ...(validationOverride ? { validationOverride } : {}),
+      }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }
