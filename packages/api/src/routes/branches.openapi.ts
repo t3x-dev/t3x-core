@@ -9,6 +9,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  ensureMainBranch,
   findBranchByName,
   findBranchesByProject,
   findCurrentBranch,
@@ -211,6 +212,7 @@ const switchBranchRoute = createRoute({
             project_id: z.string().min(1),
             branch_name: z.string().min(1),
             create_if_missing: z.boolean().optional(),
+            parent_branch: z.string().min(1).optional(),
           }),
         },
       },
@@ -253,6 +255,8 @@ branchRoutes.openapi(listBranchesRoute, async (c) => {
 
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
+
+    await ensureMainBranch(db, projectId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -330,7 +334,12 @@ branchRoutes.openapi(getCurrentBranchRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const branch = await findCurrentBranch(db, projectId);
+    let branch = await findCurrentBranch(db, projectId);
+
+    if (!branch) {
+      await ensureMainBranch(db, projectId);
+      branch = await switchBranch(db, projectId, 'main');
+    }
 
     if (!branch) {
       return errorResponse(c, 'NOT_FOUND', 'No current branch set');
@@ -356,11 +365,16 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
     // Check if branch exists
     let branch = await findBranchByName(db, body.project_id, body.branch_name);
 
+    if (!branch && body.branch_name === 'main') {
+      branch = await ensureMainBranch(db, body.project_id);
+    }
+
     if (!branch) {
       if (body.create_if_missing) {
         branch = await insertBranch(db, {
           projectId: body.project_id,
           name: body.branch_name,
+          parentBranch: body.parent_branch,
         });
       } else {
         return errorResponse(c, 'NOT_FOUND', `Branch ${body.branch_name} not found`);

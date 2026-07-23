@@ -30,7 +30,7 @@ export function prepareMerge(
   const srcMap = new Map(sourceFrames.map((f) => [f.id, f]));
   const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
 
-  const allIds = new Set([...srcMap.keys(), ...tgtMap.keys()]);
+  const allIds = new Set([...baseMap.keys(), ...srcMap.keys(), ...tgtMap.keys()]);
 
   const autoKept: string[] = [];
   const conflicts: MergeResult['conflicts'] = [];
@@ -43,11 +43,25 @@ export function prepareMerge(
     const baseFrame = baseMap.get(id);
 
     if (srcFrame && !tgtFrame) {
-      onlyInSource.push(id);
+      if (!baseFrame) {
+        onlyInSource.push(id);
+      } else if (!framesEqual(srcFrame, baseFrame)) {
+        conflicts.push({
+          path: id,
+          slotConflicts: findSlotConflicts(baseFrame, srcFrame, undefined),
+        });
+      }
       continue;
     }
     if (!srcFrame && tgtFrame) {
-      onlyInTarget.push(id);
+      if (!baseFrame) {
+        onlyInTarget.push(id);
+      } else if (!framesEqual(tgtFrame, baseFrame)) {
+        conflicts.push({
+          path: id,
+          slotConflicts: findSlotConflicts(baseFrame, undefined, tgtFrame),
+        });
+      }
       continue;
     }
     if (!srcFrame || !tgtFrame) continue;
@@ -86,11 +100,16 @@ export function prepareMerge(
     }
   }
 
+  const baseRelKeys = new Set(base.relations.map(relKey));
   const srcRelKeys = new Set(source.relations.map(relKey));
   const tgtRelKeys = new Set(target.relations.map(relKey));
   const relationsInBoth = source.relations.filter((r) => tgtRelKeys.has(relKey(r)));
-  const relationsOnlyInSource = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
-  const relationsOnlyInTarget = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
+  const relationsOnlyInSource = source.relations.filter(
+    (r) => !tgtRelKeys.has(relKey(r)) && !baseRelKeys.has(relKey(r))
+  );
+  const relationsOnlyInTarget = target.relations.filter(
+    (r) => !srcRelKeys.has(relKey(r)) && !baseRelKeys.has(relKey(r))
+  );
 
   return {
     autoKept,
@@ -259,16 +278,20 @@ function removeFramesAtPath(frames: FlatNode[], path: string): void {
 
 function findSlotConflicts(
   base: FlatNode | undefined,
-  src: FlatNode,
-  tgt: FlatNode
+  src: FlatNode | undefined,
+  tgt: FlatNode | undefined
 ): SlotConflict[] {
   const conflicts: SlotConflict[] = [];
-  const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots)]);
+  const allKeys = new Set([
+    ...Object.keys(base?.slots ?? {}),
+    ...Object.keys(src?.slots ?? {}),
+    ...Object.keys(tgt?.slots ?? {}),
+  ]);
 
   for (const key of allKeys) {
     const baseVal: SlotValue | undefined = base?.slots[key];
-    const srcVal: SlotValue | undefined = src.slots[key];
-    const tgtVal: SlotValue | undefined = tgt.slots[key];
+    const srcVal: SlotValue | undefined = src?.slots[key];
+    const tgtVal: SlotValue | undefined = tgt?.slots[key];
 
     if (deepEqual(srcVal, tgtVal)) continue;
     if (base && deepEqual(srcVal, baseVal)) continue;

@@ -90,9 +90,9 @@ export interface Branch {
   branch_id: string;
   name: string;
   project_id?: string;
-  parent_branch?: string;
-  head_commit_hash?: string;
-  description?: string;
+  parent_branch?: string | null;
+  head_commit_hash?: string | null;
+  description?: string | null;
   is_current: boolean;
   created_at: string;
   updated_at: string;

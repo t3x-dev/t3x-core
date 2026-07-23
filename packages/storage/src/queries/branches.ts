@@ -8,6 +8,7 @@ import { generateBranchId } from '@t3x-dev/core';
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Branch, branches } from '../schema';
+import { getLatestCommit } from './commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateBranchInput {
@@ -252,8 +253,51 @@ export async function deleteBranch(
  * Ensure main branch exists for project
  */
 export async function ensureMainBranch(db: AnyDB, projectId: string): Promise<Branch> {
-  const existing = await findBranchByName(db, projectId, 'main');
-  if (existing) return existing;
+  return db.transaction(async (tx) => {
+    const transactionDB = tx as AnyDB;
+    const existing = await findBranchByName(transactionDB, projectId, 'main');
+    const latestMainCommit = await getLatestCommit(transactionDB, projectId, 'main');
 
-  return insertBranch(db, { projectId, name: 'main' });
+    if (existing) {
+      if (!existing.headCommitHash && latestMainCommit) {
+        const repaired = await updateBranchHead(
+          transactionDB,
+          projectId,
+          'main',
+          latestMainCommit.hash
+        );
+        if (repaired) return repaired;
+      }
+      return existing;
+    }
+
+    const [countResult] = await transactionDB
+      .select({ count: sql<number>`count(*)::int` })
+      .from(branches)
+      .where(eq(branches.projectId, projectId));
+    const now = new Date();
+    const [created] = await transactionDB
+      .insert(branches)
+      .values({
+        branchId: generateBranchId(),
+        projectId,
+        name: 'main',
+        parentBranch: null,
+        headCommitHash: latestMainCommit?.hash ?? null,
+        description: null,
+        isCurrent: Number(countResult?.count ?? 0) === 0 ? 1 : 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [branches.projectId, branches.name] })
+      .returning();
+
+    if (created) return created;
+
+    const concurrent = await findBranchByName(transactionDB, projectId, 'main');
+    if (!concurrent) {
+      throw new Error(`Failed to ensure main branch for project ${projectId}`);
+    }
+    return concurrent;
+  });
 }

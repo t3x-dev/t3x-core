@@ -133,10 +133,13 @@ export function YOpsDraftTab({
   const validationBlocked = !commitPrerequisitesMet || yopsValidationBlocked;
   const commitBlockers = getCommitBlockers({
     appliedCount,
+    baseCommitHash: candidate.baseCommitHash,
+    originalTargetBranch: candidate.targetBranch,
     hasMaterializedTrees: Boolean(materializedTrees),
     schemaGaps: candidate.schemaReview.gaps,
     schemaVerdict: candidate.schemaReview.verdict,
     sourceBundleCount: candidate.sourceBundle.length,
+    targetBranch,
     validationPassed,
     visibleErrorMessage,
   });
@@ -1155,18 +1158,24 @@ function getCommitTitle({
 
 function getCommitBlockers({
   appliedCount,
+  baseCommitHash,
+  originalTargetBranch,
   hasMaterializedTrees,
   schemaGaps,
   schemaVerdict,
   sourceBundleCount,
+  targetBranch,
   validationPassed,
   visibleErrorMessage,
 }: {
   appliedCount: number;
+  baseCommitHash: string | null;
+  originalTargetBranch: string;
   hasMaterializedTrees: boolean;
   schemaGaps: string[];
   schemaVerdict: WorkspaceCandidate['schemaReview']['verdict'];
   sourceBundleCount: number;
+  targetBranch: string;
   validationPassed: boolean;
   visibleErrorMessage: string | null;
 }): string[] {
@@ -1180,6 +1189,11 @@ function getCommitBlockers({
   }
   if (sourceBundleCount === 0) {
     blockers.push('Add source evidence before committing.');
+  }
+  if (baseCommitHash && targetBranch !== originalTargetBranch) {
+    blockers.push(
+      `Target branch changed from ${originalTargetBranch} to ${targetBranch}. Rebuild this workspace from ${targetBranch} before committing.`
+    );
   }
   if (schemaGaps.length > 0) {
     blockers.push(...schemaGaps.map((gap) => `Schema review gap: ${gap}`));

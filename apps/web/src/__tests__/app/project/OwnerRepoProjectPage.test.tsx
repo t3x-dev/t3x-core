@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
@@ -108,16 +108,18 @@ describe('OwnerRepoProjectPage', () => {
     expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
   });
 
-  it('canonicalizes stale state-like tab segments back to the repository root', async () => {
+  it('renders a not-found state for invalid repository tab segments', () => {
     routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'yschema'] };
 
     render(<OwnerRepoProjectPage />);
 
-    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/mobile-click-audit');
-    });
+    expect(screen.getByText('Repository view not found')).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/mobile-click-audit/yschema')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to mobile-click-audit' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/mobile-click-audit'
+    );
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it('renders the organization directory for owner-only paths', () => {

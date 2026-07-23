@@ -10,6 +10,7 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
+  branchHeads: {} as Record<string, string | null>,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
   loadCommit: vi.fn(),
@@ -57,11 +58,16 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
+    branchHeads: hookMocks.branchHeads,
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
     loading: false,
     refresh: hookMocks.refreshBranches,
   }),
+}));
+
+vi.mock('@/hooks/commits/useCommitByHash', () => ({
+  useCommitByHash: () => ({ loadCommit: hookMocks.loadCommit }),
 }));
 
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
@@ -194,6 +200,8 @@ const VALIDATION: YSchemaValidationSummary = {
 };
 
 function setupHookMocks() {
+  hookMocks.branchHeads = {};
+  hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue(undefined);
   hookMocks.loadCommit.mockResolvedValue(PARENT_COMMIT);
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
@@ -414,6 +422,20 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('clarifies that an empty focused branch does not own commits shown on the all-branch canvas', async () => {
+    hookMocks.loadCommits.mockResolvedValue([]);
+    renderStateTab();
+
+    await screen.findByText('No commit on this branch');
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('main has no HEAD commit.');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Canvas shows the evolution of all branches'
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('cannot serve as the main PR base');
+  });
+
   it('passes a deep-linked commit to Canvas for selection and centering', async () => {
     navigationMocks.search = `view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
 
@@ -567,7 +589,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(
-      await screen.findByText('Commit response does not match the selected project and branch.')
+      await screen.findByText('Commit response does not match the selected project.')
     ).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff committed')).not.toBeInTheDocument();
   });
@@ -607,20 +629,27 @@ describe('ProjectStateTab', () => {
     expect(edgesLabel.nextElementSibling).toHaveTextContent('0');
   });
 
-  it('falls back from an empty main branch to the latest committed branch', async () => {
-    const featureCommit = { ...PRD_COMMIT, branch: 'feature/prd-audience' };
-    hookMocks.loadCommits.mockReset();
-    hookMocks.loadCommits.mockResolvedValueOnce([]).mockResolvedValue([featureCommit]);
+  it('keeps an empty main branch selected instead of redirecting to another branch', async () => {
+    hookMocks.loadCommits.mockResolvedValue([]);
+
+    renderStateTab();
+
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
+  });
+
+  it('loads State from the registered branch pointer even when the commit was created elsewhere', async () => {
+    const inheritedHead = { ...PRD_COMMIT, branch: 'feature/prd-audience' };
+    hookMocks.branchHeads = { main: inheritedHead.hash };
+    hookMocks.loadCommits.mockResolvedValue([]);
+    hookMocks.loadCommit.mockResolvedValue(inheritedHead);
 
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
-      { scroll: false }
-    );
-    expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
-    expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash);
+    expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
 
   it('switches its local read-only branch focus', async () => {

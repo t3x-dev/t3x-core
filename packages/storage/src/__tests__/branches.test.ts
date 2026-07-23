@@ -19,6 +19,7 @@ import {
   switchBranch,
   updateBranchHead,
 } from '../queries/branches';
+import { createCommit } from '../queries/commits';
 import { insertProject } from '../queries/projects';
 import { branches } from '../schema';
 import { createTestDB, testData } from './setup';
@@ -302,6 +303,27 @@ describe('Branches Storage', () => {
       const main = await ensureMainBranch(db, newProject.projectId);
 
       expect(main.branchId).toBe(created.branchId);
+    });
+
+    it('backfills the head from legacy main commits', async () => {
+      const newProject = await insertProject(
+        db,
+        testData.project({ name: 'Legacy Main Commit Project' })
+      );
+      const legacyCommit = await createCommit(db, {
+        author: { type: 'human', name: 'test' },
+        branch: 'main',
+        content: {
+          trees: [{ key: 'legacy', slots: { value: 'state' }, children: [] }],
+          relations: [],
+        },
+        project_id: newProject.projectId,
+      });
+
+      const main = await ensureMainBranch(db, newProject.projectId);
+
+      expect(main.headCommitHash).toBe(legacyCommit.hash);
+      expect(main.isCurrent).toBe(1);
     });
   });
 });

@@ -297,6 +297,105 @@ export const mergeDrafts = pgTable(
 );
 
 /**
+ * Pull Requests - Review lifecycle for merging one project branch into another.
+ *
+ * The source/target hashes are immutable review snapshots. A successful merge
+ * records the resulting structured-state commit in mergeCommitHash.
+ */
+export const pullRequests = pgTable(
+  'pull_requests',
+  {
+    pullRequestId: text('pull_request_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    sourceBranch: text('source_branch').notNull(),
+    targetBranch: text('target_branch').notNull(),
+    sourceCommitHash: text('source_commit_hash').notNull(),
+    targetBaseCommitHash: text('target_base_commit_hash').notNull(),
+    mergeDraftId: text('merge_draft_id').references(() => mergeDrafts.draftId, {
+      onDelete: 'set null',
+    }),
+    mergeCommitHash: text('merge_commit_hash'),
+    status: text('status').notNull().default('open'),
+    authorId: text('author_id').notNull(),
+    reviewOwnerId: text('review_owner_id'),
+    linkedWork: text('linked_work'),
+    diffSummary: jsonb('diff_summary')
+      .$type<{
+        changed_nodes: number;
+        yops_operations: number;
+        output_impacts: number;
+        source_refs: number;
+      }>()
+      .notNull()
+      .default({ changed_nodes: 0, yops_operations: 0, output_impacts: 0, source_refs: 0 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    mergedAt: timestamp('merged_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (table) => [
+    unique('pull_requests_project_number').on(table.projectId, table.number),
+    uniqueIndex('idx_pull_requests_active_pair')
+      .on(table.projectId, table.sourceBranch, table.targetBranch)
+      .where(sql`${table.status} IN ('draft', 'open', 'checking', 'ready', 'blocked')`),
+    index('idx_pull_requests_project_status').on(table.projectId, table.status),
+    check(
+      'pull_requests_status_valid',
+      sql`${table.status} IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')`
+    ),
+    check(
+      'pull_requests_merged_commit_required',
+      sql`${table.status} <> 'merged' OR ${table.mergeCommitHash} IS NOT NULL`
+    ),
+  ]
+);
+
+/** Deterministic readiness results attached to a pull request. */
+export const pullRequestChecks = pgTable(
+  'pull_request_checks',
+  {
+    checkId: text('check_id').primaryKey(),
+    pullRequestId: text('pull_request_id')
+      .notNull()
+      .references(() => pullRequests.pullRequestId, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    status: text('status').notNull(),
+    title: text('title').notNull(),
+    message: text('message'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_pull_request_checks_pr').on(table.pullRequestId),
+    check(
+      'pull_request_checks_status_valid',
+      sql`${table.status} IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')`
+    ),
+  ]
+);
+
+/** Append-only user-visible audit trail for a pull request. */
+export const pullRequestActivity = pgTable(
+  'pull_request_activity',
+  {
+    activityId: text('activity_id').primaryKey(),
+    pullRequestId: text('pull_request_id')
+      .notNull()
+      .references(() => pullRequests.pullRequestId, { onDelete: 'cascade' }),
+    actorId: text('actor_id').notNull(),
+    type: text('type').notNull(),
+    message: text('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('idx_pull_request_activity_pr').on(table.pullRequestId, table.createdAt)]
+);
+
+/**
  * Deploy Agents - Registered agents for deployment and evaluation
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
@@ -522,6 +621,13 @@ export type NewRun = typeof runs.$inferInsert;
 
 export type MergeDraft = typeof mergeDrafts.$inferSelect;
 export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
+
+export type PullRequest = typeof pullRequests.$inferSelect;
+export type NewPullRequest = typeof pullRequests.$inferInsert;
+export type PullRequestCheck = typeof pullRequestChecks.$inferSelect;
+export type NewPullRequestCheck = typeof pullRequestChecks.$inferInsert;
+export type PullRequestActivity = typeof pullRequestActivity.$inferSelect;
+export type NewPullRequestActivity = typeof pullRequestActivity.$inferInsert;
 
 export type SavedComparison = typeof savedComparisons.$inferSelect;
 export type NewSavedComparison = typeof savedComparisons.$inferInsert;

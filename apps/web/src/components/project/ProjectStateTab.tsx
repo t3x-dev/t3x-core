@@ -85,6 +85,8 @@ const SNAPSHOT_VIEWS: Array<{
   { id: 'code', label: 'Code', subtitle: 'canonical code', icon: Code2 },
 ];
 
+const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
+
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
   if (value === 'canvas') return 'canvas';
   if (value === 'points') return 'structure';
@@ -120,6 +122,7 @@ export function ProjectStateTab({
   const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const {
+    branchHeads = EMPTY_BRANCH_HEADS,
     branches,
     create: createBranch,
     loading: branchesLoading,
@@ -193,27 +196,26 @@ export function ProjectStateTab({
       });
       try {
         const requestedBranch = branchFocus || 'main';
-        let resolvedBranch = requestedBranch;
+        const branchHeadHash = branchHeads[requestedBranch];
         let commits = await loadCommits(projectId, requestedBranch, 100);
-        if (commits.length === 0 && requestedBranch === 'main') {
-          const latestCommits = await loadCommits(projectId, undefined, 100);
-          const latestBranch = latestCommits[0]?.branch;
-          if (latestBranch) {
-            resolvedBranch = latestBranch;
-            commits = latestCommits.filter((commit) => commit.branch === latestBranch);
-            if (!cancelled && latestBranch !== requestedBranch) {
-              updateBranchFocus(latestBranch);
-            }
+        let headCommit = selectVisibleBranchHead(commits);
+        if (branchHeadHash) {
+          headCommit = await loadCommit(branchHeadHash);
+          if (headCommit.hash !== branchHeadHash) {
+            throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
+          commits = [headCommit, ...commits.filter((commit) => commit.hash !== headCommit?.hash)];
+        }
+        if (commits.some((commit) => commit.project_id !== projectId)) {
+          throw new Error('Commit response does not match the selected project.');
         }
         if (
           commits.some(
-            (commit) => commit.project_id !== projectId || commit.branch !== resolvedBranch
+            (commit) => commit.hash !== branchHeadHash && commit.branch !== requestedBranch
           )
         ) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
-        const headCommit = selectVisibleBranchHead(commits);
         let operations: StateOperationEntry[] = [];
         let parentCommit: ApiCommit | null = null;
         const auxiliaryErrors: string[] = [];
@@ -271,12 +273,12 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
+    branchHeads,
     loadCommit,
     loadCommits,
     loadOperations,
     projectId,
     snapshotRefreshVersion,
-    updateBranchFocus,
   ]);
 
   const headCommit = snapshot.headCommit;
@@ -492,9 +494,11 @@ export function ProjectStateTab({
           ) : (
             <StateCanvasView
               branch={branchFocus || 'main'}
+              branchHeadHash={headCommit?.hash ?? null}
               focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}
+              snapshotLoading={snapshot.loading}
             />
           )}
         </main>
@@ -897,14 +901,18 @@ function StateViewTabs({
 
 function StateCanvasView({
   branch,
+  branchHeadHash,
   focusedCommitHash,
   projectId,
   projectName,
+  snapshotLoading,
 }: {
   branch: string;
+  branchHeadHash: string | null;
   focusedCommitHash?: string;
   projectId: string;
   projectName: string;
+  snapshotLoading: boolean;
 }) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -936,14 +944,23 @@ function StateCanvasView({
   return (
     <section
       aria-label="Multi-commit state canvas"
-      className="h-[680px] min-h-[560px] overflow-hidden xl:h-[calc(100vh-21rem)]"
+      className="flex h-[680px] min-h-[560px] flex-col overflow-hidden xl:h-[calc(100vh-21rem)]"
     >
-      <CanvasWorkspace
-        embedded
-        focusedBranch={branch}
-        focusedCommitHash={focusedCommitHash}
-        projectName={projectName}
-      />
+      {!snapshotLoading && !branchHeadHash ? (
+        <output className="shrink-0 border-b border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+          <strong className="text-[var(--text-primary)]">{branch} has no HEAD commit.</strong>{' '}
+          Canvas shows the evolution of all branches; the visible commits belong to the branch
+          labels on their cards and cannot serve as the {branch} PR base.
+        </output>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <CanvasWorkspace
+          embedded
+          focusedBranch={branch}
+          focusedCommitHash={focusedCommitHash}
+          projectName={projectName}
+        />
+      </div>
     </section>
   );
 }

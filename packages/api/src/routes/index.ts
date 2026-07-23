@@ -39,6 +39,7 @@ export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects.openapi';
 export { providersRoutes } from './providers.openapi';
+export { pullRequestRoutes } from './pull-requests.openapi';
 export { recipesRoutes } from './recipes.openapi';
 export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner.openapi';

@@ -13,7 +13,11 @@ import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
-import { type ProjectTabId, parseProjectTab } from '@/components/project/projectTabModel';
+import {
+  getProjectTabSegment,
+  type ProjectTabId,
+  parseProjectTab,
+} from '@/components/project/projectTabModel';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
@@ -65,7 +69,7 @@ function withCurrentQuery(path: string, searchParams: { toString: () => string }
 
 function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectTabId) {
   const basePath = getProjectRepoPath(project);
-  return tab === 'state' ? basePath : `${basePath}/${tab}`;
+  return tab === 'state' ? basePath : `${basePath}/${getProjectTabSegment(tab)}`;
 }
 
 function getProjectCanonicalPath(
@@ -547,7 +551,7 @@ export function ProjectDetailPageContent({
       case 'workspaces':
         return <ProjectWorkspacesTab projectId={projectId} />;
       case 'reviews':
-        return <ProjectReviewsTab />;
+        return <ProjectReviewsTab projectId={projectId} />;
       case 'outputs':
         return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
