@@ -233,6 +233,7 @@ function unitNode(id: string): Node<CanvasNodeData> {
       title: 'Unit',
       summary: 'Summary',
       timestamp: 'now',
+      tags: ['unit'],
       commitStatus: 'committed',
       branchType: 'main',
     },
@@ -386,6 +387,30 @@ describe('CanvasWorkspace initial fit view', () => {
         expect.objectContaining({ direction: 'RIGHT' })
       );
     });
+  });
+
+  it('selects and centers the commit requested by a State deep link', async () => {
+    const focusedNode = {
+      ...unitNode('sha256:focused'),
+      position: { x: 120, y: 80 },
+      data: { ...unitNode('sha256:focused').data, commitHash: 'sha256:focused' },
+    };
+    useCanvasStore.setState({
+      edges: [],
+      hasDbPositions: true,
+      nodes: [focusedNode],
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    layoutMocks.getLayoutedElements.mockResolvedValue([focusedNode]);
+
+    render(<CanvasWorkspace focusedCommitHash="sha256:focused" projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(flowMocks.setCenter).toHaveBeenCalledWith(264, 160, { duration: 300 });
+    });
+    expect(flowMocks.setNodes).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: 'sha256:focused', selected: true }),
+    ]);
   });
 
   it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {

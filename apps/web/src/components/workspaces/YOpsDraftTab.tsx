@@ -1,14 +1,26 @@
 import {
   AlertTriangle,
+  ArrowRight,
   Braces,
   CheckCircle2,
+  GitBranch,
   GitCommitHorizontal,
   Loader2,
+  Network,
   Play,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -26,20 +38,30 @@ export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
 export function YOpsDraftTab({
   candidate,
+  continuationBusy,
   flowError,
   onApplied,
   onCommitted,
+  onContinueFromCommit,
   onSendToYOps,
+  onViewCommitInState,
   onViewChange,
   sendingToYOps,
   view = 'ops',
   yopsDraftSent,
 }: {
   candidate: WorkspaceCandidate;
+  continuationBusy?: boolean;
   flowError?: string;
   onApplied?: () => void;
-  onCommitted?: (commitHash: string) => void;
+  onCommitted?: (commitHash: string, branch: string) => void;
+  onContinueFromCommit?: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
   view?: WorkspaceYOpsFlowView;
@@ -220,7 +242,7 @@ export function YOpsDraftTab({
       const hash = await commit(materializedTrees);
       setCommittedHash(hash);
       setStatus('committed');
-      onCommitted?.(hash);
+      onCommitted?.(hash, targetBranch);
     } catch (error) {
       setStatus('applied');
       setErrorMessage(error instanceof Error ? error.message : 'Workspace commit failed');
@@ -319,9 +341,12 @@ export function YOpsDraftTab({
           commitBlockers={commitBlockers}
           commitTitle={commitTitle}
           committedHash={committedHash}
+          continuationBusy={Boolean(continuationBusy)}
           isBusy={isBusy}
           onCommit={handleCommit}
+          onContinueFromCommit={onContinueFromCommit}
           onTargetBranchChange={setTargetBranch}
+          onViewCommitInState={onViewCommitInState}
           status={status}
           targetBranch={targetBranch}
           validationReady={validationPassed && !validationBlocked}
@@ -766,9 +791,12 @@ function CommitReviewView({
   commitBlockers,
   commitTitle,
   committedHash,
+  continuationBusy,
   isBusy,
   onCommit,
+  onContinueFromCommit,
   onTargetBranchChange,
+  onViewCommitInState,
   status,
   targetBranch,
   validationReady,
@@ -780,9 +808,16 @@ function CommitReviewView({
   commitBlockers: string[];
   commitTitle: string;
   committedHash: string | null;
+  continuationBusy: boolean;
   isBusy: boolean;
   onCommit: () => void;
+  onContinueFromCommit?: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void> | void;
   onTargetBranchChange: (branch: string) => void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
   targetBranch: string;
   validationReady: boolean;
@@ -838,47 +873,205 @@ function CommitReviewView({
         ) : null}
       </section>
 
-      <aside
-        aria-label="Commit controls"
-        className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
-      >
-        <label
-          className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]"
-          htmlFor={`commit-target-branch-${candidate.id}`}
+      {committedHash ? (
+        <PostCommitActions
+          branchOptions={branchOptions}
+          busy={continuationBusy}
+          commitHash={committedHash}
+          onContinueFromCommit={onContinueFromCommit}
+          onViewCommitInState={onViewCommitInState}
+          targetBranch={targetBranch}
+        />
+      ) : (
+        <aside
+          aria-label="Commit controls"
+          className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
         >
-          Commit target branch
-          <select
-            aria-label="Commit target branch"
-            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm outline-none transition-colors hover:border-[var(--stroke-strong)] focus:border-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isBusy || Boolean(committedHash)}
-            id={`commit-target-branch-${candidate.id}`}
-            onChange={(event) => onTargetBranchChange(event.target.value)}
-            value={targetBranch}
+          <label
+            className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]"
+            htmlFor={`commit-target-branch-${candidate.id}`}
           >
-            {branchOptions.map((branch) => (
-              <option key={branch} value={branch}>
-                {branch}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          disabled={!canCommit}
-          onClick={onCommit}
-          size="sm"
-          title={commitTitle}
-          type="button"
-          variant="commit"
-        >
-          <GitCommitHorizontal aria-hidden="true" className="size-4" />
-          {committedHash
-            ? 'Committed'
-            : status === 'committing'
-              ? 'Committing'
-              : `Commit · ${targetBranch}`}
-        </Button>
-      </aside>
+            Commit target branch
+            <select
+              aria-label="Commit target branch"
+              className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm outline-none transition-colors hover:border-[var(--stroke-strong)] focus:border-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy}
+              id={`commit-target-branch-${candidate.id}`}
+              onChange={(event) => onTargetBranchChange(event.target.value)}
+              value={targetBranch}
+            >
+              {branchOptions.map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            disabled={!canCommit}
+            onClick={onCommit}
+            size="sm"
+            title={commitTitle}
+            type="button"
+            variant="commit"
+          >
+            <GitCommitHorizontal aria-hidden="true" className="size-4" />
+            {status === 'committing' ? 'Committing' : `Commit · ${targetBranch}`}
+          </Button>
+        </aside>
+      )}
     </div>
+  );
+}
+
+function PostCommitActions({
+  branchOptions,
+  busy,
+  commitHash,
+  onContinueFromCommit,
+  onViewCommitInState,
+  targetBranch,
+}: {
+  branchOptions: string[];
+  busy: boolean;
+  commitHash: string;
+  onContinueFromCommit?: (
+    commitHash: string,
+    targetBranch: string,
+    createBranchFrom?: string
+  ) => Promise<void> | void;
+  onViewCommitInState?: (commitHash: string, branch: string) => void;
+  targetBranch: string;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const normalizedBranchName = normalizeNewBranchName(branchName);
+  const branchError = getNewBranchNameError(normalizedBranchName, branchOptions);
+
+  useEffect(() => {
+    if (dialogOpen) return;
+    setBranchName('');
+  }, [dialogOpen]);
+
+  function handleCreateBranch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!normalizedBranchName || branchError || busy || !onContinueFromCommit) return;
+    void onContinueFromCommit(commitHash, normalizedBranchName, targetBranch);
+    setDialogOpen(false);
+  }
+
+  return (
+    <aside
+      aria-label="Post-commit actions"
+      className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
+    >
+      <div>
+        <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+          Continue in this workspace
+        </h4>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+          The committed conversation stays preserved. Start a fresh source chat from this baseline.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2.5 text-xs">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+          New conversation baseline
+        </div>
+        <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate font-mono font-semibold text-[var(--text-primary)]">
+            {shortHash(commitHash)}
+          </span>
+          <Badge variant="commit-subtle">{targetBranch}</Badge>
+        </div>
+      </div>
+
+      <Button
+        disabled={busy || !onContinueFromCommit}
+        onClick={() => void onContinueFromCommit?.(commitHash, targetBranch)}
+        type="button"
+        variant="commit"
+      >
+        {busy ? (
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        ) : (
+          <ArrowRight aria-hidden="true" className="size-4" />
+        )}
+        Continue on {targetBranch}
+      </Button>
+      <Button
+        disabled={busy || !onContinueFromCommit}
+        onClick={() => setDialogOpen(true)}
+        type="button"
+        variant="branch"
+      >
+        <GitBranch aria-hidden="true" className="size-4" />
+        Create a new branch
+      </Button>
+      <Button
+        disabled={!onViewCommitInState}
+        onClick={() => onViewCommitInState?.(commitHash, targetBranch)}
+        type="button"
+        variant="canvas-outline"
+      >
+        <Network aria-hidden="true" className="size-4" />
+        View in State
+      </Button>
+
+      <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <form onSubmit={handleCreateBranch}>
+            <DialogHeader>
+              <DialogTitle>Create a new branch</DialogTitle>
+              <DialogDescription>
+                Start a fresh source conversation from this commit and target its next commit to a
+                new branch.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-5 grid gap-3">
+              <label
+                className="grid gap-1.5 text-sm font-semibold text-[var(--text-primary)]"
+                htmlFor="workspace-next-branch-name"
+              >
+                Branch name
+                <Input
+                  autoFocus
+                  id="workspace-next-branch-name"
+                  onChange={(event) => setBranchName(event.target.value)}
+                  placeholder="feature/next-iteration"
+                  value={branchName}
+                />
+              </label>
+              <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2.5 text-xs text-[var(--text-secondary)]">
+                Branch from <span className="font-mono font-semibold">{targetBranch}</span> at{' '}
+                <span className="font-mono font-semibold">{shortHash(commitHash)}</span>
+              </div>
+              {branchName && branchError ? (
+                <p className="text-xs font-semibold text-[var(--status-warning)]" role="alert">
+                  {branchError}
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Use letters, numbers, dots, slashes, underscores, or hyphens.
+                </p>
+              )}
+            </div>
+            <DialogFooter className="mt-6">
+              <Button onClick={() => setDialogOpen(false)} type="button" variant="canvas-outline">
+                Cancel
+              </Button>
+              <Button
+                disabled={!normalizedBranchName || Boolean(branchError) || busy}
+                type="submit"
+                variant="branch"
+              >
+                Start on new branch
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </aside>
   );
 }
 
@@ -1042,6 +1235,19 @@ function getCommitBranchOptions(candidate: WorkspaceCandidate): string[] {
 function normalizeBranchName(branch: string | null | undefined): string | null {
   const trimmed = branch?.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeNewBranchName(value: string): string {
+  return value.trim().replace(/\s+/g, '-');
+}
+
+function getNewBranchNameError(name: string, existingBranches: string[]): string | null {
+  if (!name) return null;
+  if (!/^[\w./-]+$/.test(name) || name.startsWith('/') || name.endsWith('/')) {
+    return 'Enter a valid branch name without leading or trailing slashes.';
+  }
+  if (existingBranches.includes(name)) return `Branch “${name}” already exists.`;
+  return null;
 }
 
 function PaneHeader({ icon, label, meta }: { icon: ReactNode; label: string; meta: string }) {

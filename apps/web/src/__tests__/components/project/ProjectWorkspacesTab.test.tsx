@@ -7,12 +7,14 @@ import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab'
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
 
 const replaceMock = vi.fn();
+const pushMock = vi.fn();
 const fetchMaterialsByProjectMock = vi.fn();
 const fetchProjectWorkspacesMock = vi.fn();
 let searchParamsValue = new URLSearchParams('tab=workspaces');
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: replaceMock }),
+  usePathname: () => '/t3x-dev/test-project/workspaces',
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
   useSearchParams: () => searchParamsValue,
 }));
 
@@ -27,6 +29,7 @@ vi.mock('@/queries/workspaces', () => ({
 describe('ProjectWorkspacesTab', () => {
   beforeEach(() => {
     replaceMock.mockClear();
+    pushMock.mockClear();
     fetchMaterialsByProjectMock.mockResolvedValue([]);
     fetchProjectWorkspacesMock.mockResolvedValue([]);
     searchParamsValue = new URLSearchParams('tab=workspaces');
@@ -175,5 +178,26 @@ describe('ProjectWorkspacesTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+  });
+
+  it('routes View in State to Canvas with the committed branch and commit selected', async () => {
+    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([
+      {
+        ...baseWorkspace,
+        lastCommitHash: 'sha256:workspace-commit',
+        status: 'committed',
+        targetBranch: 'feature/prd-audience',
+      },
+    ]);
+
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /Commit/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View in State' }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&commit=sha256%3Aworkspace-commit&view=canvas'
+    );
   });
 });

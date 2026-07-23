@@ -11,9 +11,9 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
-  loadCommit: vi.fn(),
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
+  loadCommit: vi.fn(),
   loadCommits: vi.fn(),
   loadOperations: vi.fn(),
   projectWorkspaces: [] as WorkspaceCandidate[],
@@ -25,15 +25,18 @@ vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({
     embedded,
     focusedBranch,
+    focusedCommitHash,
     projectName,
   }: {
     embedded?: boolean;
     focusedBranch?: string;
+    focusedCommitHash?: string;
     projectName: string;
   }) => (
     <div
       data-embedded={String(embedded)}
       data-focused-branch={focusedBranch}
+      data-focused-commit={focusedCommitHash}
       data-testid="state-canvas-workspace"
     >
       {projectName}
@@ -78,6 +81,10 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 
 vi.mock('@/hooks/commits/useCommitsList', () => ({
   useCommitsList: () => ({ loadCommits: hookMocks.loadCommits }),
+}));
+
+vi.mock('@/hooks/commits/useCommitByHash', () => ({
+  useCommitByHash: () => ({ loadCommit: hookMocks.loadCommit }),
 }));
 
 vi.mock('@/hooks/commits/useCommitOperations', () => ({
@@ -142,6 +149,35 @@ const PRD_COMMIT: ApiCommit = {
   yops_log_ids: ['op_1', 'op_2', 'op_3'],
 };
 
+const PARENT_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  committed_at: '2026-07-08T08:00:00.000Z',
+  content: {
+    ...PRD_COMMIT.content,
+    trees: [
+      {
+        key: 'prd',
+        slots: { title: 'PRD audience handoff' },
+        children: [
+          {
+            key: 'summary',
+            slots: {
+              problem: 'Users need food and drink',
+              audience: '',
+              outcome: 'Find a meal',
+            },
+            children: [],
+          },
+          ...PRD_COMMIT.content.trees[0]!.children.slice(1),
+        ],
+      },
+    ],
+  },
+  hash: PRD_COMMIT.parents[0]!,
+  message: 'Parent PRD state',
+  parents: [],
+};
+
 const VALIDATION: YSchemaValidationSummary = {
   checkedAt: '2026-07-09T08:01:00.000Z',
   commitHash: PRD_COMMIT.hash,
@@ -167,6 +203,7 @@ function setupHookMocks() {
   hookMocks.branchHeads = {};
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue(undefined);
+  hookMocks.loadCommit.mockResolvedValue(PARENT_COMMIT);
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
   hookMocks.loadOperations.mockResolvedValue({
     commit_hash: PRD_COMMIT.hash,
@@ -250,9 +287,10 @@ describe('ProjectStateTab', () => {
       'href',
       `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?returnTo=%2Ft3x-dev%2Ftest-project`
     );
-    expect(screen.getByRole('link', { name: 'Parent diff' })).toHaveAttribute(
-      'href',
-      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0]!)}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
+    expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View 2 changes' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -271,6 +309,32 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadOperations).toHaveBeenCalledTimes(2);
     expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1);
     expect(hookMocks.refreshWorkspaces).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the parent-to-HEAD diff inline and restores the state view when closed', async () => {
+    renderStateTab();
+
+    const showChanges = await screen.findByRole('button', { name: 'View 2 changes' });
+    fireEvent.click(showChanges);
+
+    const diff = screen.getByRole('region', { name: 'T3X Diff' });
+    expect(within(diff).getByText('Commit · Parent → HEAD')).toBeInTheDocument();
+    fireEvent.click(within(diff).getByRole('button', { name: 'outcome' }));
+    expect(within(diff).getByText('Updated desired outcome')).toBeInTheDocument();
+    expect(within(diff).getByText('Find a meal')).toBeInTheDocument();
+    expect(within(diff).getByText('办公室上班族')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'View model' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide changes' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide changes' }));
+
+    expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'View model' })).toBeInTheDocument();
   });
 
   it('switches to the schema-selected Render view', async () => {
@@ -370,6 +434,16 @@ describe('ProjectStateTab', () => {
       'Canvas shows the evolution of all branches'
     );
     expect(screen.getByRole('status')).toHaveTextContent('cannot serve as the main PR base');
+  });
+
+  it('passes a deep-linked commit to Canvas for selection and centering', async () => {
+    navigationMocks.search = `view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+
+    renderStateTab();
+
+    const canvas = await screen.findByTestId('state-canvas-workspace');
+    expect(canvas).toHaveAttribute('data-focused-branch', 'main');
+    expect(canvas).toHaveAttribute('data-focused-commit', PRD_COMMIT.hash);
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {

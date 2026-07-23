@@ -1006,6 +1006,226 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
   });
 
+  it('starts a fresh source conversation from the committed baseline in the same workspace', async () => {
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:workspace-commit',
+    };
+    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === workspaceUrl) {
+        const body = JSON.parse(String(init?.body)) as { workspace: WorkspaceCandidate };
+        return jsonResponse({
+          success: true,
+          data: { candidate_id: 'candidate:workspace_ready', workspace: body.workspace },
+        });
+      }
+      if (url === conversationsUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            conversation_id: 'conv_next_workspace',
+            project_id: 'proj_1',
+            title: 'PRD audience handoff source chat',
+            parent_commit_hash: 'sha256:workspace-commit',
+            created_at: '2026-07-22T08:00:00.000Z',
+          },
+        });
+      }
+      if (url.endsWith('/projects/proj_1/materials/mat_prd')) {
+        return jsonResponse({
+          success: true,
+          data: {
+            id: 'mat_prd',
+            project_id: 'proj_1',
+            source_type: 'document',
+            title: 'PRD import',
+            filename: 'prd.md',
+            mime_type: 'text/markdown',
+            content_hash: 'hash_prd',
+            content_excerpt: 'PRD source',
+            token_estimate: 2,
+            metadata: {},
+            created_at: '2026-07-22T08:00:00.000Z',
+            archived_at: null,
+            created_by: null,
+            content_text: 'PRD source',
+            page_count: null,
+            segment_count: 1,
+            segments: [
+              {
+                id: 'segment_prd',
+                index: 0,
+                label: 'Section 1',
+                text: 'PRD source',
+                char_start: 0,
+                char_end: 10,
+                token_estimate: 2,
+              },
+            ],
+            parse_quality: { status: 'ready', score: 1, message: 'Ready' },
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    activateTab(/Commit/);
+
+    expect(screen.getByRole('complementary', { name: 'Post-commit actions' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue on feature/prd-audience' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+    );
+    const [, saveInit] = findFetchCall(fetchMock.mock.calls, workspaceUrl);
+    expect(JSON.parse(String(saveInit?.body))).toMatchObject({
+      workspace: {
+        baseCommitHash: 'sha256:workspace-commit',
+        sourceBundle: [{ id: 'src_doc' }],
+        status: 'draft',
+        targetBranch: 'feature/prd-audience',
+        yopsDraft: { operations: [] },
+      },
+    });
+    const [, conversationInit] = findFetchCall(fetchMock.mock.calls, conversationsUrl);
+    expect(JSON.parse(String(conversationInit?.body))).toMatchObject({
+      metadata: {
+        target_branch: 'feature/prd-audience',
+        workspace_id: 'workspace_ready',
+      },
+      parent_commit_hash: 'sha256:workspace-commit',
+      project_id: 'proj_1',
+    });
+
+    const chatTab = screen.getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+    expect(await screen.findByText('No source chat turns yet.')).toBeInTheDocument();
+    const iterationStatus = screen.getByText(/Based on/).closest('output');
+    expect(iterationStatus).toHaveTextContent('Based on workspace-co');
+    expect(iterationStatus).toHaveTextContent('Next commit to feature/prd-audience');
+    expect(window.localStorage.getItem('t3x:workspace-source-chat:proj_1:workspace_ready')).toBe(
+      'conv_next_workspace'
+    );
+  });
+
+  it('starts the next workspace conversation on a new branch', async () => {
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:workspace-commit',
+    };
+    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const branchesUrl = 'http://localhost:8000/api/v1/branches';
+    const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === workspaceUrl) {
+        const body = JSON.parse(String(init?.body)) as { workspace: WorkspaceCandidate };
+        return jsonResponse({
+          success: true,
+          data: { candidate_id: 'candidate:workspace_ready', workspace: body.workspace },
+        });
+      }
+      if (url === branchesUrl) {
+        return jsonResponse({
+          success: true,
+          data: { branch_id: 'branch_next', name: 'feature/next-round' },
+        });
+      }
+      if (url === conversationsUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            conversation_id: 'conv_branch_workspace',
+            project_id: 'proj_1',
+            created_at: '2026-07-22T08:00:00.000Z',
+          },
+        });
+      }
+      if (url.endsWith('/projects/proj_1/materials/mat_prd')) {
+        return jsonResponse({
+          success: true,
+          data: {
+            id: 'mat_prd',
+            project_id: 'proj_1',
+            source_type: 'document',
+            title: 'PRD import',
+            filename: 'prd.md',
+            mime_type: 'text/markdown',
+            content_hash: 'hash_prd',
+            content_excerpt: 'PRD source',
+            token_estimate: 2,
+            metadata: {},
+            created_at: '2026-07-22T08:00:00.000Z',
+            archived_at: null,
+            created_by: null,
+            content_text: 'PRD source',
+            page_count: null,
+            segment_count: 1,
+            segments: [],
+            parse_quality: { status: 'ready', score: 1, message: 'Ready' },
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    activateTab(/Commit/);
+    fireEvent.click(screen.getByRole('button', { name: 'Create a new branch' }));
+    fireEvent.change(screen.getByLabelText('Branch name'), {
+      target: { value: 'feature/next-round' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start on new branch' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+    );
+    const [, branchInit] = findFetchCall(fetchMock.mock.calls, branchesUrl);
+    expect(JSON.parse(String(branchInit?.body))).toMatchObject({
+      name: 'feature/next-round',
+      parent_branch: 'feature/prd-audience',
+      project_id: 'proj_1',
+    });
+    const [, saveInit] = findFetchCall(fetchMock.mock.calls, workspaceUrl);
+    expect(JSON.parse(String(saveInit?.body))).toMatchObject({
+      workspace: {
+        baseCommitHash: 'sha256:workspace-commit',
+        targetBranch: 'feature/next-round',
+      },
+    });
+  });
+
+  it('sends View in State to the newly committed branch and commit', () => {
+    const onViewCommitInState = vi.fn();
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:workspace-commit',
+    };
+
+    render(
+      <WorkspaceWorkbench
+        candidates={[committedCandidate]}
+        onViewCommitInState={onViewCommitInState}
+        projectId="proj_1"
+      />
+    );
+    activateTab(/Commit/);
+    fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
+
+    expect(onViewCommitInState).toHaveBeenCalledWith(
+      'sha256:workspace-commit',
+      'feature/prd-audience'
+    );
+  });
+
   it('connects extract candidate, proposal, validation, preview, and commit gates', async () => {
     const extractedWorkspace: WorkspaceCandidate = {
       ...workspaceCandidates[0],

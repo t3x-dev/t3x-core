@@ -7,7 +7,8 @@ import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => '/t3x-dev/test-project/workspaces',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams('tab=workspaces'),
 }));
 
