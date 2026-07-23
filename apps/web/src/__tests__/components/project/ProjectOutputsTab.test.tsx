@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from '@/__tests__/hooks/renderHook';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
@@ -11,7 +11,16 @@ import type { ApiCommit, Leaf } from '@/types/api';
 import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
+  createLeaf: vi.fn(),
+  leafWorkspace: vi.fn(),
+  toastSuccess: vi.fn(),
   useProjectOutputsData: vi.fn(),
+}));
+
+const navigationMocks = vi.hoisted(() => ({
+  pathname: '/t3x-dev/test-project/outputs',
+  replace: vi.fn(),
+  searchParams: new URLSearchParams(),
 }));
 
 const dataSourceMocks = vi.hoisted(() => ({
@@ -22,6 +31,47 @@ const dataSourceMocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/leaves/useProjectOutputsData', () => ({
   useProjectOutputsData: (...args: unknown[]) => mocks.useProjectOutputsData(...args),
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => navigationMocks.pathname,
+  useRouter: () => ({ replace: navigationMocks.replace }),
+  useSearchParams: () => navigationMocks.searchParams,
+}));
+
+vi.mock('@/hooks/leaves/useCreateLeaf', () => ({
+  useCreateLeaf: () => ({ create: mocks.createLeaf }),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: (...args: unknown[]) => mocks.toastSuccess(...args) },
+}));
+
+vi.mock('@/app/project/[projectId]/leaf/[leafId]/page', () => ({
+  LeafDetailWorkspace: (props: {
+    embeddedNavigation: {
+      count: number;
+      onCreateLeaf: () => void;
+      onManageLeaves: () => void;
+      status: { label: string };
+    };
+    leafIdOverride: string;
+    projectIdOverride: string;
+  }) => {
+    mocks.leafWorkspace(props);
+    return (
+      <div data-testid="embedded-leaf-workspace">
+        <span>Leaf workspace {props.leafIdOverride}</span>
+        <span>{props.embeddedNavigation.status.label}</span>
+        <button onClick={props.embeddedNavigation.onManageLeaves} type="button">
+          Manage Leaves, {props.embeddedNavigation.count} existing
+        </button>
+        <button onClick={props.embeddedNavigation.onCreateLeaf} type="button">
+          New Leaf
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/hooks/commits/useCommitsList', () => ({
@@ -117,7 +167,9 @@ function makeData(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  navigationMocks.searchParams = new URLSearchParams();
   mocks.useProjectOutputsData.mockReturnValue(makeData());
+  mocks.createLeaf.mockResolvedValue(makeLeaf({ id: 'leaf_created', title: 'Created Leaf' }));
   dataSourceMocks.leaves.refresh.mockResolvedValue(undefined);
   dataSourceMocks.workspaces.refresh.mockResolvedValue(undefined);
 });
@@ -125,7 +177,7 @@ beforeEach(() => {
 afterEach(cleanupRoots);
 
 describe('ProjectOutputsTab', () => {
-  it('renders persisted Leaf metadata and links a fresh output to its detail page', () => {
+  it('embeds the existing Leaf workspace beneath the project navigation', () => {
     const workspace = makeWorkspace({
       outputTargets: [{ ...outputTarget, format: 'yaml' }],
     });
@@ -138,19 +190,15 @@ describe('ProjectOutputsTab', () => {
     render(<ProjectOutputsTab projectId="proj_1" />);
 
     expect(mocks.useProjectOutputsData).toHaveBeenCalledWith('proj_1');
-    expect(screen.getByText('Persisted PRD review brief')).toBeInTheDocument();
+    expect(screen.getByTestId('embedded-leaf-workspace')).toBeInTheDocument();
+    expect(screen.getByText('Leaf workspace leaf_fresh')).toBeInTheDocument();
     expect(screen.getByText('Fresh')).toBeInTheDocument();
-    expect(screen.getByText('Document / Markdown')).toBeInTheDocument();
-    expect(screen.getByText('Generated 2026-07-13 from PRD audience handoff')).toBeInTheDocument();
-    expect(screen.getByText('hash:latest1')).toBeInTheDocument();
-    expect(screen.getByText('PRD Schema v2')).toBeInTheDocument();
-    expect(screen.getByText('1/1 constraints passed.')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'View output: Persisted PRD review brief' })
-    ).toHaveAttribute('href', '/project/proj_1/leaf/leaf_fresh');
+    expect(mocks.leafWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ leafIdOverride: 'leaf_fresh', projectIdOverride: 'proj_1' })
+    );
   });
 
-  it('keeps ready, stale, and unknown Leaves readable without exposing write actions', () => {
+  it('manages existing Leaves and switches the embedded workspace in place', () => {
     const workspace = makeWorkspace();
     const latestCommit = makeCommit();
     const oldCommit = makeCommit({
@@ -188,21 +236,39 @@ describe('ProjectOutputsTab', () => {
 
     render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByText('Stale')).toBeInTheDocument();
-    expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'View Leaf: Ready audience brief' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/project/proj_1/leaf/leaf_ready')
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 3 existing' }));
+    expect(screen.getByRole('dialog', { name: 'Manage Leaves' })).toBeInTheDocument();
+    expect(screen.getByText('Existing Leaves')).toBeInTheDocument();
+    expect(screen.getByText('Ready audience brief')).toBeInTheDocument();
+    expect(screen.getByText('Stale audience brief')).toBeInTheDocument();
+    expect(screen.getByText('Unlinked audience brief')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ready audience brief/i }));
+    expect(screen.getByText('Leaf workspace leaf_ready')).toBeInTheDocument();
+    expect(mocks.leafWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ leafIdOverride: 'leaf_ready' })
     );
-    expect(screen.getByRole('link', { name: 'View output: Stale audience brief' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/project/proj_1/leaf/leaf_stale')
+    expect(navigationMocks.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project/outputs?leaf=leaf_ready'
     );
-    expect(
-      screen.getByRole('link', { name: 'View Leaf: Unlinked audience brief' })
-    ).toHaveAttribute('href', expect.stringContaining('/project/proj_1/leaf/leaf_unknown'));
-    expect(screen.queryByRole('button', { name: /generate|regenerate|create leaf/i })).toBeNull();
+  });
+
+  it('opens the Leaf requested by an Outputs deep link', () => {
+    const workspace = makeWorkspace();
+    const firstLeaf = makeLeaf({ id: 'leaf_first', title: 'First Leaf' });
+    const linkedLeaf = makeLeaf({ id: 'leaf_linked', title: 'Linked Leaf' });
+    navigationMocks.searchParams = new URLSearchParams('leaf=leaf_linked');
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({
+        commits: [makeCommit()],
+        leaves: [firstLeaf, linkedLeaf],
+        workspaces: [workspace],
+      })
+    );
+
+    render(<ProjectOutputsTab projectId="proj_1" />);
+
+    expect(screen.getByText('Leaf workspace leaf_linked')).toBeInTheDocument();
   });
 
   it('tolerates legacy Workspace records without output or schema arrays', () => {
@@ -216,9 +282,7 @@ describe('ProjectOutputsTab', () => {
 
     render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(screen.getByText('Persisted PRD review brief')).toBeInTheDocument();
-    expect(screen.getByText('Article / Markdown')).toBeInTheDocument();
-    expect(screen.getByText('t3x/commit')).toBeInTheDocument();
+    expect(screen.getByText('Leaf workspace leaf_fresh')).toBeInTheDocument();
   });
 
   it('shows loading while persisted records are being fetched', () => {
@@ -226,8 +290,8 @@ describe('ProjectOutputsTab', () => {
 
     render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(screen.getByText('Loading outputs...')).toBeInTheDocument();
-    expect(screen.queryByText('No committed Leaf artifacts yet')).toBeNull();
+    expect(screen.getByText('Loading Leaves...')).toBeInTheDocument();
+    expect(screen.queryByText('No committed Leaves yet')).toBeNull();
   });
 
   it('shows a load error, suppresses the empty state, and retries all records', () => {
@@ -247,8 +311,54 @@ describe('ProjectOutputsTab', () => {
   it('shows an honest empty state when the project has no persisted Leaves', () => {
     render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(screen.getByText('No committed Leaf artifacts yet')).toBeInTheDocument();
-    expect(screen.getByText('0 Leaves')).toBeInTheDocument();
+    expect(screen.getByText('No committed Leaves yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage Leaves, 0 existing' })).toBeInTheDocument();
+  });
+
+  it('creates an available Leaf and opens it in the reused workspace', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const workspace = makeWorkspace();
+    const createdLeaf = makeLeaf({ id: 'leaf_created', title: 'Audience handoff' });
+    mocks.createLeaf.mockResolvedValue(createdLeaf);
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [makeCommit()], refresh, workspaces: [workspace] })
+    );
+
+    const { rerender } = render(<ProjectOutputsTab projectId="proj_1" />);
+
+    expect(
+      screen.getByText('1 committed output target is ready to become a Leaf.')
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 0 existing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf: PRD audience brief' }));
+    expect(screen.getByRole('dialog', { name: 'Create Leaf' })).toBeInTheDocument();
+
+    const titleInput = screen.getByLabelText('Leaf title');
+    fireEvent.change(titleInput, { target: { value: 'Audience handoff' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf' }));
+
+    await waitFor(() => expect(mocks.createLeaf).toHaveBeenCalledTimes(1));
+    expect(mocks.createLeaf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commit_hash: workspace.lastCommitHash,
+        project_id: 'proj_1',
+        title: 'Audience handoff',
+      })
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [makeCommit()], leaves: [createdLeaf], refresh, workspaces: [workspace] })
+    );
+    rerender(<ProjectOutputsTab projectId="proj_1" />);
+
+    await waitFor(() =>
+      expect(screen.getByText('Leaf workspace leaf_created')).toBeInTheDocument()
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Created Audience handoff');
+    expect(navigationMocks.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project/outputs?leaf=leaf_created'
+    );
   });
 });
 

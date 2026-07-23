@@ -12,6 +12,12 @@ export interface ProjectOutputArtifact {
   workspace: WorkspaceCandidate | null;
 }
 
+export interface ProjectOutputTargetCandidate {
+  id: string;
+  target: WorkspaceOutputTarget;
+  workspace: WorkspaceCandidate;
+}
+
 export function buildProjectOutputArtifacts(
   leaves: Leaf[],
   workspaces: WorkspaceCandidate[],
@@ -45,6 +51,38 @@ export function buildProjectOutputArtifacts(
       const rightTime = artifactTimestamp(right);
       if (leftTime !== rightTime) return rightTime - leftTime;
       return left.id.localeCompare(right.id);
+    });
+}
+
+export function buildAvailableOutputTargets(
+  artifacts: ProjectOutputArtifact[],
+  workspaces: WorkspaceCandidate[]
+): ProjectOutputTargetCandidate[] {
+  const materializedTargets = new Set(
+    artifacts.flatMap((artifact) =>
+      artifact.workspace && artifact.target
+        ? [`${artifact.workspace.id}:${artifact.target.id}`]
+        : []
+    )
+  );
+
+  return workspaces
+    .flatMap((workspace) => {
+      if (!workspace.lastCommitHash) return [];
+      const targets = Array.isArray(workspace.outputTargets) ? workspace.outputTargets : [];
+      return targets
+        .filter((target) => !materializedTargets.has(`${workspace.id}:${target.id}`))
+        .map((target) => ({
+          id: `${workspace.id}:${target.id}`,
+          target,
+          workspace,
+        }));
+    })
+    .sort((left, right) => {
+      const workspaceOrder = left.workspace.title.localeCompare(right.workspace.title);
+      if (workspaceOrder !== 0) return workspaceOrder;
+      const targetOrder = left.target.title.localeCompare(right.target.title);
+      return targetOrder !== 0 ? targetOrder : left.id.localeCompare(right.id);
     });
 }
 

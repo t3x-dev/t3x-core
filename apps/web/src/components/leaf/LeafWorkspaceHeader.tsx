@@ -1,9 +1,20 @@
 'use client';
 
-import { ClipboardPaste, Copy, Download, FileJson, FileText } from 'lucide-react';
+import {
+  ChevronDown,
+  ClipboardPaste,
+  Copy,
+  Download,
+  FileJson,
+  FileOutput,
+  FileText,
+  Layers3,
+  Plus,
+} from 'lucide-react';
 import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,7 +28,18 @@ import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ExportFormat, Leaf } from '@/types/api';
 import { cn } from '@/utils/cn';
 
+export interface EmbeddedLeafNavigation {
+  count: number;
+  onCreateLeaf: () => void;
+  onManageLeaves: () => void;
+  status: {
+    label: string;
+    variant: 'leaf' | 'pending' | 'warning' | 'outline';
+  };
+}
+
 interface LeafWorkspaceHeaderProps {
+  embeddedNavigation?: EmbeddedLeafNavigation;
   leaf: Leaf;
   projectId: string;
   projectName: string | undefined;
@@ -29,6 +51,7 @@ interface LeafWorkspaceHeaderProps {
 }
 
 export function LeafWorkspaceHeader({
+  embeddedNavigation,
   leaf,
   projectId,
   onExport,
@@ -53,29 +76,74 @@ export function LeafWorkspaceHeader({
       data-intro-target="leaf-header"
     >
       {showChatSidebarToggle && <ChatSidebarToggleButton className="absolute left-2.5 top-2" />}
-      <div className={cn('min-w-0 flex-1', showChatSidebarToggle && 'pl-[34px]')}>
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-3',
+          showChatSidebarToggle && 'pl-[34px]'
+        )}
+      >
+        {embeddedNavigation ? (
+          <>
+            <Button
+              aria-label={`Manage Leaves, ${embeddedNavigation.count} existing`}
+              className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+              onClick={embeddedNavigation.onManageLeaves}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-leaf)]" />
+              <span className="hidden sm:inline">Leaves</span>
+              <Badge className="h-5 min-w-5 justify-center px-1.5" variant="outline">
+                {embeddedNavigation.count}
+              </Badge>
+              <ChevronDown aria-hidden="true" className="size-3 text-[var(--text-tertiary)]" />
+            </Button>
+            <span aria-hidden="true" className="h-7 w-px shrink-0 bg-[var(--stroke-divider)]" />
+          </>
+        ) : null}
+
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="min-w-0">
-            <Breadcrumb
-              className="hidden min-w-0 text-[11px] md:flex"
-              segments={[
-                { label: 'Home', href: '/' },
-                { label: 'Project', href: `/project/${projectId}` },
-                {
-                  label: `${t('commit')} ${shortHash}`,
-                  href: `/project/${projectId}?focus=${leaf.commit_hash}`,
-                },
-                { label: 'Leaf' },
-              ]}
-            />
-            <div className="flex min-w-0 items-baseline gap-2">
-              <h1 className="truncate text-[15px] font-semibold leading-5 text-[var(--text-primary)]">
-                {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
-              </h1>
-              <span className="hidden shrink-0 font-mono text-[11px] text-[var(--text-tertiary)] sm:inline">
-                {leaf.id.slice(0, 9)} · {hashLabel}
-                {generatedTime ? ` · generated ${generatedTime}` : ''}
-              </span>
+            {!embeddedNavigation ? (
+              <Breadcrumb
+                className="hidden min-w-0 text-[11px] md:flex"
+                segments={[
+                  { label: 'Home', href: '/' },
+                  { label: 'Project', href: `/project/${projectId}` },
+                  {
+                    label: `${t('commit')} ${shortHash}`,
+                    href: `/project/${projectId}?focus=${leaf.commit_hash}`,
+                  },
+                  { label: 'Leaf' },
+                ]}
+              />
+            ) : null}
+            <div className="flex min-w-0 items-center gap-2">
+              {embeddedNavigation ? (
+                <span className="hidden size-8 shrink-0 items-center justify-center rounded-md border border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)] md:flex">
+                  <FileOutput aria-hidden="true" className="size-4" />
+                </span>
+              ) : null}
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h1 className="truncate text-[15px] font-semibold leading-5 text-[var(--text-primary)]">
+                    {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
+                  </h1>
+                  {embeddedNavigation ? (
+                    <Badge
+                      className="hidden shrink-0 sm:inline-flex"
+                      variant={embeddedNavigation.status.variant}
+                    >
+                      {embeddedNavigation.status.label}
+                    </Badge>
+                  ) : null}
+                </div>
+                <span className="hidden truncate font-mono text-[11px] text-[var(--text-tertiary)] sm:block">
+                  {leaf.id.slice(0, 9)} · {hashLabel}
+                  {generatedTime ? ` · generated ${generatedTime}` : ''}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -84,9 +152,15 @@ export function LeafWorkspaceHeader({
       <div className="flex items-center gap-1.5" data-intro-target="leaf-actions">
         {/* Mode toggle */}
         {mode && onModeChange && (
-          <div className="mr-1 hidden overflow-hidden rounded-md border border-[var(--stroke-default)] sm:inline-flex md:mr-2">
+          <div
+            aria-label="Leaf workspace mode"
+            className="mr-1 hidden overflow-hidden rounded-md border border-[var(--stroke-default)] sm:inline-flex md:mr-2"
+            role="tablist"
+          >
             <button
+              aria-selected={mode === 'generate'}
               type="button"
+              role="tab"
               data-intro-target="leaf-mode-generate"
               className={cn(
                 'px-3 py-1 text-[10px] font-medium transition-all',
@@ -99,7 +173,9 @@ export function LeafWorkspaceHeader({
               Generate
             </button>
             <button
+              aria-selected={mode === 'display'}
               type="button"
+              role="tab"
               data-intro-target="leaf-mode-display"
               className={cn(
                 'px-3 py-1 text-[10px] font-medium transition-all',
@@ -146,6 +222,19 @@ export function LeafWorkspaceHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {embeddedNavigation ? (
+          <Button
+            className="h-8 gap-1.5 px-2.5 text-xs"
+            onClick={embeddedNavigation.onCreateLeaf}
+            size="sm"
+            type="button"
+            variant="leaf"
+          >
+            <Plus aria-hidden="true" className="size-3.5" />
+            <span className="hidden lg:inline">New Leaf</span>
+          </Button>
+        ) : null}
       </div>
     </header>
   );

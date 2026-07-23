@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
+import { getProjectOutputsPath, getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
 
 describe('repoPath', () => {
   it('normalizes project names into repository slugs', () => {
@@ -19,5 +19,11 @@ describe('repoPath', () => {
 
   it('falls back to a stable repo slug when the name is empty', () => {
     expect(toRepoSlug('', 'proj_test')).toBe('repo-proj-test');
+  });
+
+  it('builds an Outputs deep link for a selected Leaf', () => {
+    expect(
+      getProjectOutputsPath({ id: 'proj_test', name: 'Test Project' }, 'leaf/audience brief')
+    ).toBe('/t3x-dev/test-project/outputs?leaf=leaf%2Faudience%20brief');
   });
 });

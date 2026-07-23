@@ -47,6 +47,7 @@ const edgeTypes = {
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -551,9 +552,7 @@ function CanvasWorkspaceInner({
             ? () => {
                 router.push(
                   withIntroDemo(
-                    `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
-                      firstLeaf.id
-                    )}`
+                    getProjectOutputsPath({ id: projectId, name: projectName }, firstLeaf.id)
                   )
                 );
               }
@@ -663,9 +662,7 @@ function CanvasWorkspaceInner({
               // Leaf nodes -> navigate to leaf detail page (always single click)
               if (data.kind === 'leaf' && data.leafId && projectId) {
                 router.push(
-                  `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
-                    data.leafId
-                  )}`
+                  getProjectOutputsPath({ id: projectId, name: projectName }, data.leafId)
                 );
                 return;
               }
@@ -880,7 +877,7 @@ function CanvasWorkspaceInner({
           isConversationLocked={isConversationLocked}
         />
       )}
-      <LeafPanel />
+      <LeafPanel projectName={projectName} />
       <MergePanel />
       <DeletionConfirmDialog />
       {projectId && (

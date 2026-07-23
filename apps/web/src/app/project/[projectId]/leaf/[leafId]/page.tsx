@@ -9,7 +9,10 @@ import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LeafInspector } from '@/components/leaf/LeafInspector';
 import { LeafOutputDisplay } from '@/components/leaf/LeafOutputDisplay';
 import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
-import { LeafWorkspaceHeader } from '@/components/leaf/LeafWorkspaceHeader';
+import {
+  type EmbeddedLeafNavigation,
+  LeafWorkspaceHeader,
+} from '@/components/leaf/LeafWorkspaceHeader';
 import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
 import { LearnFromEditsPanel } from '@/components/leaf/LearnFromEditsPanel';
 import { QualityPanel } from '@/components/leaf/QualityPanel';
@@ -73,17 +76,23 @@ export default function LeafDetailPage() {
 }
 
 interface LeafDetailWorkspaceProps {
+  embeddedNavigation?: EmbeddedLeafNavigation;
+  leafIdOverride?: string;
+  projectIdOverride?: string;
   showChatSidebarToggle?: boolean;
 }
 
 export function LeafDetailWorkspace({
+  embeddedNavigation,
+  leafIdOverride,
+  projectIdOverride,
   showChatSidebarToggle = false,
 }: LeafDetailWorkspaceProps = {}) {
   const params = useParams();
   const router = useRouter();
   const introDemoRequested = useIntroDemoQueryFlag();
-  const projectId = params.projectId as string;
-  const leafId = params.leafId as string;
+  const projectId = projectIdOverride ?? (params.projectId as string);
+  const leafId = leafIdOverride ?? (params.leafId as string);
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const [introDemoAwaitingGeneration, setIntroDemoAwaitingGeneration] = useState(false);
   const introDemoCompletionTimerRef = useRef<number | null>(null);
@@ -302,6 +311,7 @@ export function LeafDetailWorkspace({
 
       {/* ── Header ── */}
       <LeafWorkspaceHeader
+        embeddedNavigation={embeddedNavigation}
         leaf={leaf}
         projectId={projectId}
         projectName={projectName}
