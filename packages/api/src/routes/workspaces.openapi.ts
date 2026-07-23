@@ -12,6 +12,7 @@ import type { Draft, Material, SemanticContent, SourcedYOp } from '@t3x-dev/core
 import {
   type AnyDB,
   createCommit,
+  findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
   getCommit,
@@ -95,6 +96,19 @@ const ListWorkspacesResponseSchema = z.object({
 const REVIEW_SAVE_STATUSES = new Set(['draft', 'ready_for_yops', 'schema_review']);
 
 type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
+
+class WorkspaceBaseBranchMismatchError extends Error {
+  constructor(
+    readonly targetBranch: string,
+    readonly baseCommitHash: string,
+    readonly baseBranch: string
+  ) {
+    super(
+      `Workspace base commit ${baseCommitHash} belongs to ${baseBranch}, but the commit target is ${targetBranch}. Rebuild the workspace from ${targetBranch} before committing.`
+    );
+    this.name = 'WorkspaceBaseBranchMismatchError';
+  }
+}
 
 const projectWorkspacesParams = z.object({
   projectId: z.string(),
@@ -491,6 +505,13 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       },
     });
   } catch (err) {
+    if (err instanceof WorkspaceBaseBranchMismatchError) {
+      return errorResponse(c, 'WORKSPACE_BASE_BRANCH_MISMATCH', err.message, {
+        base_branch: err.baseBranch,
+        base_commit_hash: err.baseCommitHash,
+        target_branch: err.targetBranch,
+      });
+    }
     const linearity = mapBranchLinearityError(c, err);
     if (linearity) return linearity;
     const message_ = err instanceof Error ? err.message : 'Failed to commit workspace';
@@ -615,7 +636,20 @@ async function resolveWorkspaceCommitParents(
 
   if (preferredParentHash) {
     const preferredParent = await getCommit(db, preferredParentHash);
-    if (preferredParent?.project_id === projectId) return [preferredParent.hash];
+    if (preferredParent?.project_id === projectId) {
+      if (preferredParent.branch === targetBranch) return [preferredParent.hash];
+
+      const registeredBranch = await findBranchByName(db, projectId, targetBranch);
+      const allowedParentBranch =
+        registeredBranch?.parentBranch ?? (targetBranch === 'main' ? null : 'main');
+      if (allowedParentBranch === preferredParent.branch) return [preferredParent.hash];
+
+      throw new WorkspaceBaseBranchMismatchError(
+        targetBranch,
+        preferredParent.hash,
+        preferredParent.branch
+      );
+    }
   }
 
   if (targetBranch !== 'main') {

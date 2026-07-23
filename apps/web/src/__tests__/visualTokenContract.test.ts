@@ -56,7 +56,7 @@ function collectViolations(patterns: RegExp[], allowedFiles = ALLOWED_FILES): st
 
   for (const scanDir of SCAN_DIRS) {
     for (const file of collectFiles(path.join(ROOT, scanDir))) {
-      const relative = path.relative(ROOT, file);
+      const relative = path.relative(ROOT, file).split(path.sep).join('/');
       if (allowedFiles.has(relative)) continue;
 
       const content = readFileSync(file, 'utf8');

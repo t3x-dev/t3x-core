@@ -387,7 +387,7 @@ function mergeWorkspaceOverride(
     ...override,
     outputTargets: candidate.outputTargets,
     schemaBindings: candidate.schemaBindings,
-    sourceBundle: mergeWorkspaceOverrideSources(candidate.sourceBundle, override.sourceBundle),
+    sourceBundle: mergeWorkspaceSourceBundles(candidate.sourceBundle, override.sourceBundle),
   };
 
   if (override.status !== 'committed' && !override.lastCommitHash) {
@@ -397,17 +397,13 @@ function mergeWorkspaceOverride(
   return merged;
 }
 
-function mergeWorkspaceOverrideSources(
+function mergeWorkspaceSourceBundles(
   candidateSources: SourceBundleItem[],
   overrideSources: SourceBundleItem[]
 ): SourceBundleItem[] {
-  const merged = new Map(overrideSources.map((source) => [source.id, source] as const));
-
-  for (const source of candidateSources) {
-    if (source.materialId && !merged.has(source.id)) merged.set(source.id, source);
-  }
-
-  return Array.from(merged.values());
+  const localSources = overrideSources.filter((source) => !source.materialId);
+  const refreshedMaterials = candidateSources.filter((source) => Boolean(source.materialId));
+  return [...localSources, ...refreshedMaterials];
 }
 
 function upsertWorkspaceSourceBundle(

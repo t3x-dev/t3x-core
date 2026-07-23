@@ -64,6 +64,7 @@ import {
   pinsRoutes,
   projectRoutes,
   providersRoutes,
+  pullRequestRoutes,
   recipesRoutes,
   relationsRoutes,
   runnerRoutes,
@@ -160,6 +161,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // Mount routes
   api.route('/', statusRoutes);
   api.route('/', projectRoutes);
+  api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
   api.route('/', commitRoutes);
@@ -263,6 +265,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Extraction Feedback', description: 'Feedback for extraction quality and review' },
       { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
       { name: 'Merge', description: 'Merge operations' },
+      { name: 'Pull requests', description: 'Branch review and deterministic merge workflows' },
       { name: 'Export', description: 'Export operations' },
       { name: 'Chat', description: 'LLM chat operations' },
       { name: 'Search', description: 'State and project search' },

@@ -54,6 +54,8 @@ describe('useWorkspaceCommit', () => {
   });
 
   it('persists the workspace staged state before creating a workspace commit', async () => {
+    const commitCreated = vi.fn();
+    window.addEventListener('t3x:commit-created', commitCreated);
     const { result } = renderHook(() => useWorkspaceCommit(candidate));
 
     let hash = '';
@@ -76,6 +78,17 @@ describe('useWorkspaceCommit', () => {
     expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(commitWorkspaceDraft).mock.invocationCallOrder[0]
     );
+    expect(commitCreated).toHaveBeenCalledOnce();
+    expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      type: 'commit.created',
+      projectId: 'proj_1',
+      branch: 'feature/prd-audience',
+      payload: {
+        hash: 'sha256:workspace-commit',
+        branch: 'feature/prd-audience',
+      },
+    });
+    window.removeEventListener('t3x:commit-created', commitCreated);
   });
 
   it('forwards an explicitly confirmed schema review override', async () => {

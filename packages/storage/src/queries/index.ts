@@ -323,6 +323,28 @@ export {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from './provider-credentials';
+// Pull Requests
+export {
+  type AddPullRequestActivityInput,
+  acquirePullRequestLock,
+  addPullRequestActivity,
+  type CreatePullRequestInput,
+  createPullRequest,
+  findActivePullRequestByBranches,
+  findPullRequestByNumber,
+  listPullRequestActivity,
+  listPullRequestChecks,
+  listPullRequestsByProject,
+  type PullRequestActivityType,
+  type PullRequestCheckKind,
+  type PullRequestCheckStatus,
+  type PullRequestDiffSummary,
+  type PullRequestStatus,
+  type ReplacePullRequestCheckInput,
+  replacePullRequestChecks,
+  type UpdatePullRequestInput,
+  updatePullRequest,
+} from './pull-requests';
 // Recipes (workflow automation)
 export {
   type CreateRecipeInput,

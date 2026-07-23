@@ -74,6 +74,34 @@ describe('prepareMerge', () => {
     expect(result.onlyInTarget[0]).toBe('topic_a');
   });
 
+  it('treats deletion against an unchanged node as an automatic deletion', () => {
+    const base = sc([t('topic_a', { a: 1 })]);
+
+    const sourceDeleted = prepareMerge(base, sc([]), base);
+    expect(sourceDeleted.autoKept).toEqual([]);
+    expect(sourceDeleted.onlyInTarget).toEqual([]);
+    expect(sourceDeleted.conflicts).toEqual([]);
+
+    const targetDeleted = prepareMerge(base, base, sc([]));
+    expect(targetDeleted.autoKept).toEqual([]);
+    expect(targetDeleted.onlyInSource).toEqual([]);
+    expect(targetDeleted.conflicts).toEqual([]);
+  });
+
+  it('detects a modify/delete conflict', () => {
+    const base = sc([t('topic_a', { a: 1 })]);
+    const result = prepareMerge(base, sc([]), sc([t('topic_a', { a: 2 })]));
+
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]).toMatchObject({ path: 'topic_a' });
+    expect(result.conflicts[0].slotConflicts[0]).toMatchObject({
+      key: 'a',
+      baseValue: 1,
+      sourceValue: undefined,
+      targetValue: 2,
+    });
+  });
+
   it('categorizes relations', () => {
     const trees = [t('topic_a', { a: 1 }), t('topic_b', { b: 2 })];
     const base = sc(trees);
@@ -82,6 +110,17 @@ describe('prepareMerge', () => {
     const result = prepareMerge(base, source, target);
     expect(result.relationsOnlyInSource).toHaveLength(1);
     expect(result.relationsOnlyInTarget).toHaveLength(1);
+  });
+
+  it('does not resurrect a relation deleted on one side', () => {
+    const trees = [t('topic_a', { a: 1 }), t('topic_b', { b: 2 })];
+    const relation = { from: 'topic_a', to: 'topic_b', type: 'causes' as const };
+    const base = sc(trees, [relation]);
+    const result = prepareMerge(base, sc(trees, []), base);
+
+    expect(result.relationsInBoth).toEqual([]);
+    expect(result.relationsOnlyInSource).toEqual([]);
+    expect(result.relationsOnlyInTarget).toEqual([]);
   });
 
   it('no conflict when both make same change', () => {

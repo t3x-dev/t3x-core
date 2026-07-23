@@ -530,6 +530,58 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() => expect(onSourceMaterialUploaded).toHaveBeenCalled());
   });
 
+  it('shows refreshed source materials while a workspace override is active', async () => {
+    usePinsStore.setState({ pins: [], initialized: true, currentProjectId: 'proj_1' });
+    const extractCandidateUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input) !== extractCandidateUrl) {
+        throw new Error(`Unexpected background request: ${String(input)}`);
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          candidate_id: 'candidate_before_upload',
+          workspace: workspaceCandidates[0],
+        },
+      });
+    });
+    const { rerender } = render(
+      <WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+    });
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBe(1));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute('aria-selected', 'true')
+    );
+
+    const refreshedCandidates: WorkspaceCandidate[] = [
+      {
+        ...workspaceCandidates[0],
+        sourceBundle: [
+          ...workspaceCandidates[0].sourceBundle,
+          {
+            id: 'material:mat_fresh_upload',
+            type: 'document',
+            title: 'Fresh upload.txt',
+            fileName: 'Fresh upload.txt',
+            materialId: 'mat_fresh_upload',
+          },
+        ],
+      },
+      workspaceCandidates[1],
+    ];
+
+    rerender(<WorkspaceWorkbench candidates={refreshedCandidates} projectId="proj_1" />);
+    activateTab(/Source/);
+
+    expect(screen.getAllByText('Fresh upload.txt')).toHaveLength(2);
+  });
+
   it('extracts yops before applying the backend preview', async () => {
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const createValidateResponse = () =>
@@ -1007,8 +1059,10 @@ describe('WorkspaceWorkbench', () => {
         'true'
       )
     );
-    expect(screen.queryByText('Committed to state')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
+    await waitFor(() => {
+      expect(screen.queryByText('Committed to state')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
+    });
   });
 
   it('keeps committed materialization and validation metrics complete', () => {
@@ -1810,9 +1864,19 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'main' },
     });
-    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeDisabled();
+    expect(
+      screen.getByText(
+        'Target branch changed from feature/prd-audience to main. Rebuild this workspace from main before committing.'
+      )
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
+      target: { value: 'feature/prd-audience' },
+    });
+    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ }));
 
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(2)
@@ -1861,7 +1925,7 @@ describe('WorkspaceWorkbench', () => {
       workspace: {
         id: 'workspace_ready',
         projectId: 'proj_1',
-        targetBranch: 'main',
+        targetBranch: 'feature/prd-audience',
         yopsDraft: { id: 'draft:candidate:backend' },
       },
     });
