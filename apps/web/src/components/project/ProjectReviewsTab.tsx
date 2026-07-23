@@ -1881,7 +1881,7 @@ function BranchSelect({
         </SelectTrigger>
         <SelectContent
           align="start"
-          className="min-w-60 rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
+          className="min-w-60 rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[var(--fx-shadow-lg)]"
           position="popper"
           sideOffset={8}
         >

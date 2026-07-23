@@ -1002,8 +1002,10 @@ describe('WorkspaceWorkbench', () => {
         'true'
       )
     );
-    expect(screen.queryByText('Committed to state')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
+    await waitFor(() => {
+      expect(screen.queryByText('Committed to state')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
+    });
   });
 
   it('starts a fresh source conversation from the committed baseline in the same workspace', async () => {
