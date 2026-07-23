@@ -133,7 +133,10 @@ vi.mock('@/store/pinsStore', () => ({
 
 vi.mock('@/store/projectStore', () => ({
   useProjectStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notifyCallback: vi.fn() }),
+    selector({
+      getProject: (projectId: string) => ({ id: projectId, name: 'Canvas Project' }),
+      notifyCallback: vi.fn(),
+    }),
 }));
 
 class ResizeObserverStub {
@@ -311,7 +314,7 @@ describe('Canvas node semantic markers', () => {
     renderUnitNode(makeNodeData());
 
     const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
-    expect(leafLink).toHaveAttribute('href', '/chat/project/proj_canvas/leaf/leaf_canvas');
+    expect(leafLink).toHaveAttribute('href', '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas');
 
     fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
@@ -326,7 +329,7 @@ describe('Canvas node semantic markers', () => {
 
     expect(screen.getByRole('link', { name: /Open leaf Launch brief/i })).toHaveAttribute(
       'href',
-      '/chat/project/proj_store/leaf/leaf_canvas'
+      '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas'
     );
   });
 

@@ -24,3 +24,11 @@ export function toRepoSlug(name: string, fallbackId?: string): string {
 export function getProjectRepoPath(project: { id?: string; name: string }): string {
   return `/${DEFAULT_OWNER_SLUG}/${toRepoSlug(project.name, project.id)}`;
 }
+
+export function getProjectOutputsPath(
+  project: { id?: string; name: string },
+  leafId?: string
+): string {
+  const path = `${getProjectRepoPath(project)}/outputs`;
+  return leafId ? `${path}?leaf=${encodeURIComponent(leafId)}` : path;
+}

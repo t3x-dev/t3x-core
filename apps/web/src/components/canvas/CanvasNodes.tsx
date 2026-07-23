@@ -30,7 +30,7 @@ import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
+import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { nodeEnter, reducedMotion } from '@/utils/motion';
 import { glass, toneAccent, toneGlow } from '@/utils/theme';
@@ -154,6 +154,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const { load: loadProjectData } = useCanvasNodeActions();
   const notify = useProjectStore((state) => state.notifyCallback);
+  const projectName = useProjectStore((state) =>
+    projectId ? state.getProject(projectId)?.name : undefined
+  );
 
   // Pin store
   const { isPinned } = usePinsStore();
@@ -238,12 +241,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
     },
     [commitHash, introDemoActive, projectId, router]
   );
-
-  // Navigate to leaf detail page
-  const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !leaf.id) return undefined;
-    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
-  };
 
   // B-4: Next Step button logic
   const nextStep = getNextStep({
@@ -598,6 +595,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             isDetail={isDetail}
             prefersReducedMotion={prefersReducedMotion}
             projectId={projectId}
+            projectName={projectName}
             nodeId={id}
             onCreateLeaf={() => openLeafPanel(id)}
             leafContextMenuHandler={leafContextMenuHandler}

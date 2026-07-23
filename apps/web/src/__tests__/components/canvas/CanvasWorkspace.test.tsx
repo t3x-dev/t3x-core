@@ -554,6 +554,33 @@ describe('CanvasWorkspace initial fit view', () => {
     );
   });
 
+  it('opens an existing Leaf inside the repository Outputs workspace', () => {
+    viewportMocks.selectionPanelVisible = true;
+    const node = {
+      ...unitNode('sha256:with-leaf'),
+      data: {
+        ...unitNode('sha256:with-leaf').data,
+        commitHash: 'sha256:with-leaf',
+        leaves: [{ id: 'leaf_audience', title: 'Audience handoff', type: 'article' as const }],
+      },
+    };
+    useCanvasStore.setState({ nodes: [node] });
+    layoutMocks.getLayoutedElements.mockResolvedValue([node]);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: document.createElement('div') },
+        node
+      );
+    });
+    screen.getByRole('button', { name: 'Open Leaf' }).click();
+
+    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
+      '/t3x-dev/trust-gate/outputs?leaf=leaf_audience'
+    );
+  });
+
   it('does not use double click as committed node detail navigation', () => {
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
     const node = {

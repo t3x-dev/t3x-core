@@ -1,27 +1,25 @@
 'use client';
 
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  Eye,
-  FileOutput,
-  PanelTop,
-  RefreshCw,
-} from 'lucide-react';
-import Link from 'next/link';
-import { useMemo } from 'react';
+import { AlertCircle, FileOutput, Layers3, Plus } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { LeafDetailWorkspace } from '@/app/project/[projectId]/leaf/[leafId]/page';
 import { LoadingSpinner } from '@/components/layout/ApiStatus';
+import { ProjectLeafManager } from '@/components/project/ProjectLeafManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { commitHashLabel } from '@/domain/format/formatters';
+import { formatUserFacingError } from '@/domain/format/errors';
 import {
+  buildAvailableOutputTargets,
   buildProjectOutputArtifacts,
-  type ProjectOutputArtifact,
   type ProjectOutputStatus,
 } from '@/domain/outputs/projectOutputs';
+import { buildOutputTargetLeafInput } from '@/domain/workspaces/outputTargetLeaf';
+import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
+import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useProjectOutputsData } from '@/hooks/leaves/useProjectOutputsData';
+import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
 
 interface ProjectOutputsTabProps {
   projectId: string;
@@ -29,301 +27,217 @@ interface ProjectOutputsTabProps {
 
 export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
   const data = useProjectOutputsData(projectId);
+  const { create: createLeaf } = useCreateLeaf();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedLeafId = searchParams.get('leaf');
   const artifacts = useMemo(
     () => buildProjectOutputArtifacts(data.leaves, data.workspaces, data.commits),
     [data.commits, data.leaves, data.workspaces]
   );
+  const availableTargets = useMemo(
+    () => buildAvailableOutputTargets(artifacts, data.workspaces),
+    [artifacts, data.workspaces]
+  );
+  const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [creatingTargetId, setCreatingTargetId] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const navigateToLeaf = useCallback(
+    (leafId: string) => {
+      setSelectedLeafId(leafId);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('leaf', leafId);
+      router.replace(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams]
+  );
+
+  useEffect(() => {
+    if (artifacts.length === 0) {
+      if (!data.loading) setSelectedLeafId(null);
+      return;
+    }
+    setSelectedLeafId((currentLeafId) => {
+      if (requestedLeafId && artifacts.some((artifact) => artifact.leaf.id === requestedLeafId)) {
+        return requestedLeafId;
+      }
+      if (currentLeafId && artifacts.some((artifact) => artifact.leaf.id === currentLeafId)) {
+        return currentLeafId;
+      }
+      return artifacts[0].leaf.id;
+    });
+  }, [artifacts, data.loading, requestedLeafId]);
+
+  const selectedArtifact =
+    artifacts.find((artifact) => artifact.leaf.id === selectedLeafId) ??
+    (requestedLeafId
+      ? artifacts.find((artifact) => artifact.leaf.id === requestedLeafId)
+      : undefined) ??
+    artifacts[0] ??
+    null;
+  const activeLeafId = selectedArtifact?.leaf.id ?? null;
+
+  const handleManagerOpenChange = useCallback((open: boolean) => {
+    setManagerOpen(open);
+    if (open) setCreateError(null);
+  }, []);
+
+  const handleCreate = useCallback(
+    async (workspace: WorkspaceCandidate, target: WorkspaceOutputTarget, title: string) => {
+      setCreatingTargetId(target.id);
+      setCreateError(null);
+      try {
+        const input = buildOutputTargetLeafInput(workspace, target.id);
+        const leaf = await createLeaf({ ...input, title: title || input.title });
+        dispatchLeafChanged({
+          commitHash: leaf.commit_hash,
+          leafId: leaf.id,
+          projectId,
+          reason: 'created',
+        });
+        await data.refresh();
+        navigateToLeaf(leaf.id);
+        toast.success(`Created ${leaf.title || 'Leaf'}`);
+      } catch (error) {
+        const message = formatUserFacingError(error, 'Could not create Leaf.');
+        setCreateError(message);
+        throw error;
+      } finally {
+        setCreatingTargetId(null);
+      }
+    },
+    [createLeaf, data.refresh, navigateToLeaf, projectId]
+  );
+
+  const openManager = useCallback(() => setManagerOpen(true), []);
+  const embeddedNavigation = useMemo(
+    () =>
+      selectedArtifact
+        ? {
+            count: artifacts.length,
+            onCreateLeaf: openManager,
+            onManageLeaves: openManager,
+            status: STATUS_PRESENTATION[selectedArtifact.status],
+          }
+        : undefined,
+    [artifacts.length, openManager, selectedArtifact]
+  );
 
   return (
-    <section aria-busy={data.loading} className="h-full overflow-auto p-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <OutputsHeader count={artifacts.length} />
-
-        {data.error ? (
-          <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2"
-            role="alert"
-          >
-            <div className="flex min-w-0 items-center gap-2 text-sm text-[var(--status-error)]">
-              <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
-              <span>{data.error}</span>
-            </div>
-            <Button onClick={() => void data.refresh()} size="sm" type="button" variant="outline">
-              Retry outputs
-            </Button>
+    <section
+      aria-busy={data.loading}
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)]"
+    >
+      {data.error ? (
+        <div
+          className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-4 py-2"
+          role="alert"
+        >
+          <div className="flex min-w-0 items-center gap-2 text-sm text-[var(--status-error)]">
+            <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
+            <span>{data.error}</span>
           </div>
-        ) : null}
+          <Button onClick={() => void data.refresh()} size="sm" type="button" variant="outline">
+            Retry outputs
+          </Button>
+        </div>
+      ) : null}
 
-        {data.loading && artifacts.length === 0 ? (
-          <LoadingSpinner message="Loading outputs..." />
-        ) : data.error && artifacts.length === 0 ? null : artifacts.length === 0 ? (
-          <OutputsEmptyState />
+      <div className="min-h-0 flex-1">
+        {data.loading && !selectedArtifact ? (
+          <LoadingSpinner className="h-full" message="Loading Leaves..." />
+        ) : data.error && artifacts.length === 0 ? null : selectedArtifact ? (
+          <LeafDetailWorkspace
+            embeddedNavigation={embeddedNavigation}
+            key={selectedArtifact.leaf.id}
+            leafIdOverride={selectedArtifact.leaf.id}
+            projectIdOverride={projectId}
+          />
         ) : (
-          <div className="grid gap-3">
-            {artifacts.map((artifact) => (
-              <OutputArtifactCard
-                artifact={artifact}
-                key={artifact.id}
-                leafHref={`/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(artifact.leaf.id)}`}
-              />
-            ))}
-          </div>
+          <OutputsEmptyState
+            availableCount={availableTargets.length}
+            onManageLeaves={openManager}
+          />
         )}
       </div>
+
+      <ProjectLeafManager
+        artifacts={artifacts}
+        availableTargets={availableTargets}
+        createError={createError}
+        creatingTargetId={creatingTargetId}
+        onCreate={handleCreate}
+        onOpenChange={handleManagerOpenChange}
+        onSelect={navigateToLeaf}
+        open={managerOpen}
+        selectedLeafId={activeLeafId}
+      />
     </section>
   );
 }
 
-function OutputsHeader({ count }: { count: number }) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <PanelTop aria-hidden="true" className="h-4 w-4 text-[var(--accent-leaf)]" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Committed outputs</h2>
-        </div>
-        <p className="text-sm leading-5 text-[var(--text-secondary)]">
-          Outputs are committed Leaf artifacts with stable source commits, freshness, and constraint
-          status. Workspace output targets remain draft configuration until commit.
-        </p>
-      </div>
-      <Badge variant="outline">
-        {count} {count === 1 ? 'Leaf' : 'Leaves'}
-      </Badge>
-    </div>
-  );
-}
-
-function OutputsEmptyState() {
-  return (
-    <div className="flex min-h-56 flex-col items-center justify-center rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-8 text-center">
-      <span className="flex size-10 items-center justify-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--accent-leaf)]">
-        <FileOutput aria-hidden="true" className="size-5" />
-      </span>
-      <p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">
-        No committed Leaf artifacts yet
-      </p>
-      <p className="mt-1 max-w-md text-sm leading-5 text-[var(--text-secondary)]">
-        Create a Leaf from a committed Workspace output target. Persisted Leaves will appear here.
-      </p>
-    </div>
-  );
-}
-
-function OutputArtifactCard({
-  artifact,
-  leafHref,
+function OutputsEmptyState({
+  availableCount,
+  onManageLeaves,
 }: {
-  artifact: ProjectOutputArtifact;
-  leafHref: string;
+  availableCount: number;
+  onManageLeaves: () => void;
 }) {
-  const name = artifact.leaf.title ?? artifact.target?.title ?? 'Untitled output';
-  const status = getStatusPresentation(artifact);
-  const constraints = getConstraintPresentation(artifact);
-  const sourceWorkspace = artifact.workspace?.title ?? 'Unlinked Leaf';
-  const branch = artifact.boundCommit?.branch ?? artifact.workspace?.targetBranch ?? 'Unknown';
-  const type = formatValue(artifact.target?.type ?? artifact.leaf.type ?? 'output');
-  const rawFormat = artifact.leaf.config.format ?? artifact.target?.format;
-  const format = formatValue(typeof rawFormat === 'string' ? rawFormat : 'text');
-  const schemaBindings = Array.isArray(artifact.workspace?.schemaBindings)
-    ? artifact.workspace.schemaBindings
-    : [];
-  const schemaBinding = schemaBindings[0];
-  const schema =
-    schemaBinding?.schemaName && schemaBinding.version
-      ? `${schemaBinding.schemaName} ${schemaBinding.version}`
-      : (artifact.boundCommit?.schema ?? 'Unknown');
-  const dateLine = artifact.leaf.generated_at
-    ? `Generated ${formatDate(artifact.leaf.generated_at)} from ${sourceWorkspace}`
-    : `Created ${formatDate(artifact.leaf.created_at)} from ${sourceWorkspace}`;
-
   return (
-    <article className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2 text-[var(--accent-leaf)]">
-              <FileOutput aria-hidden="true" className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                  {name}
-                </h3>
-                <Badge variant={status.badgeVariant}>{status.label}</Badge>
-                <Badge variant="outline">
-                  {type} / {format}
-                </Badge>
-              </div>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">{dateLine}</p>
-            </div>
-          </div>
+    <div className="flex h-full min-h-[420px] flex-col">
+      <header className="flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2">
+        <Button
+          aria-label="Manage Leaves, 0 existing"
+          className="h-8 gap-1.5 px-2.5 text-xs"
+          onClick={onManageLeaves}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-leaf)]" />
+          Leaves
+          <Badge className="h-5 min-w-5 justify-center px-1.5" variant="outline">
+            0
+          </Badge>
+        </Button>
+        <Button onClick={onManageLeaves} size="sm" type="button" variant="leaf">
+          <Plus aria-hidden="true" className="size-4" />
+          New Leaf
+        </Button>
+      </header>
 
-          <p className="mt-3 text-sm leading-5 text-[var(--text-secondary)]">
-            {getArtifactPreview(artifact)}
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="flex max-w-md flex-col items-center text-center">
+          <span className="flex size-12 items-center justify-center rounded-lg border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
+            <FileOutput aria-hidden="true" className="size-5" />
+          </span>
+          <h2 className="mt-4 text-base font-semibold text-[var(--text-primary)]">
+            No committed Leaves yet
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+            {availableCount > 0
+              ? `${availableCount} committed ${availableCount === 1 ? 'output target is' : 'output targets are'} ready to become a Leaf.`
+              : 'Commit a Workspace output target first, then create its persistent Leaf here.'}
           </p>
-
-          <dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
-            <OutputMeta
-              label="Bound commit"
-              mono
-              value={commitHashLabel(artifact.boundCommit?.hash ?? artifact.leaf.commit_hash)}
-            />
-            <OutputMeta label="Branch" mono value={branch} />
-            <OutputMeta label="Source workspace" value={sourceWorkspace} />
-            <OutputMeta label="Schema context" value={schema} />
-          </dl>
-        </div>
-
-        <div className="w-full border-t border-[var(--stroke-divider)] pt-3 lg:w-[220px] lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-          <div className="flex items-center gap-2">
-            <StatusIcon status={artifact.status} />
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-              Freshness
-            </p>
-          </div>
-
-          <p className="mt-2 text-sm font-semibold leading-5 text-[var(--text-primary)]">
-            {status.reason}
-          </p>
-
-          <div className="mt-3 flex items-start gap-2">
-            {constraints.tone === 'passed' ? (
-              <CheckCircle2
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 text-[var(--status-success)]"
-              />
-            ) : (
-              <AlertTriangle
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 text-[var(--status-warning)]"
-              />
-            )}
-            <p className="text-xs leading-5 text-[var(--text-secondary)]">{constraints.summary}</p>
-          </div>
-
-          <Button asChild className="mt-3 w-full" size="sm" variant="canvas-outline">
-            <Link
-              aria-label={`${artifact.leaf.output ? 'View output' : 'View Leaf'}: ${name}`}
-              href={leafHref}
-            >
-              <Eye aria-hidden="true" className="h-4 w-4" />
-              {artifact.leaf.output ? 'View output' : 'View Leaf'}
-            </Link>
+          <Button className="mt-5" onClick={onManageLeaves} type="button" variant="leaf">
+            <Layers3 aria-hidden="true" className="size-4" />
+            Manage Leaves
           </Button>
         </div>
       </div>
-    </article>
-  );
-}
-
-function OutputMeta({
-  label,
-  mono = false,
-  value,
-}: {
-  label: string;
-  mono?: boolean;
-  value: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[var(--text-tertiary)]">{label}</dt>
-      <dd
-        className={
-          mono
-            ? 'mt-1 truncate font-mono text-[var(--text-primary)]'
-            : 'mt-1 truncate text-[var(--text-primary)]'
-        }
-        title={value}
-      >
-        {value}
-      </dd>
     </div>
   );
 }
 
-function StatusIcon({ status }: { status: ProjectOutputStatus }) {
-  if (status === 'fresh') {
-    return <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-[var(--status-success)]" />;
-  }
-  if (status === 'stale') {
-    return <RefreshCw aria-hidden="true" className="h-4 w-4 text-[var(--status-warning)]" />;
-  }
-  if (status === 'ready') {
-    return <Clock3 aria-hidden="true" className="h-4 w-4 text-[var(--accent-leaf)]" />;
-  }
-  return <AlertTriangle aria-hidden="true" className="h-4 w-4 text-[var(--status-warning)]" />;
-}
-
-interface StatusPresentation {
-  badgeVariant: 'leaf' | 'pending' | 'warning' | 'outline';
-  label: string;
-  reason: string;
-}
-
-const STATUS_PRESENTATION: Record<ProjectOutputStatus, Omit<StatusPresentation, 'reason'>> = {
-  fresh: { badgeVariant: 'leaf', label: 'Fresh' },
-  ready: { badgeVariant: 'pending', label: 'Ready' },
-  stale: { badgeVariant: 'warning', label: 'Stale' },
-  unknown: { badgeVariant: 'outline', label: 'Unknown' },
+const STATUS_PRESENTATION: Record<
+  ProjectOutputStatus,
+  { label: string; variant: 'leaf' | 'pending' | 'warning' | 'outline' }
+> = {
+  fresh: { label: 'Fresh', variant: 'leaf' },
+  ready: { label: 'Ready', variant: 'pending' },
+  stale: { label: 'Stale', variant: 'warning' },
+  unknown: { label: 'Unknown', variant: 'outline' },
 };
-
-function getStatusPresentation(artifact: ProjectOutputArtifact): StatusPresentation {
-  const source = artifact.workspace?.title ?? artifact.boundCommit?.branch ?? 'source branch';
-  const reason = {
-    fresh: `Fresh from the latest committed ${source} state.`,
-    ready: 'Ready to generate from its bound commit.',
-    stale: `${source} has a newer committed state.`,
-    unknown: 'Latest source commit could not be resolved for this Leaf.',
-  }[artifact.status];
-  return { ...STATUS_PRESENTATION[artifact.status], reason };
-}
-
-function getConstraintPresentation(artifact: ProjectOutputArtifact): {
-  summary: string;
-  tone: 'passed' | 'warning';
-} {
-  const assertions = artifact.leaf.assertions;
-  if (assertions && assertions.length > 0) {
-    const passed = assertions.filter((assertion) => assertion.passed).length;
-    return {
-      summary: `${passed}/${assertions.length} constraints passed.`,
-      tone: passed === assertions.length ? 'passed' : 'warning',
-    };
-  }
-
-  if (!artifact.leaf.output) {
-    const count = artifact.leaf.constraints.length;
-    return {
-      summary:
-        count > 0
-          ? `${count} ${count === 1 ? 'constraint' : 'constraints'} will run during generation.`
-          : 'No constraints are configured for this Leaf.',
-      tone: 'warning',
-    };
-  }
-
-  return {
-    summary: 'Constraints were not validated for this output.',
-    tone: 'warning',
-  };
-}
-
-function getArtifactPreview(artifact: ProjectOutputArtifact): string {
-  if (artifact.leaf.output) {
-    const normalized = artifact.leaf.output.replace(/\s+/g, ' ').trim();
-    return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized;
-  }
-  if (artifact.target?.previewBody) return artifact.target.previewBody;
-  return 'This Leaf is configured and ready to generate from its bound commit.';
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toISOString().slice(0, 10);
-}
-
-function formatValue(value: string): string {
-  return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
-}
