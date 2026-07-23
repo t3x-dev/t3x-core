@@ -6,8 +6,10 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectStore } from '@/store/projectStore';
 import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { CommitSourceContext } from '../CommitSourceContext';
@@ -347,6 +349,9 @@ export function CommitConstraintsAndLeaves({
 }) {
   const { t } = useTerminology();
   const [showCreateLeaf, setShowCreateLeaf] = useState(false);
+  const projectName = useProjectStore((state) =>
+    projectId ? state.getProject(projectId)?.name : undefined
+  );
 
   return (
     <>
@@ -382,9 +387,11 @@ export function CommitConstraintsAndLeaves({
             {leaves.map((leaf) => (
               <li key={leaf.id}>
                 <Link
-                  href={`/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
-                    leaf.id
-                  )}`}
+                  href={
+                    projectName
+                      ? getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)
+                      : `/project/${encodeURIComponent(projectId)}?tab=outputs&leaf=${encodeURIComponent(leaf.id)}`
+                  }
                   className="flex items-center justify-between p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-success)]/15 hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">

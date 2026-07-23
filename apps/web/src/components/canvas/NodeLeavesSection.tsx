@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Circle, Clock, Loader2, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import type { EmbeddedLeaf } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { getLeafIcon } from './CanvasNodeUtils';
@@ -21,6 +22,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   isDetail,
   prefersReducedMotion,
   projectId,
+  projectName,
   nodeId,
   onCreateLeaf,
   leafContextMenuHandler,
@@ -34,6 +36,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   isDetail: boolean;
   prefersReducedMotion: boolean;
   projectId?: string;
+  projectName?: string;
   nodeId: string;
   onCreateLeaf: () => void;
   leafContextMenuHandler:
@@ -51,7 +54,9 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
 
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
-    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
+    return projectName
+      ? getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)
+      : `/project/${encodeURIComponent(projectId)}?tab=outputs&leaf=${encodeURIComponent(leaf.id)}`;
   };
   const firstLeafHref = firstLeaf ? getLeafHref(firstLeaf) : undefined;
 
