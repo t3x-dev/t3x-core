@@ -19,6 +19,7 @@ const hookMocks = vi.hoisted(() => ({
   projectWorkspaces: [] as WorkspaceCandidate[],
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
+  saveDraft: vi.fn(),
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -46,7 +47,7 @@ vi.mock('@/components/canvas', () => ({
 
 const navigationMocks = vi.hoisted(() => ({
   pathname: '/t3x-dev/test-project',
-  router: { replace: vi.fn() },
+  router: { push: vi.fn(), replace: vi.fn() },
   search: '',
 }));
 
@@ -77,6 +78,10 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     refresh: hookMocks.refreshWorkspaces,
     workspaces: hookMocks.projectWorkspaces,
   }),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
+  useWorkspaceFlow: () => ({ saveDraft: hookMocks.saveDraft }),
 }));
 
 vi.mock('@/hooks/commits/useCommitsList', () => ({
@@ -202,7 +207,16 @@ const VALIDATION: YSchemaValidationSummary = {
 function setupHookMocks() {
   hookMocks.branchHeads = {};
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
-  hookMocks.createBranch.mockResolvedValue(undefined);
+  hookMocks.createBranch.mockResolvedValue({
+    branch_id: 'branch_feature_checkout_retry',
+    created_at: '2026-07-09T08:02:00.000Z',
+    head_commit_hash: PRD_COMMIT.hash,
+    is_current: false,
+    name: 'feature/checkout-retry',
+    parent_branch: 'main',
+    updated_at: '2026-07-09T08:02:00.000Z',
+  });
+  hookMocks.saveDraft.mockResolvedValue({ workspace: {} });
   hookMocks.loadCommit.mockResolvedValue(PARENT_COMMIT);
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
   hookMocks.loadOperations.mockResolvedValue({
@@ -273,6 +287,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.getByText('YAML-shaped state tree')).toBeInTheDocument();
+    expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
@@ -281,7 +296,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces'
+      '/t3x-dev/test-project/workspaces?branch=main'
     );
     expect(screen.getByRole('link', { name: 'Open commit' })).toHaveAttribute(
       'href',
@@ -361,10 +376,12 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
   });
 
-  it('creates a new branch from the visible branch and switches State focus to it', async () => {
+  it('initializes a new branch from main without inventing a schema binding', async () => {
+    hookMocks.branchHeads = { main: null };
+    hookMocks.loadCommits.mockResolvedValue([]);
     renderStateTab();
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByText('No commit on this branch');
     fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
     fireEvent.change(screen.getByLabelText('Branch name'), {
       target: { value: 'feature/checkout-retry' },
@@ -373,10 +390,18 @@ describe('ProjectStateTab', () => {
 
     await waitFor(() => {
       expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/checkout-retry', 'main');
+      expect(hookMocks.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseCommitHash: PRD_COMMIT.hash,
+          id: 'workspace_branch:feature%2Fcheckout-retry',
+          schemaBindings: [],
+          status: 'draft',
+          targetBranch: 'feature/checkout-retry',
+        })
+      );
     });
-    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fcheckout-retry',
-      { scroll: false }
+    expect(navigationMocks.router.push).toHaveBeenCalledWith(
+      '/t3x-dev/test-project/workspaces?branch=feature%2Fcheckout-retry'
     );
   });
 

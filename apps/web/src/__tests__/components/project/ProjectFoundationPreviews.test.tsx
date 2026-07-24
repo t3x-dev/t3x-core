@@ -12,11 +12,20 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=workspaces'),
 }));
 
+vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
+  useProjectWorkspaces: () => ({
+    workspaces: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 describe('project foundation previews', () => {
-  it('renders the fixture-backed Workspaces workbench for any project id during W1', () => {
+  it('renders the fixture-backed Workspaces workbench for any project id during W1', async () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
@@ -30,7 +39,7 @@ describe('project foundation previews', () => {
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
-  it('reflects schema bindings from the schema tab in the workspace preview', () => {
+  it('reflects schema bindings from the schema tab in the workspace preview', async () => {
     render(
       <ProjectWorkspacesTab
         projectId="proj_other"
@@ -46,6 +55,6 @@ describe('project foundation previews', () => {
       />
     );
 
-    expect(screen.getAllByText('Docker Compose v2').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Docker Compose v2')).length).toBeGreaterThan(0);
   });
 });

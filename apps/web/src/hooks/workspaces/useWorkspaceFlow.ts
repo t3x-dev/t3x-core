@@ -26,6 +26,10 @@ export function useWorkspaceFlow() {
     return sendWorkspaceYOpsDraft(candidate);
   }, []);
 
+  const saveDraft = useCallback((candidate: WorkspaceCandidate) => {
+    return saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
+  }, []);
+
   const startNextIteration = useCallback(
     async ({
       candidate,
@@ -66,7 +70,7 @@ export function useWorkspaceFlow() {
     []
   );
 
-  return { extractCandidate, sendToYOps, startNextIteration };
+  return { extractCandidate, saveDraft, sendToYOps, startNextIteration };
 }
 
 function buildNextWorkspaceIteration(

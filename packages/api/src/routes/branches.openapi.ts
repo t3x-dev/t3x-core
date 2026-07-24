@@ -137,6 +137,14 @@ const createBranchRoute = createRoute({
     },
   },
   responses: {
+    200: {
+      description: 'Matching branch already exists',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(BranchResponse),
+        },
+      },
+    },
     201: {
       description: 'Branch created successfully',
       content: {
@@ -146,11 +154,15 @@ const createBranchRoute = createRoute({
       },
     },
     400: {
-      description: 'Invalid request or duplicate branch name',
+      description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Existing branch does not match the requested parent',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -304,25 +316,53 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, body.project_id);
     if (accessResult instanceof Response) return accessResult;
 
-    // Check if branch already exists
     const existing = await findBranchByName(db, body.project_id, body.name);
     if (existing) {
-      return errorResponse(c, 'CONFLICT', `Branch ${body.name} already exists`);
+      if (branchMatchesCreateIntent(existing, body.parent_branch ?? null)) {
+        return c.json({ success: true as const, data: toApiBranch(existing) }, 200);
+      }
+      return errorResponse(
+        c,
+        'CONFLICT',
+        `Branch ${body.name} already exists with a different parent`
+      );
     }
 
-    const branch = await insertBranch(db, {
-      projectId: body.project_id,
-      name: body.name,
-      parentBranch: body.parent_branch,
-      description: body.description,
-    });
+    try {
+      const branch = await insertBranch(db, {
+        projectId: body.project_id,
+        name: body.name,
+        parentBranch: body.parent_branch,
+        description: body.description,
+      });
 
-    return c.json({ success: true as const, data: toApiBranch(branch) }, 201);
+      return c.json({ success: true as const, data: toApiBranch(branch) }, 201);
+    } catch (err) {
+      const concurrent = await findBranchByName(db, body.project_id, body.name);
+      if (concurrent) {
+        if (branchMatchesCreateIntent(concurrent, body.parent_branch ?? null)) {
+          return c.json({ success: true as const, data: toApiBranch(concurrent) }, 200);
+        }
+        return errorResponse(
+          c,
+          'CONFLICT',
+          `Branch ${body.name} already exists with a different parent`
+        );
+      }
+      throw err;
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
+
+function branchMatchesCreateIntent(
+  branch: { parentBranch: string | null },
+  parentBranch: string | null
+): boolean {
+  return branch.parentBranch === parentBranch;
+}
 
 // GET /v1/branches/current - Get current branch
 branchRoutes.openapi(getCurrentBranchRoute, async (c) => {

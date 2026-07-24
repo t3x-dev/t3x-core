@@ -37,12 +37,14 @@ import {
   getYSchemaValidationPrimaryLabel,
   type YSchemaValidationSummary,
 } from '@/domain/project/yschemaValidation';
+import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -105,7 +107,7 @@ export function ProjectStateTab({
   validationRunning = false,
 }: ProjectStateTabProps) {
   const pathname = usePathname();
-  const { replace: replaceRoute } = useRouter();
+  const { push: pushRoute, replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
   const routeQueryRef = useRef(routeQuery);
@@ -129,6 +131,7 @@ export function ProjectStateTab({
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  const { saveDraft } = useWorkspaceFlow();
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -365,7 +368,44 @@ export function ProjectStateTab({
         currentReturnTo
       )
     : null;
-  const workspaceHref = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;
+  const mainHeadCommitHash = branchHeads.main ?? null;
+  const mainSchemaBindings = resolveMainSchemaBindings(
+    projectWorkspaces.workspaces,
+    mainHeadCommitHash
+  );
+  const handleCreateBranch = useCallback(
+    async (name: string) => {
+      const createdBranch = await createBranch(name, 'main');
+      const workspaceId = `workspace_branch:${encodeURIComponent(name)}`;
+      await saveDraft({
+        id: workspaceId,
+        projectId,
+        title: `Branch workspace: ${name}`,
+        summary: `Workspace for collecting source evidence on ${name}.`,
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+        baseCommitHash: createdBranch.head_commit_hash ?? null,
+        targetBranch: name,
+        sourceBundle: [],
+        schemaBindings: mainSchemaBindings,
+        schemaCandidate: {
+          summary: 'Collect source evidence, then generate a candidate proposal.',
+          fields: [],
+        },
+        schemaReview: {
+          verdict: 'needs_review',
+          summary: 'This workspace needs source evidence.',
+          gaps: ['Add source evidence for this branch.'],
+        },
+        yopsDraft: { id: `draft:${workspaceId}`, operations: [] },
+        outputTargets: [],
+      });
+      pushRoute(`${workspaceBasePath}?branch=${encodeURIComponent(name)}`);
+    },
+    [createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft, workspaceBasePath]
+  );
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
@@ -384,7 +424,7 @@ export function ProjectStateTab({
             onRunValidation={
               headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
             }
-            schemaLabel={schemaLabel(schemaName)}
+            schemaLabel={schemaName}
             validation={currentValidation}
             validationError={validationError}
             validationGapCount={validationGapCount}
@@ -407,11 +447,11 @@ export function ProjectStateTab({
             branch={branchFocus || 'main'}
             branchCount={branchCount}
             branchOptions={branchOptions}
-            headCommitHash={headCommit?.hash ?? null}
+            headCommitHash={mainHeadCommitHash}
             historyHref={historyHref}
             loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
             onBranchChange={updateBranchFocus}
-            onCreateBranch={createBranch}
+            onCreateBranch={handleCreateBranch}
             onRefresh={() => {
               setSnapshotRefreshVersion((version) => version + 1);
               void refresh();
@@ -644,7 +684,7 @@ function StateRepositoryToolbar({
   historyHref: string;
   loading: boolean;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string, parentBranch: string) => Promise<void>;
+  onCreateBranch: (name: string) => Promise<void>;
   onRefresh: () => void;
   schemaName: string;
 }) {
@@ -1273,9 +1313,12 @@ function inferSchemaName(commit: ApiCommit | null): string {
   return rootKey === 'prd' ? 't3x/prd' : 't3x/state';
 }
 
-function schemaLabel(schemaName: string): string {
-  if (schemaName === 't3x/prd') return 'PRD Schema v2';
-  return schemaName;
+function resolveMainSchemaBindings(
+  workspaces: WorkspaceCandidate[],
+  mainHeadCommitHash: string | null
+) {
+  const mainWorkspace = selectWorkspaceForBranch(workspaces, 'main', mainHeadCommitHash);
+  return mainWorkspace?.schemaBindings.map((binding) => ({ ...binding })) ?? [];
 }
 
 function formatRelativeTime(value: string | undefined): string {
