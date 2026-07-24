@@ -42,11 +42,19 @@ export type WorkspaceNavigationResolution =
     };
 
 export interface WorkspaceHandoffHrefOptions {
-  branch: string;
-  commitHash: string;
+  branch?: string | null;
+  commitHash?: string | null;
   workspaceId?: string | null;
   conversationId?: string | null;
   sourceView?: WorkspaceSourceView | null;
+}
+
+export interface EmptyBranchWorkspaceOptions {
+  baseCommitHash?: string | null;
+  projectId: string;
+  schemaBindings?: WorkspaceCandidate['schemaBindings'];
+  targetBranch: string;
+  updatedAt: string;
 }
 
 type SearchParamsReader = Pick<URLSearchParams, 'get'>;
@@ -100,8 +108,9 @@ export function resolveWorkspaceNavigation(
 
   const hasBranchContext = target.branch !== null;
   const hasCommitContext = target.commitHash !== null;
+  const emptyBranchHandoff = Boolean(target.workspaceId && hasBranchContext && !hasCommitContext);
 
-  if (hasBranchContext !== hasCommitContext) {
+  if (hasBranchContext !== hasCommitContext && !emptyBranchHandoff) {
     return selectionRequired('missing_context', target.sourceView);
   }
 
@@ -110,7 +119,11 @@ export function resolveWorkspaceNavigation(
   }
 
   const matches = target.workspaceId
-    ? candidates.filter((candidate) => candidate.id === target.workspaceId)
+    ? candidates.filter(
+        (candidate) =>
+          candidate.id === target.workspaceId &&
+          (!emptyBranchHandoff || candidate.targetBranch === target.branch)
+      )
     : candidates.filter((candidate) => {
         if (target.branch && candidate.targetBranch !== target.branch) return false;
         if (target.commitHash && !workspaceMatchesCommit(candidate, target.commitHash)) {
@@ -143,6 +156,44 @@ export function resolveWorkspaceNavigation(
     conversationId: target.conversationId,
     sourceView: target.sourceView,
     restoreStoredConversation: false,
+  };
+}
+
+/** Build the persisted empty draft opened immediately after State creates a branch. */
+export function createEmptyBranchWorkspace({
+  baseCommitHash = null,
+  projectId,
+  schemaBindings = [],
+  targetBranch,
+  updatedAt,
+}: EmptyBranchWorkspaceOptions): WorkspaceCandidate {
+  const workspaceId = `workspace_branch:${encodeURIComponent(targetBranch)}`;
+
+  return {
+    id: workspaceId,
+    projectId,
+    title: `Branch workspace: ${targetBranch}`,
+    summary: `Empty workspace for collecting source evidence on ${targetBranch}.`,
+    status: 'draft',
+    updatedAt,
+    baseCommitHash,
+    targetBranch,
+    sourceBundle: [],
+    schemaBindings: schemaBindings.map((binding) => ({ ...binding })),
+    schemaCandidate: {
+      summary: 'Collect source evidence, then generate a candidate proposal.',
+      fields: [],
+    },
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: 'This workspace is empty and needs source evidence.',
+      gaps: ['Add source evidence for this branch.'],
+    },
+    yopsDraft: {
+      id: `draft:${workspaceId}`,
+      operations: [],
+    },
+    outputTargets: [],
   };
 }
 

@@ -48,7 +48,6 @@ export function StateBranchControls({
     setSubmitting(true);
     try {
       await onCreateBranch(normalizedName, branch);
-      onBranchChange(normalizedName);
       setDialogOpen(false);
     } finally {
       setSubmitting(false);

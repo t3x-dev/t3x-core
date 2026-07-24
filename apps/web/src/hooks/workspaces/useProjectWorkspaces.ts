@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { fetchProjectWorkspaces } from '@/queries/workspaces';
+import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export interface UseProjectWorkspacesResult {
@@ -9,6 +9,7 @@ export interface UseProjectWorkspacesResult {
   initialized: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  saveDraft: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
 }
 
 export function useProjectWorkspaces(
@@ -59,11 +60,21 @@ export function useProjectWorkspaces(
     };
   }, [refresh]);
 
+  const saveDraft = useCallback(
+    async (workspace: WorkspaceCandidate) => {
+      if (!projectId) throw new Error('A project is required to save a workspace.');
+      const saved = await saveWorkspaceDraft(projectId, workspace.id, workspace);
+      return saved.workspace;
+    },
+    [projectId]
+  );
+
   return {
     workspaces: workspacesProjectId === projectId ? workspaces : [],
     loading,
     initialized: !enabled || !projectId || initializedProjectId === projectId,
     error,
     refresh,
+    saveDraft,
   };
 }

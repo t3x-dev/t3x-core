@@ -39,6 +39,7 @@ import {
 } from '@/domain/project/yschemaValidation';
 import {
   buildWorkspaceHandoffHref,
+  createEmptyBranchWorkspace,
   findUniqueCommitConversationId,
 } from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -110,7 +111,7 @@ export function ProjectStateTab({
   validationRunning = false,
 }: ProjectStateTabProps) {
   const pathname = usePathname();
-  const { replace: replaceRoute } = useRouter();
+  const { push: pushRoute, replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
   const routeQueryRef = useRef(routeQuery);
@@ -397,6 +398,37 @@ export function ProjectStateTab({
     !projectWorkspaces.loading &&
     !projectWorkspaces.error &&
     Boolean(workspaceHeadCommit);
+  const handleCreateBranch = useCallback(
+    async (name: string, parentBranch: string) => {
+      const createdBranch = await createBranch(name, parentBranch);
+      const emptyWorkspace = createEmptyBranchWorkspace({
+        baseCommitHash: createdBranch.head_commit_hash ?? null,
+        projectId,
+        schemaBindings:
+          navigationWorkspace?.schemaBindings ?? committedWorkspace?.schemaBindings ?? [],
+        targetBranch: name,
+        updatedAt: new Date().toISOString(),
+      });
+      const savedWorkspace = await projectWorkspaces.saveDraft(emptyWorkspace);
+      const nextWorkspaceHref = buildWorkspaceHandoffHref(workspaceBasePath, {
+        branch: name,
+        commitHash: createdBranch.head_commit_hash,
+        workspaceId: savedWorkspace.id,
+        sourceView: 'chat',
+      });
+
+      pushRoute(nextWorkspaceHref);
+    },
+    [
+      committedWorkspace?.schemaBindings,
+      createBranch,
+      navigationWorkspace?.schemaBindings,
+      projectId,
+      projectWorkspaces.saveDraft,
+      pushRoute,
+      workspaceBasePath,
+    ]
+  );
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
@@ -443,7 +475,7 @@ export function ProjectStateTab({
             historyHref={historyHref}
             loading={branchesLoading || projectWorkspaces.loading || activeSnapshot.loading}
             onBranchChange={updateBranchFocus}
-            onCreateBranch={createBranch}
+            onCreateBranch={handleCreateBranch}
             onRefresh={() => {
               setSnapshotRefreshVersion((version) => version + 1);
               void refresh();

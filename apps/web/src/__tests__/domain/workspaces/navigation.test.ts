@@ -4,6 +4,7 @@ import {
   buildWorkspaceContextId,
   buildWorkspaceHandoffHref,
   collectWorkspaceConversationIds,
+  createEmptyBranchWorkspace,
   findUniqueCommitConversationId,
   findUniqueWorkspaceConversationId,
   parseWorkspaceNavigationTarget,
@@ -122,6 +123,70 @@ describe('workspace navigation handoff', () => {
       status: 'default',
       candidate: { id: 'workspace_a' },
       restoreStoredConversation: true,
+    });
+  });
+
+  it('resolves an empty branch handoff only when workspace and branch match exactly', () => {
+    const emptyWorkspace = createEmptyBranchWorkspace({
+      projectId: 'proj_1',
+      targetBranch: 'feature/empty',
+      updatedAt: '2026-07-24T12:00:00.000Z',
+    });
+    const resolved = resolveWorkspaceNavigation(
+      [...workspaces, emptyWorkspace],
+      parseWorkspaceNavigationTarget(
+        new URLSearchParams({
+          branch: 'feature/empty',
+          workspace: emptyWorkspace.id,
+          sourceView: 'chat',
+        })
+      )
+    );
+    const mismatched = resolveWorkspaceNavigation(
+      [...workspaces, emptyWorkspace],
+      parseWorkspaceNavigationTarget(
+        new URLSearchParams({
+          branch: 'feature/other',
+          workspace: emptyWorkspace.id,
+          sourceView: 'chat',
+        })
+      )
+    );
+
+    expect(resolved).toMatchObject({
+      status: 'resolved',
+      candidate: { id: emptyWorkspace.id, targetBranch: 'feature/empty' },
+      sourceView: 'chat',
+      restoreStoredConversation: false,
+    });
+    expect(mismatched).toMatchObject({
+      status: 'selection_required',
+      reason: 'workspace_not_found',
+      restoreStoredConversation: false,
+    });
+  });
+
+  it('builds a source-empty draft for a newly created branch', () => {
+    const workspace = createEmptyBranchWorkspace({
+      baseCommitHash: 'sha256:base',
+      projectId: 'proj_1',
+      schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+      targetBranch: 'feature/new-branch',
+      updatedAt: '2026-07-24T12:00:00.000Z',
+    });
+
+    expect(workspace).toMatchObject({
+      id: 'workspace_branch:feature%2Fnew-branch',
+      baseCommitHash: 'sha256:base',
+      projectId: 'proj_1',
+      status: 'draft',
+      targetBranch: 'feature/new-branch',
+      sourceBundle: [],
+      schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+      schemaCandidate: { fields: [] },
+      schemaReview: { verdict: 'needs_review' },
+      yopsDraft: { operations: [] },
+      outputTargets: [],
     });
   });
 
@@ -287,5 +352,15 @@ describe('workspace navigation handoff', () => {
         commitHash: 'sha256:b-head',
       })
     ).toBe('/owner/repo/workspaces?branch=feature%2Fb&commit=sha256%3Ab-head');
+
+    expect(
+      buildWorkspaceHandoffHref('/owner/repo/workspaces', {
+        branch: 'feature/empty',
+        workspaceId: 'workspace_branch:feature%2Fempty',
+        sourceView: 'chat',
+      })
+    ).toBe(
+      '/owner/repo/workspaces?branch=feature%2Fempty&workspace=workspace_branch%3Afeature%252Fempty&sourceView=chat'
+    );
   });
 });

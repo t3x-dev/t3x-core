@@ -20,6 +20,7 @@ const hookMocks = vi.hoisted(() => ({
   projectWorkspaces: [] as WorkspaceCandidate[],
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
+  saveWorkspaceDraft: vi.fn(),
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -47,7 +48,7 @@ vi.mock('@/components/canvas', () => ({
 
 const navigationMocks = vi.hoisted(() => ({
   pathname: '/t3x-dev/test-project',
-  router: { replace: vi.fn() },
+  router: { push: vi.fn(), replace: vi.fn() },
   search: '',
 }));
 
@@ -77,6 +78,10 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     initialized: true,
     loading: false,
     refresh: hookMocks.refreshWorkspaces,
+    saveDraft: (workspace: WorkspaceCandidate) =>
+      hookMocks
+        .saveWorkspaceDraft('proj_test', workspace.id, workspace)
+        .then((saved: { workspace: WorkspaceCandidate }) => saved.workspace),
     workspaces: hookMocks.projectWorkspaces,
   }),
 }));
@@ -205,7 +210,15 @@ function setupHookMocks() {
   hookMocks.branchHeads = {};
   hookMocks.branchesLoading = false;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
-  hookMocks.createBranch.mockResolvedValue(undefined);
+  hookMocks.createBranch.mockImplementation(async (name: string, parentBranch: string) => ({
+    branch_id: `branch:${name}`,
+    created_at: '2026-07-24T12:00:00.000Z',
+    head_commit_hash: PRD_COMMIT.hash,
+    is_current: false,
+    name,
+    parent_branch: parentBranch,
+    updated_at: '2026-07-24T12:00:00.000Z',
+  }));
   hookMocks.loadCommit.mockResolvedValue(PARENT_COMMIT);
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
   hookMocks.loadOperations.mockResolvedValue({
@@ -234,6 +247,12 @@ function setupHookMocks() {
       },
     ],
   });
+  hookMocks.saveWorkspaceDraft.mockImplementation(
+    async (_projectId: string, _workspaceId: string, workspace: WorkspaceCandidate) => ({
+      candidate_id: `candidate:${workspace.id}`,
+      workspace,
+    })
+  );
 }
 
 function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION) {
@@ -398,7 +417,16 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
   });
 
-  it('creates a new branch from the visible branch and switches State focus to it', async () => {
+  it('creates an empty workspace for a new branch and opens it from committed State', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    hookMocks.projectWorkspaces = [
+      committedWorkspaceForHead({
+        schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+      }),
+    ];
     renderStateTab();
 
     await screen.findByText('PRD audience handoff committed');
@@ -411,8 +439,64 @@ describe('ProjectStateTab', () => {
     await waitFor(() => {
       expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/checkout-retry', 'main');
     });
-    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fcheckout-retry',
+    expect(hookMocks.saveWorkspaceDraft).toHaveBeenCalledWith(
+      'proj_test',
+      'workspace_branch:feature%2Fcheckout-retry',
+      expect.objectContaining({
+        baseCommitHash: PRD_COMMIT.hash,
+        id: 'workspace_branch:feature%2Fcheckout-retry',
+        projectId: 'proj_test',
+        schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+        sourceBundle: [],
+        status: 'draft',
+        targetBranch: 'feature/checkout-retry',
+        yopsDraft: expect.objectContaining({ operations: [] }),
+      })
+    );
+    expect(navigationMocks.router.push).toHaveBeenCalledWith(
+      `/t3x-dev/test-project/workspaces?branch=feature%2Fcheckout-retry&commit=${encodeURIComponent(PRD_COMMIT.hash)}&workspace=workspace_branch%3Afeature%252Fcheckout-retry&sourceView=chat`
+    );
+  });
+
+  it('creates and opens an empty workspace when the parent branch has no commit', async () => {
+    hookMocks.branchHeads = { main: null };
+    hookMocks.loadCommits.mockResolvedValue([]);
+    hookMocks.createBranch.mockImplementation(async (name: string, parentBranch: string) => ({
+      branch_id: `branch:${name}`,
+      created_at: '2026-07-24T12:00:00.000Z',
+      head_commit_hash: null,
+      is_current: false,
+      name,
+      parent_branch: parentBranch,
+      updated_at: '2026-07-24T12:00:00.000Z',
+    }));
+
+    renderStateTab();
+
+    await screen.findByText('No commit on this branch');
+    fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
+    fireEvent.change(screen.getByLabelText('Branch name'), {
+      target: { value: 'feature/empty-start' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create branch' }));
+
+    await waitFor(() => {
+      expect(hookMocks.saveWorkspaceDraft).toHaveBeenCalledWith(
+        'proj_test',
+        'workspace_branch:feature%2Fempty-start',
+        expect.objectContaining({
+          baseCommitHash: null,
+          sourceBundle: [],
+          status: 'draft',
+          targetBranch: 'feature/empty-start',
+        })
+      );
+    });
+    expect(navigationMocks.router.push).toHaveBeenCalledWith(
+      '/t3x-dev/test-project/workspaces?branch=feature%2Fempty-start&workspace=workspace_branch%3Afeature%252Fempty-start&sourceView=chat'
+    );
+    expect(navigationMocks.router.replace).not.toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fempty-start',
       { scroll: false }
     );
   });
