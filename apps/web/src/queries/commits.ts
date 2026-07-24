@@ -13,7 +13,8 @@ import type { ApiCommit } from '@/types/api';
 export function fetchCommits(
   projectId: string,
   branch?: string,
-  limit = 100
+  limit = 100,
+  offset = 0
 ): Promise<ApiCommit[]> {
-  return listCommits(projectId, branch, limit);
+  return listCommits(projectId, branch, limit, offset);
 }

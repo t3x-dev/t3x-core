@@ -11,15 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatUserFacingError } from '@/domain/format/errors';
 import {
-  buildAvailableOutputTargets,
+  buildLeafCreateCandidates,
   buildProjectOutputArtifacts,
   type ProjectOutputStatus,
 } from '@/domain/outputs/projectOutputs';
-import { buildOutputTargetLeafInput } from '@/domain/workspaces/outputTargetLeaf';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useProjectOutputsData } from '@/hooks/leaves/useProjectOutputsData';
-import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
+import type { ApiCommit, LeafType } from '@/types/api';
 
 interface ProjectOutputsTabProps {
   projectId: string;
@@ -36,24 +35,32 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
     () => buildProjectOutputArtifacts(data.leaves, data.workspaces, data.commits),
     [data.commits, data.leaves, data.workspaces]
   );
-  const availableTargets = useMemo(
-    () => buildAvailableOutputTargets(artifacts, data.workspaces),
-    [artifacts, data.workspaces]
+  const createCandidates = useMemo(
+    () => buildLeafCreateCandidates(data.leaves, data.workspaces, data.commits),
+    [data.commits, data.leaves, data.workspaces]
   );
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [creatingTargetId, setCreatingTargetId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const navigateToLeaf = useCallback(
+  const replaceLeafRoute = useCallback(
     (leafId: string) => {
-      setSelectedLeafId(leafId);
       const params = new URLSearchParams(searchParams.toString());
       params.set('leaf', leafId);
       router.replace(`${pathname}?${params.toString()}`);
     },
     [pathname, router, searchParams]
   );
+
+  const navigateToLeaf = useCallback(
+    (leafId: string) => {
+      setSelectedLeafId(leafId);
+      replaceLeafRoute(leafId);
+    },
+    [replaceLeafRoute]
+  );
+
 
   useEffect(() => {
     if (artifacts.length === 0) {
@@ -86,12 +93,19 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
   }, []);
 
   const handleCreate = useCallback(
-    async (workspace: WorkspaceCandidate, target: WorkspaceOutputTarget, title: string) => {
-      setCreatingTargetId(target.id);
+    async (commit: ApiCommit, leafType: LeafType, title: string) => {
+      setCreatingTargetId(commit.hash);
       setCreateError(null);
       try {
-        const input = buildOutputTargetLeafInput(workspace, target.id);
-        const leaf = await createLeaf({ ...input, title: title || input.title });
+        const leaf = await createLeaf({
+          commit_hash: commit.hash,
+          config: {},
+          constraints: [],
+          project_id: commit.project_id,
+          source: { type: 'user' },
+          title,
+          type: leafType,
+        });
         dispatchLeafChanged({
           commitHash: leaf.commit_hash,
           leafId: leaf.id,
@@ -158,7 +172,7 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
           />
         ) : (
           <OutputsEmptyState
-            availableCount={availableTargets.length}
+            availableCount={createCandidates.length}
             onManageLeaves={openManager}
           />
         )}
@@ -166,7 +180,7 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
 
       <ProjectLeafManager
         artifacts={artifacts}
-        availableTargets={availableTargets}
+        createCandidates={createCandidates}
         createError={createError}
         creatingTargetId={creatingTargetId}
         onCreate={handleCreate}
@@ -219,8 +233,8 @@ function OutputsEmptyState({
           </h2>
           <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
             {availableCount > 0
-              ? `${availableCount} committed ${availableCount === 1 ? 'output target is' : 'output targets are'} ready to become a Leaf.`
-              : 'Commit a Workspace output target first, then create its persistent Leaf here.'}
+              ? `${availableCount} committed ${availableCount === 1 ? 'version is' : 'versions are'} ready for Leaf creation.`
+              : 'Commit a version first, then create its persistent Leaf here.'}
           </p>
           <Button className="mt-5" onClick={onManageLeaves} type="button" variant="leaf">
             <Layers3 aria-hidden="true" className="size-4" />
