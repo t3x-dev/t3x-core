@@ -15,6 +15,7 @@ import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspac
 
 const mocks = vi.hoisted(() => ({
   createLeaf: vi.fn(),
+  deleteLeaf: vi.fn(),
   leafWorkspace: vi.fn(),
   toastSuccess: vi.fn(),
   useProjectOutputsData: vi.fn(),
@@ -46,6 +47,9 @@ vi.mock('@/hooks/leaves/useCreateLeaf', () => ({
   useCreateLeaf: () => ({ create: mocks.createLeaf }),
 }));
 
+vi.mock('@/hooks/leaves/useDeleteLeaf', () => ({
+  useDeleteLeaf: () => ({ remove: mocks.deleteLeaf }),
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: (...args: unknown[]) => mocks.toastSuccess(...args) },
@@ -174,6 +178,7 @@ beforeEach(() => {
   navigationMocks.searchParams = new URLSearchParams();
   mocks.useProjectOutputsData.mockReturnValue(makeData());
   mocks.createLeaf.mockResolvedValue(makeLeaf({ id: 'leaf_created', title: 'Created Leaf' }));
+  mocks.deleteLeaf.mockResolvedValue(undefined);
   dataSourceMocks.loadCommits.mockResolvedValue([]);
   dataSourceMocks.leaves.refresh.mockResolvedValue(undefined);
   dataSourceMocks.workspaces.refresh.mockResolvedValue(undefined);
@@ -248,7 +253,7 @@ describe('ProjectOutputsTab', () => {
     expect(screen.getByText('Stale audience brief')).toBeInTheDocument();
     expect(screen.getByText('Unlinked audience brief')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Ready audience brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Leaf: Ready audience brief' }));
     expect(screen.getByText('Leaf workspace leaf_ready')).toBeInTheDocument();
     expect(mocks.leafWorkspace).toHaveBeenLastCalledWith(
       expect.objectContaining({ leafIdOverride: 'leaf_ready' })
@@ -256,6 +261,68 @@ describe('ProjectOutputsTab', () => {
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/outputs?leaf=leaf_ready'
     );
+  });
+
+  it('deletes the selected Leaf, broadcasts the change, and opens the next Leaf', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const commit = makeCommit();
+    const selectedLeaf = makeLeaf({
+      created_at: '2026-07-14T08:30:00.000Z',
+      id: 'leaf_delete',
+      title: 'Delete me',
+    });
+    const nextLeaf = makeLeaf({ id: 'leaf_next', title: 'Next Leaf' });
+    const leafChangedEvents: unknown[] = [];
+    const listener = (event: Event) => {
+      leafChangedEvents.push((event as CustomEvent).detail);
+    };
+    window.addEventListener('t3x:leaf-changed', listener);
+    navigationMocks.searchParams = new URLSearchParams('leaf=leaf_delete');
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [commit], leaves: [selectedLeaf, nextLeaf], refresh })
+    );
+
+    try {
+      render(<ProjectOutputsTab projectId="proj_1" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 2 existing' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf: Delete me' }));
+      expect(screen.getByRole('dialog', { name: 'Delete Leaf' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf' }));
+
+      await waitFor(() => expect(mocks.deleteLeaf).toHaveBeenCalledWith('leaf_delete'));
+      await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        '/t3x-dev/test-project/outputs?leaf=leaf_next'
+      );
+      expect(leafChangedEvents).toContainEqual({
+        commitHash: selectedLeaf.commit_hash,
+        leafId: 'leaf_delete',
+        projectId: 'proj_1',
+        reason: 'deleted',
+      });
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Deleted Delete me');
+    } finally {
+      window.removeEventListener('t3x:leaf-changed', listener);
+    }
+  });
+
+  it('clears the Outputs Leaf route when deleting the last selected Leaf', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const leaf = makeLeaf({ id: 'leaf_only', title: 'Only Leaf' });
+    navigationMocks.searchParams = new URLSearchParams('leaf=leaf_only');
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [makeCommit()], leaves: [leaf], refresh })
+    );
+
+    render(<ProjectOutputsTab projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 1 existing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf: Only Leaf' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf' }));
+
+    await waitFor(() => expect(mocks.deleteLeaf).toHaveBeenCalledWith('leaf_only'));
+    expect(navigationMocks.replace).toHaveBeenCalledWith('/t3x-dev/test-project/outputs');
   });
 
   it('keeps commits with existing Leaves available for another Leaf', () => {

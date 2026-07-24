@@ -7,6 +7,7 @@ import {
   Loader2,
   Plus,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,10 @@ interface ProjectLeafManagerProps {
   createCandidates: ProjectLeafCreateCandidate[];
   createError: string | null;
   creatingTargetId: string | null;
+  deleteError: string | null;
+  deletingLeafId: string | null;
   onCreate: (commit: ApiCommit, leafType: LeafType, title: string) => Promise<void>;
+  onDelete: (artifact: ProjectOutputArtifact) => Promise<void>;
   onOpenChange: (open: boolean) => void;
   onSelect: (leafId: string) => void;
   open: boolean;
@@ -67,7 +71,10 @@ export function ProjectLeafManager({
   createCandidates,
   createError,
   creatingTargetId,
+  deleteError,
+  deletingLeafId,
   onCreate,
+  onDelete,
   onOpenChange,
   onSelect,
   open,
@@ -75,6 +82,7 @@ export function ProjectLeafManager({
 }: ProjectLeafManagerProps) {
   const [query, setQuery] = useState('');
   const [createCandidate, setCreateCandidate] = useState<ProjectLeafCreateCandidate | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<ProjectOutputArtifact | null>(null);
   const [leafType, setLeafType] = useState<LeafType>(DEFAULT_LEAF_TYPE);
   const [title, setTitle] = useState('');
 
@@ -132,6 +140,16 @@ export function ProjectLeafManager({
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteCandidate || deletingLeafId) return;
+    try {
+      await onDelete(deleteCandidate);
+      setDeleteCandidate(null);
+    } catch {
+      // The parent owns the user-facing error state so the dialog can stay open for retry.
+    }
+  };
+
   const handleLeafTypeChange = (nextLeafType: LeafType) => {
     if (createCandidate && title === defaultLeafTitle(leafType)) {
       setTitle(defaultLeafTitle(nextLeafType));
@@ -182,7 +200,7 @@ export function ProjectLeafManager({
                     const name = artifact.leaf.title?.trim() || `${artifact.leaf.type} Leaf`;
                     const selected = artifact.leaf.id === selectedLeafId;
                     return (
-                      <button
+                      <article
                         aria-current={selected ? 'page' : undefined}
                         className={cn(
                           'grid min-w-0 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors',
@@ -191,16 +209,19 @@ export function ProjectLeafManager({
                             : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]'
                         )}
                         key={artifact.id}
-                        onClick={() => {
-                          onSelect(artifact.leaf.id);
-                          onOpenChange(false);
-                        }}
-                        type="button"
                       >
                         <span className="flex size-9 items-center justify-center rounded-md border border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
                           <FileOutput aria-hidden="true" className="size-4" />
                         </span>
-                        <span className="min-w-0">
+                        <button
+                          aria-label={`Open Leaf: ${name}`}
+                          className="min-w-0 text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--accent-leaf)]/35"
+                          onClick={() => {
+                            onSelect(artifact.leaf.id);
+                            onOpenChange(false);
+                          }}
+                          type="button"
+                        >
                           <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
                             {name}
                           </span>
@@ -211,9 +232,26 @@ export function ProjectLeafManager({
                           <span className="mt-1 block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
                             {commitHashLabel(artifact.leaf.commit_hash)}
                           </span>
-                        </span>
+                        </button>
                         <span className="flex flex-col items-end gap-2">
-                          <ArtifactStatusBadge status={artifact.status} />
+                          <span className="flex items-center gap-1.5">
+                            <ArtifactStatusBadge status={artifact.status} />
+                            <Button
+                              aria-label={`Delete Leaf: ${name}`}
+                              className="size-7 text-[var(--status-error)] hover:text-[var(--status-error)]"
+                              disabled={Boolean(deletingLeafId)}
+                              onClick={() => setDeleteCandidate(artifact)}
+                              size="icon-sm"
+                              type="button"
+                              variant="canvas-ghost"
+                            >
+                              {deletingLeafId === artifact.leaf.id ? (
+                                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 aria-hidden="true" className="size-3.5" />
+                              )}
+                            </Button>
+                          </span>
                           {selected ? (
                             <CheckCircle2
                               aria-label="Currently open"
@@ -221,7 +259,7 @@ export function ProjectLeafManager({
                             />
                           ) : null}
                         </span>
-                      </button>
+                      </article>
                     );
                   })}
                 </div>
@@ -386,7 +424,78 @@ export function ProjectLeafManager({
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !deletingLeafId) setDeleteCandidate(null);
+        }}
+        open={Boolean(deleteCandidate)}
+      >
+        <DialogContent
+          className="border-[var(--stroke-divider)] bg-[var(--surface-card)] sm:max-w-[440px]"
+          showCloseButton={!deletingLeafId}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete Leaf</DialogTitle>
+            <DialogDescription>
+              Delete this persisted Leaf. The committed version will remain available for new
+              Leaves.
+            </DialogDescription>
+          </DialogHeader>
 
+          {deleteCandidate ? (
+            <div className="grid gap-4 py-1">
+              <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-3 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-subtle)] p-3">
+                <span className="flex size-9 items-center justify-center rounded-md border border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
+                  <FileOutput aria-hidden="true" className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
+                    {deleteCandidate.leaf.title?.trim() ||
+                      `${formatValue(deleteCandidate.leaf.type)} Leaf`}
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-[var(--text-secondary)]">
+                    {formatValue(deleteCandidate.leaf.type)} ·{' '}
+                    {commitHashLabel(deleteCandidate.leaf.commit_hash)}
+                  </span>
+                </span>
+              </div>
+
+              {deleteError ? (
+                <p
+                  className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]"
+                  role="alert"
+                >
+                  {deleteError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              disabled={Boolean(deletingLeafId)}
+              onClick={() => setDeleteCandidate(null)}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={Boolean(deletingLeafId)}
+              onClick={() => void handleDelete()}
+              type="button"
+              variant="destructive"
+            >
+              {deletingLeafId ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <Trash2 aria-hidden="true" className="size-4" />
+              )}
+              {deletingLeafId ? 'Deleting Leaf' : 'Delete Leaf'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

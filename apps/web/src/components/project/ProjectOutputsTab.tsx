@@ -13,10 +13,12 @@ import { formatUserFacingError } from '@/domain/format/errors';
 import {
   buildLeafCreateCandidates,
   buildProjectOutputArtifacts,
+  type ProjectOutputArtifact,
   type ProjectOutputStatus,
 } from '@/domain/outputs/projectOutputs';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
+import { useDeleteLeaf } from '@/hooks/leaves/useDeleteLeaf';
 import { useProjectOutputsData } from '@/hooks/leaves/useProjectOutputsData';
 import type { ApiCommit, LeafType } from '@/types/api';
 
@@ -27,28 +29,41 @@ interface ProjectOutputsTabProps {
 export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
   const data = useProjectOutputsData(projectId);
   const { create: createLeaf } = useCreateLeaf();
+  const { remove: deleteLeaf } = useDeleteLeaf();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedLeafId = searchParams.get('leaf');
+  const [deletedLeafIds, setDeletedLeafIds] = useState<Set<string>>(() => new Set());
+  const visibleLeaves = useMemo(
+    () => data.leaves.filter((leaf) => !deletedLeafIds.has(leaf.id)),
+    [data.leaves, deletedLeafIds]
+  );
   const artifacts = useMemo(
-    () => buildProjectOutputArtifacts(data.leaves, data.workspaces, data.commits),
-    [data.commits, data.leaves, data.workspaces]
+    () => buildProjectOutputArtifacts(visibleLeaves, data.workspaces, data.commits),
+    [data.commits, data.workspaces, visibleLeaves]
   );
   const createCandidates = useMemo(
-    () => buildLeafCreateCandidates(data.leaves, data.workspaces, data.commits),
-    [data.commits, data.leaves, data.workspaces]
+    () => buildLeafCreateCandidates(visibleLeaves, data.workspaces, data.commits),
+    [data.commits, data.workspaces, visibleLeaves]
   );
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [creatingTargetId, setCreatingTargetId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [deletingLeafId, setDeletingLeafId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const replaceLeafRoute = useCallback(
-    (leafId: string) => {
+    (leafId: string | null) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set('leaf', leafId);
-      router.replace(`${pathname}?${params.toString()}`);
+      if (leafId) {
+        params.set('leaf', leafId);
+      } else {
+        params.delete('leaf');
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname);
     },
     [pathname, router, searchParams]
   );
@@ -61,6 +76,10 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
     [replaceLeafRoute]
   );
 
+  const clearSelectedLeaf = useCallback(() => {
+    setSelectedLeafId(null);
+    replaceLeafRoute(null);
+  }, [replaceLeafRoute]);
 
   useEffect(() => {
     if (artifacts.length === 0) {
@@ -89,7 +108,10 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
 
   const handleManagerOpenChange = useCallback((open: boolean) => {
     setManagerOpen(open);
-    if (open) setCreateError(null);
+    if (open) {
+      setCreateError(null);
+      setDeleteError(null);
+    }
   }, []);
 
   const handleCreate = useCallback(
@@ -124,6 +146,56 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
       }
     },
     [createLeaf, data.refresh, navigateToLeaf, projectId]
+  );
+
+  const handleDelete = useCallback(
+    async (artifact: ProjectOutputArtifact) => {
+      const { leaf } = artifact;
+      setDeletingLeafId(leaf.id);
+      setDeleteError(null);
+      try {
+        await deleteLeaf(leaf.id);
+        setDeletedLeafIds((current) => {
+          const next = new Set(current);
+          next.add(leaf.id);
+          return next;
+        });
+
+        const remainingArtifacts = artifacts.filter((candidate) => candidate.leaf.id !== leaf.id);
+        if (activeLeafId === leaf.id) {
+          const nextLeafId = remainingArtifacts[0]?.leaf.id ?? null;
+          if (nextLeafId) {
+            navigateToLeaf(nextLeafId);
+          } else {
+            clearSelectedLeaf();
+          }
+        }
+
+        dispatchLeafChanged({
+          commitHash: leaf.commit_hash,
+          leafId: leaf.id,
+          projectId,
+          reason: 'deleted',
+        });
+        await data.refresh();
+        toast.success(`Deleted ${leaf.title || 'Leaf'}`);
+      } catch (error) {
+        const message = formatUserFacingError(error, 'Could not delete Leaf.');
+        setDeleteError(message);
+        throw error;
+      } finally {
+        setDeletingLeafId(null);
+      }
+    },
+    [
+      activeLeafId,
+      artifacts,
+      clearSelectedLeaf,
+      data.refresh,
+      deleteLeaf,
+      navigateToLeaf,
+      projectId,
+    ]
   );
 
   const openManager = useCallback(() => setManagerOpen(true), []);
@@ -183,7 +255,10 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
         createCandidates={createCandidates}
         createError={createError}
         creatingTargetId={creatingTargetId}
+        deleteError={deleteError}
+        deletingLeafId={deletingLeafId}
         onCreate={handleCreate}
+        onDelete={handleDelete}
         onOpenChange={handleManagerOpenChange}
         onSelect={navigateToLeaf}
         open={managerOpen}
