@@ -462,6 +462,40 @@ describe('Workspace routes', () => {
     expect(getBody.data.workspace.schemaCandidate.summary).toBe('User reviewed candidate.');
   });
 
+  it('maps workspace uniqueness conflicts to 409', async () => {
+    const conflicts = [
+      Object.assign(new Error('duplicate open workspace'), {
+        code: '23505',
+        constraint: 'idx_drafts_open_workspace_branch',
+      }),
+      Object.assign(new Error('duplicate workspace id'), {
+        code: '23505',
+        constraint_name: 'idx_drafts_workspace',
+      }),
+    ];
+
+    for (const conflict of conflicts) {
+      storageMock.upsertWorkspaceDraft.mockRejectedValueOnce(conflict);
+
+      const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_conflict', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_conflict',
+            projectId: 'proj_sources',
+            status: 'draft',
+            targetBranch: 'main',
+          },
+        }),
+      });
+
+      expect(res.status).toBe(409);
+      const body: ApiResponse = await res.json();
+      expect(body.error.code).toBe('CONFLICT');
+    }
+  });
+
   it('preserves backend workspace metadata when saving reviewed state', async () => {
     const extractRes = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',

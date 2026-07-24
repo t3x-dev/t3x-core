@@ -195,6 +195,12 @@ const extractCandidateRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    409: {
+      description: 'Workspace target branch conflict',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
   },
 });
 
@@ -228,6 +234,12 @@ const sendYOpsDraftRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    409: {
+      description: 'Workspace target branch conflict',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
   },
 });
 
@@ -253,6 +265,12 @@ const saveWorkspaceRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(WorkspaceResponseSchema),
         },
+      },
+    },
+    409: {
+      description: 'Workspace target branch conflict',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
       },
     },
   },
@@ -305,6 +323,21 @@ const commitWorkspaceRoute = createRoute({
 
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+workspaceRoutes.onError((error, c) => {
+  if (isWorkspaceIdConflict(error)) {
+    return errorResponse(
+      c,
+      'CONFLICT',
+      'Workspace changed since it was loaded. Refresh and retry.'
+    );
+  }
+  if (isWorkspaceBranchConflict(error)) {
+    return errorResponse(c, 'CONFLICT', 'Another open workspace already owns this branch.');
+  }
+  console.error(error);
+  return c.text('Internal Server Error', 500);
 });
 
 workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
@@ -771,6 +804,30 @@ function notFoundError(message: string) {
     success: false as const,
     error: { code: 'NOT_FOUND', message },
   };
+}
+
+function isWorkspaceBranchConflict(error: unknown): boolean {
+  return hasWorkspaceUniqueConstraint(error, 'idx_drafts_open_workspace_branch');
+}
+
+function isWorkspaceIdConflict(error: unknown): boolean {
+  return hasWorkspaceUniqueConstraint(error, 'idx_drafts_workspace');
+}
+
+function hasWorkspaceUniqueConstraint(error: unknown, constraint: string): boolean {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current !== 'object') return false;
+    const record = current as Record<string, unknown>;
+    if (
+      record.code === '23505' &&
+      (record.constraint_name === constraint || record.constraint === constraint)
+    ) {
+      return true;
+    }
+    current = record.cause;
+  }
+  return false;
 }
 
 type CommitSourceRef = { type: 'conversation' | 'import' | 'leaf'; id: string; title?: string };

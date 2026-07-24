@@ -76,5 +76,42 @@ describe('workspace drafts', () => {
 
     const list = await listWorkspaceDrafts(db, projectId);
     expect(list.map((draft) => draft.workspace_id)).toEqual(['workspace_prd_handoff']);
+
+    await expect(
+      upsertWorkspaceDraft(db, {
+        project_id: projectId,
+        workspace_id: 'workspace_b',
+        title: 'Workspace B',
+        target_branch: 'feature/prd-audience',
+        workspace_state: { ...workspaceState('schema_review', projectId), id: 'workspace_b' },
+      })
+    ).rejects.toThrow();
+
+    await upsertWorkspaceDraft(db, {
+      project_id: projectId,
+      workspace_id: 'workspace_prd_handoff',
+      title: 'Committed workspace',
+      target_branch: 'feature/prd-audience',
+      workspace_state: {
+        ...workspaceState('committed', projectId),
+        id: 'workspace_prd_handoff',
+        lastCommitHash: 'sha256:committed',
+      },
+    });
+
+    const openWorkspace = await upsertWorkspaceDraft(db, {
+      project_id: projectId,
+      workspace_id: 'workspace_next',
+      title: 'Next workspace',
+      parent_commit_hash: 'sha256:committed',
+      target_branch: 'feature/prd-audience',
+      workspace_state: {
+        ...workspaceState('draft', projectId),
+        id: 'workspace_next',
+        baseCommitHash: 'sha256:committed',
+      },
+    });
+
+    expect(openWorkspace.workspace_id).toBe('workspace_next');
   });
 });

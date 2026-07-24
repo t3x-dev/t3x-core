@@ -14,7 +14,7 @@
 
 import type { CreateDraftInput, Draft, DraftConstraint, DraftStatus } from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, ne } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type DraftRecord, drafts } from '../schema-trees';
 
@@ -380,7 +380,13 @@ export async function listWorkspaceDrafts(db: AnyDB, projectId: string): Promise
   const rows = await db
     .select()
     .from(drafts)
-    .where(and(eq(drafts.projectId, projectId), isNotNull(drafts.workspaceId)))
+    .where(
+      and(
+        eq(drafts.projectId, projectId),
+        isNotNull(drafts.workspaceId),
+        ne(drafts.status, 'abandoned')
+      )
+    )
     .orderBy(desc(drafts.updatedAt));
 
   return rows.map(rowToDraft);
@@ -390,13 +396,14 @@ export async function listWorkspaceDrafts(db: AnyDB, projectId: string): Promise
  * Create or update the Draft that backs a Workspace staged state.
  */
 export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput): Promise<Draft> {
+  const targetBranch = input.target_branch?.trim() || 'main';
   const existing = await findWorkspaceDraft(db, input.project_id, input.workspace_id);
   if (!existing) {
     return insertDraft(db, {
       project_id: input.project_id,
       title: input.title,
       parent_commit_hash: input.parent_commit_hash ?? undefined,
-      target_branch: input.target_branch ?? 'main',
+      target_branch: targetBranch,
       preview_type: 'workspace',
       workspace_id: input.workspace_id,
       workspace_state: input.workspace_state,
@@ -409,7 +416,7 @@ export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput
     {
       title: input.title,
       parent_commit_hash: input.parent_commit_hash ?? undefined,
-      target_branch: input.target_branch ?? 'main',
+      target_branch: targetBranch,
       status: 'editing',
       workspace_state: input.workspace_state,
     },
