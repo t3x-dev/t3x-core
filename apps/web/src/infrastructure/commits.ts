@@ -103,9 +103,10 @@ export interface ApiCommit {
 export async function listCommits(
   projectId: string,
   branch?: string,
-  limit = 50
+  limit = 50,
+  offset = 0
 ): Promise<ApiCommit[]> {
-  const query = buildQueryString({ branch, limit });
+  const query = buildQueryString({ branch, limit, offset });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
   const data = await handleResponse<{ commits: ApiCommit[] }>(res);
   return data.commits;

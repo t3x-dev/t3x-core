@@ -21,6 +21,8 @@ interface CommitCreatedDetail {
   projectId?: string;
 }
 
+const COMMIT_PAGE_SIZE = 1000;
+
 /** Loads the persisted Leaves, source Workspaces, and Commit metadata for Outputs. */
 export function useProjectOutputsData(projectId: string): UseProjectOutputsDataResult {
   const projectLeaves = useProjectLeaves(projectId);
@@ -43,7 +45,16 @@ export function useProjectOutputsData(projectId: string): UseProjectOutputsDataR
     setCommitsLoading(true);
     setCommitsError(null);
     try {
-      const nextCommits = await loadCommits(projectId, undefined, 100);
+      const nextCommits: ApiCommit[] = [];
+      let offset = 0;
+
+      for (;;) {
+        const page = await loadCommits(projectId, undefined, COMMIT_PAGE_SIZE, offset);
+        nextCommits.push(...page);
+        if (page.length < COMMIT_PAGE_SIZE) break;
+        offset += page.length;
+      }
+
       if (requestId !== commitRequestId.current) return;
       setCommits(nextCommits);
     } catch (error) {

@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { buildMergeDecisionLabels, buildMergeVoices } from '@/domain/merge/voices';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCreateMergeCommit } from '@/hooks/commits/useCreateMergeCommit';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
@@ -268,6 +269,11 @@ export function MergeWorkspace({
         if (!merged.merge_commit_id) {
           throw new Error('The pull request merged without returning a merge commit.');
         }
+        dispatchCommitCreated({
+          projectId,
+          hash: merged.merge_commit_id,
+          branch: targetBranch || 'main',
+        });
         useMergeWorkspaceStore.getState().setCommitted();
         setShowReviewDialog(false);
         setMergeCeremonyHash(merged.merge_commit_id);

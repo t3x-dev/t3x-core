@@ -5,13 +5,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from '@/__tests__/hooks/renderHook';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
-import { buildProjectOutputArtifacts } from '@/domain/outputs/projectOutputs';
+import {
+  buildLeafCreateCandidates,
+  buildProjectOutputArtifacts,
+} from '@/domain/outputs/projectOutputs';
 import type { UseProjectOutputsDataResult } from '@/hooks/leaves/useProjectOutputsData';
 import type { ApiCommit, Leaf } from '@/types/api';
 import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
   createLeaf: vi.fn(),
+  deleteLeaf: vi.fn(),
   leafWorkspace: vi.fn(),
   toastSuccess: vi.fn(),
   useProjectOutputsData: vi.fn(),
@@ -41,6 +45,10 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/leaves/useCreateLeaf', () => ({
   useCreateLeaf: () => ({ create: mocks.createLeaf }),
+}));
+
+vi.mock('@/hooks/leaves/useDeleteLeaf', () => ({
+  useDeleteLeaf: () => ({ remove: mocks.deleteLeaf }),
 }));
 
 vi.mock('sonner', () => ({
@@ -170,6 +178,8 @@ beforeEach(() => {
   navigationMocks.searchParams = new URLSearchParams();
   mocks.useProjectOutputsData.mockReturnValue(makeData());
   mocks.createLeaf.mockResolvedValue(makeLeaf({ id: 'leaf_created', title: 'Created Leaf' }));
+  mocks.deleteLeaf.mockResolvedValue(undefined);
+  dataSourceMocks.loadCommits.mockResolvedValue([]);
   dataSourceMocks.leaves.refresh.mockResolvedValue(undefined);
   dataSourceMocks.workspaces.refresh.mockResolvedValue(undefined);
 });
@@ -243,7 +253,7 @@ describe('ProjectOutputsTab', () => {
     expect(screen.getByText('Stale audience brief')).toBeInTheDocument();
     expect(screen.getByText('Unlinked audience brief')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Ready audience brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Leaf: Ready audience brief' }));
     expect(screen.getByText('Leaf workspace leaf_ready')).toBeInTheDocument();
     expect(mocks.leafWorkspace).toHaveBeenLastCalledWith(
       expect.objectContaining({ leafIdOverride: 'leaf_ready' })
@@ -251,6 +261,103 @@ describe('ProjectOutputsTab', () => {
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/outputs?leaf=leaf_ready'
     );
+  });
+
+  it('deletes the selected Leaf, broadcasts the change, and opens the next Leaf', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const commit = makeCommit();
+    const selectedLeaf = makeLeaf({
+      created_at: '2026-07-14T08:30:00.000Z',
+      id: 'leaf_delete',
+      title: 'Delete me',
+    });
+    const nextLeaf = makeLeaf({ id: 'leaf_next', title: 'Next Leaf' });
+    const leafChangedEvents: unknown[] = [];
+    const listener = (event: Event) => {
+      leafChangedEvents.push((event as CustomEvent).detail);
+    };
+    window.addEventListener('t3x:leaf-changed', listener);
+    navigationMocks.searchParams = new URLSearchParams('leaf=leaf_delete');
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [commit], leaves: [selectedLeaf, nextLeaf], refresh })
+    );
+
+    try {
+      render(<ProjectOutputsTab projectId="proj_1" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 2 existing' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf: Delete me' }));
+      expect(screen.getByRole('dialog', { name: 'Delete Leaf' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf' }));
+
+      await waitFor(() => expect(mocks.deleteLeaf).toHaveBeenCalledWith('leaf_delete'));
+      await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        '/t3x-dev/test-project/outputs?leaf=leaf_next'
+      );
+      expect(leafChangedEvents).toContainEqual({
+        commitHash: selectedLeaf.commit_hash,
+        leafId: 'leaf_delete',
+        projectId: 'proj_1',
+        reason: 'deleted',
+      });
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Deleted Delete me');
+    } finally {
+      window.removeEventListener('t3x:leaf-changed', listener);
+    }
+  });
+
+  it('clears the Outputs Leaf route when deleting the last selected Leaf', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const leaf = makeLeaf({ id: 'leaf_only', title: 'Only Leaf' });
+    navigationMocks.searchParams = new URLSearchParams('leaf=leaf_only');
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [makeCommit()], leaves: [leaf], refresh })
+    );
+
+    render(<ProjectOutputsTab projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 1 existing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf: Only Leaf' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Leaf' }));
+
+    await waitFor(() => expect(mocks.deleteLeaf).toHaveBeenCalledWith('leaf_only'));
+    expect(navigationMocks.replace).toHaveBeenCalledWith('/t3x-dev/test-project/outputs');
+  });
+
+  it('keeps commits with existing Leaves available for another Leaf', () => {
+    const commit = makeCommit({ message: 'Ready handoff commit' });
+    const workspace = makeWorkspace();
+    const leaf = makeLeaf({ commit_hash: commit.hash, title: 'Ready audience brief' });
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [commit], leaves: [leaf], workspaces: [workspace] })
+    );
+
+    render(<ProjectOutputsTab projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 1 existing' }));
+    expect(screen.getByText('Ready handoff commit')).toBeInTheDocument();
+    expect(screen.getByText(/1 existing Leaf/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Create Leaf: ${commit.hash}` })).toBeEnabled();
+  });
+
+  it('shows committed versions from every branch as create candidates', () => {
+    const mainCommit = makeCommit({ branch: 'main', hash: 'sha256:main_commit' });
+    const branchCommit = makeCommit({
+      branch: 'outputs/bundle-refresh',
+      hash: 'sha256:branch_commit',
+      message: 'Branch output refresh',
+    });
+    mocks.useProjectOutputsData.mockReturnValue(
+      makeData({ commits: [mainCommit, branchCommit], leaves: [] })
+    );
+
+    render(<ProjectOutputsTab projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 0 existing' }));
+    expect(screen.getByRole('button', { name: `Create Leaf: ${mainCommit.hash}` })).toBeEnabled();
+    expect(screen.getByText('Branch output refresh')).toBeInTheDocument();
+    expect(screen.getByText(/outputs\/bundle-refresh/)).toBeInTheDocument();
   });
 
   it('opens the Leaf requested by an Outputs deep link', () => {
@@ -317,38 +424,39 @@ describe('ProjectOutputsTab', () => {
 
   it('creates an available Leaf and opens it in the reused workspace', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
-    const workspace = makeWorkspace();
+    const commit = makeCommit();
     const createdLeaf = makeLeaf({ id: 'leaf_created', title: 'Audience handoff' });
     mocks.createLeaf.mockResolvedValue(createdLeaf);
-    mocks.useProjectOutputsData.mockReturnValue(
-      makeData({ commits: [makeCommit()], refresh, workspaces: [workspace] })
-    );
+    mocks.useProjectOutputsData.mockReturnValue(makeData({ commits: [commit], refresh }));
 
     const { rerender } = render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(
-      screen.getByText('1 committed output target is ready to become a Leaf.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('1 committed version is ready for Leaf creation.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Manage Leaves, 0 existing' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf: PRD audience brief' }));
+    fireEvent.click(screen.getByRole('button', { name: `Create Leaf: ${commit.hash}` }));
     expect(screen.getByRole('dialog', { name: 'Create Leaf' })).toBeInTheDocument();
 
     const titleInput = screen.getByLabelText('Leaf title');
+    expect(titleInput).toHaveValue('Blog post');
     fireEvent.change(titleInput, { target: { value: 'Audience handoff' } });
+    expect(screen.getByLabelText('Leaf type')).toHaveValue('article');
     fireEvent.click(screen.getByRole('button', { name: 'Create Leaf' }));
 
     await waitFor(() => expect(mocks.createLeaf).toHaveBeenCalledTimes(1));
     expect(mocks.createLeaf).toHaveBeenCalledWith(
       expect.objectContaining({
-        commit_hash: workspace.lastCommitHash,
+        commit_hash: commit.hash,
+        constraints: [],
+        config: {},
         project_id: 'proj_1',
         title: 'Audience handoff',
+        type: 'article',
       })
     );
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 
     mocks.useProjectOutputsData.mockReturnValue(
-      makeData({ commits: [makeCommit()], leaves: [createdLeaf], refresh, workspaces: [workspace] })
+      makeData({ commits: [commit], leaves: [createdLeaf], refresh })
     );
     rerender(<ProjectOutputsTab projectId="proj_1" />);
 
@@ -382,7 +490,50 @@ describe('buildProjectOutputArtifacts', () => {
   });
 });
 
+describe('buildLeafCreateCandidates', () => {
+  it('keeps every commit available, including commits that already have Leaves', () => {
+    const mainCommit = makeCommit({ hash: 'sha256:main_commit' });
+    const branchCommit = makeCommit({
+      branch: 'feature',
+      hash: 'sha256:branch_commit',
+      committed_at: '2026-07-14T08:00:00.000Z',
+    });
+    const leaf = makeLeaf({ commit_hash: branchCommit.hash, id: 'leaf_existing' });
+
+    const candidates = buildLeafCreateCandidates([leaf], [], [mainCommit, branchCommit]);
+
+    expect(candidates.map((candidate) => candidate.commit.hash)).toEqual([
+      branchCommit.hash,
+      mainCommit.hash,
+    ]);
+    expect(candidates[0].existingLeaves.map((existingLeaf) => existingLeaf.id)).toEqual([
+      'leaf_existing',
+    ]);
+  });
+});
+
 describe('useProjectOutputsData', () => {
+  it('loads every commit page for the project without a branch filter', async () => {
+    const firstPage = Array.from({ length: 1000 }, (_, index) =>
+      makeCommit({ hash: `sha256:page1_${index}` })
+    );
+    const finalCommit = makeCommit({ hash: 'sha256:final_page' });
+    dataSourceMocks.loadCommits
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([finalCommit]);
+
+    const actual = await vi.importActual<typeof import('@/hooks/leaves/useProjectOutputsData')>(
+      '@/hooks/leaves/useProjectOutputsData'
+    );
+    const { result, unmount } = renderHook(() => actual.useProjectOutputsData('proj_1'));
+
+    await waitFor(() => expect(result.current.commits).toHaveLength(1001));
+    expect(dataSourceMocks.loadCommits).toHaveBeenNthCalledWith(1, 'proj_1', undefined, 1000, 0);
+    expect(dataSourceMocks.loadCommits).toHaveBeenNthCalledWith(2, 'proj_1', undefined, 1000, 1000);
+    expect(result.current.commits.at(-1)).toEqual(finalCommit);
+    unmount();
+  });
+
   it('ignores unrelated commits and keeps the latest in-project refresh result', async () => {
     let resolveFirst!: (commits: ApiCommit[]) => void;
     let resolveSecond!: (commits: ApiCommit[]) => void;

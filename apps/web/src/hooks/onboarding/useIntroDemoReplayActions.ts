@@ -12,6 +12,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { createCommit } from '@/commands/commits';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { EXTRACTION_TOAST_ID } from '@/hooks/drafts/extractionToast';
 import {
   readIntroDemoLocalCommit,
@@ -234,20 +235,13 @@ export function useIntroDemoReplayActions() {
         committedAt: new Date().toISOString(),
         content,
       });
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('t3x:commit-created', {
-            detail: {
-              type: 'commit.created',
-              projectId,
-              conversationId,
-              conversationIds: [conversationId],
-              branch,
-              payload: { hash, branch },
-            },
-          })
-        );
-      }
+      dispatchCommitCreated({
+        projectId,
+        hash,
+        conversationId,
+        conversationIds: [conversationId],
+        branch,
+      });
 
       useChatStore.getState().refreshSidebar();
       return hash;

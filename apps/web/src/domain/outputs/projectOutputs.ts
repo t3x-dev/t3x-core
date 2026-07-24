@@ -18,6 +18,13 @@ export interface ProjectOutputTargetCandidate {
   workspace: WorkspaceCandidate;
 }
 
+export interface ProjectLeafCreateCandidate {
+  commit: ApiCommit;
+  existingLeaves: Leaf[];
+  id: string;
+  workspaces: WorkspaceCandidate[];
+}
+
 export function buildProjectOutputArtifacts(
   leaves: Leaf[],
   workspaces: WorkspaceCandidate[],
@@ -83,6 +90,41 @@ export function buildAvailableOutputTargets(
       if (workspaceOrder !== 0) return workspaceOrder;
       const targetOrder = left.target.title.localeCompare(right.target.title);
       return targetOrder !== 0 ? targetOrder : left.id.localeCompare(right.id);
+    });
+}
+
+export function buildLeafCreateCandidates(
+  leaves: Leaf[],
+  workspaces: WorkspaceCandidate[],
+  commits: ApiCommit[]
+): ProjectLeafCreateCandidate[] {
+  const leavesByCommit = new Map<string, Leaf[]>();
+  for (const leaf of leaves) {
+    const existing = leavesByCommit.get(leaf.commit_hash) ?? [];
+    existing.push(leaf);
+    leavesByCommit.set(leaf.commit_hash, existing);
+  }
+
+  const workspacesByCommit = new Map<string, WorkspaceCandidate[]>();
+  for (const workspace of workspaces) {
+    if (!workspace.lastCommitHash) continue;
+    const existing = workspacesByCommit.get(workspace.lastCommitHash) ?? [];
+    existing.push(workspace);
+    workspacesByCommit.set(workspace.lastCommitHash, existing);
+  }
+
+  return commits
+    .map((commit) => ({
+      commit,
+      existingLeaves: leavesByCommit.get(commit.hash) ?? [],
+      id: commit.hash,
+      workspaces: workspacesByCommit.get(commit.hash) ?? [],
+    }))
+    .sort((left, right) => {
+      const leftTime = validTimestamp(left.commit.committed_at);
+      const rightTime = validTimestamp(right.commit.committed_at);
+      if (leftTime !== rightTime) return rightTime - leftTime;
+      return left.commit.hash.localeCompare(right.commit.hash);
     });
 }
 

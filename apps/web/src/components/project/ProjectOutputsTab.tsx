@@ -11,15 +11,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatUserFacingError } from '@/domain/format/errors';
 import {
-  buildAvailableOutputTargets,
+  buildLeafCreateCandidates,
   buildProjectOutputArtifacts,
+  type ProjectOutputArtifact,
   type ProjectOutputStatus,
 } from '@/domain/outputs/projectOutputs';
-import { buildOutputTargetLeafInput } from '@/domain/workspaces/outputTargetLeaf';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
+import { useDeleteLeaf } from '@/hooks/leaves/useDeleteLeaf';
 import { useProjectOutputsData } from '@/hooks/leaves/useProjectOutputsData';
-import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
+import type { ApiCommit, LeafType } from '@/types/api';
 
 interface ProjectOutputsTabProps {
   projectId: string;
@@ -28,32 +29,57 @@ interface ProjectOutputsTabProps {
 export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
   const data = useProjectOutputsData(projectId);
   const { create: createLeaf } = useCreateLeaf();
+  const { remove: deleteLeaf } = useDeleteLeaf();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedLeafId = searchParams.get('leaf');
-  const artifacts = useMemo(
-    () => buildProjectOutputArtifacts(data.leaves, data.workspaces, data.commits),
-    [data.commits, data.leaves, data.workspaces]
+  const [deletedLeafIds, setDeletedLeafIds] = useState<Set<string>>(() => new Set());
+  const visibleLeaves = useMemo(
+    () => data.leaves.filter((leaf) => !deletedLeafIds.has(leaf.id)),
+    [data.leaves, deletedLeafIds]
   );
-  const availableTargets = useMemo(
-    () => buildAvailableOutputTargets(artifacts, data.workspaces),
-    [artifacts, data.workspaces]
+  const artifacts = useMemo(
+    () => buildProjectOutputArtifacts(visibleLeaves, data.workspaces, data.commits),
+    [data.commits, data.workspaces, visibleLeaves]
+  );
+  const createCandidates = useMemo(
+    () => buildLeafCreateCandidates(visibleLeaves, data.workspaces, data.commits),
+    [data.commits, data.workspaces, visibleLeaves]
   );
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [creatingTargetId, setCreatingTargetId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [deletingLeafId, setDeletingLeafId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const replaceLeafRoute = useCallback(
+    (leafId: string | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (leafId) {
+        params.set('leaf', leafId);
+      } else {
+        params.delete('leaf');
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname);
+    },
+    [pathname, router, searchParams]
+  );
 
   const navigateToLeaf = useCallback(
     (leafId: string) => {
       setSelectedLeafId(leafId);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('leaf', leafId);
-      router.replace(`${pathname}?${params.toString()}`);
+      replaceLeafRoute(leafId);
     },
-    [pathname, router, searchParams]
+    [replaceLeafRoute]
   );
+
+  const clearSelectedLeaf = useCallback(() => {
+    setSelectedLeafId(null);
+    replaceLeafRoute(null);
+  }, [replaceLeafRoute]);
 
   useEffect(() => {
     if (artifacts.length === 0) {
@@ -82,16 +108,26 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
 
   const handleManagerOpenChange = useCallback((open: boolean) => {
     setManagerOpen(open);
-    if (open) setCreateError(null);
+    if (open) {
+      setCreateError(null);
+      setDeleteError(null);
+    }
   }, []);
 
   const handleCreate = useCallback(
-    async (workspace: WorkspaceCandidate, target: WorkspaceOutputTarget, title: string) => {
-      setCreatingTargetId(target.id);
+    async (commit: ApiCommit, leafType: LeafType, title: string) => {
+      setCreatingTargetId(commit.hash);
       setCreateError(null);
       try {
-        const input = buildOutputTargetLeafInput(workspace, target.id);
-        const leaf = await createLeaf({ ...input, title: title || input.title });
+        const leaf = await createLeaf({
+          commit_hash: commit.hash,
+          config: {},
+          constraints: [],
+          project_id: commit.project_id,
+          source: { type: 'user' },
+          title,
+          type: leafType,
+        });
         dispatchLeafChanged({
           commitHash: leaf.commit_hash,
           leafId: leaf.id,
@@ -110,6 +146,56 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
       }
     },
     [createLeaf, data.refresh, navigateToLeaf, projectId]
+  );
+
+  const handleDelete = useCallback(
+    async (artifact: ProjectOutputArtifact) => {
+      const { leaf } = artifact;
+      setDeletingLeafId(leaf.id);
+      setDeleteError(null);
+      try {
+        await deleteLeaf(leaf.id);
+        setDeletedLeafIds((current) => {
+          const next = new Set(current);
+          next.add(leaf.id);
+          return next;
+        });
+
+        const remainingArtifacts = artifacts.filter((candidate) => candidate.leaf.id !== leaf.id);
+        if (activeLeafId === leaf.id) {
+          const nextLeafId = remainingArtifacts[0]?.leaf.id ?? null;
+          if (nextLeafId) {
+            navigateToLeaf(nextLeafId);
+          } else {
+            clearSelectedLeaf();
+          }
+        }
+
+        dispatchLeafChanged({
+          commitHash: leaf.commit_hash,
+          leafId: leaf.id,
+          projectId,
+          reason: 'deleted',
+        });
+        await data.refresh();
+        toast.success(`Deleted ${leaf.title || 'Leaf'}`);
+      } catch (error) {
+        const message = formatUserFacingError(error, 'Could not delete Leaf.');
+        setDeleteError(message);
+        throw error;
+      } finally {
+        setDeletingLeafId(null);
+      }
+    },
+    [
+      activeLeafId,
+      artifacts,
+      clearSelectedLeaf,
+      data.refresh,
+      deleteLeaf,
+      navigateToLeaf,
+      projectId,
+    ]
   );
 
   const openManager = useCallback(() => setManagerOpen(true), []);
@@ -158,7 +244,7 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
           />
         ) : (
           <OutputsEmptyState
-            availableCount={availableTargets.length}
+            availableCount={createCandidates.length}
             onManageLeaves={openManager}
           />
         )}
@@ -166,10 +252,13 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
 
       <ProjectLeafManager
         artifacts={artifacts}
-        availableTargets={availableTargets}
+        createCandidates={createCandidates}
         createError={createError}
         creatingTargetId={creatingTargetId}
+        deleteError={deleteError}
+        deletingLeafId={deletingLeafId}
         onCreate={handleCreate}
+        onDelete={handleDelete}
         onOpenChange={handleManagerOpenChange}
         onSelect={navigateToLeaf}
         open={managerOpen}
@@ -219,8 +308,8 @@ function OutputsEmptyState({
           </h2>
           <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
             {availableCount > 0
-              ? `${availableCount} committed ${availableCount === 1 ? 'output target is' : 'output targets are'} ready to become a Leaf.`
-              : 'Commit a Workspace output target first, then create its persistent Leaf here.'}
+              ? `${availableCount} committed ${availableCount === 1 ? 'version is' : 'versions are'} ready for Leaf creation.`
+              : 'Commit a version first, then create its persistent Leaf here.'}
           </p>
           <Button className="mt-5" onClick={onManageLeaves} type="button" variant="leaf">
             <Layers3 aria-hidden="true" className="size-4" />

@@ -25,6 +25,7 @@ import {
   deleteMergeDraft,
   saveMergeDraft,
 } from '@/commands/merge';
+import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
@@ -138,17 +139,28 @@ describe('useMergeWorkspaceActions.commit', () => {
   it('returns hash + marks committed on success', async () => {
     useMergeWorkspaceStore.setState({
       draftId: 'merge_1',
+      projectId: 'proj_1',
       message: 'msg',
       targetBranch: 'main',
     });
     vi.mocked(commitMergeDraft).mockResolvedValueOnce({ hash: 'sha256:m' } as never);
 
+    const commitCreated = vi.fn();
+    window.addEventListener(COMMIT_CREATED_EVENT, commitCreated);
     const { result } = renderHook(() => useMergeWorkspaceActions());
     const out = await result.current.commit();
     await waitForHook();
 
     expect(out.hash).toBe('sha256:m');
     expect(useMergeWorkspaceStore.getState().status).toBe('committed');
+    expect(commitCreated).toHaveBeenCalledOnce();
+    expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      type: 'commit.created',
+      projectId: 'proj_1',
+      branch: 'main',
+      payload: { hash: 'sha256:m', branch: 'main' },
+    });
+    window.removeEventListener(COMMIT_CREATED_EVENT, commitCreated);
   });
 });
 
