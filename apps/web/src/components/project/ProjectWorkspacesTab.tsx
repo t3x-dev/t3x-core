@@ -26,7 +26,11 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const projectMaterials = useProjectMaterials(projectId);
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const branch = searchParams.get('branch')?.trim() || null;
-  const { branchHeads, loading: branchesLoading } = useBranches(projectId, Boolean(branch));
+  const {
+    branchHeads,
+    loading: branchesLoading,
+    refresh: refreshBranches,
+  } = useBranches(projectId, Boolean(branch));
   const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
   const previewCandidates = useMemo(
     () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
@@ -67,6 +71,17 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [router, searchParams]
   );
 
+  const handleWorkspaceBranchChange = useCallback(
+    async (nextBranch: string) => {
+      await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('branch', nextBranch);
+      params.delete('workspace');
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [projectWorkspaces.refresh, refreshBranches, router, searchParams]
+  );
+
   const handleViewCommitInState = useCallback(
     (commitHash: string, branch: string) => {
       const repositoryPath = pathname.endsWith('/workspaces')
@@ -98,6 +113,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
+      onWorkspaceBranchChange={handleWorkspaceBranchChange}
     />
   );
 }

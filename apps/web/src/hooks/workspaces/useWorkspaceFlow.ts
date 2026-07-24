@@ -37,18 +37,20 @@ export function useWorkspaceFlow() {
       parentCommitHash,
       targetBranch,
     }: StartWorkspaceIterationOptions): Promise<StartWorkspaceIterationResult> => {
-      const nextWorkspace = buildNextWorkspaceIteration(candidate, parentCommitHash, targetBranch);
+      const workspaceId =
+        targetBranch === candidate.targetBranch ? candidate.id : `workspace_${crypto.randomUUID()}`;
+      const nextWorkspace = buildNextWorkspaceIteration(
+        candidate,
+        workspaceId,
+        parentCommitHash,
+        targetBranch
+      );
 
       if (createBranchFrom) {
-        try {
-          await createBranch(candidate.projectId, targetBranch, createBranchFrom);
-        } catch {
-          // Branch registration is best-effort. The target branch is still persisted
-          // on the workspace and will be materialized by its next commit.
-        }
+        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
       }
 
-      const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, nextWorkspace);
+      const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace);
 
       try {
         const conversation = await createConversation(
@@ -58,7 +60,7 @@ export function useWorkspaceFlow() {
           undefined,
           {
             target_branch: targetBranch,
-            workspace_id: candidate.id,
+            workspace_id: workspaceId,
           }
         );
         return { conversationId: conversation.conversation_id, workspace: saved.workspace };
@@ -75,13 +77,18 @@ export function useWorkspaceFlow() {
 
 function buildNextWorkspaceIteration(
   candidate: WorkspaceCandidate,
+  workspaceId: string,
   parentCommitHash: string,
   targetBranch: string
 ): WorkspaceCandidate {
-  const { lastCommitHash: _lastCommitHash, ...workspace } = candidate;
+  const { lastCommitHash: _lastCommitHash, revision: _revision, ...workspace } = candidate;
 
   return {
     ...workspace,
+    id: workspaceId,
+    ...(workspaceId === candidate.id && candidate.revision !== undefined
+      ? { revision: candidate.revision }
+      : {}),
     baseCommitHash: parentCommitHash,
     targetBranch,
     status: 'draft',
