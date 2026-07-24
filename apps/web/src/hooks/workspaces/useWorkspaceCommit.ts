@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { commitWorkspaceDraft, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate, WorkspaceValidationOverride } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
@@ -18,24 +19,11 @@ export function useWorkspaceCommit(candidate: WorkspaceCandidate) {
         validationOverride
       );
 
-      const commitCreatedEvent = {
-        type: 'commit.created',
+      dispatchCommitCreated({
         projectId: candidate.projectId,
+        hash: result.commit.hash,
         branch: candidate.targetBranch,
-        payload: { hash: result.commit.hash, branch: candidate.targetBranch },
-      };
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('t3x:commit-created', { detail: commitCreatedEvent }));
-      }
-      if (typeof BroadcastChannel !== 'undefined') {
-        try {
-          const channel = new BroadcastChannel('t3x-commits');
-          channel.postMessage(commitCreatedEvent);
-          channel.close();
-        } catch {
-          // BroadcastChannel is optional; the same-window event still keeps local views in sync.
-        }
-      }
+      });
 
       return result.commit.hash;
     },

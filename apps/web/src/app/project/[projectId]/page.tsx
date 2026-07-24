@@ -23,6 +23,11 @@ import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
+  COMMIT_CREATED_EVENT,
+  COMMITS_BROADCAST_CHANNEL,
+  isCommitCreatedForProject,
+} from '@/hooks/commits/commitEvents';
+import {
   applyIntroDemoCommitToCanvasGraph,
   readIntroDemoLocalCommit,
 } from '@/hooks/onboarding/introDemoLocalCommit';
@@ -397,6 +402,17 @@ export function ProjectDetailPageContent({
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
+    const refreshForCommit = (payload: unknown) => {
+      if (!isCommitCreatedForProject(payload, projectId)) return;
+      lastRefreshRef.current = 0; // bypass throttle for explicit commit signals
+      refreshIfStale();
+    };
+
+    const onCommitCreated = (event: Event) => {
+      refreshForCommit((event as CustomEvent<unknown>).detail);
+    };
+    window.addEventListener(COMMIT_CREATED_EVENT, onCommitCreated);
+
     // Poll every 30s while page is visible
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') refreshIfStale();
@@ -405,10 +421,9 @@ export function ProjectDetailPageContent({
     // Listen for commit broadcasts from chat page — refresh immediately
     let channel: BroadcastChannel | null = null;
     try {
-      channel = new BroadcastChannel('t3x-commits');
-      channel.onmessage = () => {
-        lastRefreshRef.current = 0; // bypass throttle
-        refreshIfStale();
+      channel = new BroadcastChannel(COMMITS_BROADCAST_CHANNEL);
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        refreshForCommit(event.data);
       };
     } catch {
       // BroadcastChannel not supported
@@ -416,6 +431,7 @@ export function ProjectDetailPageContent({
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener(COMMIT_CREATED_EVENT, onCommitCreated);
       clearInterval(interval);
       channel?.close();
     };

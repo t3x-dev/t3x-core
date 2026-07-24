@@ -27,6 +27,7 @@ import {
   saveMergeDraft,
 } from '@/commands/merge';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -91,17 +92,25 @@ export function useMergeWorkspaceActions() {
   }, []);
 
   const commit = useCallback(async (branch?: string): Promise<{ hash: string }> => {
-    const { draftId, message, targetBranch } = useMergeWorkspaceStore.getState();
+    const { draftId, message, projectId, targetBranch } = useMergeWorkspaceStore.getState();
     if (!draftId) throw new Error('No draft to commit');
 
     useMergeWorkspaceStore.getState().clearError();
 
     try {
+      const commitBranch = branch || targetBranch || 'main';
       const commitResult = await commitMergeDraft(draftId, {
         message,
-        branch: branch || targetBranch || 'main',
+        branch: commitBranch,
       });
       useMergeWorkspaceStore.getState().setCommitted();
+      if (projectId) {
+        dispatchCommitCreated({
+          projectId,
+          hash: commitResult.hash,
+          branch: commitBranch,
+        });
+      }
       return commitResult;
     } catch (err) {
       const errorMsg = formatUserFacingError(err, 'Failed to commit.');

@@ -8,6 +8,7 @@
  */
 
 import { useCallback } from 'react';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { createCommit } from '@/infrastructure/commits';
 
 export interface MergeCommitInput {
@@ -24,7 +25,7 @@ export function useCreateMergeCommit(): {
   create: (input: MergeCommitInput) => Promise<{ commit: { hash: string } }>;
 } {
   const create = useCallback(async (input: MergeCommitInput) => {
-    return createCommit(
+    const result = await createCommit(
       input.projectId,
       { trees: input.content.trees, relations: input.content.relations },
       {
@@ -35,6 +36,14 @@ export function useCreateMergeCommit(): {
         provenance: input.provenance,
       }
     );
+
+    dispatchCommitCreated({
+      projectId: input.projectId,
+      hash: result.commit.hash,
+      branch: input.branch,
+    });
+
+    return result;
   }, []);
 
   return { create };

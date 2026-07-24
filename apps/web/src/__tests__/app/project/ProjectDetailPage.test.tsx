@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 
 const stateHookMocks = vi.hoisted(() => ({
   loadCommits: vi.fn(),
@@ -265,6 +266,36 @@ describe('ProjectDetailPage — project-first shell states', () => {
     await waitFor(() => {
       expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
       expect(canvasSurfaceMocks.fetchPins).toHaveBeenCalledWith('proj_test');
+    });
+  });
+
+  it('refreshes Canvas when a same-window commit event targets this project', async () => {
+    render(
+      <ProjectDetailPageContent
+        projectIdOverride="proj_test"
+        showChatSidebarToggle
+        surface="canvas"
+      />
+    );
+
+    await waitFor(() => {
+      expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
+    });
+    canvasSurfaceMocks.loadCanvas.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent(COMMIT_CREATED_EVENT, {
+        detail: {
+          type: 'commit.created',
+          projectId: 'proj_test',
+          branch: 'main',
+          payload: { hash: 'sha256:new', branch: 'main' },
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test', { merge: true });
     });
   });
 
