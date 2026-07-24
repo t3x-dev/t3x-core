@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import type { WorkspaceSourceView } from '@/domain/workspaces/navigation';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
@@ -26,19 +28,28 @@ interface WorkspaceWorkbenchProps {
   projectId: string;
   viewState?: WorkspaceWorkbenchViewState;
   errorMessage?: string;
+  navigationConversationId?: string;
   selectedWorkspaceId?: string | null;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  restoreStoredConversation?: boolean;
+  selectionRequiredReason?: string;
+  sourceView?: WorkspaceSourceView;
 }
 
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
+  navigationConversationId,
+  onSelectedWorkspaceChange,
   onSourceMaterialUploaded,
   onViewCommitInState,
   projectId,
+  restoreStoredConversation = true,
   selectedWorkspaceId,
+  selectionRequiredReason,
+  sourceView,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
@@ -51,11 +62,19 @@ export function WorkspaceWorkbench({
   const pins = usePinsStore((state) => state.pins);
   const { extractCandidate, sendToYOps, startNextIteration } = useWorkspaceFlow();
 
-  const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
+  useEffect(() => {
+    if (sourceView || navigationConversationId) setActiveWorkflowTab('chat');
+  }, [navigationConversationId, selectedWorkspaceId, sourceView]);
+
+  const baseSelectedWorkspace = selectionRequiredReason
+    ? null
+    : selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
   const selectedWorkspace = baseSelectedWorkspace
     ? mergeWorkspaceOverride(baseSelectedWorkspace, workspaceOverrides[baseSelectedWorkspace.id])
     : null;
-  const selectedFlow = selectedWorkspace ? flowByWorkspaceId[selectedWorkspace.id] : undefined;
+  const selectedFlow = baseSelectedWorkspace
+    ? flowByWorkspaceId[baseSelectedWorkspace.id]
+    : undefined;
   const selectedWorkspaceWithFlow =
     selectedWorkspace && selectedFlow?.commitHash
       ? {
@@ -66,11 +85,11 @@ export function WorkspaceWorkbench({
       : selectedWorkspace;
 
   const updateSelectedFlow = (patch: WorkspaceFlowState) => {
-    if (!selectedWorkspace) return;
+    if (!baseSelectedWorkspace) return;
     setFlowByWorkspaceId((current) => ({
       ...current,
-      [selectedWorkspace.id]: {
-        ...current[selectedWorkspace.id],
+      [baseSelectedWorkspace.id]: {
+        ...current[baseSelectedWorkspace.id],
         ...patch,
       },
     }));
@@ -106,14 +125,14 @@ export function WorkspaceWorkbench({
   );
 
   const handleExtractCandidate = async () => {
-    if (!selectedWorkspace) return;
+    if (!selectedWorkspace || !baseSelectedWorkspace) return;
 
     updateSelectedFlow({ error: undefined, extracting: true });
     try {
       const result = await extractCandidate(selectWorkspaceSourceBundle(selectedWorkspace, pins));
       setWorkspaceOverrides((current) => ({
         ...current,
-        [result.workspace.id]: result.workspace,
+        [baseSelectedWorkspace.id]: result.workspace,
       }));
       updateSelectedFlow({
         candidateId: result.candidate_id,
@@ -132,7 +151,7 @@ export function WorkspaceWorkbench({
   };
 
   const handleSendToYOps = async () => {
-    if (!selectedWorkspace) return;
+    if (!selectedWorkspace || !baseSelectedWorkspace) return;
 
     updateSelectedFlow({ error: undefined, sendingToYOps: true });
     try {
@@ -140,7 +159,7 @@ export function WorkspaceWorkbench({
       const hasOperations = hasYOpsOperations(result.workspace);
       setWorkspaceOverrides((current) => ({
         ...current,
-        [result.workspace.id]: result.workspace,
+        [baseSelectedWorkspace.id]: result.workspace,
       }));
       updateSelectedFlow({
         candidateId: result.candidate_id,
@@ -173,7 +192,7 @@ export function WorkspaceWorkbench({
     targetBranch: string,
     createBranchFrom?: string
   ) => {
-    if (!selectedWorkspace) return;
+    if (!selectedWorkspace || !baseSelectedWorkspace) return;
 
     updateSelectedFlow({ continuationBusy: true, error: undefined });
     try {
@@ -185,7 +204,7 @@ export function WorkspaceWorkbench({
       });
       setWorkspaceOverrides((current) => ({
         ...current,
-        [result.workspace.id]: result.workspace,
+        [baseSelectedWorkspace.id]: result.workspace,
       }));
       updateSelectedFlow({
         candidateId: undefined,
@@ -239,30 +258,43 @@ export function WorkspaceWorkbench({
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
         <WorkspacesHeader />
 
-        <WorkspaceToolbar
-          activeWorkflowTab={activeWorkflowTab}
-          selectedWorkspace={selectedWorkspaceWithFlow}
-          onWorkflowTabChange={setActiveWorkflowTab}
-          validationGapCount={selectedFlow?.validationGapCount}
-        />
-
-        {candidates.length === 0 ? (
-          <WorkspaceEmptyState message="No workspaces yet." />
-        ) : (
-          <WorkspaceDetail
-            activeTab={activeWorkflowTab}
-            candidate={selectedWorkspaceWithFlow}
-            flowState={selectedFlow}
-            onExtractCandidate={handleExtractCandidate}
-            onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
-            onContinueFromCommit={handleContinueFromCommit}
-            onSendToYOps={handleSendToYOps}
-            onViewCommitInState={onViewCommitInState}
-            onWorkflowTabChange={setActiveWorkflowTab}
-            onYOpsApplied={handleYOpsApplied}
-            onYOpsCommitted={handleCommitted}
-            onSourceMaterialUploaded={onSourceMaterialUploaded}
+        {selectionRequiredReason ? (
+          <WorkspaceSelectionRequired
+            candidates={candidates}
+            onSelect={onSelectedWorkspaceChange}
+            reason={selectionRequiredReason}
           />
+        ) : (
+          <>
+            <WorkspaceToolbar
+              activeWorkflowTab={activeWorkflowTab}
+              selectedWorkspace={selectedWorkspaceWithFlow}
+              onWorkflowTabChange={setActiveWorkflowTab}
+              validationGapCount={selectedFlow?.validationGapCount}
+            />
+
+            {candidates.length === 0 ? (
+              <WorkspaceEmptyState message="No workspaces yet." />
+            ) : (
+              <WorkspaceDetail
+                activeTab={activeWorkflowTab}
+                candidate={selectedWorkspaceWithFlow}
+                flowState={selectedFlow}
+                navigationConversationId={navigationConversationId}
+                onExtractCandidate={handleExtractCandidate}
+                onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
+                onContinueFromCommit={handleContinueFromCommit}
+                onSendToYOps={handleSendToYOps}
+                onViewCommitInState={onViewCommitInState}
+                onWorkflowTabChange={setActiveWorkflowTab}
+                onYOpsApplied={handleYOpsApplied}
+                onYOpsCommitted={handleCommitted}
+                onSourceMaterialUploaded={onSourceMaterialUploaded}
+                restoreStoredConversation={restoreStoredConversation}
+                sourceView={sourceView}
+              />
+            )}
+          </>
         )}
       </div>
     </section>
@@ -306,6 +338,7 @@ function WorkspaceDetail({
   activeTab,
   candidate,
   flowState,
+  navigationConversationId,
   onExtractCandidate,
   onChatSourceEvidenceChange,
   onContinueFromCommit,
@@ -315,10 +348,13 @@ function WorkspaceDetail({
   onYOpsApplied,
   onYOpsCommitted,
   onViewCommitInState,
+  restoreStoredConversation,
+  sourceView,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
+  navigationConversationId?: string;
   onExtractCandidate: () => void;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onContinueFromCommit: (
@@ -332,6 +368,8 @@ function WorkspaceDetail({
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  restoreStoredConversation: boolean;
+  sourceView?: WorkspaceSourceView;
 }) {
   if (!candidate) return null;
 
@@ -353,8 +391,12 @@ function WorkspaceDetail({
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           continuationBusy={Boolean(flowState?.continuationBusy)}
-          sourceConversationId={flowState?.sourceConversationId}
+          sourceConversationId={flowState?.sourceConversationId ?? navigationConversationId}
           sourceParentCommitHash={flowState?.sourceParentCommitHash}
+          restoreStoredConversation={
+            flowState?.sourceParentCommitHash ? false : restoreStoredConversation
+          }
+          sourceView={sourceView}
           onSourceMaterialUploaded={onSourceMaterialUploaded}
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
@@ -446,5 +488,43 @@ function WorkspaceEmptyState({ message }: { message: string }) {
     <div className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-card)] p-8 text-center text-sm text-[var(--text-secondary)]">
       {message}
     </div>
+  );
+}
+
+function WorkspaceSelectionRequired({
+  candidates,
+  onSelect,
+  reason,
+}: {
+  candidates: WorkspaceCandidate[];
+  onSelect?: (workspaceId: string) => void;
+  reason: string;
+}) {
+  return (
+    <section
+      aria-label="Workspace selection required"
+      className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+    >
+      <h3 className="text-base font-semibold text-[var(--text-primary)]">Choose a workspace</h3>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">{reason}</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {candidates.map((candidate) => (
+          <Button
+            className="h-auto min-h-12 justify-start px-3 py-2 text-left"
+            key={candidate.id}
+            onClick={() => onSelect?.(candidate.id)}
+            type="button"
+            variant="canvas-outline"
+          >
+            <span className="min-w-0">
+              <span className="block truncate font-semibold">{candidate.title}</span>
+              <span className="mt-0.5 block truncate font-mono text-xs text-[var(--text-tertiary)]">
+                {candidate.targetBranch}
+              </span>
+            </span>
+          </Button>
+        ))}
+      </div>
+    </section>
   );
 }

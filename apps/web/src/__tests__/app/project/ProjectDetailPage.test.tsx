@@ -80,6 +80,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
     error: null,
+    initialized: true,
     loading: false,
     refresh: stateHookMocks.refreshWorkspaces,
     workspaces: [],

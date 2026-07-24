@@ -5,6 +5,12 @@ import { useCallback, useMemo } from 'react';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
 import {
+  buildWorkspaceContextCandidate,
+  parseWorkspaceNavigationTarget,
+  resolveWorkspaceNavigation,
+  type WorkspaceSelectionReason,
+} from '@/domain/workspaces/navigation';
+import {
   applyProjectWorkspaceSchemaBindings,
   type ProjectWorkspaceSchemaBindings,
 } from '@/domain/workspaces/schemaBindings';
@@ -23,9 +29,13 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const searchParams = useSearchParams();
   const projectMaterials = useProjectMaterials(projectId);
   const projectWorkspaces = useProjectWorkspaces(projectId);
-  const previewCandidates = useMemo(
-    () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
+  const currentProjectMaterials = useMemo(
+    () => projectMaterials.materials.filter((material) => material.project_id === projectId),
     [projectId, projectMaterials.materials]
+  );
+  const previewCandidates = useMemo(
+    () => getWorkspacePreviewCandidates(projectId, currentProjectMaterials),
+    [currentProjectMaterials, projectId]
   );
   const workspaceCandidates = useMemo(
     () => mergePersistedWorkspaceCandidates(previewCandidates, projectWorkspaces.workspaces),
@@ -38,16 +48,62 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
         : workspaceCandidates,
     [workspaceCandidates, schemaBindings]
   );
-  const selectedWorkspaceId = searchParams.get('workspace');
+  const navigationTarget = useMemo(
+    () => parseWorkspaceNavigationTarget(searchParams),
+    [searchParams]
+  );
+  const navigationResolution = useMemo(
+    () => resolveWorkspaceNavigation(candidates, navigationTarget),
+    [candidates, navigationTarget]
+  );
+  const navigationCandidate = useMemo(
+    () =>
+      navigationResolution.status === 'resolved'
+        ? buildWorkspaceContextCandidate(navigationResolution.candidate, navigationTarget)
+        : navigationResolution.candidate,
+    [navigationResolution, navigationTarget]
+  );
+  const visibleCandidates = useMemo(() => {
+    if (
+      navigationResolution.status !== 'resolved' ||
+      !navigationCandidate ||
+      navigationCandidate.id === navigationResolution.candidate.id
+    ) {
+      return candidates;
+    }
+
+    return [
+      navigationCandidate,
+      ...candidates.filter(
+        (candidate) =>
+          candidate.id !== navigationResolution.candidate.id &&
+          candidate.id !== navigationCandidate.id
+      ),
+    ];
+  }, [candidates, navigationCandidate, navigationResolution]);
+  const waitingForExplicitTarget =
+    navigationTarget.explicitHandoff && !projectWorkspaces.initialized;
 
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', 'workspaces');
+      const candidate = candidates.find((item) => item.id === workspaceId);
+      if (!candidate) return;
+
+      const params = new URLSearchParams();
+      const targetCommitMatches =
+        navigationTarget.commitHash === candidate.lastCommitHash ||
+        navigationTarget.commitHash === candidate.baseCommitHash;
+      if (navigationTarget.branch === candidate.targetBranch && targetCommitMatches) {
+        params.set('branch', navigationTarget.branch);
+        params.set('commit', navigationTarget.commitHash!);
+      }
       params.set('workspace', workspaceId);
+      if (navigationTarget.sourceView) {
+        params.set('sourceView', navigationTarget.sourceView);
+      }
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams]
+    [candidates, navigationTarget, router]
   );
 
   const handleViewCommitInState = useCallback(
@@ -67,14 +123,45 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
 
   return (
     <WorkspaceWorkbench
-      candidates={candidates}
+      candidates={visibleCandidates}
+      errorMessage={
+        navigationTarget.explicitHandoff ? (projectWorkspaces.error ?? undefined) : undefined
+      }
+      navigationConversationId={navigationResolution.conversationId ?? undefined}
       projectId={projectId}
-      selectedWorkspaceId={selectedWorkspaceId}
+      restoreStoredConversation={navigationResolution.restoreStoredConversation}
+      selectedWorkspaceId={navigationCandidate?.id ?? null}
+      selectionRequiredReason={
+        !waitingForExplicitTarget && navigationResolution.status === 'selection_required'
+          ? workspaceSelectionMessage(navigationResolution.reason)
+          : undefined
+      }
+      sourceView={navigationResolution.sourceView ?? undefined}
+      viewState={
+        waitingForExplicitTarget
+          ? 'loading'
+          : navigationTarget.explicitHandoff && projectWorkspaces.error
+            ? 'error'
+            : 'ready'
+      }
       onSelectedWorkspaceChange={handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
     />
   );
+}
+
+function workspaceSelectionMessage(reason: WorkspaceSelectionReason): string {
+  switch (reason) {
+    case 'ambiguous_workspace':
+      return 'More than one workspace matches this branch and commit. Choose the workspace to open.';
+    case 'conversation_not_found':
+      return 'The requested conversation does not belong to the matched workspace. Choose a workspace to continue without stale chat context.';
+    case 'missing_context':
+      return 'The workspace link is missing required branch or commit context. Choose the intended workspace.';
+    case 'workspace_not_found':
+      return 'No workspace matches the requested context. Choose an available workspace instead.';
+  }
 }
 
 function mergePersistedWorkspaceCandidates(

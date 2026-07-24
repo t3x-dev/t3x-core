@@ -114,6 +114,7 @@ function CanvasWorkspaceInner({
     nodeId: string;
   } | null>(null);
   const reopenActionPanelNodeRef = useRef<string | null>(null);
+  const focusedBranchAppliedRef = useRef(focusedBranch);
   const focusedCommitAppliedRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
@@ -166,6 +167,7 @@ function CanvasWorkspaceInner({
     openNodeModal,
     closeNodeModal,
     openLeafPanel,
+    closeLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
   const { addConversationFromCommit, startMerge } = useCanvasCommitActions();
@@ -269,6 +271,44 @@ function CanvasWorkspaceInner({
     nodes,
     edges,
   });
+
+  useEffect(() => {
+    if (focusedBranchAppliedRef.current === focusedBranch) return;
+    focusedBranchAppliedRef.current = focusedBranch;
+
+    // A branch handoff can briefly render before its HEAD snapshot arrives. Clear every
+    // node-scoped affordance from the previous branch during that gap so it cannot be used
+    // as if it belonged to the newly selected branch.
+    focusedCommitAppliedRef.current = null;
+    reopenActionPanelNodeRef.current = null;
+    setHighlight(null);
+    closeContextMenu();
+    setActionPanel(null);
+    closeNodeModal();
+    closeLeafPanel();
+
+    const currentNodes = getNodes();
+    if (currentNodes.some((node) => node.selected)) {
+      setNodes(
+        currentNodes.map((node) =>
+          node.selected
+            ? {
+                ...node,
+                selected: false,
+              }
+            : node
+        )
+      );
+    }
+  }, [
+    closeContextMenu,
+    closeLeafPanel,
+    closeNodeModal,
+    focusedBranch,
+    getNodes,
+    setHighlight,
+    setNodes,
+  ]);
 
   // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
   // Position changes don't alter this, so ELK only runs when the graph structure changes.

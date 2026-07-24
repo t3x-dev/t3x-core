@@ -14,6 +14,7 @@ const flowMocks = vi.hoisted(() => ({
   getNodes: vi.fn(),
   reactFlowProps: undefined as
     | {
+        nodes?: Node[];
         onNodeClick?: (...args: unknown[]) => void;
         onNodeDragStart?: (...args: unknown[]) => void;
         onNodeDragStop?: (...args: unknown[]) => void;
@@ -60,6 +61,7 @@ vi.mock('@xyflow/react', async () => {
     Position: { Left: 'left', Right: 'right' },
     ReactFlow: (props: {
       children?: React.ReactNode;
+      nodes?: Node[];
       onNodeClick?: (...args: unknown[]) => void;
       onNodeDragStart?: (...args: unknown[]) => void;
       onNodeDragStop?: (...args: unknown[]) => void;
@@ -411,6 +413,118 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(flowMocks.setNodes).toHaveBeenLastCalledWith([
       expect.objectContaining({ id: 'sha256:focused', selected: true }),
     ]);
+  });
+
+  it('clears stale canvas context while a new branch head is resolving', async () => {
+    const branchANode = {
+      ...unitNode('sha256:branch-a-head'),
+      position: { x: 40, y: 60 },
+      data: {
+        ...unitNode('sha256:branch-a-head').data,
+        branchName: 'branch-a',
+        branchType: 'branch' as const,
+        commitHash: 'sha256:branch-a-head',
+      },
+    };
+    const branchBNode = {
+      ...unitNode('sha256:branch-b-head'),
+      position: { x: 480, y: 220 },
+      data: {
+        ...unitNode('sha256:branch-b-head').data,
+        branchName: 'branch-b',
+        branchType: 'branch' as const,
+        commitHash: 'sha256:branch-b-head',
+      },
+    };
+    const leafNode = {
+      ...unitNode('leaf-output'),
+      data: {
+        ...unitNode('leaf-output').data,
+        kind: 'leaf' as const,
+      },
+    };
+    useCanvasStore.setState({
+      edges: [],
+      hasDbPositions: true,
+      nodes: [branchANode, branchBNode, leafNode],
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    layoutMocks.getLayoutedElements.mockResolvedValue([branchANode, branchBNode, leafNode]);
+
+    const { rerender } = render(
+      <CanvasWorkspace
+        focusedBranch="branch-a"
+        focusedCommitHash="sha256:branch-a-head"
+        projectName="Trust Gate"
+      />
+    );
+
+    await waitFor(() => {
+      expect(flowMocks.setCenter).toHaveBeenCalledWith(184, 140, { duration: 300 });
+    });
+    expect(flowMocks.reactFlowProps?.nodes?.[0]?.data).toEqual(
+      expect.objectContaining({ highlightMode: 'node' })
+    );
+
+    const clickTarget = document.createElement('div');
+    clickTarget.className = 'react-flow__node';
+    clickTarget.getBoundingClientRect = () =>
+      ({
+        bottom: 300,
+        height: 160,
+        left: 100,
+        right: 300,
+        top: 140,
+        width: 200,
+        x: 100,
+        y: 140,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: clickTarget },
+        branchANode
+      );
+      useCanvasStore.getState().openNodeModal(branchANode.id, 'commit');
+    });
+    expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
+    expect(screen.getByTestId('node-modal')).toBeInTheDocument();
+
+    rerender(<CanvasWorkspace focusedBranch="branch-b" projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(useCanvasStore.getState().nodes.every((node) => !node.selected)).toBe(true);
+    });
+    expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('node-modal')).not.toBeInTheDocument();
+    expect(
+      flowMocks.reactFlowProps?.nodes?.every(
+        (node) => node.data.dimmed === undefined && node.data.highlightMode === undefined
+      )
+    ).toBe(true);
+
+    rerender(
+      <CanvasWorkspace
+        focusedBranch="branch-b"
+        focusedCommitHash="sha256:branch-b-head"
+        projectName="Trust Gate"
+      />
+    );
+
+    await waitFor(() => {
+      expect(flowMocks.setCenter).toHaveBeenCalledWith(624, 300, { duration: 300 });
+    });
+    expect(useCanvasStore.getState().nodes.find((node) => node.id === branchANode.id)).toEqual(
+      expect.objectContaining({ selected: false })
+    );
+    expect(useCanvasStore.getState().nodes.find((node) => node.id === branchBNode.id)).toEqual(
+      expect.objectContaining({ selected: true })
+    );
+
+    rerender(<CanvasWorkspace focusedBranch="branch-b" projectName="Trust Gate" />);
+    expect(useCanvasStore.getState().nodes.find((node) => node.id === branchBNode.id)).toEqual(
+      expect.objectContaining({ selected: true })
+    );
   });
 
   it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {

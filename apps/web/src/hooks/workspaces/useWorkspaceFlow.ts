@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
+import { buildWorkspaceContextId } from '@/domain/workspaces/navigation';
 import { createBranch } from '@/infrastructure/branches';
 import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
@@ -33,7 +34,13 @@ export function useWorkspaceFlow() {
       parentCommitHash,
       targetBranch,
     }: StartWorkspaceIterationOptions): Promise<StartWorkspaceIterationResult> => {
-      const nextWorkspace = buildNextWorkspaceIteration(candidate, parentCommitHash, targetBranch);
+      const nextWorkspaceId = buildWorkspaceContextId(candidate.id, targetBranch, parentCommitHash);
+      const nextWorkspace = buildNextWorkspaceIteration(
+        candidate,
+        nextWorkspaceId,
+        parentCommitHash,
+        targetBranch
+      );
 
       if (createBranchFrom) {
         try {
@@ -44,7 +51,7 @@ export function useWorkspaceFlow() {
         }
       }
 
-      const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, nextWorkspace);
+      const saved = await saveWorkspaceDraft(candidate.projectId, nextWorkspace.id, nextWorkspace);
 
       try {
         const conversation = await createConversation(
@@ -54,7 +61,7 @@ export function useWorkspaceFlow() {
           undefined,
           {
             target_branch: targetBranch,
-            workspace_id: candidate.id,
+            workspace_id: nextWorkspace.id,
           }
         );
         return { conversationId: conversation.conversation_id, workspace: saved.workspace };
@@ -71,6 +78,7 @@ export function useWorkspaceFlow() {
 
 function buildNextWorkspaceIteration(
   candidate: WorkspaceCandidate,
+  workspaceId: string,
   parentCommitHash: string,
   targetBranch: string
 ): WorkspaceCandidate {
@@ -78,6 +86,7 @@ function buildNextWorkspaceIteration(
 
   return {
     ...workspace,
+    id: workspaceId,
     baseCommitHash: parentCommitHash,
     targetBranch,
     status: 'draft',

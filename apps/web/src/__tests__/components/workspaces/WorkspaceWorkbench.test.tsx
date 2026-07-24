@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
+import { buildWorkspaceContextId } from '@/domain/workspaces/navigation';
 import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -247,6 +248,94 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getAllByText('Release Note Schema v1').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('Release outline').length).toBeGreaterThan(0);
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
+  });
+
+  it('uses an explicit navigation conversation instead of stale workspace chat storage', async () => {
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_stale');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ success: true, data: { pins: [], turns: [] } }));
+
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        navigationConversationId="conv_1"
+        projectId="proj_1"
+        restoreStoredConversation={false}
+        selectedWorkspaceId="workspace_ready"
+        sourceView="chat"
+      />
+    );
+
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => {
+      const turnUrls = fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.includes('/api/v1/turns?'));
+      expect(turnUrls.some((url) => url.includes('conversation_id=conv_1'))).toBe(true);
+      expect(turnUrls.some((url) => url.includes('conversation_id=conv_stale'))).toBe(false);
+    });
+  });
+
+  it('does not restore stale chat storage for an explicit handoff without a conversation', async () => {
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_stale');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ success: true, data: { pins: [], turns: [] } }));
+
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        projectId="proj_1"
+        restoreStoredConversation={false}
+        selectedWorkspaceId="workspace_ready"
+        sourceView="chat"
+      />
+    );
+
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).includes('conversation_id=conv_stale'))
+      ).toBe(false);
+    });
+    expect(screen.getByText('No source chat turns yet.')).toBeInTheDocument();
+  });
+
+  it('keeps restoring the last source conversation for an ordinary direct entry', async () => {
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_stored');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ success: true, data: { pins: [], turns: [] } }));
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    const chatTab = screen.getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).includes('conversation_id=conv_stored'))
+      ).toBe(true);
+    });
+  });
+
+  it('asks for a workspace instead of rendering a fallback candidate', () => {
+    const onSelectedWorkspaceChange = vi.fn();
+
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        onSelectedWorkspaceChange={onSelectedWorkspaceChange}
+        projectId="proj_1"
+        selectionRequiredReason="The requested branch and commit match more than one workspace."
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Choose a workspace' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Workspace detail' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /PRD audience handoff/ }));
+    expect(onSelectedWorkspaceChange).toHaveBeenCalledWith('workspace_ready');
   });
 
   it('keeps the pre-commit review dock behind Validation', () => {
@@ -1159,7 +1248,14 @@ describe('WorkspaceWorkbench', () => {
       status: 'committed',
       lastCommitHash: 'sha256:workspace-commit',
     };
-    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const workspaceContextId = buildWorkspaceContextId(
+      'workspace_ready',
+      'feature/prd-audience',
+      'sha256:workspace-commit'
+    );
+    const workspaceUrl =
+      `http://localhost:8000/api/v1/projects/proj_1/workspaces/` +
+      encodeURIComponent(workspaceContextId);
     const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
@@ -1268,7 +1364,7 @@ describe('WorkspaceWorkbench', () => {
     expect(JSON.parse(String(conversationInit?.body))).toMatchObject({
       metadata: {
         target_branch: 'feature/prd-audience',
-        workspace_id: 'workspace_ready',
+        workspace_id: workspaceContextId,
       },
       parent_commit_hash: 'sha256:workspace-commit',
       project_id: 'proj_1',
@@ -1281,9 +1377,9 @@ describe('WorkspaceWorkbench', () => {
     const iterationStatus = screen.getByText(/Based on/).closest('output');
     expect(iterationStatus).toHaveTextContent('Based on workspace-co');
     expect(iterationStatus).toHaveTextContent('Next commit to feature/prd-audience');
-    expect(window.localStorage.getItem('t3x:workspace-source-chat:proj_1:workspace_ready')).toBe(
-      'conv_next_workspace'
-    );
+    expect(
+      window.localStorage.getItem(`t3x:workspace-source-chat:proj_1:${workspaceContextId}`)
+    ).toBe('conv_next_workspace');
   });
 
   it('starts the next workspace conversation on a new branch', async () => {
@@ -1292,7 +1388,14 @@ describe('WorkspaceWorkbench', () => {
       status: 'committed',
       lastCommitHash: 'sha256:workspace-commit',
     };
-    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const workspaceContextId = buildWorkspaceContextId(
+      'workspace_ready',
+      'feature/next-round',
+      'sha256:workspace-commit'
+    );
+    const workspaceUrl =
+      `http://localhost:8000/api/v1/projects/proj_1/workspaces/` +
+      encodeURIComponent(workspaceContextId);
     const branchesUrl = 'http://localhost:8000/api/v1/branches';
     const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -1380,7 +1483,14 @@ describe('WorkspaceWorkbench', () => {
       status: 'committed',
       lastCommitHash: 'sha256:workspace-commit',
     };
-    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const workspaceContextId = buildWorkspaceContextId(
+      'workspace_ready',
+      'feature/prd-audience',
+      'sha256:workspace-commit'
+    );
+    const workspaceUrl =
+      `http://localhost:8000/api/v1/projects/proj_1/workspaces/` +
+      encodeURIComponent(workspaceContextId);
     const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);

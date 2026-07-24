@@ -1,3 +1,4 @@
+import type { WorkspaceSourceView } from '@/domain/workspaces/navigation';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { SourcesTab } from './SourcesTab';
@@ -111,6 +112,8 @@ export function WorkspaceTabs({
   sendingToYOps,
   sourceConversationId,
   sourceParentCommitHash,
+  restoreStoredConversation,
+  sourceView,
   yopsDraftSent,
 }: {
   activeTab: WorkspaceTabId;
@@ -135,6 +138,8 @@ export function WorkspaceTabs({
   sendingToYOps?: boolean;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
+  restoreStoredConversation?: boolean;
+  sourceView?: WorkspaceSourceView;
   yopsDraftSent?: boolean;
 }) {
   return (
@@ -156,6 +161,8 @@ export function WorkspaceTabs({
         sendingToYOps,
         sourceConversationId,
         sourceParentCommitHash,
+        restoreStoredConversation,
+        sourceView,
         yopsDraftSent,
       })}
     </div>
@@ -183,6 +190,8 @@ interface RenderWorkspaceTabOptions {
   sendingToYOps?: boolean;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
+  restoreStoredConversation?: boolean;
+  sourceView?: WorkspaceSourceView;
   yopsDraftSent?: boolean;
 }
 
@@ -201,6 +210,8 @@ function renderWorkspaceTab(
           flowError={options.flowError}
           conversationId={options.sourceConversationId}
           parentCommitHash={options.sourceParentCommitHash}
+          restoreStoredConversation={options.restoreStoredConversation}
+          sourceView={options.sourceView}
           targetBranch={candidate.targetBranch}
           onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
           onExtractCandidate={options.onExtractCandidate}

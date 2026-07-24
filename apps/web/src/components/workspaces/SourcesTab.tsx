@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { WorkspaceSourceView } from '@/domain/workspaces/navigation';
 import {
   formatSourceCount,
   getPrimarySchemaBinding,
@@ -84,6 +85,8 @@ export function SourcesTab({
   onExtractCandidate,
   onMaterialUploaded,
   parentCommitHash,
+  restoreStoredConversation = true,
+  sourceView,
   targetBranch,
 }: {
   candidate: WorkspaceCandidate;
@@ -95,6 +98,8 @@ export function SourcesTab({
   onExtractCandidate?: () => Promise<void> | void;
   onMaterialUploaded?: () => Promise<void> | void;
   parentCommitHash?: string;
+  restoreStoredConversation?: boolean;
+  sourceView?: WorkspaceSourceView;
   targetBranch?: string;
 }) {
   const sources = candidate.sourceBundle;
@@ -103,6 +108,9 @@ export function SourcesTab({
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
+  const [activeSourceView, setActiveSourceView] = useState<WorkspaceSourceView>(
+    () => sourceView ?? (parentCommitHash ? 'chat' : 'materials')
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { archiveMaterial, archiving: materialArchiving } = useMaterialArchive();
   const { upload: uploadMaterial, uploading: materialUploading } = useMaterialUpload();
@@ -120,6 +128,10 @@ export function SourcesTab({
     if (sources.some((source) => source.id === selectedSourceId)) return;
     setSelectedSourceId(sources[0]?.id ?? null);
   }, [selectedSourceId, sources]);
+
+  useEffect(() => {
+    setActiveSourceView(sourceView ?? (parentCommitHash ? 'chat' : 'materials'));
+  }, [candidate.id, parentCommitHash, sourceView]);
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
@@ -309,7 +321,8 @@ export function SourcesTab({
 
       <Tabs
         className="min-h-[680px] overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
-        defaultValue={parentCommitHash ? 'chat' : 'materials'}
+        onValueChange={(value) => setActiveSourceView(value as WorkspaceSourceView)}
+        value={activeSourceView}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2">
           <TabsList className="h-auto justify-start rounded-none bg-transparent p-0">
@@ -378,6 +391,7 @@ export function SourcesTab({
               onChatSourceEvidenceChange={onChatSourceEvidenceChange}
               parentCommitHash={parentCommitHash}
               pins={pins}
+              restoreStoredConversation={restoreStoredConversation}
               removePin={removePin}
               selectedSource={selectedSource}
               targetBranch={targetBranch}
@@ -785,6 +799,7 @@ function SourceChatPanel({
   parentCommitHash,
   pins,
   removePin,
+  restoreStoredConversation,
   selectedSource,
   targetBranch,
 }: {
@@ -795,13 +810,17 @@ function SourceChatPanel({
   parentCommitHash?: string;
   pins: Pin[];
   removePin: (pinId: string) => Promise<void>;
+  restoreStoredConversation: boolean;
   selectedSource: SourceBundleItem | null;
   targetBranch?: string;
 }) {
   const [sourceConversationId, setSourceConversationId] = useState<string | undefined>(() =>
     parentCommitHash
       ? conversationId
-      : (conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id))
+      : (conversationId ??
+        (restoreStoredConversation
+          ? readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+          : undefined))
   );
   const [turnSourceError, setTurnSourceError] = useState<string | null>(null);
   const [pinningTurnId, setPinningTurnId] = useState<string | null>(null);
@@ -825,9 +844,18 @@ function SourceChatPanel({
     }
 
     setSourceConversationId(
-      conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+      conversationId ??
+        (restoreStoredConversation
+          ? readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+          : undefined)
     );
-  }, [candidate.id, candidate.projectId, conversationId, parentCommitHash]);
+  }, [
+    candidate.id,
+    candidate.projectId,
+    conversationId,
+    parentCommitHash,
+    restoreStoredConversation,
+  ]);
 
   const handleConversationCreated = useCallback(
     (conversationId: string) => {

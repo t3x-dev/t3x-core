@@ -37,6 +37,10 @@ import {
   getYSchemaValidationPrimaryLabel,
   type YSchemaValidationSummary,
 } from '@/domain/project/yschemaValidation';
+import {
+  buildWorkspaceHandoffHref,
+  findUniqueCommitConversationId,
+} from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
@@ -66,6 +70,7 @@ interface ProjectStateTabProps {
 
 interface StateSnapshot {
   auxiliaryError: string | null;
+  branch: string;
   commits: ApiCommit[];
   headCommit: ApiCommit | null;
   loading: boolean;
@@ -132,15 +137,16 @@ export function ProjectStateTab({
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
-  const [snapshot, setSnapshot] = useState<StateSnapshot>({
-    auxiliaryError: null,
-    commits: [],
-    headCommit: null,
-    loading: true,
-    operations: [],
-    parentCommit: null,
-    primaryError: null,
-  });
+  const [snapshot, setSnapshot] = useState<StateSnapshot>(() =>
+    createStateSnapshot(branchFocus, true)
+  );
+  const activeSnapshot =
+    snapshot.branch === branchFocus ? snapshot : createStateSnapshot(branchFocus, true);
+  const canonicalBranchHeadResolved =
+    !branchesLoading && Object.hasOwn(branchHeads, branchFocus || 'main');
+  const canonicalBranchHeadHash = canonicalBranchHeadResolved
+    ? branchHeads[branchFocus || 'main']
+    : undefined;
 
   useEffect(() => {
     setActiveView(routeView);
@@ -166,16 +172,18 @@ export function ProjectStateTab({
         'main',
         branchFocus,
         ...branches,
-        ...snapshot.commits.map((commit) => commit.branch),
+        ...activeSnapshot.commits.map((commit) => commit.branch),
       ]),
-    [branchFocus, branches, snapshot.commits]
+    [activeSnapshot.commits, branchFocus, branches]
   );
 
   const updateBranchFocus = useCallback(
     (focus: BranchFocus) => {
+      setSnapshot(createStateSnapshot(focus, true));
       const params = new URLSearchParams(routeQueryRef.current);
       if (focus === 'main') params.delete('branch');
       else params.set('branch', focus);
+      params.delete('commit');
       const query = params.toString();
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
@@ -185,17 +193,9 @@ export function ProjectStateTab({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setSnapshot({
-        auxiliaryError: null,
-        commits: [],
-        headCommit: null,
-        loading: true,
-        operations: [],
-        parentCommit: null,
-        primaryError: null,
-      });
+      const requestedBranch = branchFocus || 'main';
+      setSnapshot(createStateSnapshot(requestedBranch, true));
       try {
-        const requestedBranch = branchFocus || 'main';
         const branchHeadHash = branchHeads[requestedBranch];
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
@@ -244,6 +244,7 @@ export function ProjectStateTab({
         if (!cancelled) {
           setSnapshot({
             auxiliaryError: auxiliaryErrors.join(' ') || null,
+            branch: requestedBranch,
             commits,
             headCommit,
             loading: false,
@@ -256,6 +257,7 @@ export function ProjectStateTab({
         if (!cancelled) {
           setSnapshot({
             auxiliaryError: null,
+            branch: requestedBranch,
             commits: [],
             headCommit: null,
             loading: false,
@@ -281,17 +283,28 @@ export function ProjectStateTab({
     snapshotRefreshVersion,
   ]);
 
-  const headCommit = snapshot.headCommit;
+  const headCommit = activeSnapshot.headCommit;
+  const workspaceHeadCommit =
+    canonicalBranchHeadHash && headCommit?.hash === canonicalBranchHeadHash ? headCommit : null;
   const committedWorkspace = useMemo(
-    () => findCommittedWorkspaceForCommit(projectWorkspaces.workspaces, headCommit),
+    () => findUniqueCommittedWorkspaceForCommit(projectWorkspaces.workspaces, headCommit),
     [headCommit, projectWorkspaces.workspaces]
+  );
+  const navigationWorkspace = useMemo(
+    () =>
+      findUniqueWorkspaceForNavigation(
+        projectWorkspaces.workspaces,
+        workspaceHeadCommit,
+        branchFocus || 'main'
+      ),
+    [branchFocus, projectWorkspaces.workspaces, workspaceHeadCommit]
   );
   const workspaceOperations = useMemo(
     () => workspaceDraftOperationsToStateOperations(committedWorkspace?.yopsDraft.operations ?? []),
     [committedWorkspace]
   );
   const effectiveOperations =
-    snapshot.operations.length > 0 ? snapshot.operations : workspaceOperations;
+    activeSnapshot.operations.length > 0 ? activeSnapshot.operations : workspaceOperations;
   const workspaceGaps = useMemo(
     () => workspaceValidationGaps(committedWorkspace),
     [committedWorkspace]
@@ -329,19 +342,19 @@ export function ProjectStateTab({
   const validationGapCount = currentValidation?.gapCount ?? validationGaps.length;
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
-  const commitCount = snapshot.commits.length;
+  const commitCount = activeSnapshot.commits.length;
   const yopsCount = visibleYOpsCount(headCommit, effectiveOperations);
   const branchCount = branchOptions.length;
   const committedDiffChanges = useMemo(
     () =>
-      headCommit && snapshot.parentCommit
+      headCommit && activeSnapshot.parentCommit
         ? buildStructuredStateDiff({
-            baseline: snapshot.parentCommit.content,
+            baseline: activeSnapshot.parentCommit.content,
             head: headCommit.content,
             workspace: committedWorkspace,
           })
         : [],
-    [committedWorkspace, headCommit, snapshot.parentCommit]
+    [activeSnapshot.parentCommit, committedWorkspace, headCommit]
   );
   const effectiveSelectedDiffChangeId = committedDiffChanges.some(
     (change) => change.id === selectedDiffChangeId
@@ -352,8 +365,8 @@ export function ProjectStateTab({
     activeView !== 'canvas' &&
     diffOpen &&
     committedDiffChanges.length > 0 &&
-    Boolean(snapshot.parentCommit);
-  const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
+    Boolean(activeSnapshot.parentCommit);
+  const stateWarning = joinWarnings(activeSnapshot.auxiliaryError, projectWorkspaces.error);
   const currentReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = withReturnTo(
     `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus || 'main')}`,
@@ -365,7 +378,25 @@ export function ProjectStateTab({
         currentReturnTo
       )
     : null;
-  const workspaceHref = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const workspaceConversationId = workspaceHeadCommit
+    ? findUniqueCommitConversationId(workspaceHeadCommit.sources)
+    : null;
+  const workspaceHref = workspaceHeadCommit
+    ? buildWorkspaceHandoffHref(workspaceBasePath, {
+        branch: branchFocus || 'main',
+        commitHash: workspaceHeadCommit.hash,
+        workspaceId: navigationWorkspace?.id,
+        conversationId: workspaceConversationId,
+        sourceView: 'chat',
+      })
+    : workspaceBasePath;
+  const workspaceReady =
+    !activeSnapshot.loading &&
+    projectWorkspaces.initialized &&
+    !projectWorkspaces.loading &&
+    !projectWorkspaces.error &&
+    Boolean(workspaceHeadCommit);
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
@@ -391,6 +422,7 @@ export function ProjectStateTab({
             validationReady={validationReady}
             validationRunning={validationRunning}
             workspaceHref={workspaceHref}
+            workspaceReady={workspaceReady}
           />
         </div>
       ) : null}
@@ -409,7 +441,7 @@ export function ProjectStateTab({
             branchOptions={branchOptions}
             headCommitHash={headCommit?.hash ?? null}
             historyHref={historyHref}
-            loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
+            loading={branchesLoading || projectWorkspaces.loading || activeSnapshot.loading}
             onBranchChange={updateBranchFocus}
             onCreateBranch={createBranch}
             onRefresh={() => {
@@ -443,9 +475,9 @@ export function ProjectStateTab({
                 <StateViewTabs activeView={activeView} onViewChange={updateActiveView} />
               ) : null}
 
-              {showingInlineDiff && headCommit && snapshot.parentCommit ? (
+              {showingInlineDiff && headCommit && activeSnapshot.parentCommit ? (
                 <T3XDiff
-                  baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
+                  baselineLabel={`Parent ${shortHash(activeSnapshot.parentCommit.hash)}`}
                   changes={committedDiffChanges}
                   headerSubtitle="Commit · Parent → HEAD"
                   onSelectChange={setSelectedDiffChangeId}
@@ -454,22 +486,31 @@ export function ProjectStateTab({
                   selectedChangeId={effectiveSelectedDiffChangeId}
                 />
               ) : null}
-              {!showingInlineDiff && snapshot.primaryError ? (
-                <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
+              {!showingInlineDiff && activeSnapshot.primaryError ? (
+                <StateEmpty
+                  message={activeSnapshot.primaryError}
+                  title="No committed state loaded"
+                />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && !headCommit ? (
+              {!showingInlineDiff &&
+              !activeSnapshot.primaryError &&
+              !activeSnapshot.loading &&
+              !headCommit ? (
                 <StateEmpty
                   message="Create or select a committed branch to inspect state as Structure, Render, or Code."
                   title="No commit on this branch"
                 />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && snapshot.loading ? (
+              {!showingInlineDiff && !activeSnapshot.primaryError && activeSnapshot.loading ? (
                 <StateEmpty
                   message="Loading commit, YOps, and validation context."
                   title="Loading state"
                 />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && headCommit ? (
+              {!showingInlineDiff &&
+              !activeSnapshot.primaryError &&
+              !activeSnapshot.loading &&
+              headCommit ? (
                 <>
                   {activeView === 'structure' ? (
                     <StateStructureView
@@ -495,10 +536,14 @@ export function ProjectStateTab({
             <StateCanvasView
               branch={branchFocus || 'main'}
               branchHeadHash={headCommit?.hash ?? null}
-              focusedCommitHash={focusedCommitHash}
+              focusedCommitHash={selectFocusedCommitHash(
+                focusedCommitHash,
+                activeSnapshot.commits,
+                headCommit
+              )}
               projectId={projectId}
               projectName={projectName}
-              snapshotLoading={snapshot.loading}
+              snapshotLoading={activeSnapshot.loading}
             />
           )}
         </main>
@@ -534,6 +579,7 @@ function StateOverviewHeader({
   validationReady,
   validationRunning,
   workspaceHref,
+  workspaceReady,
 }: {
   branch: string;
   headCommit: ApiCommit | null;
@@ -545,6 +591,7 @@ function StateOverviewHeader({
   validationReady: boolean;
   validationRunning: boolean;
   workspaceHref: string;
+  workspaceReady: boolean;
 }) {
   return (
     <section
@@ -559,9 +606,21 @@ function StateOverviewHeader({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" variant="canvas-outline">
-            <Link href={workspaceHref}>Open workspace</Link>
-          </Button>
+          {workspaceReady ? (
+            <Button asChild size="sm" variant="canvas-outline">
+              <Link href={workspaceHref}>Open workspace</Link>
+            </Button>
+          ) : (
+            <Button
+              disabled
+              size="sm"
+              title="Wait for the selected branch HEAD and workspace context to finish loading."
+              type="button"
+              variant="canvas-outline"
+            >
+              Open workspace
+            </Button>
+          )}
         </div>
       </div>
       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
@@ -1215,16 +1274,65 @@ function mergeBranchNames(names: string[]): string[] {
   });
 }
 
-function findCommittedWorkspaceForCommit(
+function findUniqueCommittedWorkspaceForCommit(
   workspaces: WorkspaceCandidate[],
   commit: ApiCommit | null
 ): WorkspaceCandidate | null {
   if (!commit) return null;
-  return (
-    workspaces.find(
-      (workspace) => workspace.status === 'committed' && workspace.lastCommitHash === commit.hash
-    ) ?? null
+  const matches = workspaces.filter(
+    (workspace) => workspace.status === 'committed' && workspace.lastCommitHash === commit.hash
   );
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function findUniqueWorkspaceForNavigation(
+  workspaces: WorkspaceCandidate[],
+  commit: ApiCommit | null,
+  branch: string
+): WorkspaceCandidate | null {
+  if (!commit) return null;
+  const exactMatches = workspaces.filter(
+    (workspace) =>
+      workspace.targetBranch === branch &&
+      (workspace.lastCommitHash === commit.hash || workspace.baseCommitHash === commit.hash)
+  );
+  if (exactMatches.length === 1) return exactMatches[0]!;
+  if (exactMatches.length > 1) return null;
+
+  const workspaceTitle = commit.message?.match(/^Workspace commit:\s*(.+)$/)?.[1]?.trim();
+  if (!workspaceTitle) return null;
+
+  const titleMatches = workspaces.filter((workspace) => workspace.title === workspaceTitle);
+  if (titleMatches.length === 1) return titleMatches[0]!;
+
+  const logicalWorkspaceMatches = titleMatches.filter(
+    (workspace) => !workspace.id.includes('::context::')
+  );
+  return logicalWorkspaceMatches.length === 1 ? logicalWorkspaceMatches[0]! : null;
+}
+
+function createStateSnapshot(branch: string, loading: boolean): StateSnapshot {
+  return {
+    auxiliaryError: null,
+    branch,
+    commits: [],
+    headCommit: null,
+    loading,
+    operations: [],
+    parentCommit: null,
+    primaryError: null,
+  };
+}
+
+function selectFocusedCommitHash(
+  requestedCommitHash: string | undefined,
+  commits: ApiCommit[],
+  headCommit: ApiCommit | null
+): string | undefined {
+  if (requestedCommitHash && commits.some((commit) => commit.hash === requestedCommitHash)) {
+    return requestedCommitHash;
+  }
+  return headCommit?.hash;
 }
 
 function workspaceValidationGaps(workspace: WorkspaceCandidate | null): StateValidationGapLike[] {

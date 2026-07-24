@@ -11,6 +11,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
+  branchesLoading: false,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
   loadCommit: vi.fn(),
@@ -61,7 +62,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: hookMocks.branchHeads,
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
-    loading: false,
+    loading: hookMocks.branchesLoading,
     refresh: hookMocks.refreshBranches,
   }),
 }));
@@ -73,6 +74,7 @@ vi.mock('@/hooks/commits/useCommitByHash', () => ({
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
     error: null,
+    initialized: true,
     loading: false,
     refresh: hookMocks.refreshWorkspaces,
     workspaces: hookMocks.projectWorkspaces,
@@ -201,6 +203,7 @@ const VALIDATION: YSchemaValidationSummary = {
 
 function setupHookMocks() {
   hookMocks.branchHeads = {};
+  hookMocks.branchesLoading = false;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue(undefined);
   hookMocks.loadCommit.mockResolvedValue(PARENT_COMMIT);
@@ -239,6 +242,36 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
   );
 }
 
+function committedWorkspaceForHead(
+  overrides: Partial<WorkspaceCandidate> = {}
+): WorkspaceCandidate {
+  return {
+    baseCommitHash: PRD_COMMIT.parents[0] ?? null,
+    id: 'workspace_prd_handoff',
+    lastCommitHash: PRD_COMMIT.hash,
+    outputTargets: [],
+    projectId: 'proj_test',
+    schemaBindings: [],
+    schemaCandidate: { fields: [], summary: '' },
+    schemaReview: { gaps: [], summary: '', verdict: 'ready' },
+    sourceBundle: [
+      {
+        conversationId: 'conv_d4d239f3',
+        id: 'src_chat',
+        title: 'Audience chat',
+        type: 'chat',
+      },
+    ],
+    status: 'committed',
+    summary: 'Reviewed PRD workspace',
+    targetBranch: 'main',
+    title: 'PRD audience handoff',
+    updatedAt: '2026-07-09T08:01:00.000Z',
+    yopsDraft: { id: 'draft:workspace_prd_handoff', operations: [] },
+    ...overrides,
+  };
+}
+
 describe('ProjectStateTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -261,6 +294,10 @@ describe('ProjectStateTab', () => {
   });
 
   it('loads the branch HEAD and renders the structured state tree by default', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
@@ -281,7 +318,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces'
+      `/t3x-dev/test-project/workspaces?branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}&conversation=conv_d4d239f3&sourceView=chat`
     );
     expect(screen.getByRole('link', { name: 'Open commit' })).toHaveAttribute(
       'href',
@@ -412,6 +449,10 @@ describe('ProjectStateTab', () => {
       'data-focused-branch',
       'main'
     );
+    expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
+      'data-focused-commit',
+      PRD_COMMIT.hash
+    );
     expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Snapshot/ }));
@@ -444,6 +485,41 @@ describe('ProjectStateTab', () => {
     const canvas = await screen.findByTestId('state-canvas-workspace');
     expect(canvas).toHaveAttribute('data-focused-branch', 'main');
     expect(canvas).toHaveAttribute('data-focused-commit', PRD_COMMIT.hash);
+  });
+
+  it('hands the exact branch, HEAD, workspace, and validated conversation to Workspaces', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    hookMocks.projectWorkspaces = [committedWorkspaceForHead()];
+
+    renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
+      'href',
+      `/t3x-dev/test-project/workspaces?branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}&workspace=workspace_prd_handoff&conversation=conv_d4d239f3&sourceView=chat`
+    );
+  });
+
+  it('does not guess a workspace when multiple committed workspaces share the HEAD', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    hookMocks.projectWorkspaces = [
+      committedWorkspaceForHead(),
+      committedWorkspaceForHead({ id: 'workspace_prd_handoff_duplicate' }),
+    ];
+
+    renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
+      'href',
+      `/t3x-dev/test-project/workspaces?branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}&conversation=conv_d4d239f3&sourceView=chat`
+    );
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
@@ -684,6 +760,52 @@ describe('ProjectStateTab', () => {
     );
   });
 
+  it('drops the previous commit from the route when switching branches', async () => {
+    navigationMocks.search = `view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+    renderStateTab();
+
+    await screen.findByTestId('state-canvas-workspace');
+    fireEvent.change(screen.getByLabelText('Branch focus'), {
+      target: { value: 'feature/prd-audience' },
+    });
+
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?view=canvas&branch=feature%2Fprd-audience',
+      { scroll: false }
+    );
+  });
+
+  it('waits for the canonical branch pointer before enabling the workspace handoff', async () => {
+    const canonicalHead = {
+      ...PRD_COMMIT,
+      hash: 'sha256:canonical-main-head',
+      message: 'Canonical main HEAD',
+      parents: [],
+    };
+    hookMocks.branchesLoading = true;
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === canonicalHead.hash ? canonicalHead : PARENT_COMMIT
+    );
+    const view = renderStateTab();
+
+    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open workspace' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeDisabled();
+
+    hookMocks.branchHeads = { main: canonicalHead.hash };
+    hookMocks.branchesLoading = false;
+    view.rerender(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+    );
+
+    expect(await screen.findByText('Canonical main HEAD')).toBeInTheDocument();
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(canonicalHead.hash);
+    expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
+      'href',
+      `/t3x-dev/test-project/workspaces?branch=main&commit=${encodeURIComponent(canonicalHead.hash)}&conversation=conv_d4d239f3&sourceView=chat`
+    );
+  });
+
   it('clears old commit actions while a newly selected branch is loading', async () => {
     const view = renderStateTab();
 
@@ -706,6 +828,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('Loading state')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open commit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeDisabled();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
