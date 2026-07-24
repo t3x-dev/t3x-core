@@ -192,6 +192,7 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Create a Leaf from this version')).toBeInTheDocument();
     });
+    await flushGuidedClick();
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
     expect(screen.getByText('Create a Leaf from this version')).toBeInTheDocument();
