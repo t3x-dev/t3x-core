@@ -1,3 +1,4 @@
+import { ConflictError } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,7 +70,11 @@ const storageMock = vi.hoisted(() => {
       )
     ),
     upsertWorkspaceDraft: vi.fn(
-      (_db, input: { workspace_id: string; workspace_state: Record<string, unknown> }) => {
+      (
+        _db,
+        input: { workspace_id: string; workspace_state: Record<string, unknown> },
+        _ifRevision?: number
+      ) => {
         workspaceDraft = input.workspace_state;
         return Promise.resolve({
           id: 'draft_workspace',
@@ -341,6 +346,7 @@ describe('Workspace routes', () => {
 
     expect(extractRes.status).toBe(200);
     const extractBody: ApiResponse = await extractRes.json();
+    expect(extractBody.data.workspace.revision).toBe(1);
     expect(storageMock.upsertWorkspaceDraft).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -349,7 +355,8 @@ describe('Workspace routes', () => {
         title: 'PRD audience handoff',
         parent_commit_hash: 'sha256:base',
         target_branch: 'feature/prd-audience',
-      })
+      }),
+      undefined
     );
 
     const yopsRes = await app.request(
@@ -357,7 +364,10 @@ describe('Workspace routes', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace: { id: 'workspace_prd_handoff' } }),
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
       }
     );
 
@@ -366,6 +376,11 @@ describe('Workspace routes', () => {
     expect(yopsBody.data.workspace.schemaCandidate.fields.length).toBeGreaterThan(0);
     expect(yopsBody.data.workspace.yopsDraft.operations.length).toBeGreaterThan(0);
     expect(yopsBody.data.workspace.backendCandidateId).toBe(extractBody.data.candidate_id);
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      1
+    );
   });
 
   it('lists and reads persisted workspace state', async () => {
@@ -391,11 +406,13 @@ describe('Workspace routes', () => {
     expect(listRes.status).toBe(200);
     const listBody: ApiResponse = await listRes.json();
     expect(listBody.data.workspaces[0].id).toBe('workspace_prd_handoff');
+    expect(listBody.data.workspaces[0].revision).toBe(1);
 
     const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
     expect(getRes.status).toBe(200);
     const getBody: ApiResponse = await getRes.json();
     expect(getBody.data.workspace.id).toBe('workspace_prd_handoff');
+    expect(getBody.data.workspace.revision).toBe(1);
   });
 
   it('saves reviewed workspace draft state for later recovery', async () => {
@@ -406,6 +423,7 @@ describe('Workspace routes', () => {
         workspace: {
           id: 'client_side_id_is_ignored',
           projectId: 'client_project_is_ignored',
+          revision: 999,
           title: 'Reviewed PRD workspace',
           status: 'schema_review',
           updatedAt: '2026-01-01T00:00:00.000Z',
@@ -440,6 +458,7 @@ describe('Workspace routes', () => {
         projectId: 'proj_sources',
         title: 'Reviewed PRD workspace',
         status: 'schema_review',
+        revision: 1,
       })
     );
     expect(body.data.workspace.updatedAt).toEqual(expect.any(String));
@@ -453,8 +472,12 @@ describe('Workspace routes', () => {
         title: 'Reviewed PRD workspace',
         parent_commit_hash: 'sha256:review-base',
         target_branch: 'feature/reviewed-prd',
-      })
+      }),
+      undefined
     );
+    expect(
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state
+    ).not.toHaveProperty('revision');
 
     const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
     expect(getRes.status).toBe(200);
@@ -462,20 +485,30 @@ describe('Workspace routes', () => {
     expect(getBody.data.workspace.schemaCandidate.summary).toBe('User reviewed candidate.');
   });
 
-  it('maps workspace uniqueness conflicts to 409', async () => {
+  it('maps workspace write conflicts to 409', async () => {
     const conflicts = [
-      Object.assign(new Error('duplicate open workspace'), {
-        code: '23505',
-        constraint: 'idx_drafts_open_workspace_branch',
-      }),
-      Object.assign(new Error('duplicate workspace id'), {
-        code: '23505',
-        constraint_name: 'idx_drafts_workspace',
-      }),
+      {
+        error: Object.assign(new Error('duplicate open workspace'), {
+          code: '23505',
+          constraint: 'idx_drafts_open_workspace_branch',
+        }),
+        code: 'CONFLICT',
+      },
+      {
+        error: new ConflictError('draft_workspace', 1),
+        code: 'CONFLICT',
+      },
+      {
+        error: Object.assign(new Error('duplicate workspace id'), {
+          code: '23505',
+          constraint_name: 'idx_drafts_workspace',
+        }),
+        code: 'CONFLICT',
+      },
     ];
 
     for (const conflict of conflicts) {
-      storageMock.upsertWorkspaceDraft.mockRejectedValueOnce(conflict);
+      storageMock.upsertWorkspaceDraft.mockRejectedValueOnce(conflict.error);
 
       const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_conflict', {
         method: 'PATCH',
@@ -492,7 +525,7 @@ describe('Workspace routes', () => {
 
       expect(res.status).toBe(409);
       const body: ApiResponse = await res.json();
-      expect(body.error.code).toBe('CONFLICT');
+      expect(body.error.code).toBe(conflict.code);
     }
   });
 
@@ -538,6 +571,7 @@ describe('Workspace routes', () => {
           sourceBundle: [],
           yopsDraft: { id: 'draft:stable-extracted', operations: [] },
         },
+        if_revision: extractBody.data.workspace.revision,
       }),
     });
 
@@ -731,19 +765,29 @@ describe('Workspace routes', () => {
       }),
     });
 
-    const res = await app.request(
-      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: {
-            trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
-            relations: [],
-          },
-        }),
-      }
+    const commitPath = '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit';
+    const content = {
+      trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+      relations: [],
+    };
+    const stale = await app.request(commitPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, if_revision: 999 }),
+    });
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toEqual(
+      expect.objectContaining({ error: expect.objectContaining({ code: 'CONFLICT' }) })
     );
+    expect(storageMock.insertYOpsLogEntry).not.toHaveBeenCalled();
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
+    expect(storageMock.updateBranchHead).not.toHaveBeenCalled();
+
+    const res = await app.request(commitPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, if_revision: 1 }),
+    });
 
     expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
@@ -799,7 +843,8 @@ describe('Workspace routes', () => {
           status: 'committed',
           lastCommitHash: 'sha256:workspace-commit',
         }),
-      })
+      }),
+      1
     );
   });
 
@@ -846,7 +891,7 @@ describe('Workspace routes', () => {
     const blocked = await app.request(commitPath, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, if_revision: 1 }),
     });
 
     expect(blocked.status).toBe(409);
@@ -868,7 +913,7 @@ describe('Workspace routes', () => {
     const committed = await app.request(commitPath, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, validationOverride }),
+      body: JSON.stringify({ content, validationOverride, if_revision: 1 }),
     });
 
     expect(committed.status).toBe(200);
@@ -927,6 +972,7 @@ describe('Workspace routes', () => {
             trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
             relations: [],
           },
+          if_revision: 1,
         }),
       }
     );
@@ -996,6 +1042,7 @@ describe('Workspace routes', () => {
             trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
             relations: [],
           },
+          if_revision: 1,
         }),
       }
     );
@@ -1057,7 +1104,7 @@ describe('Workspace routes', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: committedContent }),
+        body: JSON.stringify({ content: committedContent, if_revision: 1 }),
       }
     );
 

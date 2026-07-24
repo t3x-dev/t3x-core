@@ -29,9 +29,13 @@ import { type DraftRecord, drafts } from '../schema-trees';
 export class ConflictError extends Error {
   constructor(
     public readonly draftId: string,
-    public readonly expectedRevision: number
+    public readonly expectedRevision?: number
   ) {
-    super(`Conflict: draft ${draftId} has been modified (expected revision ${expectedRevision})`);
+    super(
+      expectedRevision === undefined
+        ? `Conflict: draft ${draftId} requires a revision before it can be updated`
+        : `Conflict: draft ${draftId} has been modified (expected revision ${expectedRevision})`
+    );
     this.name = 'ConflictError';
   }
 }
@@ -395,10 +399,18 @@ export async function listWorkspaceDrafts(db: AnyDB, projectId: string): Promise
 /**
  * Create or update the Draft that backs a Workspace staged state.
  */
-export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput): Promise<Draft> {
+export async function upsertWorkspaceDraft(
+  db: AnyDB,
+  input: WorkspaceDraftInput,
+  ifRevision?: number
+): Promise<Draft> {
   const targetBranch = input.target_branch?.trim() || 'main';
   const existing = await findWorkspaceDraft(db, input.project_id, input.workspace_id);
+
   if (!existing) {
+    if (ifRevision !== undefined) {
+      throw new ConflictError(input.workspace_id, ifRevision);
+    }
     return insertDraft(db, {
       project_id: input.project_id,
       title: input.title,
@@ -408,6 +420,10 @@ export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput
       workspace_id: input.workspace_id,
       workspace_state: input.workspace_state,
     });
+  }
+
+  if (ifRevision === undefined) {
+    throw new ConflictError(existing.id);
   }
 
   return updateDraft(
@@ -420,7 +436,7 @@ export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput
       status: 'editing',
       workspace_state: input.workspace_state,
     },
-    existing.revision
+    ifRevision
   );
 }
 

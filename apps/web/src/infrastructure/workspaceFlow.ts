@@ -1,4 +1,5 @@
 import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
+import { workspaceWritePayload } from '@/infrastructure/workspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
 export interface WorkspaceFlowResponse {
@@ -17,7 +18,7 @@ export async function extractWorkspaceCandidate(
     {
       body: JSON.stringify({
         sources: candidate.sourceBundle.map(sourceToRequest),
-        workspace: candidate,
+        ...workspaceWritePayload(candidate),
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
@@ -35,7 +36,7 @@ export async function sendWorkspaceYOpsDraft(
       candidate.id
     )}/yops-draft`,
     {
-      body: JSON.stringify({ workspace: candidate }),
+      body: JSON.stringify(workspaceWritePayload(candidate)),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }

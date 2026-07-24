@@ -42,6 +42,7 @@ export interface WorkspaceSchemaBinding {
 
 export interface WorkspaceCandidate {
   id: string;
+  revision?: number;
   projectId: string;
   title: string;
   summary: string;

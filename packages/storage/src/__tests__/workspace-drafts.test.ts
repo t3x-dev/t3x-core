@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { findWorkspaceDraft, listWorkspaceDrafts, upsertWorkspaceDraft } from '../queries/drafts';
+import {
+  ConflictError,
+  findWorkspaceDraft,
+  listWorkspaceDrafts,
+  upsertWorkspaceDraft,
+} from '../queries/drafts';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
@@ -56,19 +61,35 @@ describe('workspace drafts', () => {
     expect(first.parent_commit_hash).toBe('sha256:base');
     expect(first.target_branch).toBe('feature/prd-audience');
 
-    const second = await upsertWorkspaceDraft(db, {
-      project_id: projectId,
-      workspace_id: 'workspace_prd_handoff',
-      title: 'PRD audience handoff',
-      parent_commit_hash: 'sha256:base',
-      target_branch: 'feature/prd-audience',
-      workspace_state: workspaceState('ready_for_yops', projectId),
-    });
+    const second = await upsertWorkspaceDraft(
+      db,
+      {
+        project_id: projectId,
+        workspace_id: 'workspace_prd_handoff',
+        title: 'PRD audience handoff',
+        parent_commit_hash: 'sha256:base',
+        target_branch: 'feature/prd-audience',
+        workspace_state: workspaceState('ready_for_yops', projectId),
+      },
+      first.revision
+    );
 
     expect(second.id).toBe(first.id);
     expect(second.revision).toBe(first.revision + 1);
     expect(second.status).toBe('editing');
     expect(second.workspace_state?.status).toBe('ready_for_yops');
+
+    const conflictingUpdate = {
+      project_id: projectId,
+      workspace_id: 'workspace_prd_handoff',
+      title: 'Conflicting update',
+      target_branch: 'feature/prd-audience',
+      workspace_state: workspaceState('schema_review', projectId),
+    };
+    await expect(
+      upsertWorkspaceDraft(db, conflictingUpdate, first.revision)
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(upsertWorkspaceDraft(db, conflictingUpdate)).rejects.toBeInstanceOf(ConflictError);
 
     const found = await findWorkspaceDraft(db, projectId, 'workspace_prd_handoff');
     expect(found?.id).toBe(first.id);
@@ -87,17 +108,21 @@ describe('workspace drafts', () => {
       })
     ).rejects.toThrow();
 
-    await upsertWorkspaceDraft(db, {
-      project_id: projectId,
-      workspace_id: 'workspace_prd_handoff',
-      title: 'Committed workspace',
-      target_branch: 'feature/prd-audience',
-      workspace_state: {
-        ...workspaceState('committed', projectId),
-        id: 'workspace_prd_handoff',
-        lastCommitHash: 'sha256:committed',
+    await upsertWorkspaceDraft(
+      db,
+      {
+        project_id: projectId,
+        workspace_id: 'workspace_prd_handoff',
+        title: 'Committed workspace',
+        target_branch: 'feature/prd-audience',
+        workspace_state: {
+          ...workspaceState('committed', projectId),
+          id: 'workspace_prd_handoff',
+          lastCommitHash: 'sha256:committed',
+        },
       },
-    });
+      second.revision
+    );
 
     const openWorkspace = await upsertWorkspaceDraft(db, {
       project_id: projectId,

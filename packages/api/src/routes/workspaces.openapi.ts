@@ -11,6 +11,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Draft, Material, SemanticContent, SourcedYOp } from '@t3x-dev/core';
 import {
   type AnyDB,
+  ConflictError,
   createCommit,
   findBranchByName,
   findMaterialsByProject,
@@ -54,14 +55,17 @@ const SourceBundleItemSchema = z.object({
 const ExtractCandidateRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
   sources: z.array(SourceBundleItemSchema).default([]),
+  if_revision: z.number().int().min(1).optional(),
 });
 
 const SendYOpsRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
+  if_revision: z.number().int().min(1).optional(),
 });
 
 const SaveWorkspaceRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
+  if_revision: z.number().int().min(1).optional(),
 });
 
 const WorkspaceValidationOverrideSchema = z.object({
@@ -77,6 +81,7 @@ const CommitWorkspaceRequestSchema = z.object({
   }),
   message: z.string().optional(),
   validationOverride: WorkspaceValidationOverrideSchema.optional(),
+  if_revision: z.number().int().min(1).optional(),
 });
 
 const WorkspaceResponseSchema = z.object({
@@ -196,7 +201,7 @@ const extractCandidateRoute = createRoute({
       },
     },
     409: {
-      description: 'Workspace target branch conflict',
+      description: 'Workspace revision or target branch conflict',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -235,7 +240,7 @@ const sendYOpsDraftRoute = createRoute({
       },
     },
     409: {
-      description: 'Workspace target branch conflict',
+      description: 'Workspace revision or target branch conflict',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -268,7 +273,7 @@ const saveWorkspaceRoute = createRoute({
       },
     },
     409: {
-      description: 'Workspace target branch conflict',
+      description: 'Workspace revision or target branch conflict',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -307,7 +312,7 @@ const commitWorkspaceRoute = createRoute({
       },
     },
     409: {
-      description: 'Review confirmation is required or the branch is not at the expected head',
+      description: 'Review confirmation, workspace revision, or branch head conflict',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -326,7 +331,7 @@ export const workspaceRoutes = new OpenAPIHono({
 });
 
 workspaceRoutes.onError((error, c) => {
-  if (isWorkspaceIdConflict(error)) {
+  if (error instanceof ConflictError || isWorkspaceIdConflict(error)) {
     return errorResponse(
       c,
       'CONFLICT',
@@ -345,7 +350,7 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   const db = await getDB();
   const drafts = await listWorkspaceDrafts(db, projectId);
   const workspaces = drafts.flatMap((draft) =>
-    draft.workspace_state ? [draft.workspace_state] : []
+    draft.workspace_state ? [workspaceFromDraft(draft, draft.workspace_id ?? draft.id)] : []
   );
 
   return c.json({
@@ -371,7 +376,7 @@ workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
 
 workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { workspace } = c.req.valid('json');
+  const { workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
   const storedWorkspace = storedDraft?.workspace_state ?? {};
@@ -399,14 +404,18 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
     ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
   };
-  const draft = await upsertWorkspaceDraft(db, {
-    project_id: projectId,
-    workspace_id: workspaceId,
-    title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
-    parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
-    target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
-    workspace_state: persistedWorkspace,
-  });
+  const draft = await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: projectId,
+      workspace_id: workspaceId,
+      title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
+      parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
+      target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+      workspace_state: workspaceStateForPersistence(persistedWorkspace),
+    },
+    ifRevision
+  );
 
   return c.json({
     success: true as const,
@@ -416,7 +425,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
 
 workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { content, message, validationOverride } = c.req.valid('json');
+  const { content, message, validationOverride, if_revision: ifRevision } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -425,6 +434,10 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
 
       if (!storedDraft?.workspace_state) {
         return null;
+      }
+
+      if (storedDraft.revision !== ifRevision) {
+        throw new ConflictError(storedDraft.id, ifRevision);
       }
 
       const storedWorkspace = storedDraft.workspace_state;
@@ -508,14 +521,18 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
             }
           : {}),
       };
-      const draft = await upsertWorkspaceDraft(txOrDb, {
-        project_id: projectId,
-        workspace_id: workspaceId,
-        title: stringFromWorkspace(committedWorkspace, 'title', workspaceId),
-        parent_commit_hash: nullableStringFromWorkspace(committedWorkspace, 'baseCommitHash'),
-        target_branch: targetBranch,
-        workspace_state: committedWorkspace,
-      });
+      const draft = await upsertWorkspaceDraft(
+        txOrDb,
+        {
+          project_id: projectId,
+          workspace_id: workspaceId,
+          title: stringFromWorkspace(committedWorkspace, 'title', workspaceId),
+          parent_commit_hash: nullableStringFromWorkspace(committedWorkspace, 'baseCommitHash'),
+          target_branch: targetBranch,
+          workspace_state: workspaceStateForPersistence(committedWorkspace),
+        },
+        ifRevision
+      );
 
       return { commit, draft };
     };
@@ -538,6 +555,13 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       },
     });
   } catch (err) {
+    if (err instanceof ConflictError) {
+      return errorResponse(
+        c,
+        'CONFLICT',
+        'Workspace changed since it was loaded. Refresh and retry.'
+      );
+    }
     if (err instanceof WorkspaceBaseBranchMismatchError) {
       return errorResponse(c, 'WORKSPACE_BASE_BRANCH_MISMATCH', err.message, {
         base_branch: err.baseBranch,
@@ -700,7 +724,7 @@ function contentMatches(left: unknown, right: unknown): boolean {
 
 workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { sources, workspace } = c.req.valid('json');
+  const { sources, workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
@@ -714,14 +738,18 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
     projectId,
     backendCandidateId: candidateId,
   };
-  const draft = await upsertWorkspaceDraft(db, {
-    project_id: projectId,
-    workspace_id: workspaceId,
-    title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
-    parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
-    target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
-    workspace_state: persistedWorkspace,
-  });
+  const draft = await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: projectId,
+      workspace_id: workspaceId,
+      title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
+      parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
+      target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+      workspace_state: workspaceStateForPersistence(persistedWorkspace),
+    },
+    ifRevision
+  );
 
   return c.json({
     success: true as const,
@@ -731,7 +759,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
 
 workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { workspace } = c.req.valid('json');
+  const { workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
   const sourceWorkspace = storedDraft?.workspace_state ?? workspace;
@@ -744,14 +772,18 @@ workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
     backendCandidateId: candidateId,
     yopsDraft: buildYOpsDraft(reviewWorkspace, candidateId),
   };
-  const draft = await upsertWorkspaceDraft(db, {
-    project_id: projectId,
-    workspace_id: workspaceId,
-    title: stringFromWorkspace(nextWorkspace, 'title', workspaceId),
-    parent_commit_hash: nullableStringFromWorkspace(nextWorkspace, 'baseCommitHash'),
-    target_branch: stringFromWorkspace(nextWorkspace, 'targetBranch', 'main'),
-    workspace_state: nextWorkspace,
-  });
+  const draft = await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: projectId,
+      workspace_id: workspaceId,
+      title: stringFromWorkspace(nextWorkspace, 'title', workspaceId),
+      parent_commit_hash: nullableStringFromWorkspace(nextWorkspace, 'baseCommitHash'),
+      target_branch: stringFromWorkspace(nextWorkspace, 'targetBranch', 'main'),
+      workspace_state: workspaceStateForPersistence(nextWorkspace),
+    },
+    ifRevision
+  );
 
   return c.json({
     success: true as const,
@@ -766,7 +798,7 @@ interface WorkspaceEnvelope {
 }
 
 function envelopeFromDraft(draft: Draft, workspaceId: string): WorkspaceEnvelope {
-  const workspace = draft.workspace_state ?? { id: workspaceId, projectId: draft.project_id };
+  const workspace = workspaceFromDraft(draft, workspaceId);
   const yopsDraft = workspace.yopsDraft as { id?: unknown } | undefined;
 
   return {
@@ -774,6 +806,18 @@ function envelopeFromDraft(draft: Draft, workspaceId: string): WorkspaceEnvelope
     yops_draft_id: typeof yopsDraft?.id === 'string' ? yopsDraft.id : undefined,
     workspace,
   };
+}
+
+function workspaceFromDraft(draft: Draft, workspaceId: string): Record<string, unknown> {
+  return {
+    ...(draft.workspace_state ?? { id: workspaceId, projectId: draft.project_id }),
+    revision: draft.revision,
+  };
+}
+
+function workspaceStateForPersistence(workspace: Record<string, unknown>): Record<string, unknown> {
+  const { revision: _revision, ...persistedWorkspace } = workspace;
+  return persistedWorkspace;
 }
 
 function candidateIdFromWorkspace(workspace: Record<string, unknown>, workspaceId: string): string {
