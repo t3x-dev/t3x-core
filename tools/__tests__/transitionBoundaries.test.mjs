@@ -118,6 +118,37 @@ test('aliased crypto entropy remains forbidden', () => {
   assert.ok(errors.some((error) => error.includes('forbidden randomness')));
 });
 
+test('Transition tests may use harness modules but cannot escape or become nondeterministic', () => {
+  const legalRoot = createFixture();
+  write(
+    join(legalRoot, 'packages/transition/src/__tests__/contract.test.ts'),
+    [
+      "import { createHash } from 'node:crypto';",
+      "import { readFileSync } from 'node:fs';",
+      "export const digest = createHash('sha256').update(readFileSync('vector.json')).digest('hex');",
+      '',
+    ].join('\n')
+  );
+  assert.deepEqual(validateTransitionBoundaries({ rootDir: legalRoot }).errors, []);
+
+  const illegalRoot = createFixture();
+  write(
+    join(illegalRoot, 'packages/transition/src/__tests__/contract.test.ts'),
+    [
+      "import { engine } from '../../../yops/src/engine';",
+      'export const generatedAt = Date.now();',
+      'export const nonce = Math.random();',
+      'export { engine };',
+      '',
+    ].join('\n')
+  );
+
+  const { errors } = validateTransitionBoundaries({ rootDir: illegalRoot });
+  assert.ok(errors.some((error) => error.includes('imports outside the Transition leaf')));
+  assert.ok(errors.some((error) => error.includes('forbidden current time')));
+  assert.ok(errors.some((error) => error.includes('forbidden randomness')));
+});
+
 test('native packages cannot import Transition or its adapter layer', () => {
   const rootDir = createFixture();
   write(

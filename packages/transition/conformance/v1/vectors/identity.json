@@ -1,0 +1,194 @@
+[
+  {
+    "id": "state-domain-separated",
+    "kind": "state",
+    "schema": "t3x/state/v1",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": {
+        "mediaType": "application/yaml",
+        "version": "1"
+      },
+      "value": {
+        "device": {
+          "name": "kitchen"
+        }
+      }
+    },
+    "canonical": "{\"codec\":{\"mediaType\":\"application/yaml\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":{\"device\":{\"name\":\"kitchen\"}}}",
+    "digest": "sha256:4f213d39452dc3185e067ed5af0fe0a6005f762164ff73fcac908bf9d71401c8"
+  },
+  {
+    "id": "state-codec-version-2",
+    "kind": "state",
+    "schema": "t3x/state/v1",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": {
+        "mediaType": "application/yaml",
+        "version": "2"
+      },
+      "value": {
+        "device": {
+          "name": "kitchen"
+        }
+      }
+    },
+    "canonical": "{\"codec\":{\"mediaType\":\"application/yaml\",\"version\":\"2\"},\"schema\":\"t3x/state/v1\",\"value\":{\"device\":{\"name\":\"kitchen\"}}}",
+    "digest": "sha256:b350350fcba694797495c9fbb71d19b89830e42d3c246f39d3d5f5c6f44b2104"
+  },
+  {
+    "id": "effect-driver-version-1",
+    "kind": "effect",
+    "schema": "t3x/effect/v1",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "operations": [
+        {
+          "op": "set",
+          "path": "/device/name",
+          "value": "kitchen"
+        }
+      ],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "canonical": "{\"base\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.dev/yops\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},\"inputs\":[],\"operations\":[{\"op\":\"set\",\"path\":\"/device/name\",\"value\":\"kitchen\"}],\"result\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}",
+    "digest": "sha256:3652086d3eecef3ae4ed4a0c7bf1670bef555bcc7cdf8f0bc3c5bbfdde46885f"
+  },
+  {
+    "id": "effect-driver-version-2",
+    "kind": "effect",
+    "schema": "t3x/effect/v1",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "2",
+        "specDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "operations": [
+        {
+          "op": "set",
+          "path": "/device/name",
+          "value": "kitchen"
+        }
+      ],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "canonical": "{\"base\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.dev/yops\",\"protocolVersion\":\"2\",\"specDigest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"},\"inputs\":[],\"operations\":[{\"op\":\"set\",\"path\":\"/device/name\",\"value\":\"kitchen\"}],\"result\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}",
+    "digest": "sha256:ea7e30d520bbeacbcc02de1dfe017437f638aaf1f96bf55caa45b25b1daa17fd"
+  },
+  {
+    "id": "proposal-evidence-a",
+    "kind": "statement",
+    "schema": "t3x/statement/v1",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "inferred",
+          "value": "Rename the device",
+          "evidence": [
+            {
+              "resource": {
+                "uri": "urn:t3x:source:a",
+                "mediaType": "text/plain",
+                "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "locator": {
+                "scheme": "whole",
+                "value": ""
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "mode": "unspecified"
+        }
+      }
+    },
+    "canonical": "{\"actor\":{\"id\":\"agent:planner\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[{\"locator\":{\"scheme\":\"whole\",\"value\":\"\"},\"resource\":{\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"mediaType\":\"text/plain\",\"uri\":\"urn:t3x:source:a\"}}],\"mode\":\"inferred\",\"value\":\"Rename the device\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}",
+    "digest": "sha256:4ce2fb0cc58ec3257f7e82bce42263f93cd724210d7b0bd499d206f4e925454a"
+  },
+  {
+    "id": "proposal-evidence-b",
+    "kind": "statement",
+    "schema": "t3x/statement/v1",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "inferred",
+          "value": "Rename the device",
+          "evidence": [
+            {
+              "resource": {
+                "uri": "urn:t3x:source:b",
+                "mediaType": "text/plain",
+                "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              "locator": {
+                "scheme": "whole",
+                "value": ""
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "mode": "unspecified"
+        }
+      }
+    },
+    "canonical": "{\"actor\":{\"id\":\"agent:planner\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[{\"locator\":{\"scheme\":\"whole\",\"value\":\"\"},\"resource\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"mediaType\":\"text/plain\",\"uri\":\"urn:t3x:source:b\"}}],\"mode\":\"inferred\",\"value\":\"Rename the device\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}",
+    "digest": "sha256:0290a152df40b741a7dac6de256164a145b41de58789e42f134724fe4b7c559a"
+  }
+]
