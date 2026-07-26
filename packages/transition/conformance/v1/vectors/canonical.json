@@ -20,6 +20,41 @@
     "canonical": "333333333.3333333"
   },
   {
+    "id": "number-fixed-upper-bound",
+    "value": 1e20,
+    "canonical": "100000000000000000000"
+  },
+  {
+    "id": "number-exponent-upper-bound",
+    "value": 1e21,
+    "canonical": "1e+21"
+  },
+  {
+    "id": "number-fixed-lower-bound",
+    "value": 0.000001,
+    "canonical": "0.000001"
+  },
+  {
+    "id": "number-exponent-lower-bound",
+    "value": 1e-7,
+    "canonical": "1e-7"
+  },
+  {
+    "id": "number-min-positive-subnormal",
+    "value": 5e-324,
+    "canonical": "5e-324"
+  },
+  {
+    "id": "number-max-finite-double",
+    "value": 1.7976931348623157e308,
+    "canonical": "1.7976931348623157e+308"
+  },
+  {
+    "id": "number-two-to-the-fifty-three",
+    "value": 9007199254740992,
+    "canonical": "9007199254740992"
+  },
+  {
     "id": "unicode-utf16-key-order",
     "value": {
       "€": "Euro Sign",

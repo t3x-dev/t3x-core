@@ -47,8 +47,12 @@ describe('@t3x-dev/transition package boundary', () => {
       require: './dist/index.cjs',
     });
 
-    await expect(import('../../dist/index.js')).resolves.toBeDefined();
+    const esm = await import('../../dist/index.js');
+    expect(esm.verifyEffect).toBeTypeOf('function');
+    expect(esm.verifyCommitIntegrity).toBeTypeOf('function');
     const require = createRequire(import.meta.url);
-    expect(require('../../dist/index.cjs')).toBeDefined();
+    const cjs = require('../../dist/index.cjs') as Record<string, unknown>;
+    expect(cjs.verifyEffect).toBeTypeOf('function');
+    expect(cjs.verifyCommitIntegrity).toBeTypeOf('function');
   });
 });

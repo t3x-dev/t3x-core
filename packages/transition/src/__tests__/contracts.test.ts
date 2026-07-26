@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { canonicalizeEx } from 'json-canonicalize';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   COMMIT_V2_SCHEMA,
   CORE_PREDICATE_TYPES,
+  canonicalizeProtocolValue,
   DECISION_PREDICATE_TYPE,
+  digestProtocolObject,
   EFFECT_SCHEMA,
   type Effect,
   type EffectDefinition,
@@ -18,6 +18,7 @@ import {
   PROTOCOL_HASH_ALGORITHM,
   type ProposalStatement,
   PUBLIC_PROTOCOL_NOUNS,
+  parseProtocolObject,
   STATE_SCHEMA,
   STATEMENT_SCHEMA,
   type State,
@@ -70,17 +71,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProtocolObject = ajv.compile(protocolSchema);
 
 function canonicalize(value: unknown): string {
-  const result = canonicalizeEx(value, { undefinedInArrayToNull: false });
-  if (result === undefined) throw new Error('RFC 8785 canonicalization produced no bytes');
-  return result;
+  return canonicalizeProtocolValue(value as never);
 }
 
 function digestIdentityVector(vector: IdentityVector): string {
-  const prefix = `${PROTOCOL_DIGEST_DOMAIN}\0${vector.kind}\0${vector.schema}\0`;
-  return `${PROTOCOL_HASH_ALGORITHM}:${createHash(PROTOCOL_HASH_ALGORITHM)
-    .update(prefix, 'utf8')
-    .update(canonicalize(vector.value), 'utf8')
-    .digest('hex')}`;
+  return digestProtocolObject(parseProtocolObject(vector.value));
 }
 
 function expectUniqueIds(vectors: Array<{ id: string }>): void {
@@ -167,7 +162,7 @@ describe('Transition protocol contract', () => {
     }
   });
 
-  it('pins domain-separated object identity without exporting a kernel hasher', () => {
+  it('pins the production domain-separated object identity implementation', () => {
     expectUniqueIds(identityVectors);
     for (const vector of identityVectors) {
       expect(validateProtocolObject(vector.value), vector.id).toBe(true);
