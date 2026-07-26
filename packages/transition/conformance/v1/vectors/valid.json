@@ -1,0 +1,329 @@
+[
+  {
+    "id": "state-explicit-empty-genesis",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": {
+        "mediaType": "application/yaml",
+        "version": "1"
+      },
+      "value": {}
+    }
+  },
+  {
+    "id": "effect-ordered-operations",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "operations": [
+        {
+          "op": "set",
+          "path": "/device/name",
+          "value": "kitchen"
+        }
+      ],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  {
+    "id": "proposal-stated-and-authored",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "stated",
+          "value": "Rename the kitchen device",
+          "evidence": [
+            {
+              "resource": {
+                "uri": "urn:t3x:source:turn-1",
+                "mediaType": "text/plain",
+                "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+              },
+              "locator": {
+                "scheme": "text-offset",
+                "value": {
+                  "start": 0,
+                  "end": 25
+                }
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "mode": "authored",
+          "value": "Keep device names consistent",
+          "evidence": []
+        }
+      }
+    }
+  },
+  {
+    "id": "proposal-human-direct-edit-unspecified-claims",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "unspecified" },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "proposal-inferred-explicit-empty-evidence",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "inferred",
+          "value": "Rename the kitchen device",
+          "evidence": []
+        },
+        "rationale": {
+          "mode": "unspecified"
+        }
+      }
+    }
+  },
+  {
+    "id": "proposal-agent-authored",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "authored",
+          "value": "Rename the kitchen device",
+          "evidence": []
+        },
+        "rationale": {
+          "mode": "authored",
+          "value": "Use the project naming convention",
+          "evidence": []
+        }
+      }
+    }
+  },
+  {
+    "id": "external-validator-statement",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "actor": {
+        "kind": "service",
+        "id": "validator:yschema"
+      },
+      "predicateType": "t3x.dev/yschema-validation/v1",
+      "predicate": {
+        "valid": true,
+        "issues": []
+      }
+    }
+  },
+  {
+    "id": "external-human-confirmation-statement",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.dev/human-confirmation/v1",
+      "predicate": {
+        "confirms": ["intent", "rationale"]
+      }
+    }
+  },
+  {
+    "id": "decision-accepted",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": {
+          "mode": "not_evaluated"
+        },
+        "considered": [],
+        "outcome": "accepted",
+        "rationale": {
+          "mode": "unspecified"
+        },
+        "decidedAt": "2026-07-26T02:00:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "decision-overridden-authored-rationale",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": {
+          "mode": "evaluated",
+          "resource": {
+            "uri": "urn:t3x:policy:home-config-v1",
+            "mediaType": "application/json",
+            "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        },
+        "considered": [
+          {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ],
+        "outcome": "overridden",
+        "rationale": {
+          "mode": "authored",
+          "value": "Proceed despite the optional device availability check",
+          "evidence": []
+        },
+        "decidedAt": "2026-07-26T02:01:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "decision-rejected",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": {
+        "kind": "human",
+        "id": "user:ethan"
+      },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": {
+          "mode": "not_evaluated"
+        },
+        "considered": [],
+        "outcome": "rejected",
+        "rationale": {
+          "mode": "authored",
+          "value": "The proposed device name is ambiguous",
+          "evidence": []
+        },
+        "decidedAt": "2026-07-26T02:02:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "commit-v2",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [],
+      "decision": {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  }
+]

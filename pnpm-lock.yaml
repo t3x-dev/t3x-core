@@ -934,6 +934,12 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.27
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+      json-canonicalize:
+        specifier: ^2.0.0
+        version: 2.0.0
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.15)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)

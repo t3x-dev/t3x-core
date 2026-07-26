@@ -18,6 +18,7 @@ interface PackageManifest {
   dependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  files?: string[];
   publishConfig?: { access?: string };
 }
 
@@ -33,6 +34,7 @@ describe('@t3x-dev/transition package boundary', () => {
     expect(manifest.dependencies ?? {}).toEqual({});
     expect(manifest.optionalDependencies ?? {}).toEqual({});
     expect(manifest.peerDependencies ?? {}).toEqual({});
+    expect(manifest.files).toEqual(['dist', 'schema', 'conformance']);
   });
 
   it('exposes loadable ESM and CommonJS entry points', async () => {

@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/transition/v1",
+  "title": "T3X Transition Protocol v1",
+  "description": "Closed wire contracts for State, Effect, Statement, and CommitV2.",
+  "oneOf": [
+    { "$ref": "#/$defs/State" },
+    { "$ref": "#/$defs/Effect" },
+    { "$ref": "#/$defs/Statement" },
+    { "$ref": "#/$defs/CommitV2" }
+  ],
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "CanonicalTimestamp": {
+      "type": "string",
+      "description": "UTC timestamp with exactly millisecond precision.",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])T([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+    },
+    "ProtocolValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ProtocolValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ProtocolValue" }
+        }
+      ]
+    },
+    "ResourceDescriptor": {
+      "type": "object",
+      "properties": {
+        "uri": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "digest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["uri", "mediaType", "digest"],
+      "additionalProperties": false
+    },
+    "StateDescriptor": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "state" },
+        "schema": { "const": "t3x/state/v1" },
+        "digest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["kind", "schema", "digest"],
+      "additionalProperties": false
+    },
+    "EffectDescriptor": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "effect" },
+        "schema": { "const": "t3x/effect/v1" },
+        "digest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["kind", "schema", "digest"],
+      "additionalProperties": false
+    },
+    "StatementDescriptor": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "statement" },
+        "schema": { "const": "t3x/statement/v1" },
+        "digest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["kind", "schema", "digest"],
+      "additionalProperties": false
+    },
+    "CommitDescriptor": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "commit" },
+        "schema": { "const": "t3x/commit/v2" },
+        "digest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["kind", "schema", "digest"],
+      "additionalProperties": false
+    },
+    "ObjectDescriptor": {
+      "oneOf": [
+        { "$ref": "#/$defs/StateDescriptor" },
+        { "$ref": "#/$defs/EffectDescriptor" },
+        { "$ref": "#/$defs/StatementDescriptor" },
+        { "$ref": "#/$defs/CommitDescriptor" }
+      ]
+    },
+    "ActorRef": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["human", "agent", "service"] },
+        "id": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "properties": {
+        "resource": { "$ref": "#/$defs/ResourceDescriptor" },
+        "locator": {
+          "type": "object",
+          "properties": {
+            "scheme": { "$ref": "#/$defs/Identifier" },
+            "value": { "$ref": "#/$defs/ProtocolValue" }
+          },
+          "required": ["scheme", "value"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["resource", "locator"],
+      "additionalProperties": false
+    },
+    "StateCodecRef": {
+      "type": "object",
+      "properties": {
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "version": { "$ref": "#/$defs/Identifier" }
+      },
+      "required": ["mediaType", "version"],
+      "additionalProperties": false
+    },
+    "MutationDriverRef": {
+      "type": "object",
+      "properties": {
+        "protocol": { "$ref": "#/$defs/Identifier" },
+        "protocolVersion": { "$ref": "#/$defs/Identifier" },
+        "specDigest": { "$ref": "#/$defs/Digest" }
+      },
+      "required": ["protocol", "protocolVersion", "specDigest"],
+      "additionalProperties": false
+    },
+    "State": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/state/v1" },
+        "codec": { "$ref": "#/$defs/StateCodecRef" },
+        "value": { "$ref": "#/$defs/ProtocolValue" }
+      },
+      "required": ["schema", "codec", "value"],
+      "additionalProperties": false
+    },
+    "EffectInput": {
+      "type": "object",
+      "properties": {
+        "role": { "$ref": "#/$defs/Identifier" },
+        "object": { "$ref": "#/$defs/ObjectDescriptor" }
+      },
+      "required": ["role", "object"],
+      "additionalProperties": false
+    },
+    "Effect": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/effect/v1" },
+        "base": { "$ref": "#/$defs/StateDescriptor" },
+        "driver": { "$ref": "#/$defs/MutationDriverRef" },
+        "operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ProtocolValue" }
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EffectInput" }
+        },
+        "result": { "$ref": "#/$defs/StateDescriptor" }
+      },
+      "required": ["schema", "base", "driver", "operations", "inputs", "result"],
+      "additionalProperties": false
+    },
+    "StatedStringClaim": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "stated" },
+        "value": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/EvidenceRef" },
+          "uniqueItems": true
+        }
+      },
+      "required": ["mode", "value", "evidence"],
+      "additionalProperties": false
+    },
+    "InferredStringClaim": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "inferred" },
+        "value": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EvidenceRef" },
+          "uniqueItems": true
+        }
+      },
+      "required": ["mode", "value", "evidence"],
+      "additionalProperties": false
+    },
+    "AuthoredStringClaim": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "authored" },
+        "value": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EvidenceRef" },
+          "uniqueItems": true
+        }
+      },
+      "required": ["mode", "value", "evidence"],
+      "additionalProperties": false
+    },
+    "UnspecifiedClaim": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "unspecified" }
+      },
+      "required": ["mode"],
+      "additionalProperties": false
+    },
+    "StringClaim": {
+      "oneOf": [
+        { "$ref": "#/$defs/StatedStringClaim" },
+        { "$ref": "#/$defs/InferredStringClaim" },
+        { "$ref": "#/$defs/AuthoredStringClaim" },
+        { "$ref": "#/$defs/UnspecifiedClaim" }
+      ]
+    },
+    "ProposalPredicate": {
+      "type": "object",
+      "properties": {
+        "intent": { "$ref": "#/$defs/StringClaim" },
+        "rationale": { "$ref": "#/$defs/StringClaim" }
+      },
+      "required": ["intent", "rationale"],
+      "additionalProperties": false
+    },
+    "DecisionPolicyRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": { "const": "evaluated" },
+            "resource": { "$ref": "#/$defs/ResourceDescriptor" }
+          },
+          "required": ["mode", "resource"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": { "const": "not_evaluated" }
+          },
+          "required": ["mode"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DecisionPredicate": {
+      "type": "object",
+      "properties": {
+        "policy": { "$ref": "#/$defs/DecisionPolicyRef" },
+        "considered": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/StatementDescriptor" },
+          "uniqueItems": true
+        },
+        "outcome": { "enum": ["accepted", "overridden", "rejected"] },
+        "rationale": { "$ref": "#/$defs/StringClaim" },
+        "decidedAt": { "$ref": "#/$defs/CanonicalTimestamp" }
+      },
+      "required": ["policy", "considered", "outcome", "rationale", "decidedAt"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "overridden" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "rationale": { "$ref": "#/$defs/AuthoredStringClaim" }
+            }
+          }
+        }
+      ]
+    },
+    "ProposalStatement": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/statement/v1" },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "prefixItems": [{ "$ref": "#/$defs/EffectDescriptor" }],
+          "items": false
+        },
+        "actor": { "$ref": "#/$defs/ActorRef" },
+        "predicateType": { "const": "t3x.proposal/v1" },
+        "predicate": { "$ref": "#/$defs/ProposalPredicate" }
+      },
+      "required": ["schema", "subjects", "actor", "predicateType", "predicate"],
+      "additionalProperties": false
+    },
+    "DecisionStatement": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/statement/v1" },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "prefixItems": [{ "$ref": "#/$defs/StatementDescriptor" }],
+          "items": false
+        },
+        "actor": { "$ref": "#/$defs/ActorRef" },
+        "predicateType": { "const": "t3x.decision/v1" },
+        "predicate": { "$ref": "#/$defs/DecisionPredicate" }
+      },
+      "required": ["schema", "subjects", "actor", "predicateType", "predicate"],
+      "additionalProperties": false
+    },
+    "ExternalStatement": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/statement/v1" },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ObjectDescriptor" },
+          "uniqueItems": true
+        },
+        "actor": { "$ref": "#/$defs/ActorRef" },
+        "predicateType": {
+          "allOf": [
+            { "$ref": "#/$defs/Identifier" },
+            { "not": { "enum": ["t3x.proposal/v1", "t3x.decision/v1"] } }
+          ]
+        },
+        "predicate": { "$ref": "#/$defs/ProtocolValue" }
+      },
+      "required": ["schema", "subjects", "actor", "predicateType", "predicate"],
+      "additionalProperties": false
+    },
+    "Statement": {
+      "oneOf": [
+        { "$ref": "#/$defs/ProposalStatement" },
+        { "$ref": "#/$defs/DecisionStatement" },
+        { "$ref": "#/$defs/ExternalStatement" }
+      ]
+    },
+    "CommitV2": {
+      "type": "object",
+      "properties": {
+        "schema": { "const": "t3x/commit/v2" },
+        "parents": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CommitDescriptor" }
+        },
+        "decision": { "$ref": "#/$defs/StatementDescriptor" },
+        "result": { "$ref": "#/$defs/StateDescriptor" }
+      },
+      "required": ["schema", "parents", "decision", "result"],
+      "additionalProperties": false
+    }
+  }
+}

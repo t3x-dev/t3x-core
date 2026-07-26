@@ -1,0 +1,55 @@
+{
+  "schema": "t3x/transition-conformance/v1",
+  "protocolSchema": "../../schema/transition-v1.schema.json",
+  "publicNouns": ["state", "effect", "statement", "commit"],
+  "canonicalization": {
+    "id": "RFC8785",
+    "valueDomain": "I-JSON",
+    "source": "https://www.rfc-editor.org/rfc/rfc8785",
+    "hashAlgorithm": "sha256",
+    "domain": "t3x-object-v1",
+    "preimage": "UTF8('t3x-object-v1\\0' + kind + '\\0' + schema + '\\0') || RFC8785(object)"
+  },
+  "collections": [
+    {
+      "path": "Effect.operations",
+      "semantics": "ordered"
+    },
+    {
+      "path": "Effect.inputs",
+      "semantics": "role-keyed-set",
+      "order": "ascending UTF-16 code units by role",
+      "duplicates": "reject"
+    },
+    {
+      "path": "Statement.subjects",
+      "semantics": "descriptor-set",
+      "order": "ascending RFC8785 bytes",
+      "duplicates": "reject"
+    },
+    {
+      "path": "Claim.evidence",
+      "semantics": "evidence-set",
+      "order": "ascending RFC8785 bytes",
+      "duplicates": "reject"
+    },
+    {
+      "path": "DecisionPredicate.considered",
+      "semantics": "descriptor-set",
+      "order": "ascending RFC8785 bytes",
+      "duplicates": "reject"
+    },
+    {
+      "path": "CommitV2.parents",
+      "semantics": "ordered"
+    }
+  ],
+  "vectors": {
+    "valid": "vectors/valid.json",
+    "invalid": "vectors/invalid.json",
+    "canonical": "vectors/canonical.json",
+    "identity": "vectors/identity.json",
+    "semantic": "vectors/semantic.json"
+  },
+  "compatibility": "compatibility.json"
+}
