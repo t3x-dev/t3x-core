@@ -8,6 +8,8 @@ import {
   CORE_PREDICATE_TYPES,
   DECISION_PREDICATE_TYPE,
   EFFECT_SCHEMA,
+  type Effect,
+  type EffectDefinition,
   type ExternalStatement,
   PROPOSAL_PREDICATE_TYPE,
   PROTOCOL_CANONICALIZATION,
@@ -135,6 +137,12 @@ describe('Transition protocol contract', () => {
     expectTypeOf<CorePredicateImpersonation>().toEqualTypeOf<never>();
   });
 
+  it('keeps the claimed Result outside the replay definition type', () => {
+    type FullEffectFitsReplayDefinition = Effect extends EffectDefinition ? true : false;
+
+    expectTypeOf<FullEffectFitsReplayDefinition>().toEqualTypeOf<false>();
+  });
+
   it('accepts every checked-in valid schema vector', () => {
     expectUniqueIds(validVectors);
     for (const vector of validVectors) {
@@ -205,6 +213,11 @@ describe('Transition protocol contract', () => {
         valueDomain: 'I-JSON',
         hashAlgorithm: PROTOCOL_HASH_ALGORITHM,
         domain: PROTOCOL_DIGEST_DOMAIN,
+      },
+      attribution: {
+        claims: 'Statement.actor',
+        authentication: 'service-layer',
+        delegation: 'separate-statement',
       },
     });
 

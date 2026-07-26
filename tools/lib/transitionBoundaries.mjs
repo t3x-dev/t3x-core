@@ -12,7 +12,7 @@ const DEPENDENCY_FIELDS = [
 const RUNTIME_DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'];
 const ALLOWED_LEAF_RUNTIME_PACKAGES = new Set(['json-canonicalize', 'zod']);
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
-const SKIPPED_DIRECTORIES = new Set(['__tests__', '.turbo', 'coverage', 'dist', 'node_modules']);
+const SKIPPED_DIRECTORIES = new Set(['.turbo', 'coverage', 'dist', 'node_modules']);
 
 const FORBIDDEN_LEAF_MODULES = [
   '@anthropic-ai/sdk',
@@ -66,15 +66,16 @@ function runtimeDependencyNames(manifest) {
   return RUNTIME_DEPENDENCY_FIELDS.flatMap((field) => Object.keys(manifest[field] ?? {}));
 }
 
-function sourceFiles(path) {
+function sourceFiles(path, { includeTests = false } = {}) {
   if (!existsSync(path)) return [];
 
   const files = [];
   for (const entry of readdirSync(path, { withFileTypes: true })) {
     if (entry.isDirectory() && SKIPPED_DIRECTORIES.has(entry.name)) continue;
+    if (entry.isDirectory() && entry.name === '__tests__' && !includeTests) continue;
     const entryPath = join(path, entry.name);
     if (entry.isDirectory()) {
-      files.push(...sourceFiles(entryPath));
+      files.push(...sourceFiles(entryPath, { includeTests }));
       continue;
     }
     const extension = entry.name.slice(entry.name.lastIndexOf('.'));
@@ -283,7 +284,33 @@ function checkTransitionLeaf(rootPath, errors) {
       }
     }
   }
-  return files.length;
+
+  const testFiles = sourceFiles(join(packagePath, 'src/__tests__'), { includeTests: true });
+  for (const file of testFiles) {
+    const source = readFileSync(file, 'utf8');
+    const relativeFile = displayPath(rootPath, file);
+
+    for (const label of forbiddenLeafUses(source, file)) {
+      errors.push(`${relativeFile} uses forbidden ${label}`);
+    }
+
+    for (const specifier of moduleSpecifiers(source, file)) {
+      if (specifier.startsWith('@t3x-dev/')) {
+        errors.push(`${relativeFile} imports forbidden T3X package ${specifier}`);
+        continue;
+      }
+      if (/(?:^|[/_.-])(prd|esphome)(?:$|[/_.-])/iu.test(specifier)) {
+        errors.push(`${relativeFile} imports forbidden domain module ${specifier}`);
+      }
+      if (specifier.startsWith('.') || isAbsolute(specifier)) {
+        const target = resolve(dirname(file), specifier);
+        if (!isWithin(packagePath, target)) {
+          errors.push(`${relativeFile} imports outside the Transition leaf: ${specifier}`);
+        }
+      }
+    }
+  }
+  return files.length + testFiles.length;
 }
 
 function checkPackageIsolation({ rootPath, packagePath, forbiddenPackage, errors }) {

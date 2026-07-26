@@ -10,6 +10,11 @@
     "domain": "t3x-object-v1",
     "preimage": "UTF8('t3x-object-v1\\0' + kind + '\\0' + schema + '\\0') || RFC8785(object)"
   },
+  "attribution": {
+    "claims": "Statement.actor",
+    "authentication": "service-layer",
+    "delegation": "separate-statement"
+  },
   "collections": [
     {
       "path": "Effect.operations",

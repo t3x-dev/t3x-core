@@ -112,14 +112,25 @@ export interface EffectInput {
   object: ObjectDescriptor;
 }
 
-/** Internal replay view. It is a supporting type, not a fifth protocol noun. */
-export interface EffectDefinition {
+interface EffectBody {
   driver: MutationDriverRef;
   operations: ProtocolValue[];
   inputs: EffectInput[];
 }
 
-export interface Effect extends EffectDefinition {
+/**
+ * Internal replay view. It is a supporting type, not a fifth protocol noun.
+ * The negative fields make a full Effect ineligible as Replay input: callers
+ * must project the definition explicitly, keeping the claimed Result outside
+ * the function that derives it.
+ */
+export interface EffectDefinition extends EffectBody {
+  schema?: never;
+  base?: never;
+  result?: never;
+}
+
+export interface Effect extends EffectBody {
   schema: typeof EFFECT_SCHEMA;
   base: StateDescriptor;
   result: StateDescriptor;
@@ -153,6 +164,12 @@ export type Claim<T extends string = string> =
   | AuthoredClaim<T>
   | UnspecifiedClaim;
 export type StringClaim = Claim<string>;
+
+/**
+ * Claim attribution is intentionally single-source: the enclosing Statement
+ * actor is the producer or author. A different submitter, confirmer, or
+ * evaluator attaches another Statement instead of rewriting that attribution.
+ */
 
 export type ProposalPredicate = {
   intent: StringClaim;
