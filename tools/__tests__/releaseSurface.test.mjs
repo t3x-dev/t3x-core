@@ -39,6 +39,9 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/core')?.access, 'restricted');
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.access, 'restricted');
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.npm_publish, false);
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.stability_tier, 'internal');
   assert.equal(result.packagesByName.get('@t3x-dev/api-client')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/cli')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/mcp')?.access, 'restricted');

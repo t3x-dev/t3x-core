@@ -1,0 +1,38 @@
+{
+  "name": "@t3x-dev/transition",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Internal leaf package for verifiable T3X state-transition protocol contracts",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vite": "8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "packages/transition"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
