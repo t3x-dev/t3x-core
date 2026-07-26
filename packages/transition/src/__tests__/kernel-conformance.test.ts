@@ -62,7 +62,7 @@ describe('Transition production conformance harness', () => {
     }
   });
 
-  it('matches every RFC 8785 canonical vector with an independent implementation', () => {
+  it('matches every checked-in RFC 8785 canonical vector', () => {
     for (const vector of canonicalVectors) {
       expect(canonicalizeProtocolValue(vector.value as ProtocolValue), vector.id).toBe(
         vector.canonical
