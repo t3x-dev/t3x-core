@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const DEPENDENCY_FIELDS = [
   'dependencies',
@@ -40,17 +41,14 @@ const FORBIDDEN_LEAF_MODULES = [
   'undici',
 ];
 
-const FORBIDDEN_LEAF_SOURCE = [
-  { label: 'current environment', pattern: /\bprocess\.env\b/u },
-  { label: 'current time', pattern: /\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)/u },
-  { label: 'global network access', pattern: /\bfetch\s*\(/u },
-  { label: 'high-resolution clock', pattern: /\bperformance\.now\s*\(/u },
-  {
-    label: 'randomness',
-    pattern:
-      /\bMath\.random\s*\(|\b(?:crypto\.)?(?:randomBytes|randomFill(?:Sync)?|randomInt|randomUUID)\s*\(/u,
-  },
-];
+const FORBIDDEN_RANDOM_APIS = new Set([
+  'randomBytes',
+  'randomFill',
+  'randomFillSync',
+  'randomInt',
+  'randomUUID',
+]);
+const CRYPTO_MODULES = new Set(['crypto', 'node:crypto']);
 
 function toRootPath(rootDir) {
   return rootDir instanceof URL ? fileURLToPath(rootDir) : resolve(rootDir);
@@ -85,19 +83,128 @@ function sourceFiles(path) {
   return files.sort();
 }
 
-function moduleSpecifiers(source) {
-  const specifiers = new Set();
-  const patterns = [
-    /\b(?:import|export)\s+(?:type\s+)?[^;]*?\sfrom\s*['"]([^'"]+)['"]/gu,
-    /\bimport\s*['"]([^'"]+)['"]/gu,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
-    /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
-  ];
+function parseSource(source, filePath) {
+  return ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
+}
 
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) specifiers.add(match[1]);
+function stringValue(node) {
+  return node !== undefined && ts.isStringLiteralLike(node) ? node.text : undefined;
+}
+
+function moduleSpecifiers(source, filePath) {
+  const specifiers = new Set();
+  const sourceFile = parseSource(source, filePath);
+
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      const specifier = stringValue(node.moduleSpecifier);
+      if (specifier !== undefined) specifiers.add(specifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      const specifier = stringValue(node.moduleReference.expression);
+      if (specifier !== undefined) specifiers.add(specifier);
+    } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      if (isDynamicImport || isRequire) {
+        const specifier = stringValue(node.arguments[0]);
+        if (specifier !== undefined) specifiers.add(specifier);
+      }
+    }
+    ts.forEachChild(node, visit);
   }
+
+  visit(sourceFile);
   return [...specifiers];
+}
+
+function isIdentifier(node, name) {
+  return ts.isIdentifier(node) && node.text === name;
+}
+
+function isPropertyAccess(node, objectName, propertyName) {
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    isIdentifier(node.expression, objectName) &&
+    node.name.text === propertyName
+  );
+}
+
+function forbiddenLeafUses(source, filePath) {
+  const labels = new Set();
+  const cryptoNamespaces = new Set(['crypto']);
+  const randomBindings = new Set(FORBIDDEN_RANDOM_APIS);
+  const sourceFile = parseSource(source, filePath);
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!CRYPTO_MODULES.has(stringValue(statement.moduleSpecifier))) continue;
+
+    const importClause = statement.importClause;
+    if (importClause?.name !== undefined) cryptoNamespaces.add(importClause.name.text);
+    if (importClause?.namedBindings !== undefined) {
+      if (ts.isNamespaceImport(importClause.namedBindings)) {
+        cryptoNamespaces.add(importClause.namedBindings.name.text);
+      } else {
+        for (const element of importClause.namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (FORBIDDEN_RANDOM_APIS.has(importedName)) randomBindings.add(element.name.text);
+        }
+      }
+    }
+  }
+
+  function visit(node) {
+    if (
+      isPropertyAccess(node, 'process', 'env') ||
+      (ts.isElementAccessExpression(node) &&
+        isIdentifier(node.expression, 'process') &&
+        stringValue(node.argumentExpression) === 'env')
+    ) {
+      labels.add('current environment');
+    }
+
+    if (
+      ts.isNewExpression(node) &&
+      isIdentifier(node.expression, 'Date') &&
+      (node.arguments === undefined || node.arguments.length === 0)
+    ) {
+      labels.add('current time');
+    }
+
+    if (ts.isCallExpression(node)) {
+      const expression = node.expression;
+      if (
+        isIdentifier(expression, 'fetch') ||
+        isPropertyAccess(expression, 'globalThis', 'fetch')
+      ) {
+        labels.add('global network access');
+      }
+      if (isPropertyAccess(expression, 'Date', 'now')) labels.add('current time');
+      if (isPropertyAccess(expression, 'performance', 'now')) {
+        labels.add('high-resolution clock');
+      }
+      if (isPropertyAccess(expression, 'Math', 'random')) labels.add('randomness');
+      if (ts.isIdentifier(expression) && randomBindings.has(expression.text)) {
+        labels.add('randomness');
+      }
+      if (
+        ts.isPropertyAccessExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        cryptoNamespaces.has(expression.expression.text) &&
+        FORBIDDEN_RANDOM_APIS.has(expression.name.text)
+      ) {
+        labels.add('randomness');
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return [...labels].sort();
 }
 
 function isWithin(parent, target) {
@@ -153,11 +260,11 @@ function checkTransitionLeaf(rootPath, errors) {
     const source = readFileSync(file, 'utf8');
     const relativeFile = displayPath(rootPath, file);
 
-    for (const { label, pattern } of FORBIDDEN_LEAF_SOURCE) {
-      if (pattern.test(source)) errors.push(`${relativeFile} uses forbidden ${label}`);
+    for (const label of forbiddenLeafUses(source, file)) {
+      errors.push(`${relativeFile} uses forbidden ${label}`);
     }
 
-    for (const specifier of moduleSpecifiers(source)) {
+    for (const specifier of moduleSpecifiers(source, file)) {
       if (specifier.startsWith('@t3x-dev/')) {
         errors.push(`${relativeFile} imports forbidden T3X package ${specifier}`);
         continue;
@@ -196,7 +303,7 @@ function checkPackageIsolation({ rootPath, packagePath, forbiddenPackage, errors
   const files = sourceFiles(join(absolutePackagePath, 'src'));
   for (const file of files) {
     const relativeFile = displayPath(rootPath, file);
-    for (const specifier of moduleSpecifiers(readFileSync(file, 'utf8'))) {
+    for (const specifier of moduleSpecifiers(readFileSync(file, 'utf8'), file)) {
       const directImport = matchesModule(specifier, forbiddenPackage);
       const relativeImport =
         (specifier.startsWith('.') || isAbsolute(specifier)) &&

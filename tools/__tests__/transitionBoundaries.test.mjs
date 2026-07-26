@@ -92,6 +92,32 @@ test('the Transition leaf rejects impure, hidden, and domain-specific inputs', (
   }
 });
 
+test('comments and string literals do not create false boundary violations', () => {
+  const rootDir = createFixture();
+  write(
+    join(rootDir, 'packages/transition/src/index.ts'),
+    [
+      '// Never call Date.now() or import from node:fs here.',
+      "export const guidance = 'Avoid Math.random(), process.env, and fetch() in the kernel.';",
+      'export const example = "require(\'@t3x-dev/core\')";',
+      '',
+    ].join('\n')
+  );
+
+  assert.deepEqual(validateTransitionBoundaries({ rootDir }).errors, []);
+});
+
+test('aliased crypto entropy remains forbidden', () => {
+  const rootDir = createFixture();
+  write(
+    join(rootDir, 'packages/transition/src/index.ts'),
+    "import { randomUUID as createId } from 'node:crypto';\nexport const id = createId();\n"
+  );
+
+  const { errors } = validateTransitionBoundaries({ rootDir });
+  assert.ok(errors.some((error) => error.includes('forbidden randomness')));
+});
+
 test('native packages cannot import Transition or its adapter layer', () => {
   const rootDir = createFixture();
   write(
