@@ -1,4 +1,9 @@
 export {
+  canonicalizeProtocolValue,
+  canonicalProtocolBytes,
+  compareCanonicalValues,
+} from './canonical';
+export {
   type ActorRef,
   type AuthoredClaim,
   type CanonicalTimestamp,
@@ -50,3 +55,62 @@ export {
   type StringClaim,
   type UnspecifiedClaim,
 } from './contracts';
+export {
+  EffectClaimFalseError,
+  IntegrityChainInvalidError,
+  NonCanonicalValueError,
+  ObjectDigestMismatchError,
+  ObjectNotFoundError,
+  SchemaInvalidError,
+  StaleBaseError,
+  TransitionProtocolError,
+  UnsupportedMediaTypeError,
+  UnsupportedSemanticsError,
+} from './errors';
+export {
+  canonicalProtocolObjectBytes,
+  describeProtocolObject,
+  digestCanonicalProtocolBytes,
+  digestProtocolObject,
+} from './identity';
+export {
+  type VerifiedCommitIntegrity,
+  verifyCommitIntegrity,
+  verifyStatementSubjects,
+} from './integrity';
+export { parseProtocolJson } from './json';
+export {
+  type ParsedDescriptor,
+  parseCommitV2,
+  parseDecisionStatement,
+  parseEffect,
+  parseObjectDescriptor,
+  parseProposalStatement,
+  parseProtocolBytes,
+  parseProtocolObject,
+  parseState,
+  parseStatement,
+} from './parse';
+export {
+  type MutationDriver,
+  type MutationDriverRegistry,
+  mutationDriverKey,
+  type ResolvedInputs,
+  resolveMutationDriver,
+  resolveStateCodec,
+  type StateCodec,
+  type StateCodecRegistry,
+  stateCodecKey,
+} from './ports';
+export {
+  definitionOf,
+  type EffectVerificationContext,
+  replay,
+  type VerifiedEffect,
+  verifyEffect,
+} from './replay';
+export {
+  InMemoryObjectResolver,
+  type ObjectResolver,
+  resolveProtocolObject,
+} from './resolver';

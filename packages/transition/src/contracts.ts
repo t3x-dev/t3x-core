@@ -237,4 +237,10 @@ export interface CommitV2 {
   result: StateDescriptor;
 }
 
-export type ProtocolObject = State | Effect | Statement | CommitV2;
+export type ProtocolObject =
+  | State
+  | Effect
+  | Statement
+  | ProposalStatement
+  | DecisionStatement
+  | CommitV2;
