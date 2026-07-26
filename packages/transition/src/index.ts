@@ -61,6 +61,7 @@ export {
   NonCanonicalValueError,
   ObjectDigestMismatchError,
   ObjectNotFoundError,
+  ReplayPreconditionFailedError,
   SchemaInvalidError,
   StaleBaseError,
   TransitionProtocolError,

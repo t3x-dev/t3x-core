@@ -4,11 +4,25 @@ export class TransitionProtocolError extends Error {
   readonly code: ProtocolErrorCode;
   readonly path?: string;
 
-  constructor(code: ProtocolErrorCode, message: string, path?: string) {
-    super(path === undefined ? message : `${message} at ${path}`);
+  constructor(code: ProtocolErrorCode, message: string, path?: string, options?: ErrorOptions) {
+    super(path === undefined ? message : `${message} at ${path}`, options);
     this.name = 'TransitionProtocolError';
     this.code = code;
     this.path = path;
+  }
+}
+
+/**
+ * Neutral replay control signal: the supplied Base does not satisfy an
+ * operation precondition. Verdict-producing callers must classify it for
+ * their context; it is intentionally not a persisted ProtocolErrorCode.
+ */
+export class ReplayPreconditionFailedError extends Error {
+  readonly code = 'REPLAY_PRECONDITION_FAILED' as const;
+
+  constructor(message = 'Replay precondition failed', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ReplayPreconditionFailedError';
   }
 }
 
@@ -62,15 +76,21 @@ export class IntegrityChainInvalidError extends TransitionProtocolError {
 }
 
 export class EffectClaimFalseError extends TransitionProtocolError {
-  constructor(message = 'Replay result does not match the Effect claimed Result') {
-    super('EFFECT_CLAIM_FALSE', message);
+  constructor(
+    message = 'Replay result does not match the Effect claimed Result',
+    options?: ErrorOptions
+  ) {
+    super('EFFECT_CLAIM_FALSE', message, undefined, options);
     this.name = 'EffectClaimFalseError';
   }
 }
 
 export class StaleBaseError extends TransitionProtocolError {
-  constructor(message = 'Repository head no longer matches the expected base') {
-    super('STALE_BASE', message);
+  constructor(
+    message = 'The proposal assumptions do not match the supplied base',
+    options?: ErrorOptions
+  ) {
+    super('STALE_BASE', message, undefined, options);
     this.name = 'StaleBaseError';
   }
 }

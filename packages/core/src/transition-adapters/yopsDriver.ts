@@ -13,6 +13,7 @@ import {
   mutationDriverKey,
   type ProtocolValue,
   parseEffect,
+  ReplayPreconditionFailedError,
   type ResolvedInputs,
   replay,
   SchemaInvalidError,
@@ -66,13 +67,26 @@ export class YOpsExecutionError extends Error {
   }
 }
 
-export class YOpsPreconditionFailedError extends StaleBaseError {
+class YOpsReplayPreconditionFailedError extends ReplayPreconditionFailedError {
   readonly yopsError: YOpsError;
 
   constructor(error: YOpsError) {
-    super(`YOps precondition failed at operation ${error.op_index}: ${error.message}`);
+    const yopsError = { ...error };
+    super(`YOps precondition failed at operation ${error.op_index}: ${error.message}`, {
+      cause: yopsError,
+    });
+    this.name = 'YOpsReplayPreconditionFailedError';
+    this.yopsError = yopsError;
+  }
+}
+
+export class YOpsPreconditionFailedError extends StaleBaseError {
+  readonly yopsError: YOpsError;
+
+  constructor(error: YOpsReplayPreconditionFailedError) {
+    super(error.message, { cause: error });
     this.name = 'YOpsPreconditionFailedError';
-    this.yopsError = { ...error };
+    this.yopsError = { ...error.yopsError };
   }
 }
 
@@ -130,7 +144,7 @@ export const yopsMutationDriver: MutationDriver = Object.freeze({
         throw new IntegrityChainInvalidError('YOps failed without its required native error');
       }
       if (result.error.code === YOPS_ERRORS.ASSERTION_FAILED) {
-        throw new YOpsPreconditionFailedError(result.error);
+        throw new YOpsReplayPreconditionFailedError(result.error);
       }
       throw new YOpsExecutionError(result.error);
     }
@@ -178,7 +192,15 @@ export function createYOpsEffect(input: CreateYOpsEffectInput): CreatedYOpsEffec
     operations,
     inputs: [],
   };
-  const result = replay(input.base, definition, new Map(), yopsMutationDrivers);
+  let result: State;
+  try {
+    result = replay(input.base, definition, new Map(), yopsMutationDrivers);
+  } catch (error) {
+    if (error instanceof YOpsReplayPreconditionFailedError) {
+      throw new YOpsPreconditionFailedError(error);
+    }
+    throw error;
+  }
   const effect = parseEffect({
     schema: EFFECT_SCHEMA,
     ...definition,

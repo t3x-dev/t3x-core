@@ -4,6 +4,7 @@ import {
   type Effect,
   InMemoryObjectResolver,
   type ProposalStatement,
+  ReplayPreconditionFailedError,
   replay,
   type State,
   verifyEffect,
@@ -78,6 +79,10 @@ describe('YOps MutationDriver adapter', () => {
       expect.objectContaining({
         code: 'STALE_BASE',
         yopsError: expect.objectContaining({ code: 'ASSERTION_FAILED', op_index: 0 }),
+        cause: expect.objectContaining({
+          code: 'REPLAY_PRECONDITION_FAILED',
+          cause: expect.objectContaining({ code: 'ASSERTION_FAILED', op_index: 0 }),
+        }),
       })
     );
 
@@ -88,6 +93,23 @@ describe('YOps MutationDriver adapter', () => {
         operations: [],
       })
     ).toThrowError(expect.objectContaining({ code: 'STALE_BASE' }));
+  });
+
+  it('keeps YOps assertion failures neutral during direct replay', () => {
+    const base = createYOpsState({ version: 1 });
+
+    expect(() =>
+      replay(
+        base,
+        {
+          driver: { ...YOPS_MUTATION_DRIVER_REF },
+          operations: [{ assert: { path: 'version', equals: 2 } }],
+          inputs: [],
+        },
+        new Map(),
+        yopsMutationDrivers
+      )
+    ).toThrowError(ReplayPreconditionFailedError);
   });
 
   it('keeps execution atomic and exposes the exact native failure, not a partial State', () => {
@@ -181,6 +203,21 @@ describe('YOps MutationDriver adapter', () => {
     await expect(
       verifyEffect(falseEffect, { resolver, drivers: yopsMutationDrivers })
     ).rejects.toMatchObject({ code: 'EFFECT_CLAIM_FALSE' });
+
+    const unmetPrecondition: Effect = {
+      ...effect,
+      operations: [{ assert: { path: 'count', equals: 999 } }],
+      result: describeProtocolObject(base),
+    };
+    await expect(
+      verifyEffect(unmetPrecondition, { resolver, drivers: yopsMutationDrivers })
+    ).rejects.toMatchObject({
+      code: 'EFFECT_CLAIM_FALSE',
+      cause: {
+        code: 'REPLAY_PRECONDITION_FAILED',
+        cause: { code: 'ASSERTION_FAILED', op_index: 0 },
+      },
+    });
     await expect(verifyEffect(effect, { resolver, drivers: new Map() })).rejects.toMatchObject({
       code: 'UNSUPPORTED_SEMANTICS',
     });
@@ -231,6 +268,10 @@ describe('YOps MutationDriver adapter', () => {
       expect(error).toMatchObject({
         code: 'STALE_BASE',
         yopsError: { code: 'ASSERTION_FAILED', op_index: 0 },
+        cause: {
+          code: 'REPLAY_PRECONDITION_FAILED',
+          cause: { code: 'ASSERTION_FAILED', op_index: 0 },
+        },
       });
     }
   });

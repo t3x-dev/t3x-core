@@ -26,6 +26,10 @@ export interface MutationDriver {
   readonly protocol: string;
   readonly protocolVersion: string;
   readonly specDigest: Digest;
+  /**
+   * Throw ReplayPreconditionFailedError when the supplied Base does not
+   * satisfy an operation precondition. Do not classify the caller's verdict.
+   */
   execute(base: State, definition: EffectDefinition, inputs: ResolvedInputs): State;
 }
 
