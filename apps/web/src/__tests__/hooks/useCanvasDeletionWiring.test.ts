@@ -2,8 +2,8 @@
 /**
  * Canary test for useCanvasDeletionWiring.
  *
- * Validates that the hook wires deleteConversation into the canvas
- * store callback, and that the store invokes it during a remove change.
+ * Validates that the hook wires persisted deletion for both pending
+ * conversations and workbench drafts, then refreshes the current canvas.
  */
 import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,11 +13,24 @@ vi.mock('@/commands/conversations', () => ({
   deleteConversation: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/commands/drafts', () => ({
+  deleteWorkbenchDraft: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
 }));
 
+const nodeActionMocks = vi.hoisted(() => ({
+  load: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/hooks/canvas/useCanvasNodeActions', () => ({
+  useCanvasNodeActions: () => ({ load: nodeActionMocks.load }),
+}));
+
 import { deleteConversation } from '@/commands/conversations';
+import { deleteWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -46,8 +59,10 @@ beforeEach(() => {
   useCanvasStore.setState({
     nodes: [],
     edges: [],
+    projectId: 'proj_test',
     deletionConfirmation: null,
     deleteConversationCallback: null,
+    deleteDraftCallback: null,
   });
 });
 
@@ -61,9 +76,10 @@ describe('useCanvasDeletionWiring', () => {
     await waitForHook();
 
     expect(useCanvasStore.getState().deleteConversationCallback).toBeNull();
+    expect(useCanvasStore.getState().deleteDraftCallback).toBeNull();
   });
 
-  it('registers a callback that calls deleteConversation', async () => {
+  it('deletes a conversation and reloads the current canvas', async () => {
     useCanvasStore.setState({ nodes: [unit('n1', 'conv_1')] });
 
     renderHook(() => useCanvasDeletionWiring());
@@ -73,6 +89,23 @@ describe('useCanvasDeletionWiring', () => {
     expect(cb).toBeTypeOf('function');
 
     cb?.('conv_xyz');
-    expect(deleteConversation).toHaveBeenCalledWith('conv_xyz');
+    await vi.waitFor(() => {
+      expect(deleteConversation).toHaveBeenCalledWith('conv_xyz');
+      expect(nodeActionMocks.load).toHaveBeenCalledWith('proj_test');
+    });
+  });
+
+  it('deletes a workbench draft and reloads the current canvas', async () => {
+    renderHook(() => useCanvasDeletionWiring());
+    await waitForHook();
+
+    const cb = useCanvasStore.getState().deleteDraftCallback;
+    expect(cb).toBeTypeOf('function');
+
+    cb?.('draft_xyz');
+    await vi.waitFor(() => {
+      expect(deleteWorkbenchDraft).toHaveBeenCalledWith('draft_xyz');
+      expect(nodeActionMocks.load).toHaveBeenCalledWith('proj_test');
+    });
   });
 });

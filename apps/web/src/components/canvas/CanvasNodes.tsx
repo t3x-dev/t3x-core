@@ -255,8 +255,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
     icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
     actions: {
       navigateToDraft: (pId, dId) => router.push(`/project/${pId}/draft/${dId}`),
-      navigateToConversation: (conversationId) =>
-        router.push(`/chat/${encodeURIComponent(conversationId)}`),
+      navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
       openLeafPanel,
     },

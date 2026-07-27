@@ -1,14 +1,15 @@
 /**
- * useCanvasDeletionWiring — registers the conversation-delete side effect
- * with canvasStore.
+ * useCanvasDeletionWiring — registers persisted deletion side effects for
+ * uncommitted canvas sources with canvasStore.
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, the store doesn't import
- * @/queries. The store emits an intent (via deleteConversationCallback)
- * and this hook supplies the I/O. Mount once at the canvas page root.
+ * @/queries. The store emits an intent via callbacks and this hook supplies
+ * the conversation/draft I/O. Mount once at the canvas page root.
  */
 
 import { useEffect } from 'react';
 import { deleteConversation } from '@/commands/conversations';
+import { deleteWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { dispatchConversationDeleted } from '@/hooks/shared/deleteEvents';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -19,13 +20,19 @@ export function useCanvasDeletionWiring(enabled = true): void {
   useEffect(() => {
     if (!enabled) return;
 
-    const handler = (conversationId: string) => {
+    const reloadCurrentProject = (projectId: string | null) => {
+      if (projectId && useCanvasStore.getState().projectId === projectId) {
+        void load(projectId);
+      }
+    };
+    const conversationHandler = (conversationId: string) => {
       const projectId = useCanvasStore.getState().projectId;
       deleteConversation(conversationId)
         .then(() => {
           if (projectId) {
             dispatchConversationDeleted({ projectId, conversationId });
           }
+          reloadCurrentProject(projectId);
         })
         .catch((err) => {
           const store = useCanvasStore.getState();
@@ -38,9 +45,24 @@ export function useCanvasDeletionWiring(enabled = true): void {
           }
         });
     };
-    useCanvasStore.getState().setDeleteConversationCallback(handler);
+    const draftHandler = (draftId: string) => {
+      const projectId = useCanvasStore.getState().projectId;
+      deleteWorkbenchDraft(draftId)
+        .then(() => reloadCurrentProject(projectId))
+        .catch((err) => {
+          const store = useCanvasStore.getState();
+          store.notifyCallback?.(
+            err instanceof Error ? err.message : 'Failed to delete draft',
+            'error'
+          );
+          reloadCurrentProject(projectId);
+        });
+    };
+    useCanvasStore.getState().setDeleteConversationCallback(conversationHandler);
+    useCanvasStore.getState().setDeleteDraftCallback(draftHandler);
     return () => {
       useCanvasStore.getState().setDeleteConversationCallback(null);
+      useCanvasStore.getState().setDeleteDraftCallback(null);
     };
   }, [enabled, load]);
 }

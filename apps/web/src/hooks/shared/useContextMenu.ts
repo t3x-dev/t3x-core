@@ -62,6 +62,7 @@ export function useContextMenu({
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
       event.preventDefault();
+      event.stopPropagation();
       const isDraft = node.data.commitStatus === 'draft';
       const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
@@ -131,7 +132,7 @@ export function useContextMenu({
               notify?.('Hash copied to clipboard', 'success');
             }
           : undefined,
-        onDelete: isDraft
+        onDelete: !isCommitted
           ? () => {
               // Trigger removal via onNodesChange (same as pressing Delete key)
               const change = { id: node.id, type: 'remove' as const };

@@ -48,12 +48,14 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     loadError: null,
     notifyCallback: null,
     deleteConversationCallback: null,
+    deleteDraftCallback: null,
     openNodeId: null,
     modalViewMode: null,
     deletionConfirmation: null,
 
     setNotifyCallback: (cb) => set({ notifyCallback: cb }),
     setDeleteConversationCallback: (cb) => set({ deleteConversationCallback: cb }),
+    setDeleteDraftCallback: (cb) => set({ deleteDraftCallback: cb }),
 
     openNodeModal: (nodeId, viewMode = 'commit') =>
       set({ openNodeId: nodeId, modalViewMode: viewMode }),
@@ -110,8 +112,11 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           const node = nodeMap.get(nodeId);
           if (!node) return;
 
-          // Staging unit needs confirmation
-          if (node.data.kind === 'unit' && node.data.commitStatus === 'staging') {
+          // Uncommitted units need confirmation before their persisted source is removed.
+          if (
+            node.data.kind === 'unit' &&
+            (node.data.commitStatus === 'staging' || node.data.commitStatus === 'draft')
+          ) {
             needsConfirmation.push(nodeId);
             return;
           }
@@ -129,12 +134,15 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         // If there are nodes needing confirmation, show dialog
         if (needsConfirmation.length > 0) {
           // Build confirmation message
-          const stagingUnitsInSelection = needsConfirmation.filter((id) => {
+          const uncommittedUnitsInSelection = needsConfirmation.filter((id) => {
             const n = nodeMap.get(id);
-            return n?.data.kind === 'unit' && n?.data.commitStatus === 'staging';
+            return (
+              n?.data.kind === 'unit' &&
+              (n.data.commitStatus === 'staging' || n.data.commitStatus === 'draft')
+            );
           });
           const upstreamNodes = needsConfirmation.filter(
-            (id) => !stagingUnitsInSelection.includes(id)
+            (id) => !uncommittedUnitsInSelection.includes(id)
           );
           const affectedDownstream = collectAffectedStagingUnits(
             needsConfirmation,
@@ -143,8 +151,8 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           );
 
           let message = '';
-          if (stagingUnitsInSelection.length > 0) {
-            message += `Discard ${stagingUnitsInSelection.length} staging unit(s)?`;
+          if (uncommittedUnitsInSelection.length > 0) {
+            message += `Discard ${uncommittedUnitsInSelection.length} uncommitted node(s)?`;
           }
           if (upstreamNodes.length > 0) {
             if (message) message += '\n';
@@ -168,11 +176,20 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           // Delete conversations from database for directly deleted unit nodes
           // Note: Commit deletion is local only - backend deleteCommit API not available
           const deleteConversation = state.deleteConversationCallback;
+          const deleteDraft = state.deleteDraftCallback;
           if (deleteConversation) {
             directDeletes.forEach((nodeId) => {
               const node = nodeMap.get(nodeId);
               if (node?.data.kind === 'unit' && node.data.conversationId) {
                 deleteConversation(node.data.conversationId);
+              }
+            });
+          }
+          if (deleteDraft) {
+            directDeletes.forEach((nodeId) => {
+              const node = nodeMap.get(nodeId);
+              if (node?.data.kind === 'unit' && node.data.draftId) {
+                deleteDraft(node.data.draftId);
               }
             });
           }
@@ -211,11 +228,20 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                 // Delete conversations from database for unit nodes
                 // Note: Commit deletion is local only - backend deleteCommit API not available
                 const deleteConversation = currentState.deleteConversationCallback;
+                const deleteDraft = currentState.deleteDraftCallback;
                 if (deleteConversation) {
                   needsConfirmation.forEach((nodeId) => {
                     const node = currentState.nodes.find((n) => n.id === nodeId);
                     if (node?.data.kind === 'unit' && node.data.conversationId) {
                       deleteConversation(node.data.conversationId);
+                    }
+                  });
+                }
+                if (deleteDraft) {
+                  needsConfirmation.forEach((nodeId) => {
+                    const node = currentState.nodes.find((n) => n.id === nodeId);
+                    if (node?.data.kind === 'unit' && node.data.draftId) {
+                      deleteDraft(node.data.draftId);
                     }
                   });
                 }
@@ -236,11 +262,20 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         // Delete conversations from database for removed unit nodes
         // Note: Commit deletion is local only - backend deleteCommit API not available
         const deleteConversation = state.deleteConversationCallback;
+        const deleteDraft = state.deleteDraftCallback;
         if (deleteConversation) {
           allowedRemoves.forEach((change) => {
             const node = nodeMap.get(change.id);
             if (node?.data.kind === 'unit' && node.data.conversationId) {
               deleteConversation(node.data.conversationId);
+            }
+          });
+        }
+        if (deleteDraft) {
+          allowedRemoves.forEach((change) => {
+            const node = nodeMap.get(change.id);
+            if (node?.data.kind === 'unit' && node.data.draftId) {
+              deleteDraft(node.data.draftId);
             }
           });
         }

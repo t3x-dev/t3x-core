@@ -554,6 +554,29 @@ describe('CanvasWorkspace initial fit view', () => {
     );
   });
 
+  it('keeps a pending conversation on the canvas when the node is selected', () => {
+    const pendingNode = {
+      ...unitNode('pending_1'),
+      data: {
+        ...unitNode('pending_1').data,
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending_1',
+      },
+    };
+    useCanvasStore.setState({ nodes: [pendingNode] });
+    layoutMocks.getLayoutedElements.mockResolvedValue([pendingNode]);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: document.createElement('div') },
+        pendingNode
+      );
+    });
+
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
+  });
+
   it('opens an existing Leaf inside the repository Outputs workspace', () => {
     viewportMocks.selectionPanelVisible = true;
     const node = {

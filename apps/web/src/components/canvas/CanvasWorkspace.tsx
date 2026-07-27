@@ -667,13 +667,9 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Staging/pending units -> navigate to chat page (always single click)
+              // Pending nodes stay on the canvas when selected. Their explicit action
+              // opens the inline workflow; selection must remain available for Delete.
               if (data.commitStatus !== 'committed') {
-                if (data.conversationId) {
-                  router.push(`/chat/${data.conversationId}`);
-                } else {
-                  openNodeModal(node.id, 'commit');
-                }
                 return;
               }
 
