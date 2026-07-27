@@ -49,7 +49,6 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
 export type ProjectSnapshotView = 'structure' | 'render' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
@@ -95,6 +94,27 @@ function parseStateView(value: string | null, fallback: ProjectStateView): Proje
   return SNAPSHOT_VIEWS.some((view) => view.id === value)
     ? (value as ProjectSnapshotView)
     : fallback;
+}
+
+function buildCanvasHref(
+  pathname: string,
+  routeQuery: string,
+  branch: string,
+  commitHash?: string
+): string {
+  const params = new URLSearchParams(routeQuery);
+  params.set('view', 'canvas');
+  if (branch === 'main') {
+    params.delete('branch');
+  } else {
+    params.set('branch', branch);
+  }
+  if (commitHash) {
+    params.set('commit', commitHash);
+  } else {
+    params.delete('commit');
+  }
+  return `${pathname}?${params.toString()}`;
 }
 
 export function ProjectStateTab({
@@ -357,16 +377,9 @@ export function ProjectStateTab({
     committedDiffChanges.length > 0 &&
     Boolean(snapshot.parentCommit);
   const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
-  const currentReturnTo = buildReturnTo(pathname, routeQuery);
-  const historyHref = withReturnTo(
-    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus || 'main')}`,
-    currentReturnTo
-  );
+  const historyHref = buildCanvasHref(pathname, routeQuery, branchFocus);
   const commitHref = headCommit
-    ? withReturnTo(
-        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}`,
-        currentReturnTo
-      )
+    ? buildCanvasHref(pathname, routeQuery, branchFocus, headCommit.hash)
     : null;
   const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
   const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;

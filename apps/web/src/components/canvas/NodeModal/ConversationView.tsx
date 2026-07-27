@@ -2,7 +2,6 @@
 
 import type { Node } from '@xyflow/react';
 import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
@@ -50,12 +49,7 @@ export function ConversationView({
   onShowCommitConfig,
 }: ConversationViewProps) {
   const { t } = useTerminology();
-  const router = useRouter();
   const data = node.data;
-
-  // Get projectId from route params for sidebar links
-  const params = useParams();
-  const routeProjectId = params?.projectId as string | undefined;
 
   // Derive the addCommitAction from quickActions
   const addCommitAction = useMemo(
@@ -128,14 +122,7 @@ export function ConversationView({
             {/* For staging units: show Commit button to enter commit config view */}
             {isStagingUnit && (
               <Button
-                onClick={() => {
-                  if (data.conversationId) {
-                    router.push(`/chat/${encodeURIComponent(data.conversationId)}`);
-                    onClose();
-                    return;
-                  }
-                  onShowCommitConfig();
-                }}
+                onClick={onShowCommitConfig}
                 title={t('configure_and_commit')}
                 className="gap-1.5"
               >
@@ -302,7 +289,7 @@ export function ConversationView({
               </section>
 
               <MemoryContextSidebar
-                projectId={routeProjectId || projectId || undefined}
+                projectId={projectId || undefined}
                 conversationId={data?.conversationId || data?.sourceConversationId}
                 branch={
                   data.branchName ||

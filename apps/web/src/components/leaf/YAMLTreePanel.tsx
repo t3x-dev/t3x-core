@@ -13,6 +13,7 @@ import { Check, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 import type { LeafSemanticPointSummary } from '@/domain/leaf/semanticPoints';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
@@ -30,6 +31,7 @@ interface YAMLTreePanelProps {
   saving: boolean;
   commitHash?: string;
   projectId?: string;
+  projectName?: string;
   onAddConstraintFromSource: (
     type: 'require' | 'exclude',
     value: string,
@@ -69,6 +71,7 @@ export function YAMLTreePanel({
   saving,
   commitHash,
   projectId,
+  projectName,
   onAddConstraintFromSource,
   semanticPointSummaryByNode,
   highlightedConstraintId,
@@ -234,9 +237,9 @@ export function YAMLTreePanel({
           </p>
         )}
 
-        {commitHash && projectId && (
+        {commitHash && projectId && projectName && (
           <Link
-            href={`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`}
+            href={`${getProjectRepoPath({ id: projectId, name: projectName })}?view=canvas&commit=${encodeURIComponent(commitHash)}`}
             className="flex h-9 items-center justify-center gap-1 rounded-lg border border-[var(--source)]/30 bg-[var(--source-dim)] text-[12px] font-semibold text-[var(--source)] transition-colors hover:border-[var(--source)]"
           >
             Open full source YAML

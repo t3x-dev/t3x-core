@@ -22,6 +22,7 @@ import {
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
   unsupportedChatMaterialSourceMessage,
 } from '@/components/import/documentAcceptTypes';
+import { getProjectOutputsPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import type {
   ContextManifestSourceItem,
   ConversationContextManifest,
@@ -62,6 +63,7 @@ export interface ContextManifestSourcePicker {
 interface ContextManifestPanelProps {
   id: string;
   manifest: ConversationContextManifest | null;
+  projectName?: string;
   disabled?: boolean;
   sourcePicker?: ContextManifestSourcePicker;
   onReferenceToggle: (pinId: string, included: boolean) => void | Promise<void>;
@@ -123,12 +125,16 @@ function sourceKindLabel(kind: ContextManifestSourceItem['kind']): string {
   return 'lesson';
 }
 
-function sourceItemOpenHref(item: ContextManifestSourceItem, projectId: string | undefined) {
-  if (item.kind === 'conversation') return `/chat/${encodeURIComponent(item.id)}`;
-  if (item.kind === 'leaf' && projectId)
-    return `/project/${projectId}/leaf/${encodeURIComponent(item.id)}`;
-  if ((item.kind === 'commit' || item.kind === 'baseline') && projectId) {
-    return `/project/${projectId}/commit/${encodeURIComponent(item.id)}`;
+function sourceItemOpenHref(
+  item: ContextManifestSourceItem,
+  projectId: string | undefined,
+  projectName: string | undefined
+) {
+  if (!projectId || !projectName) return null;
+  const project = { id: projectId, name: projectName };
+  if (item.kind === 'leaf') return getProjectOutputsPath(project, item.id);
+  if (item.kind === 'commit' || item.kind === 'baseline') {
+    return `${getProjectRepoPath(project)}?view=canvas&commit=${encodeURIComponent(item.id)}`;
   }
   return null;
 }
@@ -207,6 +213,7 @@ function BaselineIncludedRow({
 function SourceItemRow({
   item,
   projectId,
+  projectName,
   parentTitle,
   selected,
   disabled,
@@ -215,6 +222,7 @@ function SourceItemRow({
 }: {
   item: ContextManifestSourceItem;
   projectId: string | undefined;
+  projectName?: string;
   parentTitle?: string;
   selected: boolean;
   disabled?: boolean;
@@ -227,7 +235,7 @@ function SourceItemRow({
   const canToggle = canToggleLesson;
   const checked = isLesson ? sourceItemSelected(item) : item.included;
   const passed = sourceItemPassed(item);
-  const openHref = sourceItemOpenHref(item, projectId);
+  const openHref = sourceItemOpenHref(item, projectId, projectName);
   const openLabel =
     item.kind === 'conversation'
       ? 'Open conversation'
@@ -591,30 +599,29 @@ function PreviewPanel({
 
 function BaselineActions({
   manifest,
+  projectName,
   sourcePicker,
 }: {
   manifest: ConversationContextManifest | null;
+  projectName?: string;
   sourcePicker?: ContextManifestSourcePicker;
 }) {
   const commitHash = manifest?.baseline.commit_hash ?? sourcePicker?.baseline?.commitHash ?? null;
   const commitHref =
-    manifest?.project_id && commitHash
-      ? `/project/${manifest.project_id}/commit/${encodeURIComponent(commitHash)}`
+    manifest?.project_id && projectName && commitHash
+      ? `${getProjectRepoPath({ id: manifest.project_id, name: projectName })}?view=canvas&commit=${encodeURIComponent(commitHash)}`
       : null;
   const sourceConversationId =
     manifest?.baseline.source_conversation_id ??
     sourcePicker?.baseline?.parentConversationId ??
     null;
-  const sourceConversationHref = sourceConversationId
-    ? `/chat/${encodeURIComponent(sourceConversationId)}`
-    : null;
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       <OpenSourceLink href={commitHref} label="View commit" />
       <OpenSourceLink
-        href={sourceConversationHref}
-        label={sourceConversationHref ? 'View source conversation' : 'No source conversation'}
+        href={null}
+        label={sourceConversationId ? 'Source conversation attached' : 'No source conversation'}
       />
     </div>
   );
@@ -623,6 +630,7 @@ function BaselineActions({
 export function ContextManifestPanel({
   id,
   manifest,
+  projectName,
   disabled,
   sourcePicker,
   onReferenceToggle,
@@ -785,6 +793,7 @@ export function ContextManifestPanel({
                           key={key}
                           item={item}
                           projectId={manifest?.project_id}
+                          projectName={projectName}
                           parentTitle={
                             item.parent_source_id
                               ? sourceTitlesById.get(item.parent_source_id)
@@ -858,7 +867,11 @@ export function ContextManifestPanel({
                     </dd>
                   </div>
                 </dl>
-                <BaselineActions manifest={manifest} sourcePicker={sourcePicker} />
+                <BaselineActions
+                  manifest={manifest}
+                  projectName={projectName}
+                  sourcePicker={sourcePicker}
+                />
               </aside>
             </div>
           </div>
@@ -1016,6 +1029,7 @@ export function ContextManifestPanel({
                           key={key}
                           item={item}
                           projectId={manifest?.project_id}
+                          projectName={projectName}
                           parentTitle={
                             item.parent_source_id
                               ? (sourceTitlesById.get(item.parent_source_id) ??

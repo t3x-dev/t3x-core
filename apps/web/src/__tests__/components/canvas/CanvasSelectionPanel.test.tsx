@@ -72,11 +72,11 @@ describe('CanvasSelectionPanel', () => {
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Merge Into Main' })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Merge is hidden on main/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Details and history stay on the canvas/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Action Logic')).toBeInTheDocument();
   });
 
-  it('explains why branch-head nodes expose merge and still allow new leaves', () => {
+  it('explains that branch-head details stay on the canvas', () => {
     const node = makeNode({
       branchName: 'branch 1',
       branchType: 'branch',
@@ -103,8 +103,6 @@ describe('CanvasSelectionPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Merge appears because this is the latest branch head/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Details stay on the canvas/i)).toBeInTheDocument();
   });
 });

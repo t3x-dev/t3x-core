@@ -10,7 +10,7 @@
  */
 
 import type { Node } from '@xyflow/react';
-import { AlertCircle, ExternalLink, GitCompare, Loader2, X } from 'lucide-react';
+import { AlertCircle, GitCompare, Loader2, MessageSquare, X } from 'lucide-react';
 import { DraftWorkbenchLLM } from '@/components/draft/DraftWorkbenchLLM';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ interface PendingCommitViewProps {
   onClose: () => void;
   onUpdate: (patch: Partial<CanvasNodeData>) => void;
   projectId: string;
-  routeProjectId: string | undefined;
+  onShowConversation: () => void;
   onConvertDraft: (() => void) | undefined;
   onBranchChange: ((branch: 'main' | 'branch') => void) | undefined;
   onBranchNameChange: ((name: string) => void) | undefined;
@@ -37,6 +37,7 @@ export function PendingCommitView({
   onClose,
   onUpdate,
   projectId,
+  onShowConversation,
   onConvertDraft,
   onBranchChange,
   onBranchNameChange,
@@ -107,15 +108,10 @@ export function PendingCommitView({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const d = node.data as CanvasNodeData;
-                  if (d.projectId && d.conversationId) {
-                    window.location.href = `/chat/${d.conversationId}`;
-                  }
-                }}
+                onClick={onShowConversation}
                 className="gap-1.5"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
+                <MessageSquare className="h-3.5 w-3.5" />
                 Continue Chat
               </Button>
             )}

@@ -96,10 +96,9 @@ export function LeafCreationDialog({
       });
       onOpenChange(false);
 
-      const outputsHref = projectName
-        ? getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)
-        : `/project/${encodeURIComponent(projectId)}?tab=outputs&leaf=${encodeURIComponent(leaf.id)}`;
-      router.push(outputsHref);
+      if (projectName) {
+        router.push(getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id));
+      }
     } catch (err) {
       toast.error(formatUserFacingError(err, 'Could not create leaf. Try again.'));
     } finally {

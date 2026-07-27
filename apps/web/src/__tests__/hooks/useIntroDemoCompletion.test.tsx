@@ -65,6 +65,6 @@ describe('useIntroDemoCompletion', () => {
     expect(useCanvasStore.getState().projectId).toBeNull();
     expect(useCanvasStore.getState().hasMainCommit).toBe(false);
     expect(deleteProject).not.toHaveBeenCalled();
-    expect(pushMock).toHaveBeenCalledWith('/chat');
+    expect(pushMock).toHaveBeenCalledWith('/');
   });
 });

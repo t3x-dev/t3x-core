@@ -28,6 +28,7 @@ import {
   buildLeafSemanticPointSummaryByNode,
   deriveLeafSemanticPointItems,
 } from '@/domain/leaf/semanticPoints';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
@@ -156,10 +157,11 @@ export function LeafDetailWorkspace({
   // Re-tune with navigation
   const onRetune = useCallback(async () => {
     const conversationId = await handleRetune();
-    if (conversationId) {
-      router.push(`/chat/${conversationId}`);
+    if (conversationId && projectName) {
+      const statePath = getProjectRepoPath({ id: projectId, name: projectName });
+      router.push(`${statePath}?view=canvas&commit=${encodeURIComponent(leaf?.commit_hash ?? '')}`);
     }
-  }, [handleRetune, router, projectId]);
+  }, [handleRetune, leaf?.commit_hash, projectId, projectName, router]);
 
   // Accept AI-suggested constraints (batch add — single API call)
   const handleAcceptSuggestions = useCallback(
@@ -459,6 +461,7 @@ export function LeafDetailWorkspace({
           saving={saving}
           commitHash={leaf.commit_hash}
           projectId={projectId}
+          projectName={projectName}
           onAddConstraintFromSource={handleAddConstraintFromSource}
           semanticPointSummaryByNode={semanticPointSummaryByNode}
           highlightedConstraintId={hoveredNodeId}
@@ -572,7 +575,7 @@ export function LeafDetailWorkspace({
       </div>
 
       {/* ── Footer ── */}
-      <LeafWorkspaceFooter leaf={leaf} projectId={projectId} />
+      <LeafWorkspaceFooter leaf={leaf} projectId={projectId} projectName={projectName} />
 
       {/* ── Dialogs ── */}
       <SuggestConstraintsDialog

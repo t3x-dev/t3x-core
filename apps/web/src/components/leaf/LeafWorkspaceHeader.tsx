@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { commitHashLabel, shortHash as formatShortHash } from '@/domain/format/formatters';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ExportFormat, Leaf } from '@/types/api';
@@ -54,6 +55,7 @@ export function LeafWorkspaceHeader({
   embeddedNavigation,
   leaf,
   projectId,
+  projectName,
   onExport,
   mode,
   onModeChange,
@@ -64,6 +66,7 @@ export function LeafWorkspaceHeader({
   const shortHash = formatShortHash(leaf.commit_hash);
   const hashLabel = commitHashLabel(leaf.commit_hash);
   const generatedTime = leaf.generated_at ? formatDisplayTime(leaf.generated_at) : null;
+  const repoPath = projectName ? getProjectRepoPath({ id: projectId, name: projectName }) : null;
 
   return (
     <header
@@ -110,10 +113,12 @@ export function LeafWorkspaceHeader({
                 className="hidden min-w-0 text-[11px] md:flex"
                 segments={[
                   { label: 'Home', href: '/' },
-                  { label: 'Project', href: `/project/${projectId}` },
+                  { label: 'Project', href: repoPath ?? undefined },
                   {
                     label: `${t('commit')} ${shortHash}`,
-                    href: `/project/${projectId}?focus=${leaf.commit_hash}`,
+                    href: repoPath
+                      ? `${repoPath}?view=canvas&commit=${encodeURIComponent(leaf.commit_hash)}`
+                      : undefined,
                   },
                   { label: 'Leaf' },
                 ]}

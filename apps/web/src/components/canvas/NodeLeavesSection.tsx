@@ -53,10 +53,8 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
       : 'not run';
 
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !leaf.id) return undefined;
-    return projectName
-      ? getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)
-      : `/project/${encodeURIComponent(projectId)}?tab=outputs&leaf=${encodeURIComponent(leaf.id)}`;
+    if (!projectId || !projectName || !leaf.id) return undefined;
+    return getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id);
   };
   const firstLeafHref = firstLeaf ? getLeafHref(firstLeaf) : undefined;
 

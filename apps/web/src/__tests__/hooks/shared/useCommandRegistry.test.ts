@@ -20,7 +20,9 @@ describe('useCommandRegistry', () => {
   });
 
   it('returns only executable commands and omits placeholder actions', () => {
-    const { result } = renderHook(() => useCommandRegistry({ projectId: 'proj_1' }));
+    const { result } = renderHook(() =>
+      useCommandRegistry({ repositoryPath: '/t3x-dev/example-project' })
+    );
 
     const titles = result.current.flatMap((group) =>
       group.commands.map((command) => command.title)
@@ -35,7 +37,9 @@ describe('useCommandRegistry', () => {
   });
 
   it('routes navigation commands through the router', () => {
-    const { result } = renderHook(() => useCommandRegistry({ projectId: 'proj_1' }));
+    const { result } = renderHook(() =>
+      useCommandRegistry({ repositoryPath: '/t3x-dev/example-project' })
+    );
     const projectCommand = result.current
       .flatMap((group) => group.commands)
       .find((command) => command.id === 'go-project-canvas');
@@ -44,7 +48,23 @@ describe('useCommandRegistry', () => {
       projectCommand?.run();
     });
 
-    expect(pushMock).toHaveBeenCalledWith('/project/proj_1');
+    expect(pushMock).toHaveBeenCalledWith('/t3x-dev/example-project');
+  });
+
+  it('opens repository workspaces without entering the legacy chat route', () => {
+    const { result } = renderHook(() =>
+      useCommandRegistry({ repositoryPath: '/t3x-dev/example-project' })
+    );
+    const workspaceCommand = result.current
+      .flatMap((group) => group.commands)
+      .find((command) => command.id === 'open-workspaces');
+
+    act(() => {
+      workspaceCommand?.run();
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/t3x-dev/example-project/workspaces');
+    expect(pushMock).not.toHaveBeenCalledWith(expect.stringMatching(/^\/chat(?:\/|\?|$)/));
   });
 
   it('dispatches a typed event for keyboard shortcut help', () => {

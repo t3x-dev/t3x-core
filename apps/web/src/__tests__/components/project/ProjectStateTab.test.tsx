@@ -292,7 +292,7 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+      '/t3x-dev/test-project?view=canvas'
     );
     expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
       'href',
@@ -300,8 +300,11 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Open commit' })).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?returnTo=%2Ft3x-dev%2Ftest-project`
+      `/t3x-dev/test-project?view=canvas&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
     );
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toMatch(/^\/(?:project|chat)\//);
+    }
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View 2 changes' })).toHaveAttribute(
       'aria-expanded',
@@ -705,7 +708,7 @@ describe('ProjectStateTab', () => {
     });
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 
@@ -733,7 +736,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 });

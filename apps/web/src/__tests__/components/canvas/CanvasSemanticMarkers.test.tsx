@@ -114,6 +114,7 @@ vi.mock('@/hooks/shared/useTerminology', () => ({
 }));
 
 const openLeafPanelMock = vi.hoisted(() => vi.fn());
+const openNodeModalMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -121,7 +122,7 @@ vi.mock('@/store/canvasStore', () => ({
       getCommitTone: () => 'main-latest',
       hasMainCommit: false,
       openLeafPanel: openLeafPanelMock,
-      openNodeModal: vi.fn(),
+      openNodeModal: openNodeModalMock,
       projectId: 'proj_store',
       updateNode: vi.fn(),
     }),
@@ -294,20 +295,18 @@ describe('Canvas node semantic markers', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
 
-    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_canvas/commit/sha256%3Aabc123'
-    );
+    expect(openNodeModalMock).toHaveBeenCalledWith('unit_canvas', 'commit');
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('keeps the intro demo query when opening commit details from the hash', () => {
+  it('keeps intro-demo commit inspection inside the canvas', () => {
     navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
     renderUnitNode(makeNodeData());
 
     fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
 
-    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_canvas/commit/sha256%3Aabc123?introDemo=1'
-    );
+    expect(openNodeModalMock).toHaveBeenCalledWith('unit_canvas', 'commit');
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('shows a local new leaf action after expanding existing leaf output', () => {

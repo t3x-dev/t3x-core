@@ -9,6 +9,7 @@ import { ContextManifestPanel, type ContextManifestSourcePicker } from './Contex
 
 interface ContextManifestBarProps {
   manifest: ConversationContextManifest | null;
+  projectName?: string;
   loading: boolean;
   error: Error | string | null;
   open?: boolean;
@@ -46,6 +47,7 @@ function errorMessage(error: ContextManifestBarProps['error']): string | null {
 
 export function ContextManifestBar({
   manifest,
+  projectName,
   loading,
   error,
   open,
@@ -207,6 +209,7 @@ export function ContextManifestBar({
         <ContextManifestPanel
           id={panelId}
           manifest={displayManifest}
+          projectName={projectName}
           disabled={updating}
           sourcePicker={sourcePicker}
           onReferenceToggle={onReferenceToggle}
