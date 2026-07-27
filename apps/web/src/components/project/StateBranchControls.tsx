@@ -19,7 +19,7 @@ interface StateBranchControlsProps {
   branchOptions: string[];
   headCommitHash: string | null;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string, parentBranch: string) => Promise<void>;
+  onCreateBranch: (name: string) => Promise<void>;
 }
 
 export function StateBranchControls({
@@ -31,6 +31,7 @@ export function StateBranchControls({
 }: StateBranchControlsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const normalizedName = normalizeBranchName(name);
   const validationError = getBranchNameError(normalizedName, branchOptions);
@@ -38,6 +39,7 @@ export function StateBranchControls({
   useEffect(() => {
     if (dialogOpen) return;
     setName('');
+    setSubmitError(null);
     setSubmitting(false);
   }, [dialogOpen]);
 
@@ -45,11 +47,13 @@ export function StateBranchControls({
     event.preventDefault();
     if (validationError || !normalizedName || submitting) return;
 
+    setSubmitError(null);
     setSubmitting(true);
     try {
-      await onCreateBranch(normalizedName, branch);
-      onBranchChange(normalizedName);
+      await onCreateBranch(normalizedName);
       setDialogOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not create branch.');
     } finally {
       setSubmitting(false);
     }
@@ -84,9 +88,7 @@ export function StateBranchControls({
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
-              <DialogDescription>
-                Start a new line of structured state from the branch and commit you are viewing.
-              </DialogDescription>
+              <DialogDescription>Start a new line of structured state from main.</DialogDescription>
             </DialogHeader>
 
             <div className="mt-5 grid gap-4">
@@ -112,7 +114,7 @@ export function StateBranchControls({
                   Branch source
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-                  <span className="font-mono font-bold text-[var(--text-primary)]">{branch}</span>
+                  <span className="font-mono font-bold text-[var(--text-primary)]">main</span>
                   <span>at</span>
                   <span className="font-mono text-xs">
                     {headCommitHash ? commitHashLabel(headCommitHash) : 'empty state'}
@@ -122,6 +124,10 @@ export function StateBranchControls({
               {name && validationError ? (
                 <p className="text-xs font-semibold text-[var(--status-warning)]" role="alert">
                   {validationError}
+                </p>
+              ) : submitError ? (
+                <p className="text-xs font-semibold text-[var(--status-warning)]" role="alert">
+                  {submitError}
                 </p>
               ) : (
                 <p className="text-xs text-[var(--text-tertiary)]">

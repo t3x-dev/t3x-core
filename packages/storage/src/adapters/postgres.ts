@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 51;
+const SCHEMA_VERSION = 52;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -539,7 +539,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'editing',
       committed_as TEXT,
       committed_leaf_id TEXT,
-      target_branch TEXT DEFAULT 'main',
+      target_branch TEXT NOT NULL DEFAULT 'main',
       workspace_id TEXT,
       workspace_state_json JSONB,
       revision INTEGER NOT NULL DEFAULT 1,
@@ -1474,6 +1474,40 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
       ON drafts(project_id, workspace_id)
       WHERE workspace_id IS NOT NULL;
+  `);
+
+  // ── Schema v52: one open Project Workspace per branch ──
+  await sql.unsafe(`
+    UPDATE drafts
+    SET target_branch = 'main'
+    WHERE target_branch IS NULL;
+
+    ALTER TABLE drafts ALTER COLUMN target_branch SET DEFAULT 'main';
+    ALTER TABLE drafts ALTER COLUMN target_branch SET NOT NULL;
+
+    WITH ranked_open_workspaces AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY project_id, target_branch
+          ORDER BY updated_at DESC, id DESC
+        ) AS workspace_rank
+      FROM drafts
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed'
+    )
+    UPDATE drafts AS draft
+    SET status = 'abandoned', updated_at = NOW()
+    FROM ranked_open_workspaces AS ranked
+    WHERE draft.id = ranked.id
+      AND ranked.workspace_rank > 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
+      ON drafts(project_id, target_branch)
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

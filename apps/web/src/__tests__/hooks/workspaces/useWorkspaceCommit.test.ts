@@ -40,7 +40,7 @@ describe('useWorkspaceCommit', () => {
     vi.clearAllMocks();
     vi.mocked(saveWorkspaceDraft).mockResolvedValue({
       candidate_id: 'candidate:workspace_prd_handoff',
-      workspace: candidate,
+      workspace: { ...candidate, revision: 2 },
     });
     vi.mocked(commitWorkspaceDraft).mockResolvedValue({
       candidate_id: 'candidate:workspace_prd_handoff',
@@ -73,7 +73,8 @@ describe('useWorkspaceCommit', () => {
       'workspace_prd_handoff',
       { trees: materializedTrees, relations: materializedRelations },
       'Workspace commit: PRD audience handoff',
-      undefined
+      undefined,
+      2
     );
     expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(commitWorkspaceDraft).mock.invocationCallOrder[0]
@@ -111,7 +112,8 @@ describe('useWorkspaceCommit', () => {
       'workspace_prd_handoff',
       { trees: materializedTrees, relations: materializedRelations },
       'Workspace commit: PRD audience handoff',
-      validationOverride
+      validationOverride,
+      2
     );
   });
 });

@@ -1287,12 +1287,17 @@ describe('WorkspaceWorkbench', () => {
   });
 
   it('starts the next workspace conversation on a new branch', async () => {
+    const nextWorkspaceId = 'workspace_00000000-0000-4000-8000-000000000001';
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000001'
+    );
+    const onWorkspaceBranchChange = vi.fn();
     const committedCandidate: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       status: 'committed',
       lastCommitHash: 'sha256:workspace-commit',
     };
-    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const workspaceUrl = `http://localhost:8000/api/v1/projects/proj_1/workspaces/${nextWorkspaceId}`;
     const branchesUrl = 'http://localhost:8000/api/v1/branches';
     const conversationsUrl = 'http://localhost:8000/api/v1/conversations';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -1348,7 +1353,13 @@ describe('WorkspaceWorkbench', () => {
       return jsonResponse({ success: true, data: { pins: [] } });
     });
 
-    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    render(
+      <WorkspaceWorkbench
+        candidates={[committedCandidate]}
+        onWorkspaceBranchChange={onWorkspaceBranchChange}
+        projectId="proj_1"
+      />
+    );
     activateTab(/Commit/);
     fireEvent.click(screen.getByRole('button', { name: 'Create a new branch' }));
     fireEvent.change(screen.getByLabelText('Branch name'), {
@@ -1369,9 +1380,11 @@ describe('WorkspaceWorkbench', () => {
     expect(JSON.parse(String(saveInit?.body))).toMatchObject({
       workspace: {
         baseCommitHash: 'sha256:workspace-commit',
+        id: nextWorkspaceId,
         targetBranch: 'feature/next-round',
       },
     });
+    expect(onWorkspaceBranchChange).toHaveBeenCalledWith('feature/next-round');
   });
 
   it('adds newly refreshed materials to a continued workspace without restoring stale chat', async () => {

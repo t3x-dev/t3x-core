@@ -12,6 +12,14 @@ const fetchMaterialsByProjectMock = vi.fn();
 const fetchProjectWorkspacesMock = vi.fn();
 let searchParamsValue = new URLSearchParams('tab=workspaces');
 
+vi.mock('@/hooks/shared/useBranches', () => ({
+  useBranches: () => ({
+    branchHeads: { 'feature/prd-audience': 'sha256:feature-head', 'release/notes': null },
+    loading: false,
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/t3x-dev/test-project/workspaces',
   useRouter: () => ({ push: pushMock, replace: replaceMock }),
@@ -35,12 +43,17 @@ describe('ProjectWorkspacesTab', () => {
     searchParamsValue = new URLSearchParams('tab=workspaces');
   });
 
-  it('selects the workspace from the URL without showing an internal workspace selector', () => {
-    searchParamsValue = new URLSearchParams('tab=workspaces&workspace=workspace_release_notes');
+  it('selects the workspace from the URL without showing an internal workspace selector', async () => {
+    const [mainWorkspace, releaseWorkspace] = getWorkspacePreviewCandidates('proj_other');
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([
+      { ...mainWorkspace, id: 'workspace_main', targetBranch: 'main' },
+      releaseWorkspace,
+    ]);
+    searchParamsValue = new URLSearchParams('branch=release%2Fnotes&workspace=workspace_main');
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
+    expect(await screen.findByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.queryByText('Audience chat')).not.toBeInTheDocument();
     expect(screen.queryByText('PRD import')).not.toBeInTheDocument();
     expect(screen.queryByText('Release note outline')).not.toBeInTheDocument();
@@ -193,7 +206,7 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    fireEvent.click(screen.getByRole('tab', { name: /Commit/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Commit/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'View in State' }));
 
     expect(pushMock).toHaveBeenCalledWith(

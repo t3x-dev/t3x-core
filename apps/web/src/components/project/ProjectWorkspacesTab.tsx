@@ -4,11 +4,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
+import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import {
   applyProjectWorkspaceSchemaBindings,
   type ProjectWorkspaceSchemaBindings,
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
+import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
@@ -23,6 +25,13 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const searchParams = useSearchParams();
   const projectMaterials = useProjectMaterials(projectId);
   const projectWorkspaces = useProjectWorkspaces(projectId);
+  const branch = searchParams.get('branch')?.trim() || null;
+  const {
+    branchHeads,
+    loading: branchesLoading,
+    refresh: refreshBranches,
+  } = useBranches(projectId, Boolean(branch));
+  const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
   const previewCandidates = useMemo(
     () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
     [projectId, projectMaterials.materials]
@@ -38,7 +47,19 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
         : workspaceCandidates,
     [workspaceCandidates, schemaBindings]
   );
-  const selectedWorkspaceId = searchParams.get('workspace');
+  const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
+  const branchWorkspace = branch
+    ? (selectWorkspaceForBranch(projectWorkspaces.workspaces, branch, branchHead) ??
+      selectWorkspaceForBranch(previewCandidates, branch, branchHead))
+    : null;
+  const selectedCandidate = branch
+    ? branchWorkspace
+      ? (candidates.find((candidate) => candidate.id === branchWorkspace.id) ?? branchWorkspace)
+      : null
+    : (candidates.find((candidate) => candidate.id === requestedWorkspaceId) ?? null);
+  const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
+  const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
+  const navigationError = projectWorkspaces.error;
 
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
@@ -48,6 +69,17 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       router.replace(`?${params.toString()}`, { scroll: false });
     },
     [router, searchParams]
+  );
+
+  const handleWorkspaceBranchChange = useCallback(
+    async (nextBranch: string) => {
+      await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('branch', nextBranch);
+      params.delete('workspace');
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [projectWorkspaces.refresh, refreshBranches, router, searchParams]
   );
 
   const handleViewCommitInState = useCallback(
@@ -67,12 +99,21 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
 
   return (
     <WorkspaceWorkbench
-      candidates={candidates}
+      candidates={visibleCandidates}
+      errorMessage={navigationError ?? undefined}
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
-      onSelectedWorkspaceChange={handleWorkspaceSelect}
+      viewState={
+        projectWorkspaces.loading || (Boolean(branch) && branchesLoading)
+          ? 'loading'
+          : navigationError
+            ? 'error'
+            : 'ready'
+      }
+      onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
+      onWorkspaceBranchChange={handleWorkspaceBranchChange}
     />
   );
 }

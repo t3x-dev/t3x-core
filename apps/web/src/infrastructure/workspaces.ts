@@ -16,6 +16,14 @@ export interface WorkspaceCommitResponse extends WorkspaceSaveResponse {
   commit: { hash: string };
 }
 
+export function workspaceWritePayload(workspace: WorkspaceCandidate) {
+  const { revision, ...workspaceState } = workspace;
+  return {
+    workspace: workspaceState,
+    ...(revision === undefined ? {} : { if_revision: revision }),
+  };
+}
+
 export async function listProjectWorkspaces(projectId: string): Promise<WorkspaceCandidate[]> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces`
@@ -34,7 +42,7 @@ export async function saveProjectWorkspace(
       workspaceId
     )}`,
     {
-      body: JSON.stringify({ workspace }),
+      body: JSON.stringify(workspaceWritePayload(workspace)),
       headers: { 'Content-Type': 'application/json' },
       method: 'PATCH',
     }
@@ -47,7 +55,8 @@ export async function commitProjectWorkspace(
   workspaceId: string,
   content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
   message?: string,
-  validationOverride?: WorkspaceValidationOverride
+  validationOverride?: WorkspaceValidationOverride,
+  ifRevision?: number
 ): Promise<WorkspaceCommitResponse> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
@@ -58,6 +67,7 @@ export async function commitProjectWorkspace(
         content,
         ...(message ? { message } : {}),
         ...(validationOverride ? { validationOverride } : {}),
+        ...(ifRevision === undefined ? {} : { if_revision: ifRevision }),
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',

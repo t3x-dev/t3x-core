@@ -770,7 +770,7 @@ export const drafts = pgTable(
     committedLeafId: text('committed_leaf_id'),
 
     /** Target branch for commit */
-    targetBranch: text('target_branch').default('main'),
+    targetBranch: text('target_branch').notNull().default('main'),
 
     /** Stable Workspace ID for Project Workspaces staged state */
     workspaceId: text('workspace_id'),
@@ -802,6 +802,11 @@ export const drafts = pgTable(
     workspaceIdx: uniqueIndex('idx_drafts_workspace')
       .on(table.projectId, table.workspaceId)
       .where(sql`${table.workspaceId} IS NOT NULL`),
+    openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
+      .on(table.projectId, table.targetBranch)
+      .where(
+        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+      ),
   })
 );
 

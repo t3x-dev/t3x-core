@@ -25,7 +25,15 @@ export function commitWorkspaceDraft(
   workspaceId: string,
   content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
   message?: string,
-  validationOverride?: WorkspaceValidationOverride
+  validationOverride?: WorkspaceValidationOverride,
+  ifRevision?: number
 ): Promise<WorkspaceCommitResponse> {
-  return commitProjectWorkspace(projectId, workspaceId, content, message, validationOverride);
+  return commitProjectWorkspace(
+    projectId,
+    workspaceId,
+    content,
+    message,
+    validationOverride,
+    ifRevision
+  );
 }

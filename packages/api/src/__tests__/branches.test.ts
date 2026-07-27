@@ -125,16 +125,17 @@ describe('Branches Routes', () => {
       expect(data.error.code).toBe('NOT_FOUND');
     });
 
-    it('returns 400 for duplicate branch name', async () => {
+    it('returns the existing branch for an identical create intent', async () => {
       const res = await app.request('/v1/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: testProjectId, name: 'feature-test' }),
       });
 
-      expect(res.status).toBe(409);
+      expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
-      expect(data.error.code).toBe('CONFLICT');
+      expect(data.success).toBe(true);
+      expect(data.data.name).toBe('feature-test');
     });
 
     it('returns 400 for invalid JSON', async () => {

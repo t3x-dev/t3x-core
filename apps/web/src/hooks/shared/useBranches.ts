@@ -26,7 +26,7 @@ export interface UseBranchesResult {
   branches: string[];
   loading: boolean;
   refresh: () => Promise<void>;
-  create: (name: string, parentBranch: string) => Promise<void>;
+  create: (name: string, parentBranch: string) => Promise<Branch>;
 }
 
 export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
@@ -64,13 +64,14 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
 
   const create = useCallback(
     async (name: string, parentBranch: string) => {
-      if (!projectId) return;
+      if (!projectId) throw new Error('A project is required to create a branch.');
       const branch = await createBranch(projectId, name, parentBranch);
       setBranchHeads((previous) => ({
         ...previous,
         [branch.name]: branch.head_commit_hash ?? null,
       }));
       setBranches((prev) => (prev.includes(name) ? prev : dedupSortedBranches([...prev, name])));
+      return branch;
     },
     [projectId]
   );

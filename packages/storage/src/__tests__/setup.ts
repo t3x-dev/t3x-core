@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   status TEXT NOT NULL DEFAULT 'editing',
   committed_as TEXT,
   committed_leaf_id TEXT,
-  target_branch TEXT DEFAULT 'main',
+  target_branch TEXT NOT NULL DEFAULT 'main',
   workspace_id TEXT,
   workspace_state_json JSONB,
   revision INTEGER NOT NULL DEFAULT 1,
@@ -467,6 +467,11 @@ CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
   ON drafts(project_id, workspace_id)
   WHERE workspace_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
+  ON drafts(project_id, target_branch)
+  WHERE workspace_id IS NOT NULL
+    AND status <> 'abandoned'
+    AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (
@@ -777,6 +782,7 @@ function ignoreNotice(_notice: postgres.Notice): void {}
  */
 export async function createTestDB(): Promise<{
   db: AnyDB;
+  connectionString: string;
   /** Raw postgres.js Sql for direct SQL execution in tests */
   sql: postgres.Sql;
   cleanup: () => Promise<void>;
@@ -827,7 +833,7 @@ export async function createTestDB(): Promise<{
     }
   };
 
-  return { db, sql: rawSql, cleanup };
+  return { db, connectionString, sql: rawSql, cleanup };
 }
 
 /**

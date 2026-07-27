@@ -30,6 +30,7 @@ interface WorkspaceWorkbenchProps {
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
 }
 
 export function WorkspaceWorkbench({
@@ -37,6 +38,7 @@ export function WorkspaceWorkbench({
   errorMessage,
   onSourceMaterialUploaded,
   onViewCommitInState,
+  onWorkspaceBranchChange,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
@@ -65,12 +67,12 @@ export function WorkspaceWorkbench({
         }
       : selectedWorkspace;
 
-  const updateSelectedFlow = (patch: WorkspaceFlowState) => {
-    if (!selectedWorkspace) return;
+  const updateSelectedFlow = (patch: WorkspaceFlowState, workspaceId = selectedWorkspace?.id) => {
+    if (!workspaceId) return;
     setFlowByWorkspaceId((current) => ({
       ...current,
-      [selectedWorkspace.id]: {
-        ...current[selectedWorkspace.id],
+      [workspaceId]: {
+        ...current[workspaceId],
         ...patch,
       },
     }));
@@ -187,17 +189,21 @@ export function WorkspaceWorkbench({
         ...current,
         [result.workspace.id]: result.workspace,
       }));
-      updateSelectedFlow({
-        candidateId: undefined,
-        commitHash: undefined,
-        continuationBusy: false,
-        error: undefined,
-        sourceConversationId: result.conversationId,
-        sourceParentCommitHash: commitHash,
-        validationGapCount: undefined,
-        yopsDraftId: undefined,
-      });
+      updateSelectedFlow(
+        {
+          candidateId: undefined,
+          commitHash: undefined,
+          continuationBusy: false,
+          error: undefined,
+          sourceConversationId: result.conversationId,
+          sourceParentCommitHash: commitHash,
+          validationGapCount: undefined,
+          yopsDraftId: undefined,
+        },
+        result.workspace.id
+      );
       setActiveWorkflowTab('chat');
+      if (createBranchFrom) await onWorkspaceBranchChange?.(targetBranch);
     } catch (err) {
       updateSelectedFlow({
         continuationBusy: false,
