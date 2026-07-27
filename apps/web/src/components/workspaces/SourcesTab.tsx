@@ -36,6 +36,7 @@ import {
 } from '@/domain/workspaces/selectors';
 import type { ChatMessage } from '@/hooks/conversations/useConversationChat';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
+import { useConversationParentResolver } from '@/hooks/conversations/useConversationParentResolver';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialDetail } from '@/hooks/materials/useMaterialDetail';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
@@ -803,8 +804,12 @@ function SourceChatPanel({
       ? conversationId
       : (conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id))
   );
+  const [conversationScopeResolved, setConversationScopeResolved] = useState(
+    !parentCommitHash || Boolean(conversationId)
+  );
   const [turnSourceError, setTurnSourceError] = useState<string | null>(null);
   const [pinningTurnId, setPinningTurnId] = useState<string | null>(null);
+  const { findConversationForParent } = useConversationParentResolver();
   const {
     selectedProvider,
     selectedModel,
@@ -813,28 +818,115 @@ function SourceChatPanel({
     isSelectionReady,
   } = useChatModelSelection({});
 
+  const candidateConversationIds = useMemo(
+    () =>
+      candidate.sourceBundle
+        .filter((source) => source.type === 'chat' && source.conversationId)
+        .map((source) => source.conversationId as string),
+    [candidate.sourceBundle]
+  );
+  const candidateConversationFingerprint = candidateConversationIds.join('\u001f');
+
   useEffect(() => {
-    if (parentCommitHash) {
+    let active = true;
+
+    if (conversationId) {
       setSourceConversationId(conversationId);
-      if (conversationId) {
-        writeStoredSourceChatConversationId(candidate.projectId, candidate.id, conversationId);
-      } else {
-        removeStoredSourceChatConversationId(candidate.projectId, candidate.id);
-      }
-      return;
+      setConversationScopeResolved(true);
+      writeStoredSourceChatConversationId(
+        candidate.projectId,
+        candidate.id,
+        conversationId,
+        parentCommitHash
+      );
+      return () => {
+        active = false;
+      };
     }
 
-    setSourceConversationId(
-      conversationId ?? readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+    if (!parentCommitHash) {
+      setSourceConversationId(
+        readStoredSourceChatConversationId(candidate.projectId, candidate.id)
+      );
+      setConversationScopeResolved(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSourceConversationId(undefined);
+    setConversationScopeResolved(false);
+    const possibleConversationIds = Array.from(
+      new Set(
+        [
+          readStoredSourceChatConversationId(candidate.projectId, candidate.id, parentCommitHash),
+          readStoredSourceChatConversationId(candidate.projectId, candidate.id),
+          ...candidateConversationIds,
+        ].filter((value): value is string => Boolean(value))
+      )
     );
-  }, [candidate.id, candidate.projectId, conversationId, parentCommitHash]);
+
+    void findConversationForParent(possibleConversationIds, parentCommitHash).then(
+      (matchedConversationId) => {
+        if (!active) return;
+        setSourceConversationId(matchedConversationId);
+        setConversationScopeResolved(true);
+        if (matchedConversationId) {
+          writeStoredSourceChatConversationId(
+            candidate.projectId,
+            candidate.id,
+            matchedConversationId,
+            parentCommitHash
+          );
+        } else {
+          removeStoredSourceChatConversationId(candidate.projectId, candidate.id, parentCommitHash);
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [
+    candidate.id,
+    candidate.projectId,
+    candidateConversationFingerprint,
+    conversationId,
+    findConversationForParent,
+    parentCommitHash,
+  ]);
+
+  useEffect(() => {
+    if (!conversationScopeResolved || !parentCommitHash || !onChatSourceEvidenceChange) return;
+
+    for (const source of candidate.sourceBundle) {
+      if (
+        source.type === 'chat' &&
+        (!sourceConversationId || source.conversationId !== sourceConversationId)
+      ) {
+        onChatSourceEvidenceChange(source.id, null);
+      }
+    }
+  }, [
+    candidate.sourceBundle,
+    conversationScopeResolved,
+    onChatSourceEvidenceChange,
+    parentCommitHash,
+    sourceConversationId,
+  ]);
 
   const handleConversationCreated = useCallback(
     (conversationId: string) => {
       setSourceConversationId(conversationId);
-      writeStoredSourceChatConversationId(candidate.projectId, candidate.id, conversationId);
+      setConversationScopeResolved(true);
+      writeStoredSourceChatConversationId(
+        candidate.projectId,
+        candidate.id,
+        conversationId,
+        parentCommitHash
+      );
     },
-    [candidate.id, candidate.projectId]
+    [candidate.id, candidate.projectId, parentCommitHash]
   );
 
   const chat = useConversationChat({
@@ -863,8 +955,18 @@ function SourceChatPanel({
     }
 
     if (messageTurns.length > 0) return messageTurns;
-    return getSourceChatTurns(candidate, selectedSource);
-  }, [candidate, chat.messages, chat.streamingContent, selectedSource, sourceConversationId]);
+    if (!conversationScopeResolved) return [];
+    if (parentCommitHash && !sourceConversationId) return [];
+    return getSourceChatTurns(candidate, selectedSource, sourceConversationId);
+  }, [
+    candidate,
+    chat.messages,
+    chat.streamingContent,
+    conversationScopeResolved,
+    parentCommitHash,
+    selectedSource,
+    sourceConversationId,
+  ]);
 
   const turnPinsByRefId = useMemo(() => {
     const map = new Map<string, Pin>();
@@ -898,7 +1000,7 @@ function SourceChatPanel({
   const selectedTurnCount = selectedSourceTurns.length;
 
   useEffect(() => {
-    if (!onChatSourceEvidenceChange) return;
+    if (!onChatSourceEvidenceChange || !conversationScopeResolved) return;
 
     const sourceId = getSourceChatSourceId(candidate.id, selectedSource, sourceConversationId);
     if (selectedSourceTurns.length === 0) {
@@ -918,6 +1020,7 @@ function SourceChatPanel({
   }, [
     candidate.id,
     candidate.title,
+    conversationScopeResolved,
     onChatSourceEvidenceChange,
     selectedSource?.conversationId,
     selectedSource?.id,
@@ -1052,19 +1155,26 @@ function SourceChatPanel({
   );
 }
 
-function sourceChatConversationStorageKey(projectId: string, workspaceId: string): string {
-  return `${SOURCE_CHAT_CONVERSATION_STORAGE_PREFIX}${projectId}:${workspaceId}`;
+function sourceChatConversationStorageKey(
+  projectId: string,
+  workspaceId: string,
+  parentCommitHash?: string
+): string {
+  const scope = parentCommitHash ? `:${parentCommitHash}` : '';
+  return `${SOURCE_CHAT_CONVERSATION_STORAGE_PREFIX}${projectId}:${workspaceId}${scope}`;
 }
 
 function readStoredSourceChatConversationId(
   projectId: string,
-  workspaceId: string
+  workspaceId: string,
+  parentCommitHash?: string
 ): string | undefined {
   if (typeof window === 'undefined') return undefined;
   try {
     return (
-      window.localStorage.getItem(sourceChatConversationStorageKey(projectId, workspaceId)) ??
-      undefined
+      window.localStorage.getItem(
+        sourceChatConversationStorageKey(projectId, workspaceId, parentCommitHash)
+      ) ?? undefined
     );
   } catch {
     return undefined;
@@ -1074,12 +1184,13 @@ function readStoredSourceChatConversationId(
 function writeStoredSourceChatConversationId(
   projectId: string,
   workspaceId: string,
-  conversationId: string
+  conversationId: string,
+  parentCommitHash?: string
 ): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(
-      sourceChatConversationStorageKey(projectId, workspaceId),
+      sourceChatConversationStorageKey(projectId, workspaceId, parentCommitHash),
       conversationId
     );
   } catch {
@@ -1087,10 +1198,16 @@ function writeStoredSourceChatConversationId(
   }
 }
 
-function removeStoredSourceChatConversationId(projectId: string, workspaceId: string): void {
+function removeStoredSourceChatConversationId(
+  projectId: string,
+  workspaceId: string,
+  parentCommitHash?: string
+): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(sourceChatConversationStorageKey(projectId, workspaceId));
+    window.localStorage.removeItem(
+      sourceChatConversationStorageKey(projectId, workspaceId, parentCommitHash)
+    );
   } catch {
     // A fresh in-memory conversation can still start without localStorage.
   }
@@ -1255,8 +1372,17 @@ function SourceMeta({ label, value }: { label: string; value: string }) {
 
 function getSourceChatTurns(
   candidate: WorkspaceCandidate,
-  selectedSource: SourceBundleItem | null
+  selectedSource: SourceBundleItem | null,
+  conversationId?: string
 ): SourceConversationTurn[] {
+  if (conversationId) {
+    return (
+      candidate.sourceBundle.find(
+        (source) => source.type === 'chat' && source.conversationId === conversationId
+      )?.previewTurns ?? []
+    );
+  }
+
   if (selectedSource?.type === 'chat') {
     return selectedSource.previewTurns ?? [];
   }

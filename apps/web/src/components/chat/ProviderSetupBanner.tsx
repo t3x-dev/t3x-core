@@ -1,7 +1,5 @@
 'use client';
 
-import { PlayCircle } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { cn } from '@/utils/cn';
@@ -42,12 +40,6 @@ export function ProviderSetupBanner({ className, variant = 'setup' }: ProviderSe
 
         {variant === 'setup' && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button asChild variant="canvas-outline" size="sm">
-              <Link href="/chat?introDemo=1">
-                <PlayCircle className="h-3.5 w-3.5" />
-                Try fixture demo
-              </Link>
-            </Button>
             <Button
               type="button"
               variant="outline"

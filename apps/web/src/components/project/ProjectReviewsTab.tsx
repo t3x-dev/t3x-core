@@ -966,11 +966,6 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         onRerun={() => rerunReadiness(selectedPullRequest)}
         pullRequest={selectedPullRequest}
         readinessError={readinessError}
-        resolveConflictsHref={
-          projectId && selectedPullRequest.mergeDraftId
-            ? `/project/${encodeURIComponent(projectId)}/merge/${encodeURIComponent(selectedPullRequest.mergeDraftId)}?pullRequest=${selectedPullRequest.number}&returnTo=${encodeURIComponent(`/project/${projectId}?tab=reviews`)}`
-            : undefined
-        }
         rerunning={rerunningId === selectedPullRequest.id}
       />
     );
@@ -1478,7 +1473,6 @@ function PullRequestDetailView({
   onRerun,
   pullRequest,
   readinessError,
-  resolveConflictsHref,
   rerunning,
 }: {
   closeConfirmationActive: boolean;
@@ -1496,7 +1490,6 @@ function PullRequestDetailView({
   onRerun: () => void;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
-  resolveConflictsHref?: string;
   rerunning: boolean;
 }) {
   const closeable = !['merged', 'closed'].includes(pullRequest.status);
@@ -1636,7 +1629,6 @@ function PullRequestDetailView({
                 merging={merging}
                 onMerge={onMerge}
                 pullRequest={pullRequest}
-                resolveConflictsHref={resolveConflictsHref}
               />
             )}
           </div>
@@ -1782,13 +1774,11 @@ function MergePanel({
   merging,
   onMerge,
   pullRequest,
-  resolveConflictsHref,
 }: {
   error: string | null;
   merging: boolean;
   onMerge: () => void;
   pullRequest: ProjectPullRequest;
-  resolveConflictsHref?: string;
 }) {
   const ready = pullRequest.status === 'ready';
   const merged = pullRequest.status === 'merged';
@@ -1831,12 +1821,16 @@ function MergePanel({
             </p>
           ) : null}
         </div>
-        {!finished && resolvable && resolveConflictsHref ? (
-          <Button asChild variant="commit">
-            <a href={resolveConflictsHref}>Resolve conflicts</a>
+        {!finished && resolvable ? (
+          <Button
+            disabled
+            title="Conflict resolution is not available in this view yet"
+            variant="canvas-outline"
+          >
+            Resolve conflicts
           </Button>
         ) : null}
-        {!finished && (!resolvable || !resolveConflictsHref) ? (
+        {!finished && !resolvable ? (
           <Button
             disabled={!ready || merging}
             onClick={onMerge}

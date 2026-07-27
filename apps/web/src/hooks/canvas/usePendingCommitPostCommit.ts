@@ -72,14 +72,17 @@ export function usePendingCommitPostCommit({
           data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
       });
 
-      const routeProject = data.projectId || projectId;
-      window.location.href = `/project/${routeProject}/draft/${newDraft.id}`;
+      await loadCanvas(projectId);
+      onClose();
+      queueMicrotask(() => {
+        useCanvasStore.getState().openNodeModal(newDraft.id, 'commit');
+      });
     } catch (err) {
       toast.error(formatUserFacingError(err, 'Failed to create draft.'));
     } finally {
       setOpeningAsDraft(false);
     }
-  }, [projectId, data]);
+  }, [projectId, data, loadCanvas, onClose]);
 
   return {
     openingAsDraft,

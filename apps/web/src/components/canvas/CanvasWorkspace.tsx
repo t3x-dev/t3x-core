@@ -8,7 +8,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { GitCommit, HelpCircle } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
@@ -52,7 +52,6 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
-import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
@@ -119,24 +118,13 @@ function CanvasWorkspaceInner({
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
   const compactViewport = useCompactViewport();
   const selectionPanelVisible = useCompactViewport('(min-width: 1280px)');
   const canvasMinZoom = compactViewport ? 0.55 : 0.25;
-  const currentReturnTo = useMemo(
-    () => buildReturnTo(pathname, searchParams),
-    [pathname, searchParams]
-  );
   const introDemoActive = searchParams.get('introDemo') === '1';
-  const introDemoLeafReturnTo = useMemo(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('introDemo', '1');
-    params.set('introDemoStage', 'leaf');
-    return buildReturnTo(pathname, params);
-  }, [pathname, searchParams]);
   const withIntroDemo = useCallback(
     (href: string) => {
       if (!introDemoActive) return href;
@@ -168,9 +156,7 @@ function CanvasWorkspaceInner({
     openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
-  const { addConversationFromCommit, startMerge } = useCanvasCommitActions();
-  const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
-  const getCommitTone = useCanvasStore((state) => state.getCommitTone);
+  const { addConversationFromCommit } = useCanvasCommitActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -259,9 +245,9 @@ function CanvasWorkspaceInner({
       isDeveloperMode,
       notify,
       projectId,
+      projectName,
       fitView,
       onNavigate: (url: string) => router.push(url),
-      returnTo: currentReturnTo,
     });
 
   // Path highlight (extracted hook)
@@ -385,6 +371,7 @@ function CanvasWorkspaceInner({
     focusedCommitAppliedRef.current = focusKey;
 
     setHighlight({ mode: 'node', nodeId: targetNode.id });
+    openNodeModal(targetNode.id, 'commit');
     const currentNodes = getNodes();
     setNodes(
       currentNodes.map((node) => ({
@@ -408,6 +395,7 @@ function CanvasWorkspaceInner({
     getNodes,
     initialLayoutDone,
     nodes,
+    openNodeModal,
     projectId,
     setCenter,
     setHighlight,
@@ -471,15 +459,15 @@ function CanvasWorkspaceInner({
                 n.data.commitStatus === 'staging' &&
                 n.data.sourceCommitHash === modalNode.data.commitHash
             );
-            if (newNode?.data.conversationId) {
-              router.push(`/chat/${newNode.data.conversationId}`);
+            if (newNode) {
+              useCanvasStore.getState().openNodeModal(newNode.id, 'conversation');
             }
           },
         },
       ];
     }
     return undefined;
-  }, [modalNode, addConversationFromCommit, router]);
+  }, [modalNode, addConversationFromCommit]);
 
   const selectedUnitNode = useMemo<CanvasUnitNode | null>(() => {
     const actionNode = actionPanel
@@ -497,9 +485,8 @@ function CanvasWorkspaceInner({
 
   const buildNodeActionModel = (node: CanvasUnitNode | null) => {
     if (!node) {
-      return { actions: [], canMerge: false, hash: '', parentHash: undefined };
+      return { actions: [], canMerge: false, parentHash: undefined };
     }
-    const hash = node.data.commitHash ?? node.data.commit?.hash ?? '';
     const parentEdge = edges.find((edge) => edge.target === node.id);
     const parentNode = parentEdge
       ? (nodes.find((candidate) => candidate.id === parentEdge.source) as
@@ -510,43 +497,13 @@ function CanvasWorkspaceInner({
       parentNode?.data.commitHash ??
       parentNode?.data.commit?.hash ??
       (parentEdge?.source?.startsWith('sha') ? parentEdge.source : undefined);
-    const panelTone = getCommitTone(node.id);
     const firstLeaf = node.data.leaves?.[0];
-    const canMerge =
-      node.data.branchType === 'branch' &&
-      node.data.commitStatus === 'committed' &&
-      panelTone === 'branch-latest' &&
-      hasMainCommit;
 
     return {
       actions: buildCommitActions({
         onViewDetails: () => {
-          if (projectId && hash) {
-            const detailHref = `/project/${projectId}/commit/${encodeURIComponent(hash)}`;
-            router.push(
-              introDemoActive
-                ? withReturnTo(
-                    `${detailHref}?introDemo=1&introDemoStage=commitDetails`,
-                    introDemoLeafReturnTo
-                  )
-                : detailHref
-            );
-          }
+          openNodeModal(node.id, 'commit');
         },
-        onViewDiff:
-          parentHash && projectId && hash
-            ? () => {
-                const query = new URLSearchParams({
-                  base: parentHash,
-                  target: hash,
-                });
-                router.push(
-                  withIntroDemo(
-                    withReturnTo(`/project/${projectId}/diff?${query.toString()}`, currentReturnTo)
-                  )
-                );
-              }
-            : undefined,
         onOpenLeaf:
           firstLeaf?.id && projectId
             ? () => {
@@ -560,22 +517,8 @@ function CanvasWorkspaceInner({
         onCreateLeaf: () => {
           openLeafPanel(node.id);
         },
-        onMerge:
-          canMerge && projectId
-            ? () => {
-                void (async () => {
-                  const draftId = await startMerge(node.id);
-                  if (draftId) {
-                    router.push(
-                      withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo)
-                    );
-                  }
-                })();
-              }
-            : undefined,
       }),
-      canMerge,
-      hash,
+      canMerge: false,
       parentHash,
     };
   };
@@ -608,8 +551,6 @@ function CanvasWorkspaceInner({
     openNodeModal,
     openNodeId,
     showShortcuts,
-    router,
-    projectId,
     setIsPanMode,
     setShowShortcuts,
   });
@@ -667,17 +608,13 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Staging/pending units -> navigate to chat page (always single click)
+              // Pending nodes stay on the canvas when selected. Their explicit action
+              // opens the inline workflow; selection must remain available for Delete.
               if (data.commitStatus !== 'committed') {
-                if (data.conversationId) {
-                  router.push(`/chat/${data.conversationId}`);
-                } else {
-                  openNodeModal(node.id, 'commit');
-                }
                 return;
               }
 
-              // Committed nodes: single click = action panel. Details opens the commit page.
+              // Committed nodes: single click = action panel. Details opens inline.
               if (!compactViewport) {
                 if (data.branchType === 'branch') {
                   setHighlight({ branch: data.branchName, mode: 'branch' });
@@ -828,12 +765,7 @@ function CanvasWorkspaceInner({
         modalNode.data.commitStatus === 'draft' &&
         modalNode.data.draftId &&
         projectId && (
-          <DraftQuickSheet
-            open
-            onClose={closeNodeModal}
-            draftId={modalNode.data.draftId}
-            projectId={projectId}
-          />
+          <DraftQuickSheet open onClose={closeNodeModal} draftId={modalNode.data.draftId} />
         )}
       {modalNode && modalNode.data.commitStatus !== 'draft' && (
         <NodeModal

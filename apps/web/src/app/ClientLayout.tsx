@@ -9,8 +9,10 @@ import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDi
 import { showToast } from '@/components/layout/Toast';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Toaster } from '@/components/ui/sonner';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
+import type { ProjectSummary } from '@/store/projectStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -37,16 +39,32 @@ export function isSettingsRoute(pathname: string): boolean {
   return /^\/settings(?:\/.*)?$/.test(pathname);
 }
 
+export function resolveCanonicalRepositoryPath(
+  pathname: string,
+  projectId: string | null,
+  projects: ProjectSummary[]
+): string | undefined {
+  const routeProject =
+    projects.find((project) => project.id === projectId) ??
+    projects.find((project) => {
+      const repoPath = getProjectRepoPath(project);
+      return pathname === repoPath || pathname.startsWith(`${repoPath}/`);
+    });
+  return routeProject ? getProjectRepoPath(routeProject) : undefined;
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
+  const projects = useProjectStore((state) => state.projects) ?? [];
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
   const density = useSettingsStore((s) => s.density);
   const cleanupLegacyKeys = useSessionStore((s) => s.cleanupLegacyKeys);
   const params = useParams();
   const projectId = typeof params?.projectId === 'string' ? params.projectId : null;
+  const repositoryPath = resolveCanonicalRepositoryPath(pathname, projectId, projects);
 
   // Clean up legacy onboarding localStorage keys on first mount
   useEffect(() => {
@@ -97,7 +115,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="flex flex-1 flex-col min-h-0">{children}</div>
           </main>
           <Toaster position="bottom-right" richColors closeButton />
-          <CommandPalette projectId={projectId ?? undefined} />
+          <CommandPalette repositoryPath={repositoryPath} />
           <KeyboardShortcutsDialog />
           <SettingsModal />
         </div>

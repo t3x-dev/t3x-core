@@ -39,6 +39,7 @@ export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
 export function YOpsDraftTab({
   active = true,
+  branchOptions: availableBranches,
   candidate,
   continuationBusy,
   flowError,
@@ -53,6 +54,7 @@ export function YOpsDraftTab({
   yopsDraftSent,
 }: {
   active?: boolean;
+  branchOptions?: string[];
   candidate: WorkspaceCandidate;
   continuationBusy?: boolean;
   flowError?: string;
@@ -96,7 +98,10 @@ export function YOpsDraftTab({
   );
   const { commit } = useWorkspaceCommit(commitCandidate);
   const { loadCommittedContent, rootKey, validate } = useWorkspaceYOps(candidate);
-  const branchOptions = useMemo(() => getCommitBranchOptions(candidate), [candidate]);
+  const branchOptions = useMemo(
+    () => getCommitBranchOptions(candidate, availableBranches),
+    [availableBranches, candidate]
+  );
   const draftFingerprint = useMemo(
     () =>
       draft.operations
@@ -1518,8 +1523,15 @@ function getInitialTargetBranch(candidate: WorkspaceCandidate): string {
   return normalizeBranchName(candidate.targetBranch) ?? 'main';
 }
 
-function getCommitBranchOptions(candidate: WorkspaceCandidate): string[] {
+function getCommitBranchOptions(
+  candidate: WorkspaceCandidate,
+  availableBranches: string[] = []
+): string[] {
   const options = new Set<string>(['main']);
+  for (const branch of availableBranches) {
+    const normalizedBranch = normalizeBranchName(branch);
+    if (normalizedBranch) options.add(normalizedBranch);
+  }
   const targetBranch = normalizeBranchName(candidate.targetBranch);
   if (targetBranch) options.add(targetBranch);
   return Array.from(options);

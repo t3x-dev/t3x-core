@@ -177,13 +177,14 @@ describe('ContextManifestBar', () => {
     expect(screen.queryByText('Pin parent')).toBeNull();
   });
 
-  it('shows baseline YAML with commit and source conversation links', () => {
+  it('keeps baseline navigation in the canonical repository shell', () => {
     const manifest = makeManifest();
     manifest.baseline.source_conversation_id = 'conv_parent';
 
     render(
       <ContextManifestBar
         manifest={manifest}
+        projectName="Example Project"
         loading={false}
         error={null}
         onReload={vi.fn()}
@@ -203,11 +204,10 @@ describe('ContextManifestBar', () => {
 
     expect(screen.getByTestId('baseline-yaml').textContent).toContain('goal');
     expect(screen.getByRole('link', { name: /view commit/i }).getAttribute('href')).toBe(
-      '/project/proj_1/commit/sha256%3Aabcdef1234567890'
+      '/t3x-dev/example-project?view=canvas&commit=sha256%3Aabcdef1234567890'
     );
-    expect(
-      screen.getByRole('link', { name: /view source conversation/i }).getAttribute('href')
-    ).toBe('/chat/conv_parent');
+    expect(screen.getByText('Source conversation attached')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: /source conversation/i })).toBeNull();
   });
 
   it('marks the baseline source conversation unavailable when lineage is missing', () => {

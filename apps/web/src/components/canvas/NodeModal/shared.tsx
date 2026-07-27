@@ -384,16 +384,9 @@ export function CommitConstraintsAndLeaves({
             </span>
           </div>
           <ul className="space-y-[var(--space-item)]">
-            {leaves.map((leaf) => (
-              <li key={leaf.id}>
-                <Link
-                  href={
-                    projectName
-                      ? getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)
-                      : `/project/${encodeURIComponent(projectId)}?tab=outputs&leaf=${encodeURIComponent(leaf.id)}`
-                  }
-                  className="flex items-center justify-between p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-success)]/15 hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] transition-colors"
-                >
+            {leaves.map((leaf) => {
+              const content = (
+                <>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--status-info-muted)] text-[var(--status-info)]">
                       {leaf.type}
@@ -401,9 +394,25 @@ export function CommitConstraintsAndLeaves({
                     <span className="text-sm text-foreground/80 truncate">{leaf.title}</span>
                   </div>
                   <ExternalLink size={14} className="text-[var(--status-success)] shrink-0" />
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={leaf.id}>
+                  {projectName ? (
+                    <Link
+                      href={getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id)}
+                      className="flex items-center justify-between p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-success)]/15 hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] transition-colors"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center justify-between p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-success)]/15">
+                      {content}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

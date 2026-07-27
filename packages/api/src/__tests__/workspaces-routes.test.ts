@@ -28,7 +28,9 @@ const storageMock = vi.hoisted(() => {
       workspaceDraft = null;
     },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
-    findBranchByName: vi.fn(() => Promise.resolve(null)),
+    findBranchByName: vi.fn((_db, _projectId: string, name: string) =>
+      Promise.resolve({ name, parentBranch: name === 'main' ? null : 'main' })
+    ),
     findWorkspaceDraft: vi.fn((_db, projectId: string, workspaceId: string) =>
       Promise.resolve(
         workspaceDraft
@@ -527,6 +529,34 @@ describe('Workspace routes', () => {
       const body: ApiResponse = await res.json();
       expect(body.error.code).toBe(conflict.code);
     }
+  });
+
+  it('rejects workspace state for a branch that is not registered', async () => {
+    storageMock.findBranchByName.mockResolvedValueOnce(null);
+
+    const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_phantom', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_phantom',
+          projectId: 'proj_sources',
+          status: 'draft',
+          targetBranch: 'feature/prd-audience',
+        },
+      }),
+    });
+
+    expect(res.status).toBe(404);
+    const body: ApiResponse = await res.json();
+    expect(body).toEqual({
+      success: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Target branch not found: feature/prd-audience',
+      },
+    });
+    expect(storageMock.upsertWorkspaceDraft).not.toHaveBeenCalled();
   });
 
   it('preserves backend workspace metadata when saving reviewed state', async () => {

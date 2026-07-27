@@ -15,7 +15,7 @@ import {
   PenSquare,
   Plus,
 } from 'lucide-react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
@@ -132,13 +132,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const params = useParams();
   const routeProjectId = params?.projectId as string | undefined;
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const projectId = routeProjectId || canvasProjectId || undefined;
-  const introDemoActive = searchParams.get('introDemo') === '1';
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
@@ -235,11 +232,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const handleOpenCommitDetails = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!projectId || !commitHash) return;
-      const href = `/project/${projectId}/commit/${encodeURIComponent(commitHash)}`;
-      router.push(introDemoActive ? `${href}?introDemo=1` : href);
+      openNodeModal(id, 'commit');
     },
-    [commitHash, introDemoActive, projectId, router]
+    [id, openNodeModal]
   );
 
   // B-4: Next Step button logic
@@ -254,9 +249,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
     t,
     icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
     actions: {
-      navigateToDraft: (pId, dId) => router.push(`/project/${pId}/draft/${dId}`),
-      navigateToConversation: (conversationId) =>
-        router.push(`/chat/${encodeURIComponent(conversationId)}`),
+      navigateToDraft: () => openNodeModal(id, 'commit'),
+      navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
       openLeafPanel,
     },

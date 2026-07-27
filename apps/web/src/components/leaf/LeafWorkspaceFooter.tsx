@@ -2,18 +2,28 @@
 
 import { GitBranch, GitCommit, Server } from 'lucide-react';
 import Link from 'next/link';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { Leaf } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 interface LeafWorkspaceFooterProps {
   leaf: Leaf;
   projectId: string;
+  projectName?: string;
   className?: string;
 }
 
-export function LeafWorkspaceFooter({ leaf, projectId, className }: LeafWorkspaceFooterProps) {
+export function LeafWorkspaceFooter({
+  leaf,
+  projectId,
+  projectName,
+  className,
+}: LeafWorkspaceFooterProps) {
   const shortHash = leaf.commit_hash.replace('sha256:', '').slice(0, 8);
   const createdDate = leaf.created_at.slice(0, 10);
+  const commitHref = projectName
+    ? `${getProjectRepoPath({ id: projectId, name: projectName })}?view=canvas&commit=${encodeURIComponent(leaf.commit_hash)}`
+    : null;
 
   return (
     <footer
@@ -37,12 +47,13 @@ export function LeafWorkspaceFooter({ leaf, projectId, className }: LeafWorkspac
       <span className="flex items-center gap-1">
         <GitCommit className="h-2.5 w-2.5 text-[var(--accent-commit)]" />
         Commit{' '}
-        <Link
-          href={`/project/${projectId}?focus=${leaf.commit_hash}`}
-          className="text-[var(--accent-commit)] hover:underline"
-        >
-          {shortHash}
-        </Link>
+        {commitHref ? (
+          <Link href={commitHref} className="text-[var(--accent-commit)] hover:underline">
+            {shortHash}
+          </Link>
+        ) : (
+          <span className="font-mono text-[var(--accent-commit)]">{shortHash}</span>
+        )}
       </span>
 
       <span className="text-[var(--stroke-default)]">&middot;</span>

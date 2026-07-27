@@ -22,11 +22,12 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 }));
 
 describe('project foundation previews', () => {
-  it('renders the fixture-backed Workspaces workbench for any project id during W1', async () => {
+  it('renders a clean main Workspaces workbench for any project id during W1', async () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
     expect(await screen.findByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
@@ -45,7 +46,7 @@ describe('project foundation previews', () => {
         projectId="proj_other"
         schemaBindings={{
           byWorkspaceId: {
-            workspace_prd_handoff: {
+            'workspace_branch:main': {
               schemaName: 'Docker Compose',
               version: 'v2',
               mode: 'pinned',

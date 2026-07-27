@@ -479,7 +479,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it('renders the fixture-backed Workspaces workbench from the query string', async () => {
+  it('renders the clean main Workspaces workbench from the query string', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces');
 
     renderProjectContent();
@@ -489,7 +489,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'page'
     );
     expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
     await waitFor(() => {

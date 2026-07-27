@@ -221,6 +221,77 @@ const workspaceCandidates: WorkspaceCandidate[] = [
   },
 ];
 
+const DEFAULT_PROJECT_WORKSPACE_BINDING = {
+  schemaName: 'PRD Schema',
+  version: 'v2',
+  mode: 'project_default' as const,
+};
+
+export function getProjectWorkspaceStarterCandidate(
+  projectId: string,
+  materials: Material[] = [],
+  targetBranch = 'main',
+  baseCommitHash: string | null = null
+): WorkspaceCandidate {
+  const normalizedBranch = targetBranch.trim() || 'main';
+  const workspaceId = `workspace_branch:${encodeURIComponent(normalizedBranch)}`;
+
+  return {
+    id: workspaceId,
+    projectId,
+    title: normalizedBranch === 'main' ? 'Main workspace' : `${normalizedBranch} workspace`,
+    summary: 'Collect source evidence and build the next structured state commit.',
+    status: 'draft',
+    updatedAt: new Date().toISOString(),
+    baseCommitHash,
+    targetBranch: normalizedBranch,
+    sourceBundle: materials.map(materialToSourceBundleItem),
+    schemaBindings: [DEFAULT_PROJECT_WORKSPACE_BINDING],
+    schemaCandidate: {
+      summary: 'Add source evidence, then generate a candidate proposal.',
+      fields: [],
+    },
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: 'This workspace needs source-backed candidate extraction.',
+      gaps: ['Generate a candidate proposal from source evidence.'],
+    },
+    yopsDraft: {
+      id: `draft:${workspaceId}`,
+      operations: [],
+    },
+    outputTargets: [],
+  };
+}
+
+export function repairLeakedWorkspacePreviewCandidate(
+  candidate: WorkspaceCandidate,
+  starter: WorkspaceCandidate
+): WorkspaceCandidate {
+  if (!isLeakedWorkspacePreviewCandidate(candidate)) return candidate;
+
+  return {
+    ...starter,
+    id: candidate.id,
+    ...(candidate.revision === undefined ? {} : { revision: candidate.revision }),
+    sourceBundle: candidate.sourceBundle,
+    updatedAt: candidate.updatedAt,
+  };
+}
+
+function isLeakedWorkspacePreviewCandidate(candidate: WorkspaceCandidate): boolean {
+  return (
+    candidate.projectId !== 'preview_project' &&
+    candidate.id === 'workspace_prd_handoff' &&
+    candidate.title === 'PRD audience handoff' &&
+    candidate.targetBranch === 'feature/prd-audience' &&
+    candidate.baseCommitHash === 'sha256:base-prd' &&
+    candidate.yopsDraft.id === 'draft_prd_handoff' &&
+    candidate.yopsDraft.proposalMode === 'fixture' &&
+    !candidate.lastCommitHash
+  );
+}
+
 export function getWorkspacePreviewCandidates(
   projectId: string,
   materials: Material[] = []

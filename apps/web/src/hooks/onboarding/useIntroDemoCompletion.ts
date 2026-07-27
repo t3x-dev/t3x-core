@@ -64,7 +64,7 @@ export function useIntroDemoCompletion(projectId?: string | null) {
         }
       }
     } finally {
-      router.push('/chat');
+      router.push('/');
       setCompleting(false);
     }
   }, [projectId, removeProjectLocally, router]);

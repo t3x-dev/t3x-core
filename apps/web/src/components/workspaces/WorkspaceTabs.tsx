@@ -94,6 +94,7 @@ export function WorkspaceWorkflowTabs({
 
 export function WorkspaceTabs({
   activeTab,
+  branchOptions,
   candidate,
   candidateExtracted,
   continuationBusy,
@@ -114,6 +115,7 @@ export function WorkspaceTabs({
   yopsDraftSent,
 }: {
   activeTab: WorkspaceTabId;
+  branchOptions?: string[];
   candidate: WorkspaceCandidate;
   candidateExtracted?: boolean;
   continuationBusy?: boolean;
@@ -140,6 +142,7 @@ export function WorkspaceTabs({
   return (
     <div role="tabpanel">
       {renderWorkspaceTab(activeTab, candidate, {
+        branchOptions,
         candidateExtracted,
         continuationBusy,
         extractingCandidate,
@@ -163,6 +166,7 @@ export function WorkspaceTabs({
 }
 
 interface RenderWorkspaceTabOptions {
+  branchOptions?: string[];
   candidateExtracted?: boolean;
   continuationBusy?: boolean;
   extractingCandidate?: boolean;
@@ -209,6 +213,7 @@ function renderWorkspaceTab(
       ) : null}
       <YOpsDraftTab
         active={activeTab !== 'chat'}
+        branchOptions={options.branchOptions}
         candidate={candidate}
         continuationBusy={options.continuationBusy}
         flowError={options.flowError}

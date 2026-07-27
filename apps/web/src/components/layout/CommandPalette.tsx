@@ -24,17 +24,17 @@ import { reducedMotion, scaleIn } from '@/utils/motion';
 import { glass } from '@/utils/theme';
 
 interface CommandPaletteProps {
-  /** Current project ID for context-aware actions */
-  projectId?: string;
+  /** Canonical repository path for context-aware actions. */
+  repositoryPath?: string;
   /** Callback when a conversation is created */
   onCreateConversation?: () => void;
 }
 
-export function CommandPalette({ projectId, onCreateConversation }: CommandPaletteProps) {
+export function CommandPalette({ repositoryPath, onCreateConversation }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const dialogVariants = prefersReducedMotion ? reducedMotion.scaleIn : scaleIn;
-  const commandGroups = useCommandRegistry({ projectId, onCreateConversation });
+  const commandGroups = useCommandRegistry({ repositoryPath, onCreateConversation });
 
   // Toggle command palette with Cmd+K / Ctrl+K
   useEffect(() => {

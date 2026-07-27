@@ -202,6 +202,12 @@ const workspaceCandidates: WorkspaceCandidate[] = [
 
 afterEach(() => {
   window.localStorage.removeItem('t3x:workspace-source-chat:proj_1:workspace_ready');
+  window.localStorage.removeItem(
+    't3x:workspace-source-chat:proj_1:workspace_ready:sha256:workspace-commit'
+  );
+  window.localStorage.removeItem(
+    't3x:workspace-source-chat:proj_1:workspace_ready:sha256:merged-main-head'
+  );
   usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
   vi.restoreAllMocks();
 });
@@ -952,6 +958,71 @@ describe('WorkspaceWorkbench', () => {
     });
   });
 
+  it('starts a clean source round when the stored conversation belongs to an older head', async () => {
+    const staleConversationCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'draft',
+      baseCommitHash: 'sha256:merged-main-head',
+      targetBranch: 'main',
+      sourceBundle: [
+        {
+          id: 'source_chat:conv_old_main',
+          type: 'chat',
+          title: 'Old main source chat',
+          conversationId: 'conv_old_main',
+          previewTurns: [
+            {
+              id: 'turn_old_main',
+              role: 'user',
+              author: 'You',
+              content: 'This turn belongs to the pre-merge main workspace.',
+              pinnable: true,
+            },
+          ],
+        },
+        {
+          id: 'src_doc',
+          type: 'document',
+          title: 'PRD import',
+          fileName: 'prd.md',
+        },
+      ],
+    };
+    window.localStorage.setItem(
+      't3x:workspace-source-chat:proj_1:workspace_ready',
+      'conv_old_main'
+    );
+    const conversationUrl = 'http://localhost:8000/api/v1/conversations/conv_old_main';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === conversationUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            conversation_id: 'conv_old_main',
+            project_id: 'proj_1',
+            title: 'Old main source chat',
+            parent_commit_hash: null,
+            created_at: '2026-07-27T06:00:12.311Z',
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    render(<WorkspaceWorkbench candidates={[staleConversationCandidate]} projectId="proj_1" />);
+
+    expect(await screen.findByText('No source chat turns yet.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('This turn belongs to the pre-merge main workspace.')
+    ).not.toBeInTheDocument();
+    expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBe(1);
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument());
+    activateTab('Proposal');
+    expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
+  });
+
   it('shows an honest empty state when no YOps operations are available', () => {
     const emptyYOpsCandidate: WorkspaceCandidate = {
       ...workspaceCandidates[0],
@@ -1281,9 +1352,11 @@ describe('WorkspaceWorkbench', () => {
     const iterationStatus = screen.getByText(/Based on/).closest('output');
     expect(iterationStatus).toHaveTextContent('Based on workspace-co');
     expect(iterationStatus).toHaveTextContent('Next commit to feature/prd-audience');
-    expect(window.localStorage.getItem('t3x:workspace-source-chat:proj_1:workspace_ready')).toBe(
-      'conv_next_workspace'
-    );
+    expect(
+      window.localStorage.getItem(
+        't3x:workspace-source-chat:proj_1:workspace_ready:sha256:workspace-commit'
+      )
+    ).toBe('conv_next_workspace');
   });
 
   it('starts the next workspace conversation on a new branch', async () => {

@@ -267,7 +267,9 @@ describe('CanvasWorkspace initial fit view', () => {
       hasMainCommit: true,
       initialLoadingComplete: true,
       loading: false,
+      modalViewMode: null,
       nodes,
+      openNodeId: null,
       projectId: 'proj_test',
     } as Partial<ReturnType<typeof useCanvasStore.getState>>);
 
@@ -289,7 +291,9 @@ describe('CanvasWorkspace initial fit view', () => {
       edges: [],
       hasDbPositions: false,
       loading: false,
+      modalViewMode: null,
       nodes: [],
+      openNodeId: null,
       projectId: null,
     });
   });
@@ -411,6 +415,8 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(flowMocks.setNodes).toHaveBeenLastCalledWith([
       expect.objectContaining({ id: 'sha256:focused', selected: true }),
     ]);
+    expect(useCanvasStore.getState().openNodeId).toBe('sha256:focused');
+    expect(screen.getByTestId('node-modal')).toBeInTheDocument();
   });
 
   it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {
@@ -548,10 +554,36 @@ describe('CanvasWorkspace initial fit view', () => {
       'data-intro-target',
       'canvas-action-details'
     );
+    screen.getByRole('button', { name: 'Details' }).click();
+    expect(useCanvasStore.getState().openNodeId).toBe(node.id);
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Create Leaf From This Version' })).toHaveAttribute(
       'data-intro-target',
       'canvas-action-new-leaf'
     );
+  });
+
+  it('keeps a pending conversation on the canvas when the node is selected', () => {
+    const pendingNode = {
+      ...unitNode('pending_1'),
+      data: {
+        ...unitNode('pending_1').data,
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending_1',
+      },
+    };
+    useCanvasStore.setState({ nodes: [pendingNode] });
+    layoutMocks.getLayoutedElements.mockResolvedValue([pendingNode]);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: document.createElement('div') },
+        pendingNode
+      );
+    });
+
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('opens an existing Leaf inside the repository Outputs workspace', () => {
