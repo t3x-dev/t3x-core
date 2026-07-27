@@ -502,6 +502,10 @@ export {
 } from './t3x-yops';
 export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
+// Transition adapters — one-way integration; native engines stay autonomous
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './transition-adapters';
+// ═══════════════════════════════════════════════════════════════════════════
 // Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
 // @see docs/specification/memory-pin-system-design.md

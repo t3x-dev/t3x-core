@@ -23,6 +23,7 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
+    "@t3x-dev/transition": "workspace:*",
     "@t3x-dev/yops": "workspace:*",
     "@t3x-dev/yschema": "workspace:*",
     "js-yaml": "^4.1.1",

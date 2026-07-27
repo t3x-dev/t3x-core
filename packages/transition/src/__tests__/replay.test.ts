@@ -7,12 +7,14 @@ import {
   type MutationDriver,
   type MutationDriverRef,
   mutationDriverKey,
+  ReplayPreconditionFailedError,
   replay,
   resolveMutationDriver,
   resolveStateCodec,
   type State,
   type StateCodec,
   stateCodecKey,
+  TransitionProtocolError,
   verifyEffect,
 } from '..';
 
@@ -77,6 +79,37 @@ describe('pure Effect replay verification', () => {
     await expect(verifyEffect(effect, { resolver, drivers: new Map() })).rejects.toMatchObject({
       code: 'UNSUPPORTED_SEMANTICS',
     });
+  });
+
+  it('leaves preconditions neutral in replay and classifies them at verification', async () => {
+    const { base, resolver, effect } = fixture();
+    const nativeCause = { code: 'TEST_PRECONDITION_FAILED', operation: 0 };
+    const precondition = new ReplayPreconditionFailedError('Test precondition failed', {
+      cause: nativeCause,
+    });
+    const driver: MutationDriver = {
+      ...driverRef,
+      execute() {
+        throw precondition;
+      },
+    };
+    const drivers = new Map([[mutationDriverKey(driverRef), driver]]);
+
+    expect(() => replay(base, definitionOf(effect), new Map(), drivers)).toThrow(precondition);
+
+    try {
+      await verifyEffect(effect, { resolver, drivers });
+      expect.unreachable('verification must reject an unmet replay precondition');
+    } catch (error) {
+      expect(error).toBeInstanceOf(TransitionProtocolError);
+      expect(error).toMatchObject({
+        code: 'EFFECT_CLAIM_FALSE',
+        cause: {
+          code: 'REPLAY_PRECONDITION_FAILED',
+          cause: nativeCause,
+        },
+      });
+    }
   });
 
   it('resolves only declared Effect inputs by role', async () => {

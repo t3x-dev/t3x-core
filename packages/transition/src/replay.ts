@@ -7,7 +7,11 @@ import {
   type State,
   type StateDescriptor,
 } from './contracts';
-import { EffectClaimFalseError, IntegrityChainInvalidError } from './errors';
+import {
+  EffectClaimFalseError,
+  IntegrityChainInvalidError,
+  ReplayPreconditionFailedError,
+} from './errors';
 import { describeProtocolObject } from './identity';
 import { parseEffect, parseEffectDefinition, parseState } from './parse';
 import { type MutationDriverRegistry, type ResolvedInputs, resolveMutationDriver } from './ports';
@@ -41,7 +45,11 @@ function descriptorsEqual(
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
 }
 
-/** Execute only Base + EffectDefinition + declared inputs; no claimed Result is accepted. */
+/**
+ * Execute only Base + EffectDefinition + declared inputs; no claimed Result is accepted.
+ * Replay deliberately lets ReplayPreconditionFailedError escape unchanged so
+ * callers can classify the same failed precondition for their own context.
+ */
 export function replay(
   base: State,
   definition: EffectDefinition,
@@ -97,7 +105,18 @@ export async function verifyEffect(
     inputs.set(input.role, await resolveProtocolObject(context.resolver, input.object));
   }
 
-  const result = replay(base, definitionOf(parsed), inputs, context.drivers);
+  let result: State;
+  try {
+    result = replay(base, definitionOf(parsed), inputs, context.drivers);
+  } catch (error) {
+    if (error instanceof ReplayPreconditionFailedError) {
+      throw new EffectClaimFalseError(
+        `Replay could not satisfy an Effect precondition: ${error.message}`,
+        { cause: error }
+      );
+    }
+    throw error;
+  }
   const resultDescriptor = describeProtocolObject(result);
   if (!descriptorsEqual(resultDescriptor, parsed.result)) {
     throw new EffectClaimFalseError(

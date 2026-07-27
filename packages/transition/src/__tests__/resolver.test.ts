@@ -64,4 +64,17 @@ describe('content-addressed ObjectResolver', () => {
       resolveProtocolObject(new FixedResolver(prettyBytes), descriptor)
     ).rejects.toMatchObject({ code: 'OBJECT_DIGEST_MISMATCH' });
   });
+
+  it('does not disguise resolver infrastructure failures as protocol verdicts', async () => {
+    const operationalFailure = new Error('object store unavailable');
+    const resolver: ObjectResolver = {
+      async get() {
+        throw operationalFailure;
+      },
+    };
+
+    await expect(
+      resolveProtocolObject(resolver, describeProtocolObject(state('requested')))
+    ).rejects.toBe(operationalFailure);
+  });
 });

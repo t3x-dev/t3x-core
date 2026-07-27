@@ -799,6 +799,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@t3x-dev/transition':
+        specifier: workspace:*
+        version: link:../transition
       '@t3x-dev/yops':
         specifier: workspace:*
         version: link:../yops
