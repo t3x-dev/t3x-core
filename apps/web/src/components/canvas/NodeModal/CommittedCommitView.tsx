@@ -615,7 +615,6 @@ export function CommittedCommitView({
                 />
               </>
             )}
-
           </aside>
         </div>
       </div>

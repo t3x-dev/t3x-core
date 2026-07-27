@@ -12,8 +12,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { useProjectStore } from '@/store/projectStore';
 import type { ProjectSummary } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
 

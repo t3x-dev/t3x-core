@@ -105,12 +105,7 @@ export function PendingCommitView({
           </div>
           <div className="flex items-center gap-2">
             {(node.data as CanvasNodeData).conversationId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onShowConversation}
-                className="gap-1.5"
-              >
+              <Button variant="outline" size="sm" onClick={onShowConversation} className="gap-1.5">
                 <MessageSquare className="h-3.5 w-3.5" />
                 Continue Chat
               </Button>

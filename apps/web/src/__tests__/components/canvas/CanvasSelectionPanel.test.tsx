@@ -72,7 +72,9 @@ describe('CanvasSelectionPanel', () => {
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Merge Into Main' })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Details and history stay on the canvas/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Details and history stay on the canvas/i).length).toBeGreaterThan(
+      0
+    );
     expect(screen.getByText('Action Logic')).toBeInTheDocument();
   });
 
