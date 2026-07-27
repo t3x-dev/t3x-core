@@ -38,7 +38,7 @@ describe('YOps MutationDriver adapter', () => {
   });
 
   it('produces the same Effect identity from the same Base and ordered operations', () => {
-    const base = createYOpsState({ count: 0, label: '温度 😀', epsilon: 5e-324 });
+    const base = createYOpsState({ count: 0, label: 'temperature € 😀', epsilon: 5e-324 });
     const callerOperations = [structuredClone(setCountToOne)];
     const first = createYOpsEffect({ base, operations: callerOperations });
     const second = createYOpsEffect({ base, operations: [setCountToOne] });
@@ -47,7 +47,7 @@ describe('YOps MutationDriver adapter', () => {
 
     expect(first).toEqual(second);
     expect(digestProtocolObject(first.effect)).toBe(digestProtocolObject(second.effect));
-    expect(first.result.value).toEqual({ count: 1, label: '温度 😀', epsilon: 5e-324 });
+    expect(first.result.value).toEqual({ count: 1, label: 'temperature € 😀', epsilon: 5e-324 });
   });
 
   it('preserves operation order in both Effect identity and replay result', () => {

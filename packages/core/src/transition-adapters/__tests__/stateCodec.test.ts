@@ -10,7 +10,7 @@ import {
 describe('YOps State codec', () => {
   it('normalizes the JSON document domain without sharing YOps semantic canonicalization', () => {
     const input = {
-      unicode: '你好 😀',
+      unicode: 'temperature € 😀',
       numbers: [-0, 0.000001, 1e21, 5e-324],
       nested: { b: 2, a: 1 },
     };
@@ -25,7 +25,7 @@ describe('YOps State codec', () => {
       value: {
         nested: { a: 1, b: 2 },
         numbers: [0, 0.000001, 1e21, 5e-324],
-        unicode: '你好 😀',
+        unicode: 'temperature € 😀',
       },
     });
     expect(state.value).not.toBe(input);
