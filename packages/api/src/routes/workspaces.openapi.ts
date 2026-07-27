@@ -272,6 +272,12 @@ const saveWorkspaceRoute = createRoute({
         },
       },
     },
+    404: {
+      description: 'Workspace target branch not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
     409: {
       description: 'Workspace revision or target branch conflict',
       content: {
@@ -404,6 +410,14 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
     ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
   };
+  const missingTargetBranch = await findMissingWorkspaceTargetBranch(
+    db,
+    projectId,
+    persistedWorkspace
+  );
+  if (missingTargetBranch) {
+    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${missingTargetBranch}`);
+  }
   const draft = await upsertWorkspaceDraft(
     db,
     {
@@ -442,6 +456,11 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
 
       const storedWorkspace = storedDraft.workspace_state;
       const targetBranch = stringFromWorkspace(storedWorkspace, 'targetBranch', 'main');
+      if (!(await findBranchByName(txOrDb, projectId, targetBranch))) {
+        return {
+          reviewRequired: errorResponse(c, 'NOT_FOUND', `Target branch not found: ${targetBranch}`),
+        };
+      }
       const commitContent = workspaceCommitContent(content);
       const schemaReviewBlockers = workspaceSchemaReviewBlockers(storedWorkspace, commitContent);
       if (schemaReviewBlockers.length > 0 && !validationOverride) {
@@ -738,6 +757,14 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
     projectId,
     backendCandidateId: candidateId,
   };
+  const missingTargetBranch = await findMissingWorkspaceTargetBranch(
+    db,
+    projectId,
+    persistedWorkspace
+  );
+  if (missingTargetBranch) {
+    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${missingTargetBranch}`);
+  }
   const draft = await upsertWorkspaceDraft(
     db,
     {
@@ -772,6 +799,10 @@ workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
     backendCandidateId: candidateId,
     yopsDraft: buildYOpsDraft(reviewWorkspace, candidateId),
   };
+  const missingTargetBranch = await findMissingWorkspaceTargetBranch(db, projectId, nextWorkspace);
+  if (missingTargetBranch) {
+    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${missingTargetBranch}`);
+  }
   const draft = await upsertWorkspaceDraft(
     db,
     {
@@ -833,6 +864,15 @@ function stringFromWorkspace(
 ): string {
   const value = workspace[key];
   return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+async function findMissingWorkspaceTargetBranch(
+  db: AnyDB,
+  projectId: string,
+  workspace: Record<string, unknown>
+): Promise<string | null> {
+  const targetBranch = stringFromWorkspace(workspace, 'targetBranch', 'main');
+  return (await findBranchByName(db, projectId, targetBranch)) ? null : targetBranch;
 }
 
 function nullableStringFromWorkspace(

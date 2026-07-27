@@ -14,7 +14,11 @@ let searchParamsValue = new URLSearchParams('tab=workspaces');
 
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
-    branchHeads: { 'feature/prd-audience': 'sha256:feature-head', 'release/notes': null },
+    branchHeads: {
+      main: null,
+      'feature/prd-audience': 'sha256:feature-head',
+      'release/notes': null,
+    },
     loading: false,
     refresh: vi.fn(),
   }),
@@ -41,6 +45,31 @@ describe('ProjectWorkspacesTab', () => {
     fetchMaterialsByProjectMock.mockResolvedValue([]);
     fetchProjectWorkspacesMock.mockResolvedValue([]);
     searchParamsValue = new URLSearchParams('tab=workspaces');
+  });
+
+  it('starts a new project with a clean main workspace instead of preview fixture state', async () => {
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument();
+  });
+
+  it('rebuilds a leaked preview workspace on main without keeping its fake baseline', async () => {
+    const [leakedWorkspace] = getWorkspacePreviewCandidates('proj_other');
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([leakedWorkspace]);
+    searchParamsValue = new URLSearchParams('branch=main');
+
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
+
+    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
+    expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
+    expect(screen.queryByText('feature/prd-audience')).not.toBeInTheDocument();
   });
 
   it('selects the workspace from the URL without showing an internal workspace selector', async () => {
