@@ -22,6 +22,7 @@ interface WorkspaceFlowState {
 }
 
 interface WorkspaceWorkbenchProps {
+  branchOptions?: string[];
   candidates: WorkspaceCandidate[];
   projectId: string;
   viewState?: WorkspaceWorkbenchViewState;
@@ -34,6 +35,7 @@ interface WorkspaceWorkbenchProps {
 }
 
 export function WorkspaceWorkbench({
+  branchOptions,
   candidates,
   errorMessage,
   onSourceMaterialUploaded,
@@ -95,12 +97,20 @@ export function WorkspaceWorkbench({
 
         if (sourceBundlesEqual(currentWorkspace.sourceBundle, sourceBundle)) return current;
 
+        const removedSource = source
+          ? null
+          : currentWorkspace.sourceBundle.find((item) => item.id === sourceId);
+        const nextWorkspace =
+          removedSource?.type === 'chat'
+            ? resetWorkspaceProposalAfterSourceChange(currentWorkspace, sourceBundle)
+            : {
+                ...(existingOverride ?? baseSelectedWorkspace),
+                sourceBundle,
+              };
+
         return {
           ...current,
-          [baseSelectedWorkspace.id]: {
-            ...(existingOverride ?? baseSelectedWorkspace),
-            sourceBundle,
-          },
+          [baseSelectedWorkspace.id]: nextWorkspace,
         };
       });
     },
@@ -257,6 +267,7 @@ export function WorkspaceWorkbench({
         ) : (
           <WorkspaceDetail
             activeTab={activeWorkflowTab}
+            branchOptions={branchOptions}
             candidate={selectedWorkspaceWithFlow}
             flowState={selectedFlow}
             onExtractCandidate={handleExtractCandidate}
@@ -310,6 +321,7 @@ function WorkspaceToolbar({
 
 function WorkspaceDetail({
   activeTab,
+  branchOptions,
   candidate,
   flowState,
   onExtractCandidate,
@@ -323,6 +335,7 @@ function WorkspaceDetail({
   onViewCommitInState,
 }: {
   activeTab: WorkspaceTabId;
+  branchOptions?: string[];
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
   onExtractCandidate: () => void;
@@ -354,13 +367,16 @@ function WorkspaceDetail({
       <div className={cn('flex flex-col', activeTab === 'chat' ? 'gap-3' : '')}>
         <WorkspaceTabs
           activeTab={activeTab}
+          branchOptions={branchOptions}
           candidate={candidate}
           candidateExtracted={Boolean(flowState?.candidateId)}
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           continuationBusy={Boolean(flowState?.continuationBusy)}
           sourceConversationId={flowState?.sourceConversationId}
-          sourceParentCommitHash={flowState?.sourceParentCommitHash}
+          sourceParentCommitHash={
+            flowState?.sourceParentCommitHash ?? getWorkspaceSourceParentCommitHash(candidate)
+          }
           onSourceMaterialUploaded={onSourceMaterialUploaded}
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
@@ -380,6 +396,11 @@ function WorkspaceDetail({
 
 function hasYOpsOperations(candidate: WorkspaceCandidate | null | undefined): boolean {
   return Boolean(candidate?.yopsDraft.operations.length);
+}
+
+function getWorkspaceSourceParentCommitHash(candidate: WorkspaceCandidate): string | undefined {
+  if (candidate.status !== 'draft') return undefined;
+  return candidate.baseCommitHash ?? undefined;
 }
 
 function mergeWorkspaceOverride(
@@ -420,6 +441,36 @@ function upsertWorkspaceSourceBundle(
   const next = sourceBundle.filter((item) => item.id !== sourceId);
   if (!source) return next;
   return [...next, source];
+}
+
+function resetWorkspaceProposalAfterSourceChange(
+  workspace: WorkspaceCandidate,
+  sourceBundle: SourceBundleItem[]
+): WorkspaceCandidate {
+  const {
+    commitOverride: _commitOverride,
+    lastCommitHash: _lastCommitHash,
+    ...editableWorkspace
+  } = workspace;
+
+  return {
+    ...editableWorkspace,
+    sourceBundle,
+    status: 'draft',
+    schemaCandidate: {
+      summary: 'Source evidence changed. Generate a new candidate proposal.',
+      fields: [],
+    },
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: 'The candidate proposal must be regenerated after its source evidence changed.',
+      gaps: ['Generate a candidate proposal from the current source evidence.'],
+    },
+    yopsDraft: {
+      id: workspace.yopsDraft.id,
+      operations: [],
+    },
+  };
 }
 
 function sourceBundlesEqual(left: SourceBundleItem[], right: SourceBundleItem[]): boolean {

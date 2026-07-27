@@ -5,20 +5,26 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
+import { extractWorkspaceCandidate } from '@/infrastructure/workspaceFlow';
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 const fetchMaterialsByProjectMock = vi.fn();
 const fetchProjectWorkspacesMock = vi.fn();
 let searchParamsValue = new URLSearchParams('tab=workspaces');
+let branchHeadsValue: Record<string, string | null> = {};
+
+vi.mock('@/infrastructure/workspaceFlow', () => ({
+  extractWorkspaceCandidate: vi.fn(),
+  sendWorkspaceYOpsDraft: vi.fn(),
+}));
+
+const extractWorkspaceCandidateMock = vi.mocked(extractWorkspaceCandidate);
 
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
-    branchHeads: {
-      main: null,
-      'feature/prd-audience': 'sha256:feature-head',
-      'release/notes': null,
-    },
+    branchHeads: branchHeadsValue,
+    branches: Object.keys(branchHeadsValue),
     loading: false,
     refresh: vi.fn(),
   }),
@@ -44,7 +50,17 @@ describe('ProjectWorkspacesTab', () => {
     pushMock.mockClear();
     fetchMaterialsByProjectMock.mockResolvedValue([]);
     fetchProjectWorkspacesMock.mockResolvedValue([]);
+    extractWorkspaceCandidateMock.mockReset();
+    extractWorkspaceCandidateMock.mockImplementation(async (candidate) => ({
+      candidate_id: `candidate:${candidate.id}`,
+      workspace: candidate,
+    }));
     searchParamsValue = new URLSearchParams('tab=workspaces');
+    branchHeadsValue = {
+      main: null,
+      'feature/prd-audience': 'sha256:feature-head',
+      'release/notes': null,
+    };
   });
 
   it('starts a new project with a clean main workspace instead of preview fixture state', async () => {
@@ -69,7 +85,57 @@ describe('ProjectWorkspacesTab', () => {
 
     expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
     expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
-    expect(screen.queryByText('feature/prd-audience')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'feature/prd-audience' })).toBeInTheDocument();
+  });
+
+  it('starts the next main workspace when a merge advances the branch head', async () => {
+    const [committedWorkspace] = getWorkspacePreviewCandidates('proj_other');
+    branchHeadsValue = {
+      main: 'sha256:merged-main-head',
+      'feature/checkout-retry-hardening': 'sha256:feature-head',
+    };
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([
+      {
+        ...committedWorkspace,
+        id: 'workspace_main',
+        projectId: 'proj_other',
+        revision: 5,
+        status: 'committed',
+        targetBranch: 'main',
+        baseCommitHash: null,
+        lastCommitHash: 'sha256:previous-main-head',
+      },
+    ]);
+    searchParamsValue = new URLSearchParams('branch=main');
+
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('No workspaces yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate candidate proposal' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+
+    await waitFor(() => expect(extractWorkspaceCandidateMock).toHaveBeenCalledOnce());
+    const continuedWorkspace = extractWorkspaceCandidateMock.mock.calls[0]?.[0];
+    expect(continuedWorkspace).toMatchObject({
+      id: 'workspace_main',
+      revision: 5,
+      status: 'draft',
+      targetBranch: 'main',
+      baseCommitHash: 'sha256:merged-main-head',
+      yopsDraft: { operations: [] },
+    });
+    expect(continuedWorkspace?.lastCommitHash).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
+
+    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
+    expect(
+      screen.getByRole('option', { name: 'feature/checkout-retry-hardening' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View in State' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
   });
 
   it('selects the workspace from the URL without showing an internal workspace selector', async () => {

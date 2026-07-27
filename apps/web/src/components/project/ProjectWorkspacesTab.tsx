@@ -31,6 +31,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const branch = searchParams.get('branch')?.trim() || null;
   const {
     branchHeads,
+    branches,
     loading: branchesLoading,
     refresh: refreshBranches,
   } = useBranches(projectId, Boolean(branch));
@@ -103,6 +104,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
 
   return (
     <WorkspaceWorkbench
+      branchOptions={branches}
       candidates={visibleCandidates}
       errorMessage={navigationError ?? undefined}
       projectId={projectId}
@@ -132,11 +134,62 @@ function mergePersistedWorkspaceCandidates(
       repairLeakedWorkspacePreviewCandidate(persistedCandidate, starterCandidate)
     )
   );
-  const hasWorkspaceForStarterBranch = mergedCandidates.some(
+  const branchCandidates = mergedCandidates.filter(
     (candidate) => candidate.targetBranch === starterCandidate.targetBranch
   );
+  const openWorkspace = branchCandidates.find((candidate) => candidate.status !== 'committed');
+  if (openWorkspace) return mergedCandidates;
 
-  return hasWorkspaceForStarterBranch ? mergedCandidates : [...mergedCandidates, starterCandidate];
+  const currentCommittedWorkspace = branchCandidates.find(
+    (candidate) =>
+      candidate.status === 'committed' &&
+      candidate.lastCommitHash === starterCandidate.baseCommitHash
+  );
+  if (currentCommittedWorkspace) return mergedCandidates;
+
+  const previousCommittedWorkspace = branchCandidates.find(
+    (candidate) => candidate.status === 'committed'
+  );
+  if (previousCommittedWorkspace && starterCandidate.baseCommitHash) {
+    const nextWorkspace = buildNextWorkspaceAtBranchHead(
+      starterCandidate,
+      previousCommittedWorkspace
+    );
+    return mergedCandidates.map((candidate) =>
+      candidate.id === previousCommittedWorkspace.id ? nextWorkspace : candidate
+    );
+  }
+
+  return [...mergedCandidates, starterCandidate];
+}
+
+function buildNextWorkspaceAtBranchHead(
+  starterCandidate: WorkspaceCandidate,
+  previousCommittedWorkspace: WorkspaceCandidate
+): WorkspaceCandidate {
+  return {
+    ...starterCandidate,
+    id: previousCommittedWorkspace.id,
+    ...(previousCommittedWorkspace.revision === undefined
+      ? {}
+      : { revision: previousCommittedWorkspace.revision }),
+    outputTargets:
+      previousCommittedWorkspace.outputTargets.length > 0
+        ? previousCommittedWorkspace.outputTargets
+        : starterCandidate.outputTargets,
+    schemaBindings:
+      previousCommittedWorkspace.schemaBindings.length > 0
+        ? previousCommittedWorkspace.schemaBindings
+        : starterCandidate.schemaBindings,
+    sourceBundle: mergeSourceBundles(
+      starterCandidate.sourceBundle,
+      previousCommittedWorkspace.sourceBundle.filter((source) => source.type !== 'chat')
+    ),
+    yopsDraft: {
+      id: previousCommittedWorkspace.yopsDraft.id,
+      operations: [],
+    },
+  };
 }
 
 function mergeWorkspaceCandidate(
