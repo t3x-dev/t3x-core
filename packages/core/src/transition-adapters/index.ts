@@ -17,3 +17,12 @@ export {
   yopsMutationDriver,
   yopsMutationDrivers,
 } from './yopsDriver';
+export {
+  createYSchemaContextDescriptor,
+  createYSchemaResourceDescriptor,
+  runYSchemaStatementProvider,
+  YSCHEMA_CONTEXT_MEDIA_TYPE,
+  YSCHEMA_NATIVE_PROFILE,
+  YSCHEMA_RESOURCE_MEDIA_TYPE,
+  type YSchemaStatementProviderInput,
+} from './yschemaStatementProvider';
