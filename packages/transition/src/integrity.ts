@@ -15,6 +15,7 @@ import {
   parseDecisionStatement,
   parseEffect,
   parseProposalStatement,
+  parseState,
   parseStatement,
 } from './parse';
 import { type ObjectResolver, resolveProtocolObject } from './resolver';
@@ -32,6 +33,15 @@ function descriptorsEqual(
   right: { kind: string; schema: string; digest: string }
 ): boolean {
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
+}
+
+function isExplicitEmptyGenesis(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 0
+  );
 }
 
 export async function verifyStatementSubjects(
@@ -82,7 +92,7 @@ export async function verifyCommitIntegrity(
     throw new IntegrityChainInvalidError('CommitV2.result must equal the Effect claimed Result');
   }
 
-  await resolveProtocolObject(resolver, effect.base);
+  const base = parseState(await resolveProtocolObject(resolver, effect.base));
   await resolveProtocolObject(resolver, parsedCommit.result);
   for (const considered of decision.predicate.considered) {
     const consideredObject = await resolveProtocolObject(resolver, considered);
@@ -95,10 +105,22 @@ export async function verifyCommitIntegrity(
     parents.push(parseCommitV2(parentObject));
   }
   const firstParent = parents[0];
+  if (firstParent === undefined && !isExplicitEmptyGenesis(base.value)) {
+    throw new IntegrityChainInvalidError(
+      'A parentless CommitV2 must apply its Effect to an explicit empty genesis State'
+    );
+  }
   if (firstParent !== undefined && !descriptorsEqual(firstParent.result, effect.base)) {
     throw new IntegrityChainInvalidError(
       'First-parent Result must equal the Effect Base descriptor'
     );
+  }
+  for (const mergeParent of parents.slice(1)) {
+    if (!effect.inputs.some((input) => descriptorsEqual(input.object, mergeParent.result))) {
+      throw new IntegrityChainInvalidError(
+        'Every additional parent Result must be declared in Effect.inputs'
+      );
+    }
   }
 
   return { commit: parsedCommit, decision, proposal, effect, parents };

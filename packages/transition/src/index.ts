@@ -8,6 +8,7 @@ export {
   type AuthoredClaim,
   type CanonicalTimestamp,
   type Claim,
+  COMMIT_V2_MEDIA_TYPE,
   COMMIT_V2_SCHEMA,
   CORE_PREDICATE_TYPES,
   type CommitDescriptor,
