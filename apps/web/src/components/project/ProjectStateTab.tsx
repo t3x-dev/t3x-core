@@ -13,11 +13,23 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { StatePaneResizeHandle } from '@/components/project/StatePaneResizeHandle';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
+import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +39,7 @@ import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  countStateYOps,
   type StateOperationEntry,
   type StatePointRow,
   type StateValidationGapLike,
@@ -87,6 +100,14 @@ const SNAPSHOT_VIEWS: Array<{
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
+const STATE_CONTEXT_RAIL_DEFAULT_WIDTH = 330;
+const STATE_CONTEXT_RAIL_MIN_WIDTH = 260;
+const STATE_CONTEXT_RAIL_MAX_WIDTH = 560;
+const STATE_CONTENT_MIN_WIDTH = 640;
+
+function clampStatePaneWidth(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
 
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
   if (value === 'canvas') return 'canvas';
@@ -143,6 +164,8 @@ export function ProjectStateTab({
   const [diffOpen, setDiffOpen] = useState(false);
   const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
+  const [contextRailWidth, setContextRailWidth] = useState(STATE_CONTEXT_RAIL_DEFAULT_WIDTH);
+  const stateLayoutRef = useRef<HTMLDivElement>(null);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -353,7 +376,7 @@ export function ProjectStateTab({
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
-  const yopsCount = visibleYOpsCount(headCommit, effectiveOperations);
+  const yopsCount = countStateYOps(effectiveOperations);
   const branchCount = branchOptions.length;
   const committedDiffChanges = useMemo(
     () =>
@@ -419,25 +442,75 @@ export function ProjectStateTab({
     },
     [createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft, workspaceBasePath]
   );
+  const handleContextRailResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      const container = stateLayoutRef.current;
+      if (!container) return;
+
+      const startX = event.clientX;
+      const startWidth = contextRailWidth;
+      const containerWidth = container.getBoundingClientRect().width;
+      const maxWidth = Math.min(
+        STATE_CONTEXT_RAIL_MAX_WIDTH,
+        containerWidth - STATE_CONTENT_MIN_WIDTH
+      );
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const nextWidth = startWidth + startX - moveEvent.clientX;
+        setContextRailWidth(clampStatePaneWidth(nextWidth, STATE_CONTEXT_RAIL_MIN_WIDTH, maxWidth));
+      };
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('blur', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+      window.addEventListener('blur', handleUp);
+    },
+    [contextRailWidth]
+  );
+  const handleContextRailResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const step = event.shiftKey ? 48 : 16;
+      const direction = event.key === 'ArrowLeft' ? 1 : -1;
+      setContextRailWidth((current) =>
+        clampStatePaneWidth(
+          current + step * direction,
+          STATE_CONTEXT_RAIL_MIN_WIDTH,
+          STATE_CONTEXT_RAIL_MAX_WIDTH
+        )
+      );
+    },
+    []
+  );
+  const contextRailVisible =
+    showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas');
+
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)] p-3"
       data-state-view={activeView}
     >
-      <StateModeTabs
-        activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
-        onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
-      />
-
-      {activeView !== 'canvas' ? (
-        <div className="mt-4">
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 shadow-sm">
+        <StateModeTabs
+          activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
+          onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
+        />
+        {activeView !== 'canvas' ? (
           <StateOverviewHeader
-            branch={branchFocus || 'main'}
             headCommit={headCommit}
             onRunValidation={
               headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
             }
-            schemaLabel={schemaName}
             validation={currentValidation}
             validationError={validationError}
             validationGapCount={validationGapCount}
@@ -445,17 +518,23 @@ export function ProjectStateTab({
             validationRunning={validationRunning}
             workspaceHref={workspaceHref}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <div
         className={cn(
-          'mt-4 grid min-h-0 flex-1 gap-4',
-          (showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas')) &&
-            'xl:grid-cols-[minmax(0,1fr)_330px]'
+          'mt-3 grid min-h-0 flex-1 overflow-auto xl:overflow-hidden',
+          contextRailVisible &&
+            'gap-4 xl:grid-cols-[minmax(0,1fr)_8px_var(--state-context-rail-width)] xl:gap-0'
         )}
+        ref={stateLayoutRef}
+        style={
+          contextRailVisible
+            ? ({ '--state-context-rail-width': `${String(contextRailWidth)}px` } as CSSProperties)
+            : undefined
+        }
       >
-        <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
           <StateRepositoryToolbar
             branch={branchFocus || 'main'}
             branchCount={branchCount}
@@ -497,15 +576,17 @@ export function ProjectStateTab({
               ) : null}
 
               {showingInlineDiff && headCommit && snapshot.parentCommit ? (
-                <T3XDiff
-                  baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
-                  changes={committedDiffChanges}
-                  headerSubtitle="Commit · Parent → HEAD"
-                  onSelectChange={setSelectedDiffChangeId}
-                  pathSubtitle="Committed state · node-level result"
-                  projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
-                  selectedChangeId={effectiveSelectedDiffChangeId}
-                />
+                <StateScrollArea className="min-h-0 flex-1" horizontal label="Committed state diff">
+                  <T3XDiff
+                    baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
+                    changes={committedDiffChanges}
+                    headerSubtitle="Commit · Parent → HEAD"
+                    onSelectChange={setSelectedDiffChangeId}
+                    pathSubtitle="Committed state · node-level result"
+                    projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
+                    selectedChangeId={effectiveSelectedDiffChangeId}
+                  />
+                </StateScrollArea>
               ) : null}
               {!showingInlineDiff && snapshot.primaryError ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
@@ -556,20 +637,35 @@ export function ProjectStateTab({
           )}
         </main>
 
-        {showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas') ? (
-          <StateContextRail
-            commitCount={commitCount}
-            edgeCount={headCommit?.content.relations.length ?? 0}
-            headCommit={headCommit}
-            operations={effectiveOperations}
-            projectName={projectName}
-            schemaName={schemaName}
-            validation={currentValidation}
-            validationGapCount={validationGapCount}
-            validationReady={validationReady}
-            viewModelVisible={!showingInlineDiff}
-            warning={stateWarning}
+        {contextRailVisible ? (
+          <StatePaneResizeHandle
+            className="hidden xl:block"
+            label="Resize state details"
+            max={STATE_CONTEXT_RAIL_MAX_WIDTH}
+            min={STATE_CONTEXT_RAIL_MIN_WIDTH}
+            onKeyDown={handleContextRailResizeKeyDown}
+            onMouseDown={handleContextRailResizeMouseDown}
+            onReset={() => setContextRailWidth(STATE_CONTEXT_RAIL_DEFAULT_WIDTH)}
+            value={contextRailWidth}
           />
+        ) : null}
+
+        {contextRailVisible ? (
+          <StateScrollArea className="min-h-0" label="State details" viewportClassName="xl:pl-4">
+            <StateContextRail
+              commitCount={commitCount}
+              edgeCount={headCommit?.content.relations.length ?? 0}
+              headCommit={headCommit}
+              operations={effectiveOperations}
+              projectName={projectName}
+              schemaName={schemaName}
+              validation={currentValidation}
+              validationGapCount={validationGapCount}
+              validationReady={validationReady}
+              viewModelVisible={!showingInlineDiff}
+              warning={stateWarning}
+            />
+          </StateScrollArea>
         ) : null}
       </div>
     </section>
@@ -577,10 +673,8 @@ export function ProjectStateTab({
 }
 
 function StateOverviewHeader({
-  branch,
   headCommit,
   onRunValidation,
-  schemaLabel,
   validation,
   validationError,
   validationGapCount,
@@ -588,10 +682,8 @@ function StateOverviewHeader({
   validationRunning,
   workspaceHref,
 }: {
-  branch: string;
   headCommit: ApiCommit | null;
   onRunValidation?: () => Promise<void> | void;
-  schemaLabel: string;
   validation?: YSchemaValidationSummary | null;
   validationError?: string | null;
   validationGapCount: number;
@@ -602,48 +694,27 @@ function StateOverviewHeader({
   return (
     <section
       aria-label="State overview"
-      className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-4 shadow-sm"
+      className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 py-1"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold leading-tight text-[var(--text-primary)]">State</h1>
-          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-            Current state from latest successful commit
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" variant="canvas-outline">
-            <Link href={workspaceHref}>Open workspace</Link>
-          </Button>
-        </div>
-      </div>
-      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
-        <StateFact label="Schema" value={schemaLabel} />
-        <StateFact label="Branch" value={branch} />
-        <StateFact
-          label="State"
-          mono
-          value={headCommit?.hash ? 'sha256:' + shortHash(headCommit.hash) : 'empty'}
-        />
-        <div className="min-w-0">
-          <dt className="text-xs font-bold uppercase text-[var(--text-tertiary)]">Validation</dt>
-          <dd className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge
-              variant={validationReady ? 'success' : validationGapCount > 0 ? 'warning' : 'outline'}
-            >
-              {validationLabel(validation, validationGapCount)}
-            </Badge>
-            {validation ? (
-              <Badge variant="success">Up to date</Badge>
-            ) : headCommit ? (
-              <Badge variant="outline">Not validated at HEAD</Badge>
-            ) : null}
-          </dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <h1 className="sr-only">State</h1>
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        <Badge
+          variant={validationReady ? 'success' : validationGapCount > 0 ? 'warning' : 'outline'}
+        >
+          {validationLabel(validation, validationGapCount)}
+        </Badge>
+        {validation ? (
+          <Badge variant="success">Up to date</Badge>
+        ) : headCommit ? (
+          <Badge variant="outline">Not validated at HEAD</Badge>
+        ) : null}
         {validationError ? (
-          <p className="text-xs font-semibold text-[var(--status-warning)]">{validationError}</p>
+          <p
+            className="max-w-64 truncate text-xs font-semibold text-[var(--status-warning)]"
+            title={validationError}
+          >
+            {validationError}
+          </p>
         ) : null}
         {!validationReady && onRunValidation ? (
           <Button
@@ -657,24 +728,11 @@ function StateOverviewHeader({
             {validationRunning ? 'Running...' : 'Run validation'}
           </Button>
         ) : null}
+        <Button asChild size="sm" variant="canvas-outline">
+          <Link href={workspaceHref}>Open workspace</Link>
+        </Button>
       </div>
     </section>
-  );
-}
-
-function StateFact({ label, mono, value }: { label: string; mono?: boolean; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-bold uppercase text-[var(--text-tertiary)]">{label}</dt>
-      <dd
-        className={cn(
-          'mt-1 inline-flex max-w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1 text-xs font-bold text-[var(--text-primary)]',
-          mono && 'font-mono'
-        )}
-      >
-        <span className="truncate">{value}</span>
-      </dd>
-    </div>
   );
 }
 
@@ -702,7 +760,7 @@ function StateRepositoryToolbar({
   schemaName: string;
 }) {
   return (
-    <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
+    <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StateBranchControls
           branch={branch}
@@ -750,7 +808,7 @@ function StateCommitRow({
   yopsCount: number;
 }) {
   return (
-    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3 py-2">
       <div className="flex min-w-0 items-center gap-3">
         <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/15 text-sm font-bold text-[var(--accent-branch)]">
           W
@@ -759,7 +817,7 @@ function StateCommitRow({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-bold text-[var(--text-primary)]">{title}</h2>
             <Badge variant="outline">
-              {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
+              HEAD · {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
             </Badge>
           </div>
         </div>
@@ -795,7 +853,7 @@ function StateObjectLine({
   validationKnown: boolean;
 }) {
   return (
-    <div className="flex min-h-13 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5">
+    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1.5">
       <div className="min-w-0 truncate font-mono text-sm text-[var(--text-secondary)]">
         state <span className="font-bold text-[var(--text-primary)]">prd-state.yaml</span> /{' '}
         <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
@@ -815,7 +873,7 @@ function StateObjectLine({
               : 'not validated'}
         </Badge>
         <Badge variant="outline">{activeView}</Badge>
-        {diffCount > 0 ? <Badge variant="warning">{diffCount} changes</Badge> : null}
+        {diffCount > 0 ? <Badge variant="warning">{diffCount} changed paths</Badge> : null}
         {commitHref ? (
           <Button asChild size="sm" variant="canvas-outline">
             <Link href={commitHref}>Open commit</Link>
@@ -830,7 +888,7 @@ function StateObjectLine({
             variant={diffOpen ? 'commit' : 'canvas-outline'}
           >
             <GitCompare className="size-4" />
-            {diffOpen ? 'Hide changes' : `View ${String(diffCount)} changes`}
+            {diffOpen ? 'Hide changed paths' : `View ${String(diffCount)} changed paths`}
           </Button>
         ) : null}
       </div>
@@ -866,11 +924,7 @@ function StateModeTabs({
   ];
 
   return (
-    <div
-      aria-label="State modes"
-      className="flex min-h-16 items-stretch rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 shadow-sm"
-      role="tablist"
-    >
+    <div aria-label="State modes" className="flex min-h-10 shrink-0 items-stretch" role="tablist">
       {modes.map((mode) => {
         const Icon = mode.icon;
         const selected = activeMode === mode.id;
@@ -878,7 +932,7 @@ function StateModeTabs({
           <button
             aria-selected={selected}
             className={cn(
-              'min-w-36 border-b-2 px-3 py-2 text-left transition-colors',
+              'border-b-2 px-3 py-1.5 text-left transition-colors',
               selected
                 ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -888,12 +942,12 @@ function StateModeTabs({
             role="tab"
             type="button"
           >
-            <span className="flex items-center gap-1.5 text-sm font-bold">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-bold">
               <Icon aria-hidden="true" className="size-4" />
               {mode.label}
-            </span>
-            <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
-              {mode.subtitle}
+              <span className="hidden text-xs font-medium text-[var(--text-tertiary)] 2xl:inline">
+                · {mode.subtitle}
+              </span>
             </span>
           </button>
         );
@@ -912,7 +966,7 @@ function StateViewTabs({
   return (
     <div
       aria-label="State views"
-      className="flex min-h-14 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-4"
+      className="flex min-h-12 shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-3"
       role="tablist"
     >
       <div className="flex shrink-0 items-stretch gap-0">
@@ -976,7 +1030,7 @@ function StateCanvasView({
     return (
       <section
         aria-label="Multi-commit state canvas"
-        className="flex min-h-[560px] items-center justify-center"
+        className="flex min-h-0 flex-1 items-center justify-center"
       >
         <LoadingSpinner message="Loading state evolution..." />
       </section>
@@ -987,7 +1041,7 @@ function StateCanvasView({
     return (
       <section
         aria-label="Multi-commit state canvas"
-        className="flex min-h-[560px] items-center justify-center p-6"
+        className="flex min-h-0 flex-1 items-center justify-center p-6"
       >
         <ErrorMessage error={canvasError} onRetry={() => void loadCanvas(projectId)} />
       </section>
@@ -997,7 +1051,7 @@ function StateCanvasView({
   return (
     <section
       aria-label="Multi-commit state canvas"
-      className="flex h-[680px] min-h-[560px] flex-col overflow-hidden xl:h-[calc(100vh-21rem)]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
     >
       {!snapshotLoading && !branchHeadHash ? (
         <output className="shrink-0 border-b border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -1028,8 +1082,11 @@ function StateStructureView({
   rows: StatePointRow[];
 }) {
   return (
-    <section aria-label="Structured state tree" className="min-h-[460px]">
-      <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
+    <section
+      aria-label="Structured state tree"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
         <label className="relative h-9 w-full max-w-[260px]">
           <Search
             aria-hidden="true"
@@ -1043,17 +1100,17 @@ function StateStructureView({
           />
         </label>
       </div>
-      <div className="overflow-auto">
-        <table className="w-full table-fixed border-collapse text-left text-sm">
-          <thead className="bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)]">
+      <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
+        <table className="w-full min-w-[1440px] table-fixed border-collapse text-left text-sm">
+          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
-              <th className="w-[34%] border-b border-[var(--stroke-divider)] px-4 py-3">
+              <th className="sticky left-0 z-30 w-[38%] border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
                 Path / Key
               </th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
-              <th className="w-[25%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">
+              <th className="w-[10%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
+              <th className="w-[26%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
+              <th className="w-[10%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
+              <th className="w-[11%] border-b border-[var(--stroke-divider)] px-3 py-3">
                 Source / Op
               </th>
               <th className="w-[5%] border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
@@ -1065,7 +1122,7 @@ function StateStructureView({
             ))}
           </tbody>
         </table>
-      </div>
+      </StateScrollArea>
     </section>
   );
 }
@@ -1078,7 +1135,12 @@ function StatePointTableRow({ row }: { row: StatePointRow }) {
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
       )}
     >
-      <td className="px-4 py-2.5 font-bold">
+      <td
+        className={cn(
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5 font-bold',
+          row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
+        )}
+      >
         <span
           className="flex min-w-0 items-center gap-2"
           style={{ paddingLeft: 4 + row.depth * 18 }}
@@ -1086,11 +1148,15 @@ function StatePointTableRow({ row }: { row: StatePointRow }) {
           <span className="w-3 shrink-0 font-mono text-xs text-[var(--text-tertiary)]">
             {row.expandable ? '›' : ''}
           </span>
-          <span className="truncate">{row.key}</span>
+          <span className="truncate" title={row.key}>
+            {row.key}
+          </span>
         </span>
       </td>
       <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.type}</td>
-      <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]">{row.value}</td>
+      <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]" title={row.value}>
+        {row.value}
+      </td>
       <td className="px-3 py-2.5">
         <StatusPill row={row} />
       </td>
@@ -1129,18 +1195,25 @@ function StateCodeView({ yamlText }: { yamlText: string }) {
   return (
     <section
       aria-label="YAML code view"
-      className="min-h-[560px] bg-[var(--surface-card)] px-6 py-5"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] px-6 py-5"
     >
-      <pre className="overflow-auto rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 font-mono text-sm leading-6 text-[var(--text-primary)]">
-        {lines.map((line, index) => (
-          <div className="grid grid-cols-[44px_minmax(0,1fr)]" key={String(index)}>
-            <span className="select-none pr-4 text-right text-[var(--text-tertiary)]">
-              {index + 1}
+      <StateScrollArea
+        className="min-h-0 flex-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
+        horizontal
+        label="Canonical YAML content"
+        viewportClassName="font-mono text-sm leading-6 text-[var(--text-primary)]"
+      >
+        <code className="block min-w-max py-4 pr-4">
+          {lines.map((line, index) => (
+            <span className="grid grid-cols-[44px_max-content]" key={String(index)}>
+              <span className="sticky left-0 z-10 select-none border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-right text-[var(--text-tertiary)]">
+                {index + 1}
+              </span>
+              <span className="whitespace-pre pl-4">{line}</span>
             </span>
-            <code className="whitespace-pre-wrap">{line}</code>
-          </div>
-        ))}
-      </pre>
+          ))}
+        </code>
+      </StateScrollArea>
     </section>
   );
 }
@@ -1182,7 +1255,7 @@ function StateContextRail({
   warning: string | null;
 }) {
   return (
-    <aside className="grid content-start gap-4">
+    <aside className="grid content-start gap-4 pb-1">
       <RailCard title="About this state">
         <p>Committed state built from source evidence through YOps.</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1214,7 +1287,7 @@ function StateContextRail({
           <RailRow label="Schema" value={schemaName} />
           <RailRow label="Readiness" value={validationLabel(validation, validationGapCount)} />
           <RailRow label="Commits" value={String(commitCount)} />
-          <RailRow label="YOps" value={String(operations.length)} />
+          <RailRow label="HEAD YOps" value={String(countStateYOps(operations))} />
           <RailRow label="Edges" value={String(edgeCount)} />
         </dl>
         {warning ? (
@@ -1282,11 +1355,6 @@ function findCommittedWorkspaceForCommit(
 
 function workspaceValidationGaps(workspace: WorkspaceCandidate | null): StateValidationGapLike[] {
   return workspace?.schemaReview.gaps.map((path) => ({ path })) ?? [];
-}
-
-function visibleYOpsCount(commit: ApiCommit | null, operations: StateOperationEntry[]): number {
-  const committedCount = commit?.yops_log_ids?.length ?? 0;
-  return committedCount > 0 ? committedCount : operations.length;
 }
 
 function joinWarnings(...warnings: Array<string | null | undefined>): string | null {
