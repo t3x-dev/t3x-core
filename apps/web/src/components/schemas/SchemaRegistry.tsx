@@ -1,4 +1,7 @@
+'use client';
+
 import { type ReactNode, useState } from 'react';
+import { SchemaFamilyTabs } from '@/components/schemas/SchemaFamilyTabs';
 import {
   type SchemaDetailView,
   SchemaReleaseDetail,
@@ -6,60 +9,49 @@ import {
 import { SchemaReleaseList } from '@/components/schemas/SchemaReleaseList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { SchemaReleasePreview } from '@/types/schemas';
+import type { SchemaFamilyPreview, SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaRegistryProps {
-  currentReleaseId: string;
-  releases: SchemaReleasePreview[];
+  defaultFamilyId: string;
+  families: SchemaFamilyPreview[];
 }
 
-export function SchemaRegistry({ currentReleaseId, releases }: SchemaRegistryProps) {
-  const currentRelease =
-    releases.find((release) => release.id === currentReleaseId && release.status === 'active') ??
-    null;
-  const [selectedReleaseId, setSelectedReleaseId] = useState<string | null>(null);
+export function SchemaRegistry({ defaultFamilyId, families }: SchemaRegistryProps) {
+  const initialFamily =
+    families.find((family) => family.id === defaultFamilyId) ?? families[0] ?? null;
+  const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? '');
+  const [selectedReleaseIds, setSelectedReleaseIds] = useState<Record<string, string>>({});
   const [activeView, setActiveView] = useState<SchemaDetailView>('structure');
-  const selectedRelease =
-    (selectedReleaseId
-      ? releases.find((release) => release.id === selectedReleaseId)
-      : undefined) ??
-    currentRelease ??
-    releases[0] ??
-    null;
+
+  const selectedFamily = families.find((family) => family.id === selectedFamilyId) ?? initialFamily;
+  const currentRelease = getCurrentRelease(selectedFamily);
+  const selectedRelease = selectedFamily
+    ? (selectedFamily.releases.find(
+        (release) => release.id === selectedReleaseIds[selectedFamily.id]
+      ) ??
+      currentRelease ??
+      selectedFamily.releases[0] ??
+      null)
+    : null;
+
+  function handleSelectFamily(familyId: string) {
+    setSelectedFamilyId(familyId);
+    setActiveView('structure');
+  }
 
   function handleSelectRelease(releaseId: string) {
-    setSelectedReleaseId(releaseId);
+    if (!selectedFamily) return;
+    setSelectedReleaseIds((releaseIds) => ({
+      ...releaseIds,
+      [selectedFamily.id]: releaseId,
+    }));
     setActiveView('structure');
   }
 
   function handleOpenCanonicalYaml() {
-    if (!currentRelease) return;
-    setSelectedReleaseId(currentRelease.id);
+    if (!selectedRelease) return;
     setActiveView('yaml');
   }
-
-  if (!selectedRelease) {
-    return (
-      <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
-        <div className="mx-auto w-full max-w-[1480px]">
-          <section
-            aria-labelledby="schemas-page-title"
-            className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm"
-          >
-            <SchemaRegistryHeader
-              currentRelease={null}
-              onOpenCanonicalYaml={handleOpenCanonicalYaml}
-            />
-            <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
-              No schema versions are available for this project.
-            </div>
-          </section>
-        </div>
-      </section>
-    );
-  }
-
-  const summaryRelease = currentRelease ?? selectedRelease;
 
   return (
     <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
@@ -69,92 +61,84 @@ export function SchemaRegistry({ currentReleaseId, releases }: SchemaRegistryPro
           className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm"
         >
           <SchemaRegistryHeader
-            currentRelease={currentRelease}
             onOpenCanonicalYaml={handleOpenCanonicalYaml}
+            selectedRelease={selectedRelease}
           />
 
-          <dl className="grid gap-px border-t border-[var(--stroke-divider)] bg-[var(--stroke-divider)] min-[481px]:grid-cols-2 min-[721px]:grid-cols-4">
-            <SchemaFact label="Schema">
-              <span>{summaryRelease.name}</span>
-              <Badge className="text-[11px]" variant="commit">
-                single family
-              </Badge>
-            </SchemaFact>
-            <SchemaFact label="Current version">
-              {currentRelease ? (
-                <>
-                  <span className="font-mono">{currentRelease.version}</span>
-                  <Badge className="text-[11px]" variant="success">
-                    current
-                  </Badge>
-                </>
-              ) : (
-                <>
-                  <span>Not set</span>
-                  <Badge className="text-[11px]" variant="pending">
-                    no current
-                  </Badge>
-                </>
-              )}
-            </SchemaFact>
-            <SchemaFact label="Root">
-              <span className="font-mono">{summaryRelease.rootKey}</span>
-              <Badge className="text-[11px]" variant="outline">
-                strict paths
-              </Badge>
-            </SchemaFact>
-            <SchemaFact label="Usage">
-              <span>
-                {summaryRelease.usedByCommitCount}{' '}
-                {summaryRelease.usedByCommitCount === 1 ? 'commit' : 'commits'}
-              </span>
-              <span>
-                {summaryRelease.usedByWorkspaceCount}{' '}
-                {summaryRelease.usedByWorkspaceCount === 1 ? 'workspace' : 'workspaces'}
-              </span>
-            </SchemaFact>
-          </dl>
+          {selectedFamily ? (
+            <SchemaFamilyTabs
+              activeFamilyId={selectedFamily.id}
+              families={families}
+              onSelectFamily={handleSelectFamily}
+            />
+          ) : null}
+
+          {selectedFamily && selectedRelease ? (
+            <SchemaRegistryFacts
+              currentRelease={currentRelease}
+              family={selectedFamily}
+              familyCount={families.length}
+              selectedRelease={selectedRelease}
+            />
+          ) : (
+            <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
+              {selectedFamily
+                ? `No versions are available for ${selectedFamily.name}.`
+                : 'No schema families are available for this project.'}
+            </div>
+          )}
         </section>
 
-        <section
-          aria-label="Schema version browser"
-          className="mt-4 grid min-h-[650px] gap-4 min-[961px]:grid-cols-[280px_minmax(0,1fr)]"
-        >
-          <SchemaReleaseList
-            currentRelease={currentRelease}
-            onSelectRelease={handleSelectRelease}
-            releases={releases}
-            selectedReleaseId={selectedRelease.id}
-          />
-          <SchemaReleaseDetail
-            activeView={activeView}
-            currentRelease={currentRelease}
-            onCompareWithCurrent={() => setActiveView('changes')}
-            onViewChange={setActiveView}
-            release={selectedRelease}
-          />
-        </section>
+        {selectedFamily && selectedRelease ? (
+          <section
+            aria-label="Schema version browser"
+            className="mt-4 grid min-h-[650px] gap-4 min-[961px]:grid-cols-[280px_minmax(0,1fr)]"
+          >
+            <SchemaReleaseList
+              currentRelease={currentRelease}
+              onSelectRelease={handleSelectRelease}
+              releases={selectedFamily.releases}
+              selectedReleaseId={selectedRelease.id}
+            />
+            <SchemaReleaseDetail
+              activeView={activeView}
+              currentRelease={currentRelease}
+              onCompareWithCurrent={() => setActiveView('changes')}
+              onViewChange={setActiveView}
+              release={selectedRelease}
+            />
+          </section>
+        ) : null}
 
         <p className="mx-0.5 mt-[14px] text-[11px] text-[var(--text-tertiary)]">
-          Preview data — one project, one Schema family, versioned YAML contracts.
+          Preview data — one repository can use multiple Schema families; each family keeps an
+          independent, immutable version history.
         </p>
       </div>
     </section>
   );
 }
 
+function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePreview | null {
+  return (
+    family?.releases.find(
+      (release) => release.id === family.currentReleaseId && release.status === 'active'
+    ) ?? null
+  );
+}
+
 function SchemaRegistryHeader({
-  currentRelease,
   onOpenCanonicalYaml,
+  selectedRelease,
 }: {
-  currentRelease: SchemaReleasePreview | null;
   onOpenCanonicalYaml: () => void;
+  selectedRelease: SchemaReleasePreview | null;
 }) {
   return (
     <header className="flex flex-col items-start justify-between gap-6 p-4 min-[721px]:flex-row">
       <div>
         <p className="mb-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-          Repository contract
+          Repository contracts
         </p>
         <h2
           className="text-lg font-bold leading-[1.3] text-[var(--text-primary)]"
@@ -162,19 +146,19 @@ function SchemaRegistryHeader({
         >
           Schemas
         </h2>
-        <p className="mt-0.5 max-w-[700px] text-[13px] leading-5 text-[var(--text-secondary)]">
-          One versioned contract defines the shape of this repository&apos;s structured state. New
-          workspaces use the current version; existing commits keep their original version.
+        <p className="mt-0.5 max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
+          Schema families define different kinds of structured state. Choose a family to inspect its
+          current contract, historical versions, typed relations, and canonical YAML.
         </p>
       </div>
       <Button
         aria-label={
-          currentRelease
-            ? `Open current ${currentRelease.version} canonical YAML`
-            : 'Open current canonical YAML'
+          selectedRelease
+            ? `Open ${selectedRelease.name} ${selectedRelease.version} canonical YAML`
+            : 'Open canonical YAML'
         }
         className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
-        disabled={!currentRelease}
+        disabled={!selectedRelease}
         onClick={onOpenCanonicalYaml}
         type="button"
         variant="canvas-outline"
@@ -182,6 +166,64 @@ function SchemaRegistryHeader({
         Open canonical YAML
       </Button>
     </header>
+  );
+}
+
+function SchemaRegistryFacts({
+  currentRelease,
+  family,
+  familyCount,
+  selectedRelease,
+}: {
+  currentRelease: SchemaReleasePreview | null;
+  family: SchemaFamilyPreview;
+  familyCount: number;
+  selectedRelease: SchemaReleasePreview;
+}) {
+  const summaryRelease = currentRelease ?? selectedRelease;
+
+  return (
+    <dl className="grid gap-px border-t border-[var(--stroke-divider)] bg-[var(--stroke-divider)] min-[481px]:grid-cols-2 min-[721px]:grid-cols-4">
+      <SchemaFact label="Schema">
+        <span>{family.name}</span>
+        <Badge className="text-[11px]" variant="commit">
+          {familyCount} {familyCount === 1 ? 'family' : 'families'}
+        </Badge>
+      </SchemaFact>
+      <SchemaFact label="Current version">
+        {currentRelease ? (
+          <>
+            <span className="font-mono">{currentRelease.version}</span>
+            <Badge className="text-[11px]" variant="success">
+              current
+            </Badge>
+          </>
+        ) : (
+          <>
+            <span>Not set</span>
+            <Badge className="text-[11px]" variant="pending">
+              no current
+            </Badge>
+          </>
+        )}
+      </SchemaFact>
+      <SchemaFact label="Root">
+        <span className="font-mono">{summaryRelease.rootKey}</span>
+        <Badge className="text-[11px]" variant="outline">
+          strict paths
+        </Badge>
+      </SchemaFact>
+      <SchemaFact label="Usage">
+        <span>
+          {summaryRelease.usedByCommitCount}{' '}
+          {summaryRelease.usedByCommitCount === 1 ? 'commit' : 'commits'}
+        </span>
+        <span>
+          {summaryRelease.usedByWorkspaceCount}{' '}
+          {summaryRelease.usedByWorkspaceCount === 1 ? 'workspace' : 'workspaces'}
+        </span>
+      </SchemaFact>
+    </dl>
   );
 }
 

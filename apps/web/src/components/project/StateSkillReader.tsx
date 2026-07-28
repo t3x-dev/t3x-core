@@ -582,11 +582,11 @@ function BundleStatus({
 
 function CodePreview({ code, label }: { code: string; label: string }) {
   return (
-    <div className="min-w-0 overflow-auto bg-[#0d1117]">
-      <div className="sticky top-0 border-b border-white/10 bg-[#161b22] px-4 py-2 font-mono text-[10px] text-slate-400">
+    <div className="min-w-0 overflow-auto bg-[var(--surface-code)]">
+      <div className="sticky top-0 border-b border-[var(--syn-comment)]/20 bg-[var(--surface-code)] px-4 py-2 font-mono text-[10px] text-[var(--syn-comment)]">
         {label}
       </div>
-      <pre className="min-w-max p-5 font-mono text-xs leading-6 text-slate-200">
+      <pre className="min-w-max p-5 font-mono text-xs leading-6 text-[var(--on-accent)]">
         <code>{code}</code>
       </pre>
     </div>

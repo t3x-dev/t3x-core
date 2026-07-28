@@ -3,7 +3,7 @@ import type { YSchema } from './types';
 export const normalizedT3xSkillYSchema: YSchema = {
   yschema: '0.1',
   name: 't3x/skill',
-  version: '0.2.0',
+  version: 'v1',
   description: 'Portable workflow-routed agent skill with deterministic delivery checks.',
   strict: true,
   nodes: {
