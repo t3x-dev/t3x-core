@@ -16,7 +16,17 @@ export function schemaReleaseToWorkspaceBinding(
   release: SchemaRelease,
   mode: WorkspaceSchemaBinding['mode']
 ): WorkspaceSchemaBinding {
+  const releaseWithCanonicalMetadata = release as SchemaRelease & {
+    canonicalName?: string;
+    schemaHash?: string;
+  };
   return {
+    ...(releaseWithCanonicalMetadata.canonicalName
+      ? { canonicalName: releaseWithCanonicalMetadata.canonicalName }
+      : {}),
+    ...(releaseWithCanonicalMetadata.schemaHash
+      ? { schemaHash: releaseWithCanonicalMetadata.schemaHash }
+      : {}),
     schemaName: release.name,
     version: release.version,
     mode,

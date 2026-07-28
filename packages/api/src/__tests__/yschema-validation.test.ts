@@ -1,7 +1,9 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use compact response casts */
 
+import { yamlToTree } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import { t3xSkillP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -74,6 +76,7 @@ describe('YSchema validation routes', () => {
       },
       message: 'Validated PRD candidate',
       project_id: project.projectId,
+      sources: [{ type: 'import', id: 'mat_prd_complete' }],
     });
 
     const createRes = await app.request(
@@ -133,6 +136,7 @@ describe('YSchema validation routes', () => {
       },
       message: 'Incomplete PRD candidate',
       project_id: project.projectId,
+      sources: [{ type: 'import', id: 'mat_prd_incomplete' }],
     });
 
     const res = await app.request(`/v1/projects/${project.projectId}/yschema-validation/runs`, {
@@ -151,5 +155,57 @@ describe('YSchema validation routes', () => {
     expect(body.data.result.validation.gaps).toContainEqual(
       expect.objectContaining({ code: 'REQUIRED_SLOT_MISSING', path: 'summary/audience' })
     );
+  });
+
+  it('runs structural and policy validation for a Skill commit', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Skill Validation' }));
+    const candidate = t3xSkillP0Fixtures.validCandidateTree;
+    const commit = await createCommit(mockDB, {
+      author: { type: 'human', name: 'YX' },
+      content: {
+        trees: Object.entries(candidate).map(([key, value]) => yamlToTree(key, value)),
+        relations: [...t3xSkillP0Fixtures.validRelations],
+      },
+      message: 'Validated Skill candidate',
+      project_id: project.projectId,
+      sources: [{ type: 'import', id: 'mat_skill_complete' }],
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/yschema-validation/runs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commit_hash: commit.hash, schema_name: 't3x/skill' }),
+      }
+    );
+
+    expect(response.status).toBe(201);
+    const body: ApiResponse = await response.json();
+    expect(body.data).toMatchObject({
+      schema_name: 't3x/skill',
+      status: 'passed',
+      valid: true,
+      ready: true,
+      error_count: 0,
+      gap_count: 0,
+    });
+    expect(body.data.result.policy_validation).toEqual({
+      valid: true,
+      ready: true,
+      errors: [],
+      gaps: [],
+    });
+    expect(body.data.result.provenance_by_path['manifest/name']).toContainEqual({
+      origin: 'user_evidence',
+      sourceId: 'import:mat_skill_complete',
+    });
+
+    const latestResponse = await app.request(
+      `/v1/projects/${project.projectId}/yschema-validation/latest`
+    );
+    const latest: ApiResponse = await latestResponse.json();
+    expect(latest.data.id).toBe(body.data.id);
+    expect(latest.data.schema_name).toBe('t3x/skill');
   });
 });

@@ -316,13 +316,16 @@ export function ProjectDetailPageContent({
   }, [isCanvasSurface, projectBase?.id]);
 
   const handleRunYSchemaValidation = useCallback(
-    async (commitHash: string) => {
+    async (commitHash: string, schemaName: string) => {
       if (!projectBase?.id) return;
       setYschemaValidationRunning(true);
       setYschemaValidationError(null);
 
       try {
-        const run = await runYSchemaValidation(projectBase.id, { commit_hash: commitHash });
+        const run = await runYSchemaValidation(projectBase.id, {
+          commit_hash: commitHash,
+          schema_name: schemaName,
+        });
         setYschemaValidation(toYSchemaValidationSummary(run));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Validation run failed';

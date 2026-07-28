@@ -37,6 +37,12 @@ export interface Provenance {
   };
   /** For squash/rebase: the original commit hashes that were replaced */
   source_commits?: string[];
+  /** Schema contract pinned by the workspace that produced this commit. */
+  schema_ref?: {
+    name: string;
+    version?: string;
+    hash?: string;
+  };
 }
 
 export interface Commit {

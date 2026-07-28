@@ -18,6 +18,7 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
+import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import {
   type StatePointRow,
   type StateValidationGapLike,
   selectPrdRenderModel,
+  selectSkillRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import {
@@ -42,6 +44,7 @@ import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
@@ -57,7 +60,7 @@ type BranchFocus = string;
 
 interface ProjectStateTabProps {
   initialView?: ProjectStateView;
-  onRunValidation?: (commitHash: string) => Promise<void> | void;
+  onRunValidation?: (commitHash: string, schemaName: string) => Promise<void> | void;
   projectId: string;
   projectName: string;
   validation?: YSchemaValidationSummary | null;
@@ -337,17 +340,23 @@ export function ProjectStateTab({
     () => (headCommit ? buildCanonicalStateYaml(headCommit.content) : ''),
     [headCommit]
   );
-  const renderModel = useMemo(
+  const schemaName = currentValidation?.schemaName ?? inferSchemaName(headCommit);
+  const isSkillSchema = schemaName === 't3x/skill';
+  const prdRenderModel = useMemo(
     () =>
-      headCommit
+      headCommit && !isSkillSchema
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
           })
         : null,
-    [effectiveOperations, headCommit, validationGaps]
+    [effectiveOperations, headCommit, isSkillSchema, validationGaps]
   );
-  const schemaName = currentValidation?.schemaName ?? inferSchemaName(headCommit);
+  const skillRenderModel = useMemo(
+    () => (headCommit && isSkillSchema ? selectSkillRenderModel(headCommit.content) : null),
+    [headCommit, isSkillSchema]
+  );
+  const skillArtifact = useSkillArtifact(projectId, headCommit?.hash ?? null, isSkillSchema);
   const validationReady = currentValidation?.status === 'verified';
   const validationGapCount = currentValidation?.gapCount ?? validationGaps.length;
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
@@ -435,7 +444,9 @@ export function ProjectStateTab({
             branch={branchFocus || 'main'}
             headCommit={headCommit}
             onRunValidation={
-              headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
+              headCommit && onRunValidation
+                ? () => onRunValidation(headCommit.hash, schemaName)
+                : undefined
             }
             schemaLabel={schemaName}
             validation={currentValidation}
@@ -489,11 +500,16 @@ export function ProjectStateTab({
                 headCommit={headCommit}
                 onDiffToggle={() => setDiffOpen((current) => !current)}
                 rootKey={rootKey}
+                schemaName={schemaName}
                 validationGapCount={validationGapCount}
                 validationKnown={Boolean(currentValidation)}
               />
               {!showingInlineDiff ? (
-                <StateViewTabs activeView={activeView} onViewChange={updateActiveView} />
+                <StateViewTabs
+                  activeView={activeView}
+                  onViewChange={updateActiveView}
+                  schemaName={schemaName}
+                />
               ) : null}
 
               {showingInlineDiff && headCommit && snapshot.parentCommit ? (
@@ -531,9 +547,21 @@ export function ProjectStateTab({
                       rows={filteredRows}
                     />
                   ) : null}
-                  {activeView === 'render' && renderModel ? (
+                  {activeView === 'render' && skillRenderModel ? (
+                    <StateSkillReader
+                      artifact={skillArtifact.artifact}
+                      artifactError={skillArtifact.error?.message ?? null}
+                      artifactLoading={skillArtifact.loading}
+                      model={skillRenderModel}
+                      schemaName={schemaName}
+                      validationGapCount={validationGapCount}
+                      validationReady={validationReady}
+                      yamlText={yamlText}
+                    />
+                  ) : null}
+                  {activeView === 'render' && prdRenderModel ? (
                     <StatePrdReader
-                      model={renderModel}
+                      model={prdRenderModel}
                       schemaName={schemaName}
                       validationGapCount={validationGapCount}
                       validationReady={validationReady}
@@ -781,6 +809,7 @@ function StateObjectLine({
   headCommit,
   onDiffToggle,
   rootKey,
+  schemaName,
   validationGapCount,
   validationKnown,
 }: {
@@ -791,20 +820,24 @@ function StateObjectLine({
   headCommit: ApiCommit | null;
   onDiffToggle: () => void;
   rootKey: string;
+  schemaName: string;
   validationGapCount: number;
   validationKnown: boolean;
 }) {
   return (
     <div className="flex min-h-13 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5">
       <div className="min-w-0 truncate font-mono text-sm text-[var(--text-secondary)]">
-        state <span className="font-bold text-[var(--text-primary)]">prd-state.yaml</span> /{' '}
-        <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
+        state{' '}
+        <span className="font-bold text-[var(--text-primary)]">
+          {schemaArtifactFileName(schemaName)}
+        </span>{' '}
+        / <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
         <Badge className="ml-2 font-mono" variant="commit">
           HEAD {headCommit?.hash ? commitHashLabel(headCommit.hash) : 'empty'}
         </Badge>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="pending-subtle">adapter prd.document</Badge>
+        <Badge variant="pending-subtle">adapter {schemaAdapterName(schemaName)}</Badge>
         <Badge
           variant={validationGapCount > 0 ? 'warning' : validationKnown ? 'success' : 'outline'}
         >
@@ -905,9 +938,11 @@ function StateModeTabs({
 function StateViewTabs({
   activeView,
   onViewChange,
+  schemaName,
 }: {
   activeView: ProjectSnapshotView;
   onViewChange: (view: ProjectSnapshotView) => void;
+  schemaName: string;
 }) {
   return (
     <div
@@ -945,7 +980,7 @@ function StateViewTabs({
         })}
       </div>
       <div className="hidden flex-wrap items-center gap-2 md:flex">
-        <Badge variant="pending-subtle">adapter prd.document</Badge>
+        <Badge variant="pending-subtle">adapter {schemaAdapterName(schemaName)}</Badge>
         <Badge variant="commit-subtle">canonical YAML</Badge>
       </div>
     </div>
@@ -1322,8 +1357,35 @@ function validationLabel(
 }
 
 function inferSchemaName(commit: ApiCommit | null): string {
-  const rootKey = commit?.content.trees?.[0]?.key;
-  return rootKey === 'prd' ? 't3x/prd' : 't3x/state';
+  const provenanceSchema = commit?.provenance?.schema_ref?.name;
+  if (provenanceSchema) return provenanceSchema;
+
+  const rootKeys = new Set(commit?.content.trees?.map((tree) => tree.key) ?? []);
+  if (
+    rootKeys.has('skill') ||
+    ['manifest', 'activation', 'contract', 'instructions'].every((key) => rootKeys.has(key))
+  ) {
+    return 't3x/skill';
+  }
+  return rootKeys.has('prd') ? 't3x/prd' : 't3x/state';
+}
+
+function schemaArtifactFileName(schemaName: string): string {
+  const schemaKey =
+    schemaName
+      .split('/')
+      .at(-1)
+      ?.replace(/[^a-z0-9-]+/gi, '-') || 'state';
+  return `${schemaKey}-state.yaml`;
+}
+
+function schemaAdapterName(schemaName: string): string {
+  const schemaKey =
+    schemaName
+      .split('/')
+      .at(-1)
+      ?.replace(/[^a-z0-9_.-]+/gi, '-') || 'state';
+  return `${schemaKey}.document`;
 }
 
 function resolveMainSchemaBindings(

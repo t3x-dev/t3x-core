@@ -67,6 +67,13 @@ const ProvenanceSchema = z.object({
   method: z.enum(['llm_extraction', 'human_curation', 'import', 'merge']),
   model: z.string().optional(),
   extracted_at: z.string().optional(),
+  schema_ref: z
+    .object({
+      name: z.string().min(1),
+      version: z.string().optional(),
+      hash: z.string().optional(),
+    })
+    .optional(),
 });
 
 const CreateCommitRequestSchema = z.object({

@@ -23,10 +23,15 @@ import {
   updateBranchHead,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
-import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
+import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  canonicalSchemaNameFromBinding,
+  resolveBuiltInYSchema,
+  schemaRootKeyFromBinding,
+} from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -504,6 +509,9 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
             project_id: projectId,
             provenance: {
               method: 'human_curation',
+              ...(workspaceSchemaRef(storedWorkspace)
+                ? { schema_ref: workspaceSchemaRef(storedWorkspace) ?? undefined }
+                : {}),
               ...(validationOverride
                 ? {
                     validation_override: {
@@ -1122,10 +1130,9 @@ function buildExtractedWorkspace(
 }
 
 function resolveWorkspaceYSchema(workspace: Record<string, unknown>): YSchema | null {
-  const bindings = workspace.schemaBindings as Array<{ schemaName?: string }> | undefined;
-  const primarySchemaName = bindings?.[0]?.schemaName ?? '';
-  if (/prd/i.test(primarySchemaName)) return t3xPrdP0Fixtures.normalizedYSchema;
-  return null;
+  const bindings = workspace.schemaBindings as unknown[] | undefined;
+  const canonicalName = canonicalSchemaNameFromBinding(bindings?.[0]);
+  return canonicalName ? resolveBuiltInYSchema(canonicalName) : null;
 }
 
 function buildCandidateFieldsFromYSchema(
@@ -1405,18 +1412,23 @@ function flattenField(field: unknown): Array<Record<string, string>> {
 }
 
 function schemaPathToYOpsPath(workspace: Record<string, unknown>, path: string) {
-  const rootKey = String(
-    (workspace.schemaBindings as Array<{ schemaName?: string }> | undefined)?.[0]?.schemaName ??
-      'Candidate'
-  )
-    .replace(/\s+Schema$/i, '')
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+  const rootKey = schemaRootKeyFromBinding(
+    (workspace.schemaBindings as unknown[] | undefined)?.[0]
+  );
 
   return [rootKey, ...path.split('.').filter(Boolean)].join('/');
+}
+
+function workspaceSchemaRef(workspace: Record<string, unknown>) {
+  const binding = (workspace.schemaBindings as unknown[] | undefined)?.[0];
+  const name = canonicalSchemaNameFromBinding(binding);
+  if (!name || !binding || typeof binding !== 'object' || Array.isArray(binding)) return null;
+  const record = binding as Record<string, unknown>;
+  return {
+    name,
+    ...(typeof record.version === 'string' ? { version: record.version } : {}),
+    ...(typeof record.schemaHash === 'string' ? { hash: record.schemaHash } : {}),
+  };
 }
 
 function extractWorkspaceSourceRefs(workspace: Record<string, unknown>): string[] {

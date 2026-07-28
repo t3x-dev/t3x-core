@@ -1,18 +1,20 @@
 import { createHash } from 'node:crypto';
-import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
+import {
+  type SemanticContent,
+  type SlotValue,
+  type TreeNode,
+  validateSkillPolicy,
+} from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createYSchemaValidationRun,
   getCommit,
   getLatestCommit,
+  getYOpsForCommit,
   type YSchemaValidationRunOutput,
 } from '@t3x-dev/storage';
-import {
-  type ProvenanceIndex,
-  t3xPrdP0Fixtures,
-  validateTree,
-  type YSchemaRelation,
-} from '@t3x-dev/yschema';
+import { type ProvenanceIndex, validateTree, type YSchemaRelation } from '@t3x-dev/yschema';
+import { resolveBuiltInYSchema } from './yschema-registry';
 
 export const YSCHEMA_VALIDATOR_VERSION = 'yschema-p0@0.1';
 
@@ -40,14 +42,6 @@ export async function runYSchemaValidationForCommit(
   db: AnyDB,
   input: RunValidationInput
 ): Promise<YSchemaValidationRunView> {
-  const schemaName = input.schemaName ?? 't3x/prd';
-  if (schemaName !== 't3x/prd') {
-    throw new YSchemaValidationError(
-      'SCHEMA_NOT_SUPPORTED',
-      `YSchema ${schemaName} is not supported by the local validator yet`
-    );
-  }
-
   const commit = input.commitHash
     ? await getCommit(db, input.commitHash)
     : await getLatestCommit(db, input.projectId, 'main');
@@ -61,22 +55,42 @@ export async function runYSchemaValidationForCommit(
     );
   }
 
-  const schema = t3xPrdP0Fixtures.normalizedYSchema;
+  const schemaName = input.schemaName ?? commit.provenance?.schema_ref?.name ?? 't3x/prd';
+  const schema = resolveBuiltInYSchema(schemaName);
+  if (!schema) {
+    throw new YSchemaValidationError(
+      'SCHEMA_NOT_SUPPORTED',
+      `YSchema ${schemaName} is not supported by the local validator yet`
+    );
+  }
   const candidate = semanticContentToCandidate(commit.content);
   const relations = semanticContentToYSchemaRelations(commit.content);
-  const provenanceByPath = acceptedEvidence(candidateEvidencePaths(candidate));
-  const validation = validateTree({
+  const provenanceByPath = await buildCommitProvenance(db, commit, candidate);
+  const structuralValidation = validateTree({
     schema,
     tree: candidate,
     relations,
     provenanceByPath,
   });
+  const policyValidation =
+    schema.name === 't3x/skill'
+      ? validateSkillPolicy(candidate, relations)
+      : { valid: true, ready: true, errors: [], gaps: [] };
+  const validation = {
+    valid: structuralValidation.valid && policyValidation.valid,
+    ready: structuralValidation.ready && policyValidation.ready,
+    errors: [...structuralValidation.errors, ...policyValidation.errors],
+    gaps: [...structuralValidation.gaps, ...policyValidation.gaps],
+    fixes: structuralValidation.fixes,
+  };
   const status = validation.valid && validation.ready ? 'passed' : 'failed';
   const result = {
     schema,
     candidate,
     relations,
     provenance_by_path: provenanceByPath,
+    structural_validation: structuralValidation,
+    policy_validation: policyValidation,
     validation,
   };
 
@@ -123,18 +137,76 @@ function semanticContentToYSchemaRelations(content: SemanticContent): YSchemaRel
   }));
 }
 
-function acceptedEvidence(paths: string[]): ProvenanceIndex {
-  return Object.fromEntries(
-    paths.map((path) => [
-      path,
-      [
-        {
-          origin: 'user_evidence',
-          sourceId: `commit:${path}`,
-        },
-      ],
-    ])
-  );
+async function buildCommitProvenance(
+  db: AnyDB,
+  commit: Awaited<ReturnType<typeof getCommit>> & {},
+  candidate: Record<string, unknown>
+): Promise<ProvenanceIndex> {
+  const leafPaths = candidateEvidencePaths(candidate);
+  const provenance: ProvenanceIndex = {};
+  const logs = await getYOpsForCommit(db, commit.yops_log_ids ?? []);
+
+  for (const log of logs) {
+    if (!Array.isArray(log.yops)) continue;
+    for (const operation of log.yops) {
+      if (!operation || typeof operation !== 'object' || Array.isArray(operation)) continue;
+      const record = operation as Record<string, unknown>;
+      const operationPath = yopsOperationPath(record);
+      if (!operationPath) continue;
+      const matchingPaths = leafPaths.filter(
+        (path) =>
+          operationPath === path ||
+          operationPath.endsWith(`/${path}`) ||
+          path.startsWith(`${operationPath}/`) ||
+          operationPath.endsWith(`/${path.split('/').slice(0, -1).join('/')}`)
+      );
+      const ref = provenanceRefFromYOp(record.source);
+      if (!ref) continue;
+      for (const path of matchingPaths) {
+        provenance[path] = [...(provenance[path] ?? []), ref];
+      }
+    }
+  }
+
+  const sourceRefs = (commit.sources ?? []).map((source) => ({
+    origin: 'user_evidence' as const,
+    sourceId: `${source.type}:${source.id}`,
+  }));
+  if (sourceRefs.length > 0) {
+    for (const path of leafPaths) {
+      if (!provenance[path]?.length) provenance[path] = sourceRefs;
+    }
+  }
+
+  return provenance;
+}
+
+function yopsOperationPath(operation: Record<string, unknown>): string | null {
+  for (const value of Object.values(operation)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const path = (value as Record<string, unknown>).path;
+    if (typeof path === 'string' && path.trim()) return path.trim().replace(/\./g, '/');
+  }
+  return null;
+}
+
+function provenanceRefFromYOp(source: unknown) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+  const record = source as Record<string, unknown>;
+  if (record.type === 'llm') {
+    const turnRef = record.turn_ref;
+    if (!turnRef || typeof turnRef !== 'object' || Array.isArray(turnRef)) return null;
+    const turn = turnRef as Record<string, unknown>;
+    return {
+      origin: 'user_evidence' as const,
+      ...(typeof turn.turn_hash === 'string' ? { turnHash: turn.turn_hash } : {}),
+      ...(typeof turn.quote === 'string' ? { quote: turn.quote } : {}),
+    };
+  }
+  if (record.type === 'human') {
+    return { origin: 'ai_paraphrase_approved' as const, approved: true };
+  }
+  return null;
 }
 
 function candidateEvidencePaths(candidate: unknown, prefix = ''): string[] {
