@@ -588,6 +588,114 @@ export const yschemaValidationRuns = pgTable(
   ]
 );
 
+/**
+ * Workspace Validation Runs - Candidate-level validation workflow records
+ *
+ * Binds external validator evidence to a workspace candidate, workflow,
+ * materialized input, and validator contract. Gate status is stored as a
+ * summary for consumers, but freshness is calculated by workflow/API code.
+ */
+export const validationRuns = pgTable(
+  'validation_runs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectHash: text('subject_hash').notNull(),
+    workflowName: text('workflow_name').notNull(),
+    workflowHash: text('workflow_hash').notNull(),
+    inputHash: text('input_hash').notNull(),
+    validatorHash: text('validator_hash').notNull(),
+    environmentHash: text('environment_hash'),
+    provider: text('provider').notNull(),
+    status: text('status').notNull(),
+    gateStatus: text('gate_status').notNull(),
+    summary: text('summary'),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_validation_runs_workspace_created').on(
+      table.projectId,
+      table.workspaceId,
+      table.createdAt
+    ),
+    index('idx_validation_runs_subject').on(
+      table.projectId,
+      table.workspaceId,
+      table.subjectType,
+      table.subjectHash
+    ),
+    index('idx_validation_runs_workflow').on(table.workflowName, table.workflowHash),
+  ]
+);
+
+/**
+ * Workspace Validation Step Runs - Step-level evidence for a validation run.
+ */
+export const validationStepRuns = pgTable(
+  'validation_step_runs',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => validationRuns.id, { onDelete: 'cascade' }),
+    stepId: text('step_id').notNull(),
+    name: text('name').notNull(),
+    status: text('status').notNull(),
+    summary: text('summary'),
+    errorCode: text('error_code'),
+    exitCode: integer('exit_code'),
+    durationMs: integer('duration_ms'),
+    commandJson: jsonb('command_json').$type<unknown[] | null>(),
+    logExcerpt: text('log_excerpt'),
+    logTruncated: boolean('log_truncated').notNull().default(false),
+    logArtifactId: text('log_artifact_id'),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_validation_step_runs_run').on(table.runId),
+    index('idx_validation_step_runs_run_step').on(table.runId, table.stepId),
+  ]
+);
+
+/**
+ * Workspace Validation Findings - Structured validator errors and evidence.
+ */
+export const validationFindings = pgTable(
+  'validation_findings',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => validationRuns.id, { onDelete: 'cascade' }),
+    stepRunId: text('step_run_id').references(() => validationStepRuns.id, {
+      onDelete: 'cascade',
+    }),
+    severity: text('severity').notNull(),
+    file: text('file'),
+    line: integer('line'),
+    statePath: text('state_path'),
+    code: text('code').notNull(),
+    message: text('message').notNull(),
+    logExcerpt: text('log_excerpt'),
+    evidenceJson: jsonb('evidence_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_validation_findings_run').on(table.runId),
+    index('idx_validation_findings_step').on(table.stepRunId),
+  ]
+);
+
 // ============================================================
 // Type Exports (for use in application code)
 // ============================================================
@@ -634,6 +742,13 @@ export type NewSavedComparison = typeof savedComparisons.$inferInsert;
 
 export type YSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferSelect;
 export type NewYSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferInsert;
+
+export type ValidationRunRecord = typeof validationRuns.$inferSelect;
+export type NewValidationRunRecord = typeof validationRuns.$inferInsert;
+export type ValidationStepRunRecord = typeof validationStepRuns.$inferSelect;
+export type NewValidationStepRunRecord = typeof validationStepRuns.$inferInsert;
+export type ValidationFindingRecord = typeof validationFindings.$inferSelect;
+export type NewValidationFindingRecord = typeof validationFindings.$inferInsert;
 
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
