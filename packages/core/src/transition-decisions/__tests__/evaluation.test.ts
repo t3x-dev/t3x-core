@@ -431,7 +431,7 @@ describe('policy evaluation and immutable Decisions', () => {
     );
   });
 
-  it('distinguishes missing validation in complete and partial observation scopes', () => {
+  it('distinguishes required validation from optional validation', () => {
     const base = input();
     const complete = evaluateAcceptance({
       ...base,
@@ -439,15 +439,6 @@ describe('policy evaluation and immutable Decisions', () => {
     });
     expect(complete.failures).toEqual([
       expect.objectContaining({ code: 'VALIDATION_REQUIRED', overrideable: true }),
-    ]);
-
-    const partial = evaluateAcceptance({
-      ...base,
-      observationScope: { completeness: 'partial', sources: ['offline-pack'] },
-      statements: [base.statements[0] as StatementObservation],
-    });
-    expect(partial.failures).toEqual([
-      expect.objectContaining({ code: 'OBSERVATION_SCOPE_INCOMPLETE', overrideable: false }),
     ]);
 
     const missingOverride = evaluateAcceptance({
@@ -481,6 +472,54 @@ describe('policy evaluation and immutable Decisions', () => {
       statements: [base.statements[0] as StatementObservation],
     });
     expect(optional).toMatchObject({ permitted: true, failures: [] });
+  });
+
+  it('requires complete observation for acceptance and override', () => {
+    const base = input();
+    const partialMissing = evaluateAcceptance({
+      ...base,
+      observationScope: { completeness: 'partial', sources: ['offline-pack'] },
+      statements: [base.statements[0] as StatementObservation],
+    });
+    expect(partialMissing.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'OBSERVATION_SCOPE_INCOMPLETE', overrideable: false }),
+        expect.objectContaining({ code: 'VALIDATION_REQUIRED', overrideable: true }),
+      ])
+    );
+
+    const partialPositiveInput: EvaluateAcceptanceInput = {
+      ...base,
+      observationScope: { completeness: 'partial', sources: ['offline-pack'] },
+    };
+    const partialPositive = evaluateAcceptance(partialPositiveInput);
+    expect(partialPositive).toMatchObject({ permitted: false });
+    expect(partialPositive.failures).toEqual([
+      expect.objectContaining({
+        code: 'OBSERVATION_SCOPE_INCOMPLETE',
+        overrideable: false,
+        details: { check: 'decision', sources: ['offline-pack'] },
+      }),
+    ]);
+    const partialDecision = createDecisionStatement({
+      ...partialPositiveInput,
+      decidedAt: DECIDED_AT,
+    });
+    expect(partialDecision).toMatchObject({ ok: false });
+    expect('decision' in partialDecision).toBe(false);
+
+    const partialOverride = evaluateAcceptance({
+      ...partialPositiveInput,
+      outcome: 'overridden',
+      rationale: { mode: 'authored', value: 'Override from an offline pack', evidence: [] },
+    });
+    expect(partialOverride.permitted).toBe(false);
+
+    const partialRejection = evaluateAcceptance({
+      ...partialPositiveInput,
+      outcome: 'rejected',
+    });
+    expect(partialRejection.permitted).toBe(true);
   });
 
   it('treats Statements as a set and refuses claimed-time latest-wins', () => {

@@ -198,6 +198,11 @@ export function createAcceptancePolicyResource(input: { policy: unknown; uri: st
   };
 }
 
+/**
+ * Verify that a descriptor names these exact policy bytes. This does not prove
+ * the policy is applicable to a project or ref; the application must select the
+ * applicable resource from trusted configuration before evaluation.
+ */
 export function verifyAcceptancePolicyResource(
   policy: AcceptancePolicy,
   resource: ResourceDescriptor

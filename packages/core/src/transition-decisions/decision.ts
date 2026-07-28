@@ -19,6 +19,11 @@ export type DecisionCreationResult =
  * Statement. Preview evaluations are not authority tokens and cannot be forged
  * into Decisions by flipping a `permitted` field.
  *
+ * This function establishes policy evaluation, not issuer authenticity. A
+ * repository or MCP service MUST accept its result only through a trusted
+ * decision path; a structurally valid Decision parsed elsewhere is not proof
+ * that this evaluator authorized it.
+ *
  * A rejected Decision is auditable; CommitV2 verification separately refuses it.
  */
 export function createDecisionStatement(

@@ -56,7 +56,10 @@ export interface ActorContext {
 
 export interface StatementObservation {
   statement: Statement;
-  /** Trusted resolver/authentication facts; distinct from the Statement's claimed actor. */
+  /**
+   * Trusted resolver/authentication facts; distinct from the Statement's claimed actor.
+   * The application MUST NOT construct this context from Statement or request payload fields.
+   */
   issuerContext: ActorContext;
 }
 
@@ -96,6 +99,14 @@ interface EvaluationFacts {
   policyFailures: PolicyFailure[];
 }
 
+/**
+ * Inputs to the pure evaluator.
+ *
+ * The application boundary is responsible for selecting the policy applicable to the
+ * project/ref, authenticating actor and issuer contexts, and deriving observation scope
+ * from the resolver. Content addressing proves policy bytes, not policy applicability;
+ * none of these trust facts may be promoted from a client request.
+ */
 export interface EvaluateAcceptanceInput {
   actorContext: ActorContext;
   effect: Effect;
@@ -331,6 +342,16 @@ function policyFacts(input: EvaluateAcceptanceInput): {
     acceptableConfirmations.map((observation) => observation.statement)
   );
 
+  if (scope.completeness === 'partial') {
+    failures.push({
+      code: 'OBSERVATION_SCOPE_INCOMPLETE',
+      path: '$.observationScope',
+      message: 'A partial observation scope cannot authorize acceptance or override',
+      overrideable: false,
+      details: { check: 'decision', sources: scope.sources },
+    });
+  }
+
   const replayOutcomes = new Set(
     acceptableReplay.map((observation) => observation.statement.predicate.outcome)
   );
@@ -340,14 +361,6 @@ function policyFacts(input: EvaluateAcceptanceInput): {
       path: '$.statements',
       message: 'Replay is false for the exact proposed Effect',
       overrideable: false,
-    });
-  } else if (!replayOutcomes.has('verified') && scope.completeness === 'partial') {
-    failures.push({
-      code: 'OBSERVATION_SCOPE_INCOMPLETE',
-      path: '$.observationScope',
-      message: 'The partial observation scope cannot establish a required replay verdict',
-      overrideable: false,
-      details: { check: 'replay', sources: scope.sources },
     });
   } else if (!replayOutcomes.has('verified')) {
     failures.push({
@@ -379,23 +392,12 @@ function policyFacts(input: EvaluateAcceptanceInput): {
     policy.checks.validation.requirement === 'required' &&
     !validationOutcomes.has('passed')
   ) {
-    if (scope.completeness === 'partial') {
-      failures.push({
-        code: 'OBSERVATION_SCOPE_INCOMPLETE',
-        path: '$.observationScope',
-        message:
-          'The partial observation scope cannot prove a required validation Statement absent',
-        overrideable: false,
-        details: { check: 'validation', sources: scope.sources },
-      });
-    } else {
-      failures.push({
-        code: 'VALIDATION_REQUIRED',
-        path: '$.statements',
-        message: 'No acceptable passed validation Statement was observed in the complete scope',
-        overrideable: policy.override.allowMissingValidation,
-      });
-    }
+    failures.push({
+      code: 'VALIDATION_REQUIRED',
+      path: '$.statements',
+      message: 'No acceptable passed validation Statement was observed',
+      overrideable: policy.override.allowMissingValidation,
+    });
   }
 
   return {
