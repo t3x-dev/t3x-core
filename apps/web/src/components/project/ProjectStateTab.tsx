@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  ChevronDown,
+  ChevronRight,
   Code2,
   FileText,
   GitCommit,
@@ -355,7 +357,6 @@ export function ProjectStateTab({
         : [],
     [effectiveOperations, headCommit, validationGaps]
   );
-  const filteredRows = useMemo(() => filterRows(pointRows, pathQuery), [pathQuery, pointRows]);
   const yamlText = useMemo(
     () => (headCommit ? buildCanonicalStateYaml(headCommit.content) : ''),
     [headCommit]
@@ -609,7 +610,7 @@ export function ProjectStateTab({
                     <StateStructureView
                       onPathQueryChange={setPathQuery}
                       pathQuery={pathQuery}
-                      rows={filteredRows}
+                      rows={pointRows}
                     />
                   ) : null}
                   {activeView === 'render' && renderModel ? (
@@ -1081,6 +1082,30 @@ function StateStructureView({
   pathQuery: string;
   rows: StatePointRow[];
 }) {
+  const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({});
+  const structureRows = useMemo(() => buildStateStructureRows(rows), [rows]);
+  const filteredRows = useMemo(
+    () => filterStateStructureRows(structureRows, pathQuery),
+    [pathQuery, structureRows]
+  );
+  const searching = pathQuery.trim().length > 0;
+  const visibleRows = useMemo(
+    () =>
+      searching
+        ? filteredRows
+        : filterCollapsedStateRows(structureRows, (row) =>
+            isStateStructureRowExpanded(row, expansionOverrides)
+          ),
+    [expansionOverrides, filteredRows, searching, structureRows]
+  );
+
+  const toggleRow = useCallback((row: StateStructureRow) => {
+    setExpansionOverrides((current) => ({
+      ...current,
+      [row.id]: !isStateStructureRowExpanded(row, current),
+    }));
+  }, []);
+
   return (
     <section
       aria-label="Structured state tree"
@@ -1101,24 +1126,29 @@ function StateStructureView({
         </label>
       </div>
       <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
-        <table className="w-full min-w-[1440px] table-fixed border-collapse text-left text-sm">
+        <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm">
           <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
-              <th className="sticky left-0 z-30 w-[38%] border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
+              <th className="sticky left-0 z-30 w-[36%] border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
                 Path / Key
               </th>
-              <th className="w-[10%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
-              <th className="w-[26%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
-              <th className="w-[10%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
-              <th className="w-[11%] border-b border-[var(--stroke-divider)] px-3 py-3">
+              <th className="w-[35%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
+              <th className="w-[6%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
+              <th className="w-[8%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
+              <th className="w-[9%] border-b border-[var(--stroke-divider)] px-3 py-3">
                 Source / Op
               </th>
-              <th className="w-[5%] border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
+              <th className="w-[6%] border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <StatePointTableRow key={row.id} row={row} />
+            {visibleRows.map((row) => (
+              <StatePointTableRow
+                expanded={searching || isStateStructureRowExpanded(row, expansionOverrides)}
+                key={row.id}
+                onToggle={() => toggleRow(row)}
+                row={row}
+              />
             ))}
           </tbody>
         </table>
@@ -1127,17 +1157,37 @@ function StateStructureView({
   );
 }
 
-function StatePointTableRow({ row }: { row: StatePointRow }) {
+interface StateStructureRow extends StatePointRow {
+  childCount?: number;
+  collapseByDefault?: boolean;
+  parentPath: string | null;
+  virtualGroup?: boolean;
+}
+
+function StatePointTableRow({
+  expanded,
+  onToggle,
+  row,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  row: StateStructureRow;
+}) {
+  const expandableLabel = `${expanded ? 'Collapse' : 'Expand'} ${row.key}`;
+
   return (
     <tr
       className={cn(
-        'border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        row.expandable && 'cursor-pointer transition-colors hover:bg-[var(--surface-hover)]',
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
       )}
+      onClick={row.expandable ? onToggle : undefined}
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5 font-bold',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5 font-bold transition-colors',
+          row.expandable && 'group-hover:bg-[var(--surface-hover)]',
           row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
         )}
       >
@@ -1145,18 +1195,40 @@ function StatePointTableRow({ row }: { row: StatePointRow }) {
           className="flex min-w-0 items-center gap-2"
           style={{ paddingLeft: 4 + row.depth * 18 }}
         >
-          <span className="w-3 shrink-0 font-mono text-xs text-[var(--text-tertiary)]">
-            {row.expandable ? '›' : ''}
-          </span>
+          {row.expandable ? (
+            <button
+              aria-expanded={expanded}
+              aria-label={expandableLabel}
+              className="-m-1 inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggle();
+              }}
+              type="button"
+            >
+              {expanded ? (
+                <ChevronDown aria-hidden="true" className="size-3.5" />
+              ) : (
+                <ChevronRight aria-hidden="true" className="size-3.5" />
+              )}
+            </button>
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
           <span className="truncate" title={row.key}>
             {row.key}
           </span>
+          {row.virtualGroup && row.childCount ? (
+            <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
+              {row.childCount}
+            </Badge>
+          ) : null}
         </span>
       </td>
-      <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.type}</td>
       <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]" title={row.value}>
         {row.value}
       </td>
+      <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.type}</td>
       <td className="px-3 py-2.5">
         <StatusPill row={row} />
       </td>
@@ -1362,14 +1434,170 @@ function joinWarnings(...warnings: Array<string | null | undefined>): string | n
   return message || null;
 }
 
-function filterRows(rows: StatePointRow[], query: string): StatePointRow[] {
+function buildStateStructureRows(rows: StatePointRow[]): StateStructureRow[] {
+  const rootPaths = new Set(rows.filter((row) => row.depth === 0).map((row) => row.path));
+  const mustRowsByParent = new Map<string, StatePointRow[]>();
+
+  for (const row of rows) {
+    const parentPath = parentStatePath(row.path);
+    if (
+      parentPath &&
+      rootPaths.has(parentPath) &&
+      row.depth === 1 &&
+      row.type === 'boolean' &&
+      isMustConditionKey(row.key)
+    ) {
+      const siblings = mustRowsByParent.get(parentPath) ?? [];
+      siblings.push(row);
+      mustRowsByParent.set(parentPath, siblings);
+    }
+  }
+
+  const groupByChildId = new Map<string, StatePointRow[]>();
+  for (const siblings of mustRowsByParent.values()) {
+    if (siblings.length < 2) continue;
+    for (const row of siblings) groupByChildId.set(row.id, siblings);
+  }
+
+  const structuredRows: StateStructureRow[] = [];
+  for (const row of rows) {
+    const mustSiblings = groupByChildId.get(row.id);
+    if (!mustSiblings) {
+      structuredRows.push({ ...row, parentPath: parentStatePath(row.path) });
+      continue;
+    }
+    if (mustSiblings[0]?.id !== row.id) continue;
+
+    const parentPath = parentStatePath(row.path);
+    if (!parentPath) continue;
+    const groupId = `${parentPath}/$must_conditions`;
+    const groupStatus = aggregateStatePointStatus(mustSiblings);
+    structuredRows.push({
+      childCount: mustSiblings.length,
+      collapseByDefault: true,
+      depth: row.depth,
+      expandable: true,
+      id: groupId,
+      issueCount: mustSiblings.reduce((total, child) => total + child.issueCount, 0),
+      key: 'Must conditions',
+      parentPath,
+      path: groupId,
+      sourceOp: aggregateStatePointSource(mustSiblings),
+      status: groupStatus.status,
+      statusLabel: groupStatus.label,
+      type: `${String(mustSiblings.length)} × bool`,
+      value: summarizeMustConditions(mustSiblings),
+      virtualGroup: true,
+    });
+    structuredRows.push(
+      ...mustSiblings.map((child) => ({
+        ...child,
+        depth: row.depth + 1,
+        parentPath: groupId,
+      }))
+    );
+  }
+
+  return structuredRows;
+}
+
+function filterStateStructureRows(rows: StateStructureRow[], query: string): StateStructureRow[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return rows;
-  return rows.filter((row) =>
-    [row.path, row.key, row.type, row.value, row.statusLabel].some((value) =>
+
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const includedIds = new Set<string>();
+  for (const row of rows) {
+    const matches = [row.path, row.key, row.type, row.value, row.statusLabel].some((value) =>
       value.toLowerCase().includes(normalized)
-    )
+    );
+    if (!matches) continue;
+
+    includedIds.add(row.id);
+    let ancestorPath = row.parentPath;
+    while (ancestorPath) {
+      includedIds.add(ancestorPath);
+      ancestorPath = rowById.get(ancestorPath)?.parentPath ?? null;
+    }
+  }
+
+  return rows.filter((row) => includedIds.has(row.id));
+}
+
+function filterCollapsedStateRows(
+  rows: StateStructureRow[],
+  isExpanded: (row: StateStructureRow) => boolean
+): StateStructureRow[] {
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  return rows.filter((row) => {
+    let ancestorPath = row.parentPath;
+    while (ancestorPath) {
+      const ancestor = rowById.get(ancestorPath);
+      if (ancestor?.expandable && !isExpanded(ancestor)) return false;
+      ancestorPath = ancestor?.parentPath ?? null;
+    }
+    return true;
+  });
+}
+
+function isStateStructureRowExpanded(
+  row: StateStructureRow,
+  overrides: Record<string, boolean>
+): boolean {
+  return overrides[row.id] ?? !row.collapseByDefault;
+}
+
+function parentStatePath(path: string): string | null {
+  const separatorIndex = path.lastIndexOf('/');
+  return separatorIndex < 0 ? null : path.slice(0, separatorIndex);
+}
+
+function isMustConditionKey(key: string): boolean {
+  return (
+    key.includes('_must_') ||
+    key.startsWith('must_') ||
+    key.startsWith('cases_not_resolvable_automatically_need_')
   );
+}
+
+function summarizeMustConditions(rows: StatePointRow[]): string {
+  const labels = rows.map((row) => conciseMustConditionLabel(row.key));
+  const visibleLabels = labels.slice(0, 5);
+  const remaining = labels.length - visibleLabels.length;
+  return `${visibleLabels.join(' · ')}${remaining > 0 ? ` · +${String(remaining)}` : ''}`;
+}
+
+function conciseMustConditionLabel(key: string): string {
+  const prefixes = [
+    'for_every_relevant_case_must_define_',
+    'cases_not_resolvable_automatically_need_',
+    'must_define_',
+    'must_',
+  ];
+  const prefix = prefixes.find((candidate) => key.startsWith(candidate));
+  const text = (prefix ? key.slice(prefix.length) : key).replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function aggregateStatePointStatus(rows: StatePointRow[]): {
+  label: string;
+  status: StatePointRow['status'];
+} {
+  const first = rows[0];
+  if (!first) return { label: 'unchanged', status: 'unchanged' };
+  if (rows.every((row) => row.status === first.status && row.statusLabel === first.statusLabel)) {
+    return { label: first.statusLabel, status: first.status };
+  }
+  if (rows.some((row) => row.status === 'missing')) return { label: 'missing', status: 'missing' };
+  const changedCount = rows.filter((row) => row.status !== 'unchanged').length;
+  return { label: `${String(changedCount)} changes`, status: 'changed' };
+}
+
+function aggregateStatePointSource(rows: StatePointRow[]): string {
+  const sources = Array.from(
+    new Set(rows.map((row) => row.sourceOp).filter((value) => value !== '-'))
+  );
+  return sources.length === 1 ? sources[0]! : '-';
 }
 
 function commitTitleFor(commit: ApiCommit | null): string {

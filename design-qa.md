@@ -32,3 +32,40 @@ Date: 2026-07-23
 - P3: none required for this iteration.
 
 final result: passed
+
+---
+
+# Design QA — State Structure Collapsible Nodes
+
+Date: 2026-07-28
+
+## Visual sources
+
+- Selected design: `notes/docs/2026-07-28-state-structure-region-options-v2.html`
+- Selected-state capture: `/private/tmp/t3x-state-collapsible-tree-final.png`
+- Production capture: `/private/tmp/t3x-state-structure-implementation-1600.png`
+
+## Comparison
+
+- `Path / Key` and `Value` are adjacent; `Type` follows as secondary metadata.
+- The production column proportions match the selected design closely: 36 / 35 / 6 / 8 / 9 / 6.
+- Top-level PRD boolean requirements are summarized as one collapsed `Must conditions` row with a count and concise preview.
+- `prd`, `Must conditions`, and `problem_context` use the same left-chevron and full-row interaction model.
+- The former right-side `Expand` action is absent.
+
+## Interaction verification
+
+- Clicking the `Must conditions` row reveals all seven managed boolean fields and clicking it again hides them.
+- Clicking `problem_context` hides and restores its descendants.
+- Clicking `prd` hides and restores the complete managed tree.
+- Search still reveals matching rows together with their ancestors.
+- The restarted dev page and repository home both render meaningful content with no framework error overlay or browser console errors.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- P3: none required for this iteration.
+
+final result: passed

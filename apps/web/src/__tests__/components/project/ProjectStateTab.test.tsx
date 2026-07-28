@@ -173,6 +173,34 @@ const PRD_COMMIT: ApiCommit = {
   yops_log_ids: ['op_1', 'op_2', 'op_3'],
 };
 
+const MUST_CONDITION_KEYS = [
+  'for_every_relevant_case_must_define_degradation_path',
+  'for_every_relevant_case_must_define_retry_eligibility',
+  'for_every_relevant_case_must_define_responsible_service',
+  'for_every_relevant_case_must_define_operational_response',
+  'cases_not_resolvable_automatically_need_manual_handling_path',
+  'for_every_relevant_case_must_define_expected_system_behavior',
+  'cases_not_resolvable_automatically_need_operational_runbook_link_or_reference',
+] as const;
+
+const MUST_CONDITIONS_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  content: {
+    ...PRD_COMMIT.content,
+    trees: [
+      {
+        ...PRD_COMMIT.content.trees[0]!,
+        slots: {
+          ...PRD_COMMIT.content.trees[0]!.slots,
+          ...Object.fromEntries(MUST_CONDITION_KEYS.map((key) => [key, true])),
+        },
+      },
+    ],
+  },
+  hash: 'sha256:must-conditions',
+  message: 'PRD must conditions committed',
+};
+
 const PARENT_COMMIT: ApiCommit = {
   ...PRD_COMMIT,
   committed_at: '2026-07-08T08:00:00.000Z',
@@ -351,7 +379,7 @@ describe('ProjectStateTab', () => {
     const structureScrollArea = structureScroller.closest('[data-slot="state-scroll-area"]');
     expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
-    expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1440px]');
+    expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1200px]');
     expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
       'sticky',
       'top-0'
@@ -390,6 +418,69 @@ describe('ProjectStateTab', () => {
     fireEvent.mouseUp(document);
     expect(document.body).not.toHaveStyle({ cursor: 'col-resize' });
     fireEvent.doubleClick(stateDetailsSeparator);
+  });
+
+  it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
+    hookMocks.loadCommits.mockResolvedValue([MUST_CONDITIONS_COMMIT]);
+    renderStateTab();
+
+    await screen.findByText('PRD must conditions committed');
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(
+      within(structureView)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent?.trim())
+    ).toEqual(['Path / Key', 'Value', 'Type', 'Status', 'Source / Op', 'Issues']);
+
+    const mustToggle = within(structureView).getByRole('button', {
+      name: 'Expand Must conditions',
+    });
+    expect(mustToggle).toHaveAttribute('aria-expanded', 'false');
+    for (const key of MUST_CONDITION_KEYS) {
+      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+    }
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: 'degradation_path' },
+    });
+    expect(
+      within(structureView).getByText('for_every_relevant_case_must_define_degradation_path')
+    ).toBeInTheDocument();
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: '' },
+    });
+    const collapsedMustToggle = within(structureView).getByRole('button', {
+      name: 'Expand Must conditions',
+    });
+    fireEvent.click(collapsedMustToggle.closest('tr')!);
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toHaveAttribute('aria-expanded', 'true');
+    for (const key of MUST_CONDITION_KEYS) {
+      expect(within(structureView).getByText(key)).toBeInTheDocument();
+    }
+
+    const problemToggle = within(structureView).getByRole('button', {
+      name: 'Collapse summary',
+    });
+    fireEvent.click(problemToggle.closest('tr')!);
+    expect(within(structureView).queryByText('problem')).not.toBeInTheDocument();
+
+    const rootToggle = within(structureView).getByRole('button', { name: 'Collapse prd' });
+    fireEvent.click(rootToggle.closest('tr')!);
+    expect(
+      within(structureView).queryByRole('button', { name: 'Collapse Must conditions' })
+    ).not.toBeInTheDocument();
+    expect(within(structureView).queryByText('title')).not.toBeInTheDocument();
+
+    fireEvent.click(within(structureView).getByRole('button', { name: 'Expand prd' }));
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toBeInTheDocument();
   });
 
   it('reloads the State snapshot and supporting repository data on refresh', async () => {
