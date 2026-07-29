@@ -11,31 +11,23 @@ import {
 
 describe('ESPHome workspace validation materializer', () => {
   it('materializes workspace.device into stable YAML and hashes', () => {
-    const workspace = {
-      device: {
-        wifi: {
-          ssid: 'Lab',
-          password: 'super-secret',
-        },
-        sensor: [
-          {
-            platform: 'wifi_signal',
-            name: 'WiFi Signal',
-          },
-        ],
-        esphome: {
-          name: 'energy-meter',
-        },
-        esp32: {
-          board: 'esp32dev',
-        },
+    const materialized = materializeDevice({
+      wifi: {
+        ssid: 'Lab',
+        password: 'super-secret',
       },
-    };
-
-    const materialized = materializeEsphomeDeviceInput({
-      projectId: 'proj_esphome',
-      workspaceId: 'workspace_esphome',
-      workspace,
+      sensor: [
+        {
+          platform: 'wifi_signal',
+          name: 'WiFi Signal',
+        },
+      ],
+      esphome: {
+        name: 'energy-meter',
+      },
+      esp32: {
+        board: 'esp32dev',
+      },
     });
 
     expect(materialized).toMatchObject({
@@ -69,28 +61,17 @@ describe('ESPHome workspace validation materializer', () => {
     expect(materialized.workflow_hash).toMatch(/^sha256:/);
     expect(materialized.validator_hash).toMatch(/^sha256:/);
     expect(materialized.files[0].content).not.toContain('super-secret');
+    expect(ESPHOME_CONFIG_COMMAND).toEqual(['esphome', 'config', '/config/device.yaml']);
   });
 
-  it('produces the same output for equivalent device objects with different key order', () => {
-    const left = materializeEsphomeDeviceInput({
-      projectId: 'proj_esphome',
-      workspaceId: 'workspace_esphome',
-      workspace: {
-        device: {
-          esphome: { name: 'energy-meter' },
-          esp32: { board: 'esp32dev' },
-        },
-      },
+  it('keeps hashes stable for reordered input and fresh for changed device state', () => {
+    const left = materializeDevice({
+      esphome: { name: 'energy-meter' },
+      esp32: { board: 'esp32dev' },
     });
-    const right = materializeEsphomeDeviceInput({
-      projectId: 'proj_esphome',
-      workspaceId: 'workspace_esphome',
-      workspace: {
-        device: {
-          esp32: { board: 'esp32dev' },
-          esphome: { name: 'energy-meter' },
-        },
-      },
+    const right = materializeDevice({
+      esp32: { board: 'esp32dev' },
+      esphome: { name: 'energy-meter' },
     });
 
     expect(right.files[0].content).toBe(left.files[0].content);
@@ -98,34 +79,16 @@ describe('ESPHome workspace validation materializer', () => {
     expect(right.input_hash).toBe(left.input_hash);
     expect(right.workflow_hash).toBe(left.workflow_hash);
     expect(right.validator_hash).toBe(left.validator_hash);
-  });
 
-  it('changes candidate hashes when device state changes', () => {
-    const base = materializeEsphomeDeviceInput({
-      projectId: 'proj_esphome',
-      workspaceId: 'workspace_esphome',
-      workspace: {
-        device: {
-          esphome: { name: 'energy-meter' },
-          esp32: { board: 'esp32dev' },
-        },
-      },
-    });
-    const changed = materializeEsphomeDeviceInput({
-      projectId: 'proj_esphome',
-      workspaceId: 'workspace_esphome',
-      workspace: {
-        device: {
-          esphome: { name: 'energy-meter-v2' },
-          esp32: { board: 'esp32dev' },
-        },
-      },
+    const changed = materializeDevice({
+      esphome: { name: 'energy-meter-v2' },
+      esp32: { board: 'esp32dev' },
     });
 
-    expect(changed.subject_hash).not.toBe(base.subject_hash);
-    expect(changed.input_hash).not.toBe(base.input_hash);
-    expect(changed.workflow_hash).toBe(base.workflow_hash);
-    expect(changed.validator_hash).toBe(base.validator_hash);
+    expect(changed.subject_hash).not.toBe(left.subject_hash);
+    expect(changed.input_hash).not.toBe(left.input_hash);
+    expect(changed.workflow_hash).toBe(left.workflow_hash);
+    expect(changed.validator_hash).toBe(left.validator_hash);
   });
 
   it('rejects workspaces without ESPHome device state', () => {
@@ -144,8 +107,12 @@ describe('ESPHome workspace validation materializer', () => {
       )
     );
   });
-
-  it('keeps the validator command contract explicit for phase 3', () => {
-    expect(ESPHOME_CONFIG_COMMAND).toEqual(['esphome', 'config', '/config/device.yaml']);
-  });
 });
+
+function materializeDevice(device: Record<string, unknown>) {
+  return materializeEsphomeDeviceInput({
+    projectId: 'proj_esphome',
+    workspaceId: 'workspace_esphome',
+    workspace: { device },
+  });
+}

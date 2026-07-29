@@ -2,18 +2,26 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ESPHOME_CONFIG_COMMAND, stableHash } from './esphome-materializer';
+import {
+  ESPHOME_CONFIG_COMMAND,
+  ESPHOME_DEVICE_CONFIG_PATH,
+  stableHash,
+} from './esphome-materializer';
 
 export const ESPHOME_OCI_IMAGE = 'ghcr.io/esphome/esphome:2025.6';
 export const LOCAL_OCI_PREFLIGHT_STEP_ID = 'local-oci-preflight';
 export const ESPHOME_CONFIG_STEP_ID = 'esphome-config';
 export const OCI_RUNTIME_MISSING_CODE = 'OCI_RUNTIME_MISSING';
+export const OCI_RUNTIME_FAILED_CODE = 'OCI_RUNTIME_FAILED';
 export const ESPHOME_CONFIG_FAILED_CODE = 'ESPHOME_CONFIG_FAILED';
+export const ESPHOME_CONFIG_TIMED_OUT_CODE = 'ESPHOME_CONFIG_TIMED_OUT';
 
 const DEFAULT_PREFLIGHT_TIMEOUT_MS = 5_000;
 const DEFAULT_CONFIG_TIMEOUT_MS = 120_000;
 const LOG_EXCERPT_LIMIT = 8_000;
 const PROCESS_OUTPUT_LIMIT = 64_000;
+const CONFIG_CONTAINER_DIR = '/config';
+const ESPHOME_CONFIG_CONTAINER_COMMAND = ['config', ESPHOME_DEVICE_CONFIG_PATH] as const;
 
 type LocalOciRuntime = 'docker' | 'podman';
 
@@ -50,7 +58,7 @@ export interface RunLocalEsphomeConfigValidationOptions {
 export interface LocalEsphomeValidationStep {
   step_id: typeof LOCAL_OCI_PREFLIGHT_STEP_ID | typeof ESPHOME_CONFIG_STEP_ID;
   name: string;
-  status: 'passed' | 'failed' | 'environment_required';
+  status: 'passed' | 'failed' | 'environment_required' | 'timed_out';
   summary: string;
   error_code: string | null;
   exit_code: number | null;
@@ -73,7 +81,7 @@ export interface LocalEsphomeValidationFinding {
 }
 
 export interface LocalEsphomeValidationResult {
-  status: 'passed' | 'failed' | 'environment_required';
+  status: 'passed' | 'failed' | 'environment_required' | 'timed_out';
   gate_status: 'ready' | 'blocked';
   summary: string;
   environment_hash: string | null;
@@ -266,6 +274,77 @@ async function runEsphomeConfigInRuntime(
       };
     }
 
+    if (result.timed_out) {
+      return {
+        status: 'timed_out',
+        gate_status: 'blocked',
+        summary: 'ESPHome config timed out.',
+        environment_hash: runtimeEnvironmentHash(input.runtime, input.image),
+        step: configStep({
+          status: 'timed_out',
+          summary: 'ESPHome config timed out.',
+          errorCode: ESPHOME_CONFIG_TIMED_OUT_CODE,
+          exitCode: result.exit_code,
+          durationMs,
+          log,
+          runtime: input.runtime,
+          image: input.image,
+          ociCommand,
+        }),
+        findings: [
+          {
+            severity: 'error',
+            file: null,
+            line: null,
+            state_path: null,
+            code: ESPHOME_CONFIG_TIMED_OUT_CODE,
+            message: 'ESPHome config validation timed out.',
+            log_excerpt: log.excerpt,
+            evidence_json: {
+              runtime: input.runtime,
+              image: input.image,
+            },
+          },
+        ],
+      };
+    }
+
+    if (isOciRuntimeFailure(result, log.excerpt)) {
+      const message = summarizeOciRuntimeFailure(log.excerpt);
+      return {
+        status: 'environment_required',
+        gate_status: 'blocked',
+        summary: 'Local OCI runtime could not run the ESPHome image.',
+        environment_hash: null,
+        step: configStep({
+          status: 'environment_required',
+          summary: 'Local OCI runtime could not run the ESPHome image.',
+          errorCode: OCI_RUNTIME_FAILED_CODE,
+          exitCode: result.exit_code,
+          durationMs,
+          log,
+          runtime: input.runtime,
+          image: input.image,
+          ociCommand,
+        }),
+        findings: [
+          {
+            severity: 'error',
+            file: null,
+            line: null,
+            state_path: null,
+            code: OCI_RUNTIME_FAILED_CODE,
+            message,
+            log_excerpt: log.excerpt,
+            evidence_json: {
+              runtime: input.runtime,
+              image: input.image,
+            },
+          },
+        ],
+      };
+    }
+
     const message = summarizeEsphomeFailure(log.excerpt);
     return {
       status: 'failed',
@@ -313,15 +392,15 @@ function buildOciRunCommand(runtime: LocalOciRuntime, configDir: string, image: 
       '--network',
       'none',
       '-v',
-      `${configDir}:/config:ro`,
+      `${configDir}:${CONFIG_CONTAINER_DIR}:rw`,
       image,
-      ...ESPHOME_CONFIG_COMMAND,
+      ...ESPHOME_CONFIG_CONTAINER_COMMAND,
     ],
   };
 }
 
 function configStep(input: {
-  status: 'passed' | 'failed';
+  status: 'passed' | 'failed' | 'environment_required' | 'timed_out';
   summary: string;
   errorCode: string | null;
   exitCode: number | null;
@@ -354,7 +433,9 @@ function buildBoundedLog(result: LocalOciCommandResult): {
   excerpt: string | null;
   truncated: boolean;
 } {
-  const combined = [result.stdout.trimEnd(), result.stderr.trimEnd()].filter(Boolean).join('\n');
+  const combined = [result.stdout.trimEnd(), result.stderr.trimEnd(), result.error?.message ?? '']
+    .filter(Boolean)
+    .join('\n');
   if (!combined) {
     return { excerpt: null, truncated: Boolean(result.output_truncated) };
   }
@@ -369,17 +450,54 @@ function buildBoundedLog(result: LocalOciCommandResult): {
   };
 }
 
+function isOciRuntimeFailure(result: LocalOciCommandResult, logExcerpt: string | null): boolean {
+  if (result.error) return true;
+  if (result.exit_code === 125) return true;
+  if (!logExcerpt) return false;
+
+  return /(?:unable to find image|pull access denied|manifest unknown|error response from daemon|docker:\s*error|podman:\s*error|cannot connect to the docker daemon|requested access to the resource is denied|no such image)/i.test(
+    logExcerpt
+  );
+}
+
+function summarizeOciRuntimeFailure(logExcerpt: string | null): string {
+  const fallback = 'Local OCI runtime could not run the ESPHome image.';
+  if (!logExcerpt) return fallback;
+
+  const firstUsefulLine = logExcerpt
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find(Boolean);
+  if (!firstUsefulLine) return fallback;
+
+  return truncateText(`${fallback} ${firstUsefulLine}`, 240);
+}
+
 function summarizeEsphomeFailure(logExcerpt: string | null): string {
   const fallback = 'ESPHome configuration validation failed.';
   if (!logExcerpt) return fallback;
 
-  const line = logExcerpt
+  const lines = logExcerpt
     .split(/\r?\n/)
     .map((item) => item.trim())
-    .find((item) => item && !item.startsWith('INFO ') && !item.startsWith('WARNING '));
+    .filter((item) => item && !isEsphomeBoilerplateLogLine(item));
+  const line =
+    lines.find((item) =>
+      /(?:not a valid|invalid|requires|missing|required|must|failed|error)/i.test(item)
+    ) ?? lines[0];
   if (!line) return fallback;
 
   return truncateText(line, 240);
+}
+
+function isEsphomeBoilerplateLogLine(line: string): boolean {
+  return (
+    line.startsWith('INFO ') ||
+    line.startsWith('WARNING ') ||
+    line.startsWith('Creating cache directory ') ||
+    line.startsWith('You can change this behavior ') ||
+    line === 'Failed config'
+  );
 }
 
 function extractDeviceYamlLine(logExcerpt: string | null): number | null {

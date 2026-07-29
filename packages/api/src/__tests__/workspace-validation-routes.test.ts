@@ -63,31 +63,24 @@ describe('Workspace validation routes', () => {
     providerMock.runLocalEsphomeConfigValidation.mockReset();
   });
 
+  const postValidationRun = (projectId: string, body: Record<string, unknown> = {}) =>
+    app.request(`/v1/projects/${projectId}/workspaces/workspace_esphome/validation-runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
   it('runs ESPHome workspace validation and persists a passed result', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Runtime' }));
-    await createEsphomeWorkspace(project.projectId);
+    const project = await createEsphomeProject('ESPHome Runtime');
     providerMock.runLocalEsphomeConfigValidation.mockResolvedValueOnce(
       localProviderResult({
-        status: 'passed',
-        gate_status: 'ready',
-        summary: 'ESPHome config passed.',
         step: {
-          status: 'passed',
-          summary: 'ESPHome config passed.',
-          exit_code: 0,
           log_excerpt: 'INFO Configuration is valid!',
         },
       })
     );
 
-    const res = await app.request(
-      `/v1/projects/${project.projectId}/workspaces/workspace_esphome/validation-runs`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      }
-    );
+    const res = await postValidationRun(project.projectId);
 
     expect(res.status).toBe(201);
     const body: ApiResponse = await res.json();
@@ -119,8 +112,7 @@ describe('Workspace validation routes', () => {
   });
 
   it('persists ESPHome config failures with a finding', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Failed' }));
-    await createEsphomeWorkspace(project.projectId);
+    const project = await createEsphomeProject('ESPHome Failed');
     providerMock.runLocalEsphomeConfigValidation.mockResolvedValueOnce(
       localProviderResult({
         status: 'failed',
@@ -148,14 +140,7 @@ describe('Workspace validation routes', () => {
       })
     );
 
-    const res = await app.request(
-      `/v1/projects/${project.projectId}/workspaces/workspace_esphome/validation-runs`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflow_name: WORKFLOW_NAME }),
-      }
-    );
+    const res = await postValidationRun(project.projectId, { workflow_name: WORKFLOW_NAME });
 
     expect(res.status).toBe(201);
     const body: ApiResponse = await res.json();
@@ -176,47 +161,12 @@ describe('Workspace validation routes', () => {
   });
 
   it('persists environment_required when local OCI runtime is unavailable', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Env' }));
-    await createEsphomeWorkspace(project.projectId);
+    const project = await createEsphomeProject('ESPHome Env');
     providerMock.runLocalEsphomeConfigValidation.mockResolvedValueOnce(
-      localProviderResult({
-        status: 'environment_required',
-        gate_status: 'blocked',
-        summary: 'Local OCI runtime is not available.',
-        environment_hash: null,
-        step: {
-          step_id: 'local-oci-preflight',
-          name: 'Local OCI preflight',
-          status: 'environment_required',
-          summary: 'Local OCI runtime is not available.',
-          error_code: 'OCI_RUNTIME_MISSING',
-          exit_code: null,
-          command_json: null,
-          log_excerpt: null,
-        },
-        findings: [
-          {
-            severity: 'error',
-            file: null,
-            line: null,
-            state_path: null,
-            code: 'OCI_RUNTIME_MISSING',
-            message: 'Docker or Podman is required to run ESPHome validation.',
-            log_excerpt: null,
-            evidence_json: {},
-          },
-        ],
-      })
+      environmentRequiredProviderResult()
     );
 
-    const res = await app.request(
-      `/v1/projects/${project.projectId}/workspaces/workspace_esphome/validation-runs`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflow_name: WORKFLOW_NAME }),
-      }
-    );
+    const res = await postValidationRun(project.projectId, { workflow_name: WORKFLOW_NAME });
 
     expect(res.status).toBe(201);
     const body: ApiResponse = await res.json();
@@ -235,41 +185,22 @@ describe('Workspace validation routes', () => {
 
   it('reads the latest workspace validation run', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Project' }));
-    await createValidationRun(mockDB, {
-      project_id: project.projectId,
-      workspace_id: 'workspace_esphome',
+    await createStoredValidationRun(project.projectId, {
       subject_hash: 'sha256:subject-old',
-      workflow_name: WORKFLOW_NAME,
-      workflow_hash: 'sha256:workflow',
       input_hash: 'sha256:input-old',
-      validator_hash: 'sha256:validator',
-      provider: 'local-oci',
-      status: 'failed',
-      gate_status: 'blocked',
     });
-    const latestRun = await createValidationRun(mockDB, {
-      project_id: project.projectId,
-      workspace_id: 'workspace_esphome',
+    const latestRun = await createStoredValidationRun(project.projectId, {
       subject_hash: 'sha256:subject-new',
-      workflow_name: WORKFLOW_NAME,
-      workflow_hash: 'sha256:workflow',
       input_hash: 'sha256:input-new',
-      validator_hash: 'sha256:validator',
-      provider: 'local-oci',
       status: 'passed',
       gate_status: 'ready',
     });
-    await createValidationRun(mockDB, {
-      project_id: project.projectId,
-      workspace_id: 'workspace_esphome',
+    await createStoredValidationRun(project.projectId, {
       subject_hash: 'sha256:other-workflow',
       workflow_name: 'workspace-validation/other@v0',
       workflow_hash: 'sha256:other',
       input_hash: 'sha256:other-input',
       validator_hash: 'sha256:other-validator',
-      provider: 'local-oci',
-      status: 'failed',
-      gate_status: 'blocked',
     });
 
     const res = await app.request(
@@ -288,21 +219,18 @@ describe('Workspace validation routes', () => {
       status: 'passed',
       gate_status: 'ready',
     });
+
+    const emptyRes = await app.request(
+      `/v1/projects/${project.projectId}/workspaces/workspace_missing/validation-runs/latest`
+    );
+
+    expect(emptyRes.status).toBe(200);
+    await expect(emptyRes.json()).resolves.toEqual({ success: true, data: { run: null } });
   });
 
   it('reads validation run details with steps and findings', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Details' }));
-    const run = await createValidationRun(mockDB, {
-      project_id: project.projectId,
-      workspace_id: 'workspace_esphome',
-      subject_hash: 'sha256:subject',
-      workflow_name: WORKFLOW_NAME,
-      workflow_hash: 'sha256:workflow',
-      input_hash: 'sha256:input',
-      validator_hash: 'sha256:validator',
-      provider: 'local-oci',
-      status: 'failed',
-      gate_status: 'blocked',
+    const run = await createStoredValidationRun(project.projectId, {
       summary: 'ESPHome config failed',
     });
     const step = await createValidationStepRun(mockDB, {
@@ -351,18 +279,6 @@ describe('Workspace validation routes', () => {
     });
   });
 
-  it('returns null when no latest run exists for the workspace', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'No Runs' }));
-
-    const res = await app.request(
-      `/v1/projects/${project.projectId}/workspaces/workspace_missing/validation-runs/latest`
-    );
-
-    expect(res.status).toBe(200);
-    const body: ApiResponse = await res.json();
-    expect(body).toEqual({ success: true, data: { run: null } });
-  });
-
   it('rejects workspaces without ESPHome device state', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Unsupported Input' }));
     await upsertWorkspaceDraft(mockDB, {
@@ -391,6 +307,12 @@ describe('Workspace validation routes', () => {
   });
 });
 
+async function createEsphomeProject(name: string) {
+  const project = await insertProject(mockDB, testData.project({ name }));
+  await createEsphomeWorkspace(project.projectId);
+  return project;
+}
+
 async function createEsphomeWorkspace(projectId: string) {
   return upsertWorkspaceDraft(mockDB, {
     project_id: projectId,
@@ -404,6 +326,56 @@ async function createEsphomeWorkspace(projectId: string) {
         esp32: { board: 'esp32dev' },
       },
     },
+  });
+}
+
+function createStoredValidationRun(
+  projectId: string,
+  overrides: Partial<Parameters<typeof createValidationRun>[1]> = {}
+) {
+  return createValidationRun(mockDB, {
+    project_id: projectId,
+    workspace_id: 'workspace_esphome',
+    subject_hash: 'sha256:subject',
+    workflow_name: WORKFLOW_NAME,
+    workflow_hash: 'sha256:workflow',
+    input_hash: 'sha256:input',
+    validator_hash: 'sha256:validator',
+    provider: 'local-oci',
+    status: 'failed',
+    gate_status: 'blocked',
+    ...overrides,
+  });
+}
+
+function environmentRequiredProviderResult(): LocalEsphomeValidationResult {
+  return localProviderResult({
+    status: 'environment_required',
+    gate_status: 'blocked',
+    summary: 'Local OCI runtime is not available.',
+    environment_hash: null,
+    step: {
+      step_id: 'local-oci-preflight',
+      name: 'Local OCI preflight',
+      status: 'environment_required',
+      summary: 'Local OCI runtime is not available.',
+      error_code: 'OCI_RUNTIME_MISSING',
+      exit_code: null,
+      command_json: null,
+      log_excerpt: null,
+    },
+    findings: [
+      {
+        severity: 'error',
+        file: null,
+        line: null,
+        state_path: null,
+        code: 'OCI_RUNTIME_MISSING',
+        message: 'Docker or Podman is required to run ESPHome validation.',
+        log_excerpt: null,
+        evidence_json: {},
+      },
+    ],
   });
 }
 
