@@ -5,6 +5,25 @@ export {
   yopsStateCodec,
 } from './stateCodec';
 export {
+  type CreatedYamlSourceEffect,
+  type CreateYamlSourceEffectInput,
+  createYamlSourceEffect,
+  YAML_SOURCE_DRIVER_PROTOCOL,
+  YAML_SOURCE_DRIVER_PROTOCOL_VERSION,
+  YAML_SOURCE_DRIVER_SPEC_DIGEST,
+  YAML_SOURCE_MUTATION_DRIVER_REF,
+  YamlSourcePreconditionFailedError,
+  type YamlSourceReplaceScalarOperation,
+  yamlSourceMutationDriver,
+  yamlSourceMutationDrivers,
+} from './yamlSourceDriver';
+export {
+  createYamlSourceState,
+  YAML_SOURCE_CODEC_VERSION,
+  YAML_SOURCE_MEDIA_TYPE,
+  yamlSourceStateCodec,
+} from './yamlSourceStateCodec';
+export {
   type CreatedYOpsEffect,
   type CreateYOpsEffectInput,
   createYOpsEffect,
