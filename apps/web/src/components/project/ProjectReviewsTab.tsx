@@ -972,14 +972,12 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   }
 
   return (
-    <section className="h-full overflow-auto bg-[var(--surface-canvas)] p-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <header className="flex items-end justify-between gap-4 px-1 pt-1">
+    <section className="h-full overflow-auto bg-[var(--surface-app)] p-2">
+      <div className="flex min-h-full w-full flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <header className="flex min-h-14 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-3 py-2">
           <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
-              Pull requests
-            </h2>
-            <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
+            <h2 className="text-base font-bold text-[var(--text-primary)]">Pull requests</h2>
+            <p className="mt-0.5 text-xs leading-5 text-[var(--text-secondary)]">
               Review branch changes and merge structured state.
             </p>
           </div>
@@ -988,21 +986,22 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
               setApiError(null);
               setView('create');
             }}
+            size="sm"
             type="button"
-            variant="commit"
+            variant="branch"
           >
             Create PR
           </Button>
         </header>
 
-        <label className="relative block overflow-hidden rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <label className="relative mx-3 mt-3 block overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)]">
           <Search
             aria-hidden="true"
             className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-[var(--text-tertiary)]"
           />
           <input
             aria-label="Search pull requests"
-            className="h-11 w-full bg-transparent pr-3 pl-9 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:ring-2 focus:ring-inset focus:ring-[var(--status-info)]/30"
+            className="h-9 w-full bg-transparent pr-3 pl-9 text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:font-normal placeholder:text-[var(--text-tertiary)] focus:ring-2 focus:ring-inset focus:ring-[var(--accent-commit)]/30"
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by title, branch, or author"
             value={query}
@@ -1010,12 +1009,12 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         </label>
 
         {apiError ? (
-          <div className="rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
+          <div className="mx-3 mt-2 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
             Could not load pull requests: {apiError}
           </div>
         ) : null}
 
-        <section className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 shadow-sm">
+        <section className="mx-3 mt-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-1">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <ModeButton
@@ -1040,7 +1039,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
           </div>
         </section>
 
-        <div className="grid gap-3">
+        <div className="grid gap-2 p-3">
           {visiblePullRequests.length > 0 ? (
             visiblePullRequests.map((pullRequest) => (
               <PullRequestRow
@@ -1051,7 +1050,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
               />
             ))
           ) : (
-            <section className="rounded-2xl border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-6 py-10 text-center">
+            <section className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-card)] px-6 py-10 text-center">
               <h3 className="font-semibold text-[var(--text-primary)]">No pull requests found</h3>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
                 {query
@@ -1081,9 +1080,9 @@ function ModeButton({
     <button
       aria-pressed={active}
       className={cn(
-        'inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors',
+        'inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-sm font-bold transition-colors',
         active
-          ? 'bg-[var(--status-info)]/10 text-[var(--status-info)]'
+          ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
           : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
       )}
       onClick={onClick}
@@ -1108,15 +1107,15 @@ function PullRequestRow({
   return (
     <article
       className={cn(
-        'grid gap-4 rounded-2xl border bg-[var(--surface-panel)] p-4 shadow-sm transition-colors sm:grid-cols-[6px_minmax(0,1fr)_auto]',
-        highlighted ? 'border-[var(--status-info)]' : 'border-[var(--stroke-divider)]'
+        'grid gap-4 rounded-md border bg-[var(--surface-card)] p-3 transition-colors sm:grid-cols-[4px_minmax(0,1fr)_auto]',
+        highlighted ? 'border-[var(--accent-commit)]' : 'border-[var(--stroke-divider)]'
       )}
     >
       <div
         aria-hidden="true"
         className={cn(
           'hidden rounded-full sm:block',
-          highlighted ? 'bg-[var(--status-success)]' : 'bg-[var(--status-info)]'
+          highlighted ? 'bg-[var(--status-success)]' : 'bg-[var(--accent-commit)]'
         )}
       />
       <div className="min-w-0">
@@ -1205,19 +1204,17 @@ function PullRequestCreateView({
   };
 
   return (
-    <section className="h-full overflow-auto bg-[var(--surface-canvas)] p-4">
-      <div className="mx-auto grid w-full max-w-6xl gap-4">
+    <section className="h-full overflow-auto bg-[var(--surface-app)] p-2">
+      <div className="grid w-full gap-2">
         <Button className="w-fit" onClick={onBack} type="button" variant="ghost">
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Pull requests
         </Button>
 
-        <section className="rounded-3xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 shadow-sm">
+        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
-                Open pull request
-              </h2>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Open pull request</h2>
               <p className="mt-2 max-w-3xl text-sm leading-5 text-[var(--text-secondary)]">
                 Select the branch you want to propose, confirm the base branch, then add the PR
                 title and description before opening it for review.
@@ -1244,7 +1241,7 @@ function PullRequestCreateView({
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
             <GitBranch aria-hidden="true" className="h-4 w-4 text-[var(--text-tertiary)]" />
             <BranchSelect
               label="base"
@@ -1268,7 +1265,7 @@ function PullRequestCreateView({
             />
           </div>
 
-          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[var(--status-warning)]/10 p-4 text-sm text-[var(--text-secondary)]">
+          <div className="mt-3 flex items-center gap-3 rounded-md bg-[var(--status-warning)]/10 p-3 text-sm text-[var(--text-secondary)]">
             <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-[var(--status-warning)]" />
             <span>
               Every registered branch with a HEAD commit stays visible. Branches with an open PR, no
@@ -1278,7 +1275,7 @@ function PullRequestCreateView({
         </section>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
-          <section className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+          <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
             <div className="border-b border-[var(--stroke-divider)] p-4">
               <h3 className="font-semibold text-[var(--text-primary)]">Branches with commits</h3>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -1287,7 +1284,7 @@ function PullRequestCreateView({
             </div>
             <div className="grid gap-2 p-3">
               {compareLoading ? (
-                <div className="flex items-center gap-2 rounded-2xl bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
+                <div className="flex items-center gap-2 rounded-md bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
                   <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
                   Loading branch comparisons...
                 </div>
@@ -1301,14 +1298,14 @@ function PullRequestCreateView({
                   />
                 ))
               ) : (
-                <div className="rounded-2xl bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
+                <div className="rounded-md bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]">
                   No other committed branches can be compared with this base.
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+          <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--stroke-divider)] p-5">
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)]">
@@ -1358,7 +1355,7 @@ function PullRequestCreateView({
               <label className="grid gap-2 text-sm font-semibold text-[var(--text-primary)]">
                 Title
                 <input
-                  className="h-11 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
+                  className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-[var(--accent-commit)]/30"
                   onChange={(event) => update({ title: event.target.value })}
                   value={form.title}
                 />
@@ -1366,13 +1363,13 @@ function PullRequestCreateView({
               <label className="grid gap-2 text-sm font-semibold text-[var(--text-primary)]">
                 Description
                 <textarea
-                  className="min-h-36 resize-y rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-xs font-normal leading-5 outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
+                  className="min-h-36 resize-y rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-xs font-normal leading-5 outline-none focus:ring-2 focus:ring-[var(--accent-commit)]/30"
                   onChange={(event) => update({ description: event.target.value })}
                   value={form.description}
                 />
               </label>
               {error ? (
-                <div className="rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
+                <div className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
                   {error}
                 </div>
               ) : null}
@@ -1389,7 +1386,7 @@ function PullRequestCreateView({
                   disabled={!canCreate || creating}
                   onClick={onCreate}
                   type="button"
-                  variant="commit"
+                  variant="branch"
                 >
                   {creating ? (
                     <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
@@ -1417,16 +1414,16 @@ function CompareCandidateRow({
   return (
     <button
       className={cn(
-        'grid gap-2 rounded-xl border p-3 text-left transition-colors',
+        'grid gap-2 rounded-md border p-3 text-left transition-colors',
         active
-          ? 'border-[var(--status-info)] bg-[var(--status-info)]/8'
+          ? 'border-[var(--accent-commit)] bg-[var(--accent-commit-soft)]'
           : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] hover:bg-[var(--hover-bg)]'
       )}
       onClick={onSelect}
       type="button"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 truncate font-mono text-sm font-semibold text-[var(--status-info)]">
+        <span className="min-w-0 truncate font-mono text-sm font-semibold text-[var(--accent-commit)]">
           {candidate.branch}
         </span>
         <Badge variant={candidate.status === 'ready' ? 'branch' : 'secondary'}>
@@ -1448,7 +1445,7 @@ function CompareCandidateRow({
 
 function CompareMetric({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
+    <article className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
         {label}
       </p>
@@ -1501,18 +1498,18 @@ function PullRequestDetailView({
       : 'Close PR';
 
   return (
-    <section className="h-full overflow-auto bg-[var(--surface-canvas)] p-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+    <section className="h-full overflow-auto bg-[var(--surface-app)] p-2">
+      <div className="flex w-full flex-col gap-2">
         <Button className="w-fit" onClick={onBack} type="button" variant="ghost">
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Pull requests
         </Button>
 
-        <section className="rounded-3xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 shadow-sm">
+        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+                <h2 className="text-lg font-bold text-[var(--text-primary)]">
                   {pullRequest.title}
                 </h2>
                 <ReadinessBadge pullRequest={pullRequest} />
@@ -1575,18 +1572,18 @@ function PullRequestDetailView({
             </div>
           </div>
           {closeConfirmationActive || closeError ? (
-            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+            <div className="mt-4 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
               {closeError ??
                 'Close without merging? This moves the PR to Closed and leaves the target branch unchanged.'}
             </div>
           ) : null}
           {readinessError ? (
-            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+            <div className="mt-4 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
               {readinessError}
             </div>
           ) : null}
           {detailError ? (
-            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+            <div className="mt-4 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
               {detailError}
             </div>
           ) : null}
@@ -1597,7 +1594,7 @@ function PullRequestDetailView({
                 className={cn(
                   '-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition-colors',
                   detailTab === tab.id
-                    ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                    ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                     : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 )}
                 key={tab.id}
@@ -1654,7 +1651,7 @@ function OverviewPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
     <div
       className={cn('grid gap-6', metadataItems.length > 0 && 'lg:grid-cols-[minmax(0,1fr)_300px]')}
     >
-      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
+      <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
         <h3 className="font-semibold text-[var(--text-primary)]">Description</h3>
         <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--text-secondary)]">
           {pullRequest.description}
@@ -1667,7 +1664,7 @@ function OverviewPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
 
 function DetailLoadingState() {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5 text-sm text-[var(--text-secondary)]">
+    <div className="flex items-center gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5 text-sm text-[var(--text-secondary)]">
       <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
       Loading pull request details...
     </div>
@@ -1704,7 +1701,7 @@ function StructuredDiffPanel({ summary }: { summary?: PullRequestDiffSummary }) 
         ],
       ].map(([label, value, detail]) => (
         <article
-          className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+          className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
           key={label}
         >
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
@@ -1727,7 +1724,7 @@ function ChecksPanel({ checks }: { checks: PullRequestCheck[] }) {
     <div className="grid gap-3">
       {checks.map((check) => (
         <article
-          className="flex items-start gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+          className="flex items-start gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
           key={check.id}
         >
           <CheckIcon status={check.status} />
@@ -1749,7 +1746,7 @@ function ActivityPanel({ activity }: { activity: PullRequestActivity[] }) {
   return (
     <div className="grid gap-3">
       {activity.map((item) => (
-        <article className="rounded-2xl bg-[var(--surface-card)] p-4" key={item.id}>
+        <article className="rounded-md bg-[var(--surface-card)] p-4" key={item.id}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h3 className="font-semibold text-[var(--text-primary)]">{item.label}</h3>
             <time className="text-xs text-[var(--text-tertiary)]">{item.createdAt}</time>
@@ -1763,7 +1760,7 @@ function ActivityPanel({ activity }: { activity: PullRequestActivity[] }) {
 
 function DetailEmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-8 text-center text-sm text-[var(--text-secondary)]">
+    <div className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-8 text-center text-sm text-[var(--text-secondary)]">
       {message}
     </div>
   );
@@ -1810,13 +1807,13 @@ function MergePanel({
             : 'Merge is available after deterministic merge simulation and review requirements pass.';
 
   return (
-    <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
+    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h3 className="font-semibold text-[var(--text-primary)]">{title}</h3>
           <p className="mt-2 max-w-2xl text-sm leading-5 text-[var(--text-secondary)]">{message}</p>
           {!finished && error ? (
-            <p className="mt-3 rounded-xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+            <p className="mt-3 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-3 py-2 text-sm text-[var(--text-secondary)]">
               {error}
             </p>
           ) : null}
@@ -1869,19 +1866,19 @@ function BranchSelect({
       <Select onValueChange={onChange} value={value}>
         <SelectTrigger
           aria-label={accessibleLabel}
-          className="h-11 w-[min(17rem,calc(100vw-5rem))] rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3.5 font-semibold text-[var(--text-primary)] shadow-none transition-[background-color,border-color,box-shadow] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:border-[var(--status-info)] focus-visible:ring-4 focus-visible:ring-[var(--status-info)]/12 data-[size=default]:h-11 data-[state=open]:border-[var(--status-info)] data-[state=open]:bg-[var(--surface-panel)] data-[state=open]:ring-4 data-[state=open]:ring-[var(--status-info)]/12 sm:w-60"
+          className="h-9 w-[min(17rem,calc(100vw-5rem))] rounded-md border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 font-semibold text-[var(--text-primary)] shadow-none transition-[background-color,border-color,box-shadow] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:border-[var(--accent-commit)] focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/20 data-[size=default]:h-9 data-[state=open]:border-[var(--accent-commit)] data-[state=open]:bg-[var(--surface-panel)] data-[state=open]:ring-2 data-[state=open]:ring-[var(--accent-commit)]/20 sm:w-60"
         >
           <SelectValue className="min-w-0 flex-1 truncate text-left" placeholder="Choose branch" />
         </SelectTrigger>
         <SelectContent
           align="start"
-          className="min-w-60 rounded-2xl border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[var(--fx-shadow-lg)]"
+          className="min-w-60 rounded-md border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[var(--fx-shadow-lg)]"
           position="popper"
           sideOffset={8}
         >
           {options.map((option) => (
             <SelectItem
-              className="h-10 rounded-xl pr-9 pl-3 font-medium text-[var(--text-primary)] focus:bg-[var(--hover-bg)] focus:text-[var(--text-primary)] data-[state=checked]:bg-[var(--status-info)]/10 data-[state=checked]:font-semibold data-[state=checked]:text-[var(--status-info)]"
+              className="h-9 rounded-sm pr-9 pl-3 font-medium text-[var(--text-primary)] focus:bg-[var(--hover-bg)] focus:text-[var(--text-primary)] data-[state=checked]:bg-[var(--accent-commit-soft)] data-[state=checked]:font-semibold data-[state=checked]:text-[var(--accent-commit)]"
               key={option}
               value={option}
             >
@@ -1917,7 +1914,7 @@ function ReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }) {
 
 function ReadinessRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-[var(--surface-card)] px-4 py-3 text-sm">
+    <div className="flex items-center justify-between rounded-md bg-[var(--surface-card)] px-4 py-3 text-sm">
       <span className="font-semibold text-[var(--text-primary)]">{label}</span>
       <span className="font-semibold text-[var(--status-success)]">{value}</span>
     </div>
@@ -1929,7 +1926,7 @@ function MetadataRail({ items }: { items: Array<[string, string]> }) {
     <aside className="grid content-start gap-3">
       {items.map(([label, value]) => (
         <section
-          className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm"
+          className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm"
           key={label}
         >
           <div className="mb-2 flex items-center justify-between gap-3">
@@ -1966,7 +1963,7 @@ function CheckIcon({ status }: { status: PullRequestCheck['status'] }) {
     <RefreshCw
       aria-hidden="true"
       className={cn(
-        'mt-0.5 h-5 w-5 text-[var(--status-info)]',
+        'mt-0.5 h-5 w-5 text-[var(--accent-commit)]',
         status === 'running' && 'animate-spin'
       )}
     />

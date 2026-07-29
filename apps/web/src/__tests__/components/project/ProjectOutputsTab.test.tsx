@@ -415,10 +415,23 @@ describe('ProjectOutputsTab', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an honest empty state when the project has no persisted Leaves', () => {
+  it('shows an honest empty state with the State page visual constitution', () => {
     render(<ProjectOutputsTab projectId="proj_1" />);
 
-    expect(screen.getByText('No committed Leaves yet')).toBeInTheDocument();
+    const heading = screen.getByText('No committed Leaves yet');
+    const shell = heading.closest('section');
+    const createButton = screen.getByRole('button', { name: 'New Leaf' });
+    const manageButton = screen.getByRole('button', { name: 'Manage Leaves' });
+
+    expect(shell).toHaveClass(
+      'rounded-md',
+      'border-[var(--stroke-divider)]',
+      'bg-[var(--surface-panel)]'
+    );
+    expect(createButton).toHaveAttribute('data-variant', 'branch');
+    expect(createButton).toHaveAttribute('data-size', 'sm');
+    expect(manageButton).toHaveAttribute('data-variant', 'branch');
+    expect(manageButton).toHaveAttribute('data-size', 'sm');
     expect(screen.getByRole('button', { name: 'Manage Leaves, 0 existing' })).toBeInTheDocument();
   });
 

@@ -85,13 +85,32 @@ beforeEach(() => {
 });
 
 describe('ProjectReviewsTab', () => {
-  it('renders a focused pull request list without placeholder controls', () => {
-    render(<ProjectReviewsTab />);
+  it('renders the pull request list with the State page visual constitution', () => {
+    const { container } = render(<ProjectReviewsTab />);
 
-    expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Create PR/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search by title, branch, or author')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /3\s*Open/i })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'Pull requests' });
+    const page = heading.closest('section');
+    const shell = heading.closest('div.flex.min-h-full');
+    const createButton = screen.getByRole('button', { name: /Create PR/i });
+    const search = screen.getByPlaceholderText('Search by title, branch, or author');
+    const openButton = screen.getByRole('button', { name: /3\s*Open/i });
+
+    expect(page).toHaveClass('bg-[var(--surface-app)]', 'p-2');
+    expect(shell).toHaveClass(
+      'rounded-md',
+      'border-[var(--stroke-divider)]',
+      'bg-[var(--surface-panel)]'
+    );
+    expect(createButton).toHaveAttribute('data-variant', 'branch');
+    expect(createButton).toHaveAttribute('data-size', 'sm');
+    expect(search).toHaveClass('h-9', 'focus:ring-[var(--accent-commit)]/30');
+    expect(openButton).toHaveClass(
+      'h-8',
+      'rounded-md',
+      'bg-[var(--accent-commit-soft)]',
+      'text-[var(--accent-commit)]'
+    );
+    expect(container.querySelector('.rounded-2xl')).toBeNull();
     expect(screen.getByRole('button', { name: /1\s*Closed/i })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('PRD Schema v3 rollout')).toBeInTheDocument();
@@ -108,7 +127,11 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
-    expect(screen.getByText('Open pull request')).toBeInTheDocument();
+    const createHeading = screen.getByText('Open pull request');
+    expect(createHeading.closest('section')).toHaveClass(
+      'rounded-md',
+      'border-[var(--stroke-divider)]'
+    );
     expect(screen.getByText('Branches with commits')).toBeInTheDocument();
     expect(screen.getAllByText('outputs/bundle-refresh').length).toBeGreaterThan(0);
     expect(screen.getAllByText('yschema-p0/1145-contract-source').length).toBeGreaterThan(0);
@@ -118,6 +141,10 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Base commit')).toBeInTheDocument();
     expect(screen.queryByText(/Changes from/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\+112/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create PR' })).toHaveAttribute(
+      'data-variant',
+      'branch'
+    );
   });
 
   it('creates a project PR from the exact commit snapshot shown by compare', async () => {

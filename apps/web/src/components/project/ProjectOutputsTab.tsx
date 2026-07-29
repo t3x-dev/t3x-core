@@ -276,47 +276,55 @@ function OutputsEmptyState({
   onManageLeaves: () => void;
 }) {
   return (
-    <div className="flex h-full min-h-[420px] flex-col">
-      <header className="flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2">
-        <Button
-          aria-label="Manage Leaves, 0 existing"
-          className="h-8 gap-1.5 px-2.5 text-xs"
-          onClick={onManageLeaves}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-leaf)]" />
-          Leaves
-          <Badge className="h-5 min-w-5 justify-center px-1.5" variant="outline">
-            0
-          </Badge>
-        </Button>
-        <Button onClick={onManageLeaves} size="sm" type="button" variant="leaf">
-          <Plus aria-hidden="true" className="size-4" />
-          New Leaf
-        </Button>
-      </header>
-
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="flex max-w-md flex-col items-center text-center">
-          <span className="flex size-12 items-center justify-center rounded-lg border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
-            <FileOutput aria-hidden="true" className="size-5" />
-          </span>
-          <h2 className="mt-4 text-base font-semibold text-[var(--text-primary)]">
-            No committed Leaves yet
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-            {availableCount > 0
-              ? `${availableCount} committed ${availableCount === 1 ? 'version is' : 'versions are'} ready for Leaf creation.`
-              : 'Commit a version first, then create its persistent Leaf here.'}
-          </p>
-          <Button className="mt-5" onClick={onManageLeaves} type="button" variant="leaf">
-            <Layers3 aria-hidden="true" className="size-4" />
-            Manage Leaves
+    <div className="flex h-full min-h-[420px] p-2">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <header className="flex min-h-12 shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-3 py-2">
+          <Button
+            aria-label="Manage Leaves, 0 existing"
+            className="h-8 gap-1.5 px-2.5 text-xs"
+            onClick={onManageLeaves}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-commit)]" />
+            Leaves
+            <Badge className="h-5 min-w-5 justify-center px-1.5" variant="outline">
+              0
+            </Badge>
           </Button>
+          <Button onClick={onManageLeaves} size="sm" type="button" variant="branch">
+            <Plus aria-hidden="true" className="size-4" />
+            New Leaf
+          </Button>
+        </header>
+
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="flex max-w-md flex-col items-center text-center">
+            <span className="flex size-10 items-center justify-center rounded-md border border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
+              <FileOutput aria-hidden="true" className="size-5" />
+            </span>
+            <h2 className="mt-3 text-sm font-bold text-[var(--text-primary)]">
+              No committed Leaves yet
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+              {availableCount > 0
+                ? `${availableCount} committed ${availableCount === 1 ? 'version is' : 'versions are'} ready for Leaf creation.`
+                : 'Commit a version first, then create its persistent Leaf here.'}
+            </p>
+            <Button
+              className="mt-4"
+              onClick={onManageLeaves}
+              size="sm"
+              type="button"
+              variant="branch"
+            >
+              <Layers3 aria-hidden="true" className="size-4" />
+              Manage Leaves
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
