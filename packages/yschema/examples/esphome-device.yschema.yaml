@@ -1,0 +1,61 @@
+yschema: "0.1"
+name: t3x/esphome-device
+version: "0.1.0"
+description: Supported ESPHome device configuration subset for the T3X reference workflow.
+strict: false
+
+nodes:
+  esphome:
+    required: true
+    description: Core ESPHome device identity.
+    required_slots: [name]
+    slots:
+      name:
+        type: string
+        min_length: 1
+        max_length: 24
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$"
+        description: Stable lowercase device identifier.
+      friendly_name:
+        type: string
+        min_length: 1
+        description: Human-readable device name.
+
+  esp32:
+    required: true
+    description: ESP32 target configuration.
+    required_slots: [board]
+    slots:
+      board:
+        type: string
+        min_length: 1
+      framework:
+        type: object
+
+  wifi:
+    required: false
+    description: Wi-Fi references supplied outside the checked-in fixture.
+    required_slots: [ssid, password]
+    slots:
+      ssid:
+        type: string
+        min_length: 1
+      password:
+        type: string
+        min_length: 1
+
+  logger:
+    required: false
+    description: ESPHome logger configuration.
+    slots:
+      level:
+        enum: [NONE, ERROR, WARN, INFO, DEBUG, VERBOSE, VERY_VERBOSE]
+
+  api:
+    required: false
+    description: Native ESPHome API configuration.
+    slots:
+      encryption:
+        type: object
+
+rules: []
