@@ -373,6 +373,10 @@
   --scrollbar-width: 4px;
   --scrollbar-thumb: oklch(0 0 0 / 15%);
   --scrollbar-thumb-hover: oklch(0 0 0 / 25%);
+  --state-scrollbar-track: oklch(0.94 0.002 250);
+  --state-scrollbar-thumb: oklch(0 0 0 / 34%);
+  --state-scrollbar-thumb-hover: oklch(0 0 0 / 46%);
+  --state-scrollbar-thumb-active: oklch(0 0 0 / 58%);
 
   /* ===== Reading Surfaces ===== */
   --glass-bg-reading: oklch(0.98 0.002 250);
@@ -557,6 +561,10 @@
   --scrollbar-width: 4px;
   --scrollbar-thumb: rgba(226, 234, 248, 0.15);
   --scrollbar-thumb-hover: rgba(226, 234, 248, 0.24);
+  --state-scrollbar-track: #0e141e;
+  --state-scrollbar-thumb: rgba(226, 234, 248, 0.32);
+  --state-scrollbar-thumb-hover: rgba(226, 234, 248, 0.46);
+  --state-scrollbar-thumb-active: rgba(226, 234, 248, 0.58);
 
   /* ===== Diff Token System — Unified Design v2 dark overrides ===== */
   --diff-added-bg: rgba(123, 201, 159, 0.11);

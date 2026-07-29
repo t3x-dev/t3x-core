@@ -1,7 +1,27 @@
 'use client';
 
-import { Check, Copy, FileText, GitCompare, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  GitCompare,
+  ListTree,
+  PanelRight,
+  X,
+} from 'lucide-react';
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { StatePaneResizeHandle } from '@/components/project/StatePaneResizeHandle';
+import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type {
@@ -13,7 +33,38 @@ import type {
 import { cn } from '@/utils/cn';
 
 type ReaderMode = 'rendered' | 'raw';
-type InspectorTab = 'changes' | 'evidence';
+type InspectorTab = 'changes' | 'evidence' | 'node';
+type ReaderPane = 'inspector' | 'outline';
+
+const PRD_OUTLINE_DEFAULT_WIDTH = 220;
+const PRD_OUTLINE_MIN_WIDTH = 180;
+const PRD_OUTLINE_MAX_WIDTH = 420;
+const PRD_INSPECTOR_DEFAULT_WIDTH = 310;
+const PRD_INSPECTOR_MIN_WIDTH = 260;
+const PRD_INSPECTOR_MAX_WIDTH = 520;
+const PRD_DOCUMENT_MIN_WIDTH = 600;
+
+function clampReaderPaneWidth(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
+
+interface PrdOutlineNode {
+  group: 'document' | 'optional' | 'requirements' | 'summary';
+  id: string;
+  label: string;
+  meta?: string;
+}
+
+interface PrdSelectedNode {
+  acceptanceCount: number;
+  cardinality: string;
+  description: string;
+  identity: string;
+  label: string;
+  path: string;
+  required: boolean;
+  type: string;
+}
 
 interface StatePrdReaderProps {
   model: PrdRenderModel;
@@ -31,22 +82,134 @@ export function StatePrdReader({
   yamlText,
 }: StatePrdReaderProps) {
   const [mode, setMode] = useState<ReaderMode>('rendered');
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('node');
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [outlineWidth, setOutlineWidth] = useState(PRD_OUTLINE_DEFAULT_WIDTH);
+  const [inspectorWidth, setInspectorWidth] = useState(PRD_INSPECTOR_DEFAULT_WIDTH);
+  const [selectedNodeId, setSelectedNodeId] = useState('document');
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(
     model.evidence[0]?.id ?? null
   );
   const [copied, setCopied] = useState(false);
+  const documentScrollerRef = useRef<HTMLDivElement>(null);
+  const readerLayoutRef = useRef<HTMLDivElement>(null);
+  const programmaticNodeRef = useRef<string | null>(null);
+  const programmaticNodeTimerRef = useRef<number | null>(null);
+  const outlineNodes = useMemo(() => buildOutlineNodes(model), [model]);
+  const selectedNode = useMemo(
+    () => selectInspectorNode(model, selectedNodeId),
+    [model, selectedNodeId]
+  );
   const selectedEvidence =
     model.evidence.find((item) => item.id === selectedEvidenceId) ?? model.evidence[0] ?? null;
   const validationLabel = validationReady
-    ? `${String(model.changes.length)} / ${String(model.changes.length)} passed`
+    ? 'Validation verified'
     : validationGapCount > 0
       ? `${String(validationGapCount)} validation gap${validationGapCount === 1 ? '' : 's'}`
       : 'Validation pending';
 
+  const getReaderPaneMaxWidth = useCallback(
+    (pane: ReaderPane) => {
+      const containerWidth = readerLayoutRef.current?.getBoundingClientRect().width ?? 0;
+      if (containerWidth === 0) {
+        return pane === 'outline' ? PRD_OUTLINE_MAX_WIDTH : PRD_INSPECTOR_MAX_WIDTH;
+      }
+      const inspectorInline =
+        typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1536px)').matches;
+      const reservedWidth =
+        pane === 'outline' ? (inspectorInline ? inspectorWidth : 0) : outlineWidth;
+      const configuredMax = pane === 'outline' ? PRD_OUTLINE_MAX_WIDTH : PRD_INSPECTOR_MAX_WIDTH;
+      return Math.min(configuredMax, containerWidth - reservedWidth - PRD_DOCUMENT_MIN_WIDTH - 16);
+    },
+    [inspectorWidth, outlineWidth]
+  );
+
+  const handlePaneResizeMouseDown = useCallback(
+    (pane: ReaderPane, event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = pane === 'outline' ? outlineWidth : inspectorWidth;
+      const minWidth = pane === 'outline' ? PRD_OUTLINE_MIN_WIDTH : PRD_INSPECTOR_MIN_WIDTH;
+      const maxWidth = getReaderPaneMaxWidth(pane);
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const requestedWidth = pane === 'outline' ? startWidth + delta : startWidth - delta;
+        const nextWidth = clampReaderPaneWidth(requestedWidth, minWidth, maxWidth);
+        if (pane === 'outline') setOutlineWidth(nextWidth);
+        else setInspectorWidth(nextWidth);
+      };
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('blur', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+      window.addEventListener('blur', handleUp);
+    },
+    [getReaderPaneMaxWidth, inspectorWidth, outlineWidth]
+  );
+
+  const handlePaneResizeKeyDown = useCallback(
+    (pane: ReaderPane, event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const step = event.shiftKey ? 48 : 16;
+      const minWidth = pane === 'outline' ? PRD_OUTLINE_MIN_WIDTH : PRD_INSPECTOR_MIN_WIDTH;
+      const maxWidth = getReaderPaneMaxWidth(pane);
+      const dividerDirection = event.key === 'ArrowRight' ? 1 : -1;
+      const paneDirection = pane === 'outline' ? dividerDirection : -dividerDirection;
+      const updateWidth = (current: number) =>
+        clampReaderPaneWidth(current + step * paneDirection, minWidth, maxWidth);
+      if (pane === 'outline') setOutlineWidth(updateWidth);
+      else setInspectorWidth(updateWidth);
+    },
+    [getReaderPaneMaxWidth]
+  );
+
   function openInspector(tab: InspectorTab, evidenceId?: string) {
     if (evidenceId) setSelectedEvidenceId(evidenceId);
-    setInspectorTab((current) => (current === tab && !evidenceId ? null : tab));
+    setInspectorTab(tab);
+    setInspectorOpen(true);
+    setOutlineOpen(false);
+  }
+
+  function selectNode(nodeId: string, scroll = false) {
+    setSelectedNodeId(nodeId);
+    setInspectorTab('node');
+    if (scroll) {
+      const scroller = documentScrollerRef.current;
+      const target = Array.from(
+        scroller?.querySelectorAll<HTMLElement>('[data-prd-node]') ?? []
+      ).find((element) => element.dataset.prdNode === nodeId);
+      if (scroller && target) {
+        programmaticNodeRef.current = nodeId;
+        if (programmaticNodeTimerRef.current !== null) {
+          window.clearTimeout(programmaticNodeTimerRef.current);
+        }
+        programmaticNodeTimerRef.current = window.setTimeout(() => {
+          programmaticNodeRef.current = null;
+          programmaticNodeTimerRef.current = null;
+        }, 650);
+        const reducedMotion =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const top = Math.max(0, target.offsetTop - 24);
+        if (typeof scroller.scrollTo === 'function') {
+          scroller.scrollTo({ behavior: reducedMotion ? 'auto' : 'smooth', top });
+        } else {
+          scroller.scrollTop = top;
+        }
+      }
+    }
+    setOutlineOpen(false);
   }
 
   async function copyYaml() {
@@ -55,12 +218,49 @@ export function StatePrdReader({
     window.setTimeout(() => setCopied(false), 1500);
   }
 
+  useEffect(() => {
+    const scroller = documentScrollerRef.current;
+    if (!scroller || mode !== 'rendered') return;
+
+    function updateSelectedNode() {
+      if (!scroller) return;
+      if (programmaticNodeRef.current) return;
+      const scrollerTop = scroller.getBoundingClientRect().top;
+      const visibleNodes = Array.from(scroller.querySelectorAll<HTMLElement>('[data-prd-node]'));
+      let current = visibleNodes[0];
+      for (const node of visibleNodes) {
+        if (node.getBoundingClientRect().top - scrollerTop <= 96) current = node;
+        else break;
+      }
+      if (current?.dataset.prdNode) setSelectedNodeId(current.dataset.prdNode);
+    }
+
+    updateSelectedNode();
+    scroller.addEventListener('scroll', updateSelectedNode, { passive: true });
+    return () => scroller.removeEventListener('scroll', updateSelectedNode);
+  }, [mode, model]);
+
+  useEffect(() => {
+    function closeTransientPanels(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setInspectorOpen(false);
+      setOutlineOpen(false);
+    }
+    window.addEventListener('keydown', closeTransientPanels);
+    return () => {
+      window.removeEventListener('keydown', closeTransientPanels);
+      if (programmaticNodeTimerRef.current !== null) {
+        window.clearTimeout(programmaticNodeTimerRef.current);
+      }
+    };
+  }, []);
+
   return (
     <section
       aria-label="Schema render"
-      className="min-h-[665px] overflow-hidden bg-[var(--surface-card)]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
     >
-      <header className="flex min-h-[55px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5">
+      <header className="flex min-h-[55px] shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="truncate font-mono text-[11px] font-semibold text-[var(--text-secondary)]">
             prd <span className="text-[var(--text-tertiary)]">/</span>{' '}
@@ -71,6 +271,20 @@ export function StatePrdReader({
 
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
           <Button
+            aria-expanded={outlineOpen}
+            className="xl:hidden"
+            onClick={() => {
+              setOutlineOpen((current) => !current);
+              setInspectorOpen(false);
+            }}
+            size="sm"
+            type="button"
+            variant="canvas-outline"
+          >
+            <ListTree aria-hidden="true" className="size-3.5" />
+            Outline
+          </Button>
+          <Button
             aria-pressed={inspectorTab === 'evidence'}
             onClick={() => openInspector('evidence')}
             size="sm"
@@ -78,7 +292,7 @@ export function StatePrdReader({
             variant="canvas-outline"
           >
             <FileText aria-hidden="true" className="size-3.5" />
-            Evidence <span>{model.evidence.length}</span>
+            HEAD evidence <span>{model.evidence.length}</span>
           </Button>
           <Button
             aria-pressed={inspectorTab === 'changes'}
@@ -88,7 +302,18 @@ export function StatePrdReader({
             variant="canvas-outline"
           >
             <GitCompare aria-hidden="true" className="size-3.5" />
-            Changes <span>{model.changes.length}</span>
+            HEAD YOps <span>{model.changes.length}</span>
+          </Button>
+          <Button
+            aria-expanded={inspectorOpen}
+            className="2xl:hidden"
+            onClick={() => openInspector('node')}
+            size="sm"
+            type="button"
+            variant="canvas-outline"
+          >
+            <PanelRight aria-hidden="true" className="size-3.5" />
+            Inspector
           </Button>
           <div
             aria-label="Preview representation"
@@ -106,9 +331,13 @@ export function StatePrdReader({
                 key={nextMode}
                 onClick={() => {
                   setMode(nextMode);
-                  if (nextMode === 'raw') setInspectorTab(null);
+                  if (nextMode === 'raw') {
+                    setInspectorOpen(false);
+                    setOutlineOpen(false);
+                  }
                 }}
                 role="tab"
+                tabIndex={mode === nextMode ? 0 : -1}
                 type="button"
               >
                 {nextMode}
@@ -120,25 +349,80 @@ export function StatePrdReader({
 
       {mode === 'rendered' ? (
         <div
-          className={cn(
-            'relative grid min-h-[665px] grid-cols-[minmax(0,1fr)_0px] transition-[grid-template-columns] duration-200',
-            inspectorTab && 'xl:grid-cols-[minmax(0,1fr)_354px]'
-          )}
+          className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-hidden xl:grid-cols-[var(--prd-outline-width)_8px_minmax(0,1fr)] 2xl:grid-cols-[var(--prd-outline-width)_8px_minmax(0,1fr)_8px_var(--prd-inspector-width)]"
+          ref={readerLayoutRef}
+          style={
+            {
+              '--prd-inspector-width': `${String(inspectorWidth)}px`,
+              '--prd-outline-width': `${String(outlineWidth)}px`,
+            } as CSSProperties
+          }
         >
-          <div className="min-w-0 overflow-auto bg-[var(--surface-card)]">
+          {(outlineOpen || inspectorOpen) && (
+            <button
+              aria-label="Close open panel"
+              className={cn(
+                'absolute inset-0 z-20 bg-[var(--text-primary)]/[0.06] backdrop-blur-[1px]',
+                outlineOpen ? 'xl:hidden' : '2xl:hidden'
+              )}
+              onClick={() => {
+                setInspectorOpen(false);
+                setOutlineOpen(false);
+              }}
+              type="button"
+            />
+          )}
+          <PrdOutline
+            model={model}
+            nodes={outlineNodes}
+            onClose={() => setOutlineOpen(false)}
+            onSelect={(nodeId) => selectNode(nodeId, true)}
+            open={outlineOpen}
+            selectedNodeId={selectedNodeId}
+          />
+          <StatePaneResizeHandle
+            className="hidden xl:block"
+            label="Resize document outline"
+            max={PRD_OUTLINE_MAX_WIDTH}
+            min={PRD_OUTLINE_MIN_WIDTH}
+            onKeyDown={(event) => handlePaneResizeKeyDown('outline', event)}
+            onMouseDown={(event) => handlePaneResizeMouseDown('outline', event)}
+            onReset={() => setOutlineWidth(PRD_OUTLINE_DEFAULT_WIDTH)}
+            value={outlineWidth}
+          />
+          <StateScrollArea
+            className="min-h-0 min-w-0 bg-[var(--surface-card)]"
+            horizontal
+            label="Rendered PRD document"
+            ref={documentScrollerRef}
+          >
             <PrdDocument
               model={model}
               onInspectEvidence={(evidenceId) => openInspector('evidence', evidenceId)}
+              onSelectNode={(nodeId) => selectNode(nodeId)}
               schemaName={schemaName}
+              selectedNodeId={selectedNodeId}
               validationGapCount={validationGapCount}
               validationReady={validationReady}
             />
-          </div>
+          </StateScrollArea>
+          <StatePaneResizeHandle
+            className="hidden 2xl:block"
+            label="Resize PRD inspector"
+            max={PRD_INSPECTOR_MAX_WIDTH}
+            min={PRD_INSPECTOR_MIN_WIDTH}
+            onKeyDown={(event) => handlePaneResizeKeyDown('inspector', event)}
+            onMouseDown={(event) => handlePaneResizeMouseDown('inspector', event)}
+            onReset={() => setInspectorWidth(PRD_INSPECTOR_DEFAULT_WIDTH)}
+            value={inspectorWidth}
+          />
           <PrdInspector
             activeTab={inspectorTab}
+            inspectorOpen={inspectorOpen}
             model={model}
-            onClose={() => setInspectorTab(null)}
+            onClose={() => setInspectorOpen(false)}
             onSelectTab={setInspectorTab}
+            selectedNode={selectedNode}
             selectedEvidence={selectedEvidence}
             validationLabel={validationLabel}
             validationReady={validationReady}
@@ -147,14 +431,14 @@ export function StatePrdReader({
       ) : (
         <section
           aria-label="Raw materialized YAML"
-          className="min-h-[665px] bg-[var(--surface-code)] text-[var(--text-code)]"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-code)] text-[var(--text-code)]"
         >
-          <header className="flex min-h-11 items-center gap-2 border-b border-[var(--text-tertiary)]/20 bg-[var(--surface-code)] px-4">
+          <header className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[var(--text-tertiary)]/20 bg-[var(--surface-code)] px-4">
             <span className="font-mono text-[11px] font-semibold text-[var(--text-code)]">
               prd.yaml
             </span>
             <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-              materialized · {model.changes.length} applied
+              HEAD · {model.changes.length} YOps applied
             </span>
             <Button
               className="ml-auto border-[var(--text-tertiary)]/30 bg-[var(--text-code)]/[0.04] text-[var(--text-code)] hover:border-[var(--text-tertiary)]/50 hover:bg-[var(--text-code)]/[0.08] hover:text-[var(--text-code)]"
@@ -177,19 +461,26 @@ export function StatePrdReader({
 function PrdDocument({
   model,
   onInspectEvidence,
+  onSelectNode,
   schemaName,
+  selectedNodeId,
   validationGapCount,
   validationReady,
 }: {
   model: PrdRenderModel;
   onInspectEvidence: (evidenceId: string) => void;
+  onSelectNode: (nodeId: string) => void;
   schemaName: string;
+  selectedNodeId: string;
   validationGapCount: number;
   validationReady: boolean;
 }) {
   return (
-    <article className="mx-auto w-[min(1040px,calc(100%-80px))] py-12 max-md:w-[calc(100%-32px)] max-md:py-8">
-      <header className="border-b border-[var(--stroke-divider)] pb-7">
+    <article className="mx-auto w-[min(1080px,calc(100%-56px))] py-10 max-md:w-[calc(100%-32px)] max-md:py-7">
+      <header
+        className="scroll-mt-6 border-b border-[var(--stroke-divider)] pb-7"
+        data-prd-node="document"
+      >
         <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
           Product requirements document{model.documentId ? ` · ${model.documentId}` : ''}
         </p>
@@ -202,8 +493,10 @@ function PrdDocument({
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-[var(--text-tertiary)]">
           <span>{model.schemaVersion || schemaName}</span>
           {model.owner ? <span>Owner: {model.owner}</span> : null}
-          <span>{model.evidence.length} sources</span>
-          <span>{model.changes.length} changes</span>
+          <span>
+            {model.evidence.length} HEAD source{model.evidence.length === 1 ? '' : 's'}
+          </span>
+          <span>{model.changes.length} HEAD YOps</span>
           {model.target ? <span>Target: {model.target}</span> : null}
           <span>Materialized commit</span>
         </div>
@@ -231,47 +524,61 @@ function PrdDocument({
           <SummaryCell
             evidenceIds={evidenceIdsForPath(model, 'summary/problem')}
             label="Problem"
+            nodeId="summary-problem"
             onInspectEvidence={onInspectEvidence}
+            onSelectNode={onSelectNode}
             value={model.problem || 'No problem statement provided.'}
           />
           <SummaryCell
             evidenceIds={evidenceIdsForPath(model, 'summary/audience')}
             label="Audience"
             missing={model.audienceMissing}
+            nodeId="summary-audience"
             onInspectEvidence={onInspectEvidence}
+            onSelectNode={onSelectNode}
             value={model.audience || 'This field is required by the schema.'}
           />
           <SummaryCell
             evidenceIds={evidenceIdsForPath(model, 'summary/outcome')}
             label="Outcome"
+            nodeId="summary-outcome"
             onInspectEvidence={onInspectEvidence}
+            onSelectNode={onSelectNode}
             value={model.outcome || 'No outcome specified.'}
           />
         </div>
       </section>
 
-      {model.sections.map((section, index) => (
-        <StructuredSection
-          index={index + 1}
-          key={section.key}
-          model={model}
-          onInspectEvidence={onInspectEvidence}
-          section={section}
-        />
-      ))}
-
       <RequirementsSection
         model={model}
         onInspectEvidence={onInspectEvidence}
-        sectionNumber={model.sections.length + 1}
+        onSelectNode={onSelectNode}
+        sectionNumber={1}
+        selectedNodeId={selectedNodeId}
       />
+
+      {model.sections.map((section, index) => (
+        <StructuredSection
+          index={index + 2}
+          key={section.key}
+          model={model}
+          nodeId={`section-${String(index)}`}
+          onInspectEvidence={onInspectEvidence}
+          onSelectNode={onSelectNode}
+          section={section}
+          selected={selectedNodeId === `section-${String(index)}`}
+        />
+      ))}
 
       {Object.keys(model.metadata).length > 0 ? (
         <StructuredSection
           index={model.sections.length + 2}
           model={model}
+          nodeId="metadata"
           onInspectEvidence={onInspectEvidence}
+          onSelectNode={onSelectNode}
           section={{ key: 'metadata', title: 'Document metadata', value: model.metadata }}
+          selected={selectedNodeId === 'metadata'}
         />
       ) : null}
     </article>
@@ -282,23 +589,36 @@ function SummaryCell({
   evidenceIds,
   label,
   missing = false,
+  nodeId,
   onInspectEvidence,
+  onSelectNode,
   value,
 }: {
   evidenceIds: string[];
   label: string;
   missing?: boolean;
+  nodeId: string;
   onInspectEvidence: (evidenceId: string) => void;
+  onSelectNode: (nodeId: string) => void;
   value: string;
 }) {
   return (
     <section
       className={cn(
-        'min-w-0 px-4 py-4 first:pl-0 last:pr-0 md:border-r md:border-[var(--stroke-divider)] md:last:border-r-0',
+        'min-w-0 scroll-mt-6 px-4 py-4 first:pl-0 last:pr-0 md:border-r md:border-[var(--stroke-divider)] md:last:border-r-0',
         missing && 'bg-[var(--status-warning-muted)] px-4 first:pl-4'
       )}
+      data-prd-node={nodeId}
     >
-      <h3 className="text-xs font-bold text-[var(--text-primary)]">{label}</h3>
+      <h3 className="text-xs font-bold text-[var(--text-primary)]">
+        <button
+          className="rounded-sm text-left hover:text-[var(--accent-commit)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-commit)]"
+          onClick={() => onSelectNode(nodeId)}
+          type="button"
+        >
+          {label}
+        </button>
+      </h3>
       <p className="mt-2 text-[13px] leading-6 text-[var(--text-secondary)]">{value}</p>
       <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
     </section>
@@ -308,29 +628,57 @@ function SummaryCell({
 function StructuredSection({
   index,
   model,
+  nodeId,
   onInspectEvidence,
+  onSelectNode,
   section,
+  selected,
 }: {
   index: number;
   model: PrdRenderModel;
+  nodeId: string;
   onInspectEvidence: (evidenceId: string) => void;
+  onSelectNode: (nodeId: string) => void;
   section: PrdRenderSection;
+  selected: boolean;
 }) {
   const evidenceIds = evidenceIdsForPath(model, section.key);
   return (
-    <section className="border-b border-[var(--stroke-divider)] py-8">
+    <section
+      className="scroll-mt-6 border-b border-[var(--stroke-divider)] py-8"
+      data-prd-node={nodeId}
+    >
       <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
         {index} · {section.title}
       </p>
       <div className="mt-2 flex flex-wrap items-start gap-2">
         <h2 className="text-[21px] font-bold leading-[1.35] tracking-[-0.02em] text-[var(--text-primary)]">
-          {sectionTitle(section)}
+          <button
+            aria-expanded={selected}
+            className="rounded-sm text-left hover:text-[var(--accent-commit)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-commit)]"
+            onClick={() => onSelectNode(nodeId)}
+            type="button"
+          >
+            <span className="inline-flex items-center gap-2">
+              {sectionTitle(section)}
+              <ChevronDown
+                aria-hidden="true"
+                className={cn('size-4 transition-transform', selected && 'rotate-180')}
+              />
+            </span>
+          </button>
         </h2>
         <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
       </div>
-      <div className="mt-4">
-        <StructuredValue value={section.value} />
-      </div>
+      {selected ? (
+        <div className="mt-4">
+          <StructuredValue value={section.value} />
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+          Select this section to review its materialized fields.
+        </p>
+      )}
     </section>
   );
 }
@@ -338,11 +686,15 @@ function StructuredSection({
 function RequirementsSection({
   model,
   onInspectEvidence,
+  onSelectNode,
   sectionNumber,
+  selectedNodeId,
 }: {
   model: PrdRenderModel;
   onInspectEvidence: (evidenceId: string) => void;
+  onSelectNode: (nodeId: string) => void;
   sectionNumber: number;
+  selectedNodeId: string;
 }) {
   return (
     <section className="border-b border-[var(--stroke-divider)] py-8">
@@ -359,32 +711,21 @@ function RequirementsSection({
       </div>
 
       {model.requirements.length > 0 ? (
-        <div className="mt-4 overflow-x-auto border-y border-[var(--stroke-default)]">
-          <table className="w-full min-w-[760px] border-collapse text-left text-[12.5px] leading-[1.55] text-[var(--text-secondary)]">
-            <thead>
-              <tr className="bg-[var(--surface-panel)] text-[10px] font-extrabold uppercase tracking-[0.06em] text-[var(--text-primary)]">
-                <th className="px-3 py-3">ID</th>
-                <th className="px-3 py-3">Requirement</th>
-                <th className="px-3 py-3">Priority</th>
-                <th className="px-3 py-3">Acceptance signal</th>
-                <th className="px-3 py-3">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {model.requirements.map((requirement, index) => (
-                <RequirementRow
-                  evidenceIds={evidenceIdsForPaths(model, [
-                    `requirements/${requirement.key || String(index)}`,
-                    `requirements/${String(index)}`,
-                  ])}
-                  index={index}
-                  key={`${requirement.key}:${requirement.title}:${String(index)}`}
-                  onInspectEvidence={onInspectEvidence}
-                  requirement={requirement}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-3 divide-y divide-[var(--stroke-divider)]">
+          {model.requirements.map((requirement, index) => (
+            <RequirementBlock
+              evidenceIds={evidenceIdsForPaths(model, [
+                `requirements/${requirement.key || String(index)}`,
+                `requirements/${String(index)}`,
+              ])}
+              index={index}
+              key={`${requirement.key}:${requirement.title}:${String(index)}`}
+              onInspectEvidence={onInspectEvidence}
+              onSelectNode={onSelectNode}
+              requirement={requirement}
+              selected={selectedNodeId === `requirement-${String(index)}`}
+            />
+          ))}
         </div>
       ) : (
         <p className="mt-4 text-sm text-[var(--text-tertiary)]">
@@ -395,42 +736,109 @@ function RequirementsSection({
   );
 }
 
-function RequirementRow({
+function RequirementBlock({
   evidenceIds,
   index,
   onInspectEvidence,
+  onSelectNode,
   requirement,
+  selected,
 }: {
   evidenceIds: string[];
   index: number;
   onInspectEvidence: (evidenceId: string) => void;
+  onSelectNode: (nodeId: string) => void;
   requirement: PrdRenderRequirement;
+  selected: boolean;
 }) {
+  const criteria = acceptanceCriteria(requirement.acceptance);
+  const displayedCriteria = criteria.length > 0 ? criteria : ['Not specified'];
+  const requirementId = requirement.key || `R-${String(index + 1).padStart(2, '0')}`;
+  const nodeId = `requirement-${String(index)}`;
   return (
-    <tr className="border-b border-[var(--stroke-divider)] last:border-b-0">
-      <td className="px-3 py-3 align-top font-mono text-[10px] text-[var(--text-tertiary)]">
-        {requirement.key || `R-${String(index + 1).padStart(2, '0')}`}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <strong className="text-[var(--text-primary)]">{requirement.title}</strong>
-        {requirement.description ? <p className="mt-1">{requirement.description}</p> : null}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <Badge variant="pending-subtle">{requirement.priority || 'P?'}</Badge>
-      </td>
-      <td className="px-3 py-3 align-top">
-        {requirement.acceptance
-          ? requirement.acceptance.split('\n').map((criterion, criterionIndex) => (
-              <span className="block" key={`${criterion}:${String(criterionIndex)}`}>
-                {criterion}
+    <article className="scroll-mt-6 py-6 first:pt-5" data-prd-node={nodeId}>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] font-extrabold text-[var(--accent-commit)]">
+              {requirementId}
+            </span>
+            <Badge variant="pending-subtle">{requirement.priority || 'P?'}</Badge>
+          </div>
+          <h3 className="mt-2 text-[18px] font-bold leading-[1.35] tracking-[-0.015em] text-[var(--text-primary)]">
+            <button
+              aria-label={`Inspect requirement ${requirement.title}`}
+              aria-expanded={selected}
+              className="rounded-sm text-left hover:text-[var(--accent-commit)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-commit)]"
+              onClick={() => onSelectNode(nodeId)}
+              type="button"
+            >
+              <span className="inline-flex items-center gap-2">
+                {requirement.title}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn('size-4 transition-transform', selected && 'rotate-180')}
+                />
               </span>
-            ))
-          : 'Not specified'}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
-      </td>
-    </tr>
+            </button>
+          </h3>
+          {requirement.owner ? (
+            <p className="mt-1.5 text-[10px] font-semibold text-[var(--text-tertiary)]">
+              Owner · {requirement.owner}
+            </p>
+          ) : null}
+          {requirement.description ? (
+            <p className="mt-2 max-w-[72ch] text-[13px] leading-6 text-[var(--text-secondary)]">
+              {requirement.description}
+            </p>
+          ) : null}
+        </div>
+        <Badge variant="outline">
+          {criteria.length} acceptance {criteria.length === 1 ? 'criterion' : 'criteria'}
+        </Badge>
+      </header>
+
+      {selected ? (
+        <>
+          <div className="mt-4 border-y border-[var(--stroke-divider)]">
+            {displayedCriteria.map((criterion, criterionIndex) => (
+              <div
+                className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 border-b border-[var(--stroke-divider)] px-1 py-2.5 last:border-b-0 max-sm:grid-cols-[18px_minmax(0,1fr)]"
+                key={`${criterion}:${String(criterionIndex)}`}
+              >
+                <span
+                  className={cn(
+                    'mt-0.5 inline-flex size-4 items-center justify-center rounded-full',
+                    criteria.length > 0
+                      ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                      : 'bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
+                  )}
+                >
+                  {criteria.length > 0 ? (
+                    <Check aria-hidden="true" className="size-3" />
+                  ) : (
+                    <span aria-hidden="true">—</span>
+                  )}
+                  <span className="sr-only">
+                    {criteria.length > 0 ? 'Criterion present' : 'Criterion missing'}
+                  </span>
+                </span>
+                <span className="text-[12.5px] leading-5 text-[var(--text-primary)]">
+                  {criterion}
+                </span>
+                <code className="font-mono text-[9px] text-[var(--text-tertiary)] max-sm:col-start-2">
+                  AC-{String(index + 1).padStart(3, '0')}-
+                  {String(criterionIndex + 1).padStart(2, '0')}
+                </code>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
+          </div>
+        </>
+      ) : null}
+    </article>
   );
 }
 
@@ -451,7 +859,10 @@ function CitationButtons({
             aria-label={`Inspect source ${sourceNumber}`}
             className="inline-flex min-h-5 min-w-7 items-center justify-center rounded border border-[var(--source)]/30 bg-[var(--source-dim)] px-1.5 font-mono text-[9px] font-extrabold text-[var(--source)] hover:border-[var(--source)]"
             key={evidenceId}
-            onClick={() => onInspectEvidence(evidenceId)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onInspectEvidence(evidenceId);
+            }}
             type="button"
           >
             S{sourceNumber}
@@ -462,10 +873,23 @@ function CitationButtons({
   );
 }
 
-function StructuredValue({ value }: { value: unknown }) {
+function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (Array.isArray(value)) {
     if (value.every(isScalar)) return <ScalarList values={value} />;
-    return <RecordTable rows={value.map(toRecord).filter((row) => Object.keys(row).length > 0)} />;
+    return (
+      <div className="divide-y divide-[var(--stroke-divider)] border-y border-[var(--stroke-divider)]">
+        {value.map((item, index) => (
+          <section className="py-4" key={String(index)}>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+              Item {index + 1}
+            </p>
+            <div className="mt-2">
+              <StructuredValue depth={depth + 1} value={item} />
+            </div>
+          </section>
+        ))}
+      </div>
+    );
   }
 
   const record = toRecord(value);
@@ -491,30 +915,22 @@ function StructuredValue({ value }: { value: unknown }) {
       );
     }
 
-    if (entries.every(([, item]) => Array.isArray(item) && item.every(isScalar))) {
-      return (
-        <div className="grid border-y border-[var(--stroke-divider)] md:grid-cols-2">
-          {entries.map(([key, item]) => (
-            <section
-              className="px-5 py-4 md:odd:border-r md:odd:border-[var(--stroke-divider)]"
-              key={key}
-            >
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">{humanizeKey(key)}</h3>
-              <ScalarList values={item as unknown[]} />
-            </section>
-          ))}
-        </div>
-      );
-    }
-
-    const tableRows = entries.map(([key, item]) => ({ __key: key, ...toRecord(item) }));
-    if (tableRows.some((row) => Object.keys(row).length > 1))
-      return <RecordTable rows={tableRows} />;
-
     return (
-      <pre className="overflow-x-auto rounded-md bg-[var(--surface-code)] p-4 font-mono text-xs leading-6 text-[var(--text-code)]">
-        {JSON.stringify(value, null, 2)}
-      </pre>
+      <div
+        className={cn(
+          'divide-y divide-[var(--stroke-divider)] border-y border-[var(--stroke-divider)]',
+          depth > 0 && 'rounded-md border-x bg-[var(--surface-panel)]'
+        )}
+      >
+        {entries.map(([key, item]) => (
+          <section className={cn('py-4', depth > 0 && 'px-4')} key={key}>
+            <h3 className="text-sm font-bold text-[var(--text-primary)]">{humanizeKey(key)}</h3>
+            <div className="mt-2">
+              <StructuredValue depth={depth + 1} value={item} />
+            </div>
+          </section>
+        ))}
+      </div>
     );
   }
 
@@ -541,73 +957,141 @@ function ScalarList({ values }: { values: unknown[] }) {
   );
 }
 
-function RecordTable({ rows }: { rows: Array<Record<string, unknown>> }) {
-  const columns = useMemo(
-    () => Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).slice(0, 6),
-    [rows]
-  );
-  if (rows.length === 0 || columns.length === 0) return null;
+function PrdOutline({
+  model,
+  nodes,
+  onClose,
+  onSelect,
+  open,
+  selectedNodeId,
+}: {
+  model: PrdRenderModel;
+  nodes: PrdOutlineNode[];
+  onClose: () => void;
+  onSelect: (nodeId: string) => void;
+  open: boolean;
+  selectedNodeId: string;
+}) {
+  const groups: PrdOutlineNode['group'][] = ['document', 'summary', 'requirements', 'optional'];
+  const labels: Record<PrdOutlineNode['group'], string> = {
+    document: 'Document',
+    optional: 'Document sections',
+    requirements: 'Requirements',
+    summary: 'Summary',
+  };
 
   return (
-    <div className="overflow-x-auto border-y border-[var(--stroke-default)]">
-      <table className="w-full min-w-[720px] border-collapse text-left text-[12.5px] leading-[1.55] text-[var(--text-secondary)]">
-        <thead>
-          <tr className="bg-[var(--surface-panel)] text-[10px] font-extrabold uppercase tracking-[0.06em] text-[var(--text-primary)]">
-            {columns.map((column) => (
-              <th className="px-3 py-3" key={column}>
-                {column === '__key' ? 'ID' : humanizeKey(column)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr
-              className="border-b border-[var(--stroke-divider)] last:border-b-0"
-              key={`${displayValue(row.__key)}:${String(index)}`}
-            >
-              {columns.map((column) => (
-                <td className="px-3 py-3 align-top" key={column}>
-                  {displayValue(row[column])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <aside
+      aria-label="Document outline"
+      className={cn(
+        'z-30 min-h-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
+        open
+          ? 'absolute inset-y-0 left-0 block w-[270px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
+          : 'hidden xl:block'
+      )}
+    >
+      <StateScrollArea className="h-full" label="Document outline items">
+        <div className="px-3 py-4">
+          <header className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-1 pb-3 xl:hidden">
+            <strong className="text-xs text-[var(--text-primary)]">Document outline</strong>
+            <Button onClick={onClose} size="sm" type="button" variant="canvas-outline">
+              Close
+            </Button>
+          </header>
+          <p className="truncate px-2 font-mono text-[9px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+            {model.documentId || 'prd'}
+          </p>
+          <nav className="mt-3" aria-label="PRD semantic nodes">
+            {groups.map((group) => {
+              const groupNodes = nodes.filter((node) => node.group === group);
+              if (groupNodes.length === 0) return null;
+              return (
+                <section className="mb-5" key={group}>
+                  <h2 className="px-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                    {labels[group]}
+                  </h2>
+                  <div className="mt-2 grid gap-0.5">
+                    {groupNodes.map((node) => {
+                      const selected = selectedNodeId === node.id;
+                      return (
+                        <button
+                          aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
+                          aria-current={selected ? 'true' : undefined}
+                          className={cn(
+                            'flex min-h-9 w-full items-start gap-2 rounded-md px-2 py-2 text-left text-[11px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                            selected &&
+                              'bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)] ring-1 ring-inset ring-[var(--status-info)]/20'
+                          )}
+                          key={node.id}
+                          onClick={() => onSelect(node.id)}
+                          type="button"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              'mt-1 size-1.5 shrink-0 rounded-full bg-[var(--text-tertiary)]/60',
+                              selected && 'bg-[var(--status-info)]'
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-semibold text-current">{node.label}</span>
+                            {node.meta ? (
+                              <span className="mt-0.5 block truncate font-mono text-[9px] font-normal text-[var(--text-tertiary)]">
+                                {node.meta}
+                              </span>
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </nav>
+        </div>
+      </StateScrollArea>
+    </aside>
   );
 }
 
 function PrdInspector({
   activeTab,
+  inspectorOpen,
   model,
   onClose,
   onSelectTab,
+  selectedNode,
   selectedEvidence,
   validationLabel,
   validationReady,
 }: {
-  activeTab: InspectorTab | null;
+  activeTab: InspectorTab;
+  inspectorOpen: boolean;
   model: PrdRenderModel;
   onClose: () => void;
   onSelectTab: (tab: InspectorTab) => void;
+  selectedNode: PrdSelectedNode;
   selectedEvidence: PrdRenderEvidence | null;
   validationLabel: string;
   validationReady: boolean;
 }) {
-  if (!activeTab) return null;
-
   return (
     <aside
       aria-label="PRD inspector"
       className={cn(
-        'min-w-0 overflow-hidden border-l-0 border-[var(--stroke-divider)] bg-[var(--surface-panel)] opacity-100',
-        'max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:w-[354px] max-xl:max-w-[92vw] max-xl:shadow-[var(--fx-shadow-lg)] xl:border-l'
+        'z-30 min-h-0 min-w-0 flex-col overflow-hidden border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
+        inspectorOpen
+          ? 'absolute inset-y-0 right-0 flex w-[min(340px,92vw)] shadow-[var(--fx-shadow-lg)] 2xl:static 2xl:w-auto 2xl:shadow-none'
+          : 'hidden 2xl:flex'
       )}
     >
-      <header className="flex min-h-[54px] items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3">
-        {(['evidence', 'changes'] as const).map((tab) => (
+      <header
+        aria-label="Inspector views"
+        className="flex min-h-[54px] shrink-0 items-center gap-1 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3"
+        role="tablist"
+      >
+        {(['node', 'evidence', 'changes'] as const).map((tab) => (
           <button
             aria-selected={activeTab === tab}
             className={cn(
@@ -617,13 +1101,14 @@ function PrdInspector({
             key={tab}
             onClick={() => onSelectTab(tab)}
             role="tab"
+            tabIndex={activeTab === tab ? 0 : -1}
             type="button"
           >
             {tab}
           </button>
         ))}
         <Button
-          className="ml-auto"
+          className="ml-auto 2xl:hidden"
           onClick={onClose}
           size="icon-sm"
           type="button"
@@ -634,7 +1119,15 @@ function PrdInspector({
         </Button>
       </header>
 
-      <div className="h-[611px] overflow-auto">
+      <StateScrollArea className="min-h-0 flex-1" label="PRD inspector content">
+        {activeTab === 'node' ? (
+          <NodeInspector
+            model={model}
+            node={selectedNode}
+            validationLabel={validationLabel}
+            validationReady={validationReady}
+          />
+        ) : null}
         {activeTab === 'evidence' ? (
           <EvidenceInspector evidence={selectedEvidence} model={model} />
         ) : null}
@@ -645,8 +1138,143 @@ function PrdInspector({
             validationReady={validationReady}
           />
         ) : null}
-      </div>
+      </StateScrollArea>
     </aside>
+  );
+}
+
+function NodeInspector({
+  model,
+  node,
+  validationLabel,
+  validationReady,
+}: {
+  model: PrdRenderModel;
+  node: PrdSelectedNode;
+  validationLabel: string;
+  validationReady: boolean;
+}) {
+  const criteriaApplicable = node.type === 'Document' || node.type === 'Requirement';
+  const criteriaStatus =
+    node.acceptanceCount > 0 ? 'Present' : criteriaApplicable ? 'Missing' : 'Not applicable';
+  return (
+    <div aria-live="polite" aria-atomic="true">
+      <section className="border-b border-[var(--stroke-divider)] p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+          Selected semantic node
+        </p>
+        <h2 className="mt-2 text-base font-bold leading-6 text-[var(--text-primary)]">
+          {node.label}
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{node.description}</p>
+      </section>
+
+      <section className="border-b border-[var(--stroke-divider)] p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+          Semantic address
+        </p>
+        <code className="mt-3 block break-all rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-3 font-mono text-[10px] font-bold text-[var(--accent-commit)]">
+          State → {node.path.replaceAll('/', ' → ')}
+        </code>
+      </section>
+
+      <section className="border-b border-[var(--stroke-divider)] p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+          Node definition
+        </p>
+        <dl className="mt-3 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+          <InspectorDefinition label="Type" value={node.type} />
+          <InspectorDefinition label="Identity" mono value={node.identity} />
+          <InspectorDefinition label="Cardinality" value={node.cardinality} />
+          <InspectorDefinition label="Required" value={node.required ? 'Yes' : 'No'} />
+          <InspectorDefinition label="Render" value="PRD document" />
+        </dl>
+      </section>
+
+      <section className="border-b border-[var(--stroke-divider)] p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+          Node validation
+        </p>
+        <div className="mt-3 grid gap-2">
+          <InspectorCheck label="Known schema adapter" status="Pass" tone="success" />
+          <InspectorCheck
+            label={validationLabel}
+            status={validationReady ? 'Pass' : 'Review'}
+            tone={validationReady ? 'success' : 'warning'}
+          />
+          <InspectorCheck
+            label={`${String(node.acceptanceCount)} acceptance ${node.acceptanceCount === 1 ? 'criterion' : 'criteria'}`}
+            status={criteriaStatus}
+            tone={node.acceptanceCount > 0 ? 'success' : criteriaApplicable ? 'warning' : 'neutral'}
+          />
+        </div>
+      </section>
+
+      <section className="p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+          Provenance
+        </p>
+        <dl className="mt-3 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+          <InspectorDefinition label="HEAD sources" value={String(model.evidence.length)} />
+          <InspectorDefinition label="HEAD YOps" value={String(model.changes.length)} />
+          <InspectorDefinition
+            label="Schema"
+            mono
+            value={model.schemaVersion || 'project binding'}
+          />
+        </dl>
+      </section>
+    </div>
+  );
+}
+
+function InspectorDefinition({
+  label,
+  mono,
+  value,
+}: {
+  label: string;
+  mono?: boolean;
+  value: string;
+}) {
+  return (
+    <>
+      <dt className="font-medium text-[var(--text-tertiary)]">{label}</dt>
+      <dd
+        className={cn(
+          'min-w-0 font-bold text-[var(--text-primary)]',
+          mono && 'font-mono text-[10px]'
+        )}
+      >
+        {value}
+      </dd>
+    </>
+  );
+}
+
+function InspectorCheck({
+  label,
+  status,
+  tone,
+}: {
+  label: string;
+  status: string;
+  tone: 'neutral' | 'success' | 'warning';
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2.5">
+      <span className="text-[10px] text-[var(--text-primary)]">{label}</span>
+      <span
+        className={cn(
+          'font-mono text-[9px] font-extrabold uppercase',
+          tone === 'success' && 'text-[var(--status-success)]',
+          tone === 'warning' && 'text-[var(--status-warning)]',
+          tone === 'neutral' && 'text-[var(--text-tertiary)]'
+        )}
+      >
+        {status}
+      </span>
+    </div>
   );
 }
 
@@ -673,8 +1301,8 @@ function EvidenceInspector({
         </p>
         <h2 className="mt-2 text-base font-bold text-[var(--text-primary)]">{evidence.title}</h2>
         <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-          The rendered statement is linked to its captured source and deterministic materialization
-          trace.
+          The rendered statement is linked to evidence attached to the current HEAD commit and its
+          deterministic materialization trace.
         </p>
       </section>
       <section className="border-b border-[var(--stroke-divider)] p-5">
@@ -696,7 +1324,7 @@ function EvidenceInspector({
         </p>
         <dl className="mt-2 divide-y divide-[var(--stroke-divider)]">
           <InspectorTrace label="Source" value="Captured" />
-          <InspectorTrace label="Proposal" value={`${model.changes.length} reviewed operations`} />
+          <InspectorTrace label="Proposal" value={`${model.changes.length} reviewed HEAD YOps`} />
           <InspectorTrace label="YOps" value="Validated · applied" />
           <InspectorTrace label="Render" value="Materialized from commit tree" />
         </dl>
@@ -741,7 +1369,7 @@ function ChangesInspector({
   return (
     <>
       <header className="flex items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-4">
-        <strong className="text-xs text-[var(--text-primary)]">Materialized changes</strong>
+        <strong className="text-xs text-[var(--text-primary)]">HEAD materialized YOps</strong>
         <span
           className={cn(
             'text-[10px] font-extrabold',
@@ -779,12 +1407,12 @@ function ChangesInspector({
 
 function YamlCode({ yamlText }: { yamlText: string }) {
   return (
-    <div className="overflow-auto py-4">
+    <StateScrollArea className="min-h-0 flex-1" horizontal label="Raw YAML content">
       <table className="w-full min-w-[760px] border-collapse font-mono text-[12.5px] leading-[1.72]">
         <tbody>
           {yamlText.split('\n').map((line, index) => (
             <tr key={String(index)}>
-              <td className="w-[58px] select-none pr-4 text-right align-top text-[var(--text-tertiary)]">
+              <td className="sticky left-0 z-10 w-[58px] select-none border-r border-[var(--text-tertiary)]/20 bg-[var(--surface-code)] pr-4 text-right align-top text-[var(--text-tertiary)]">
                 {index + 1}
               </td>
               <td className="whitespace-pre px-4 align-top text-[var(--text-code)]">{line}</td>
@@ -792,7 +1420,7 @@ function YamlCode({ yamlText }: { yamlText: string }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </StateScrollArea>
   );
 }
 
@@ -817,11 +1445,15 @@ function evidenceIdsForPaths(model: PrdRenderModel, paths: string[]): string[] {
 }
 
 function sectionTitle(section: PrdRenderSection): string {
+  if (section.key === 'contract_flags') return 'Required behavior contract';
   if (section.key === 'goals') return 'Goals and measurable outcomes';
   if (section.key === 'non_goals') return 'Explicit product boundaries';
-  if (section.key === 'metrics') return 'Success metrics and guardrails';
-  if (section.key === 'rollout') return 'Progressive exposure and promotion gates';
-  if (section.key === 'risks') return 'Known failure modes and mitigations';
+  if (section.key === 'metrics' || section.key === 'success_metrics')
+    return 'Success metrics and guardrails';
+  if (section.key === 'rollout' || section.key === 'rollout_plan')
+    return 'Progressive exposure and promotion gates';
+  if (section.key === 'risks' || section.key === 'risk_controls')
+    return 'Known failure modes and mitigations';
   if (section.key === 'decisions') return 'Material product decisions';
   return section.title;
 }
@@ -839,6 +1471,7 @@ function displayValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (Array.isArray(value)) return value.map(displayValue).join(' · ');
   if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   return String(value);
 }
 
@@ -848,4 +1481,118 @@ function humanizeKey(value: string): string {
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function acceptanceCriteria(value: string): string[] {
+  return value
+    .split('\n')
+    .map((criterion) => criterion.trim())
+    .filter(Boolean);
+}
+
+function buildOutlineNodes(model: PrdRenderModel): PrdOutlineNode[] {
+  return [
+    { group: 'document', id: 'document', label: model.title, meta: model.documentId || 'prd' },
+    { group: 'summary', id: 'summary-problem', label: 'Problem' },
+    { group: 'summary', id: 'summary-audience', label: 'Audience' },
+    { group: 'summary', id: 'summary-outcome', label: 'Outcome' },
+    ...model.requirements.map((requirement, index) => ({
+      group: 'requirements' as const,
+      id: `requirement-${String(index)}`,
+      label: requirement.title,
+      meta: requirement.key || `R-${String(index + 1).padStart(2, '0')}`,
+    })),
+    ...model.sections.map((section, index) => ({
+      group: 'optional' as const,
+      id: `section-${String(index)}`,
+      label: section.title,
+      meta: section.key,
+    })),
+    ...(Object.keys(model.metadata).length > 0
+      ? [{ group: 'optional' as const, id: 'metadata', label: 'Document metadata' }]
+      : []),
+  ];
+}
+
+function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelectedNode {
+  if (
+    nodeId === 'summary-problem' ||
+    nodeId === 'summary-audience' ||
+    nodeId === 'summary-outcome'
+  ) {
+    const key = nodeId.replace('summary-', '');
+    return {
+      acceptanceCount: 0,
+      cardinality: 'Exactly one',
+      description: `Schema-backed ${key} field rendered in the executive summary.`,
+      identity: key,
+      label: humanizeKey(key),
+      path: `prd/summary/${key}`,
+      required: true,
+      type: key === 'audience' ? 'Text or list slot' : 'String slot',
+    };
+  }
+
+  const requirementIndex = Number.parseInt(nodeId.replace('requirement-', ''), 10);
+  if (nodeId.startsWith('requirement-') && Number.isInteger(requirementIndex)) {
+    const requirement = model.requirements[requirementIndex];
+    if (requirement) {
+      const identity = requirement.key || `R-${String(requirementIndex + 1).padStart(2, '0')}`;
+      return {
+        acceptanceCount: acceptanceCriteria(requirement.acceptance).length,
+        cardinality: 'One of many',
+        description:
+          requirement.description || 'A schema-backed requirement in the materialized PRD.',
+        identity,
+        label: `${identity} · ${requirement.title}`,
+        path: `prd/requirements/${requirement.key || String(requirementIndex)}`,
+        required: true,
+        type: 'Requirement',
+      };
+    }
+  }
+
+  const sectionIndex = Number.parseInt(nodeId.replace('section-', ''), 10);
+  if (nodeId.startsWith('section-') && Number.isInteger(sectionIndex)) {
+    const section = model.sections[sectionIndex];
+    if (section) {
+      return {
+        acceptanceCount: 0,
+        cardinality: 'Zero or one',
+        description: `Optional ${section.title.toLowerCase()} section materialized from committed state.`,
+        identity: section.key,
+        label: section.title,
+        path: `prd/${section.key}`,
+        required: false,
+        type: 'Section',
+      };
+    }
+  }
+
+  if (nodeId === 'metadata') {
+    return {
+      acceptanceCount: 0,
+      cardinality: 'Zero or one',
+      description: 'Versioning and source metadata attached to the PRD document.',
+      identity: 'metadata',
+      label: 'Document metadata',
+      path: 'prd/metadata',
+      required: false,
+      type: 'Metadata section',
+    };
+  }
+
+  return {
+    acceptanceCount: model.requirements.reduce(
+      (count, requirement) => count + acceptanceCriteria(requirement.acceptance).length,
+      0
+    ),
+    cardinality: 'Exactly one',
+    description: 'Root document node rendered as the committed product requirements document.',
+    identity: model.documentId || 'prd',
+    label: model.title,
+    path: 'prd',
+    required: true,
+    type: 'Document',
+  };
 }

@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  ChevronDown,
+  ChevronRight,
   Code2,
   FileText,
   GitCommit,
@@ -13,11 +15,23 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { StatePaneResizeHandle } from '@/components/project/StatePaneResizeHandle';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
+import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +41,7 @@ import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  countStateYOps,
   type StateOperationEntry,
   type StatePointRow,
   type StateValidationGapLike,
@@ -87,6 +102,14 @@ const SNAPSHOT_VIEWS: Array<{
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
+const STATE_CONTEXT_RAIL_DEFAULT_WIDTH = 330;
+const STATE_CONTEXT_RAIL_MIN_WIDTH = 260;
+const STATE_CONTEXT_RAIL_MAX_WIDTH = 560;
+const STATE_CONTENT_MIN_WIDTH = 640;
+
+function clampStatePaneWidth(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
 
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
   if (value === 'canvas') return 'canvas';
@@ -143,6 +166,8 @@ export function ProjectStateTab({
   const [diffOpen, setDiffOpen] = useState(false);
   const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
+  const [contextRailWidth, setContextRailWidth] = useState(STATE_CONTEXT_RAIL_DEFAULT_WIDTH);
+  const stateLayoutRef = useRef<HTMLDivElement>(null);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -332,7 +357,6 @@ export function ProjectStateTab({
         : [],
     [effectiveOperations, headCommit, validationGaps]
   );
-  const filteredRows = useMemo(() => filterRows(pointRows, pathQuery), [pathQuery, pointRows]);
   const yamlText = useMemo(
     () => (headCommit ? buildCanonicalStateYaml(headCommit.content) : ''),
     [headCommit]
@@ -353,7 +377,7 @@ export function ProjectStateTab({
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
-  const yopsCount = visibleYOpsCount(headCommit, effectiveOperations);
+  const yopsCount = countStateYOps(effectiveOperations);
   const branchCount = branchOptions.length;
   const committedDiffChanges = useMemo(
     () =>
@@ -419,25 +443,75 @@ export function ProjectStateTab({
     },
     [createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft, workspaceBasePath]
   );
+  const handleContextRailResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      const container = stateLayoutRef.current;
+      if (!container) return;
+
+      const startX = event.clientX;
+      const startWidth = contextRailWidth;
+      const containerWidth = container.getBoundingClientRect().width;
+      const maxWidth = Math.min(
+        STATE_CONTEXT_RAIL_MAX_WIDTH,
+        containerWidth - STATE_CONTENT_MIN_WIDTH
+      );
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const nextWidth = startWidth + startX - moveEvent.clientX;
+        setContextRailWidth(clampStatePaneWidth(nextWidth, STATE_CONTEXT_RAIL_MIN_WIDTH, maxWidth));
+      };
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('blur', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+      window.addEventListener('blur', handleUp);
+    },
+    [contextRailWidth]
+  );
+  const handleContextRailResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const step = event.shiftKey ? 48 : 16;
+      const direction = event.key === 'ArrowLeft' ? 1 : -1;
+      setContextRailWidth((current) =>
+        clampStatePaneWidth(
+          current + step * direction,
+          STATE_CONTEXT_RAIL_MIN_WIDTH,
+          STATE_CONTEXT_RAIL_MAX_WIDTH
+        )
+      );
+    },
+    []
+  );
+  const contextRailVisible =
+    showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas');
+
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-auto bg-[var(--surface-app)] p-4"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)] p-3"
       data-state-view={activeView}
     >
-      <StateModeTabs
-        activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
-        onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
-      />
-
-      {activeView !== 'canvas' ? (
-        <div className="mt-4">
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 shadow-sm">
+        <StateModeTabs
+          activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
+          onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
+        />
+        {activeView !== 'canvas' ? (
           <StateOverviewHeader
-            branch={branchFocus || 'main'}
             headCommit={headCommit}
             onRunValidation={
               headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
             }
-            schemaLabel={schemaName}
             validation={currentValidation}
             validationError={validationError}
             validationGapCount={validationGapCount}
@@ -445,17 +519,23 @@ export function ProjectStateTab({
             validationRunning={validationRunning}
             workspaceHref={workspaceHref}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <div
         className={cn(
-          'mt-4 grid min-h-0 flex-1 gap-4',
-          (showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas')) &&
-            'xl:grid-cols-[minmax(0,1fr)_330px]'
+          'mt-3 grid min-h-0 flex-1 overflow-auto xl:overflow-hidden',
+          contextRailVisible &&
+            'gap-4 xl:grid-cols-[minmax(0,1fr)_8px_var(--state-context-rail-width)] xl:gap-0'
         )}
+        ref={stateLayoutRef}
+        style={
+          contextRailVisible
+            ? ({ '--state-context-rail-width': `${String(contextRailWidth)}px` } as CSSProperties)
+            : undefined
+        }
       >
-        <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
           <StateRepositoryToolbar
             branch={branchFocus || 'main'}
             branchCount={branchCount}
@@ -497,15 +577,17 @@ export function ProjectStateTab({
               ) : null}
 
               {showingInlineDiff && headCommit && snapshot.parentCommit ? (
-                <T3XDiff
-                  baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
-                  changes={committedDiffChanges}
-                  headerSubtitle="Commit · Parent → HEAD"
-                  onSelectChange={setSelectedDiffChangeId}
-                  pathSubtitle="Committed state · node-level result"
-                  projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
-                  selectedChangeId={effectiveSelectedDiffChangeId}
-                />
+                <StateScrollArea className="min-h-0 flex-1" horizontal label="Committed state diff">
+                  <T3XDiff
+                    baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
+                    changes={committedDiffChanges}
+                    headerSubtitle="Commit · Parent → HEAD"
+                    onSelectChange={setSelectedDiffChangeId}
+                    pathSubtitle="Committed state · node-level result"
+                    projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
+                    selectedChangeId={effectiveSelectedDiffChangeId}
+                  />
+                </StateScrollArea>
               ) : null}
               {!showingInlineDiff && snapshot.primaryError ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
@@ -528,7 +610,7 @@ export function ProjectStateTab({
                     <StateStructureView
                       onPathQueryChange={setPathQuery}
                       pathQuery={pathQuery}
-                      rows={filteredRows}
+                      rows={pointRows}
                     />
                   ) : null}
                   {activeView === 'render' && renderModel ? (
@@ -556,20 +638,34 @@ export function ProjectStateTab({
           )}
         </main>
 
-        {showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas') ? (
-          <StateContextRail
-            commitCount={commitCount}
-            edgeCount={headCommit?.content.relations.length ?? 0}
-            headCommit={headCommit}
-            operations={effectiveOperations}
-            projectName={projectName}
-            schemaName={schemaName}
-            validation={currentValidation}
-            validationGapCount={validationGapCount}
-            validationReady={validationReady}
-            viewModelVisible={!showingInlineDiff}
-            warning={stateWarning}
+        {contextRailVisible ? (
+          <StatePaneResizeHandle
+            className="hidden xl:block"
+            label="Resize state details"
+            max={STATE_CONTEXT_RAIL_MAX_WIDTH}
+            min={STATE_CONTEXT_RAIL_MIN_WIDTH}
+            onKeyDown={handleContextRailResizeKeyDown}
+            onMouseDown={handleContextRailResizeMouseDown}
+            onReset={() => setContextRailWidth(STATE_CONTEXT_RAIL_DEFAULT_WIDTH)}
+            value={contextRailWidth}
           />
+        ) : null}
+
+        {contextRailVisible ? (
+          <StateScrollArea className="min-h-0" label="State details" viewportClassName="xl:pl-4">
+            <StateContextRail
+              commitCount={commitCount}
+              edgeCount={headCommit?.content.relations.length ?? 0}
+              headCommit={headCommit}
+              operations={effectiveOperations}
+              projectName={projectName}
+              schemaName={schemaName}
+              validation={currentValidation}
+              validationGapCount={validationGapCount}
+              validationReady={validationReady}
+              warning={stateWarning}
+            />
+          </StateScrollArea>
         ) : null}
       </div>
     </section>
@@ -577,10 +673,8 @@ export function ProjectStateTab({
 }
 
 function StateOverviewHeader({
-  branch,
   headCommit,
   onRunValidation,
-  schemaLabel,
   validation,
   validationError,
   validationGapCount,
@@ -588,10 +682,8 @@ function StateOverviewHeader({
   validationRunning,
   workspaceHref,
 }: {
-  branch: string;
   headCommit: ApiCommit | null;
   onRunValidation?: () => Promise<void> | void;
-  schemaLabel: string;
   validation?: YSchemaValidationSummary | null;
   validationError?: string | null;
   validationGapCount: number;
@@ -602,48 +694,27 @@ function StateOverviewHeader({
   return (
     <section
       aria-label="State overview"
-      className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-4 shadow-sm"
+      className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 py-1"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold leading-tight text-[var(--text-primary)]">State</h1>
-          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-            Current state from latest successful commit
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" variant="canvas-outline">
-            <Link href={workspaceHref}>Open workspace</Link>
-          </Button>
-        </div>
-      </div>
-      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
-        <StateFact label="Schema" value={schemaLabel} />
-        <StateFact label="Branch" value={branch} />
-        <StateFact
-          label="State"
-          mono
-          value={headCommit?.hash ? 'sha256:' + shortHash(headCommit.hash) : 'empty'}
-        />
-        <div className="min-w-0">
-          <dt className="text-xs font-bold uppercase text-[var(--text-tertiary)]">Validation</dt>
-          <dd className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge
-              variant={validationReady ? 'success' : validationGapCount > 0 ? 'warning' : 'outline'}
-            >
-              {validationLabel(validation, validationGapCount)}
-            </Badge>
-            {validation ? (
-              <Badge variant="success">Up to date</Badge>
-            ) : headCommit ? (
-              <Badge variant="outline">Not validated at HEAD</Badge>
-            ) : null}
-          </dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <h1 className="sr-only">State</h1>
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        <Badge
+          variant={validationReady ? 'success' : validationGapCount > 0 ? 'warning' : 'outline'}
+        >
+          {validationLabel(validation, validationGapCount)}
+        </Badge>
+        {validation ? (
+          <Badge variant="success">Up to date</Badge>
+        ) : headCommit ? (
+          <Badge variant="outline">Not validated at HEAD</Badge>
+        ) : null}
         {validationError ? (
-          <p className="text-xs font-semibold text-[var(--status-warning)]">{validationError}</p>
+          <p
+            className="max-w-64 truncate text-xs font-semibold text-[var(--status-warning)]"
+            title={validationError}
+          >
+            {validationError}
+          </p>
         ) : null}
         {!validationReady && onRunValidation ? (
           <Button
@@ -657,24 +728,11 @@ function StateOverviewHeader({
             {validationRunning ? 'Running...' : 'Run validation'}
           </Button>
         ) : null}
+        <Button asChild size="sm" variant="canvas-outline">
+          <Link href={workspaceHref}>Open workspace</Link>
+        </Button>
       </div>
     </section>
-  );
-}
-
-function StateFact({ label, mono, value }: { label: string; mono?: boolean; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-bold uppercase text-[var(--text-tertiary)]">{label}</dt>
-      <dd
-        className={cn(
-          'mt-1 inline-flex max-w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1 text-xs font-bold text-[var(--text-primary)]',
-          mono && 'font-mono'
-        )}
-      >
-        <span className="truncate">{value}</span>
-      </dd>
-    </div>
   );
 }
 
@@ -702,7 +760,7 @@ function StateRepositoryToolbar({
   schemaName: string;
 }) {
   return (
-    <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
+    <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StateBranchControls
           branch={branch}
@@ -750,7 +808,7 @@ function StateCommitRow({
   yopsCount: number;
 }) {
   return (
-    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3 py-2">
       <div className="flex min-w-0 items-center gap-3">
         <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/15 text-sm font-bold text-[var(--accent-branch)]">
           W
@@ -759,7 +817,7 @@ function StateCommitRow({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-bold text-[var(--text-primary)]">{title}</h2>
             <Badge variant="outline">
-              {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
+              HEAD · {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
             </Badge>
           </div>
         </div>
@@ -795,7 +853,7 @@ function StateObjectLine({
   validationKnown: boolean;
 }) {
   return (
-    <div className="flex min-h-13 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5">
+    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1.5">
       <div className="min-w-0 truncate font-mono text-sm text-[var(--text-secondary)]">
         state <span className="font-bold text-[var(--text-primary)]">prd-state.yaml</span> /{' '}
         <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
@@ -815,7 +873,7 @@ function StateObjectLine({
               : 'not validated'}
         </Badge>
         <Badge variant="outline">{activeView}</Badge>
-        {diffCount > 0 ? <Badge variant="warning">{diffCount} changes</Badge> : null}
+        {diffCount > 0 ? <Badge variant="warning">{diffCount} changed paths</Badge> : null}
         {commitHref ? (
           <Button asChild size="sm" variant="canvas-outline">
             <Link href={commitHref}>Open commit</Link>
@@ -830,7 +888,7 @@ function StateObjectLine({
             variant={diffOpen ? 'commit' : 'canvas-outline'}
           >
             <GitCompare className="size-4" />
-            {diffOpen ? 'Hide changes' : `View ${String(diffCount)} changes`}
+            {diffOpen ? 'Hide changed paths' : `View ${String(diffCount)} changed paths`}
           </Button>
         ) : null}
       </div>
@@ -866,11 +924,7 @@ function StateModeTabs({
   ];
 
   return (
-    <div
-      aria-label="State modes"
-      className="flex min-h-16 items-stretch rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 shadow-sm"
-      role="tablist"
-    >
+    <div aria-label="State modes" className="flex min-h-10 shrink-0 items-stretch" role="tablist">
       {modes.map((mode) => {
         const Icon = mode.icon;
         const selected = activeMode === mode.id;
@@ -878,7 +932,7 @@ function StateModeTabs({
           <button
             aria-selected={selected}
             className={cn(
-              'min-w-36 border-b-2 px-3 py-2 text-left transition-colors',
+              'border-b-2 px-3 py-1.5 text-left transition-colors',
               selected
                 ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -888,12 +942,12 @@ function StateModeTabs({
             role="tab"
             type="button"
           >
-            <span className="flex items-center gap-1.5 text-sm font-bold">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-bold">
               <Icon aria-hidden="true" className="size-4" />
               {mode.label}
-            </span>
-            <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
-              {mode.subtitle}
+              <span className="hidden text-xs font-medium text-[var(--text-tertiary)] 2xl:inline">
+                · {mode.subtitle}
+              </span>
             </span>
           </button>
         );
@@ -912,7 +966,7 @@ function StateViewTabs({
   return (
     <div
       aria-label="State views"
-      className="flex min-h-14 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-4"
+      className="flex min-h-12 shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-3"
       role="tablist"
     >
       <div className="flex shrink-0 items-stretch gap-0">
@@ -976,7 +1030,7 @@ function StateCanvasView({
     return (
       <section
         aria-label="Multi-commit state canvas"
-        className="flex min-h-[560px] items-center justify-center"
+        className="flex min-h-0 flex-1 items-center justify-center"
       >
         <LoadingSpinner message="Loading state evolution..." />
       </section>
@@ -987,7 +1041,7 @@ function StateCanvasView({
     return (
       <section
         aria-label="Multi-commit state canvas"
-        className="flex min-h-[560px] items-center justify-center p-6"
+        className="flex min-h-0 flex-1 items-center justify-center p-6"
       >
         <ErrorMessage error={canvasError} onRetry={() => void loadCanvas(projectId)} />
       </section>
@@ -997,7 +1051,7 @@ function StateCanvasView({
   return (
     <section
       aria-label="Multi-commit state canvas"
-      className="flex h-[680px] min-h-[560px] flex-col overflow-hidden xl:h-[calc(100vh-21rem)]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
     >
       {!snapshotLoading && !branchHeadHash ? (
         <output className="shrink-0 border-b border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -1027,9 +1081,36 @@ function StateStructureView({
   pathQuery: string;
   rows: StatePointRow[];
 }) {
+  const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({});
+  const structureRows = useMemo(() => buildStateStructureRows(rows), [rows]);
+  const filteredRows = useMemo(
+    () => filterStateStructureRows(structureRows, pathQuery),
+    [pathQuery, structureRows]
+  );
+  const searching = pathQuery.trim().length > 0;
+  const visibleRows = useMemo(
+    () =>
+      searching
+        ? filteredRows
+        : filterCollapsedStateRows(structureRows, (row) =>
+            isStateStructureRowExpanded(row, expansionOverrides)
+          ),
+    [expansionOverrides, filteredRows, searching, structureRows]
+  );
+
+  const toggleRow = useCallback((row: StateStructureRow) => {
+    setExpansionOverrides((current) => ({
+      ...current,
+      [row.id]: !isStateStructureRowExpanded(row, current),
+    }));
+  }, []);
+
   return (
-    <section aria-label="Structured state tree" className="min-h-[460px]">
-      <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
+    <section
+      aria-label="Structured state tree"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
         <label className="relative h-9 w-full max-w-[260px]">
           <Search
             aria-hidden="true"
@@ -1043,54 +1124,116 @@ function StateStructureView({
           />
         </label>
       </div>
-      <div className="overflow-auto">
-        <table className="w-full table-fixed border-collapse text-left text-sm">
-          <thead className="bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)]">
+      <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
+        <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm">
+          <colgroup>
+            <col className="w-[360px]" />
+            <col />
+            <col className="w-24" />
+            <col className="w-32" />
+            <col className="w-36" />
+            <col className="w-24" />
+          </colgroup>
+          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
-              <th className="w-[34%] border-b border-[var(--stroke-divider)] px-4 py-3">
+              <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
                 Path / Key
               </th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
-              <th className="w-[25%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
-              <th className="w-[12%] border-b border-[var(--stroke-divider)] px-3 py-3">
-                Source / Op
-              </th>
-              <th className="w-[5%] border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Source / Op</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <StatePointTableRow key={row.id} row={row} />
+            {visibleRows.map((row) => (
+              <StatePointTableRow
+                expanded={searching || isStateStructureRowExpanded(row, expansionOverrides)}
+                key={row.id}
+                onToggle={() => toggleRow(row)}
+                row={row}
+              />
             ))}
           </tbody>
         </table>
-      </div>
+      </StateScrollArea>
     </section>
   );
 }
 
-function StatePointTableRow({ row }: { row: StatePointRow }) {
+interface StateStructureRow extends StatePointRow {
+  childCount?: number;
+  collapseByDefault?: boolean;
+  parentPath: string | null;
+  virtualGroup?: boolean;
+}
+
+function StatePointTableRow({
+  expanded,
+  onToggle,
+  row,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  row: StateStructureRow;
+}) {
+  const expandableLabel = `${expanded ? 'Collapse' : 'Expand'} ${row.key}`;
+
   return (
     <tr
       className={cn(
-        'border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        row.expandable && 'cursor-pointer transition-colors hover:bg-[var(--surface-hover)]',
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
       )}
+      onClick={row.expandable ? onToggle : undefined}
     >
-      <td className="px-4 py-2.5 font-bold">
+      <td
+        className={cn(
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5 font-bold transition-colors',
+          row.expandable && 'group-hover:bg-[var(--surface-hover)]',
+          row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
+        )}
+      >
         <span
           className="flex min-w-0 items-center gap-2"
           style={{ paddingLeft: 4 + row.depth * 18 }}
         >
-          <span className="w-3 shrink-0 font-mono text-xs text-[var(--text-tertiary)]">
-            {row.expandable ? '›' : ''}
+          {row.expandable ? (
+            <button
+              aria-expanded={expanded}
+              aria-label={expandableLabel}
+              className="-m-1 inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggle();
+              }}
+              type="button"
+            >
+              {expanded ? (
+                <ChevronDown aria-hidden="true" className="size-3.5" />
+              ) : (
+                <ChevronRight aria-hidden="true" className="size-3.5" />
+              )}
+            </button>
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
+          <span className="min-w-0 flex-1 truncate" title={row.path}>
+            {row.key}
           </span>
-          <span className="truncate">{row.key}</span>
+          {row.childCount ? (
+            <Badge className="shrink-0 px-1.5 py-0 text-[10px]" variant="outline">
+              {row.childCount}
+            </Badge>
+          ) : null}
         </span>
       </td>
+      <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]" title={row.value}>
+        {row.value}
+      </td>
       <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.type}</td>
-      <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]">{row.value}</td>
       <td className="px-3 py-2.5">
         <StatusPill row={row} />
       </td>
@@ -1129,18 +1272,25 @@ function StateCodeView({ yamlText }: { yamlText: string }) {
   return (
     <section
       aria-label="YAML code view"
-      className="min-h-[560px] bg-[var(--surface-card)] px-6 py-5"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] px-6 py-5"
     >
-      <pre className="overflow-auto rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 font-mono text-sm leading-6 text-[var(--text-primary)]">
-        {lines.map((line, index) => (
-          <div className="grid grid-cols-[44px_minmax(0,1fr)]" key={String(index)}>
-            <span className="select-none pr-4 text-right text-[var(--text-tertiary)]">
-              {index + 1}
+      <StateScrollArea
+        className="min-h-0 flex-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
+        horizontal
+        label="Canonical YAML content"
+        viewportClassName="font-mono text-sm leading-6 text-[var(--text-primary)]"
+      >
+        <code className="block min-w-max py-4 pr-4">
+          {lines.map((line, index) => (
+            <span className="grid grid-cols-[44px_max-content]" key={String(index)}>
+              <span className="sticky left-0 z-10 select-none border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-right text-[var(--text-tertiary)]">
+                {index + 1}
+              </span>
+              <span className="whitespace-pre pl-4">{line}</span>
             </span>
-            <code className="whitespace-pre-wrap">{line}</code>
-          </div>
-        ))}
-      </pre>
+          ))}
+        </code>
+      </StateScrollArea>
     </section>
   );
 }
@@ -1166,7 +1316,6 @@ function StateContextRail({
   validation,
   validationGapCount,
   validationReady,
-  viewModelVisible,
   warning,
 }: {
   commitCount: number;
@@ -1178,11 +1327,10 @@ function StateContextRail({
   validation?: YSchemaValidationSummary | null;
   validationGapCount: number;
   validationReady: boolean;
-  viewModelVisible: boolean;
   warning: string | null;
 }) {
   return (
-    <aside className="grid content-start gap-4">
+    <aside className="grid content-start gap-4 pb-1">
       <RailCard title="About this state">
         <p>Committed state built from source evidence through YOps.</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1194,27 +1342,25 @@ function StateContextRail({
           </Badge>
         </div>
       </RailCard>
-      {viewModelVisible ? (
-        <RailCard title="View model">
-          <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
-            <RailRow label="Structure" value="YAML-shaped state tree" />
-            <RailRow label="Render" value="Schema-selected reader" />
-            <RailRow label="Code" value="Canonical committed state" />
-          </dl>
-          <p className="mt-3">
-            Structure preserves YAML nodes; Render applies the selected schema.
-          </p>
-        </RailCard>
-      ) : null}
       <RailCard title="State metadata">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
           <RailRow label="Project" value={projectName} />
-          <RailRow label="HEAD" mono value={headCommit?.hash ?? 'empty'} />
-          <RailRow label="Parent" mono value={headCommit?.parents?.[0] ?? 'none'} />
+          <RailRow
+            label="HEAD"
+            mono
+            title={headCommit?.hash}
+            value={hashTail(headCommit?.hash, 'empty')}
+          />
+          <RailRow
+            label="Parent"
+            mono
+            title={headCommit?.parents?.[0]}
+            value={hashTail(headCommit?.parents?.[0], 'none')}
+          />
           <RailRow label="Schema" value={schemaName} />
           <RailRow label="Readiness" value={validationLabel(validation, validationGapCount)} />
           <RailRow label="Commits" value={String(commitCount)} />
-          <RailRow label="YOps" value={String(operations.length)} />
+          <RailRow label="HEAD YOps" value={String(countStateYOps(operations))} />
           <RailRow label="Edges" value={String(edgeCount)} />
         </dl>
         {warning ? (
@@ -1234,7 +1380,17 @@ function RailCard({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
-function RailRow({ label, mono, value }: { label: string; mono?: boolean; value: string }) {
+function RailRow({
+  label,
+  mono,
+  title,
+  value,
+}: {
+  label: string;
+  mono?: boolean;
+  title?: string;
+  value: string;
+}) {
   return (
     <>
       <dt className="font-bold text-[var(--text-tertiary)]">{label}</dt>
@@ -1243,11 +1399,16 @@ function RailRow({ label, mono, value }: { label: string; mono?: boolean; value:
           'min-w-0 truncate font-bold text-[var(--text-primary)]',
           mono && 'font-mono text-xs'
         )}
+        title={title ?? value}
       >
         {value}
       </dd>
     </>
   );
+}
+
+function hashTail(hash: string | null | undefined, fallback: string): string {
+  return hash ? hash.replace(/^sha256:/, '').slice(-6) : fallback;
 }
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
@@ -1284,24 +1445,220 @@ function workspaceValidationGaps(workspace: WorkspaceCandidate | null): StateVal
   return workspace?.schemaReview.gaps.map((path) => ({ path })) ?? [];
 }
 
-function visibleYOpsCount(commit: ApiCommit | null, operations: StateOperationEntry[]): number {
-  const committedCount = commit?.yops_log_ids?.length ?? 0;
-  return committedCount > 0 ? committedCount : operations.length;
-}
-
 function joinWarnings(...warnings: Array<string | null | undefined>): string | null {
   const message = warnings.filter(Boolean).join(' ');
   return message || null;
 }
 
-function filterRows(rows: StatePointRow[], query: string): StatePointRow[] {
+function buildStateStructureRows(rows: StatePointRow[]): StateStructureRow[] {
+  const rootPaths = new Set(rows.filter((row) => row.depth === 0).map((row) => row.path));
+  const mustRowsByParent = new Map<string, StatePointRow[]>();
+
+  for (const row of rows) {
+    const parentPath = parentStatePath(row.path);
+    if (
+      parentPath &&
+      rootPaths.has(parentPath) &&
+      row.depth === 1 &&
+      row.type === 'boolean' &&
+      isMustConditionKey(row.key)
+    ) {
+      const siblings = mustRowsByParent.get(parentPath) ?? [];
+      siblings.push(row);
+      mustRowsByParent.set(parentPath, siblings);
+    }
+  }
+
+  const groupByChildId = new Map<string, StatePointRow[]>();
+  for (const siblings of mustRowsByParent.values()) {
+    if (siblings.length < 2) continue;
+    for (const row of siblings) groupByChildId.set(row.id, siblings);
+  }
+
+  const structuredRows: StateStructureRow[] = [];
+  for (const row of rows) {
+    const mustSiblings = groupByChildId.get(row.id);
+    if (!mustSiblings) {
+      structuredRows.push({ ...row, parentPath: parentStatePath(row.path) });
+      continue;
+    }
+    if (mustSiblings[0]?.id !== row.id) continue;
+
+    const parentPath = parentStatePath(row.path);
+    if (!parentPath) continue;
+    const groupId = `${parentPath}/$must_conditions`;
+    const groupStatus = aggregateStatePointStatus(mustSiblings);
+    structuredRows.push({
+      childCount: mustSiblings.length,
+      collapseByDefault: true,
+      depth: row.depth,
+      expandable: true,
+      id: groupId,
+      issueCount: mustSiblings.reduce((total, child) => total + child.issueCount, 0),
+      key: 'Must conditions',
+      parentPath,
+      path: groupId,
+      sourceOp: aggregateStatePointSource(mustSiblings),
+      status: groupStatus.status,
+      statusLabel: groupStatus.label,
+      type: `${String(mustSiblings.length)} × bool`,
+      value: summarizeMustConditions(mustSiblings),
+      virtualGroup: true,
+    });
+    structuredRows.push(
+      ...mustSiblings.map((child) => ({
+        ...child,
+        depth: row.depth + 1,
+        parentPath: groupId,
+      }))
+    );
+  }
+
+  return collapseDenseBooleanGroups(structuredRows);
+}
+
+function collapseDenseBooleanGroups(rows: StateStructureRow[]): StateStructureRow[] {
+  const childrenByParent = new Map<string, StateStructureRow[]>();
+  for (const row of rows) {
+    if (!row.parentPath) continue;
+    const children = childrenByParent.get(row.parentPath) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parentPath, children);
+  }
+
+  return rows.map((row) => {
+    if (!row.expandable || row.type !== 'object') return row;
+    const children = childrenByParent.get(row.id) ?? [];
+    const booleanChildren = children.filter((child) => child.type === 'boolean');
+    const booleanHeavy = booleanChildren.length * 3 >= children.length * 2;
+    if (booleanChildren.length < 4 || !booleanHeavy) return row;
+
+    const groupStatus = aggregateStatePointStatus([row, ...children]);
+    return {
+      ...row,
+      childCount: children.length,
+      collapseByDefault: true,
+      issueCount: children.reduce((total, child) => total + child.issueCount, row.issueCount),
+      sourceOp: aggregateStatePointSource([row, ...children]),
+      status: groupStatus.status,
+      statusLabel: groupStatus.label,
+      value: summarizeBooleanGroup(children, booleanChildren),
+    };
+  });
+}
+
+function summarizeBooleanGroup(
+  children: StateStructureRow[],
+  booleanChildren: StateStructureRow[]
+): string {
+  const enabledCount = booleanChildren.filter(
+    (child) => child.value.trim().toLowerCase() === 'true'
+  ).length;
+  if (children.length === booleanChildren.length) {
+    return enabledCount === booleanChildren.length
+      ? `${String(booleanChildren.length)} rules · all enabled`
+      : `${String(booleanChildren.length)} rules · ${String(enabledCount)} enabled`;
+  }
+  return `${String(children.length)} fields · ${String(enabledCount)}/${String(booleanChildren.length)} rules enabled`;
+}
+
+function filterStateStructureRows(rows: StateStructureRow[], query: string): StateStructureRow[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return rows;
-  return rows.filter((row) =>
-    [row.path, row.key, row.type, row.value, row.statusLabel].some((value) =>
+
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const includedIds = new Set<string>();
+  for (const row of rows) {
+    const matches = [row.path, row.key, row.type, row.value, row.statusLabel].some((value) =>
       value.toLowerCase().includes(normalized)
-    )
+    );
+    if (!matches) continue;
+
+    includedIds.add(row.id);
+    let ancestorPath = row.parentPath;
+    while (ancestorPath) {
+      includedIds.add(ancestorPath);
+      ancestorPath = rowById.get(ancestorPath)?.parentPath ?? null;
+    }
+  }
+
+  return rows.filter((row) => includedIds.has(row.id));
+}
+
+function filterCollapsedStateRows(
+  rows: StateStructureRow[],
+  isExpanded: (row: StateStructureRow) => boolean
+): StateStructureRow[] {
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  return rows.filter((row) => {
+    let ancestorPath = row.parentPath;
+    while (ancestorPath) {
+      const ancestor = rowById.get(ancestorPath);
+      if (ancestor?.expandable && !isExpanded(ancestor)) return false;
+      ancestorPath = ancestor?.parentPath ?? null;
+    }
+    return true;
+  });
+}
+
+function isStateStructureRowExpanded(
+  row: StateStructureRow,
+  overrides: Record<string, boolean>
+): boolean {
+  return overrides[row.id] ?? !row.collapseByDefault;
+}
+
+function parentStatePath(path: string): string | null {
+  const separatorIndex = path.lastIndexOf('/');
+  return separatorIndex < 0 ? null : path.slice(0, separatorIndex);
+}
+
+function isMustConditionKey(key: string): boolean {
+  return (
+    key.includes('_must_') ||
+    key.startsWith('must_') ||
+    key.startsWith('cases_not_resolvable_automatically_need_')
   );
+}
+
+function summarizeMustConditions(rows: StatePointRow[]): string {
+  const labels = rows.map((row) => conciseMustConditionLabel(row.key));
+  const visibleLabels = labels.slice(0, 5);
+  const remaining = labels.length - visibleLabels.length;
+  return `${visibleLabels.join(' · ')}${remaining > 0 ? ` · +${String(remaining)}` : ''}`;
+}
+
+function conciseMustConditionLabel(key: string): string {
+  const prefixes = [
+    'for_every_relevant_case_must_define_',
+    'cases_not_resolvable_automatically_need_',
+    'must_define_',
+    'must_',
+  ];
+  const prefix = prefixes.find((candidate) => key.startsWith(candidate));
+  const text = (prefix ? key.slice(prefix.length) : key).replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function aggregateStatePointStatus(rows: StatePointRow[]): {
+  label: string;
+  status: StatePointRow['status'];
+} {
+  const first = rows[0];
+  if (!first) return { label: 'unchanged', status: 'unchanged' };
+  if (rows.every((row) => row.status === first.status && row.statusLabel === first.statusLabel)) {
+    return { label: first.statusLabel, status: first.status };
+  }
+  if (rows.some((row) => row.status === 'missing')) return { label: 'missing', status: 'missing' };
+  const changedCount = rows.filter((row) => row.status !== 'unchanged').length;
+  return { label: `${String(changedCount)} changes`, status: 'changed' };
+}
+
+function aggregateStatePointSource(rows: StatePointRow[]): string {
+  const sources = Array.from(
+    new Set(rows.map((row) => row.sourceOp).filter((value) => value !== '-'))
+  );
+  return sources.length === 1 ? sources[0]! : '-';
 }
 
 function commitTitleFor(commit: ApiCommit | null): string {
