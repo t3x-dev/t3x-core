@@ -1,0 +1,237 @@
+[
+  {
+    "id": "false-claimed-result",
+    "operation": "verify-effect-result",
+    "input": {
+      "actualResult": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "claimedResult": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rule": "Replay(Base, DefinitionOf(Effect)) must equal Effect.result",
+    "expectedCode": "EFFECT_CLAIM_FALSE"
+  },
+  {
+    "id": "commit-resolves-wrong-decision-predicate",
+    "operation": "verify-integrity-hop",
+    "input": {
+      "slot": "CommitV2.decision",
+      "expectedKind": "statement",
+      "expectedPredicateType": "t3x.decision/v1",
+      "resolvedKind": "statement",
+      "resolvedPredicateType": "t3x.dev/yschema-validation/v1"
+    },
+    "rule": "CommitV2.decision must resolve to Statement<t3x.decision/v1>",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "decision-resolves-non-proposal-statement",
+    "operation": "verify-integrity-hop",
+    "input": {
+      "slot": "Decision.subjects[0]",
+      "expectedKind": "statement",
+      "expectedPredicateType": "t3x.proposal/v1",
+      "resolvedKind": "statement",
+      "resolvedPredicateType": "t3x.dev/human-confirmation/v1"
+    },
+    "rule": "Decision subject must resolve to Statement<t3x.proposal/v1>",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "rejected-decision-cannot-commit",
+    "operation": "verify-commit-outcome",
+    "input": {
+      "outcome": "rejected"
+    },
+    "rule": "CommitV2 may bind only accepted or policy-authorized overridden Decisions",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "resolver-bytes-mismatch",
+    "operation": "verify-resolved-bytes",
+    "input": {
+      "requested": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resolved": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rule": "Resolved bytes must re-hash to the requested descriptor digest",
+    "expectedCode": "OBJECT_DIGEST_MISMATCH"
+  },
+  {
+    "id": "duplicate-effect-input-role",
+    "operation": "verify-collection",
+    "input": {
+      "path": "Effect.inputs",
+      "roles": ["merge-source", "merge-source"]
+    },
+    "rule": "Effect.inputs roles are unique and canonically ordered",
+    "expectedCode": "NON_CANONICAL_VALUE"
+  },
+  {
+    "id": "unordered-statement-subjects",
+    "operation": "verify-collection",
+    "input": {
+      "path": "Statement.subjects",
+      "canonicalMembers": [
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "receivedMembers": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    },
+    "rule": "Statement.subjects are a canonical descriptor set",
+    "expectedCode": "NON_CANONICAL_VALUE"
+  },
+  {
+    "id": "missing-driver",
+    "operation": "resolve-semantics",
+    "input": {
+      "protocol": "t3x.dev/unknown",
+      "protocolVersion": "1"
+    },
+    "rule": "Missing codec or driver semantics is unsupported, not a false replay",
+    "expectedCode": "UNSUPPORTED_SEMANTICS"
+  },
+  {
+    "id": "stale-repository-head",
+    "operation": "advance-head",
+    "input": {
+      "expectedHead": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actualHead": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rule": "Repository head movement is distinct from object or replay validity",
+    "expectedCode": "STALE_BASE"
+  },
+  {
+    "id": "duplicate-json-key",
+    "operation": "parse-protocol-bytes",
+    "input": {
+      "rawJson": "{\"schema\":\"t3x/state/v1\",\"schema\":\"t3x/state/v1\"}"
+    },
+    "rule": "Duplicate JSON object keys are rejected before canonicalization",
+    "expectedCode": "SCHEMA_INVALID"
+  },
+  {
+    "id": "lone-unicode-surrogate",
+    "operation": "canonicalize-protocol-bytes",
+    "input": {
+      "rawJson": "\"\\ud800\""
+    },
+    "rule": "Strings outside the RFC 8785 I-JSON domain are rejected",
+    "expectedCode": "NON_CANONICAL_VALUE"
+  },
+  {
+    "id": "merge-reads-undeclared-input",
+    "operation": "verify-replay-inputs",
+    "input": {
+      "declaredRoles": ["base", "merge-source"],
+      "resolvedRoles": ["base", "merge-source", "ambient-worktree"]
+    },
+    "rule": "Replay may resolve only Base and Effect.inputs declared by role",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "driver-version-changes-identity",
+    "operation": "compare-identity",
+    "input": {
+      "first": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "second": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "2",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "rule": "MutationDriver protocolVersion and specDigest participate in Effect identity",
+    "expected": "digest-different"
+  },
+  {
+    "id": "human-confirmation-does-not-rewrite-proposal",
+    "operation": "attach-statement",
+    "input": {
+      "subjectBefore": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "subjectAfter": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "predicateType": "t3x.dev/human-confirmation/v1"
+    },
+    "rule": "A confirmation Statement targets an immutable Proposal and leaves its digest unchanged",
+    "expected": "subject-digest-unchanged"
+  },
+  {
+    "id": "external-statement-does-not-rewrite-subject",
+    "operation": "attach-statement",
+    "input": {
+      "subjectBefore": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "subjectAfter": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "predicateType": "t3x.dev/yschema-validation/v1"
+    },
+    "rule": "Attaching an external Statement leaves every subject digest unchanged",
+    "expected": "subject-digest-unchanged"
+  },
+  {
+    "id": "mixed-commit-history-preserves-v1-identity",
+    "operation": "project-mixed-history",
+    "input": {
+      "commitV1Before": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitV1After": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "nextSchema": "t3x/commit/v2"
+    },
+    "rule": "CommitV1 bytes and hashes remain unchanged when projected beside CommitV2",
+    "expected": "legacy-digest-unchanged"
+  },
+  {
+    "id": "same-proposal-different-decision-actors",
+    "operation": "compare-identity",
+    "input": {
+      "proposal": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "firstActor": { "kind": "human", "id": "user:one" },
+      "secondActor": { "kind": "human", "id": "user:two" }
+    },
+    "rule": "Decision actor participates in Statement identity",
+    "expected": "digest-different"
+  },
+  {
+    "id": "authenticated-caller-mismatch",
+    "operation": "bind-authenticated-caller",
+    "input": {
+      "claimedActor": { "kind": "agent", "id": "agent:planner" },
+      "authenticatedActor": { "kind": "agent", "id": "agent:reviewer" }
+    },
+    "rule": "The service layer rejects caller and claimed ActorRef mismatch without changing protocol bytes",
+    "expected": "service-layer-reject"
+  },
+  {
+    "id": "parentless-commit-requires-empty-genesis",
+    "operation": "verify-commit-genesis",
+    "input": {
+      "parentCount": 0,
+      "baseValue": { "alreadyInitialized": true }
+    },
+    "rule": "A parentless CommitV2 Effect Base must be the explicit empty genesis State",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "merge-parent-result-not-declared",
+    "operation": "verify-commit-merge-inputs",
+    "input": {
+      "additionalParentResults": [
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "declaredEffectInputs": []
+    },
+    "rule": "Every additional CommitV2 parent Result must be declared in Effect.inputs",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "decision-without-repository-authorization",
+    "operation": "create-repository-commit",
+    "input": {
+      "decision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "structurallyValid": true,
+      "authorizationRecord": false
+    },
+    "rule": "Decision structure is not repository authority; an exact project/ref authorization record is required",
+    "expected": "service-layer-reject"
+  }
+]

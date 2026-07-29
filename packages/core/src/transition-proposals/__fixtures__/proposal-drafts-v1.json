@@ -1,0 +1,62 @@
+{
+  "statedAndInferred": {
+    "schema": "t3x/proposal-draft",
+    "version": 1,
+    "intent": {
+      "mode": "stated",
+      "value": "Keep the service available during launch traffic",
+      "evidence": [
+        {
+          "resource": {
+            "uri": "urn:t3x:test:turn:T1",
+            "mediaType": "text/plain",
+            "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "locator": {
+            "scheme": "t3x.text-quote/v1",
+            "value": { "quote": "Keep the service available during launch traffic" }
+          }
+        }
+      ]
+    },
+    "rationale": {
+      "mode": "inferred",
+      "value": "Additional replicas reduce saturation risk",
+      "evidence": []
+    },
+    "review": {
+      "unresolvedQuestions": [],
+      "warnings": [],
+      "sourceBindings": []
+    }
+  },
+  "authoredAndUnspecified": {
+    "schema": "t3x/proposal-draft",
+    "version": 1,
+    "intent": { "mode": "unspecified" },
+    "rationale": {
+      "mode": "authored",
+      "value": "Prepare for the planned launch",
+      "evidence": []
+    },
+    "review": {
+      "unresolvedQuestions": [],
+      "warnings": [],
+      "sourceBindings": []
+    }
+  },
+  "missingStatedEvidence": {
+    "schema": "t3x/proposal-draft",
+    "version": 1,
+    "intent": {
+      "mode": "stated",
+      "value": "Keep the service available"
+    },
+    "rationale": { "mode": "unspecified" },
+    "review": {
+      "unresolvedQuestions": ["What is the expected peak load?"],
+      "warnings": [],
+      "sourceBindings": []
+    }
+  }
+}

@@ -1,5 +1,16 @@
 # @t3x-dev/yschema
 
+## 0.6.0
+
+### Minor Changes
+
+- [#1186](https://github.com/t3x-dev/t3x-core/pull/1186) [`6a77456`](https://github.com/t3x-dev/t3x-core/commit/6a77456dc875006df648a675e44f6129409aef0c) Thanks [@lqw905](https://github.com/lqw905)! - Promote YSchema as a public alpha package, version-aligned with the T3X 0.6.0 alpha release train.
+
+### Patch Changes
+
+- Updated dependencies [[`896ef97`](https://github.com/t3x-dev/t3x-core/commit/896ef9749e6a1c90cc3926d4bd76e1d4f05acf78), [`73d147d`](https://github.com/t3x-dev/t3x-core/commit/73d147dece3306a7fc58aba9ef59ba80c31760af), [`7c80d16`](https://github.com/t3x-dev/t3x-core/commit/7c80d16eb4fa9ac17ac37e2fc9056b89b04ed084), [`a37a3e2`](https://github.com/t3x-dev/t3x-core/commit/a37a3e2f0413332108f8def62be314077285c2b4), [`ab019c7`](https://github.com/t3x-dev/t3x-core/commit/ab019c7773d91f50aef98441c8882193e016d5a6)]:
+  - @t3x-dev/yops@0.6.0
+
 ## 0.5.1
 
 ### Patch Changes

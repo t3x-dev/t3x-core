@@ -8,6 +8,7 @@
  * - POST   /v1/commits               - Create a new commit
  * - GET    /v1/commits/:hash         - Get commit by hash
  * - GET    /v1/projects/:projectId/commits - List commits by project
+ * - GET    /v1/projects/:projectId/commit-history - List V1/V2 history projections
  *
  * @see packages/core/src/commit/types.ts
  */
@@ -23,6 +24,7 @@ import {
   getYOpsForCommit,
   insertRewrite,
   isCommitSuperseded,
+  listCommitHistory,
   listCommits,
   markConversationCommitted,
   updateCommitMessage,
@@ -114,6 +116,46 @@ const CommitResponseSchema = z.object({
   branch: z.string(),
   provenance: ProvenanceSchema.nullable(),
 });
+
+const DescriptorBaseSchema = z.object({
+  digest: z.string(),
+});
+
+const CommitHistoryProjectionSchema = z.discriminatedUnion('format', [
+  z.object({
+    format: z.literal('legacy_v1'),
+    id: z.string(),
+    schema: z.enum(['t3x/commit', 't3x/commit/1']),
+    parents: z.array(z.string()),
+    recordedAt: z.string(),
+    result: z.object({ mode: z.literal('legacy_content'), content: z.any() }),
+    assurance: z.object({
+      mode: z.literal('legacy_unavailable'),
+      unavailable: z.array(z.enum(['proposal', 'evidence', 'replay', 'validation', 'decision'])),
+    }),
+  }),
+  z.object({
+    format: z.literal('transition_v2'),
+    id: z.string(),
+    schema: z.literal('t3x/commit/v2'),
+    parents: z.array(z.string()),
+    recordedAt: z.string(),
+    result: z.object({
+      mode: z.literal('state_descriptor'),
+      descriptor: DescriptorBaseSchema.extend({
+        kind: z.literal('state'),
+        schema: z.literal('t3x/state/v1'),
+      }),
+    }),
+    assurance: z.object({
+      mode: z.literal('decision_bound'),
+      decision: DescriptorBaseSchema.extend({
+        kind: z.literal('statement'),
+        schema: z.literal('t3x/statement/v1'),
+      }),
+    }),
+  }),
+]);
 
 // ============================================================
 // POST /v1/commits — Create a new frame-based commit
@@ -350,6 +392,52 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
     return c.json({ success: true as const, data: { commits } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to list commits';
+    return errorResponse(c, 'LIST_FAILED', message);
+  }
+});
+
+// ============================================================
+// GET /v1/projects/:projectId/commit-history — Mixed V1/V2 read projection
+// ============================================================
+
+const listCommitHistoryRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commit-history',
+  tags: ['Commits'],
+  summary: 'List discriminated CommitV1 and CommitV2 history projections',
+  request: {
+    params: z.object({ projectId: z.string().min(1) }),
+    query: PaginationQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Mixed commit history listed successfully',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({ history: z.array(CommitHistoryProjectionSchema) })
+          ),
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(listCommitHistoryRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const { limit, offset } = c.req.valid('query');
+  const db = await getDB();
+  try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const history = await listCommitHistory(db, projectId, { limit, offset });
+    return c.json({ success: true as const, data: { history } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list commit history';
     return errorResponse(c, 'LIST_FAILED', message);
   }
 });

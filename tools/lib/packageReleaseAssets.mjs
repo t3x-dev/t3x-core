@@ -125,6 +125,14 @@ function packageReleaseFor(packageRecord) {
     };
   }
 
+  if (packageRecord.name === '@t3x-dev/yschema') {
+    return {
+      releaseTag: `t3x-yschema-v${packageRecord.version}`,
+      releaseTitle: `t3x-yschema v${packageRecord.version}`,
+      releaseNotes: `Package release for @t3x-dev/yschema@${packageRecord.version}.`,
+    };
+  }
+
   throw new Error(`unsupported package release asset package: ${packageRecord.name}`);
 }
 

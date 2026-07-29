@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/yops",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Declarative operations over JSON-compatible YAML documents",
   "license": "Apache-2.0",
   "main": "dist/index.js",

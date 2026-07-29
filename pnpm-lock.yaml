@@ -34,6 +34,9 @@ importers:
       turbo:
         specifier: ^2.7.2
         version: 2.7.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   apps/agent-demo:
     dependencies:
@@ -796,6 +799,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@t3x-dev/transition':
+        specifier: workspace:*
+        version: link:../transition
       '@t3x-dev/yops':
         specifier: workspace:*
         version: link:../yops
@@ -814,6 +820,9 @@ importers:
       undici:
         specifier: ^7.27.2
         version: 7.27.2
+      yaml:
+        specifier: 2.8.3
+        version: 2.8.3
       zod:
         specifier: ^4.2.1
         version: 4.2.1
@@ -898,6 +907,15 @@ importers:
       '@swc/core':
         specifier: ^1.15.18
         version: 1.15.18
+      '@t3x-dev/transition':
+        specifier: workspace:*
+        version: link:../transition
+      '@t3x-dev/yschema':
+        specifier: workspace:*
+        version: link:../yschema
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.27
@@ -910,6 +928,9 @@ importers:
       esbuild:
         specifier: 0.28.0
         version: 0.28.0
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.15)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
@@ -919,6 +940,27 @@ importers:
       unplugin-swc:
         specifier: ^1.5.9
         version: 1.5.9(@swc/core@1.15.18)(rollup@4.61.1)
+      vite:
+        specifier: 8.0.16
+        version: 8.0.16(@types/node@20.19.27)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@20.19.27)(@vitest/coverage-v8@4.1.8)(jsdom@28.0.0)(vite@8.0.16(@types/node@20.19.27)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  packages/transition:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.27
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.15)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vite:
         specifier: 8.0.16
         version: 8.0.16(@types/node@20.19.27)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)

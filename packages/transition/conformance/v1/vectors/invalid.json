@@ -1,0 +1,330 @@
+[
+  {
+    "id": "stated-claim-empty-evidence",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "agent", "id": "agent:planner" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "stated", "value": "Rename it", "evidence": [] },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "inferred-claim-missing-evidence",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "agent", "id": "agent:planner" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "inferred", "value": "Rename it" },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "unspecified-claim-carries-value",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "unspecified", "value": "invented", "evidence": [] },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "proposal-carries-review-questions",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "agent", "id": "agent:planner" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "inferred", "value": "Rename it", "evidence": [] },
+        "rationale": { "mode": "unspecified" },
+        "reviewQuestions": ["Which room?"]
+      }
+    }
+  },
+  {
+    "id": "proposal-subjects-state",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "state",
+          "schema": "t3x/state/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "authored", "value": "Rename it", "evidence": [] },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "proposal-subjects-multiple-effects",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "authored", "value": "Rename it", "evidence": [] },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "decision-subjects-effect",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": { "mode": "not_evaluated" },
+        "considered": [],
+        "outcome": "accepted",
+        "rationale": { "mode": "unspecified" },
+        "decidedAt": "2026-07-26T02:00:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "external-statement-impersonates-core-predicate",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "state",
+          "schema": "t3x/state/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "service", "id": "validator:malicious" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": { "valid": true }
+    }
+  },
+  {
+    "id": "override-with-inferred-rationale",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": { "mode": "not_evaluated" },
+        "considered": [],
+        "outcome": "overridden",
+        "rationale": {
+          "mode": "inferred",
+          "value": "The user probably accepts the risk",
+          "evidence": []
+        },
+        "decidedAt": "2026-07-26T02:00:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "decision-noncanonical-timestamp",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "statement",
+          "schema": "t3x/statement/v1",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "actor": { "kind": "human", "id": "user:ethan" },
+      "predicateType": "t3x.decision/v1",
+      "predicate": {
+        "policy": { "mode": "not_evaluated" },
+        "considered": [],
+        "outcome": "accepted",
+        "rationale": { "mode": "unspecified" },
+        "decidedAt": "2026-07-26T12:00:00+10:00"
+      }
+    }
+  },
+  {
+    "id": "unknown-outer-statement-field",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "agent", "id": "agent:planner" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "inferred", "value": "Rename it", "evidence": [] },
+        "rationale": { "mode": "unspecified" }
+      },
+      "displayLabel": "Rename"
+    }
+  },
+  {
+    "id": "malformed-digest",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:ABC"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "operations": [],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  {
+    "id": "effect-null-base",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": null,
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "operations": [],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  {
+    "id": "actor-ref-missing-id",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": { "kind": "agent" },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": { "mode": "unspecified" },
+        "rationale": { "mode": "unspecified" }
+      }
+    }
+  },
+  {
+    "id": "null-core-field",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": null,
+      "value": {}
+    }
+  },
+  {
+    "id": "commit-decision-is-effect-descriptor",
+    "expectedCode": "SCHEMA_INVALID",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [],
+      "decision": {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  }
+]

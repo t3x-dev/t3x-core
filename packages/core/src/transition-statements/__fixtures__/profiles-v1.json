@@ -1,0 +1,100 @@
+{
+  "replay": {
+    "schema": "t3x/statement/v1",
+    "subjects": [
+      {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "actor": {
+      "kind": "service",
+      "id": "verifier:local"
+    },
+    "predicateType": "t3x.dev/replay-verification/v1",
+    "predicate": {
+      "tool": {
+        "name": "t3x-replay",
+        "version": "1.0.0"
+      },
+      "run": {
+        "id": "run:replay:1",
+        "recordedAt": "2026-07-27T01:00:00.000Z"
+      },
+      "environment": {
+        "mode": "unspecified"
+      },
+      "outcome": "verified",
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  },
+  "yschema": {
+    "schema": "t3x/statement/v1",
+    "subjects": [
+      {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "actor": {
+      "kind": "service",
+      "id": "validator:yschema"
+    },
+    "predicateType": "t3x.dev/yschema-validation/v1",
+    "predicate": {
+      "tool": {
+        "name": "@t3x-dev/yschema",
+        "version": "0.6.0"
+      },
+      "run": {
+        "id": "run:yschema:1",
+        "recordedAt": "2026-07-27T01:00:01.000Z"
+      },
+      "environment": {
+        "mode": "unspecified"
+      },
+      "schemaResource": {
+        "uri": "urn:t3x:test:yschema:device",
+        "mediaType": "application/vnd.t3x.yschema+json",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "profile": {
+        "id": "t3x.dev/yschema/native",
+        "version": "0.1"
+      },
+      "context": {
+        "mode": "unspecified"
+      },
+      "outcome": "passed",
+      "valid": true,
+      "ready": true,
+      "errors": [],
+      "gaps": [],
+      "fixes": []
+    }
+  },
+  "humanConfirmation": {
+    "schema": "t3x/statement/v1",
+    "subjects": [
+      {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "actor": {
+      "kind": "human",
+      "id": "user:reviewer"
+    },
+    "predicateType": "t3x.dev/human-confirmation/v1",
+    "predicate": {
+      "confirms": ["intent", "rationale"]
+    }
+  }
+}
