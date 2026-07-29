@@ -507,6 +507,7 @@ export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 export * from './transition-adapters';
 export * from './transition-commits';
 export * from './transition-decisions';
+export * from './transition-projection';
 export * from './transition-proposals';
 export * from './transition-statements';
 // ═══════════════════════════════════════════════════════════════════════════
