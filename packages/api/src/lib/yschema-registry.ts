@@ -5,8 +5,10 @@ const BUILT_IN_SCHEMAS = new Map<string, YSchema>([
   ['t3x/skill', t3xSkillP0Fixtures.normalizedYSchema],
 ]);
 
-export function resolveBuiltInYSchema(name: string): YSchema | null {
-  return BUILT_IN_SCHEMAS.get(name.trim().toLowerCase()) ?? null;
+export function resolveBuiltInYSchema(name: string, version?: string): YSchema | null {
+  const schema = BUILT_IN_SCHEMAS.get(name.trim().toLowerCase()) ?? null;
+  if (!schema || (version !== undefined && version !== schema.version)) return null;
+  return schema;
 }
 
 export function canonicalSchemaNameFromBinding(binding: unknown): string | null {
@@ -20,6 +22,12 @@ export function canonicalSchemaNameFromBinding(binding: unknown): string | null 
   if (/skill/i.test(displayName)) return 't3x/skill';
   if (/prd/i.test(displayName)) return 't3x/prd';
   return null;
+}
+
+export function schemaVersionFromBinding(binding: unknown): string | undefined {
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return undefined;
+  const version = (binding as Record<string, unknown>).version;
+  return typeof version === 'string' && version.trim() ? version.trim() : undefined;
 }
 
 export function schemaRootKeyFromBinding(binding: unknown): string {

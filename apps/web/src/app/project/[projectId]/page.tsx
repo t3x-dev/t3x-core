@@ -20,6 +20,10 @@ import {
 } from '@/components/project/projectTabModel';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
+import {
+  getProjectDefaultSchemaBinding,
+  mergeProjectWorkspaceSchemaBindings,
+} from '@/domain/workspaces/schemaBindings';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -38,6 +42,7 @@ import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -192,6 +197,20 @@ export function ProjectDetailPageContent({
   const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
   const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
   const projectBase = projectFromStore ?? fetchedProject;
+  const liveSchemaBindings = useProjectWorkspaceSchemaBindingsStore(
+    (state) => state.bindingsByProjectId[projectId]
+  );
+  const schemaBindings = useMemo(
+    () =>
+      mergeProjectWorkspaceSchemaBindings(
+        {
+          projectDefault: getProjectDefaultSchemaBinding(projectBase?.metadata),
+          byWorkspaceId: {},
+        },
+        liveSchemaBindings
+      ),
+    [liveSchemaBindings, projectBase?.metadata]
+  );
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
@@ -566,9 +585,15 @@ export function ProjectDetailPageContent({
   const activeContent = (() => {
     switch (activeTab) {
       case 'schemas':
-        return <ProjectSchemasTab projectId={projectId} />;
+        return (
+          <ProjectSchemasTab
+            projectId={projectId}
+            projectMetadata={projectBase?.metadata}
+            schemaBindings={schemaBindings}
+          />
+        );
       case 'workspaces':
-        return <ProjectWorkspacesTab projectId={projectId} />;
+        return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':
         return <ProjectReviewsTab projectId={projectId} />;
       case 'outputs':

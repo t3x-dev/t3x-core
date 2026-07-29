@@ -1,6 +1,8 @@
 import type { SchemaRelease } from '@/types/schemas';
 import type { WorkspaceCandidate, WorkspaceSchemaBinding } from '@/types/workspaces';
 
+export const PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY = 'default_schema_binding';
+
 export interface ProjectWorkspaceSchemaBindings {
   projectDefault?: WorkspaceSchemaBinding;
   byWorkspaceId: Record<string, WorkspaceSchemaBinding>;
@@ -24,12 +26,90 @@ export function schemaReleaseToWorkspaceBinding(
     ...(releaseWithCanonicalMetadata.canonicalName
       ? { canonicalName: releaseWithCanonicalMetadata.canonicalName }
       : {}),
-    ...(releaseWithCanonicalMetadata.schemaHash
+    ...(releaseWithCanonicalMetadata.schemaHash &&
+    /^sha256:[a-f0-9]{64}$/i.test(releaseWithCanonicalMetadata.schemaHash)
       ? { schemaHash: releaseWithCanonicalMetadata.schemaHash }
       : {}),
     schemaName: release.name,
     version: release.version,
     mode,
+  };
+}
+
+export function getProjectDefaultSchemaBinding(
+  metadata: Record<string, unknown> | null | undefined
+): WorkspaceSchemaBinding | undefined {
+  const value = metadata?.[PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY];
+  if (!isWorkspaceSchemaBinding(value)) return undefined;
+  return { ...value, mode: 'project_default' };
+}
+
+export function withProjectDefaultSchemaBinding(
+  metadata: Record<string, unknown> | null | undefined,
+  binding: WorkspaceSchemaBinding
+): Record<string, unknown> {
+  return {
+    ...(metadata ?? {}),
+    [PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY]: {
+      ...binding,
+      mode: 'project_default',
+    },
+  };
+}
+
+export function mergeProjectWorkspaceSchemaBindings(
+  persisted: ProjectWorkspaceSchemaBindings,
+  live: ProjectWorkspaceSchemaBindings | undefined
+): ProjectWorkspaceSchemaBindings {
+  if (!live) return persisted;
+  return {
+    projectDefault: live.projectDefault ?? persisted.projectDefault,
+    byWorkspaceId: {
+      ...persisted.byWorkspaceId,
+      ...live.byWorkspaceId,
+    },
+  };
+}
+
+export function workspaceSchemaBindingsEqual(
+  left: WorkspaceSchemaBinding | undefined,
+  right: WorkspaceSchemaBinding | undefined
+): boolean {
+  if (!left || !right) return left === right;
+  return (
+    left.canonicalName === right.canonicalName &&
+    left.schemaName === right.schemaName &&
+    left.version === right.version
+  );
+}
+
+export function rebindWorkspaceCandidate(
+  candidate: WorkspaceCandidate,
+  binding: WorkspaceSchemaBinding,
+  updatedAt = candidate.updatedAt
+): WorkspaceCandidate {
+  if (workspaceSchemaBindingsEqual(candidate.schemaBindings[0], binding)) return candidate;
+
+  const { commitOverride: _commitOverride, ...workspace } = candidate;
+  const schemaLabel = `${binding.schemaName} ${binding.version}`;
+  return {
+    ...workspace,
+    status: 'draft',
+    updatedAt,
+    schemaBindings: replaceCurrentWorkspaceBinding(candidate.schemaBindings, binding),
+    schemaCandidate: {
+      summary: `Schema binding changed to ${schemaLabel}. Regenerate the candidate from its sources.`,
+      fields: [],
+    },
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: `The previous candidate was produced under a different Schema and is now stale.`,
+      gaps: [`Regenerate the candidate against ${schemaLabel}.`],
+    },
+    yopsDraft: {
+      ...candidate.yopsDraft,
+      operations: [],
+    },
   };
 }
 
@@ -44,33 +124,35 @@ export function applyProjectWorkspaceSchemaBindings(
   return candidates.map((candidate) => {
     const workspaceBinding = bindings.byWorkspaceId[candidate.id];
     if (workspaceBinding) {
-      return {
-        ...candidate,
-        schemaBindings: replaceCurrentWorkspaceBinding(candidate.schemaBindings, workspaceBinding),
-      };
+      return rebindWorkspaceCandidate(candidate, workspaceBinding);
     }
 
     if (!bindings.projectDefault) return candidate;
-    return {
-      ...candidate,
-      schemaBindings: replaceProjectDefaultBinding(
-        candidate.schemaBindings,
-        bindings.projectDefault
-      ),
-    };
+    const nextBindings = replaceProjectDefaultBinding(
+      candidate.schemaBindings,
+      bindings.projectDefault
+    );
+    const nextBinding = nextBindings[0];
+    return nextBinding ? rebindWorkspaceCandidate(candidate, nextBinding) : candidate;
   });
 }
 
+function isWorkspaceSchemaBinding(value: unknown): value is WorkspaceSchemaBinding {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.schemaName === 'string' &&
+    record.schemaName.trim().length > 0 &&
+    typeof record.version === 'string' &&
+    record.version.trim().length > 0
+  );
+}
+
 function replaceCurrentWorkspaceBinding(
-  bindings: WorkspaceSchemaBinding[],
+  _bindings: WorkspaceSchemaBinding[],
   nextBinding: WorkspaceSchemaBinding
 ): WorkspaceSchemaBinding[] {
-  return [
-    nextBinding,
-    ...bindings.filter(
-      (binding) => binding.mode !== 'pinned' && binding.mode !== 'project_default'
-    ),
-  ];
+  return [nextBinding];
 }
 
 function replaceProjectDefaultBinding(

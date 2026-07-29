@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyProjectWorkspaceSchemaBindings,
+  getProjectDefaultSchemaBinding,
+  mergeProjectWorkspaceSchemaBindings,
+  rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
+  withProjectDefaultSchemaBinding,
 } from '@/domain/workspaces/schemaBindings';
 import type { SchemaRelease } from '@/types/schemas';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -85,6 +89,83 @@ describe('workspace schema bindings', () => {
     expect(updated[0].schemaBindings).toEqual(candidates[0].schemaBindings);
     expect(updated[1].schemaBindings).toEqual([
       { schemaName: 'Docker Compose', version: 'v2', mode: 'project_default' },
+    ]);
+  });
+
+  it('round-trips the project default through project metadata without dropping other metadata', () => {
+    const binding = schemaReleaseToWorkspaceBinding(release, 'project_default');
+    const metadata = withProjectDefaultSchemaBinding({ description: 'Infra project' }, binding);
+
+    expect(metadata.description).toBe('Infra project');
+    expect(getProjectDefaultSchemaBinding(metadata)).toEqual(binding);
+  });
+
+  it('merges persisted project defaults with live workspace overrides', () => {
+    const projectDefault = schemaReleaseToWorkspaceBinding(release, 'project_default');
+    const workspaceBinding = schemaReleaseToWorkspaceBinding(release, 'pinned');
+
+    expect(
+      mergeProjectWorkspaceSchemaBindings(
+        { projectDefault, byWorkspaceId: {} },
+        { byWorkspaceId: { workspace_pinned: workspaceBinding } }
+      )
+    ).toEqual({
+      projectDefault,
+      byWorkspaceId: { workspace_pinned: workspaceBinding },
+    });
+  });
+
+  it('marks generated candidate and YOps state stale when a Workspace changes Schema', () => {
+    const candidate = {
+      ...candidates[0],
+      schemaCandidate: {
+        summary: 'Generated candidate',
+        fields: [
+          {
+            id: 'field_1',
+            path: 'summary.problem',
+            label: 'Problem',
+            type: 'string',
+            required: true,
+            status: 'covered' as const,
+          },
+        ],
+      },
+      yopsDraft: {
+        id: 'draft_1',
+        operations: [{ id: 'op_1', op: 'set', path: 'prd/summary/problem', summary: 'Set' }],
+      },
+    };
+
+    const rebound = rebindWorkspaceCandidate(
+      candidate,
+      schemaReleaseToWorkspaceBinding(release, 'pinned'),
+      '2026-07-29T00:00:00.000Z'
+    );
+
+    expect(rebound.status).toBe('draft');
+    expect(rebound.updatedAt).toBe('2026-07-29T00:00:00.000Z');
+    expect(rebound.schemaCandidate.fields).toEqual([]);
+    expect(rebound.schemaReview.verdict).toBe('needs_review');
+    expect(rebound.yopsDraft.operations).toEqual([]);
+  });
+
+  it('replaces stale overrides instead of retaining multiple active Schema bindings', () => {
+    const candidate = {
+      ...candidates[0],
+      schemaBindings: [
+        { schemaName: 'Draft Schema', version: 'v3', mode: 'draft_override' as const },
+        { schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' as const },
+      ],
+    };
+
+    const rebound = rebindWorkspaceCandidate(
+      candidate,
+      schemaReleaseToWorkspaceBinding(release, 'pinned')
+    );
+
+    expect(rebound.schemaBindings).toEqual([
+      { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
     ]);
   });
 });

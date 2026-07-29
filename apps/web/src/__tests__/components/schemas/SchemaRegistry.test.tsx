@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SchemaRegistry } from '@/components/schemas';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 
@@ -47,6 +47,41 @@ describe('SchemaRegistry', () => {
     expect(screen.getByText('has_step')).toBeInTheDocument();
     expect(screen.getByText('checks/*')).toBeInTheDocument();
     expect(screen.getAllByText('workflows/*')).not.toHaveLength(0);
+  });
+
+  it('binds only the registered current release through explicit Workspace actions', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const onSetProjectDefault = vi.fn().mockResolvedValue(undefined);
+    const onApplyToWorkspace = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SchemaRegistry
+        {...preview}
+        bindingActions={{
+          onApplyToWorkspace,
+          onSetProjectDefault,
+          pending: null,
+          workspaceTarget: {
+            id: 'workspace_main',
+            title: 'Main workspace',
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Schema binding actions' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Use for new Workspaces' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
+
+    const currentPrd = preview.families[0].releases.find(
+      (release) => release.id === preview.families[0].currentReleaseId
+    );
+    expect(onSetProjectDefault).toHaveBeenCalledWith(currentPrd);
+    expect(onApplyToWorkspace).toHaveBeenCalledWith(currentPrd);
+
+    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
+    expect(screen.getByText('view only')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use for new Workspaces' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply to Main workspace' })).toBeDisabled();
   });
 
   it('remembers each family version selection while resetting the detail view', () => {

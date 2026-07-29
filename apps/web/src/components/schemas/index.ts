@@ -1,3 +1,8 @@
+export type {
+  SchemaBindingActionKind,
+  SchemaBindingActionsState,
+  SchemaBindingFeedbackTone,
+} from '@/components/schemas/SchemaBindingActions';
 export { SchemaFamilyList } from '@/components/schemas/SchemaFamilyList';
 export { SchemaFamilyTabs } from '@/components/schemas/SchemaFamilyTabs';
 export { SchemaRegistry } from '@/components/schemas/SchemaRegistry';

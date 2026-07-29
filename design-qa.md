@@ -64,3 +64,16 @@
 - [x] Remove the temporary QA route and test project.
 
 final result: passed
+
+## Schema-to-Workspace binding follow-up
+
+- Desktop PRD: `C:\Users\user\.codex\visualizations\2026\07\27\019fa303-800d-7e42-b34f-c0126bcc08dc\schema-binding-prd.png`
+- Desktop Skill: `C:\Users\user\.codex\visualizations\2026\07\27\019fa303-800d-7e42-b34f-c0126bcc08dc\schema-binding-skill.png`
+- Persisted Workspace state: `C:\Users\user\.codex\visualizations\2026\07\27\019fa303-800d-7e42-b34f-c0126bcc08dc\schema-binding-workspace.png`
+- Mobile binding state: `C:\Users\user\.codex\visualizations\2026\07\27\019fa303-800d-7e42-b34f-c0126bcc08dc\schema-binding-mobile.png`
+- Verified routes: `/t3x-dev/schema-audit-20260713/schemas` and `/t3x-dev/lqw/schemas`; 1440 × 1100 and 390 × 844 viewports.
+- The binding strip preserves the existing repository-contract hierarchy and adds two explicit actions: a project default for new Workspaces and a direct binding for the current persisted Workspace.
+- Current runtime releases are actionable; draft and historical releases remain view-only. Binding copy makes commit immutability and candidate regeneration explicit.
+- Browser verification found meaningful content, no framework error overlay, and no console/page errors. A repository without a persisted Workspace shows a disabled explanatory state; a repository with one shows its title in the action.
+- Complete SHA-256 values remain available to assistive technology and on hover, while the visual value is compact enough for the metadata rail.
+- The binding controls stack without introducing mobile overflow. The repository shell's existing horizontally scrollable top navigation and version rail still extend beyond the 390px document viewport; that behavior predates this binding change.

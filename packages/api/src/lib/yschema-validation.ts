@@ -55,8 +55,12 @@ export async function runYSchemaValidationForCommit(
     );
   }
 
-  const schemaName = input.schemaName ?? commit.provenance?.schema_ref?.name ?? 't3x/prd';
-  const schema = resolveBuiltInYSchema(schemaName);
+  const commitSchemaRef = commit.provenance?.schema_ref;
+  const schemaName = input.schemaName ?? commitSchemaRef?.name ?? 't3x/prd';
+  const schema = resolveBuiltInYSchema(
+    schemaName,
+    input.schemaName === undefined ? commitSchemaRef?.version : undefined
+  );
   if (!schema) {
     throw new YSchemaValidationError(
       'SCHEMA_NOT_SUPPORTED',

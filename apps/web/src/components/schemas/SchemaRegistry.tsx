@@ -1,6 +1,10 @@
 'use client';
 
 import { type ReactNode, useState } from 'react';
+import {
+  SchemaBindingActions,
+  type SchemaBindingActionsState,
+} from '@/components/schemas/SchemaBindingActions';
 import { SchemaFamilyTabs } from '@/components/schemas/SchemaFamilyTabs';
 import {
   type SchemaDetailView,
@@ -12,11 +16,12 @@ import { Button } from '@/components/ui/button';
 import type { SchemaFamilyPreview, SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaRegistryProps {
+  bindingActions?: SchemaBindingActionsState;
   defaultFamilyId: string;
   families: SchemaFamilyPreview[];
 }
 
-export function SchemaRegistry({ defaultFamilyId, families }: SchemaRegistryProps) {
+export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: SchemaRegistryProps) {
   const initialFamily =
     families.find((family) => family.id === defaultFamilyId) ?? families[0] ?? null;
   const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? '');
@@ -74,12 +79,21 @@ export function SchemaRegistry({ defaultFamilyId, families }: SchemaRegistryProp
           ) : null}
 
           {selectedFamily && selectedRelease ? (
-            <SchemaRegistryFacts
-              currentRelease={currentRelease}
-              family={selectedFamily}
-              familyCount={families.length}
-              selectedRelease={selectedRelease}
-            />
+            <>
+              <SchemaRegistryFacts
+                currentRelease={currentRelease}
+                family={selectedFamily}
+                familyCount={families.length}
+                selectedRelease={selectedRelease}
+              />
+              {bindingActions ? (
+                <SchemaBindingActions
+                  actions={bindingActions}
+                  currentRelease={currentRelease}
+                  selectedRelease={selectedRelease}
+                />
+              ) : null}
+            </>
           ) : (
             <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
               {selectedFamily

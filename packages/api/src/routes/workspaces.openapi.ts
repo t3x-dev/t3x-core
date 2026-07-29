@@ -31,6 +31,7 @@ import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
   schemaRootKeyFromBinding,
+  schemaVersionFromBinding,
 } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -197,6 +198,12 @@ const extractCandidateRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(WorkspaceResponseSchema),
         },
+      },
+    },
+    400: {
+      description: 'The bound Schema release is not available in the runtime registry',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
       },
     },
     404: {
@@ -755,8 +762,19 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const db = await getDB();
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
+  const schemaResolution = resolveWorkspaceYSchema(workspace);
+  if (schemaResolution.canonicalName && !schemaResolution.schema) {
+    const releaseLabel = schemaResolution.version
+      ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
+      : schemaResolution.canonicalName;
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      `Bound Schema release ${releaseLabel} is not available in this runtime. Choose a registered current release before regenerating the Workspace.`
+    );
+  }
   const nextWorkspace = reopenCommittedWorkspaceForReview(
-    buildExtractedWorkspace(workspace, projectId, sourceTexts)
+    buildExtractedWorkspace(workspace, projectId, sourceTexts, schemaResolution.schema)
   );
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const persistedWorkspace = {
@@ -1098,10 +1116,10 @@ function mergeSourceTexts(
 function buildExtractedWorkspace(
   workspace: Record<string, unknown>,
   projectId: string,
-  sourceTexts: WorkspaceSourceText[]
+  sourceTexts: WorkspaceSourceText[],
+  schema: YSchema | null
 ): Record<string, unknown> {
   const sourceText = joinSourceTexts(sourceTexts);
-  const schema = resolveWorkspaceYSchema(workspace);
   const fields = schema
     ? buildCandidateFieldsFromYSchema(schema, sourceTexts)
     : buildFallbackCandidateFields(sourceText, sourceTexts);
@@ -1129,10 +1147,20 @@ function buildExtractedWorkspace(
   };
 }
 
-function resolveWorkspaceYSchema(workspace: Record<string, unknown>): YSchema | null {
+function resolveWorkspaceYSchema(workspace: Record<string, unknown>): {
+  canonicalName: string | null;
+  schema: YSchema | null;
+  version?: string;
+} {
   const bindings = workspace.schemaBindings as unknown[] | undefined;
-  const canonicalName = canonicalSchemaNameFromBinding(bindings?.[0]);
-  return canonicalName ? resolveBuiltInYSchema(canonicalName) : null;
+  const binding = bindings?.[0];
+  const canonicalName = canonicalSchemaNameFromBinding(binding);
+  const version = schemaVersionFromBinding(binding);
+  return {
+    canonicalName,
+    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
+    ...(version ? { version } : {}),
+  };
 }
 
 function buildCandidateFieldsFromYSchema(

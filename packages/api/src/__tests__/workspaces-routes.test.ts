@@ -243,6 +243,41 @@ describe('Workspace routes', () => {
     );
   });
 
+  it('rejects a bound built-in Schema version that is unavailable at runtime', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_version_mismatch/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_version_mismatch',
+            projectId: 'proj_sources',
+            schemaBindings: [
+              {
+                canonicalName: 't3x/skill',
+                schemaName: 'Skill Schema',
+                version: 'v999',
+                mode: 'pinned',
+              },
+            ],
+            sourceBundle: [],
+          },
+          sources: [],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: expect.stringContaining('t3x/skill v999'),
+      },
+    });
+  });
+
   it('merges complementary evidence for the same repeated requirement', async () => {
     const res = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
