@@ -215,7 +215,7 @@ function releaseSurface(overrides = {}) {
   return {
     errors: [],
     warnings: [],
-    npmPublishPackages: ['@t3x-dev/local', '@t3x-dev/yops'],
+    npmPublishPackages: ['@t3x-dev/local', '@t3x-dev/yops', '@t3x-dev/yschema'],
     packages: [],
     ...overrides,
   };

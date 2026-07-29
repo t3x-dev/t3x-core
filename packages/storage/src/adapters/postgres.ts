@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 52;
+const SCHEMA_VERSION = 53;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1579,6 +1579,43 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       WHERE workspace_id IS NOT NULL
         AND status <> 'abandoned'
         AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+  `);
+
+  // ── Schema v53: immutable Transition objects, CommitV2 membership, and authority facts ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_objects (
+      digest TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      schema TEXT NOT NULL,
+      canonical_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS transition_commits (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      media_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, digest)
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_commits_project_created
+      ON transition_commits(project_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      decision_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      policy_uri TEXT NOT NULL,
+      policy_digest TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      observation_scope JSONB NOT NULL,
+      authorized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, ref_name, decision_digest)
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_decision_authorizations_decision
+      ON transition_decision_authorizations(decision_digest);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

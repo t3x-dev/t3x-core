@@ -79,6 +79,9 @@ jobs:
       - name: Check release surface
         run: pnpm check:release-surface
 
+      - name: Check Transition boundaries
+        run: pnpm check:transition-boundaries
+
       - name: Build packages
         run: pnpm build
 

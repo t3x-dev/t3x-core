@@ -4,8 +4,8 @@ import { listWorkspaceDrafts } from '../queries/drafts';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
-describe('workspace branch migration', () => {
-  it('keeps the newest open workspace per branch when upgrading from v51 to v52', async () => {
+describe('workspace and Transition schema migrations', () => {
+  it('keeps the newest open workspace per branch when upgrading from v51', async () => {
     const testDb = await createTestDB();
 
     try {
@@ -95,12 +95,57 @@ describe('workspace branch migration', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(52);
+      expect(schemaVersion?.version).toBe(53);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
       `;
       expect(index?.index_name).toBe('idx_drafts_open_workspace_branch');
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs Transition tables when upgrading an existing UI schema from v52', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_decision_authorizations;
+        DROP TABLE IF EXISTS transition_commits;
+        DROP TABLE IF EXISTS transition_objects;
+        UPDATE _schema_version
+        SET version = 52, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [tables] = await testDb.sql<
+        Array<{
+          objects: string | null;
+          commits: string | null;
+          authorizations: string | null;
+        }>
+      >`
+        SELECT
+          to_regclass('transition_objects')::text AS objects,
+          to_regclass('transition_commits')::text AS commits,
+          to_regclass('transition_decision_authorizations')::text AS authorizations
+      `;
+      expect(tables).toEqual({
+        objects: 'transition_objects',
+        commits: 'transition_commits',
+        authorizations: 'transition_decision_authorizations',
+      });
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version
+        FROM _schema_version
+        WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(53);
     } finally {
       await testDb.cleanup();
     }

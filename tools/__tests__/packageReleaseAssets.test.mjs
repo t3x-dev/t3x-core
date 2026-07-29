@@ -13,8 +13,13 @@ test('builds a product release asset upload plan from product release notes', ()
     packageRecords: [
       { name: '@t3x-dev/local', version: '0.4.2' },
       { name: '@t3x-dev/yops', version: '0.4.3' },
+      { name: '@t3x-dev/yschema', version: '0.4.3' },
     ],
-    assetPaths: ['/tmp/t3x-dev-local-0.4.2.tgz', '/tmp/t3x-dev-yops-0.4.3.tgz'],
+    assetPaths: [
+      '/tmp/t3x-dev-local-0.4.2.tgz',
+      '/tmp/t3x-dev-yops-0.4.3.tgz',
+      '/tmp/t3x-dev-yschema-0.4.3.tgz',
+    ],
     releaseRecords: [
       {
         tagName: 't3x-v0.5.0',
@@ -24,6 +29,7 @@ test('builds a product release asset upload plan from product release notes', ()
 
 - \`@t3x-dev/local\`: 0.4.2
 - \`@t3x-dev/yops\`: 0.4.3
+- \`@t3x-dev/yschema\`: 0.4.3
 `,
       },
     ],
@@ -34,13 +40,18 @@ test('builds a product release asset upload plan from product release notes', ()
 
   assert.deepEqual(plan, {
     releaseTag: 't3x-v0.5.0',
-    assetPaths: ['/tmp/t3x-dev-local-0.4.2.tgz', '/tmp/t3x-dev-yops-0.4.3.tgz'],
+    assetPaths: [
+      '/tmp/t3x-dev-local-0.4.2.tgz',
+      '/tmp/t3x-dev-yops-0.4.3.tgz',
+      '/tmp/t3x-dev-yschema-0.4.3.tgz',
+    ],
     args: [
       'release',
       'upload',
       't3x-v0.5.0',
       '/tmp/t3x-dev-local-0.4.2.tgz',
       '/tmp/t3x-dev-yops-0.4.3.tgz',
+      '/tmp/t3x-dev-yschema-0.4.3.tgz',
       '--clobber',
     ],
     env: {
@@ -123,6 +134,27 @@ test('builds a yops package release asset upload plan', () => {
   });
 });
 
+test('builds a yschema package release asset upload plan', () => {
+  const plan = buildPackageReleaseAssetUploadPlan({
+    packageRecord: { name: '@t3x-dev/yschema', version: '0.4.2' },
+    assetPaths: ['/tmp/t3x-dev-yschema-0.4.2.tgz', '/tmp/checksums.txt'],
+    env: {
+      GITHUB_TOKEN: 'github-token',
+    },
+  });
+
+  assert.equal(plan.releaseTag, 't3x-yschema-v0.4.2');
+  assert.equal(plan.releaseTitle, 't3x-yschema v0.4.2');
+  assert.deepEqual(plan.uploadArgs, [
+    'release',
+    'upload',
+    't3x-yschema-v0.4.2',
+    '/tmp/t3x-dev-yschema-0.4.2.tgz',
+    '/tmp/checksums.txt',
+    '--clobber',
+  ]);
+});
+
 test('builds a local package release asset upload plan', () => {
   const plan = buildPackageReleaseAssetUploadPlan({
     packageRecord: { name: '@t3x-dev/local', version: '0.4.2' },
@@ -150,8 +182,13 @@ test('rejects package release assets when no product release declares the packag
         packageRecords: [
           { name: '@t3x-dev/local', version: '0.4.2' },
           { name: '@t3x-dev/yops', version: '0.4.3' },
+          { name: '@t3x-dev/yschema', version: '0.4.3' },
         ],
-        assetPaths: ['/tmp/t3x-dev-local-0.4.2.tgz', '/tmp/t3x-dev-yops-0.4.3.tgz'],
+        assetPaths: [
+          '/tmp/t3x-dev-local-0.4.2.tgz',
+          '/tmp/t3x-dev-yops-0.4.3.tgz',
+          '/tmp/t3x-dev-yschema-0.4.3.tgz',
+        ],
         releaseRecords: [
           {
             tagName: 't3x-v0.5.0',
@@ -159,6 +196,7 @@ test('rejects package release assets when no product release declares the packag
 
 - \`@t3x-dev/local\`: 0.4.2
 - \`@t3x-dev/yops\`: 0.4.2
+- \`@t3x-dev/yschema\`: 0.4.3
 `,
           },
         ],

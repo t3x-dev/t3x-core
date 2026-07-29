@@ -14,7 +14,7 @@ without making every workspace package part of the public release surface.
 
 ## Release status
 
-`@t3x-dev/local@0.5.1` is part of the public T3X alpha release surface.
+`@t3x-dev/local@0.6.0` is part of the public T3X alpha release surface.
 Package visibility is public on npm.
 
 ## Install

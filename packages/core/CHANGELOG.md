@@ -1,5 +1,15 @@
 # @t3x-dev/core
 
+## 0.6.0
+
+### Patch Changes
+
+- [#1159](https://github.com/t3x-dev/t3x-core/pull/1159) [`6e91a08`](https://github.com/t3x-dev/t3x-core/commit/6e91a0887edb3b61397d9ca4ddda9f1b85d41ea7) Thanks [@etht3x](https://github.com/etht3x)! - Align the T3X YOps adapter with the YOPS atomic failure contract so failed
+  adapter results return the original semantic content instead of partial state.
+- Updated dependencies [[`6a77456`](https://github.com/t3x-dev/t3x-core/commit/6a77456dc875006df648a675e44f6129409aef0c), [`896ef97`](https://github.com/t3x-dev/t3x-core/commit/896ef9749e6a1c90cc3926d4bd76e1d4f05acf78), [`73d147d`](https://github.com/t3x-dev/t3x-core/commit/73d147dece3306a7fc58aba9ef59ba80c31760af), [`7c80d16`](https://github.com/t3x-dev/t3x-core/commit/7c80d16eb4fa9ac17ac37e2fc9056b89b04ed084), [`a37a3e2`](https://github.com/t3x-dev/t3x-core/commit/a37a3e2f0413332108f8def62be314077285c2b4), [`ab019c7`](https://github.com/t3x-dev/t3x-core/commit/ab019c7773d91f50aef98441c8882193e016d5a6)]:
+  - @t3x-dev/yschema@0.6.0
+  - @t3x-dev/yops@0.6.0
+
 ## 0.5.1
 
 ### Patch Changes

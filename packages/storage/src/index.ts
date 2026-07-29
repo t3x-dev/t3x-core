@@ -88,6 +88,7 @@ export * from './schema-extraction-feedback';
 export * from './schema-metrics';
 // Node Modifications Schema (audit trail)
 export * from './schema-node-modifications';
+export * from './schema-transition-commits';
 // Tree State (source-of-truth for current trees)
 export * from './schema-tree-state';
 // Schema (leaves, pins, conversation_contexts)

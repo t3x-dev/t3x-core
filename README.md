@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/alpha-v0.5.1%20public-green" alt="public alpha v0.5.1" />
+  <img src="https://img.shields.io/badge/alpha-v0.6.0%20public-green" alt="public alpha v0.6.0" />
 </p>
 
 <br/>
@@ -74,6 +74,16 @@ own app:
 
 ```bash
 npm install @t3x-dev/yops
+```
+
+The package is part of the public alpha npm release surface.
+
+### Use YSchema as a library
+
+Use this path when you want schema validation helpers for structured T3X state:
+
+```bash
+npm install @t3x-dev/yschema
 ```
 
 The package is part of the public alpha npm release surface.
@@ -341,6 +351,7 @@ The current npm release surface is intentionally narrow and declared in
 |:--------|:----|:------------|
 | [`@t3x-dev/local`](apps/local/) | public alpha | Local installer and no-key demo entrypoint |
 | [`@t3x-dev/yops`](packages/yops/) | public alpha | Declarative YAML operations |
+| [`@t3x-dev/yschema`](packages/yschema/) | public alpha | Schema validation candidate for structured state |
 
 Other packages remain internal or preview until they are promoted into the
 release surface.
