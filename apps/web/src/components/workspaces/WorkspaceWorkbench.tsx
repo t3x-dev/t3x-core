@@ -31,6 +31,7 @@ interface WorkspaceWorkbenchProps {
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  onWorkspacesRefresh?: () => Promise<void> | void;
   onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
 }
 
@@ -40,6 +41,7 @@ export function WorkspaceWorkbench({
   errorMessage,
   onSourceMaterialUploaded,
   onViewCommitInState,
+  onWorkspacesRefresh,
   onWorkspaceBranchChange,
   projectId,
   selectedWorkspaceId,
@@ -53,7 +55,12 @@ export function WorkspaceWorkbench({
     {}
   );
   const pins = usePinsStore((state) => state.pins);
-  const { extractCandidate, sendToYOps, startNextIteration } = useWorkspaceFlow();
+  const {
+    extractCandidate,
+    saveDraft: saveWorkspaceDraft,
+    sendToYOps,
+    startNextIteration,
+  } = useWorkspaceFlow();
 
   const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
   const selectedWorkspace = baseSelectedWorkspace
@@ -227,6 +234,41 @@ export function WorkspaceWorkbench({
     setActiveWorkflowTab('preview');
   };
 
+  const handleYOpsScriptSave = async (workspace: WorkspaceCandidate) => {
+    updateSelectedFlow({ error: undefined, validationGapCount: undefined }, workspace.id);
+    try {
+      const result = await saveWorkspaceDraft(workspace);
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [result.workspace.id]: result.workspace,
+      }));
+      updateSelectedFlow(
+        {
+          commitHash: undefined,
+          error: undefined,
+          validationGapCount: undefined,
+          yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
+        },
+        result.workspace.id
+      );
+    } catch (err) {
+      if (isWorkspaceRevisionConflict(err) && onWorkspacesRefresh) {
+        await onWorkspacesRefresh();
+        setWorkspaceOverrides((current) => {
+          const next = { ...current };
+          delete next[workspace.id];
+          return next;
+        });
+        const message =
+          'Workspace changed since it was loaded. I refreshed the latest workspace; review your edits and save again.';
+        throw new Error(message);
+      }
+
+      const message = err instanceof Error ? err.message : 'Unable to save YOps changes.';
+      throw new Error(message);
+    }
+  };
+
   if (viewState === 'loading') {
     return (
       <section className="h-full overflow-auto p-4" data-project-id={projectId}>
@@ -278,6 +320,7 @@ export function WorkspaceWorkbench({
             onWorkflowTabChange={setActiveWorkflowTab}
             onYOpsApplied={handleYOpsApplied}
             onYOpsCommitted={handleCommitted}
+            onYOpsScriptSave={handleYOpsScriptSave}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
         )}
@@ -332,6 +375,7 @@ function WorkspaceDetail({
   onWorkflowTabChange,
   onYOpsApplied,
   onYOpsCommitted,
+  onYOpsScriptSave,
   onViewCommitInState,
 }: {
   activeTab: WorkspaceTabId;
@@ -350,6 +394,7 @@ function WorkspaceDetail({
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string) => void;
+  onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
 }) {
   if (!candidate) return null;
@@ -382,6 +427,7 @@ function WorkspaceDetail({
           onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}
           onSendToYOps={onSendToYOps}
+          onYOpsScriptSave={onYOpsScriptSave}
           onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
           onViewCommitInState={onViewCommitInState}
@@ -496,6 +542,16 @@ function selectWorkspaceSourceBundle(
   });
 
   return { ...candidate, sourceBundle };
+}
+
+function isWorkspaceRevisionConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as { code?: unknown }).code;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    code === 'CONFLICT' &&
+    /Workspace changed since it was loaded|revision|refresh and retry/i.test(message)
+  );
 }
 
 function WorkspaceEmptyState({ message }: { message: string }) {

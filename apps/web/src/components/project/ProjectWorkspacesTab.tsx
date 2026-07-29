@@ -119,6 +119,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
+      onWorkspacesRefresh={projectWorkspaces.refresh}
       onWorkspaceBranchChange={handleWorkspaceBranchChange}
     />
   );

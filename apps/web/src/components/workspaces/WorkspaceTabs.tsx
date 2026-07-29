@@ -107,6 +107,7 @@ export function WorkspaceTabs({
   onSendToYOps,
   onYOpsApplied,
   onYOpsCommitted,
+  onYOpsScriptSave,
   onViewCommitInState,
   onWorkflowTabChange,
   sendingToYOps,
@@ -132,6 +133,7 @@ export function WorkspaceTabs({
   onSendToYOps?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
@@ -154,6 +156,7 @@ export function WorkspaceTabs({
         onSourceMaterialUploaded,
         onYOpsApplied,
         onYOpsCommitted,
+        onYOpsScriptSave,
         onViewCommitInState,
         onWorkflowTabChange,
         sendingToYOps,
@@ -182,6 +185,7 @@ interface RenderWorkspaceTabOptions {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
@@ -221,6 +225,7 @@ function renderWorkspaceTab(
         onSendToYOps={options.onSendToYOps}
         onApplied={options.onYOpsApplied}
         onCommitted={options.onYOpsCommitted}
+        onYOpsScriptSave={options.onYOpsScriptSave}
         onViewCommitInState={options.onViewCommitInState}
         sendingToYOps={options.sendingToYOps}
         onViewChange={options.onWorkflowTabChange}
