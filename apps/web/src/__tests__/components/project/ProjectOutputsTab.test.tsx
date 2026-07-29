@@ -201,6 +201,10 @@ describe('ProjectOutputsTab', () => {
 
     expect(mocks.useProjectOutputsData).toHaveBeenCalledWith('proj_1');
     expect(screen.getByTestId('embedded-leaf-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('embedded-leaf-workspace').parentElement).toHaveClass(
+      'rounded-md',
+      'border'
+    );
     expect(screen.getByText('Leaf workspace leaf_fresh')).toBeInTheDocument();
     expect(screen.getByText('Fresh')).toBeInTheDocument();
     expect(mocks.leafWorkspace).toHaveBeenLastCalledWith(

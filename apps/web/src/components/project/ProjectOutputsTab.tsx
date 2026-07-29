@@ -236,12 +236,16 @@ export function ProjectOutputsTab({ projectId }: ProjectOutputsTabProps) {
         {data.loading && !selectedArtifact ? (
           <LoadingSpinner className="h-full" message="Loading Leaves..." />
         ) : data.error && artifacts.length === 0 ? null : selectedArtifact ? (
-          <LeafDetailWorkspace
-            embeddedNavigation={embeddedNavigation}
-            key={selectedArtifact.leaf.id}
-            leafIdOverride={selectedArtifact.leaf.id}
-            projectIdOverride={projectId}
-          />
+          <div className="flex h-full min-h-0 p-2">
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+              <LeafDetailWorkspace
+                embeddedNavigation={embeddedNavigation}
+                key={selectedArtifact.leaf.id}
+                leafIdOverride={selectedArtifact.leaf.id}
+                projectIdOverride={projectId}
+              />
+            </div>
+          </div>
         ) : (
           <OutputsEmptyState
             availableCount={createCandidates.length}
@@ -336,5 +340,5 @@ const STATUS_PRESENTATION: Record<
   fresh: { label: 'Fresh', variant: 'leaf' },
   ready: { label: 'Ready', variant: 'pending' },
   stale: { label: 'Stale', variant: 'warning' },
-  unknown: { label: 'Unknown', variant: 'outline' },
+  unknown: { label: 'Unlinked', variant: 'outline' },
 };

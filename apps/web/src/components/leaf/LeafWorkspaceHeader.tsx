@@ -71,7 +71,8 @@ export function LeafWorkspaceHeader({
   return (
     <header
       className={cn(
-        'relative flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4 py-2',
+        'relative flex shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)]',
+        embeddedNavigation ? 'min-h-12 px-3 py-2' : 'min-h-[58px] px-4 py-2',
         'bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]',
         'backdrop-blur-[6px]',
         className
@@ -95,7 +96,7 @@ export function LeafWorkspaceHeader({
               type="button"
               variant="outline"
             >
-              <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-leaf)]" />
+              <Layers3 aria-hidden="true" className="size-3.5 text-[var(--accent-commit)]" />
               <span className="hidden sm:inline">Leaves</span>
               <Badge className="h-5 min-w-5 justify-center px-1.5" variant="outline">
                 {embeddedNavigation.count}
@@ -168,9 +169,9 @@ export function LeafWorkspaceHeader({
               role="tab"
               data-intro-target="leaf-mode-generate"
               className={cn(
-                'px-3 py-1 text-[10px] font-medium transition-all',
+                'min-h-8 px-3 py-1 text-xs font-medium transition-all',
                 mode === 'generate'
-                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => onModeChange('generate')}
@@ -183,9 +184,9 @@ export function LeafWorkspaceHeader({
               role="tab"
               data-intro-target="leaf-mode-display"
               className={cn(
-                'px-3 py-1 text-[10px] font-medium transition-all',
+                'min-h-8 px-3 py-1 text-xs font-medium transition-all',
                 mode === 'display'
-                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => onModeChange('display')}
@@ -195,38 +196,46 @@ export function LeafWorkspaceHeader({
           </div>
         )}
 
-        <ShareLinkButton entityType="leaf" entityId={leaf.id} className="h-8 rounded-lg text-xs" />
+        {leaf.output ? (
+          <ShareLinkButton
+            entityType="leaf"
+            entityId={leaf.id}
+            className="h-8 rounded-md text-xs"
+          />
+        ) : null}
 
         {/* Export dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-              <Download className="h-3 w-3" />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onExport('clipboard')} disabled={!leaf.output}>
-              <Copy className="mr-2 h-4 w-4" />
-              Copy Output
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onExport('prompt')}
-              disabled={!leaf.config?.prompt_template && !leaf.output}
-            >
-              <ClipboardPaste className="mr-2 h-4 w-4" />
-              Copy as Prompt
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onExport('markdown')}>
-              <FileText className="mr-2 h-4 w-4" />
-              Export as Markdown
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onExport('json')}>
-              <FileJson className="mr-2 h-4 w-4" />
-              Export as JSON
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {leaf.output ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Download className="h-3 w-3" />
+                <span className="hidden sm:inline">Export</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onExport('clipboard')} disabled={!leaf.output}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Output
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onExport('prompt')}
+                disabled={!leaf.config?.prompt_template && !leaf.output}
+              >
+                <ClipboardPaste className="mr-2 h-4 w-4" />
+                Copy as Prompt
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport('markdown')}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport('json')}>
+                <FileJson className="mr-2 h-4 w-4" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
 
         {embeddedNavigation ? (
           <Button
@@ -234,7 +243,7 @@ export function LeafWorkspaceHeader({
             onClick={embeddedNavigation.onCreateLeaf}
             size="sm"
             type="button"
-            variant="leaf"
+            variant="branch"
           >
             <Plus aria-hidden="true" className="size-3.5" />
             <span className="hidden lg:inline">New Leaf</span>
