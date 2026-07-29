@@ -135,6 +135,63 @@ export async function createYSchemaValidationRun(
 }
 
 // ============================================================================
+// Deterministic Skill artifacts
+// ============================================================================
+
+export interface SkillArtifactFile {
+  path: string;
+  media_type: string;
+  content: string;
+  sha256: string;
+}
+
+export interface SkillArtifactCheck {
+  key: string;
+  kind: string;
+  run_when: string;
+  blocking: boolean;
+  command_resource?: string;
+  assertions: string[];
+  success_criteria: string[];
+  workflow_keys: string[];
+}
+
+export interface SkillArtifactIssue {
+  code: string;
+  path: string;
+  message: string;
+}
+
+export interface SkillArtifact {
+  commit_hash: string;
+  schema_name: 't3x/skill';
+  renderer_version: string;
+  generated_description: string;
+  bundle_hash: string;
+  publishable: boolean;
+  missing_resources: string[];
+  gate: {
+    declaratively_ready: boolean;
+    blocking_check_count: number;
+    requires_execution: boolean;
+    errors: SkillArtifactIssue[];
+    gaps: SkillArtifactIssue[];
+  };
+  checks: SkillArtifactCheck[];
+  files: SkillArtifactFile[];
+}
+
+export async function getSkillArtifact(
+  projectId: string,
+  commitHash: string
+): Promise<SkillArtifact> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitHash)}/artifacts/skill`
+  );
+  return handleResponse<SkillArtifact>(res);
+}
+
+// ============================================================================
 // Hash Chain Verification
 // ============================================================================
 

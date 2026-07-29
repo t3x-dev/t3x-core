@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { ApiCommit } from '@/types/api';
+import type { ApiCommit, SkillArtifact } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
@@ -20,6 +20,7 @@ const hookMocks = vi.hoisted(() => ({
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
   saveDraft: vi.fn(),
+  skillArtifact: null as SkillArtifact | null,
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -98,6 +99,14 @@ vi.mock('@/hooks/commits/useCommitOperations', () => ({
 
 vi.mock('@/hooks/canvas/useCanvasNodeActions', () => ({
   useCanvasNodeActions: () => ({ load: hookMocks.loadCanvas }),
+}));
+
+vi.mock('@/hooks/projects/useSkillArtifact', () => ({
+  useSkillArtifact: () => ({
+    artifact: hookMocks.skillArtifact,
+    error: null,
+    loading: false,
+  }),
 }));
 
 const PRD_COMMIT: ApiCommit = {
@@ -348,6 +357,7 @@ describe('ProjectStateTab', () => {
       navigationMocks.search = url.search;
     });
     setupHookMocks();
+    hookMocks.skillArtifact = null;
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({
       edges: [],
@@ -704,6 +714,82 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
   });
 
+  it('uses Skill-specific state labels and the Skill reader for a Skill commit', async () => {
+    const skillCommit: ApiCommit = {
+      ...PRD_COMMIT,
+      content: {
+        relations: [],
+        trees: [
+          {
+            children: [],
+            key: 'manifest',
+            slots: {
+              default_freedom: 'medium',
+              description: 'Review code when a user requests a review.',
+              name: 'review-code',
+            },
+          },
+          {
+            children: [],
+            key: 'activation',
+            slots: {
+              implicit: true,
+              should_not_trigger: ['Implement this feature.'],
+              should_trigger: ['Review this change.'],
+            },
+          },
+          {
+            children: [],
+            key: 'contract',
+            slots: {
+              goal: 'Produce an evidence-backed review.',
+              inputs: ['Repository changes'],
+              non_goals: ['Implement fixes'],
+              outputs: ['Actionable findings'],
+              truth_policy: 'evidence_only',
+            },
+          },
+          {
+            children: [
+              {
+                children: [],
+                key: 'inspect',
+                slots: {
+                  approval: 'none',
+                  body: 'Read the diff and surrounding code.',
+                  effect: 'read',
+                  freedom: 'medium',
+                  kind: 'procedure',
+                  sequence: 1,
+                  success_criteria: ['Changes are inspected.'],
+                  title: 'Inspect changes',
+                },
+              },
+            ],
+            key: 'instructions',
+            slots: {},
+          },
+        ],
+      },
+      hash: 'sha256:skill',
+      message: 'Add review-code Skill',
+      parents: [],
+      provenance: { method: 'workspace', schema_ref: { name: 't3x/skill' } },
+      yops_log_ids: [],
+    };
+    hookMocks.loadCommits.mockResolvedValue([skillCommit]);
+    hookMocks.loadOperations.mockResolvedValue({ commit_hash: skillCommit.hash, operations: [] });
+
+    renderStateTab(null);
+
+    await screen.findByText('Add review-code Skill');
+    expect(screen.getByText('skill-state.yaml')).toBeInTheDocument();
+    expect(screen.getAllByText('adapter skill.document').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
+  });
+
   it('initializes a new branch from main without inventing a schema binding', async () => {
     hookMocks.branchHeads = { main: null };
     hookMocks.loadCommits.mockResolvedValue([]);
@@ -893,7 +979,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
-    expect(onRunValidation).toHaveBeenCalledWith(PRD_COMMIT.hash);
+    expect(onRunValidation).toHaveBeenCalledWith(PRD_COMMIT.hash, 't3x/prd');
   });
 
   it('does not reuse stale workspace gaps after the visible HEAD validates cleanly', async () => {

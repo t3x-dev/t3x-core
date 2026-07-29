@@ -38,6 +38,14 @@ export interface SchemaContractChange {
   summary: string;
 }
 
+export interface SchemaRelationTypePreview {
+  id: string;
+  from: string;
+  to: string;
+  description: string;
+  constraints: string[];
+}
+
 /** Fixture-backed view model for the Schemas version browser. */
 export interface SchemaReleasePreview extends SchemaRelease {
   canonicalName: string;
@@ -45,14 +53,25 @@ export interface SchemaReleasePreview extends SchemaRelease {
   updatedLabel: string;
   canonicalYaml: string;
   structure: SchemaContractPath[];
+  relationTypes: SchemaRelationTypePreview[];
   changesBaseReleaseId: string;
   changes: SchemaContractChange[];
 }
 
-/** Fixture-backed registry payload with an explicit published-version pointer. */
-export interface SchemaRegistryPreview {
+/** One selectable Schema family with an explicit published-version pointer. */
+export interface SchemaFamilyPreview {
+  id: string;
+  name: string;
+  canonicalName: string;
+  description: string;
   currentReleaseId: string;
   releases: SchemaReleasePreview[];
+}
+
+/** Fixture-backed registry payload grouped by portable Schema family. */
+export interface SchemaRegistryPreview {
+  defaultFamilyId: string;
+  families: SchemaFamilyPreview[];
 }
 
 export interface SchemaReleaseFamily {

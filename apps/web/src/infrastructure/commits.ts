@@ -91,7 +91,11 @@ export interface ApiCommit {
   message: string | null;
   branch: string;
   sources: Array<{ type: string; id: string; title?: string }> | null;
-  provenance: { method: string; model?: string } | null;
+  provenance: {
+    method: string;
+    model?: string;
+    schema_ref?: { name: string; version?: string; hash?: string };
+  } | null;
   yops_log_ids?: string[];
   position_x?: number;
   position_y?: number;

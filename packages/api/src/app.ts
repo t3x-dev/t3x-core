@@ -71,6 +71,7 @@ import {
   runsRoutes,
   searchRoutes,
   shareRoutes,
+  skillArtifactRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
@@ -183,6 +184,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);

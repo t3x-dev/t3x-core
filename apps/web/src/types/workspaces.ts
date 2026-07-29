@@ -35,6 +35,8 @@ export interface SourceConversationTurn {
 export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';
 
 export interface WorkspaceSchemaBinding {
+  canonicalName?: string;
+  schemaHash?: string;
   schemaName: string;
   version: string;
   mode: SchemaBindingMode;

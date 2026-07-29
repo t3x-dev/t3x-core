@@ -88,7 +88,12 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
           <dl className="grid gap-2">
             <MetadataRow label="Name" mono value={release.canonicalName} />
             <MetadataRow label="Version" mono value={release.version} />
-            <MetadataRow label="Schema hash" mono value={release.schemaHash} />
+            <MetadataRow
+              displayValue={compactSchemaHash(release.schemaHash)}
+              label="Schema hash"
+              mono
+              value={release.schemaHash}
+            />
             <MetadataRow label="Updated" value={release.updatedLabel} />
             <MetadataRow label="Author" value={release.releasedBy ?? 'Schema working group'} />
           </dl>
@@ -122,10 +127,12 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
 }
 
 function MetadataRow({
+  displayValue,
   label,
   mono = false,
   value,
 }: {
+  displayValue?: string;
   label: string;
   mono?: boolean;
   value: string;
@@ -138,9 +145,22 @@ function MetadataRow({
           'm-0 min-w-0 [overflow-wrap:anywhere] text-xs font-semibold text-[var(--text-primary)]',
           mono && 'font-mono'
         )}
+        title={displayValue ? value : undefined}
       >
-        {value}
+        {displayValue ? (
+          <>
+            <span className="sr-only">{value}</span>
+            <span aria-hidden="true">{displayValue}</span>
+          </>
+        ) : (
+          value
+        )}
       </dd>
     </div>
   );
+}
+
+function compactSchemaHash(hash: string): string {
+  if (!/^sha256:[a-f0-9]{64}$/i.test(hash)) return hash;
+  return `${hash.slice(0, 15)}…${hash.slice(-6)}`;
 }

@@ -28,6 +28,7 @@ export interface ProjectSummary {
   outputsCount?: number;
   defaultProvider?: string | null;
   defaultModel?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 type ProjectStore = {
@@ -84,6 +85,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   outputsCount: project.outputs_count ?? 0,
   defaultProvider: project.default_provider ?? null,
   defaultModel: project.default_model ?? null,
+  metadata: project.metadata ?? undefined,
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({

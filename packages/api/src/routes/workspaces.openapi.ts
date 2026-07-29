@@ -23,10 +23,16 @@ import {
   updateBranchHead,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
-import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
+import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  canonicalSchemaNameFromBinding,
+  resolveBuiltInYSchema,
+  schemaRootKeyFromBinding,
+  schemaVersionFromBinding,
+} from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -192,6 +198,12 @@ const extractCandidateRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(WorkspaceResponseSchema),
         },
+      },
+    },
+    400: {
+      description: 'The bound Schema release is not available in the runtime registry',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
       },
     },
     404: {
@@ -504,6 +516,9 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
             project_id: projectId,
             provenance: {
               method: 'human_curation',
+              ...(workspaceSchemaRef(storedWorkspace)
+                ? { schema_ref: workspaceSchemaRef(storedWorkspace) ?? undefined }
+                : {}),
               ...(validationOverride
                 ? {
                     validation_override: {
@@ -747,8 +762,19 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const db = await getDB();
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
+  const schemaResolution = resolveWorkspaceYSchema(workspace);
+  if (schemaResolution.canonicalName && !schemaResolution.schema) {
+    const releaseLabel = schemaResolution.version
+      ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
+      : schemaResolution.canonicalName;
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      `Bound Schema release ${releaseLabel} is not available in this runtime. Choose a registered current release before regenerating the Workspace.`
+    );
+  }
   const nextWorkspace = reopenCommittedWorkspaceForReview(
-    buildExtractedWorkspace(workspace, projectId, sourceTexts)
+    buildExtractedWorkspace(workspace, projectId, sourceTexts, schemaResolution.schema)
   );
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const persistedWorkspace = {
@@ -1090,10 +1116,10 @@ function mergeSourceTexts(
 function buildExtractedWorkspace(
   workspace: Record<string, unknown>,
   projectId: string,
-  sourceTexts: WorkspaceSourceText[]
+  sourceTexts: WorkspaceSourceText[],
+  schema: YSchema | null
 ): Record<string, unknown> {
   const sourceText = joinSourceTexts(sourceTexts);
-  const schema = resolveWorkspaceYSchema(workspace);
   const fields = schema
     ? buildCandidateFieldsFromYSchema(schema, sourceTexts)
     : buildFallbackCandidateFields(sourceText, sourceTexts);
@@ -1121,11 +1147,20 @@ function buildExtractedWorkspace(
   };
 }
 
-function resolveWorkspaceYSchema(workspace: Record<string, unknown>): YSchema | null {
-  const bindings = workspace.schemaBindings as Array<{ schemaName?: string }> | undefined;
-  const primarySchemaName = bindings?.[0]?.schemaName ?? '';
-  if (/prd/i.test(primarySchemaName)) return t3xPrdP0Fixtures.normalizedYSchema;
-  return null;
+function resolveWorkspaceYSchema(workspace: Record<string, unknown>): {
+  canonicalName: string | null;
+  schema: YSchema | null;
+  version?: string;
+} {
+  const bindings = workspace.schemaBindings as unknown[] | undefined;
+  const binding = bindings?.[0];
+  const canonicalName = canonicalSchemaNameFromBinding(binding);
+  const version = schemaVersionFromBinding(binding);
+  return {
+    canonicalName,
+    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
+    ...(version ? { version } : {}),
+  };
 }
 
 function buildCandidateFieldsFromYSchema(
@@ -1405,18 +1440,23 @@ function flattenField(field: unknown): Array<Record<string, string>> {
 }
 
 function schemaPathToYOpsPath(workspace: Record<string, unknown>, path: string) {
-  const rootKey = String(
-    (workspace.schemaBindings as Array<{ schemaName?: string }> | undefined)?.[0]?.schemaName ??
-      'Candidate'
-  )
-    .replace(/\s+Schema$/i, '')
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+  const rootKey = schemaRootKeyFromBinding(
+    (workspace.schemaBindings as unknown[] | undefined)?.[0]
+  );
 
   return [rootKey, ...path.split('.').filter(Boolean)].join('/');
+}
+
+function workspaceSchemaRef(workspace: Record<string, unknown>) {
+  const binding = (workspace.schemaBindings as unknown[] | undefined)?.[0];
+  const name = canonicalSchemaNameFromBinding(binding);
+  if (!name || !binding || typeof binding !== 'object' || Array.isArray(binding)) return null;
+  const record = binding as Record<string, unknown>;
+  return {
+    name,
+    ...(typeof record.version === 'string' ? { version: record.version } : {}),
+    ...(typeof record.schemaHash === 'string' ? { hash: record.schemaHash } : {}),
+  };
 }
 
 function extractWorkspaceSourceRefs(workspace: Record<string, unknown>): string[] {

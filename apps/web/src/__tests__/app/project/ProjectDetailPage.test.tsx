@@ -431,6 +431,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     await waitFor(() => {
       expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test', {
         commit_hash: STATE_COMMIT.hash,
+        schema_name: 't3x/prd',
       });
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });

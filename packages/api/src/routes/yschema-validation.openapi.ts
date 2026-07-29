@@ -21,12 +21,12 @@ const RunParamSchema = z.object({
 
 const CreateYSchemaValidationRunRequest = z.object({
   commit_hash: z.string().min(1).optional(),
-  schema_name: z.string().min(1).default('t3x/prd'),
+  schema_name: z.string().min(1).optional(),
 });
 
 const LatestYSchemaValidationQuery = z.object({
   commit_hash: z.string().min(1).optional(),
-  schema_name: z.string().min(1).default('t3x/prd'),
+  schema_name: z.string().min(1).optional(),
 });
 
 const YSchemaValidationRunResponse = z.object({

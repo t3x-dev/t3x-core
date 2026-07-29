@@ -100,6 +100,100 @@ export interface PrdRenderModel {
   title: string;
 }
 
+export interface SkillRenderInstruction {
+  approval: string;
+  body: string;
+  effect: string;
+  freedom: string;
+  key: string;
+  kind: string;
+  onFailure: string;
+  resourceKeys: string[];
+  sequence: number;
+  successCriteria: string[];
+  title: string;
+}
+
+export interface SkillRenderResource {
+  contentHash: string;
+  description: string;
+  key: string;
+  kind: string;
+  loadPolicy: string;
+  mediaType: string;
+  path: string;
+  revision: string;
+  sourceUrl: string;
+  useWhen: string;
+}
+
+export interface SkillRenderDependency {
+  description: string;
+  identifier: string;
+  key: string;
+  kind: string;
+  permissions: string[];
+  required: boolean;
+  useWhen: string;
+  versionConstraint: string;
+}
+
+export interface SkillRenderWorkflow {
+  checkKeys: string[];
+  dependencyKeys: string[];
+  fallbackWorkflow: string;
+  key: string;
+  kind: string;
+  onEmpty: string;
+  onFailure: string;
+  outputFormats: string[];
+  persistence: string;
+  resourceKeys: string[];
+  stepKeys: string[];
+  title: string;
+  when: string;
+}
+
+export interface SkillRenderCheck {
+  assertions: string[];
+  blocking: boolean;
+  commandResource: string;
+  key: string;
+  kind: string;
+  runWhen: string;
+  successCriteria: string[];
+  workflowKeys: string[];
+}
+
+export interface SkillRenderEval {
+  assertions: string[];
+  expectedOutput: string;
+  files: string[];
+  key: string;
+  kind: string;
+  prompt: string;
+}
+
+export interface SkillRenderModel {
+  checks: SkillRenderCheck[];
+  defaultFreedom: string;
+  dependencies: SkillRenderDependency[];
+  evals: SkillRenderEval[];
+  goal: string;
+  implicit: boolean;
+  inputs: string[];
+  instructions: SkillRenderInstruction[];
+  name: string;
+  nonGoals: string[];
+  outputs: string[];
+  resources: SkillRenderResource[];
+  shouldNotTrigger: string[];
+  shouldTrigger: string[];
+  summary: string;
+  truthPolicy: string;
+  workflows: SkillRenderWorkflow[];
+}
+
 function semanticContentToPlain(content: SemanticContent): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const tree of content.trees ?? []) {
@@ -217,6 +311,138 @@ export function selectPrdRenderModel(
     target: scalarToString(root.target) || scalarToString(metadata.target),
     title: scalarToString(root.title) || 'State document',
   };
+}
+
+export function selectSkillRenderModel(content: SemanticContent): SkillRenderModel {
+  const plain = semanticContentToPlain(content);
+  const root = Object.hasOwn(plain, 'skill') ? toRecord(plain.skill) : plain;
+  const manifest = toRecord(root.manifest);
+  const activation = toRecord(root.activation);
+  const contract = toRecord(root.contract);
+  const relations = content.relations.map((relation) => ({
+    from: normalizeSkillEndpoint(relation.from),
+    to: normalizeSkillEndpoint(relation.to),
+    type: relation.type,
+  }));
+  const relationTargets = (type: string, from: string) =>
+    Array.from(
+      new Set(
+        relations
+          .filter((relation) => relation.type === type && relation.from === from)
+          .map((relation) => relation.to)
+      )
+    );
+  const endpointKeys = (type: string, from: string, collection: string) =>
+    relationTargets(type, from).flatMap((endpoint) => {
+      const prefix = `${collection}/`;
+      return endpoint.startsWith(prefix) ? [endpoint.slice(prefix.length)] : [];
+    });
+  const checks = repeatedRecordEntries(root.checks)
+    .map(([key, check]) => ({
+      assertions: stringList(check.assertions),
+      blocking: check.blocking === true,
+      commandResource: scalarToString(check.command_resource),
+      key,
+      kind: scalarToString(check.kind),
+      runWhen: scalarToString(check.run_when),
+      successCriteria: stringList(check.success_criteria),
+      workflowKeys: endpointKeys('verifies', `checks/${key}`, 'workflows').sort(),
+    }))
+    .sort((left, right) => left.key.localeCompare(right.key));
+
+  return {
+    checks,
+    defaultFreedom: scalarToString(contract.default_freedom),
+    dependencies: repeatedRecordEntries(root.dependencies).map(([key, dependency]) => ({
+      description: scalarToString(dependency.description),
+      identifier: scalarToString(dependency.identifier),
+      key,
+      kind: scalarToString(dependency.kind),
+      permissions: stringList(dependency.permissions),
+      required: dependency.required === true,
+      useWhen: scalarToString(dependency.use_when),
+      versionConstraint: scalarToString(dependency.version_constraint),
+    })),
+    evals: repeatedRecordEntries(root.evals).map(([key, evaluation]) => ({
+      assertions: stringList(evaluation.assertions),
+      expectedOutput: scalarToString(evaluation.expected_output),
+      files: stringList(evaluation.files),
+      key,
+      kind: scalarToString(evaluation.kind),
+      prompt: scalarToString(evaluation.prompt),
+    })),
+    goal: scalarToString(contract.goal),
+    implicit: activation.implicit === true,
+    inputs: stringList(contract.inputs),
+    instructions: repeatedRecordEntries(root.instructions)
+      .map(([key, instruction], index) => ({
+        approval: scalarToString(instruction.approval) || 'none',
+        body: scalarToString(instruction.body),
+        effect: scalarToString(instruction.effect) || 'none',
+        freedom:
+          scalarToString(instruction.freedom) ||
+          scalarToString(contract.default_freedom) ||
+          'medium',
+        key,
+        kind: scalarToString(instruction.kind),
+        onFailure: scalarToString(instruction.on_failure),
+        resourceKeys: endpointKeys('instruction_uses_resource', `instructions/${key}`, 'resources'),
+        sequence: typeof instruction.sequence === 'number' ? instruction.sequence : index + 1,
+        successCriteria: stringList(instruction.success_criteria),
+        title: scalarToString(instruction.title) || humanizeKey(key),
+      }))
+      .sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key)),
+    name: scalarToString(manifest.name) || 'unnamed-skill',
+    nonGoals: stringList(contract.non_goals),
+    outputs: stringList(contract.outputs),
+    resources: repeatedRecordEntries(root.resources).map(([key, resource]) => ({
+      contentHash: scalarToString(resource.content_hash),
+      description: scalarToString(resource.description),
+      key,
+      kind: scalarToString(resource.kind),
+      loadPolicy: scalarToString(resource.load_policy),
+      mediaType: scalarToString(resource.media_type),
+      path: scalarToString(resource.path),
+      revision: scalarToString(resource.revision),
+      sourceUrl: scalarToString(resource.source_url),
+      useWhen: scalarToString(resource.use_when),
+    })),
+    shouldNotTrigger: stringList(activation.should_not_trigger),
+    shouldTrigger: stringList(activation.should_trigger),
+    summary: scalarToString(manifest.summary),
+    truthPolicy: scalarToString(contract.truth_policy),
+    workflows: repeatedRecordEntries(root.workflows)
+      .map(([key, workflow]) => ({
+        checkKeys: checks
+          .filter((check) => check.workflowKeys.includes(key))
+          .map((check) => check.key),
+        dependencyKeys: endpointKeys('requires', `workflows/${key}`, 'dependencies'),
+        fallbackWorkflow: scalarToString(workflow.fallback_workflow),
+        key,
+        kind: scalarToString(workflow.kind),
+        onEmpty: scalarToString(workflow.on_empty),
+        onFailure: scalarToString(workflow.on_failure),
+        outputFormats: stringList(workflow.output_formats),
+        persistence: scalarToString(workflow.persistence),
+        resourceKeys: endpointKeys('workflow_uses_resource', `workflows/${key}`, 'resources'),
+        stepKeys: endpointKeys('has_step', `workflows/${key}`, 'instructions'),
+        title: scalarToString(workflow.title) || humanizeKey(key),
+        when: scalarToString(workflow.when),
+      }))
+      .sort((left, right) => {
+        const order = ['primary', 'supporting', 'persistence', 'review'];
+        const leftRank = order.indexOf(left.kind);
+        const rightRank = order.indexOf(right.kind);
+        return (
+          (leftRank < 0 ? 99 : leftRank) - (rightRank < 0 ? 99 : rightRank) ||
+          left.key.localeCompare(right.key)
+        );
+      }),
+  };
+}
+
+function normalizeSkillEndpoint(value: string): string {
+  return normalizePath(value).replace(/^skill\//, '');
 }
 
 function buildPrdSections(
@@ -645,6 +871,40 @@ function firstScalar(...values: unknown[]): string | null {
     if (scalar) return scalar;
   }
   return null;
+}
+
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const scalar = scalarToString(item);
+      return scalar ? [scalar] : [];
+    });
+  }
+
+  const record = toRecordOrNull(value);
+  if (!record) return [];
+  return Object.entries(record)
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .flatMap(([, item]) => {
+      const scalar = scalarToString(item);
+      return scalar ? [scalar] : [];
+    });
+}
+
+function repeatedRecordEntries(value: unknown): Array<[string, Record<string, unknown>]> {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => {
+      const record = toRecordOrNull(item);
+      return record ? [[String(index), record] as [string, Record<string, unknown>]] : [];
+    });
+  }
+
+  const record = toRecordOrNull(value);
+  if (!record) return [];
+  return Object.entries(record).flatMap(([key, item]) => {
+    const repeatedItem = toRecordOrNull(item);
+    return repeatedItem ? [[key, repeatedItem] as [string, Record<string, unknown>]] : [];
+  });
 }
 
 function humanizeKey(value: string): string {
