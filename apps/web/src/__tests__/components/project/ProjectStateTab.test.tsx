@@ -201,6 +201,43 @@ const MUST_CONDITIONS_COMMIT: ApiCommit = {
   message: 'PRD must conditions committed',
 };
 
+const DENSE_RULE_KEYS = [
+  'delivery_must_be_incremental',
+  'cannot_replace_payment_gateway',
+  'must_fit_existing_architecture',
+  'cannot_rewrite_entire_order_platform',
+] as const;
+
+const DENSE_RULES_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  content: {
+    ...PRD_COMMIT.content,
+    trees: [
+      {
+        ...PRD_COMMIT.content.trees[0]!,
+        children: [
+          ...PRD_COMMIT.content.trees[0]!.children,
+          {
+            key: 'constraints',
+            slots: Object.fromEntries(DENSE_RULE_KEYS.map((key) => [key, true])),
+            children: [],
+          },
+          {
+            key: 'retry_eligibility',
+            slots: {
+              retry_action_visibility_rule: 'Only show retry after an eligible backend decision.',
+              ...Object.fromEntries(DENSE_RULE_KEYS.map((key) => [`retry_${key}`, true] as const)),
+            },
+            children: [],
+          },
+        ],
+      },
+    ],
+  },
+  hash: 'sha256:dense-rules',
+  message: 'Dense rule groups committed',
+};
+
 const PARENT_COMMIT: ApiCommit = {
   ...PRD_COMMIT,
   committed_at: '2026-07-08T08:00:00.000Z',
@@ -342,8 +379,20 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('audience')).not.toHaveLength(0);
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.getByText('YAML-shaped state tree')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
+    const stateMetadata = screen
+      .getByRole('heading', { name: 'State metadata' })
+      .closest('section');
+    expect(stateMetadata).not.toBeNull();
+    expect(within(stateMetadata as HTMLElement).getByText('000000')).toHaveAttribute(
+      'title',
+      PRD_COMMIT.hash
+    );
+    expect(within(stateMetadata as HTMLElement).getByText('se-prd')).toHaveAttribute(
+      'title',
+      PRD_COMMIT.parents[0]
+    );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
@@ -380,6 +429,7 @@ describe('ProjectStateTab', () => {
     expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1200px]');
+    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[360px]');
     expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
       'sticky',
       'top-0'
@@ -483,6 +533,40 @@ describe('ProjectStateTab', () => {
     ).toBeInTheDocument();
   });
 
+  it('summarizes and collapses dense boolean rule groups by default', async () => {
+    hookMocks.loadCommits.mockResolvedValue([DENSE_RULES_COMMIT]);
+    renderStateTab();
+
+    await screen.findByText('Dense rule groups committed');
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    const constraintsToggle = within(structureView).getByRole('button', {
+      name: 'Expand constraints',
+    });
+    const retryToggle = within(structureView).getByRole('button', {
+      name: 'Expand retry_eligibility',
+    });
+
+    expect(constraintsToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(retryToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(structureView).getByText('4 rules · all enabled')).toBeInTheDocument();
+    expect(within(structureView).getByText('5 fields · 4/4 rules enabled')).toBeInTheDocument();
+    for (const key of DENSE_RULE_KEYS) {
+      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+    }
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: 'delivery_must_be_incremental' },
+    });
+    const longKey = within(structureView).getByText('delivery_must_be_incremental');
+    expect(longKey).toBeInTheDocument();
+    expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
+    expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
+    expect(longKey).toHaveAttribute('title', expect.stringContaining('delivery_must_be_incremental'));
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse constraints' })
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('reloads the State snapshot and supporting repository data on refresh', async () => {
     renderStateTab();
 
@@ -508,7 +592,7 @@ describe('ProjectStateTab', () => {
     expect(within(diff).getByText('Find a meal')).toBeInTheDocument();
     expect(within(diff).getByText('办公室上班族')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'View model' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide changed paths' })).toHaveAttribute(
       'aria-expanded',
       'true'
@@ -518,7 +602,7 @@ describe('ProjectStateTab', () => {
 
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'View model' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
   });
 
   it('switches to the schema-selected Render view', async () => {

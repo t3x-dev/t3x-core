@@ -663,7 +663,6 @@ export function ProjectStateTab({
               validation={currentValidation}
               validationGapCount={validationGapCount}
               validationReady={validationReady}
-              viewModelVisible={!showingInlineDiff}
               warning={stateWarning}
             />
           </StateScrollArea>
@@ -1127,18 +1126,24 @@ function StateStructureView({
       </div>
       <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
         <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm">
+          <colgroup>
+            <col className="w-[360px]" />
+            <col />
+            <col className="w-24" />
+            <col className="w-32" />
+            <col className="w-36" />
+            <col className="w-24" />
+          </colgroup>
           <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
-              <th className="sticky left-0 z-30 w-[36%] border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
+              <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
                 Path / Key
               </th>
-              <th className="w-[35%] border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
-              <th className="w-[6%] border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
-              <th className="w-[8%] border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
-              <th className="w-[9%] border-b border-[var(--stroke-divider)] px-3 py-3">
-                Source / Op
-              </th>
-              <th className="w-[6%] border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Source / Op</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
             </tr>
           </thead>
           <tbody>
@@ -1215,11 +1220,14 @@ function StatePointTableRow({
           ) : (
             <span className="w-3 shrink-0" />
           )}
-          <span className="truncate" title={row.key}>
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={row.path}
+          >
             {row.key}
           </span>
-          {row.virtualGroup && row.childCount ? (
-            <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
+          {row.childCount ? (
+            <Badge className="shrink-0 px-1.5 py-0 text-[10px]" variant="outline">
               {row.childCount}
             </Badge>
           ) : null}
@@ -1311,7 +1319,6 @@ function StateContextRail({
   validation,
   validationGapCount,
   validationReady,
-  viewModelVisible,
   warning,
 }: {
   commitCount: number;
@@ -1323,7 +1330,6 @@ function StateContextRail({
   validation?: YSchemaValidationSummary | null;
   validationGapCount: number;
   validationReady: boolean;
-  viewModelVisible: boolean;
   warning: string | null;
 }) {
   return (
@@ -1339,23 +1345,21 @@ function StateContextRail({
           </Badge>
         </div>
       </RailCard>
-      {viewModelVisible ? (
-        <RailCard title="View model">
-          <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
-            <RailRow label="Structure" value="YAML-shaped state tree" />
-            <RailRow label="Render" value="Schema-selected reader" />
-            <RailRow label="Code" value="Canonical committed state" />
-          </dl>
-          <p className="mt-3">
-            Structure preserves YAML nodes; Render applies the selected schema.
-          </p>
-        </RailCard>
-      ) : null}
       <RailCard title="State metadata">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
           <RailRow label="Project" value={projectName} />
-          <RailRow label="HEAD" mono value={headCommit?.hash ?? 'empty'} />
-          <RailRow label="Parent" mono value={headCommit?.parents?.[0] ?? 'none'} />
+          <RailRow
+            label="HEAD"
+            mono
+            title={headCommit?.hash}
+            value={hashTail(headCommit?.hash, 'empty')}
+          />
+          <RailRow
+            label="Parent"
+            mono
+            title={headCommit?.parents?.[0]}
+            value={hashTail(headCommit?.parents?.[0], 'none')}
+          />
           <RailRow label="Schema" value={schemaName} />
           <RailRow label="Readiness" value={validationLabel(validation, validationGapCount)} />
           <RailRow label="Commits" value={String(commitCount)} />
@@ -1379,7 +1383,17 @@ function RailCard({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
-function RailRow({ label, mono, value }: { label: string; mono?: boolean; value: string }) {
+function RailRow({
+  label,
+  mono,
+  title,
+  value,
+}: {
+  label: string;
+  mono?: boolean;
+  title?: string;
+  value: string;
+}) {
   return (
     <>
       <dt className="font-bold text-[var(--text-tertiary)]">{label}</dt>
@@ -1388,11 +1402,16 @@ function RailRow({ label, mono, value }: { label: string; mono?: boolean; value:
           'min-w-0 truncate font-bold text-[var(--text-primary)]',
           mono && 'font-mono text-xs'
         )}
+        title={title ?? value}
       >
         {value}
       </dd>
     </>
   );
+}
+
+function hashTail(hash: string | null | undefined, fallback: string): string {
+  return hash ? hash.replace(/^sha256:/, '').slice(-6) : fallback;
 }
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
@@ -1498,7 +1517,52 @@ function buildStateStructureRows(rows: StatePointRow[]): StateStructureRow[] {
     );
   }
 
-  return structuredRows;
+  return collapseDenseBooleanGroups(structuredRows);
+}
+
+function collapseDenseBooleanGroups(rows: StateStructureRow[]): StateStructureRow[] {
+  const childrenByParent = new Map<string, StateStructureRow[]>();
+  for (const row of rows) {
+    if (!row.parentPath) continue;
+    const children = childrenByParent.get(row.parentPath) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parentPath, children);
+  }
+
+  return rows.map((row) => {
+    if (!row.expandable || row.type !== 'object') return row;
+    const children = childrenByParent.get(row.id) ?? [];
+    const booleanChildren = children.filter((child) => child.type === 'boolean');
+    const booleanHeavy = booleanChildren.length * 3 >= children.length * 2;
+    if (booleanChildren.length < 4 || !booleanHeavy) return row;
+
+    const groupStatus = aggregateStatePointStatus([row, ...children]);
+    return {
+      ...row,
+      childCount: children.length,
+      collapseByDefault: true,
+      issueCount: children.reduce((total, child) => total + child.issueCount, row.issueCount),
+      sourceOp: aggregateStatePointSource([row, ...children]),
+      status: groupStatus.status,
+      statusLabel: groupStatus.label,
+      value: summarizeBooleanGroup(children, booleanChildren),
+    };
+  });
+}
+
+function summarizeBooleanGroup(
+  children: StateStructureRow[],
+  booleanChildren: StateStructureRow[]
+): string {
+  const enabledCount = booleanChildren.filter(
+    (child) => child.value.trim().toLowerCase() === 'true'
+  ).length;
+  if (children.length === booleanChildren.length) {
+    return enabledCount === booleanChildren.length
+      ? `${String(booleanChildren.length)} rules · all enabled`
+      : `${String(booleanChildren.length)} rules · ${String(enabledCount)} enabled`;
+  }
+  return `${String(children.length)} fields · ${String(enabledCount)}/${String(booleanChildren.length)} rules enabled`;
 }
 
 function filterStateStructureRows(rows: StateStructureRow[], query: string): StateStructureRow[] {
