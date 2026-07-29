@@ -9,7 +9,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts --clean",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "bench": "vitest bench",
@@ -30,6 +30,7 @@
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",
     "undici": "^7.27.2",
+    "yaml": "2.8.3",
     "zod": "^4.2.1"
   },
   "devDependencies": {
