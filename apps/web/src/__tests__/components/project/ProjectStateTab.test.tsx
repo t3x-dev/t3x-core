@@ -561,7 +561,10 @@ describe('ProjectStateTab', () => {
     expect(longKey).toBeInTheDocument();
     expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
     expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
-    expect(longKey).toHaveAttribute('title', expect.stringContaining('delivery_must_be_incremental'));
+    expect(longKey).toHaveAttribute(
+      'title',
+      expect.stringContaining('delivery_must_be_incremental')
+    );
     expect(
       within(structureView).getByRole('button', { name: 'Collapse constraints' })
     ).toHaveAttribute('aria-expanded', 'true');

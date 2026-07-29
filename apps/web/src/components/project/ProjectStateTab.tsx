@@ -1220,10 +1220,7 @@ function StatePointTableRow({
           ) : (
             <span className="w-3 shrink-0" />
           )}
-          <span
-            className="min-w-0 flex-1 truncate"
-            title={row.path}
-          >
+          <span className="min-w-0 flex-1 truncate" title={row.path}>
             {row.key}
           </span>
           {row.childCount ? (
