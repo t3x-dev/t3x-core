@@ -52,4 +52,21 @@ describe('LeafSemanticPointsPanel', () => {
     expect(onTogglePoint).toHaveBeenNthCalledWith(1, 'trip/duration', true);
     expect(onTogglePoint).toHaveBeenNthCalledWith(2, 'trip/city', false);
   });
+
+  it('filters state points by text and included state', () => {
+    render(<LeafSemanticPointsPanel points={points} saving={false} onTogglePoint={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter state points' }), {
+      target: { value: 'duration' },
+    });
+    expect(screen.getByLabelText('trip.duration = 2 days')).toBeInTheDocument();
+    expect(screen.queryByLabelText('trip.city = Kyoto')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter state points' }), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Excluded' }));
+    expect(screen.getByLabelText('trip.duration = 2 days')).toBeInTheDocument();
+    expect(screen.queryByLabelText('trip')).not.toBeInTheDocument();
+  });
 });

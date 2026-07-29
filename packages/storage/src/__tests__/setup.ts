@@ -415,6 +415,77 @@ CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_commit
 CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
   ON yschema_validation_runs(schema_name, schema_hash);
 
+-- Workspace validation runs
+CREATE TABLE IF NOT EXISTS validation_runs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_hash TEXT NOT NULL,
+  workflow_name TEXT NOT NULL,
+  workflow_hash TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  validator_hash TEXT NOT NULL,
+  environment_hash TEXT,
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL,
+  gate_status TEXT NOT NULL,
+  summary TEXT,
+  result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_workspace_created
+  ON validation_runs(project_id, workspace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_subject
+  ON validation_runs(project_id, workspace_id, subject_type, subject_hash);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_workflow
+  ON validation_runs(workflow_name, workflow_hash);
+
+CREATE TABLE IF NOT EXISTS validation_step_runs (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+  step_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  summary TEXT,
+  error_code TEXT,
+  exit_code INTEGER,
+  duration_ms INTEGER,
+  command_json JSONB,
+  log_excerpt TEXT,
+  log_truncated BOOLEAN NOT NULL DEFAULT FALSE,
+  log_artifact_id TEXT,
+  result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run
+  ON validation_step_runs(run_id);
+CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run_step
+  ON validation_step_runs(run_id, step_id);
+
+CREATE TABLE IF NOT EXISTS validation_findings (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+  step_run_id TEXT REFERENCES validation_step_runs(id) ON DELETE CASCADE,
+  severity TEXT NOT NULL,
+  file TEXT,
+  line INTEGER,
+  state_path TEXT,
+  code TEXT NOT NULL,
+  message TEXT NOT NULL,
+  log_excerpt TEXT,
+  evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_validation_findings_run
+  ON validation_findings(run_id);
+CREATE INDEX IF NOT EXISTS idx_validation_findings_step
+  ON validation_findings(step_run_id);
+
 -- Templates
 CREATE TABLE IF NOT EXISTS templates (
   template_id TEXT PRIMARY KEY,

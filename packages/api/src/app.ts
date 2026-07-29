@@ -83,6 +83,7 @@ import {
   usageRoutes,
   webhooksRoutes,
   workspaceRoutes,
+  workspaceValidationRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
   yschemaPrdSmokeRoutes,
@@ -217,6 +218,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
+  api.route('/', workspaceValidationRoutes);
   api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)

@@ -148,6 +148,25 @@ const PRD_COMMIT: ApiCommit = {
             slots: { version: '1.0.0', source: 'source_chat:conv_d4d239f3' },
             children: [],
           },
+          {
+            key: 'rollout_plan',
+            slots: {},
+            children: [
+              {
+                key: 'phase_1',
+                slots: {
+                  audience: 'Internal accounts',
+                  exposure: '1 percent',
+                  gateway: 'Primary gateway',
+                  owner: 'Checkout platform',
+                  rollback: 'Kill switch',
+                  success_gate: 'No duplicate orders',
+                  verification_window: 'Seventh rollout field remains visible',
+                },
+                children: [],
+              },
+            ],
+          },
         ],
       },
     ],
@@ -161,6 +180,71 @@ const PRD_COMMIT: ApiCommit = {
   schema: 't3x/commit',
   sources: [{ type: 'conversation', id: 'conv_d4d239f3' }],
   yops_log_ids: ['op_1', 'op_2', 'op_3'],
+};
+
+const MUST_CONDITION_KEYS = [
+  'for_every_relevant_case_must_define_degradation_path',
+  'for_every_relevant_case_must_define_retry_eligibility',
+  'for_every_relevant_case_must_define_responsible_service',
+  'for_every_relevant_case_must_define_operational_response',
+  'cases_not_resolvable_automatically_need_manual_handling_path',
+  'for_every_relevant_case_must_define_expected_system_behavior',
+  'cases_not_resolvable_automatically_need_operational_runbook_link_or_reference',
+] as const;
+
+const MUST_CONDITIONS_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  content: {
+    ...PRD_COMMIT.content,
+    trees: [
+      {
+        ...PRD_COMMIT.content.trees[0]!,
+        slots: {
+          ...PRD_COMMIT.content.trees[0]!.slots,
+          ...Object.fromEntries(MUST_CONDITION_KEYS.map((key) => [key, true])),
+        },
+      },
+    ],
+  },
+  hash: 'sha256:must-conditions',
+  message: 'PRD must conditions committed',
+};
+
+const DENSE_RULE_KEYS = [
+  'delivery_must_be_incremental',
+  'cannot_replace_payment_gateway',
+  'must_fit_existing_architecture',
+  'cannot_rewrite_entire_order_platform',
+] as const;
+
+const DENSE_RULES_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  content: {
+    ...PRD_COMMIT.content,
+    trees: [
+      {
+        ...PRD_COMMIT.content.trees[0]!,
+        children: [
+          ...PRD_COMMIT.content.trees[0]!.children,
+          {
+            key: 'constraints',
+            slots: Object.fromEntries(DENSE_RULE_KEYS.map((key) => [key, true])),
+            children: [],
+          },
+          {
+            key: 'retry_eligibility',
+            slots: {
+              retry_action_visibility_rule: 'Only show retry after an eligible backend decision.',
+              ...Object.fromEntries(DENSE_RULE_KEYS.map((key) => [`retry_${key}`, true] as const)),
+            },
+            children: [],
+          },
+        ],
+      },
+    ],
+  },
+  hash: 'sha256:dense-rules',
+  message: 'Dense rule groups committed',
 };
 
 const PARENT_COMMIT: ApiCommit = {
@@ -288,16 +372,37 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(document.querySelector('[data-state-view="structure"]')).toHaveClass(
+      'h-full',
+      'min-h-0',
+      'overflow-hidden'
+    );
+    expect(screen.getByRole('region', { name: 'State overview' })).toHaveClass(
+      'ml-auto',
+      'items-center'
+    );
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Path / Key')).toBeInTheDocument();
     expect(screen.getByText('summary')).toBeInTheDocument();
     expect(screen.getByText('problem')).toBeInTheDocument();
-    expect(screen.getByText('audience')).toBeInTheDocument();
+    expect(screen.getAllByText('audience')).not.toHaveLength(0);
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.getByText('YAML-shaped state tree')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
+    const stateMetadata = screen
+      .getByRole('heading', { name: 'State metadata' })
+      .closest('section');
+    expect(stateMetadata).not.toBeNull();
+    expect(within(stateMetadata as HTMLElement).getByText('000000')).toHaveAttribute(
+      'title',
+      PRD_COMMIT.hash
+    );
+    expect(within(stateMetadata as HTMLElement).getByText('se-prd')).toHaveAttribute(
+      'title',
+      PRD_COMMIT.parents[0]
+    );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
@@ -316,7 +421,7 @@ describe('ProjectStateTab', () => {
       expect(link.getAttribute('href')).not.toMatch(/^\/(?:project|chat)\//);
     }
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View 2 changes' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'View 2 changed paths' })).toHaveAttribute(
       'aria-expanded',
       'false'
     );
@@ -325,6 +430,154 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
+
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(structureView).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
+    const structureScroller = within(structureView).getByRole('region', { name: 'State rows' });
+    expect(structureScroller).toHaveAttribute('tabindex', '0');
+    const structureScrollArea = structureScroller.closest('[data-slot="state-scroll-area"]');
+    expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
+    expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
+    expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1200px]');
+    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[360px]');
+    expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
+      'sticky',
+      'top-0'
+    );
+    expect(within(structureView).getByText('Path / Key').closest('th')).toHaveClass(
+      'sticky',
+      'left-0'
+    );
+
+    const stateDetailsSeparator = screen.getByRole('separator', {
+      name: 'Resize state details',
+    });
+    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '330');
+    fireEvent.keyDown(stateDetailsSeparator, { key: 'ArrowLeft' });
+    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '346');
+    fireEvent.doubleClick(stateDetailsSeparator);
+    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '330');
+
+    vi.spyOn(
+      stateDetailsSeparator.parentElement as HTMLElement,
+      'getBoundingClientRect'
+    ).mockReturnValue({
+      bottom: 760,
+      height: 640,
+      left: 0,
+      right: 1800,
+      top: 120,
+      width: 1800,
+      x: 0,
+      y: 120,
+      toJSON: () => ({}),
+    });
+    fireEvent.mouseDown(stateDetailsSeparator, { clientX: 1400 });
+    fireEvent.mouseMove(document, { clientX: 1300 });
+    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '430');
+    fireEvent.mouseUp(document);
+    expect(document.body).not.toHaveStyle({ cursor: 'col-resize' });
+    fireEvent.doubleClick(stateDetailsSeparator);
+  });
+
+  it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
+    hookMocks.loadCommits.mockResolvedValue([MUST_CONDITIONS_COMMIT]);
+    renderStateTab();
+
+    await screen.findByText('PRD must conditions committed');
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(
+      within(structureView)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent?.trim())
+    ).toEqual(['Path / Key', 'Value', 'Type', 'Status', 'Source / Op', 'Issues']);
+
+    const mustToggle = within(structureView).getByRole('button', {
+      name: 'Expand Must conditions',
+    });
+    expect(mustToggle).toHaveAttribute('aria-expanded', 'false');
+    for (const key of MUST_CONDITION_KEYS) {
+      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+    }
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: 'degradation_path' },
+    });
+    expect(
+      within(structureView).getByText('for_every_relevant_case_must_define_degradation_path')
+    ).toBeInTheDocument();
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: '' },
+    });
+    const collapsedMustToggle = within(structureView).getByRole('button', {
+      name: 'Expand Must conditions',
+    });
+    fireEvent.click(collapsedMustToggle.closest('tr')!);
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toHaveAttribute('aria-expanded', 'true');
+    for (const key of MUST_CONDITION_KEYS) {
+      expect(within(structureView).getByText(key)).toBeInTheDocument();
+    }
+
+    const problemToggle = within(structureView).getByRole('button', {
+      name: 'Collapse summary',
+    });
+    fireEvent.click(problemToggle.closest('tr')!);
+    expect(within(structureView).queryByText('problem')).not.toBeInTheDocument();
+
+    const rootToggle = within(structureView).getByRole('button', { name: 'Collapse prd' });
+    fireEvent.click(rootToggle.closest('tr')!);
+    expect(
+      within(structureView).queryByRole('button', { name: 'Collapse Must conditions' })
+    ).not.toBeInTheDocument();
+    expect(within(structureView).queryByText('title')).not.toBeInTheDocument();
+
+    fireEvent.click(within(structureView).getByRole('button', { name: 'Expand prd' }));
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+    ).toBeInTheDocument();
+  });
+
+  it('summarizes and collapses dense boolean rule groups by default', async () => {
+    hookMocks.loadCommits.mockResolvedValue([DENSE_RULES_COMMIT]);
+    renderStateTab();
+
+    await screen.findByText('Dense rule groups committed');
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    const constraintsToggle = within(structureView).getByRole('button', {
+      name: 'Expand constraints',
+    });
+    const retryToggle = within(structureView).getByRole('button', {
+      name: 'Expand retry_eligibility',
+    });
+
+    expect(constraintsToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(retryToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(structureView).getByText('4 rules · all enabled')).toBeInTheDocument();
+    expect(within(structureView).getByText('5 fields · 4/4 rules enabled')).toBeInTheDocument();
+    for (const key of DENSE_RULE_KEYS) {
+      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+    }
+
+    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+      target: { value: 'delivery_must_be_incremental' },
+    });
+    const longKey = within(structureView).getByText('delivery_must_be_incremental');
+    expect(longKey).toBeInTheDocument();
+    expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
+    expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
+    expect(longKey).toHaveAttribute(
+      'title',
+      expect.stringContaining('delivery_must_be_incremental')
+    );
+    expect(
+      within(structureView).getByRole('button', { name: 'Collapse constraints' })
+    ).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('reloads the State snapshot and supporting repository data on refresh', async () => {
@@ -342,7 +595,7 @@ describe('ProjectStateTab', () => {
   it('shows the parent-to-HEAD diff inline and restores the state view when closed', async () => {
     renderStateTab();
 
-    const showChanges = await screen.findByRole('button', { name: 'View 2 changes' });
+    const showChanges = await screen.findByRole('button', { name: 'View 2 changed paths' });
     fireEvent.click(showChanges);
 
     const diff = screen.getByRole('region', { name: 'T3X Diff' });
@@ -352,17 +605,17 @@ describe('ProjectStateTab', () => {
     expect(within(diff).getByText('Find a meal')).toBeInTheDocument();
     expect(within(diff).getByText('办公室上班族')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'View model' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Hide changes' })).toHaveAttribute(
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide changed paths' })).toHaveAttribute(
       'aria-expanded',
       'true'
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide changed paths' }));
 
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'View model' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
   });
 
   it('switches to the schema-selected Render view', async () => {
@@ -377,12 +630,84 @@ describe('ProjectStateTab', () => {
       screen.getByRole('heading', { name: 'Problem, audience, and intended outcome' })
     ).toBeInTheDocument();
     expect(screen.getByText('This field is required by the schema.')).toBeInTheDocument();
-    expect(screen.getByText('找到食物和饮品')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Evidence 1/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Changes 3/ })).toBeInTheDocument();
+    expect(screen.getAllByText('找到食物和饮品')).not.toHaveLength(0);
+    expect(screen.getByRole('navigation', { name: 'PRD semantic nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Document outline' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'PRD inspector' })).toBeInTheDocument();
+    expect(screen.getByText('Selected semantic node')).toBeInTheDocument();
+    expect(screen.queryByText('AC-001-01')).not.toBeInTheDocument();
+    expect(screen.queryByText('Seventh rollout field remains visible')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Changes 3/ }));
-    expect(screen.getByText('Materialized changes')).toBeInTheDocument();
+    const schemaRender = screen.getByRole('region', { name: 'Schema render' });
+    expect(schemaRender).toHaveClass('h-full', 'min-h-0', 'flex-1', 'overflow-hidden');
+
+    const outlineSeparator = screen.getByRole('separator', {
+      name: 'Resize document outline',
+    });
+    const inspectorSeparator = screen.getByRole('separator', {
+      name: 'Resize PRD inspector',
+    });
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '220');
+    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
+    fireEvent.keyDown(outlineSeparator, { key: 'ArrowRight' });
+    fireEvent.keyDown(inspectorSeparator, { key: 'ArrowLeft' });
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '236');
+    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '326');
+    fireEvent.doubleClick(outlineSeparator);
+    fireEvent.doubleClick(inspectorSeparator);
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '220');
+    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
+
+    vi.spyOn(
+      outlineSeparator.parentElement as HTMLElement,
+      'getBoundingClientRect'
+    ).mockReturnValue({
+      bottom: 760,
+      height: 640,
+      left: 0,
+      right: 1900,
+      top: 120,
+      width: 1900,
+      x: 0,
+      y: 120,
+      toJSON: () => ({}),
+    });
+    fireEvent.mouseDown(outlineSeparator, { clientX: 220 });
+    fireEvent.mouseMove(document, { clientX: 270 });
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '270');
+    fireEvent.mouseUp(document);
+    fireEvent.doubleClick(outlineSeparator);
+
+    fireEvent.mouseDown(inspectorSeparator, { clientX: 1590 });
+    fireEvent.mouseMove(document, { clientX: 1540 });
+    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '360');
+    fireEvent.mouseUp(document);
+    fireEvent.doubleClick(inspectorSeparator);
+
+    const requirementButton = screen.getByRole('button', {
+      name: 'Inspect requirement 找到食物和饮品',
+    });
+    expect(requirementButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(requirementButton);
+    expect(requirementButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('AC-001-01')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rollout Plan · rollout_plan' }));
+    expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '找到食物和饮品 · 0' }));
+    const inspector = screen.getByRole('complementary', { name: 'PRD inspector' });
+    expect(
+      within(inspector).getByRole('heading', { name: '0 · 找到食物和饮品' })
+    ).toBeInTheDocument();
+    expect(within(inspector).getByText('State → prd → requirements → 0')).toBeInTheDocument();
+    expect(within(inspector).getByText('1 acceptance criterion')).toBeInTheDocument();
+    expect(within(inspector).getByText('Present')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /HEAD YOps 3/ }));
+    expect(screen.getByText('HEAD materialized YOps')).toBeInTheDocument();
     expect(screen.getByText('prd/summary/problem')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'raw' }));
@@ -508,6 +833,18 @@ describe('ProjectStateTab', () => {
     expect(codeView).not.toHaveTextContent('slots:');
     expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
     expect(within(codeView).queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
+    expect(codeView).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
+    const codeScroller = within(codeView).getByRole('region', {
+      name: 'Canonical YAML content',
+    });
+    expect(codeScroller).toHaveAttribute('tabindex', '0');
+    const codeScrollArea = codeScroller.closest('[data-slot="state-scroll-area"]');
+    expect(codeScrollArea).toHaveClass('min-h-0', 'flex-1');
+    expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
+    expect(codeView.querySelector('code')).toHaveClass('min-w-max');
+    expect(within(codeView).getByText('problem: "You: i need food and drink"')).toHaveClass(
+      'whitespace-pre'
+    );
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
@@ -521,7 +858,12 @@ describe('ProjectStateTab', () => {
       { scroll: false }
     );
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Multi-commit state canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Multi-commit state canvas' })).toHaveClass(
+      'h-full',
+      'min-h-0',
+      'flex-1',
+      'overflow-hidden'
+    );
     expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
       'data-focused-branch',
       'main'

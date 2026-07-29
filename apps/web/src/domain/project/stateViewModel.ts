@@ -54,6 +54,7 @@ export interface PrdRenderRequirement {
   acceptance: string;
   description: string;
   key: string;
+  owner: string;
   priority: string;
   title: string;
 }
@@ -269,7 +270,7 @@ export function selectPrdRenderModel(
   const summary = toRecord(root.summary);
   const metadata = toRecord(root.metadata);
   const gapPaths = buildGapPathSet(options.gaps ?? [], rootKey ? [rootKey] : []);
-  const audience = scalarToString(summary.audience);
+  const audience = valueToStringList(summary.audience).join(' · ');
   const { changes, evidence } = buildPrdRenderTrace(options.operations ?? []);
   const excludedSectionKeys = new Set([
     'description',
@@ -287,8 +288,7 @@ export function selectPrdRenderModel(
   return {
     audience,
     audienceMissing:
-      isEmptyScalar(summary.audience) ||
-      gapPaths.has(normalizePath(`${rootKey || 'prd'}/summary/audience`)),
+      audience.length === 0 || gapPaths.has(normalizePath(`${rootKey || 'prd'}/summary/audience`)),
     changes,
     documentId: scalarToString(root.id) || scalarToString(metadata.id),
     evidence,
@@ -307,9 +307,7 @@ export function selectPrdRenderModel(
     requirements: requirementsToRenderModel(root.requirements),
     schemaVersion:
       firstScalar(root.schema, metadata.schema, metadata.schema_version, metadata.version) || '',
-    sections: Object.entries(root)
-      .filter(([key]) => !excludedSectionKeys.has(key))
-      .map(([key, value]) => ({ key, title: humanizeKey(key), value })),
+    sections: buildPrdSections(root, excludedSectionKeys),
     target: scalarToString(root.target) || scalarToString(metadata.target),
     title: scalarToString(root.title) || 'State document',
   };
@@ -445,6 +443,29 @@ export function selectSkillRenderModel(content: SemanticContent): SkillRenderMod
 
 function normalizeSkillEndpoint(value: string): string {
   return normalizePath(value).replace(/^skill\//, '');
+}
+
+function buildPrdSections(
+  root: Record<string, unknown>,
+  excludedSectionKeys: Set<string>
+): PrdRenderSection[] {
+  const contractFlags: Record<string, unknown> = {};
+  const sections: PrdRenderSection[] = [];
+
+  for (const [key, value] of Object.entries(root)) {
+    if (excludedSectionKeys.has(key) || key === 'root_metadata') continue;
+    if (typeof value === 'boolean') {
+      contractFlags[key] = value;
+      continue;
+    }
+    sections.push({ key, title: humanizeKey(key), value });
+  }
+
+  if (Object.keys(contractFlags).length > 0) {
+    sections.unshift({ key: 'contract_flags', title: 'Contract flags', value: contractFlags });
+  }
+
+  return sections;
 }
 
 function buildPrdRenderTrace(operations: StateOperationEntry[]): {
@@ -683,6 +704,10 @@ function normalizeYOps(value: unknown): Array<Record<string, unknown>> {
   return [];
 }
 
+export function countStateYOps(operations: StateOperationEntry[]): number {
+  return operations.reduce((count, entry) => count + normalizeYOps(entry.yops).length, 0);
+}
+
 function yOpName(yOp: Record<string, unknown>): string | null {
   const names = [
     'define',
@@ -777,6 +802,7 @@ function requirementToRenderModel(value: unknown, fallbackTitle = ''): PrdRender
       acceptance: valueToStringList(record.acceptance).join('\n'),
       description: firstScalar(record.description, record.summary, record.detail) || '',
       key: fallbackTitle,
+      owner: scalarToString(record.owner),
       priority: scalarToString(record.priority),
       title: scalarToString(record.title) || fallbackTitle,
     },

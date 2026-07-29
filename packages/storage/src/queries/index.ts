@@ -501,6 +501,25 @@ export {
   findUserByUsername,
   updateUser,
 } from './users';
+// Workspace Validation Runs
+export {
+  type CreateValidationFindingInput,
+  type CreateValidationRunInput,
+  type CreateValidationStepRunInput,
+  createValidationFinding,
+  createValidationRun,
+  createValidationStepRun,
+  findLatestValidationRunByWorkspace,
+  findValidationRunDetailsById,
+  type ValidationFindingOutput,
+  type ValidationFindingSeverity,
+  type ValidationGateStatus,
+  type ValidationRunDetailsOutput,
+  type ValidationRunOutput,
+  type ValidationRunStatus,
+  type ValidationStepRunOutput,
+  type ValidationStepRunStatus,
+} from './validation-runs';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,

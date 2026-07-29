@@ -226,7 +226,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -447,10 +447,12 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
-    expect(screen.getByText('repo')).toBeInTheDocument();
+    expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
+    expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
     expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
+    const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
+    expect(projectNavigation.parentElement).toHaveClass('h-dvh', 'overflow-hidden');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');

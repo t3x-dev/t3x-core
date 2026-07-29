@@ -69,10 +69,10 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
   }
 
   return (
-    <div className="p-3 rounded-lg border border-[var(--source)]/30 bg-[var(--source-dim)] space-y-2">
+    <div className="space-y-2 rounded-md border border-[var(--accent-branch)]/30 bg-[var(--accent-branch-soft)] p-3">
       <div className="flex items-center gap-1.5">
-        <BookOpen size={14} className="text-[var(--source)]" />
-        <span className="text-xs font-semibold text-[var(--source)]">
+        <BookOpen size={14} className="text-[var(--accent-branch)]" />
+        <span className="text-xs font-semibold text-[var(--accent-branch)]">
           {result.suggestions.length} learned constraint
           {result.suggestions.length !== 1 ? 's' : ''}
         </span>

@@ -12,6 +12,16 @@
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    disconnect(): void {}
+
+    observe(): void {}
+
+    unobserve(): void {}
+  };
+}
+
 function installMemoryLocalStorage(): void {
   const currentStorage = globalThis.localStorage as Storage | undefined;
   if (

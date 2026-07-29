@@ -35,7 +35,7 @@ export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
   return (
     <nav
       aria-label="Project views"
-      className="flex min-h-12 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3"
+      className="flex min-h-10 shrink-0 items-stretch gap-0 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3"
     >
       {PROJECT_TABS.map((tab) => {
         const Icon = tabIcons[tab.id];
@@ -46,11 +46,11 @@ export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
             aria-label={tab.label}
             aria-current={selected ? 'page' : undefined}
             className={cn(
-              'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors',
+              'inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-info)]/30',
               selected
-                ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                ? 'border-[var(--accent-commit)] text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
             href={tab.id === 'state' ? repoPath : `${repoPath}/${getProjectTabSegment(tab.id)}`}
             key={tab.id}

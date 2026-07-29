@@ -1,19 +1,7 @@
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';
-import {
-  Check,
-  CheckCircle,
-  Clipboard,
-  Loader2,
-  Mail,
-  Plus,
-  RefreshCw,
-  Share2,
-  Trash2,
-  X,
-  XCircle,
-} from 'lucide-react';
+import { Check, CheckCircle, Loader2, Plus, RefreshCw, Trash2, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { LeafSemanticPointsPanel } from '@/components/leaf/LeafSemanticPointsPanel';
 import { Button } from '@/components/ui/button';
@@ -39,7 +27,6 @@ interface LeafInspectorProps {
     value: string,
     matchMode?: 'exact' | 'semantic'
   ) => void;
-  onExport: (format: 'clipboard' | 'markdown' | 'json' | 'prompt') => Promise<void>;
   // Runner Eval
   selectedAssertionIds?: Set<string>;
   toggleAssertion?: (id: string) => void;
@@ -69,7 +56,7 @@ function ConstraintPill({
       className={cn(
         'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs',
         isRequire
-          ? 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
+          ? 'border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
           : 'border-[var(--status-error)]/25 bg-[var(--status-error-muted)] text-[var(--status-error)]'
       )}
     >
@@ -79,11 +66,11 @@ function ConstraintPill({
         <button
           type="button"
           aria-label={`Remove constraint: ${constraint.value.slice(0, 50)}`}
-          className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-50 transition-opacity hover:bg-[var(--surface-hover)] hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/30"
           onClick={onRemove}
           disabled={disabled}
         >
-          <Trash2 className="h-2.5 w-2.5" />
+          <Trash2 className="size-3" />
         </button>
       )}
     </div>
@@ -116,7 +103,7 @@ function AddConstraintInline({
     return (
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-[var(--stroke-default)] py-1.5 text-[11px] font-medium text-[var(--accent-leaf)] hover:border-[var(--accent-leaf)] hover:bg-[var(--surface-elevated)] transition-colors"
+        className="flex min-h-8 w-full items-center justify-center gap-1 rounded-md border border-dashed border-[var(--accent-branch)]/50 py-1.5 text-[11px] font-medium text-[var(--accent-branch)] transition-colors hover:border-[var(--accent-branch)] hover:bg-[var(--accent-branch-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/30"
         onClick={() => setOpen(true)}
       >
         <Plus className="h-3 w-3" />
@@ -126,14 +113,14 @@ function AddConstraintInline({
   }
 
   return (
-    <div className="rounded-md border border-[var(--accent-leaf)] p-2 space-y-2">
+    <div className="space-y-2 rounded-md border border-[var(--accent-commit)]/40 p-2">
       <div className="flex gap-1">
         <button
           type="button"
           className={cn(
             'flex-1 rounded px-2 py-1 text-[10px] font-semibold transition-colors',
             type === 'require'
-              ? 'bg-[var(--accent-leaf)] text-[var(--on-accent)]'
+              ? 'bg-[var(--accent-commit)] text-[var(--on-accent)]'
               : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
           )}
           onClick={() => setType('require')}
@@ -155,7 +142,7 @@ function AddConstraintInline({
       </div>
       <input
         type="text"
-        className="w-full rounded border border-[var(--stroke-default)] bg-transparent px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-leaf)]"
+        className="h-8 w-full rounded-md border border-[var(--stroke-default)] bg-transparent px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
         placeholder="Constraint value..."
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -164,16 +151,17 @@ function AddConstraintInline({
       <div className="flex gap-1">
         <Button
           size="sm"
-          className="h-6 flex-1 text-[10px]"
+          className="h-8 flex-1 text-[11px]"
           onClick={handleSubmit}
           disabled={saving || !value.trim()}
+          variant="branch"
         >
           Add
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          className="h-6 text-[10px]"
+          className="h-8 text-[11px]"
           onClick={() => {
             setOpen(false);
             setValue('');
@@ -243,7 +231,6 @@ export function LeafInspector({
   collapsed,
   onRemoveConstraint,
   onAddConstraint,
-  onExport,
   selectedAssertionIds,
   toggleAssertion,
   onRetune,
@@ -282,16 +269,16 @@ export function LeafInspector({
       {/* Constraints */}
       <div className="p-3 border-b border-[var(--stroke-divider)]">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Constraints
           </span>
-          <span className="text-[10px] text-[var(--text-tertiary)]">{leaf.constraints.length}</span>
+          <span className="text-[11px] text-[var(--text-tertiary)]">{leaf.constraints.length}</span>
         </div>
 
         {/* Require */}
         {requireConstraints.length > 0 && (
           <div className="mb-2">
-            <span className="text-[10px] font-semibold text-[var(--status-success)] uppercase tracking-wide">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--accent-commit)]">
               Require
             </span>
             <div className="mt-1 flex flex-col gap-1">
@@ -311,7 +298,7 @@ export function LeafInspector({
         {/* Exclude */}
         {excludeConstraints.length > 0 && (
           <div className="mb-2">
-            <span className="text-[10px] font-semibold text-[var(--status-error)] uppercase tracking-wide">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--status-error)]">
               Exclude
             </span>
             <div className="mt-1 flex flex-col gap-1">
@@ -340,7 +327,7 @@ export function LeafInspector({
       {/* Assertions */}
       <div className="p-3 border-b border-[var(--stroke-divider)]">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Assertions
           </span>
           {assertions.length > 0 && (
@@ -358,8 +345,8 @@ export function LeafInspector({
         </div>
 
         {assertions.length === 0 ? (
-          <p className="py-2 text-center text-[10px] text-[var(--text-tertiary)]">
-            No results yet.
+          <p className="py-2 text-center text-[11px] text-[var(--text-tertiary)]">
+            Runs after Generate &amp; Verify.
           </p>
         ) : (
           <div>
@@ -379,7 +366,7 @@ export function LeafInspector({
       {leaf.runner_assertions && leaf.runner_assertions.length > 0 && toggleAssertion && (
         <div className="p-3 border-b border-[var(--stroke-divider)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
               Runner Eval
             </span>
             <span className="text-[10px] text-[var(--text-tertiary)]">
@@ -399,7 +386,7 @@ export function LeafInspector({
               >
                 <input
                   type="checkbox"
-                  className="h-3 w-3 accent-[var(--accent-leaf)]"
+                  className="h-4 w-4 accent-[var(--accent-commit)]"
                   checked={selectedAssertionIds?.has(a.id) ?? false}
                   onChange={() => toggleAssertion(a.id)}
                 />
@@ -437,42 +424,6 @@ export function LeafInspector({
           )}
         </div>
       )}
-
-      {/* Deploy & Share */}
-      <div className="p-3">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] mb-2 block">
-          Deploy & Share
-        </span>
-        <div className="flex flex-col gap-1.5">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all"
-            onClick={() => onExport('clipboard')}
-            disabled={!leaf.output}
-          >
-            <Clipboard className="h-3.5 w-3.5 shrink-0" />
-            Copy to clipboard
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => onExport('json')}
-            disabled={!leaf.output}
-          >
-            <Share2 className="h-3.5 w-3.5 shrink-0" />
-            Share via API
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => onExport('markdown')}
-            disabled={!leaf.output}
-          >
-            <Mail className="h-3.5 w-3.5 shrink-0" />
-            Export Markdown
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }

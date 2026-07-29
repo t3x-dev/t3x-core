@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  countStateYOps,
   selectPrdRenderModel,
   selectSkillRenderModel,
   workspaceDraftOperationsToStateOperations,
@@ -366,6 +367,79 @@ describe('stateViewModel', () => {
     ]);
     expect(model.changes).toEqual([]);
     expect(model.evidence).toEqual([]);
+  });
+
+  it('renders a schema-backed audience list without treating it as a missing scalar', () => {
+    const content: SemanticContent = {
+      ...PRD_CONTENT,
+      trees: [
+        {
+          ...PRD_CONTENT.trees[0]!,
+          children: PRD_CONTENT.trees[0]!.children.map((child) =>
+            child.key === 'summary'
+              ? {
+                  ...child,
+                  slots: {
+                    ...child.slots,
+                    audience: ['Customers', 'support agents', 'platform engineers'],
+                  },
+                }
+              : child
+          ),
+        },
+      ],
+    };
+
+    const model = selectPrdRenderModel(content);
+
+    expect(model.audience).toBe('Customers · support agents · platform engineers');
+    expect(model.audienceMissing).toBe(false);
+  });
+
+  it('groups root contract flags and omits duplicate root metadata from the reader', () => {
+    const content: SemanticContent = {
+      ...PRD_CONTENT,
+      trees: [
+        {
+          ...PRD_CONTENT.trees[0]!,
+          slots: { ...PRD_CONTENT.trees[0]!.slots, review_required: true },
+          children: [
+            ...PRD_CONTENT.trees[0]!.children,
+            {
+              key: 'root_metadata',
+              slots: { title: 'Duplicate title' },
+              children: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    const model = selectPrdRenderModel(content);
+
+    expect(model.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'contract_flags', value: { review_required: true } }),
+      ])
+    );
+    expect(model.sections.some((section) => section.key === 'root_metadata')).toBe(false);
+  });
+
+  it('counts nested YOps rather than operation-log envelopes', () => {
+    expect(
+      countStateYOps([
+        {
+          created_at: '2026-07-09T00:00:00.000Z',
+          id: 'op_1',
+          source: 'pipeline',
+          turn_hash: 'turn_1',
+          yops: [
+            { populate: { path: 'prd', values: { title: 'Checkout recovery' } } },
+            { populate: { path: 'prd.summary', values: { audience: ['Customers'] } } },
+          ],
+        },
+      ])
+    ).toBe(2);
   });
 
   it('builds PRD reader evidence and materialized change rows from committed YOps', () => {
