@@ -10,6 +10,7 @@ describe('YSchema public export surface', () => {
       'parseYSchema',
       'renderYSchemaMarkdown',
       't3xPrdP0Fixtures',
+      't3xSkillP0Fixtures',
       'validateTree',
     ]);
   });
