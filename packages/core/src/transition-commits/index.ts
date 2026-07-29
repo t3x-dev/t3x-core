@@ -1,0 +1,36 @@
+export {
+  type AuthorizeRepositoryDecisionInput,
+  authorizeDecisionForRepository,
+  isRepositoryDecisionAuthorization,
+  type RepositoryDecisionAuthority,
+  type RepositoryDecisionAuthorization,
+  type RepositoryDecisionAuthorizationResult,
+  type TrustedDecisionFacts,
+} from './authorization';
+export {
+  COMMIT_V2_MEDIA_TYPE,
+  type CommitDescriptor,
+  type CommitV2,
+  type CreateCommitV2Input,
+  createCommitV2,
+  describeCommitV2,
+  describeTransitionObject,
+  type Effect,
+  InMemoryTransitionObjectResolver,
+  type ObjectDescriptor,
+  type ObjectResolver,
+  overlayTransitionObjects,
+  type ProposalStatement,
+  type ProtocolObject,
+  parseSerializedTransitionObject,
+  type SerializedTransitionObject,
+  type State,
+  serializeTransitionObject,
+  verifyCommitV2,
+} from './commit';
+export {
+  type CommitHistoryProjection,
+  LEGACY_ASSURANCE_UNAVAILABLE,
+  projectCommitV2,
+  projectLegacyCommit,
+} from './projection';

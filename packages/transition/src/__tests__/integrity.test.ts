@@ -12,16 +12,16 @@ import {
   verifyStatementSubjects,
 } from '..';
 
-function state(name: string): State {
+function state(name?: string): State {
   return {
     schema: 't3x/state/v1',
     codec: { mediaType: 'application/test+json', version: '1' },
-    value: { name },
+    value: name === undefined ? {} : { name },
   };
 }
 
 function integrityFixture(outcome: 'accepted' | 'rejected' = 'accepted') {
-  const base = state('before');
+  const base = state();
   const result = state('after');
   const resolver = new InMemoryObjectResolver([base, result]);
   const effect: Effect = {
@@ -150,6 +150,64 @@ describe('pure protocol integrity-chain verification', () => {
     await expect(verifyCommitIntegrity(wrongCommit, fixture.resolver)).rejects.toMatchObject({
       code: 'INTEGRITY_CHAIN_INVALID',
     });
+  });
+
+  it('requires an explicit empty genesis State for a parentless CommitV2', async () => {
+    const fixture = integrityFixture();
+    const nonEmptyBase = state('already-initialized');
+    fixture.resolver.put(nonEmptyBase);
+    const effect = { ...fixture.effect, base: describeProtocolObject(nonEmptyBase) };
+    const effectDescriptor = fixture.resolver.put(effect);
+    const proposal = { ...fixture.proposal, subjects: [effectDescriptor] } as ProposalStatement;
+    const proposalDescriptor = fixture.resolver.put(proposal);
+    const decision = { ...fixture.decision, subjects: [proposalDescriptor] } as DecisionStatement;
+    const commit = { ...fixture.commit, decision: fixture.resolver.put(decision) };
+
+    await expect(verifyCommitIntegrity(commit, fixture.resolver)).rejects.toMatchObject({
+      code: 'INTEGRITY_CHAIN_INVALID',
+    });
+  });
+
+  it('requires every additional parent Result to be a declared Effect input', async () => {
+    const fixture = integrityFixture();
+    const mergeState = state('merge-parent');
+    fixture.resolver.put(mergeState);
+    const firstParent: CommitV2 = {
+      schema: 't3x/commit/v2',
+      parents: [],
+      decision: fixture.commit.decision,
+      result: fixture.effect.base,
+    };
+    const mergeParent: CommitV2 = {
+      schema: 't3x/commit/v2',
+      parents: [],
+      decision: fixture.commit.decision,
+      result: describeProtocolObject(mergeState),
+    };
+    const parents = [fixture.resolver.put(firstParent), fixture.resolver.put(mergeParent)];
+    const missingInput = { ...fixture.commit, parents };
+    await expect(verifyCommitIntegrity(missingInput, fixture.resolver)).rejects.toMatchObject({
+      code: 'INTEGRITY_CHAIN_INVALID',
+    });
+
+    const effect: Effect = {
+      ...fixture.effect,
+      inputs: [{ role: 'merge-source', object: describeProtocolObject(mergeState) }],
+    };
+    const proposal: ProposalStatement = {
+      ...fixture.proposal,
+      subjects: [fixture.resolver.put(effect)],
+    };
+    const decision: DecisionStatement = {
+      ...fixture.decision,
+      subjects: [fixture.resolver.put(proposal)],
+    };
+    const declaredInput = {
+      ...fixture.commit,
+      parents,
+      decision: fixture.resolver.put(decision),
+    };
+    await expect(verifyCommitIntegrity(declaredInput, fixture.resolver)).resolves.toBeDefined();
   });
 
   it('attaches external Statements without rewriting subject identity', async () => {

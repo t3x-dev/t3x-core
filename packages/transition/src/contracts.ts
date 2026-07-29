@@ -10,6 +10,7 @@ export const STATE_SCHEMA = 't3x/state/v1' as const;
 export const EFFECT_SCHEMA = 't3x/effect/v1' as const;
 export const STATEMENT_SCHEMA = 't3x/statement/v1' as const;
 export const COMMIT_V2_SCHEMA = 't3x/commit/v2' as const;
+export const COMMIT_V2_MEDIA_TYPE = 'application/vnd.t3x.commit-v2+json' as const;
 
 export const PROPOSAL_PREDICATE_TYPE = 't3x.proposal/v1' as const;
 export const DECISION_PREDICATE_TYPE = 't3x.decision/v1' as const;

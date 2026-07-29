@@ -429,6 +429,22 @@ export {
   listTopicsByConversation,
   updateTopic,
 } from './topics';
+// CommitV2 repository path and mixed-history projections
+export {
+  type CreatedTransitionCommit,
+  type CreateTransitionCommitInput,
+  createTransitionCommit,
+  DecisionAuthorizationConflictError,
+  DecisionNotAuthorizedError,
+  getCommitHistoryEntry,
+  getTransitionCommit,
+  listCommitHistory,
+  listTransitionCommits,
+  recordRepositoryDecisionAuthorization,
+  TransitionHeadConflictError,
+  TransitionParentHeadMismatchError,
+  TransitionRefNotFoundError,
+} from './transition-commits';
 // Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,

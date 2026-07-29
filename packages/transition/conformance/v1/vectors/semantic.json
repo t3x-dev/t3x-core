@@ -200,5 +200,38 @@
     },
     "rule": "The service layer rejects caller and claimed ActorRef mismatch without changing protocol bytes",
     "expected": "service-layer-reject"
+  },
+  {
+    "id": "parentless-commit-requires-empty-genesis",
+    "operation": "verify-commit-genesis",
+    "input": {
+      "parentCount": 0,
+      "baseValue": { "alreadyInitialized": true }
+    },
+    "rule": "A parentless CommitV2 Effect Base must be the explicit empty genesis State",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "merge-parent-result-not-declared",
+    "operation": "verify-commit-merge-inputs",
+    "input": {
+      "additionalParentResults": [
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "declaredEffectInputs": []
+    },
+    "rule": "Every additional CommitV2 parent Result must be declared in Effect.inputs",
+    "expectedCode": "INTEGRITY_CHAIN_INVALID"
+  },
+  {
+    "id": "decision-without-repository-authorization",
+    "operation": "create-repository-commit",
+    "input": {
+      "decision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "structurallyValid": true,
+      "authorizationRecord": false
+    },
+    "rule": "Decision structure is not repository authority; an exact project/ref authorization record is required",
+    "expected": "service-layer-reject"
   }
 ]
