@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { parseWorkspaceYOpsScript } from '@/domain/workspaces/yopsScript';
 import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -47,6 +48,7 @@ export function YOpsDraftTab({
   onCommitted,
   onContinueFromCommit,
   onSendToYOps,
+  onYOpsScriptSave,
   onViewCommitInState,
   onViewChange,
   sendingToYOps,
@@ -66,6 +68,7 @@ export function YOpsDraftTab({
     createBranchFrom?: string
   ) => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
+  onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
@@ -322,6 +325,36 @@ export function YOpsDraftTab({
     }
   }
 
+  async function handleSaveYOpsScript(script: string) {
+    if (committedHash) throw new Error('Committed workspaces are read-only.');
+    if (!onYOpsScriptSave) throw new Error('Workspace YOps editing is unavailable.');
+
+    const result = parseWorkspaceYOpsScript(script, {
+      currentOperations: draft.operations,
+      rootKey,
+    });
+    if (!result.ok) throw new Error(result.error);
+
+    const nextWorkspace: WorkspaceCandidate = {
+      ...candidate,
+      yopsDraft: {
+        ...draft,
+        operations: result.operations,
+      },
+    };
+
+    await onYOpsScriptSave(nextWorkspace);
+    setGeneratedYOps(null);
+    setBaselineTrees(null);
+    setValidatedPreviewTrees(null);
+    setValidationPassed(false);
+    setMaterializedTrees(null);
+    setMaterializedRelations(null);
+    setAppliedCount(0);
+    setStatus('idle');
+    setErrorMessage(null);
+  }
+
   async function handleCommit(validationOverride?: WorkspaceValidationOverride) {
     const commitAllowed = validationOverride ? canOverrideCommit : canCommit;
     if (!materializedTrees || !materializedRelations || !commitAllowed) return;
@@ -386,11 +419,20 @@ export function YOpsDraftTab({
           flowError={visibleErrorMessage}
           onContinueToValidation={() => onViewChange?.('validation')}
           onSendToYOps={onSendToYOps}
+          onSaveYOpsScript={handleSaveYOpsScript}
           proposalMode={proposalMode}
           sendingToYOps={Boolean(sendingToYOps)}
           statusText={statusText}
           yopsDraftSent={Boolean(yopsDraftSent)}
           yopsLines={yopsLines}
+          yopsReadOnly={Boolean(committedHash) || isBusy}
+          yopsReadOnlyReason={
+            committedHash
+              ? 'Committed workspaces are read-only.'
+              : isBusy
+                ? 'A workspace operation is already in progress.'
+                : undefined
+          }
         />
       ) : null}
 

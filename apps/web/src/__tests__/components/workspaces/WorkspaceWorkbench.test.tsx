@@ -2,10 +2,33 @@
 
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
+
+vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
+  WorkspaceYOpsEditor: ({
+    onChange,
+    readOnly,
+    value,
+  }: {
+    onChange: (value: string) => void;
+    readOnly?: boolean;
+    value: string;
+  }) => (
+    <div data-testid="workspace-yops-editor">
+      <textarea
+        aria-label="YOps YAML editor"
+        onChange={(event) => onChange(event.currentTarget.value)}
+        readOnly={readOnly}
+        value={value}
+      />
+      <pre>{value}</pre>
+    </div>
+  ),
+}));
 
 function countFetchCalls(calls: Parameters<typeof fetch>[], expectedUrl: string) {
   return calls.filter(([url]) => String(url) === expectedUrl).length;
@@ -17,9 +40,9 @@ function findFetchCall(calls: Parameters<typeof fetch>[], expectedUrl: string, o
   return matches[occurrence];
 }
 
-function jsonResponse(body: unknown) {
+function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -476,6 +499,212 @@ describe('WorkspaceWorkbench', () => {
     );
     expect(screen.getByText('Materialized 0')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
+  });
+
+  it('saves edited Workspace YOps and validates the edited operation', async () => {
+    const saveWorkspaceUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === saveWorkspaceUrl) {
+        const body = JSON.parse(String(init?.body)) as { workspace: WorkspaceCandidate };
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:workspace_ready',
+            workspace: { ...body.workspace, revision: 2 },
+            yops_draft_id: body.workspace.yopsDraft.id,
+          },
+        });
+      }
+      if (url === yopsValidateUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            ok: true,
+            applied: 1,
+            preview: {
+              trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+              relations: [],
+            },
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
+
+    const editor = screen.getByLabelText('YOps YAML editor') as HTMLTextAreaElement;
+    fireEvent.change(editor, {
+      target: {
+        value: editor.value.replace('Product and engineering reviewers', 'Design reviewers'),
+      },
+    });
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/ }));
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl)).toBe(1));
+
+    const [, saveInit] = findFetchCall(fetchMock.mock.calls, saveWorkspaceUrl);
+    expect(JSON.parse(String(saveInit?.body))).toMatchObject({
+      workspace: {
+        yopsDraft: {
+          operations: [
+            {
+              afterValue: 'Design reviewers',
+              path: 'prd/summary/audience',
+              sourceRefs: ['src_chat', 'src_doc'],
+            },
+          ],
+        },
+      },
+    });
+
+    activateTab(/Validation/);
+    fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(1));
+
+    const [, validateInit] = findFetchCall(fetchMock.mock.calls, yopsValidateUrl);
+    expect(JSON.parse(String(validateInit?.body))).toMatchObject({
+      yops: [
+        {
+          set: {
+            path: 'prd/summary/audience',
+            value: 'Design reviewers',
+          },
+        },
+      ],
+    });
+  });
+
+  it('refreshes stale workspaces without discarding edited YOps text', async () => {
+    const saveWorkspaceUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const latestWorkspace: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      revision: 2,
+      yopsDraft: {
+        ...workspaceCandidates[0].yopsDraft,
+        operations: [
+          {
+            ...workspaceCandidates[0].yopsDraft.operations[0],
+            afterValue: 'Server reviewers',
+          },
+        ],
+      },
+    };
+    const refreshWorkspaces = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === saveWorkspaceUrl) {
+        if (countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl) === 1) {
+          return jsonResponse(
+            {
+              success: false,
+              error: {
+                code: 'CONFLICT',
+                message: 'Workspace changed since it was loaded. Refresh and retry.',
+              },
+            },
+            409
+          );
+        }
+        const body = JSON.parse(String(init?.body)) as {
+          if_revision?: number;
+          workspace: WorkspaceCandidate;
+        };
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:workspace_ready',
+            workspace: { ...body.workspace, revision: 3 },
+            yops_draft_id: body.workspace.yopsDraft.id,
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    function StaleWorkspaceHarness() {
+      const [candidates, setCandidates] = useState(workspaceCandidates);
+      return (
+        <WorkspaceWorkbench
+          candidates={candidates}
+          projectId="proj_1"
+          onWorkspacesRefresh={async () => {
+            refreshWorkspaces();
+            setCandidates([latestWorkspace, workspaceCandidates[1]]);
+          }}
+        />
+      );
+    }
+
+    render(<StaleWorkspaceHarness />);
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
+
+    const editor = screen.getByLabelText('YOps YAML editor') as HTMLTextAreaElement;
+    fireEvent.change(editor, {
+      target: {
+        value: editor.value.replace('Product and engineering reviewers', 'Design reviewers'),
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Save changes/ }));
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'I refreshed the latest workspace; review your edits and save again.'
+    );
+    expect(refreshWorkspaces).toHaveBeenCalledTimes(1);
+    expect(editor.value).toContain('Design reviewers');
+    expect(editor.value).not.toContain('Server reviewers');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/ }));
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl)).toBe(2));
+
+    const [, retryInit] = findFetchCall(fetchMock.mock.calls, saveWorkspaceUrl, 1);
+    expect(JSON.parse(String(retryInit?.body))).toMatchObject({
+      if_revision: 2,
+      workspace: {
+        yopsDraft: {
+          operations: [
+            {
+              afterValue: 'Design reviewers',
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('rejects invalid Workspace YOps edits before saving', async () => {
+    const saveWorkspaceUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ success: true, data: { pins: [] } }));
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
+
+    fireEvent.change(screen.getByLabelText('YOps YAML editor'), {
+      target: {
+        value: `yops:
+  - set:
+      path: prd/summary/audience`,
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('SET operation 1 is missing value.');
+    expect(countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl)).toBe(0);
   });
 
   it('imports pasted text as a source material', async () => {
