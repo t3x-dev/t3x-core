@@ -21,14 +21,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { parseWorkspaceYOpsScript } from '@/domain/workspaces/yopsScript';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
-import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
+import {
+  useWorkspaceTransition,
+  type WorkspaceTransitionState,
+} from '@/hooks/workspaces/useWorkspaceTransition';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
   WorkspaceSchemaFieldStatus,
-  WorkspaceValidationOverride,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
@@ -36,6 +39,7 @@ import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
+import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
@@ -96,17 +100,19 @@ export function YOpsDraftTab({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
+  const [changeNote, setChangeNote] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
   const transitionReview = useCommitTransitionView(
     candidate.projectId,
     targetBranch,
     isCanonicalCommitHash(committedHash) ? committedHash : null
   );
 
-  const commitCandidate = useMemo(
+  const transitionCandidate = useMemo(
     () => ({ ...candidate, targetBranch }),
     [candidate, targetBranch]
   );
-  const { commit } = useWorkspaceCommit(commitCandidate);
+  const workspaceTransition = useWorkspaceTransition(transitionCandidate);
   const { loadCommittedContent, rootKey, validate } = useWorkspaceYOps(candidate);
   const branchOptions = useMemo(
     () => getCommitBranchOptions(candidate, availableBranches),
@@ -142,7 +148,11 @@ export function YOpsDraftTab({
   const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
   const materializedCount = committedHash ? draft.operations.length : appliedCount;
   const pendingCount = Math.max(draft.operations.length - materializedCount, 0);
-  const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
+  const transitionBusy =
+    workspaceTransition.state.phase === 'reviewing' ||
+    workspaceTransition.state.phase === 'deciding';
+  const isBusy =
+    status === 'generating' || status === 'applying' || status === 'committing' || transitionBusy;
   const unresolvedSchemaGaps = getUnresolvedSchemaGaps(
     candidate.schemaReview.gaps,
     materializedTrees,
@@ -172,13 +182,14 @@ export function YOpsDraftTab({
     validationPassed,
     visibleErrorMessage,
   });
-  const canCommit = commitBlockers.length === 0 && !isBusy && !committedHash;
   const schemaOverrideBlockers = commitBlockers.filter(isSchemaOverrideBlocker);
   const canOverrideCommit =
     schemaOverrideBlockers.length > 0 &&
     schemaOverrideBlockers.length === commitBlockers.length &&
     !isBusy &&
     !committedHash;
+  const reviewBlockers = commitBlockers.filter((blocker) => !isSchemaOverrideBlocker(blocker));
+  const canReview = reviewBlockers.length === 0 && !isBusy && !committedHash;
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
@@ -191,9 +202,9 @@ export function YOpsDraftTab({
     generated: Boolean(generatedYOps),
     isBusy,
   });
-  const commitTitle = getCommitTitle({
+  const commitTitle = getReviewTitle({
     appliedCount,
-    blockers: commitBlockers,
+    blockers: reviewBlockers,
     committedHash,
     isBusy,
     targetBranch,
@@ -211,7 +222,10 @@ export function YOpsDraftTab({
     setCommittedPreviewLoading(isCanonicalCommitHash(candidate.lastCommitHash));
     setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
     setErrorMessage(null);
-  }, [candidate.id, draft.id, draftFingerprint]);
+    setChangeNote('');
+    setOverrideReason('');
+    workspaceTransition.reset();
+  }, [candidate.id, draft.id, draftFingerprint, workspaceTransition.reset]);
 
   useEffect(() => {
     const hash = candidate.lastCommitHash;
@@ -273,9 +287,11 @@ export function YOpsDraftTab({
 
   useEffect(() => {
     setTargetBranch(getInitialTargetBranch(candidate));
-  }, [candidate.id, candidate.targetBranch]);
+    workspaceTransition.reset();
+  }, [candidate.id, candidate.targetBranch, workspaceTransition.reset]);
 
   async function handleGenerate() {
+    workspaceTransition.reset();
     setStatus('generating');
     setErrorMessage(null);
     try {
@@ -303,6 +319,7 @@ export function YOpsDraftTab({
   }
 
   async function handleApply() {
+    workspaceTransition.reset();
     setStatus('applying');
     setErrorMessage(null);
     try {
@@ -360,26 +377,38 @@ export function YOpsDraftTab({
     setAppliedCount(0);
     setStatus('idle');
     setErrorMessage(null);
+    workspaceTransition.reset();
   }
 
-  async function handleCommit(validationOverride?: WorkspaceValidationOverride) {
-    const commitAllowed = validationOverride ? canOverrideCommit : canCommit;
-    if (!materializedTrees || !materializedRelations || !commitAllowed) return;
-    setStatus('committing');
+  async function handleReview() {
+    if (!materializedTrees || !materializedRelations || !canReview) return;
     setErrorMessage(null);
+    setOverrideReason('');
+    await workspaceTransition.review(
+      { trees: materializedTrees, relations: materializedRelations },
+      changeNote
+    );
+  }
 
-    try {
-      const hash = await commit(
-        { trees: materializedTrees, relations: materializedRelations },
-        validationOverride
-      );
+  async function handleDecision(outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) {
+    const hash = await workspaceTransition.decide(outcome, reason);
+    if (hash) {
       setCommittedHash(hash);
       setStatus('committed');
       onCommitted?.(hash, targetBranch);
-    } catch (error) {
-      setStatus('applied');
-      setErrorMessage(error instanceof Error ? error.message : 'Workspace commit failed');
     }
+  }
+
+  function handleTargetBranchChange(branch: string) {
+    setTargetBranch(branch);
+    setOverrideReason('');
+    workspaceTransition.reset();
+  }
+
+  function handleChangeNote(next: string) {
+    setChangeNote(next);
+    setOverrideReason('');
+    workspaceTransition.reset();
   }
 
   if (!active) return null;
@@ -486,28 +515,25 @@ export function YOpsDraftTab({
           appliedCount={materializedCount}
           branchOptions={branchOptions}
           candidate={candidate}
-          canCommit={canCommit}
-          canOverrideCommit={canOverrideCommit}
+          canReview={canReview}
+          changeNote={changeNote}
           commitBlockers={commitBlockers}
           commitTitle={commitTitle}
           committedHash={committedHash}
           continuationBusy={Boolean(continuationBusy)}
           isBusy={isBusy}
-          onCommit={handleCommit}
-          onOverrideCommit={() =>
-            handleCommit({
-              kind: 'schema_review',
-              reason: 'User explicitly confirmed unresolved schema review gaps.',
-              blockers: schemaOverrideBlockers,
-            })
-          }
+          onChangeNote={handleChangeNote}
+          onDecision={(outcome, reason) => void handleDecision(outcome, reason)}
+          onOverrideReasonChange={setOverrideReason}
+          onReview={() => void handleReview()}
           onContinueFromCommit={onContinueFromCommit}
-          onTargetBranchChange={setTargetBranch}
+          onTargetBranchChange={handleTargetBranchChange}
           onViewCommitInState={onViewCommitInState}
-          status={status}
-          schemaOverrideBlockers={schemaOverrideBlockers}
+          overrideReason={overrideReason}
+          reviewBlockers={reviewBlockers}
           targetBranch={targetBranch}
           transitionReview={transitionReview}
+          transitionState={workspaceTransition.state}
           validationReady={Boolean(committedHash) || (validationPassed && !validationBlocked)}
         />
       ) : null}
@@ -999,62 +1025,68 @@ function CommitReviewView({
   appliedCount,
   branchOptions,
   candidate,
-  canCommit,
-  canOverrideCommit,
+  canReview,
+  changeNote,
   commitBlockers,
   commitTitle,
   committedHash,
   continuationBusy,
   isBusy,
-  onCommit,
-  onOverrideCommit,
+  onChangeNote,
   onContinueFromCommit,
+  onDecision,
+  onOverrideReasonChange,
+  onReview,
   onTargetBranchChange,
   onViewCommitInState,
-  status,
-  schemaOverrideBlockers,
+  overrideReason,
+  reviewBlockers,
   targetBranch,
   transitionReview,
+  transitionState,
   validationReady,
 }: {
   appliedCount: number;
   branchOptions: string[];
   candidate: WorkspaceCandidate;
-  canCommit: boolean;
-  canOverrideCommit: boolean;
+  canReview: boolean;
+  changeNote: string;
   commitBlockers: string[];
   commitTitle: string;
   committedHash: string | null;
   continuationBusy: boolean;
   isBusy: boolean;
-  onCommit: () => void;
-  onOverrideCommit: () => void;
+  onChangeNote: (note: string) => void;
   onContinueFromCommit?: (
     commitHash: string,
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void> | void;
+  onDecision: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
+  onOverrideReasonChange: (reason: string) => void;
+  onReview: () => void;
   onTargetBranchChange: (branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
-  status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
-  schemaOverrideBlockers: string[];
+  overrideReason: string;
+  reviewBlockers: string[];
   targetBranch: string;
   transitionReview: ReturnType<typeof useCommitTransitionView>;
+  transitionState: WorkspaceTransitionState;
   validationReady: boolean;
 }) {
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
-  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
-
-  useEffect(() => {
-    if (overrideDialogOpen) return;
-    setOverrideConfirmed(false);
-  }, [overrideDialogOpen]);
-
-  function handleOverrideCommit() {
-    if (!overrideConfirmed || !canOverrideCommit || isBusy) return;
-    setOverrideDialogOpen(false);
-    onOverrideCommit();
-  }
+  const pendingView = transitionState.view;
+  const decisionValue = committedHash
+    ? 'Done'
+    : transitionState.phase === 'rejected'
+      ? 'Rejected'
+      : pendingView
+        ? 'Awaiting'
+        : canReview
+          ? 'Ready'
+          : 'Return';
+  const displayedReview = pendingView
+    ? { error: null, loading: false, view: pendingView }
+    : transitionReview;
 
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -1069,16 +1101,14 @@ function CommitReviewView({
             value={`${appliedCount}`}
           />
           <ValidationMetric
-            label="Validation"
+            label="YOps preflight"
             tone={validationReady ? 'success' : 'warning'}
             value={validationReady ? 'Passed' : 'Required'}
           />
           <ValidationMetric
-            label="Commit"
-            tone={committedHash ? 'success' : canCommit ? 'success' : 'warning'}
-            value={
-              committedHash ? 'Done' : canCommit ? 'Ready' : canOverrideCommit ? 'Review' : 'Return'
-            }
+            label="Decision"
+            tone={committedHash ? 'success' : pendingView || canReview ? 'success' : 'warning'}
+            value={decisionValue}
           />
         </div>
         <dl className="mt-3 grid gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs">
@@ -1098,9 +1128,9 @@ function CommitReviewView({
         {commitBlockers.length > 0 && !committedHash ? (
           <div className="mt-3 grid gap-2 text-sm text-[var(--text-secondary)]">
             <p>
-              {canOverrideCommit
-                ? 'Resolve these schema gaps, or click Commit to review and confirm the risk.'
-                : 'Resolve these blockers before committing.'}
+              {reviewBlockers.length === 0
+                ? 'Review will verify these schema gaps and show whether an explicit override is permitted.'
+                : 'Resolve these blockers before reviewing the change.'}
             </p>
             <ul className="grid gap-1">
               {commitBlockers.map((blocker) => (
@@ -1122,9 +1152,17 @@ function CommitReviewView({
           onViewCommitInState={onViewCommitInState}
           targetBranch={targetBranch}
         />
+      ) : pendingView ? (
+        <TransitionDecisionControls
+          busy={isBusy}
+          onDecide={onDecision}
+          onOverrideReasonChange={onOverrideReasonChange}
+          overrideReason={overrideReason}
+          view={pendingView}
+        />
       ) : (
         <aside
-          aria-label="Commit controls"
+          aria-label="Review controls"
           className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
         >
           <label
@@ -1147,83 +1185,66 @@ function CommitReviewView({
               ))}
             </select>
           </label>
+          <label
+            className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]"
+            htmlFor={`transition-change-note-${candidate.id}`}
+          >
+            Change note (optional)
+            <Textarea
+              disabled={isBusy}
+              id={`transition-change-note-${candidate.id}`}
+              maxLength={2000}
+              onChange={(event) => onChangeNote(event.target.value)}
+              placeholder="Why is this change useful?"
+              value={changeNote}
+            />
+          </label>
           <Button
-            disabled={!canCommit && !canOverrideCommit}
-            onClick={canOverrideCommit ? () => setOverrideDialogOpen(true) : () => onCommit()}
+            disabled={!canReview}
+            onClick={onReview}
             size="sm"
-            title={
-              canOverrideCommit ? 'Review unresolved schema gaps before committing.' : commitTitle
-            }
+            title={commitTitle}
             type="button"
             variant="commit"
           >
-            <GitCommitHorizontal aria-hidden="true" className="size-4" />
-            {status === 'committing' ? 'Committing' : `Commit · ${targetBranch}`}
+            {transitionState.phase === 'reviewing' ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <GitCommitHorizontal aria-hidden="true" className="size-4" />
+            )}
+            {transitionState.phase === 'reviewing' ? 'Reviewing' : 'Review change'}
           </Button>
         </aside>
       )}
 
-      {committedHash ? (
-        <div className="lg:col-span-2">
-          <TransitionReviewPanel {...transitionReview} />
-        </div>
+      {transitionState.error ? (
+        <section
+          aria-label={
+            transitionState.errorCode === 'LEGACY_HEAD_READ_ONLY'
+              ? 'Transition setup required'
+              : 'Change review error'
+          }
+          className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-4 lg:col-span-2"
+          role="alert"
+        >
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            {transitionState.errorCode === 'LEGACY_HEAD_READ_ONLY'
+              ? 'Transition setup required'
+              : transitionState.errorCode === 'STALE_REVIEW'
+                ? 'Review changed'
+                : 'Unable to continue'}
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+            {transitionState.error}
+          </p>
+        </section>
       ) : null}
 
-      <Dialog onOpenChange={setOverrideDialogOpen} open={overrideDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Commit despite unresolved schema gaps?</DialogTitle>
-            <DialogDescription>
-              This writes the materialized result to {targetBranch} while preserving the unresolved
-              schema review gaps in the commit audit trail.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 grid gap-3">
-            <div
-              className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3"
-              role="alert"
-            >
-              <p className="text-sm font-semibold text-[var(--status-warning)]">
-                {schemaOverrideBlockers.length}{' '}
-                {schemaOverrideBlockers.length === 1 ? 'schema gap remains' : 'schema gaps remain'}
-              </p>
-              <ul className="mt-2 grid gap-1 text-xs leading-5 text-[var(--text-secondary)]">
-                {schemaOverrideBlockers.map((blocker) => (
-                  <li className="break-words font-mono" key={blocker}>
-                    {blocker}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <label className="flex items-start gap-2 rounded-md border border-[var(--stroke-divider)] p-3 text-sm text-[var(--text-secondary)]">
-              <input
-                checked={overrideConfirmed}
-                className="mt-0.5"
-                onChange={(event) => setOverrideConfirmed(event.target.checked)}
-                type="checkbox"
-              />
-              <span>I understand this commit will retain unresolved schema gaps.</span>
-            </label>
-          </div>
-          <DialogFooter className="mt-6">
-            <Button
-              onClick={() => setOverrideDialogOpen(false)}
-              type="button"
-              variant="canvas-outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!overrideConfirmed || isBusy}
-              onClick={handleOverrideCommit}
-              type="button"
-              variant="destructive"
-            >
-              Commit anyway · {targetBranch}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {committedHash || pendingView ? (
+        <div className="lg:col-span-2">
+          <TransitionReviewPanel {...displayedReview} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1440,7 +1461,7 @@ function getApplyYOpsTitle({
   return 'Apply validated YOps into a YAML preview.';
 }
 
-function getCommitTitle({
+function getReviewTitle({
   appliedCount,
   blockers,
   committedHash,
@@ -1453,11 +1474,11 @@ function getCommitTitle({
   isBusy: boolean;
   targetBranch: string;
 }): string {
-  if (committedHash) return 'Workspace result is already committed.';
+  if (committedHash) return 'Workspace result is already saved.';
   if (isBusy) return 'A workspace operation is already in progress.';
-  if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
-  if (blockers.length > 0) return blockers[0] ?? 'Resolve commit blockers before committing.';
-  return `Commit the materialized YAML result to ${targetBranch}.`;
+  if (appliedCount === 0) return 'Apply YOps before reviewing the workspace result.';
+  if (blockers.length > 0) return blockers[0] ?? 'Resolve blockers before review.';
+  return `Review the materialized YAML result for ${targetBranch}.`;
 }
 
 function getUnresolvedSchemaGaps(

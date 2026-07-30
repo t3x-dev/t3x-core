@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { TransitionViewV1 } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,6 +46,167 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+const transitionDigest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}` as const;
+
+const transitionPrecondition = {
+  workspace_revision: 2,
+  ref_head: null,
+  effect_digest: transitionDigest('a'),
+  proposal_digest: transitionDigest('b'),
+  statement_digests: [transitionDigest('c')],
+  policy_digest: transitionDigest('d'),
+};
+
+function workspaceTransitionView({
+  commitId,
+  outcome,
+  overrideAllowed = false,
+}: {
+  commitId?: string;
+  outcome?: 'accepted' | 'overridden' | 'rejected';
+  overrideAllowed?: boolean;
+} = {}): Extract<TransitionViewV1, { mode: 'transition' }> {
+  const decisionSupplied = outcome !== undefined;
+  return {
+    schema: 't3x.dev/transition-view/v1',
+    version: 1,
+    mode: 'transition',
+    change: {
+      effect: { kind: 'effect', schema: 't3x/effect/v1', digest: transitionDigest('a') },
+      base: { kind: 'state', schema: 't3x/state/v1', digest: transitionDigest('1') },
+      result: { kind: 'state', schema: 't3x/state/v1', digest: transitionDigest('2') },
+      driver: {
+        protocol: 't3x.dev/yops',
+        protocolVersion: '1',
+        specDigest: transitionDigest('3'),
+      },
+      operations: [{ op: 'set', path: 'prd/summary/audience', value: 'Backend reviewers' }],
+    },
+    claims: {
+      proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: transitionDigest('b') },
+      actor: { kind: 'human', id: 'human:test' },
+      intent: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+      rationale: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+    },
+    checks: {
+      objectIntegrity: 'verified',
+      observationScope: { completeness: 'complete', sources: ['project-store'] },
+      replay: {
+        observation: 'observed',
+        outcomes: ['verified'],
+        runs: [],
+        unsupportedProfiles: [],
+      },
+      validation: {
+        observation: 'observed',
+        outcomes: overrideAllowed ? ['failed'] : ['passed'],
+        runs: [],
+        unsupportedProfiles: [],
+      },
+      humanConfirmation: { observation: 'no_statement_observed', runs: [] },
+    },
+    decision: decisionSupplied
+      ? {
+          observation: 'supplied',
+          statement: {
+            kind: 'statement',
+            schema: 't3x/statement/v1',
+            digest: transitionDigest('4'),
+          },
+          actor: { kind: 'human', id: 'human:test' },
+          outcome,
+          policy: {
+            mode: 'evaluated',
+            resource: {
+              uri: 't3x://project/policies/default',
+              mediaType: 'application/vnd.t3x.acceptance-policy+json',
+              digest: transitionDigest('d'),
+            },
+          },
+          considered: [],
+          rationale: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+          decidedAt: '2026-07-30T00:00:00.000Z',
+        }
+      : { observation: 'not_supplied' },
+    history: commitId
+      ? {
+          observation: 'committed',
+          commit: {
+            format: 'transition_v2',
+            id: commitId as `sha256:${string}`,
+            schema: 't3x/commit/v2',
+            parents: [],
+            recordedAt: '2026-07-30T00:00:00.000Z',
+            result: {
+              mode: 'state_descriptor',
+              descriptor: {
+                kind: 'state',
+                schema: 't3x/state/v1',
+                digest: transitionDigest('2'),
+              },
+            },
+            assurance: {
+              mode: 'decision_bound',
+              decision: {
+                kind: 'statement',
+                schema: 't3x/statement/v1',
+                digest: transitionDigest('4'),
+              },
+            },
+          },
+        }
+      : { observation: 'not_committed' },
+    capabilities: decisionSupplied
+      ? {
+          accept: { disposition: 'not_applicable', reasons: [] },
+          override: { disposition: 'not_applicable', reasons: [] },
+          reject: { disposition: 'not_applicable', reasons: [] },
+          commit: { disposition: commitId ? 'not_applicable' : 'denied', reasons: [] },
+          revert: { disposition: commitId ? 'not_evaluated' : 'not_applicable', reasons: [] },
+        }
+      : {
+          accept: {
+            disposition: overrideAllowed ? 'denied' : 'allowed',
+            reasons: overrideAllowed
+              ? [{ code: 'VALIDATION_FAILED', message: 'Validation failed' }]
+              : [],
+          },
+          override: {
+            disposition: overrideAllowed ? 'allowed' : 'denied',
+            reasons: overrideAllowed
+              ? []
+              : [{ code: 'OVERRIDE_NOT_REQUIRED', message: 'No override is required' }],
+          },
+          reject: { disposition: 'allowed', reasons: [] },
+          commit: { disposition: 'not_applicable', reasons: [] },
+          revert: { disposition: 'not_applicable', reasons: [] },
+        },
+    audit: {
+      effect: { kind: 'effect', schema: 't3x/effect/v1', digest: transitionDigest('a') },
+      proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: transitionDigest('b') },
+      statements: [],
+      ...(decisionSupplied
+        ? {
+            decision: {
+              kind: 'statement' as const,
+              schema: 't3x/statement/v1' as const,
+              digest: transitionDigest('4'),
+            },
+          }
+        : {}),
+      ...(commitId
+        ? {
+            commit: {
+              kind: 'commit' as const,
+              schema: 't3x/commit/v2' as const,
+              digest: commitId as `sha256:${string}`,
+            },
+          }
+        : {}),
+    },
+  };
 }
 
 const workspaceCandidates: WorkspaceCandidate[] = [
@@ -490,12 +652,10 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue(
       'feature/prd-audience'
     );
-    expect(
-      screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Review change' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review change' })).toHaveAttribute(
       'title',
-      'Apply YOps before committing the workspace result.'
+      'Apply YOps before reviewing the workspace result.'
     );
     expect(screen.getByText('Materialized 0')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
@@ -948,26 +1108,40 @@ describe('WorkspaceWorkbench', () => {
   it('allows YOps validation and preview when schema review still has blocking gaps', async () => {
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_draft';
-    const commitUrl = `${workspaceUrl}/commit`;
+    const reviewUrl = `${workspaceUrl}/transition/review`;
+    const decideUrl = `${workspaceUrl}/transition/decide`;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url === workspaceUrl) {
         return jsonResponse({
           success: true,
-          data: { candidate_id: 'candidate:workspace_draft', workspace: workspaceCandidates[1] },
+          data: {
+            candidate_id: 'candidate:workspace_draft',
+            workspace: { ...workspaceCandidates[1], revision: 2 },
+          },
         });
       }
-      if (url === commitUrl) {
+      if (url === reviewUrl) {
         return jsonResponse({
           success: true,
           data: {
-            candidate_id: 'candidate:workspace_draft',
-            commit: { hash: 'sha256:forced-workspace-commit' },
-            workspace: {
-              ...workspaceCandidates[1],
-              lastCommitHash: 'sha256:forced-workspace-commit',
-              status: 'committed',
-            },
+            transition: workspaceTransitionView({ overrideAllowed: true }),
+            precondition: transitionPrecondition,
+          },
+        });
+      }
+      if (url === decideUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            transition: workspaceTransitionView({
+              commitId: transitionDigest('9'),
+              outcome: 'overridden',
+              overrideAllowed: true,
+            }),
+            precondition: transitionPrecondition,
+            decision_digest: transitionDigest('4'),
+            commit: {},
           },
         });
       }
@@ -1025,46 +1199,39 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Review required')).toBeInTheDocument();
     expect(screen.getByText('1 schema gap')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review Commit blockers' }));
-    const commitButton = screen.getByRole('button', { name: /Commit · release\/notes/ });
-    expect(commitButton).toBeEnabled();
+    const reviewButton = screen.getByRole('button', { name: 'Review change' });
+    expect(reviewButton).toBeEnabled();
     expect(
-      screen.getByText('Resolve these schema gaps, or click Commit to review and confirm the risk.')
+      screen.getByText(
+        'Review will verify these schema gaps and show whether an explicit override is permitted.'
+      )
     ).toBeInTheDocument();
     expect(
       screen.getByText('Schema review gap: Confirm release-note required fields.')
     ).toBeInTheDocument();
-    expect(commitButton).toHaveAttribute(
-      'title',
-      'Review unresolved schema gaps before committing.'
-    );
-    fireEvent.click(commitButton);
+    fireEvent.click(reviewButton);
 
-    expect(
-      screen.getByRole('dialog', { name: 'Commit despite unresolved schema gaps?' })
-    ).toBeInTheDocument();
-    const confirmButton = screen.getByRole('button', {
-      name: 'Commit anyway · release/notes',
+    expect(await screen.findByRole('region', { name: 'Change review' })).toHaveTextContent(
+      'Awaiting decision'
+    );
+    const overrideButton = screen.getByRole('button', { name: 'Continue anyway and save' });
+    expect(overrideButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Why continue despite the failed check?'), {
+      target: { value: 'This known schema gap is acceptable for the draft.' },
     });
-    expect(confirmButton).toBeDisabled();
-    fireEvent.click(
-      screen.getByRole('checkbox', {
-        name: 'I understand this commit will retain unresolved schema gaps.',
-      })
-    );
-    expect(confirmButton).toBeEnabled();
-    fireEvent.click(confirmButton);
+    expect(overrideButton).toBeEnabled();
+    fireEvent.click(overrideButton);
 
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, commitUrl)).toBe(1));
-    const commitRequest = findFetchCall(fetchMock.mock.calls, commitUrl)[1];
-    const commitBody = JSON.parse(String(commitRequest?.body)) as {
-      validationOverride?: { kind: string; blockers: string[] };
-    };
-    expect(commitBody.validationOverride).toEqual(
-      expect.objectContaining({
-        kind: 'schema_review',
-        blockers: ['Schema review gap: Confirm release-note required fields.'],
-      })
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(1));
+    const decisionBody = JSON.parse(
+      String(findFetchCall(fetchMock.mock.calls, decideUrl)[1]?.body)
     );
+    expect(decisionBody).toMatchObject({
+      outcome: 'overridden',
+      decision_reason: 'This known schema gap is acceptable for the draft.',
+      precondition: transitionPrecondition,
+    });
+    expect(countFetchCalls(fetchMock.mock.calls, `${workspaceUrl}/commit`)).toBe(0);
 
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
@@ -2027,8 +2194,10 @@ describe('WorkspaceWorkbench', () => {
     const saveWorkspaceUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
-    const workspaceCommitUrl =
-      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit';
+    const workspaceReviewUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/transition/review';
+    const workspaceDecideUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/transition/decide';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url === extractCandidateUrl) {
@@ -2045,7 +2214,7 @@ describe('WorkspaceWorkbench', () => {
           success: true,
           data: {
             candidate_id: 'candidate:backend',
-            workspace: yopsWorkspace,
+            workspace: { ...yopsWorkspace, revision: 2 },
             yops_draft_id: 'draft:candidate:backend',
           },
         });
@@ -2055,7 +2224,7 @@ describe('WorkspaceWorkbench', () => {
           success: true,
           data: {
             candidate_id: 'candidate:backend',
-            workspace: yopsWorkspace,
+            workspace: { ...yopsWorkspace, revision: 2 },
             yops_draft_id: 'draft:candidate:backend',
           },
         });
@@ -2111,18 +2280,26 @@ describe('WorkspaceWorkbench', () => {
           },
         });
       }
-      if (url === workspaceCommitUrl) {
+      if (url === workspaceReviewUrl) {
         return jsonResponse({
           success: true,
           data: {
-            candidate_id: 'candidate:backend',
-            commit: { hash: 'sha256:workspace-commit' },
-            workspace: {
-              ...yopsWorkspace,
-              lastCommitHash: 'sha256:workspace-commit',
-              status: 'committed',
-            },
-            yops_draft_id: 'draft:candidate:backend',
+            transition: workspaceTransitionView(),
+            precondition: transitionPrecondition,
+          },
+        });
+      }
+      if (url === workspaceDecideUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            transition: workspaceTransitionView({
+              commitId: transitionDigest('8'),
+              outcome: 'accepted',
+            }),
+            precondition: transitionPrecondition,
+            decision_digest: transitionDigest('4'),
+            commit: {},
           },
         });
       }
@@ -2244,11 +2421,11 @@ describe('WorkspaceWorkbench', () => {
 
     expect(screen.getByText('Preview ready for commit')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Continue to Commit' }));
-    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Review change' })).toBeEnabled();
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'main' },
     });
-    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Review change' })).toBeDisabled();
     expect(
       screen.getByText(
         'Target branch changed from feature/prd-audience to main. Rebuild this workspace from main before committing.'
@@ -2258,9 +2435,12 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'feature/prd-audience' },
     });
-    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Review change' })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ }));
+    fireEvent.change(screen.getByLabelText('Change note (optional)'), {
+      target: { value: 'Keep the PRD audience aligned with the reviewed source.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Review change' }));
 
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(2)
@@ -2314,13 +2494,11 @@ describe('WorkspaceWorkbench', () => {
       },
     });
     await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, workspaceCommitUrl)).toBeGreaterThanOrEqual(1)
+      expect(countFetchCalls(fetchMock.mock.calls, workspaceReviewUrl)).toBeGreaterThanOrEqual(1)
     );
-    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, workspaceCommitUrl);
-    expect(commitUrl).toBe(
-      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit'
-    );
-    expect(JSON.parse(String(commitInit?.body))).toMatchObject({
+    const [reviewUrl, reviewInit] = findFetchCall(fetchMock.mock.calls, workspaceReviewUrl);
+    expect(reviewUrl).toBe(workspaceReviewUrl);
+    expect(JSON.parse(String(reviewInit?.body))).toMatchObject({
       content: {
         relations: [],
         trees: [
@@ -2331,13 +2509,31 @@ describe('WorkspaceWorkbench', () => {
           },
         ],
       },
-      message: 'Workspace commit: PRD audience handoff',
+      why: 'Keep the PRD audience aligned with the reviewed source.',
+      if_revision: 2,
     });
+    expect(await screen.findByRole('button', { name: 'Approve and save' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, workspaceDecideUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [, decideInit] = findFetchCall(fetchMock.mock.calls, workspaceDecideUrl);
+    expect(JSON.parse(String(decideInit?.body))).toMatchObject({
+      outcome: 'accepted',
+      why: 'Keep the PRD audience aligned with the reviewed source.',
+      precondition: transitionPrecondition,
+    });
+    expect(
+      countFetchCalls(
+        fetchMock.mock.calls,
+        'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit'
+      )
+    ).toBe(0);
 
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true')
     );
-    expect(screen.getAllByText('sha256:workspace-commit').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(transitionDigest('8')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 

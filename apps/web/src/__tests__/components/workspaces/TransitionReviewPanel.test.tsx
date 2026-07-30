@@ -202,4 +202,20 @@ describe('TransitionReviewPanel', () => {
     expect(screen.getByLabelText('Validation: attention required')).toHaveTextContent('failed');
     expect(screen.queryByLabelText('Validation: passed')).not.toBeInTheDocument();
   });
+
+  it('renders an uncommitted graph as a pending review rather than saved history', () => {
+    const view = transitionView();
+    view.decision = { observation: 'not_supplied' };
+    view.history = { observation: 'not_committed' };
+    view.audit.decision = undefined;
+    view.audit.commit = undefined;
+
+    render(<TransitionReviewPanel error={null} loading={false} view={view} />);
+
+    expect(screen.getByRole('region', { name: 'Change review' })).toHaveTextContent(
+      'Review change'
+    );
+    expect(screen.getByText('Awaiting decision')).toBeInTheDocument();
+    expect(screen.queryByText(/saved with verified history/i)).not.toBeInTheDocument();
+  });
 });

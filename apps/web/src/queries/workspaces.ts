@@ -1,12 +1,16 @@
 import {
-  commitProjectWorkspace,
+  decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
-  type WorkspaceCommitResponse,
   type WorkspaceSaveResponse,
+  type WorkspaceTransitionContent,
+  type WorkspaceTransitionDecisionResponse,
+  type WorkspaceTransitionOutcome,
+  type WorkspaceTransitionPrecondition,
+  type WorkspaceTransitionReviewResponse,
 } from '@/infrastructure/workspaces';
-import type { WorkspaceCandidate, WorkspaceValidationOverride } from '@/types/workspaces';
-import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export function fetchProjectWorkspaces(projectId: string): Promise<WorkspaceCandidate[]> {
   return listProjectWorkspaces(projectId);
@@ -20,20 +24,26 @@ export function saveWorkspaceDraft(
   return saveProjectWorkspace(projectId, workspaceId, workspace);
 }
 
-export function commitWorkspaceDraft(
+export function reviewWorkspaceTransition(
   projectId: string,
   workspaceId: string,
-  content: { trees: WorkspaceYOpsTreeNode[]; relations: unknown[] },
-  message?: string,
-  validationOverride?: WorkspaceValidationOverride,
-  ifRevision?: number
-): Promise<WorkspaceCommitResponse> {
-  return commitProjectWorkspace(
-    projectId,
-    workspaceId,
-    content,
-    message,
-    validationOverride,
-    ifRevision
-  );
+  content: WorkspaceTransitionContent,
+  why: string | undefined,
+  ifRevision: number
+): Promise<WorkspaceTransitionReviewResponse> {
+  return reviewProjectWorkspaceTransition(projectId, workspaceId, content, why, ifRevision);
+}
+
+export function decideWorkspaceTransition(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    content: WorkspaceTransitionContent;
+    why?: string;
+    outcome: WorkspaceTransitionOutcome;
+    decisionReason?: string;
+    precondition: WorkspaceTransitionPrecondition;
+  }
+): Promise<WorkspaceTransitionDecisionResponse> {
+  return decideProjectWorkspaceTransition(projectId, workspaceId, input);
 }
