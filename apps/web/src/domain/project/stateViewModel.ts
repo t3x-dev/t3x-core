@@ -194,6 +194,151 @@ export interface SkillRenderModel {
   workflows: SkillRenderWorkflow[];
 }
 
+export type StateReaderKind = 'generic' | 'prd' | 'prompt' | 'skill';
+
+export interface PromptRenderIssue {
+  code: string;
+  label: string;
+  message: string;
+  path: string;
+}
+
+export interface PromptRenderSource {
+  id: string;
+  label: string;
+  type: string;
+}
+
+export interface PromptRenderYOp {
+  id: string;
+  kind: string;
+  label: string;
+  path: string;
+  source: string;
+}
+
+export interface PromptRenderMessage {
+  contextKeys: string[];
+  issues: PromptRenderIssue[];
+  key: string;
+  latestYOp: PromptRenderYOp | null;
+  onMissingVariable: string;
+  optional: boolean;
+  purpose: string;
+  resourceKeys: string[];
+  role: string;
+  sequence: number;
+  sources: PromptRenderSource[];
+  template: string;
+  variableKeys: string[];
+}
+
+export interface PromptRenderVariable {
+  defaultValue: unknown;
+  description: string;
+  enumValues: string[];
+  issues: PromptRenderIssue[];
+  key: string;
+  onMissing: string;
+  required: boolean;
+  sensitive: boolean;
+  source: string;
+  usedByMessageKeys: string[];
+  valuePattern: string;
+  valueType: string;
+}
+
+export interface PromptRenderContext {
+  key: string;
+  kind: string;
+  loadPolicy: string;
+  maxTokens: number | null;
+  onEmpty: string;
+  placement: string;
+  required: boolean;
+  resourceKey: string;
+  targetMessageKeys: string[];
+}
+
+export interface PromptRenderResource {
+  contentHash: string;
+  description: string;
+  key: string;
+  kind: string;
+  loadPolicy: string;
+  mediaType: string;
+  modelContextEligible: boolean;
+  path: string;
+  usedByMessageKeys: string[];
+}
+
+export interface PromptRenderCheck {
+  assertions: string[];
+  blocking: boolean;
+  fixtureResource: string;
+  key: string;
+  kind: string;
+  runWhen: string;
+  successCriteria: string[];
+  verifiedMessageKeys: string[];
+  verifiesOutput: boolean;
+}
+
+export interface PromptRenderEval {
+  assertions: string[];
+  evaluatedMessageKeys: string[];
+  expectedOutput: string;
+  fixtureResource: string;
+  key: string;
+  kind: string;
+  minimumScore: number | null;
+}
+
+export interface PromptRenderModel {
+  checks: PromptRenderCheck[];
+  contexts: PromptRenderContext[];
+  contract: {
+    goal: string;
+    inputs: string[];
+    nonGoals: string[];
+    outputs: string[];
+    truthPolicy: string;
+  };
+  evals: PromptRenderEval[];
+  issues: PromptRenderIssue[];
+  messages: PromptRenderMessage[];
+  name: string;
+  output: {
+    format: string;
+    maxRetries: number | null;
+    onParseFailure: string;
+    schemaResource: string;
+    strict: boolean;
+  };
+  resources: PromptRenderResource[];
+  runtime: {
+    maxOutputTokens: number | null;
+    mode: string;
+    responseFormat: string;
+    streaming: boolean;
+    toolPolicy: string;
+  };
+  sources: PromptRenderSource[];
+  summary: string;
+  variables: PromptRenderVariable[];
+}
+
+export interface PromptRenderModelOptions {
+  issues?: Array<{
+    code?: string;
+    label?: string;
+    message?: string;
+    path?: string | null;
+  }>;
+  operations?: StateOperationEntry[];
+  sources?: Array<{ id: string; title?: string; type: string }> | null;
+}
+
 function semanticContentToPlain(content: SemanticContent): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const tree of content.trees ?? []) {
@@ -439,6 +584,270 @@ export function selectSkillRenderModel(content: SemanticContent): SkillRenderMod
         );
       }),
   };
+}
+
+export function resolveStateReaderKind(schemaName: string): StateReaderKind {
+  if (schemaName === 't3x/prd') return 'prd';
+  if (schemaName === 't3x/skill') return 'skill';
+  if (schemaName === 't3x/prompt') return 'prompt';
+  return 'generic';
+}
+
+export function selectPromptRenderModel(
+  content: SemanticContent,
+  options: PromptRenderModelOptions = {}
+): PromptRenderModel {
+  const plain = semanticContentToPlain(content);
+  const root = Object.hasOwn(plain, 'prompt') ? toRecord(plain.prompt) : plain;
+  const manifest = toRecord(root.manifest);
+  const contract = toRecord(root.contract);
+  const runtime = toRecord(root.runtime);
+  const output = toRecord(root.output);
+  const relations = content.relations.map((relation) => ({
+    from: normalizePromptEndpoint(relation.from),
+    to: normalizePromptEndpoint(relation.to),
+    type: relation.type,
+  }));
+  const relationTargets = (type: string, from: string) =>
+    Array.from(
+      new Set(
+        relations
+          .filter((relation) => relation.type === type && relation.from === from)
+          .map((relation) => relation.to)
+      )
+    );
+  const relationSources = (type: string, to: string) =>
+    Array.from(
+      new Set(
+        relations
+          .filter((relation) => relation.type === type && relation.to === to)
+          .map((relation) => relation.from)
+      )
+    );
+  const endpointKeys = (endpoints: string[], collection: string) =>
+    endpoints.flatMap((endpoint) => {
+      const prefix = `${collection}/`;
+      return endpoint.startsWith(prefix) ? [endpoint.slice(prefix.length)] : [];
+    });
+  const sources = (options.sources ?? []).map((source) => ({
+    id: source.id,
+    label: source.title?.trim() || humanizeKey(source.type),
+    type: source.type,
+  }));
+  const issues = (options.issues ?? []).flatMap((issue) => {
+    const rawPath = typeof issue.path === 'string' ? issue.path.trim() : '';
+    if (!rawPath) return [];
+    return [
+      {
+        code: issue.code?.trim() || 'VALIDATION_ISSUE',
+        label: issue.label?.trim() || 'Validation issue',
+        message: issue.message?.trim() || `${rawPath} needs review.`,
+        path: normalizePromptEndpoint(rawPath),
+      },
+    ];
+  });
+  const issuesForPath = (path: string) =>
+    issues.filter((issue) => isSameOrDescendantPath(issue.path, path));
+  const messages = repeatedRecordEntries(root.messages)
+    .map(([key, message], index) => {
+      const path = `messages/${key}`;
+      const template = scalarToString(message.template);
+      const relationVariableKeys = endpointKeys(
+        relationTargets('uses_variable', path),
+        'variables'
+      );
+      const placeholderVariableKeys = Array.from(
+        template.matchAll(/{{\s*([a-zA-Z_][\w.-]*)\s*}}/g),
+        (match) => match[1] ?? ''
+      ).filter(Boolean);
+      const trace = selectPromptRenderTrace(path, options.operations ?? [], sources);
+      return {
+        contextKeys: endpointKeys(relationSources('provides_context', path), 'contexts').sort(),
+        issues: issuesForPath(path),
+        key,
+        latestYOp: trace.latestYOp,
+        onMissingVariable: scalarToString(message.on_missing_variable),
+        optional: message.optional === true,
+        purpose: scalarToString(message.purpose),
+        resourceKeys: endpointKeys(relationTargets('uses_resource', path), 'resources').sort(),
+        role: scalarToString(message.role),
+        sequence: typeof message.sequence === 'number' ? message.sequence : index + 1,
+        sources: trace.sources,
+        template,
+        variableKeys: Array.from(
+          new Set([...relationVariableKeys, ...placeholderVariableKeys])
+        ).sort(),
+      };
+    })
+    .sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key));
+  const messageKeysForTarget = (type: string, collection: string, key: string) =>
+    endpointKeys(relationSources(type, `${collection}/${key}`), 'messages').sort();
+
+  return {
+    checks: repeatedRecordEntries(root.checks)
+      .map(([key, check]) => ({
+        assertions: stringList(check.assertions),
+        blocking: check.blocking === true,
+        fixtureResource: scalarToString(check.fixture_resource),
+        key,
+        kind: scalarToString(check.kind),
+        runWhen: scalarToString(check.run_when),
+        successCriteria: stringList(check.success_criteria),
+        verifiedMessageKeys: endpointKeys(
+          relationTargets('verifies_message', `checks/${key}`),
+          'messages'
+        ).sort(),
+        verifiesOutput: relationTargets('verifies_output', `checks/${key}`).includes('output'),
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key)),
+    contexts: repeatedRecordEntries(root.contexts)
+      .map(([key, context]) => ({
+        key,
+        kind: scalarToString(context.kind),
+        loadPolicy: scalarToString(context.load_policy),
+        maxTokens: typeof context.max_tokens === 'number' ? context.max_tokens : null,
+        onEmpty: scalarToString(context.on_empty),
+        placement: scalarToString(context.placement),
+        required: context.required === true,
+        resourceKey: scalarToString(context.resource_key),
+        targetMessageKeys: endpointKeys(
+          relationTargets('provides_context', `contexts/${key}`),
+          'messages'
+        ).sort(),
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key)),
+    contract: {
+      goal: scalarToString(contract.goal),
+      inputs: stringList(contract.inputs),
+      nonGoals: stringList(contract.non_goals),
+      outputs: stringList(contract.outputs),
+      truthPolicy: scalarToString(contract.truth_policy),
+    },
+    evals: repeatedRecordEntries(root.evals)
+      .map(([key, evaluation]) => ({
+        assertions: stringList(evaluation.assertions),
+        evaluatedMessageKeys: endpointKeys(
+          relationTargets('evaluates', `evals/${key}`),
+          'messages'
+        ).sort(),
+        expectedOutput: scalarToString(evaluation.expected_output),
+        fixtureResource: scalarToString(evaluation.fixture_resource),
+        key,
+        kind: scalarToString(evaluation.kind),
+        minimumScore:
+          typeof evaluation.minimum_score === 'number' ? evaluation.minimum_score : null,
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key)),
+    issues,
+    messages,
+    name: scalarToString(manifest.name) || 'unnamed-prompt',
+    output: {
+      format: scalarToString(output.format),
+      maxRetries: typeof output.max_retries === 'number' ? output.max_retries : null,
+      onParseFailure: scalarToString(output.on_parse_failure),
+      schemaResource:
+        scalarToString(output.schema_resource) ||
+        endpointKeys(relationTargets('uses_output_schema', 'output'), 'resources')[0] ||
+        '',
+      strict: output.strict === true,
+    },
+    resources: repeatedRecordEntries(root.resources)
+      .map(([key, resource]) => {
+        const loadPolicy = scalarToString(resource.load_policy);
+        return {
+          contentHash: scalarToString(resource.content_hash),
+          description: scalarToString(resource.description),
+          key,
+          kind: scalarToString(resource.kind),
+          loadPolicy,
+          mediaType: scalarToString(resource.media_type),
+          modelContextEligible: loadPolicy === 'always' || loadPolicy === 'on_demand',
+          path: scalarToString(resource.path),
+          usedByMessageKeys: messageKeysForTarget('uses_resource', 'resources', key),
+        };
+      })
+      .sort((left, right) => left.key.localeCompare(right.key)),
+    runtime: {
+      maxOutputTokens:
+        typeof runtime.max_output_tokens === 'number' ? runtime.max_output_tokens : null,
+      mode: scalarToString(runtime.mode),
+      responseFormat: scalarToString(runtime.response_format),
+      streaming: runtime.streaming === true,
+      toolPolicy: scalarToString(runtime.tool_policy),
+    },
+    sources,
+    summary: scalarToString(manifest.summary),
+    variables: repeatedRecordEntries(root.variables)
+      .map(([key, variable]) => ({
+        defaultValue: variable.default_value,
+        description: scalarToString(variable.description),
+        enumValues: stringList(variable.enum_values),
+        issues: issuesForPath(`variables/${key}`),
+        key,
+        onMissing: scalarToString(variable.on_missing),
+        required: variable.required === true,
+        sensitive: variable.sensitive === true,
+        source: scalarToString(variable.source),
+        usedByMessageKeys: messages
+          .filter((message) => message.variableKeys.includes(key))
+          .map((message) => message.key),
+        valuePattern: scalarToString(variable.value_pattern),
+        valueType: scalarToString(variable.value_type),
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key)),
+  };
+}
+
+function normalizePromptEndpoint(value: string): string {
+  return normalizePath(value).replace(/^prompt\//, '');
+}
+
+function isSameOrDescendantPath(candidate: string, path: string): boolean {
+  return candidate === path || candidate.startsWith(`${path}/`);
+}
+
+function selectPromptRenderTrace(
+  path: string,
+  operations: StateOperationEntry[],
+  fallbackSources: PromptRenderSource[]
+): { latestYOp: PromptRenderYOp | null; sources: PromptRenderSource[] } {
+  const matchedSources = new Map<string, PromptRenderSource>();
+  let latestYOp: PromptRenderYOp | null = null;
+  let operationIndex = 0;
+
+  for (const entry of operations) {
+    for (const yOp of normalizeYOps(entry.yops)) {
+      const kind = yOpName(yOp);
+      if (!kind) continue;
+      operationIndex += 1;
+      const payload = toRecord(yOp[kind]);
+      const rawPath = firstString(payload.path, payload.to, payload.from);
+      if (!rawPath) continue;
+      const operationPath = normalizePromptEndpoint(rawPath);
+      if (
+        !isSameOrDescendantPath(operationPath, path) &&
+        !isSameOrDescendantPath(path, operationPath)
+      ) {
+        continue;
+      }
+      const sourceId = entry.turn_hash || entry.source || entry.id;
+      matchedSources.set(sourceId, {
+        id: sourceId,
+        label: humanizeKey(entry.source || 'YOp source'),
+        type: entry.turn_hash ? 'turn' : 'yop',
+      });
+      latestYOp = {
+        id: entry.id,
+        kind,
+        label: `${paddedOperationIndex(operationIndex)} ${kind.toUpperCase()}`,
+        path: operationPath,
+        source: entry.source,
+      };
+    }
+  }
+
+  const sources = matchedSources.size > 0 ? Array.from(matchedSources.values()) : fallbackSources;
+  return { latestYOp, sources };
 }
 
 function normalizeSkillEndpoint(value: string): string {

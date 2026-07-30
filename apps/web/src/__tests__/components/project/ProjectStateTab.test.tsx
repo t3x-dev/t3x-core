@@ -297,6 +297,138 @@ const VALIDATION: YSchemaValidationSummary = {
   valid: true,
 };
 
+const PROMPT_COMMIT: ApiCommit = {
+  ...PRD_COMMIT,
+  content: {
+    relations: [
+      { from: 'messages/system_policy', to: 'messages/user_task', type: 'precedes' },
+      { from: 'messages/user_task', to: 'variables/user_request', type: 'uses_variable' },
+    ],
+    trees: [
+      {
+        children: [],
+        key: 'manifest',
+        slots: {
+          name: 'extract-requirements',
+          summary: 'Extract source-backed requirements.',
+        },
+      },
+      {
+        children: [],
+        key: 'contract',
+        slots: {
+          goal: 'Produce grounded requirements.',
+          inputs: ['Request'],
+          non_goals: ['Invent facts'],
+          outputs: ['JSON'],
+          truth_policy: 'evidence_only',
+        },
+      },
+      {
+        children: [
+          {
+            children: [],
+            key: 'user_request',
+            slots: {
+              description: 'Request to extract.',
+              on_missing: 'ask_user',
+              required: true,
+              source: 'user',
+              value_type: 'string',
+            },
+          },
+        ],
+        key: 'variables',
+        slots: {},
+      },
+      {
+        children: [
+          {
+            children: [],
+            key: 'user_task',
+            slots: {
+              on_missing_variable: 'report_and_stop',
+              optional: false,
+              purpose: 'Provide request.',
+              role: 'user',
+              sequence: 2,
+              template: '{{user_request}}',
+            },
+          },
+          {
+            children: [],
+            key: 'system_policy',
+            slots: {
+              on_missing_variable: 'report_and_stop',
+              optional: false,
+              purpose: 'Set policy.',
+              role: 'system',
+              sequence: 1,
+              template: 'Use source evidence only.',
+            },
+          },
+        ],
+        key: 'messages',
+        slots: {},
+      },
+      {
+        children: [],
+        key: 'runtime',
+        slots: {
+          mode: 'chat',
+          response_format: 'json',
+          streaming: false,
+          tool_policy: 'none',
+        },
+      },
+      {
+        children: [],
+        key: 'output',
+        slots: { format: 'json', on_parse_failure: 'report_and_stop', strict: true },
+      },
+      {
+        children: [
+          {
+            children: [],
+            key: 'compile_templates',
+            slots: { blocking: true, kind: 'template_compile', run_when: 'pre_compile' },
+          },
+        ],
+        key: 'checks',
+        slots: {},
+      },
+    ],
+  },
+  hash: 'sha256:prompt',
+  message: 'Add extract requirements Prompt',
+  parents: [],
+  provenance: { method: 'workspace', schema_ref: { name: 't3x/prompt', version: 'v1' } },
+  sources: [{ id: 'conv_prompt', title: 'Prompt brief', type: 'conversation' }],
+  yops_log_ids: ['op_prompt'],
+};
+
+const PROMPT_VALIDATION: YSchemaValidationSummary = {
+  checkedAt: '2026-07-30T08:01:00.000Z',
+  commitHash: PROMPT_COMMIT.hash,
+  errorCount: 1,
+  fixCount: 0,
+  gapCount: 0,
+  gaps: [],
+  issues: [
+    {
+      code: 'INVALID_TYPE',
+      label: 'Invalid type',
+      message: 'Template must be a string.',
+      path: 'messages.system_policy.template',
+    },
+  ],
+  ready: false,
+  runId: 'ysvr_prompt',
+  schemaName: 't3x/prompt',
+  status: 'failed',
+  valid: false,
+};
+
 function setupHookMocks() {
   hookMocks.branchHeads = {};
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
@@ -788,6 +920,83 @@ describe('ProjectStateTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
     expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
+  });
+
+  it('routes Prompt commits to the Prompt reader with validation and YOp context', async () => {
+    hookMocks.loadCommits.mockResolvedValue([PROMPT_COMMIT]);
+    hookMocks.loadOperations.mockResolvedValue({
+      commit_hash: PROMPT_COMMIT.hash,
+      operations: [
+        {
+          created_at: '2026-07-30T08:00:00.000Z',
+          id: 'op_prompt',
+          model: null,
+          source: 'source_chat',
+          turn_hash: 'turn_prompt',
+          yops: [
+            {
+              set: {
+                path: 'messages/system_policy/template',
+                value: 'Use source evidence only.',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    renderStateTab(PROMPT_VALIDATION);
+
+    await screen.findByText('Add extract requirements Prompt');
+    expect(screen.getByText('prompt-state.yaml')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(screen.getByRole('region', { name: 'Prompt schema render' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByText('messages/system_policy/template')).not.toHaveLength(0);
+    expect(screen.getByText('01 SET')).toBeInTheDocument();
+    expect(screen.getByText('Source Chat')).toBeInTheDocument();
+  });
+
+  it('keeps an inspectable generic reader for unregistered schemas', async () => {
+    const genericCommit: ApiCommit = {
+      ...PRD_COMMIT,
+      content: {
+        relations: [],
+        trees: [
+          {
+            children: [{ children: [], key: 'hostname', slots: { value: 'sensor-node-1' } }],
+            key: 'device',
+            slots: { platform: 'esphome' },
+          },
+        ],
+      },
+      hash: 'sha256:generic-state',
+      message: 'Add device state',
+      parents: [],
+      provenance: { method: 'workspace', schema_ref: { name: 'vendor/device', version: 'v1' } },
+      sources: [],
+      yops_log_ids: [],
+    };
+    hookMocks.loadCommits.mockResolvedValue([genericCommit]);
+    hookMocks.loadOperations.mockResolvedValue({
+      commit_hash: genericCommit.hash,
+      operations: [],
+    });
+
+    renderStateTab(null);
+
+    await screen.findByText('Add device state');
+    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(
+      screen.getByRole('region', { name: 'Generic structured state render' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'No specialized reader is registered; committed nodes remain fully inspectable.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('device')).not.toHaveLength(0);
+    expect(screen.queryByRole('region', { name: 'Schema render' })).not.toBeInTheDocument();
   });
 
   it('initializes a new branch from main without inventing a schema binding', async () => {
