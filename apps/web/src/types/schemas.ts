@@ -27,8 +27,11 @@ export interface SchemaContractPath {
   type: string;
   required: boolean;
   constraint: string;
+  constraintTags?: SchemaConstraintTag[];
   depth: 0 | 1 | 2;
 }
+
+export type SchemaConstraintTag = 'blocking' | 'enum' | 'executable' | 'pattern';
 
 export type SchemaContractChangeKind = 'ADD' | 'CHANGE' | 'KEEP' | 'REMOVE';
 
@@ -46,6 +49,17 @@ export interface SchemaRelationTypePreview {
   constraints: string[];
 }
 
+export type SchemaRuleKind = 'descriptive' | 'executable';
+
+export interface SchemaRulePreview {
+  id: string;
+  kind: SchemaRuleKind;
+  description: string;
+  scope: string;
+  blocking: boolean;
+  signals: string[];
+}
+
 /** Fixture-backed view model for the Schemas version browser. */
 export interface SchemaReleasePreview extends SchemaRelease {
   canonicalName: string;
@@ -54,6 +68,7 @@ export interface SchemaReleasePreview extends SchemaRelease {
   canonicalYaml: string;
   structure: SchemaContractPath[];
   relationTypes: SchemaRelationTypePreview[];
+  rules: SchemaRulePreview[];
   changesBaseReleaseId: string;
   changes: SchemaContractChange[];
 }

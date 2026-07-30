@@ -162,7 +162,7 @@ function SchemaRegistryHeader({
         </h2>
         <p className="mt-0.5 max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
           Schema families define different kinds of structured state. Choose a family to inspect its
-          current contract, historical versions, typed relations, and canonical YAML.
+          current contract, deterministic rules, typed relations, and canonical YAML.
         </p>
       </div>
       <Button
