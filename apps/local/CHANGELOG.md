@@ -1,5 +1,11 @@
 # @t3x-dev/local
 
+## 0.6.0
+
+### Patch Changes
+
+- [#1186](https://github.com/t3x-dev/t3x-core/pull/1186) [`6a77456`](https://github.com/t3x-dev/t3x-core/commit/6a77456dc875006df648a675e44f6129409aef0c) Thanks [@lqw905](https://github.com/lqw905)! - Align the local package release with the three-package public alpha surface.
+
 ## 0.5.1
 
 ### Patch Changes

@@ -12,8 +12,8 @@ Before requesting review:
 - Link the issue the PR resolves.
 - Fill in release impact.
 - Run the smallest relevant local verification commands.
-- Add a changeset if the PR changes user-visible behavior for `@t3x-dev/local`
-  or `@t3x-dev/yops`.
+- Add a changeset if the PR changes user-visible behavior for `@t3x-dev/local`,
+  `@t3x-dev/yops`, or `@t3x-dev/yschema`.
 
 Use `no-release-impact` only when the PR does not affect public package behavior
 or documented public contracts.
@@ -50,7 +50,8 @@ Release PRs must include:
 - User-facing release notes.
 - A `Package Releases` section containing either `- None` or the complete
   current npm publish surface:
-  `- \`@t3x-dev/local\`: 0.4.1` and `- \`@t3x-dev/yops\`: 0.4.1`.
+  `- \`@t3x-dev/local\`: 0.6.0`, `- \`@t3x-dev/yops\`: 0.6.0`, and
+  `- \`@t3x-dev/yschema\`: 0.6.0`.
 
 The release PR policy check also validates changeset files:
 
@@ -60,8 +61,8 @@ The release PR policy check also validates changeset files:
   types like `patch`, `minor`, or `major`.
 - Listed public packages must appear in changeset frontmatter.
 - Public packages in changeset frontmatter must appear in `Package Releases`.
-- Package releases currently require both public alpha npm packages:
-  `@t3x-dev/local` and `@t3x-dev/yops`.
+- Package releases currently require all public alpha npm packages:
+  `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
 
 The product release version is independent from npm package versions. If the
 release publishes no packages, write `- None` in `Package Releases`; final
@@ -105,6 +106,7 @@ Use this decision table when filling out a PR.
 | --- | --- |
 | `@t3x-dev/local` user-visible behavior | Yes |
 | `@t3x-dev/yops` user-visible behavior | Yes |
+| `@t3x-dev/yschema` user-visible behavior | Yes |
 | Runtime artifact or install behavior | Yes |
 | Public docs contract | Usually yes |
 | CI-only change | No |

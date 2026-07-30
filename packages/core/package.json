@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/core",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -9,7 +9,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts --clean",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "bench": "vitest bench",
@@ -23,12 +23,14 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
+    "@t3x-dev/transition": "workspace:*",
     "@t3x-dev/yops": "workspace:*",
     "@t3x-dev/yschema": "workspace:*",
     "js-yaml": "^4.1.1",
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",
     "undici": "^7.27.2",
+    "yaml": "2.8.3",
     "zod": "^4.2.1"
   },
   "devDependencies": {

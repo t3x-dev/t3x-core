@@ -1,0 +1,284 @@
+[
+  {
+    "id": "state-domain-separated",
+    "kind": "state",
+    "schema": "t3x/state/v1",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": {
+        "mediaType": "application/yaml",
+        "version": "1"
+      },
+      "value": {
+        "device": {
+          "name": "kitchen"
+        }
+      }
+    },
+    "canonical": "{\"codec\":{\"mediaType\":\"application/yaml\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":{\"device\":{\"name\":\"kitchen\"}}}",
+    "digest": "sha256:4f213d39452dc3185e067ed5af0fe0a6005f762164ff73fcac908bf9d71401c8"
+  },
+  {
+    "id": "state-codec-version-2",
+    "kind": "state",
+    "schema": "t3x/state/v1",
+    "value": {
+      "schema": "t3x/state/v1",
+      "codec": {
+        "mediaType": "application/yaml",
+        "version": "2"
+      },
+      "value": {
+        "device": {
+          "name": "kitchen"
+        }
+      }
+    },
+    "canonical": "{\"codec\":{\"mediaType\":\"application/yaml\",\"version\":\"2\"},\"schema\":\"t3x/state/v1\",\"value\":{\"device\":{\"name\":\"kitchen\"}}}",
+    "digest": "sha256:b350350fcba694797495c9fbb71d19b89830e42d3c246f39d3d5f5c6f44b2104"
+  },
+  {
+    "id": "effect-driver-version-1",
+    "kind": "effect",
+    "schema": "t3x/effect/v1",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "1",
+        "specDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "operations": [
+        {
+          "op": "set",
+          "path": "/device/name",
+          "value": "kitchen"
+        }
+      ],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "canonical": "{\"base\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.dev/yops\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},\"inputs\":[],\"operations\":[{\"op\":\"set\",\"path\":\"/device/name\",\"value\":\"kitchen\"}],\"result\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}",
+    "digest": "sha256:3652086d3eecef3ae4ed4a0c7bf1670bef555bcc7cdf8f0bc3c5bbfdde46885f"
+  },
+  {
+    "id": "effect-driver-version-2",
+    "kind": "effect",
+    "schema": "t3x/effect/v1",
+    "value": {
+      "schema": "t3x/effect/v1",
+      "base": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "driver": {
+        "protocol": "t3x.dev/yops",
+        "protocolVersion": "2",
+        "specDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "operations": [
+        {
+          "op": "set",
+          "path": "/device/name",
+          "value": "kitchen"
+        }
+      ],
+      "inputs": [],
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "canonical": "{\"base\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.dev/yops\",\"protocolVersion\":\"2\",\"specDigest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"},\"inputs\":[],\"operations\":[{\"op\":\"set\",\"path\":\"/device/name\",\"value\":\"kitchen\"}],\"result\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}",
+    "digest": "sha256:ea7e30d520bbeacbcc02de1dfe017437f638aaf1f96bf55caa45b25b1daa17fd"
+  },
+  {
+    "id": "proposal-evidence-a",
+    "kind": "statement",
+    "schema": "t3x/statement/v1",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "inferred",
+          "value": "Rename the device",
+          "evidence": [
+            {
+              "resource": {
+                "uri": "urn:t3x:source:a",
+                "mediaType": "text/plain",
+                "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "locator": {
+                "scheme": "whole",
+                "value": ""
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "mode": "unspecified"
+        }
+      }
+    },
+    "canonical": "{\"actor\":{\"id\":\"agent:planner\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[{\"locator\":{\"scheme\":\"whole\",\"value\":\"\"},\"resource\":{\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"mediaType\":\"text/plain\",\"uri\":\"urn:t3x:source:a\"}}],\"mode\":\"inferred\",\"value\":\"Rename the device\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}",
+    "digest": "sha256:4ce2fb0cc58ec3257f7e82bce42263f93cd724210d7b0bd499d206f4e925454a"
+  },
+  {
+    "id": "proposal-evidence-b",
+    "kind": "statement",
+    "schema": "t3x/statement/v1",
+    "value": {
+      "schema": "t3x/statement/v1",
+      "subjects": [
+        {
+          "kind": "effect",
+          "schema": "t3x/effect/v1",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "actor": {
+        "kind": "agent",
+        "id": "agent:planner"
+      },
+      "predicateType": "t3x.proposal/v1",
+      "predicate": {
+        "intent": {
+          "mode": "inferred",
+          "value": "Rename the device",
+          "evidence": [
+            {
+              "resource": {
+                "uri": "urn:t3x:source:b",
+                "mediaType": "text/plain",
+                "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              "locator": {
+                "scheme": "whole",
+                "value": ""
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "mode": "unspecified"
+        }
+      }
+    },
+    "canonical": "{\"actor\":{\"id\":\"agent:planner\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[{\"locator\":{\"scheme\":\"whole\",\"value\":\"\"},\"resource\":{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"mediaType\":\"text/plain\",\"uri\":\"urn:t3x:source:b\"}}],\"mode\":\"inferred\",\"value\":\"Rename the device\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}",
+    "digest": "sha256:0290a152df40b741a7dac6de256164a145b41de58789e42f134724fe4b7c559a"
+  },
+  {
+    "id": "commit-base",
+    "kind": "commit",
+    "schema": "t3x/commit/v2",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [],
+      "decision": {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "canonical": "{\"decision\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}",
+    "digest": "sha256:b3cfc844e19b79b167b3a49b21314303e50ba2e3846dfedda525ce4aa87b78a4"
+  },
+  {
+    "id": "commit-parent",
+    "kind": "commit",
+    "schema": "t3x/commit/v2",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [
+        {
+          "kind": "commit",
+          "schema": "t3x/commit/v2",
+          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "decision": {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "canonical": "{\"decision\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[{\"digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"kind\":\"commit\",\"schema\":\"t3x/commit/v2\"}],\"result\":{\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}",
+    "digest": "sha256:e746db7545afbdece0195dbfa11c95b3d8346464d5d7b8cb56dc285d7400505f"
+  },
+  {
+    "id": "commit-decision",
+    "kind": "commit",
+    "schema": "t3x/commit/v2",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [],
+      "decision": {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "canonical": "{\"decision\":{\"digest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}",
+    "digest": "sha256:fbd3dd2fc280f2c98c5d6b0f99680426de71db718821b4f4aafc092810bfd947"
+  },
+  {
+    "id": "commit-result",
+    "kind": "commit",
+    "schema": "t3x/commit/v2",
+    "value": {
+      "schema": "t3x/commit/v2",
+      "parents": [],
+      "decision": {
+        "kind": "statement",
+        "schema": "t3x/statement/v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    "canonical": "{\"decision\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}",
+    "digest": "sha256:5a6065a8d69bab4d44269eec0b226409299386b653f8b16df221b4f62ebd1707"
+  }
+]

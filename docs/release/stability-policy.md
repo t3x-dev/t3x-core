@@ -10,6 +10,7 @@ The public alpha surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/yschema`
 
 Other packages may exist in the repository, but they are treated as internal
 until explicitly promoted.
@@ -45,6 +46,13 @@ For `@t3x-dev/yops`:
 - Public operation semantics must be documented before release.
 - Breaking operation behavior requires a changeset and release note.
 - Compatibility-sensitive changes should include fixture or golden-case tests.
+
+For `@t3x-dev/yschema`:
+
+- Public validation behavior must be documented before release.
+- Compatibility-sensitive changes should include fixture or golden-case tests.
+- Breaking validation API or schema-profile changes require a changeset and
+  release note.
 
 ### YOps Alpha Contract
 

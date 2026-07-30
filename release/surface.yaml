@@ -33,15 +33,25 @@ packages:
     api_extractor: false
     why: Candidate engine package; not part of the alpha public surface.
 
-  - name: "@t3x-dev/yschema"
-    path: packages/yschema
+  - name: "@t3x-dev/transition"
+    path: packages/transition
     access: restricted
     publish_state: applied
     npm_publish: false
     stability_tier: internal
     readme_required: false
     api_extractor: false
-    why: Candidate schema package; not part of the alpha public surface.
+    why: Internal leaf package for the Transition protocol; not a public alpha surface.
+
+  - name: "@t3x-dev/yschema"
+    path: packages/yschema
+    access: public
+    publish_state: applied
+    npm_publish: true
+    stability_tier: alpha
+    readme_required: true
+    api_extractor: false
+    why: Public alpha schema validation candidate for schema-backed structured state.
 
   - name: "@t3x-dev/api-client"
     path: packages/api-client

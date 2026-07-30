@@ -235,7 +235,7 @@ async function uploadSinglePackageReleaseAssets(packageRecord) {
 }
 
 async function packageReleaseAssetPaths(packageRecord) {
-  if (packageRecord.name === '@t3x-dev/yops') {
+  if (packageRecord.name === '@t3x-dev/yops' || packageRecord.name === '@t3x-dev/yschema') {
     return [packageRecord.tarballPath];
   }
 
@@ -339,6 +339,9 @@ function packageReleaseTag(packageRecord) {
   }
   if (packageRecord.name === '@t3x-dev/yops') {
     return `t3x-yops-v${packageRecord.version}`;
+  }
+  if (packageRecord.name === '@t3x-dev/yschema') {
+    return `t3x-yschema-v${packageRecord.version}`;
   }
   return null;
 }

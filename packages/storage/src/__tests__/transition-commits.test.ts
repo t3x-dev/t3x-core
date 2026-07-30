@@ -1,0 +1,360 @@
+import {
+  authorizeDecisionForRepository,
+  buildReplayVerificationStatement,
+  type CommitDescriptor,
+  createAcceptancePolicyResource,
+  createCommitV2,
+  describeCommitV2,
+  describeTransitionObject,
+  type Effect,
+  InMemoryTransitionObjectResolver,
+  type ProposalStatement,
+  parseAcceptancePolicy,
+  type RepositoryDecisionAuthority,
+  type RepositoryDecisionAuthorization,
+  type State,
+} from '@t3x-dev/core';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AnyDB } from '../adapters';
+import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
+import { createCommit } from '../queries/commits';
+import { insertProject } from '../queries/projects';
+import {
+  createTransitionCommit,
+  DecisionNotAuthorizedError,
+  getTransitionCommit,
+  listCommitHistory,
+  recordRepositoryDecisionAuthorization,
+  TransitionHeadConflictError,
+} from '../queries/transition-commits';
+import { createTestDB, testData } from './setup';
+
+const DECIDED_AT = '2026-07-28T00:00:00.000Z';
+
+function state(value: Record<string, unknown>): State {
+  return {
+    schema: 't3x/state/v1',
+    codec: { mediaType: 'application/yaml', version: '1' },
+    value,
+  } as State;
+}
+
+function graph(base: State, result: State, suffix: string) {
+  const effect: Effect = {
+    schema: 't3x/effect/v1',
+    base: describeTransitionObject(base),
+    driver: {
+      protocol: 't3x.dev/test',
+      protocolVersion: '1',
+      specDigest: `sha256:${'a'.repeat(64)}`,
+    },
+    operations: [{ op: 'set', path: '/value', value: suffix }],
+    inputs: [],
+    result: describeTransitionObject(result),
+  };
+  const proposal: ProposalStatement = {
+    schema: 't3x/statement/v1',
+    subjects: [describeTransitionObject(effect)],
+    actor: { kind: 'agent', id: `agent:planner:${suffix}` },
+    predicateType: 't3x.proposal/v1',
+    predicate: {
+      intent: { mode: 'inferred', value: `Apply ${suffix}`, evidence: [] },
+      rationale: { mode: 'authored', value: `Prepare ${suffix}`, evidence: [] },
+    },
+  };
+  const replay = buildReplayVerificationStatement({
+    effect,
+    actor: { kind: 'service', id: 'service:replay' },
+    predicate: {
+      outcome: 'verified',
+      result: effect.result,
+      tool: { name: 'test-replay', version: '1' },
+      run: { id: `run:${suffix}`, recordedAt: DECIDED_AT },
+      environment: { mode: 'unspecified' },
+    },
+  });
+  return { base, result, effect, proposal, replay };
+}
+
+function authority(subject: ReturnType<typeof graph>): RepositoryDecisionAuthority {
+  const bound = createAcceptancePolicyResource({
+    policy: parseAcceptancePolicy({
+      schema: 't3x.dev/acceptance-policy/v1',
+      version: 1,
+      authorization: {
+        decide: { actors: { mode: 'any' } },
+        override: { actors: { mode: 'any' } },
+        allowSelfApproval: false,
+      },
+      claims: {
+        intent: {
+          allowedModes: ['inferred'],
+          minimumEvidence: 0,
+          humanConfirmation: 'not_required',
+        },
+        rationale: {
+          allowedModes: ['authored'],
+          minimumEvidence: 0,
+          humanConfirmation: 'not_required',
+        },
+      },
+      checks: {
+        replay: {
+          issuers: { mode: 'any' },
+          tools: { mode: 'any' },
+          environments: { mode: 'any' },
+        },
+        validation: {
+          requirement: 'optional',
+          issuers: { mode: 'any' },
+          tools: { mode: 'any' },
+          environments: { mode: 'any' },
+          profiles: { mode: 'any' },
+          schemas: { mode: 'any' },
+          contexts: { mode: 'any' },
+        },
+        humanConfirmation: { issuers: { mode: 'any' } },
+      },
+      override: {
+        allowClaimFailures: false,
+        allowFailedValidation: true,
+        allowMissingHumanConfirmation: false,
+        allowMissingValidation: true,
+      },
+    }),
+    uri: 't3x://project/policies/default',
+  });
+  return {
+    async resolve() {
+      return {
+        actorContext: { actor: { kind: 'human', id: 'human:maintainer' } },
+        observationScope: { completeness: 'complete', sources: ['project-store'] },
+        policy: bound.policy,
+        policyResource: bound.resource,
+        statements: [{ statement: subject.replay, issuerContext: { actor: subject.replay.actor } }],
+      };
+    },
+  };
+}
+
+async function prepare(
+  projectId: string,
+  refName: string,
+  base: State,
+  result: State,
+  suffix: string,
+  parents: readonly CommitDescriptor[] = []
+) {
+  const subject = graph(base, result, suffix);
+  const issued = await authorizeDecisionForRepository({
+    projectId,
+    refName,
+    proposal: subject.proposal,
+    effect: subject.effect,
+    outcome: 'accepted',
+    rationale: { mode: 'unspecified' },
+    decidedAt: DECIDED_AT,
+    authority: authority(subject),
+  });
+  if (!issued.ok || issued.authorization === null) {
+    throw new Error('Fixture Decision authorization failed');
+  }
+  const objects = [subject.base, subject.result, ...issued.authorization.objects];
+  const resolver = new InMemoryTransitionObjectResolver(objects);
+  for (const parent of parents) {
+    const stored = await getTransitionCommit(db, projectId, parent.digest);
+    if (stored !== null) resolver.put(stored.commit);
+  }
+  const commit = await createCommitV2({
+    parents,
+    decision: issued.decision,
+    resolver,
+  });
+  return { subject, issued, commit, objects };
+}
+
+let db: AnyDB;
+let cleanup: () => Promise<void>;
+
+beforeAll(async () => {
+  const setup = await createTestDB();
+  db = setup.db;
+  cleanup = setup.cleanup;
+});
+
+afterAll(async () => cleanup());
+
+describe('CommitV2 repository', () => {
+  it('requires the unforgeable issuance capability before recording authority', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Capability Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'one' }),
+      'capability'
+    );
+    const forged = { ...prepared.issued.authorization } as RepositoryDecisionAuthorization;
+    await expect(recordRepositoryDecisionAuthorization(db, forged)).rejects.toThrow(
+      'was not issued by the trusted service'
+    );
+    await expect(
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: null,
+        commit: prepared.commit,
+        objects: prepared.objects,
+      })
+    ).rejects.toBeInstanceOf(DecisionNotAuthorizedError);
+  });
+
+  it('persists canonical CommitV2 bytes and advances the ref only after exact authorization', async () => {
+    const project = await insertProject(db, testData.project({ name: 'CommitV2 Project' }));
+    const branch = await ensureMainBranch(db, project.projectId);
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'kitchen' }),
+      'genesis'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const created = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+    const stored = await getTransitionCommit(db, project.projectId, created.digest);
+
+    expect(created.mediaType).toBe('application/vnd.t3x.commit-v2+json');
+    expect(stored?.commit).toEqual(prepared.commit);
+    const refreshed = await findBranchByName(db, project.projectId, branch.name);
+    expect(refreshed?.headCommitHash).toBe(created.digest);
+  });
+
+  it('binds authorization to the exact project and ref', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Ref Binding Project' }));
+    await ensureMainBranch(db, project.projectId);
+    await insertBranch(db, { projectId: project.projectId, name: 'other' });
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'bound' }),
+      'ref-bound'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    await expect(
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'other',
+        expectedHead: null,
+        commit: prepared.commit,
+        objects: prepared.objects,
+      })
+    ).rejects.toBeInstanceOf(DecisionNotAuthorizedError);
+  });
+
+  it('allows exactly one writer to win an expected-head race', async () => {
+    const project = await insertProject(db, testData.project({ name: 'CAS Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const genesis = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ version: 1 }),
+      'cas-genesis'
+    );
+    await recordRepositoryDecisionAuthorization(db, genesis.issued.authorization);
+    const first = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: genesis.commit,
+      objects: genesis.objects,
+    });
+    const parent = describeCommitV2(genesis.commit);
+    const left = await prepare(
+      project.projectId,
+      'main',
+      genesis.subject.result,
+      state({ version: 2, writer: 'left' }),
+      'left',
+      [parent]
+    );
+    const right = await prepare(
+      project.projectId,
+      'main',
+      genesis.subject.result,
+      state({ version: 2, writer: 'right' }),
+      'right',
+      [parent]
+    );
+    await Promise.all([
+      recordRepositoryDecisionAuthorization(db, left.issued.authorization),
+      recordRepositoryDecisionAuthorization(db, right.issued.authorization),
+    ]);
+    const attempts = await Promise.allSettled([
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: first.digest,
+        commit: left.commit,
+        objects: left.objects,
+      }),
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: first.digest,
+        commit: right.commit,
+        objects: right.objects,
+      }),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
+    const failure = attempts.find((attempt) => attempt.status === 'rejected');
+    expect(failure).toMatchObject({ reason: expect.any(TransitionHeadConflictError) });
+    if (failure?.status === 'rejected') {
+      expect(failure.reason).toMatchObject({ code: 'STALE_BASE', expectedHead: first.digest });
+    }
+  });
+
+  it('lists CommitV1 and CommitV2 together without promoting legacy assurance', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Mixed History Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const legacy = await createCommit(db, {
+      project_id: project.projectId,
+      content: { trees: [], relations: [] },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'legacy',
+    });
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'v2' }),
+      'mixed'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+
+    const history = await listCommitHistory(db, project.projectId);
+    const legacyEntry = history.find((entry) => entry.format === 'legacy_v1');
+    expect(history.map((entry) => entry.format).sort()).toEqual(['legacy_v1', 'transition_v2']);
+    expect(legacyEntry).toMatchObject({
+      id: legacy.hash,
+      assurance: { mode: 'legacy_unavailable' },
+    });
+    expect(legacyEntry).not.toHaveProperty('decision');
+  });
+});

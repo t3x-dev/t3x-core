@@ -1,0 +1,32 @@
+# Source fidelity fixture: representation is part of the State identity.
+substitutions:
+  device_name: &device_name greenhouse-sensor
+  friendly_name: Greenhouse Sensor
+
+esphome:
+  name: *device_name
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+logger:
+  level: INFO # Keep this explanation beside the value.
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+packages: !include packages/common.yaml
+
+interval:
+  - interval: 60s
+    then:
+      - lambda: !lambda |-
+          ESP_LOGD("heartbeat", "alive");

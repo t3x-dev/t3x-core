@@ -22,6 +22,40 @@ diffs, merges, and provenance.
 Do not reintroduce the old graph, meaning, knowledge, or AI-first positioning
 unless the README changes first.
 
+## Transition Spine Migration
+
+The current public product frame remains `Source -> YOps -> Commit`. Epic #1222
+authorizes an internal architecture migration that makes the relationship
+between proposal, replay verification, acceptance, and commit explicit:
+
+```text
+Propose -> Verify* -> Decide -> Commit?
+```
+
+`Verify*` always includes deterministic replay verification and may add zero or
+more external Statements. `Commit?` exists only for accepted or authorized
+overridden Decisions; rejection remains auditable without advancing history.
+Preparation, retries, revisions, and post-processing compose these verbs rather
+than adding kernel lifecycle hooks.
+
+This is not permission to change public positioning or claim that a stable
+protocol already exists. Until the Epic's portability and conformance gates
+pass:
+
+- keep YOps, YSchema, and Commit independently usable;
+- put protocol contracts in the leaf `@t3x-dev/transition` package;
+- distinguish protocol ports, native adapters, Statement providers, application
+  use cases, and derived product projections instead of using one framework;
+- integrate native components through one-way adapters rather than inheritance;
+- keep database, network, LLM, runner, UI, clock, and randomness outside the
+  protocol kernel;
+- keep product surfaces task-oriented and derive them from shared application
+  projections rather than raw protocol records;
+- update the relevant GitHub Issue before changing an architecture decision.
+
+The Transition Spine is implementation work under review, not a replacement
+README claim.
+
 ## Repository Shape
 
 This is a pnpm workspace with Turborepo:
@@ -118,6 +152,11 @@ Match verification to the change:
   `pnpm standards:validate`, and relevant `node --test tools/__tests__/*.mjs`.
 - Package/runtime changes: run the package-specific build/test plus `pnpm build`
   when practical.
+- Transition Spine changes: record the clean `origin/dev` baseline; map each
+  changed invariant to its native, adapter, protocol-conformance, or E2E test;
+  include an adversarial case; and run `pnpm test` before review. A retry does
+  not erase the first failure—classify assertion, teardown/resource, environment,
+  and flaky failures separately.
 - WebUI changes: run the relevant WebUI test/build and inspect in a browser when
   layout or interaction changes.
 
