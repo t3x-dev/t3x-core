@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 76 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(76);
+  it('has 80 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(80);
   });
 
   it('key equals value for every code', () => {
@@ -39,6 +39,7 @@ describe('ErrorCodes', () => {
         "CONVERSATION_NOT_FOUND": "CONVERSATION_NOT_FOUND",
         "CREATE_FAILED": "CREATE_FAILED",
         "DATABASE_ERROR": "DATABASE_ERROR",
+        "DECISION_NOT_PERMITTED": "DECISION_NOT_PERMITTED",
         "DELETE_FAILED": "DELETE_FAILED",
         "DEPRECATED": "DEPRECATED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
@@ -60,6 +61,7 @@ describe('ErrorCodes', () => {
         "INVALID_STATUS": "INVALID_STATUS",
         "LEAF_NOT_FOUND": "LEAF_NOT_FOUND",
         "LEARN_FAILED": "LEARN_FAILED",
+        "LEGACY_HEAD_READ_ONLY": "LEGACY_HEAD_READ_ONLY",
         "LIST_FAILED": "LIST_FAILED",
         "LLM_NOT_CONFIGURED": "LLM_NOT_CONFIGURED",
         "MERGE_FAILED": "MERGE_FAILED",
@@ -79,11 +81,13 @@ describe('ErrorCodes', () => {
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
         "REVIEW_REQUIRED": "REVIEW_REQUIRED",
+        "SCHEMA_UNAVAILABLE": "SCHEMA_UNAVAILABLE",
         "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "STALE_REVIEW": "STALE_REVIEW",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "TRANSITION_VIEW_UNAVAILABLE": "TRANSITION_VIEW_UNAVAILABLE",

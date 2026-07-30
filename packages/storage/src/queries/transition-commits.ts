@@ -16,6 +16,7 @@ import {
   projectTransitionView,
   type RepositoryDecisionAuthorization,
   type RepositoryDecisionRecord,
+  type State,
   type StatementObservation,
   serializeTransitionObject,
   type TransitionViewV1,
@@ -107,6 +108,19 @@ export class TransitionRefNotFoundError extends Error {
   ) {
     super(`Ref ${refName} was not found in project ${projectId}`);
     this.name = 'TransitionRefNotFoundError';
+  }
+}
+
+export class TransitionRefHeadIntegrityError extends Error {
+  readonly code = 'INTEGRITY_CHAIN_INVALID';
+
+  constructor(
+    readonly projectId: string,
+    readonly refName: string,
+    readonly head: string
+  ) {
+    super(`Ref ${refName} in project ${projectId} points to an unverifiable commit ${head}`);
+    this.name = 'TransitionRefHeadIntegrityError';
   }
 }
 
@@ -661,6 +675,74 @@ export interface CreatedTransitionCommit {
   commit: CommitV2;
   digest: string;
   mediaType: typeof COMMIT_V2_MEDIA_TYPE;
+}
+
+export type TransitionRefHead =
+  | {
+      format: 'empty';
+      refName: string;
+      head: null;
+    }
+  | {
+      format: 'legacy_v1';
+      refName: string;
+      head: string;
+    }
+  | {
+      format: 'transition_v2';
+      refName: string;
+      head: string;
+      commit: CommitV2;
+      recordedAt: string;
+      state: State;
+    };
+
+/**
+ * Resolve a repository ref into a verified Transition base.
+ *
+ * Legacy CommitV1 heads are reported explicitly and never promoted into a
+ * synthetic CommitV2 parent. CommitV2 heads and their Result State are
+ * re-hashed and integrity-verified before callers may use them as a Base.
+ */
+export async function getTransitionRefHead(
+  db: AnyDB,
+  input: { projectId: string; refName: string }
+): Promise<TransitionRefHead> {
+  const [ref] = await db
+    .select({ head: branches.headCommitHash })
+    .from(branches)
+    .where(and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName)))
+    .limit(1);
+  if (ref === undefined) {
+    throw new TransitionRefNotFoundError(input.projectId, input.refName);
+  }
+  if (ref.head === null) {
+    return { format: 'empty', refName: input.refName, head: null };
+  }
+
+  const transition = await getTransitionCommit(db, input.projectId, ref.head);
+  if (transition === null) {
+    const legacy = await getCommit(db, ref.head);
+    if (legacy?.project_id !== input.projectId) {
+      throw new TransitionRefHeadIntegrityError(input.projectId, input.refName, ref.head);
+    }
+    return { format: 'legacy_v1', refName: input.refName, head: ref.head };
+  }
+
+  const resolver = new DatabaseTransitionObjectResolver(db);
+  const verified = await verifyCommitV2(transition.commit, resolver);
+  const result = await resolveStoredObject(resolver, verified.effect.result);
+  if (result.schema !== 't3x/state/v1') {
+    throw new TransitionRefHeadIntegrityError(input.projectId, input.refName, ref.head);
+  }
+  return {
+    format: 'transition_v2',
+    refName: input.refName,
+    head: ref.head,
+    commit: verified.commit,
+    recordedAt: transition.recordedAt,
+    state: result,
+  };
 }
 
 /**
