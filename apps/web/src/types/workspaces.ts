@@ -128,6 +128,14 @@ export interface WorkspaceSchemaCandidate {
   summary: string;
   proposalMode?: WorkspaceProposalMode;
   fields: WorkspaceSchemaCandidateField[];
+  promptCompileInputs?: WorkspacePromptCompileInputs;
+}
+
+export interface WorkspacePromptCompileInputs {
+  relations?: Array<{ type: string; from: string; to: string }>;
+  variableValues?: Record<string, unknown>;
+  contextContents?: Record<string, string>;
+  resourceContents?: Record<string, string>;
 }
 
 export interface WorkspaceYOpsDraftOperation {

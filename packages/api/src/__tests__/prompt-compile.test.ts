@@ -58,6 +58,11 @@ function validPreviewRequest() {
       response_schema: responseSchema,
       extraction_policy: 'Use only facts present in the supplied source material.',
     },
+    input_source: {
+      kind: 'fixture' as const,
+      label: 'Basic extraction fixture',
+      sourceCount: 1,
+    },
   };
 }
 
@@ -88,6 +93,21 @@ describe('Prompt compile preview route', () => {
         compiled: true,
         schemaName: 't3x/prompt',
         schemaVersion: 'v1',
+        compilerVersion: 't3x-prompt-compiler@0.1.0',
+        inputSource: {
+          kind: 'fixture',
+          label: 'Basic extraction fixture',
+          sourceCount: 1,
+        },
+        adapter: {
+          id: 'portable-preview',
+          mode: 'chat',
+          responseFormat: 'json_schema',
+          streaming: false,
+          toolPolicy: 'none',
+          maxOutputTokens: 2000,
+        },
+        contextBudget: { maxTokens: 6000, resolved: 1, missing: 0 },
         issues: [],
       },
     });
@@ -101,6 +121,10 @@ describe('Prompt compile preview route', () => {
     expect(first.data.resources).toContainEqual(
       expect.objectContaining({ key: 'response_schema', referenced: true, available: true })
     );
+    expect(first.data.contexts).toContainEqual(
+      expect.objectContaining({ key: 'project_sources', status: 'resolved' })
+    );
+    expect(first.data.compileHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it('returns validation issues at Workspace State paths without running a prompt', async () => {
@@ -171,5 +195,7 @@ describe('Prompt compile preview route', () => {
       tags: ['Prompts'],
     });
     expect(document.components.schemas.PromptCompilePreviewResponse).toBeDefined();
+    expect(document.components.schemas.PromptCompileInputSource).toBeDefined();
+    expect(document.components.schemas.PromptContextBudget).toBeDefined();
   });
 });
