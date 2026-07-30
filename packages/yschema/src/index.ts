@@ -41,6 +41,7 @@ export {
   parseYSchema,
   renderYSchemaMarkdown,
   t3xPrdP0Fixtures,
+  t3xPromptP0Fixtures,
   t3xSkillP0Fixtures,
   validateTree,
 } from './p0';
