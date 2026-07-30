@@ -1,4 +1,4 @@
-import type { SchemaRelease } from '@/types/schemas';
+import type { SchemaReleasePreview } from '@/types/schemas';
 import type { WorkspaceCandidate, WorkspaceSchemaBinding } from '@/types/workspaces';
 
 export const PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY = 'default_schema_binding';
@@ -15,25 +15,31 @@ export const EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS: ProjectWorkspaceSchemaBind
 };
 
 export function schemaReleaseToWorkspaceBinding(
-  release: SchemaRelease,
+  release: SchemaReleasePreview,
   mode: WorkspaceSchemaBinding['mode']
 ): WorkspaceSchemaBinding {
-  const releaseWithCanonicalMetadata = release as SchemaRelease & {
-    canonicalName?: string;
-    schemaHash?: string;
-  };
+  if (!isSchemaReleaseBindable(release)) {
+    throw new Error(
+      `Schema release ${release.canonicalName}@${release.version} is not available for binding.`
+    );
+  }
+  if (!/^sha256:[a-f0-9]{64}$/i.test(release.schemaHash)) {
+    throw new Error(
+      `Schema release ${release.canonicalName}@${release.version} does not have a complete hash.`
+    );
+  }
+
   return {
-    ...(releaseWithCanonicalMetadata.canonicalName
-      ? { canonicalName: releaseWithCanonicalMetadata.canonicalName }
-      : {}),
-    ...(releaseWithCanonicalMetadata.schemaHash &&
-    /^sha256:[a-f0-9]{64}$/i.test(releaseWithCanonicalMetadata.schemaHash)
-      ? { schemaHash: releaseWithCanonicalMetadata.schemaHash }
-      : {}),
+    canonicalName: release.canonicalName,
+    schemaHash: release.schemaHash,
     schemaName: release.name,
     version: release.version,
     mode,
   };
+}
+
+export function isSchemaReleaseBindable(release: SchemaReleasePreview): boolean {
+  return release.status === 'active' && release.runtimeAvailable;
 }
 
 export function getProjectDefaultSchemaBinding(
@@ -78,6 +84,7 @@ export function workspaceSchemaBindingsEqual(
   if (!left || !right) return left === right;
   return (
     left.canonicalName === right.canonicalName &&
+    left.schemaHash === right.schemaHash &&
     left.schemaName === right.schemaName &&
     left.version === right.version
   );
@@ -127,7 +134,7 @@ export function applyProjectWorkspaceSchemaBindings(
       return rebindWorkspaceCandidate(candidate, workspaceBinding);
     }
 
-    if (!bindings.projectDefault) return candidate;
+    if (!bindings.projectDefault || candidate.revision !== undefined) return candidate;
     const nextBindings = replaceProjectDefaultBinding(
       candidate.schemaBindings,
       bindings.projectDefault
