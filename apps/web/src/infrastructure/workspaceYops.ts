@@ -70,8 +70,14 @@ export async function validateWorkspaceYOps(
 }
 
 export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): string {
-  const primary = bindings[0]?.schemaName.replace(/\s+Schema$/i, '') ?? 'candidate';
-  return toSnakeKey(primary);
+  const primary = bindings[0];
+  const canonicalName = primary?.canonicalName?.trim().toLowerCase();
+  if (canonicalName === 't3x/esphome-device') return 'device';
+  if (canonicalName) return toSnakeKey(canonicalName.split('/').at(-1) ?? 'candidate');
+
+  const primaryName = primary?.schemaName.replace(/\s+Schema$/i, '') ?? 'candidate';
+  if (/esphome\s+device/i.test(primaryName)) return 'device';
+  return toSnakeKey(primaryName);
 }
 
 function buildWorkspaceBaselineTrees(
@@ -186,14 +192,27 @@ function seedOperationBaseline(
 }
 
 function operationBaselineArrayValue(operation: WorkspaceYOpsDraftOperation): WorkspaceYOpsValue[] {
-  const beforeValue = operation.beforeValue?.trim();
-  if (!beforeValue || isEmptyBaselineLabel(beforeValue)) return [];
-  if (operation.afterValue !== undefined && beforeValue === operation.afterValue.trim()) return [];
-  return [operation.beforeValue ?? beforeValue];
+  const beforeValue = operation.beforeValue;
+  if (beforeValue === undefined || isEmptyBaselineValue(beforeValue)) return [];
+  if (
+    operation.afterValue !== undefined &&
+    workspaceYOpsValuesEqual(beforeValue, operation.afterValue)
+  ) {
+    return [];
+  }
+  return [beforeValue];
 }
 
-function isEmptyBaselineLabel(value: string): boolean {
-  return /^no\b/i.test(value);
+function isEmptyBaselineValue(value: WorkspaceYOpsValue): boolean {
+  if (value === null) return true;
+  if (typeof value === 'string') return !value.trim() || /^no\b/i.test(value);
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
+
+function workspaceYOpsValuesEqual(left: WorkspaceYOpsValue, right: WorkspaceYOpsValue): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string): WorkspaceYOp {

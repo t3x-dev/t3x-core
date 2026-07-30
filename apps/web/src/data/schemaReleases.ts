@@ -7,6 +7,7 @@ import type {
 const PRD_CURRENT_RELEASE_ID = 'schema_prd_v2';
 const PROMPT_CURRENT_RELEASE_ID = 'schema_prompt_v1';
 const SKILL_CURRENT_RELEASE_ID = 'schema_skill_v1';
+const ESPHOME_DEVICE_CURRENT_RELEASE_ID = 'schema_esphome_device_v1';
 
 const prdSchemaReleases: SchemaReleasePreview[] = [
   {
@@ -1136,6 +1137,117 @@ rules:
   },
 ];
 
+const esphomeDeviceSchemaReleases: SchemaReleasePreview[] = [
+  {
+    id: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
+    projectId: 'preview_project',
+    name: 'ESPHome Device',
+    version: 'v1',
+    description:
+      'Supported ESPHome device configuration subset for config validation and extra checks.',
+    status: 'active',
+    runtimeAvailable: true,
+    releasedAt: '2026-07-30T00:00:00.000Z',
+    releasedBy: 'T3X',
+    usedByCommitCount: 0,
+    usedByWorkspaceCount: 0,
+    breakingChangeLevel: 'none',
+    source: 'official',
+    category: 'Device runtime',
+    rootKey: 'device',
+    requiredFields: ['esphome.name', 'esp32.board'],
+    compatibleWith: ['YSchema validation', 'ESPHome config', 'Extra checks'],
+    migrationSummary:
+      'Current ESPHome Device contract. YAML source is materialized into device state before local ESPHome config checks.',
+    canonicalName: 't3x/esphome-device',
+    schemaHash: 'sha256:4dadbf6d65b4bd1f0310be317b9b0cfb90edfbcf293fe1d8bc60a0b07f05675d',
+    updatedLabel: '2026-07-30',
+    structure: [
+      {
+        path: 'esphome',
+        type: 'object',
+        required: true,
+        constraint: 'core device identity',
+        depth: 0,
+      },
+      {
+        path: 'esphome.name',
+        type: 'string',
+        required: true,
+        constraint: 'lowercase device id, max 24 chars',
+        constraintTags: ['pattern'],
+        depth: 1,
+      },
+      {
+        path: 'esphome.friendly_name',
+        type: 'string',
+        required: false,
+        constraint: 'human-readable name',
+        depth: 1,
+      },
+      {
+        path: 'esp32',
+        type: 'object',
+        required: true,
+        constraint: 'ESP32 target configuration',
+        depth: 0,
+      },
+      {
+        path: 'esp32.board',
+        type: 'string',
+        required: true,
+        constraint: 'ESPHome board id',
+        depth: 1,
+      },
+      {
+        path: 'wifi',
+        type: 'object',
+        required: false,
+        constraint: 'local credential references',
+        depth: 0,
+      },
+      {
+        path: 'logger',
+        type: 'object',
+        required: false,
+        constraint: 'ESPHome logger options',
+        depth: 0,
+      },
+      {
+        path: 'api',
+        type: 'object',
+        required: false,
+        constraint: 'native ESPHome API options',
+        depth: 0,
+      },
+    ],
+    rules: [],
+    relationTypes: [],
+    canonicalYaml: `yschema: "0.1"
+name: t3x/esphome-device
+version: "v1"
+description: Supported ESPHome device configuration subset for the T3X reference workflow.
+strict: false
+nodes:
+  esphome:
+    required: true
+    required_slots: [name]
+  esp32:
+    required: true
+    required_slots: [board]
+  wifi:
+    required: false
+    required_slots: [ssid, password]
+  logger:
+    required: false
+  api:
+    required: false
+rules: []`,
+    changesBaseReleaseId: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
+    changes: [],
+  },
+];
+
 const schemaFamilies: SchemaFamilyPreview[] = [
   {
     id: 'prd',
@@ -1160,6 +1272,14 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     description: 'Typed messages, variables, resources, output contracts, checks, and evals.',
     currentReleaseId: PROMPT_CURRENT_RELEASE_ID,
     releases: promptSchemaReleases,
+  },
+  {
+    id: 'esphome-device',
+    name: 'ESPHome Device',
+    canonicalName: 't3x/esphome-device',
+    description: 'ESPHome device YAML state for config validation and local runtime checks.',
+    currentReleaseId: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
+    releases: esphomeDeviceSchemaReleases,
   },
 ];
 
