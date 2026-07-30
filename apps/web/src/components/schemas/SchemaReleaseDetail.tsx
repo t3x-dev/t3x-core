@@ -1,5 +1,6 @@
 import { SchemaChangesView } from '@/components/schemas/SchemaChangesView';
 import { SchemaRelationsView } from '@/components/schemas/SchemaRelationsView';
+import { SchemaRulesView } from '@/components/schemas/SchemaRulesView';
 import { SchemaStructureView } from '@/components/schemas/SchemaStructureView';
 import { SchemaVersionBadge } from '@/components/schemas/SchemaVersionBadge';
 import { SchemaYamlView } from '@/components/schemas/SchemaYamlView';
@@ -7,11 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { SchemaReleasePreview } from '@/types/schemas';
 
-export type SchemaDetailView = 'changes' | 'relations' | 'structure' | 'yaml';
+export type SchemaDetailView = 'changes' | 'relations' | 'rules' | 'structure' | 'yaml';
 
 const DETAIL_VIEWS: Array<{ id: SchemaDetailView; label: string }> = [
   { id: 'structure', label: 'Structure' },
   { id: 'relations', label: 'Relations' },
+  { id: 'rules', label: 'Rules' },
   { id: 'yaml', label: 'Canonical YAML' },
   { id: 'changes', label: 'Changes' },
 ];
@@ -34,9 +36,11 @@ export function SchemaReleaseDetail({
   const isCurrent = release.id === currentRelease?.id;
   const canCompare =
     currentRelease !== null && !isCurrent && release.changesBaseReleaseId === currentRelease.id;
-  const visibleViews = DETAIL_VIEWS.filter(
-    (view) => view.id !== 'relations' || release.relationTypes.length > 0
-  );
+  const visibleViews = DETAIL_VIEWS.filter((view) => {
+    if (view.id === 'relations') return release.relationTypes.length > 0;
+    if (view.id === 'rules') return release.rules.length > 0;
+    return true;
+  });
   const activeViewLabel = visibleViews.find((view) => view.id === activeView)?.label ?? activeView;
 
   return (
@@ -100,6 +104,9 @@ export function SchemaReleaseDetail({
         </TabsContent>
         <TabsContent className="m-0 min-h-0 flex-1 p-4" value="relations">
           <SchemaRelationsView release={release} />
+        </TabsContent>
+        <TabsContent className="m-0 min-h-0 flex-1 p-4" value="rules">
+          <SchemaRulesView release={release} />
         </TabsContent>
         <TabsContent className="m-0 min-h-0 flex-1 p-4" value="yaml">
           <SchemaYamlView release={release} />

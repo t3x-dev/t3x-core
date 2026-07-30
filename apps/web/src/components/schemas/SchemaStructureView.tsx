@@ -1,4 +1,7 @@
-import type { SchemaReleasePreview } from '@/types/schemas';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import type { SchemaContractPath, SchemaReleasePreview } from '@/types/schemas';
 import { cn } from '@/utils/cn';
 
 interface SchemaStructureViewProps {
@@ -8,6 +11,21 @@ interface SchemaStructureViewProps {
 
 export function SchemaStructureView({ currentRelease, release }: SchemaStructureViewProps) {
   const isCurrent = release.id === currentRelease?.id;
+  const groups = groupContractPaths(release.structure);
+  const expandGroupsByDefault = release.structure.length <= 12;
+  const [expandedByGroup, setExpandedByGroup] = useState<Record<string, boolean>>({});
+
+  function isGroupExpanded(groupKey: string) {
+    return expandedByGroup[`${release.id}:${groupKey}`] ?? expandGroupsByDefault;
+  }
+
+  function toggleGroup(groupKey: string) {
+    const stateKey = `${release.id}:${groupKey}`;
+    setExpandedByGroup((expanded) => ({
+      ...expanded,
+      [stateKey]: !(expanded[stateKey] ?? expandGroupsByDefault),
+    }));
+  }
 
   return (
     <div className="grid gap-4 min-[1181px]:grid-cols-[minmax(0,1fr)_300px]">
@@ -17,7 +35,8 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
             Structured state contract
           </h4>
           <span className="text-xs text-[var(--text-secondary)]">
-            {release.structure.length} contract {release.structure.length === 1 ? 'path' : 'paths'}
+            {groups.length} {groups.length === 1 ? 'node' : 'nodes'} · {release.structure.length}{' '}
+            {release.structure.length === 1 ? 'path' : 'paths'}
           </span>
         </header>
         {release.structure.length === 0 ? (
@@ -43,38 +62,24 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {release.structure.map((field) => (
-                  <tr
-                    className="border-t border-[var(--stroke-divider)] hover:bg-[var(--hover-bg)]"
-                    key={field.path}
-                  >
-                    <td
-                      className={cn(
-                        'min-w-[250px] px-3 py-2.5 font-mono font-semibold text-[var(--text-primary)]',
-                        field.depth === 1 && 'pl-7',
-                        field.depth === 2 && 'pl-[46px]'
-                      )}
-                    >
-                      {field.path}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[var(--text-secondary)]">
-                      {field.type}
-                    </td>
-                    <td
-                      className={cn(
-                        'px-3 py-2.5',
-                        field.required
-                          ? 'font-bold text-[var(--status-warning)]'
-                          : 'text-[var(--text-tertiary)]'
-                      )}
-                    >
-                      {field.required ? 'required' : 'optional'}
-                    </td>
-                    <td className="px-3 py-2.5 text-[var(--text-primary)]">{field.constraint}</td>
-                  </tr>
-                ))}
-              </tbody>
+              {groups.map((group) => {
+                const expanded = isGroupExpanded(group.key);
+                return (
+                  <tbody key={group.key}>
+                    <StructureRow
+                      expandable={group.children.length > 0}
+                      expanded={expanded}
+                      field={group.root}
+                      onToggle={() => toggleGroup(group.key)}
+                    />
+                    {expanded
+                      ? group.children.map((field) => (
+                          <StructureRow field={field} key={field.path} />
+                        ))
+                      : null}
+                  </tbody>
+                );
+              })}
             </table>
           </div>
         )}
@@ -124,6 +129,108 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
       </div>
     </div>
   );
+}
+
+function StructureRow({
+  expandable = false,
+  expanded = false,
+  field,
+  onToggle,
+}: {
+  expandable?: boolean;
+  expanded?: boolean;
+  field: SchemaContractPath;
+  onToggle?: () => void;
+}) {
+  return (
+    <tr className="border-t border-[var(--stroke-divider)] hover:bg-[var(--hover-bg)]">
+      <td
+        className={cn(
+          'min-w-[250px] px-3 py-2.5 font-mono font-semibold text-[var(--text-primary)]',
+          field.depth === 1 && 'pl-9',
+          field.depth === 2 && 'pl-[52px]'
+        )}
+      >
+        {expandable ? (
+          <button
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${field.path} structure`}
+            className="-ml-1 inline-flex min-h-7 max-w-full items-center gap-1 rounded px-1 text-left hover:bg-[var(--surface-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]"
+            onClick={onToggle}
+            type="button"
+          >
+            {expanded ? (
+              <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 flex-none" />
+            ) : (
+              <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 flex-none" />
+            )}
+            <span className="truncate">{field.path}</span>
+          </button>
+        ) : (
+          <span>{field.path}</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 font-mono text-[var(--text-secondary)]">{field.type}</td>
+      <td
+        className={cn(
+          'px-3 py-2.5',
+          field.required ? 'font-bold text-[var(--status-warning)]' : 'text-[var(--text-tertiary)]'
+        )}
+      >
+        {field.required ? 'required' : 'optional'}
+      </td>
+      <td className="px-3 py-2.5 text-[var(--text-primary)]">
+        <div className="flex min-w-[180px] flex-wrap items-center gap-1.5">
+          <span>{field.constraint}</span>
+          {field.constraintTags?.map((tag) => (
+            <Badge className="font-mono text-[10px]" key={tag} variant="outline">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+interface SchemaStructureGroup {
+  key: string;
+  root: SchemaContractPath;
+  children: SchemaContractPath[];
+}
+
+function groupContractPaths(paths: SchemaContractPath[]): SchemaStructureGroup[] {
+  const groups = new Map<string, SchemaStructureGroup>();
+
+  for (const field of paths) {
+    const key = field.path.split('.')[0] ?? field.path;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        key,
+        root:
+          field.depth === 0
+            ? field
+            : {
+                path: key,
+                type: 'object',
+                required: false,
+                constraint: 'grouped paths',
+                depth: 0,
+              },
+        children: field.depth === 0 ? [] : [field],
+      });
+      continue;
+    }
+
+    if (field.depth === 0) {
+      existing.root = field;
+    } else {
+      existing.children.push(field);
+    }
+  }
+
+  return [...groups.values()];
 }
 
 function MetadataRow({

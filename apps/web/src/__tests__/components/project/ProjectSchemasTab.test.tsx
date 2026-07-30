@@ -70,7 +70,7 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Schema families define different kinds of structured state. Choose a family to inspect its current contract, historical versions, typed relations, and canonical YAML.'
+        'Schema families define different kinds of structured state. Choose a family to inspect its current contract, deterministic rules, typed relations, and canonical YAML.'
       )
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'PRD Schema v2' })).toHaveAttribute(
@@ -78,6 +78,7 @@ describe('ProjectSchemasTab', () => {
       'true'
     );
     expect(screen.getByRole('tab', { name: 'Skill Schema v1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Prompt Schema v1' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
     expect(screen.queryByText('Docker Compose')).not.toBeInTheDocument();
   });
