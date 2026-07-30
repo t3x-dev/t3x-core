@@ -66,7 +66,7 @@ export function CommitHistoryRow({
   introDemo = false,
   returnTo,
 }: CommitHistoryRowProps) {
-  const commitHref = `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : ''}`;
+  const commitHref = `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : '?view=diff'}`;
 
   return (
     <Link

@@ -6,7 +6,6 @@ import {
   Code2,
   FileText,
   GitCommit,
-  GitCompare,
   History,
   Network,
   RotateCw,
@@ -15,31 +14,19 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import {
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateGenericReader } from '@/components/project/StateGenericReader';
-import { StatePaneResizeHandle } from '@/components/project/StatePaneResizeHandle';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
-import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
-import { commitHashLabel, shortHash } from '@/domain/format/formatters';
+import { shortHash } from '@/domain/format/formatters';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
@@ -54,10 +41,7 @@ import {
   selectSkillRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
-import {
-  getYSchemaValidationPrimaryLabel,
-  type YSchemaValidationSummary,
-} from '@/domain/project/yschemaValidation';
+import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
@@ -71,6 +55,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
 export type ProjectSnapshotView = 'structure' | 'render' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
@@ -105,46 +90,16 @@ const SNAPSHOT_VIEWS: Array<{
 }> = [
   { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
   { id: 'render', label: 'Render', subtitle: 'schema reader', icon: FileText },
-  { id: 'code', label: 'Code', subtitle: 'canonical code', icon: Code2 },
+  { id: 'code', label: 'Code', subtitle: 'canonical YAML', icon: Code2 },
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
-const STATE_CONTEXT_RAIL_DEFAULT_WIDTH = 330;
-const STATE_CONTEXT_RAIL_MIN_WIDTH = 260;
-const STATE_CONTEXT_RAIL_MAX_WIDTH = 560;
-const STATE_CONTENT_MIN_WIDTH = 640;
-
-function clampStatePaneWidth(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max));
-}
-
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
   if (value === 'canvas') return 'canvas';
   if (value === 'points') return 'structure';
   return SNAPSHOT_VIEWS.some((view) => view.id === value)
     ? (value as ProjectSnapshotView)
     : fallback;
-}
-
-function buildCanvasHref(
-  pathname: string,
-  routeQuery: string,
-  branch: string,
-  commitHash?: string
-): string {
-  const params = new URLSearchParams(routeQuery);
-  params.set('view', 'canvas');
-  if (branch === 'main') {
-    params.delete('branch');
-  } else {
-    params.set('branch', branch);
-  }
-  if (commitHash) {
-    params.set('commit', commitHash);
-  } else {
-    params.delete('commit');
-  }
-  return `${pathname}?${params.toString()}`;
 }
 
 export function ProjectStateTab({
@@ -170,16 +125,16 @@ export function ProjectStateTab({
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const focusedCommitHash = searchParams.get('commit')?.trim() || undefined;
   const [pathQuery, setPathQuery] = useState('');
-  const [diffOpen, setDiffOpen] = useState(false);
-  const [selectedDiffChangeId, setSelectedDiffChangeId] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
-  const [contextRailWidth, setContextRailWidth] = useState(STATE_CONTEXT_RAIL_DEFAULT_WIDTH);
-  const stateLayoutRef = useRef<HTMLDivElement>(null);
+  const [stateDetailsOpen, setStateDetailsOpen] = useState(false);
+  const [freshnessChecking, setFreshnessChecking] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
+  const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
     create: createBranch,
-    loading: branchesLoading,
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -251,7 +206,9 @@ export function ProjectStateTab({
       });
       try {
         const requestedBranch = branchFocus || 'main';
-        const branchHeadHash = branchHeads[requestedBranch];
+        const registeredBranchHeadHash = branchHeads[requestedBranch];
+        const branchHeadHash =
+          inspectedHeadByBranchRef.current[requestedBranch] ?? registeredBranchHeadHash;
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
@@ -297,6 +254,9 @@ export function ProjectStateTab({
         }
 
         if (!cancelled) {
+          if (headCommit && !inspectedHeadByBranchRef.current[requestedBranch]) {
+            inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
+          }
           setSnapshot({
             auxiliaryError: auxiliaryErrors.join(' ') || null,
             commits,
@@ -422,24 +382,29 @@ export function ProjectStateTab({
         : [],
     [committedWorkspace, headCommit, snapshot.parentCommit]
   );
-  const effectiveSelectedDiffChangeId = committedDiffChanges.some(
-    (change) => change.id === selectedDiffChangeId
-  )
-    ? selectedDiffChangeId
-    : (committedDiffChanges.at(-1)?.id ?? '');
-  const showingInlineDiff =
-    activeView !== 'canvas' &&
-    diffOpen &&
-    committedDiffChanges.length > 0 &&
-    Boolean(snapshot.parentCommit);
   const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
-  const historyHref = buildCanvasHref(pathname, routeQuery, branchFocus);
+  const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
+  const historyHref = withReturnTo(
+    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
+    currentStateReturnTo
+  );
   const commitHref = headCommit
-    ? buildCanvasHref(pathname, routeQuery, branchFocus, headCommit.hash)
+    ? withReturnTo(
+        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}?view=diff`,
+        currentStateReturnTo
+      )
     : null;
   const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
   const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;
   const mainHeadCommitHash = branchHeads.main ?? null;
+  const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
+  const availableHeadHash =
+    latestBranchHeadHash &&
+    headCommit &&
+    latestBranchHeadHash !== headCommit.hash &&
+    latestBranchHeadHash !== dismissedHeadHash
+      ? latestBranchHeadHash
+      : null;
   const mainSchemaBindings = resolveMainSchemaBindings(
     projectWorkspaces.workspaces,
     mainHeadCommitHash
@@ -475,175 +440,141 @@ export function ProjectStateTab({
     },
     [createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft, workspaceBasePath]
   );
-  const handleContextRailResizeMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      const container = stateLayoutRef.current;
-      if (!container) return;
+  const checkCurrentBranchForUpdates = useCallback(async () => {
+    setFreshnessChecking(true);
+    try {
+      await refresh();
+    } finally {
+      setLastCheckedAt(new Date());
+      setFreshnessChecking(false);
+    }
+  }, [refresh]);
 
-      const startX = event.clientX;
-      const startWidth = contextRailWidth;
-      const containerWidth = container.getBoundingClientRect().width;
-      const maxWidth = Math.min(
-        STATE_CONTEXT_RAIL_MAX_WIDTH,
-        containerWidth - STATE_CONTENT_MIN_WIDTH
-      );
+  useEffect(() => {
+    setDismissedHeadHash(null);
+    setLastCheckedAt(null);
+    setStateDetailsOpen(false);
+    const initialCheck = window.setTimeout(() => {
+      void checkCurrentBranchForUpdates();
+    }, 1100);
+    const handleFocus = () => {
+      void checkCurrentBranchForUpdates();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void checkCurrentBranchForUpdates();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearTimeout(initialCheck);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [branchFocus, checkCurrentBranchForUpdates]);
 
-      const handleMove = (moveEvent: MouseEvent) => {
-        const nextWidth = startWidth + startX - moveEvent.clientX;
-        setContextRailWidth(clampStatePaneWidth(nextWidth, STATE_CONTEXT_RAIL_MIN_WIDTH, maxWidth));
-      };
-      const handleUp = () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleUp);
-        window.removeEventListener('blur', handleUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
+  const handleViewLatest = useCallback(() => {
+    if (!availableHeadHash) return;
+    inspectedHeadByBranchRef.current[branchFocus] = availableHeadHash;
+    setDismissedHeadHash(null);
+    setSnapshotRefreshVersion((version) => version + 1);
+  }, [availableHeadHash, branchFocus]);
 
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleUp);
-      window.addEventListener('blur', handleUp);
-    },
-    [contextRailWidth]
-  );
-  const handleContextRailResizeKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      event.preventDefault();
-      const step = event.shiftKey ? 48 : 16;
-      const direction = event.key === 'ArrowLeft' ? 1 : -1;
-      setContextRailWidth((current) =>
-        clampStatePaneWidth(
-          current + step * direction,
-          STATE_CONTEXT_RAIL_MIN_WIDTH,
-          STATE_CONTEXT_RAIL_MAX_WIDTH
-        )
-      );
-    },
-    []
-  );
-  const contextRailVisible =
-    showingInlineDiff || (activeView !== 'render' && activeView !== 'canvas');
+  const contextRailVisible = activeView !== 'canvas';
+  const readinessLabel = stateReadinessLabel(validationReady);
+  const lastCheckedLabel = freshnessChecking
+    ? 'Checking…'
+    : lastCheckedAt
+      ? 'Just now'
+      : 'Not checked';
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)] p-3"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)] p-[7px]"
       data-state-view={activeView}
     >
-      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 shadow-sm">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-1 shadow-sm">
         <StateModeTabs
           activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
           onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
         />
-        {activeView !== 'canvas' ? (
-          <StateOverviewHeader
-            headCommit={headCommit}
-            onRunValidation={
-              headCommit && onRunValidation
-                ? () => onRunValidation(headCommit.hash, schemaName)
-                : undefined
-            }
-            validation={currentValidation}
-            validationError={validationError}
-            validationGapCount={validationGapCount}
-            validationReady={validationReady}
-            validationRunning={validationRunning}
-            workspaceHref={workspaceHref}
-          />
-        ) : null}
       </div>
 
       <div
         className={cn(
-          'mt-3 grid min-h-0 flex-1 overflow-auto xl:overflow-hidden',
-          contextRailVisible &&
-            'gap-4 xl:grid-cols-[minmax(0,1fr)_8px_var(--state-context-rail-width)] xl:gap-0'
+          'mt-[7px] grid min-h-0 flex-1 gap-[9px] overflow-auto min-[1121px]:overflow-hidden',
+          contextRailVisible && 'min-[1121px]:grid-cols-[minmax(0,1fr)_224px]'
         )}
-        ref={stateLayoutRef}
-        style={
-          contextRailVisible
-            ? ({ '--state-context-rail-width': `${String(contextRailWidth)}px` } as CSSProperties)
-            : undefined
-        }
       >
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
-          <StateRepositoryToolbar
-            branch={branchFocus || 'main'}
-            branchCount={branchCount}
-            branchOptions={branchOptions}
-            headCommitHash={mainHeadCommitHash}
-            historyHref={historyHref}
-            loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
-            onBranchChange={updateBranchFocus}
-            onCreateBranch={handleCreateBranch}
-            onRefresh={() => {
-              setSnapshotRefreshVersion((version) => version + 1);
-              void refresh();
-              void projectWorkspaces.refresh();
-            }}
-            schemaName={schemaName}
-          />
           {activeView !== 'canvas' ? (
             <>
-              <StateCommitRow
+              <StateRepositoryToolbar
+                branch={branchFocus || 'main'}
+                branchCount={branchCount}
+                branchOptions={branchOptions}
                 commitCount={commitCount}
+                headCommitHash={mainHeadCommitHash}
+                historyHref={historyHref}
+                onBranchChange={updateBranchFocus}
+                onCreateBranch={handleCreateBranch}
+                schemaName={schemaName}
+              />
+              {availableHeadHash ? (
+                <StateUpdateBanner
+                  branch={branchFocus}
+                  hash={availableHeadHash}
+                  onDismiss={() => setDismissedHeadHash(availableHeadHash)}
+                  onViewLatest={handleViewLatest}
+                />
+              ) : null}
+              <StateCommitRow
+                author={headCommit?.author?.name ?? headCommit?.author?.type ?? 'W'}
+                commitHref={commitHref}
                 hash={headCommit?.hash ?? null}
                 relativeTime={formatRelativeTime(headCommit?.committed_at)}
                 title={commitTitle}
                 yopsCount={yopsCount}
               />
               <StateObjectLine
-                activeView={activeView}
                 commitHref={commitHref}
                 diffCount={committedDiffChanges.length}
-                diffOpen={showingInlineDiff}
                 headCommit={headCommit}
-                onDiffToggle={() => setDiffOpen((current) => !current)}
+                onRunValidation={
+                  headCommit && onRunValidation
+                    ? () => onRunValidation(headCommit.hash, schemaName)
+                    : undefined
+                }
+                readinessLabel={readinessLabel}
                 rootKey={rootKey}
                 schemaName={schemaName}
-                validationGapCount={validationGapCount}
-                validationKnown={Boolean(currentValidation)}
+                validationError={validationError}
+                validationReady={validationReady}
+                validationRunning={validationRunning}
+                workspaceHref={workspaceHref}
               />
-              {!showingInlineDiff ? (
-                <StateViewTabs
-                  activeView={activeView}
-                  onViewChange={updateActiveView}
-                  schemaName={schemaName}
-                />
-              ) : null}
+              <StateViewTabs
+                activeView={activeView}
+                detailsOpen={stateDetailsOpen}
+                onDetailsToggle={() => setStateDetailsOpen((open) => !open)}
+                onViewChange={updateActiveView}
+              />
 
-              {showingInlineDiff && headCommit && snapshot.parentCommit ? (
-                <StateScrollArea className="min-h-0 flex-1" horizontal label="Committed state diff">
-                  <T3XDiff
-                    baselineLabel={`Parent ${shortHash(snapshot.parentCommit.hash)}`}
-                    changes={committedDiffChanges}
-                    headerSubtitle="Commit · Parent → HEAD"
-                    onSelectChange={setSelectedDiffChangeId}
-                    pathSubtitle="Committed state · node-level result"
-                    projectedLabel={`HEAD ${shortHash(headCommit.hash)}`}
-                    selectedChangeId={effectiveSelectedDiffChangeId}
-                  />
-                </StateScrollArea>
-              ) : null}
-              {!showingInlineDiff && snapshot.primaryError ? (
+              {snapshot.primaryError ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && !headCommit ? (
+              {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 <StateEmpty
                   message="Create or select a committed branch to inspect state as Structure, Render, or Code."
                   title="No commit on this branch"
                 />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && snapshot.loading ? (
+              {!snapshot.primaryError && snapshot.loading ? (
                 <StateEmpty
                   message="Loading commit, YOps, and validation context."
                   title="Loading state"
                 />
               ) : null}
-              {!showingInlineDiff && !snapshot.primaryError && !snapshot.loading && headCommit ? (
+              {!snapshot.primaryError && !snapshot.loading && headCommit ? (
                 <>
                   {activeView === 'structure' ? (
                     <StateStructureView
@@ -706,98 +637,26 @@ export function ProjectStateTab({
         </main>
 
         {contextRailVisible ? (
-          <StatePaneResizeHandle
-            className="hidden xl:block"
-            label="Resize state details"
-            max={STATE_CONTEXT_RAIL_MAX_WIDTH}
-            min={STATE_CONTEXT_RAIL_MIN_WIDTH}
-            onKeyDown={handleContextRailResizeKeyDown}
-            onMouseDown={handleContextRailResizeMouseDown}
-            onReset={() => setContextRailWidth(STATE_CONTEXT_RAIL_DEFAULT_WIDTH)}
-            value={contextRailWidth}
-          />
-        ) : null}
-
-        {contextRailVisible ? (
-          <StateScrollArea className="min-h-0" label="State details" viewportClassName="xl:pl-4">
+          <aside
+            className={cn(
+              'hidden min-h-0 min-[1121px]:block',
+              stateDetailsOpen &&
+                'fixed right-3 top-24 z-40 block w-[min(310px,calc(100vw-24px))] min-[1121px]:static min-[1121px]:w-auto'
+            )}
+          >
             <StateContextRail
-              commitCount={commitCount}
-              edgeCount={headCommit?.content.relations.length ?? 0}
+              branch={branchFocus}
+              changedPathCount={committedDiffChanges.length}
               headCommit={headCommit}
+              lastCheckedLabel={lastCheckedLabel}
               operations={effectiveOperations}
               projectName={projectName}
+              readinessLabel={readinessLabel}
               schemaName={schemaName}
-              validation={currentValidation}
-              validationGapCount={validationGapCount}
-              validationReady={validationReady}
               warning={stateWarning}
             />
-          </StateScrollArea>
+          </aside>
         ) : null}
-      </div>
-    </section>
-  );
-}
-
-function StateOverviewHeader({
-  headCommit,
-  onRunValidation,
-  validation,
-  validationError,
-  validationGapCount,
-  validationReady,
-  validationRunning,
-  workspaceHref,
-}: {
-  headCommit: ApiCommit | null;
-  onRunValidation?: () => Promise<void> | void;
-  validation?: YSchemaValidationSummary | null;
-  validationError?: string | null;
-  validationGapCount: number;
-  validationReady: boolean;
-  validationRunning: boolean;
-  workspaceHref: string;
-}) {
-  return (
-    <section
-      aria-label="State overview"
-      className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 py-1"
-    >
-      <h1 className="sr-only">State</h1>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        <Badge
-          variant={validationReady ? 'success' : validationGapCount > 0 ? 'warning' : 'outline'}
-        >
-          {validationLabel(validation, validationGapCount)}
-        </Badge>
-        {validation ? (
-          <Badge variant="success">Up to date</Badge>
-        ) : headCommit ? (
-          <Badge variant="outline">Not validated at HEAD</Badge>
-        ) : null}
-        {validationError ? (
-          <p
-            className="max-w-64 truncate text-xs font-semibold text-[var(--status-warning)]"
-            title={validationError}
-          >
-            {validationError}
-          </p>
-        ) : null}
-        {!validationReady && onRunValidation ? (
-          <Button
-            disabled={validationRunning}
-            onClick={onRunValidation}
-            size="sm"
-            type="button"
-            variant="canvas-outline"
-          >
-            <RotateCw className={cn('size-4', validationRunning && 'animate-spin')} />
-            {validationRunning ? 'Running...' : 'Run validation'}
-          </Button>
-        ) : null}
-        <Button asChild size="sm" variant="canvas-outline">
-          <Link href={workspaceHref}>Open workspace</Link>
-        </Button>
       </div>
     </section>
   );
@@ -807,27 +666,25 @@ function StateRepositoryToolbar({
   branch,
   branchCount,
   branchOptions,
+  commitCount,
   headCommitHash,
   historyHref,
-  loading,
   onBranchChange,
   onCreateBranch,
-  onRefresh,
   schemaName,
 }: {
   branch: string;
   branchCount: number;
   branchOptions: string[];
+  commitCount: number;
   headCommitHash: string | null;
   historyHref: string;
-  loading: boolean;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
-  onRefresh: () => void;
   schemaName: string;
 }) {
   return (
-    <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-2">
+    <div className="flex min-h-[38px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-2.5 py-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StateBranchControls
           branch={branch}
@@ -836,133 +693,198 @@ function StateRepositoryToolbar({
           onBranchChange={onBranchChange}
           onCreateBranch={onCreateBranch}
         />
-        <Badge variant="branch">{branchCount} branches</Badge>
-        <Badge variant="outline">{schemaName}</Badge>
+        <span className="text-[10px] font-semibold text-[var(--text-secondary)]">
+          {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
+        </span>
+        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{schemaName}</span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button asChild size="sm" variant="canvas-outline">
-          <Link href={historyHref}>
-            <History className="size-4" />
+        <Button asChild className="text-[10.5px]" size="sm" variant="canvas-outline">
+          <Link aria-label="History" href={historyHref}>
+            <History className="size-3.5" />
             History
+            <Badge className="min-w-[18px] px-1.5 py-0 text-[9px]" variant="outline">
+              {commitCount}
+            </Badge>
           </Link>
-        </Button>
-        <Button
-          disabled={loading}
-          onClick={onRefresh}
-          size="sm"
-          type="button"
-          variant="canvas-outline"
-        >
-          <RotateCw className={cn('size-4', loading && 'animate-spin')} />
-          {loading ? 'Refreshing' : 'Refresh'}
         </Button>
       </div>
     </div>
   );
 }
 
+function StateUpdateBanner({
+  branch,
+  hash,
+  onDismiss,
+  onViewLatest,
+}: {
+  branch: string;
+  hash: string;
+  onDismiss: () => void;
+  onViewLatest: () => void;
+}) {
+  return (
+    <output
+      aria-live="polite"
+      className="flex min-h-[42px] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--accent-commit)]/15 bg-[var(--accent-commit)]/10 px-3 py-1.5 text-[11px] text-[var(--accent-commit)]"
+    >
+      <GitCommit aria-hidden="true" className="size-3.5" />
+      <span>
+        <strong className="text-[var(--text-primary)]">Newer commit available on {branch}</strong>
+        {' · '}
+        <span className="font-mono">{shortHash(hash)}</span>
+        {' · just now'}
+      </span>
+      <div className="ml-auto flex items-center gap-1.5">
+        <Button className="text-[10.5px]" onClick={onDismiss} size="sm" variant="canvas-ghost">
+          Dismiss
+        </Button>
+        <Button className="text-[10.5px]" onClick={onViewLatest} size="sm" variant="commit">
+          View latest
+        </Button>
+      </div>
+    </output>
+  );
+}
+
 function StateCommitRow({
-  commitCount,
+  author,
+  commitHref,
   hash,
   relativeTime,
   title,
   yopsCount,
 }: {
-  commitCount: number;
+  author: string;
+  commitHref: string | null;
   hash: string | null;
   relativeTime: string;
   title: string;
   yopsCount: number;
 }) {
   return (
-    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3 py-2">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/15 text-sm font-bold text-[var(--accent-branch)]">
+    <div className="flex min-h-[34px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-[11px] font-extrabold text-[var(--accent-branch)]"
+          title={`Author ${author}`}
+        >
           W
         </span>
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h2 className="truncate text-sm font-bold text-[var(--text-primary)]">{title}</h2>
-            <Badge variant="outline">
-              HEAD · {yopsCount} {yopsCount === 1 ? 'YOp' : 'YOps'}
-            </Badge>
-          </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="truncate text-xs font-bold text-[var(--text-primary)]">{title}</h2>
+          <p className="whitespace-nowrap text-[9.5px] text-[var(--text-tertiary)]">
+            Committed state · {yopsCount} deterministic {yopsCount === 1 ? 'YOp' : 'YOps'}
+          </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
-        <span className="font-mono">{hash ? commitHashLabel(hash) : 'empty'}</span>
+      <div className="flex shrink-0 items-center gap-3 text-[10px] text-[var(--text-secondary)]">
+        {commitHref && hash ? (
+          <Link
+            className="font-mono hover:text-[var(--accent-commit)] hover:underline"
+            href={commitHref}
+          >
+            {shortHash(hash)}
+          </Link>
+        ) : (
+          <span className="font-mono">{hash ? shortHash(hash) : 'empty'}</span>
+        )}
         <span>{relativeTime}</span>
-        <Badge variant="outline">{commitCount} commits</Badge>
       </div>
     </div>
   );
 }
 
 function StateObjectLine({
-  activeView,
   commitHref,
   diffCount,
-  diffOpen,
   headCommit,
-  onDiffToggle,
+  onRunValidation,
+  readinessLabel,
   rootKey,
   schemaName,
-  validationGapCount,
-  validationKnown,
+  validationError,
+  validationReady,
+  validationRunning,
+  workspaceHref,
 }: {
-  activeView: ProjectStateView;
   commitHref: string | null;
   diffCount: number;
-  diffOpen: boolean;
   headCommit: ApiCommit | null;
-  onDiffToggle: () => void;
+  onRunValidation?: () => Promise<void> | void;
+  readinessLabel: string;
   rootKey: string;
   schemaName: string;
-  validationGapCount: number;
-  validationKnown: boolean;
+  validationError?: string | null;
+  validationReady: boolean;
+  validationRunning: boolean;
+  workspaceHref: string;
 }) {
   return (
-    <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1.5">
-      <div className="min-w-0 truncate font-mono text-sm text-[var(--text-secondary)]">
-        state{' '}
-        <span className="font-bold text-[var(--text-primary)]">
-          {schemaArtifactFileName(schemaName)}
-        </span>{' '}
-        / <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
-        <Badge className="ml-2 font-mono" variant="commit">
-          HEAD {headCommit?.hash ? commitHashLabel(headCommit.hash) : 'empty'}
-        </Badge>
+    <div className="flex min-h-[38px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+        <div className="min-w-0 truncate text-[10.5px] text-[var(--text-secondary)]">
+          state{' '}
+          <span className="font-bold text-[var(--text-primary)]">
+            {schemaArtifactFileName(schemaName)}
+          </span>{' '}
+          / <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 text-[9.5px] text-[var(--text-tertiary)]">
+          <span>
+            HEAD{' '}
+            <span className="font-mono">
+              {headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
+            </span>
+          </span>
+          {diffCount > 0 && commitHref ? (
+            <Link
+              className="font-semibold text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
+              href={commitHref}
+            >
+              {diffCount} changed paths
+            </Link>
+          ) : null}
+          <span>
+            Parent{' '}
+            <span className="font-mono">
+              {headCommit?.parents?.[0] ? shortHash(headCommit.parents[0]) : 'none'}
+            </span>
+          </span>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="pending-subtle">adapter {schemaAdapterName(schemaName)}</Badge>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         <Badge
-          variant={validationGapCount > 0 ? 'warning' : validationKnown ? 'success' : 'outline'}
+          className="min-h-[23px] px-2 text-[10px] font-bold"
+          variant={validationReady ? 'success' : 'warning'}
         >
-          {validationGapCount > 0
-            ? String(validationGapCount) + ' validation gap'
-            : validationKnown
-              ? 'validated'
-              : 'not validated'}
+          {readinessLabel}
         </Badge>
-        <Badge variant="outline">{activeView}</Badge>
-        {diffCount > 0 ? <Badge variant="warning">{diffCount} changed paths</Badge> : null}
-        {commitHref ? (
-          <Button asChild size="sm" variant="canvas-outline">
-            <Link href={commitHref}>Open commit</Link>
-          </Button>
+        {validationError ? (
+          <span
+            className="max-w-44 truncate text-[10px] font-semibold text-[var(--status-warning)]"
+            title={validationError}
+          >
+            {validationError}
+          </span>
         ) : null}
-        {diffCount > 0 ? (
+        {!validationReady && onRunValidation ? (
           <Button
-            aria-expanded={diffOpen}
-            onClick={onDiffToggle}
+            className="text-[10.5px]"
+            disabled={validationRunning}
+            onClick={onRunValidation}
             size="sm"
             type="button"
-            variant={diffOpen ? 'commit' : 'canvas-outline'}
+            variant="commit"
           >
-            <GitCompare className="size-4" />
-            {diffOpen ? 'Hide changed paths' : `View ${String(diffCount)} changed paths`}
+            <RotateCw className={cn('size-3.5', validationRunning && 'animate-spin')} />
+            {validationRunning ? 'Running…' : 'Run validation'}
           </Button>
         ) : null}
+        <Button asChild className="text-[10.5px]" size="sm" variant="canvas-outline">
+          <Link href={workspaceHref}>Open workspace</Link>
+        </Button>
       </div>
     </div>
   );
@@ -1014,10 +936,10 @@ function StateModeTabs({
             role="tab"
             type="button"
           >
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-bold">
-              <Icon aria-hidden="true" className="size-4" />
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-bold">
+              <Icon aria-hidden="true" className="size-3.5" />
               {mode.label}
-              <span className="hidden text-xs font-medium text-[var(--text-tertiary)] 2xl:inline">
+              <span className="hidden text-[10px] font-medium text-[var(--text-tertiary)] lg:inline">
                 · {mode.subtitle}
               </span>
             </span>
@@ -1030,17 +952,19 @@ function StateModeTabs({
 
 function StateViewTabs({
   activeView,
+  detailsOpen,
+  onDetailsToggle,
   onViewChange,
-  schemaName,
 }: {
   activeView: ProjectSnapshotView;
+  detailsOpen: boolean;
+  onDetailsToggle: () => void;
   onViewChange: (view: ProjectSnapshotView) => void;
-  schemaName: string;
 }) {
   return (
     <div
       aria-label="State views"
-      className="flex min-h-12 shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-3"
+      className="flex min-h-[38px] shrink-0 items-stretch justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-1"
       role="tablist"
     >
       <div className="flex shrink-0 items-stretch gap-0">
@@ -1051,7 +975,7 @@ function StateViewTabs({
             <button
               aria-selected={selected}
               className={cn(
-                'min-w-28 border-b-2 px-3 py-2 text-left transition-colors',
+                'min-w-28 border-b-2 px-3 py-1 text-left transition-colors',
                 selected
                   ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -1061,21 +985,27 @@ function StateViewTabs({
               role="tab"
               type="button"
             >
-              <span className="flex items-center gap-1.5 text-sm font-bold">
-                <Icon aria-hidden="true" className="size-4" />
+              <span className="flex items-center gap-1.5 text-xs font-bold">
+                <Icon aria-hidden="true" className="size-3.5" />
                 {view.label}
               </span>
-              <span className="mt-0.5 block text-xs font-bold text-[var(--text-tertiary)]">
+              <span className="mt-0.5 block text-[9px] font-semibold text-[var(--text-tertiary)]">
                 {view.subtitle}
               </span>
             </button>
           );
         })}
       </div>
-      <div className="hidden flex-wrap items-center gap-2 md:flex">
-        <Badge variant="pending-subtle">adapter {schemaAdapterName(schemaName)}</Badge>
-        <Badge variant="commit-subtle">canonical YAML</Badge>
-      </div>
+      <Button
+        aria-expanded={detailsOpen}
+        className="my-auto mr-2 text-[10.5px] min-[1121px]:hidden"
+        onClick={onDetailsToggle}
+        size="sm"
+        type="button"
+        variant="canvas-outline"
+      >
+        State details
+      </Button>
     </div>
   );
 }
@@ -1184,40 +1114,43 @@ function StateStructureView({
       aria-label="Structured state tree"
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2">
-        <label className="relative h-9 w-full max-w-[260px]">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
+        <label className="relative h-[33px] w-full max-w-[270px]">
           <Search
             aria-hidden="true"
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]"
+            className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
           />
           <input
-            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-[10.5px] font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             onChange={(event) => onPathQueryChange(event.target.value)}
             placeholder="Search paths, titles, types..."
             value={pathQuery}
           />
         </label>
+        <span className="text-[10px] text-[var(--text-tertiary)]">
+          {visibleRows.length} visible {visibleRows.length === 1 ? 'row' : 'rows'}
+        </span>
       </div>
       <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
-        <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm">
+        <table className="w-full min-w-[1010px] table-fixed border-collapse text-left text-[10px]">
           <colgroup>
-            <col className="w-[360px]" />
+            <col className="w-[250px]" />
             <col />
-            <col className="w-24" />
-            <col className="w-32" />
-            <col className="w-36" />
-            <col className="w-24" />
+            <col className="w-[88px]" />
+            <col className="w-[92px]" />
+            <col className="w-[130px]" />
+            <col className="w-[62px]" />
           </colgroup>
-          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
+          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-[9px] font-extrabold uppercase tracking-[0.035em] text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
-              <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
+              <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
                 Path / Key
               </th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Value</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Type</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Status</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Source / Op</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-3">Issues</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Value</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Type</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Status</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Source / Op</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Issues</th>
             </tr>
           </thead>
           <tbody>
@@ -1257,7 +1190,7 @@ function StatePointTableRow({
   return (
     <tr
       className={cn(
-        'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        'group h-[37px] border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
         row.expandable && 'cursor-pointer transition-colors hover:bg-[var(--surface-hover)]',
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
       )}
@@ -1265,15 +1198,12 @@ function StatePointTableRow({
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5 font-bold transition-colors',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 font-bold transition-colors',
           row.expandable && 'group-hover:bg-[var(--surface-hover)]',
           row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
         )}
       >
-        <span
-          className="flex min-w-0 items-center gap-2"
-          style={{ paddingLeft: 4 + row.depth * 18 }}
-        >
+        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: row.depth * 22 }}>
           {row.expandable ? (
             <button
               aria-expanded={expanded}
@@ -1286,9 +1216,9 @@ function StatePointTableRow({
               type="button"
             >
               {expanded ? (
-                <ChevronDown aria-hidden="true" className="size-3.5" />
+                <ChevronDown aria-hidden="true" className="size-3" />
               ) : (
-                <ChevronRight aria-hidden="true" className="size-3.5" />
+                <ChevronRight aria-hidden="true" className="size-3" />
               )}
             </button>
           ) : (
@@ -1298,23 +1228,25 @@ function StatePointTableRow({
             {row.key}
           </span>
           {row.childCount ? (
-            <Badge className="shrink-0 px-1.5 py-0 text-[10px]" variant="outline">
+            <Badge className="shrink-0 px-1.5 py-0 text-[9px]" variant="outline">
               {row.childCount}
             </Badge>
           ) : null}
         </span>
       </td>
-      <td className="truncate px-3 py-2.5 text-xs text-[var(--text-secondary)]" title={row.value}>
+      <td className="truncate px-3 py-2 text-[10px] text-[var(--text-secondary)]" title={row.value}>
         {row.value}
       </td>
-      <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.type}</td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2 text-[10px] text-[var(--text-secondary)]">{row.type}</td>
+      <td className="px-3 py-2">
         <StatusPill row={row} />
       </td>
-      <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{row.sourceOp}</td>
-      <td className="px-3 py-2.5 text-center">
+      <td className="px-3 py-2 font-mono text-[10px] text-[var(--text-secondary)]">
+        {row.sourceOp}
+      </td>
+      <td className="px-3 py-2 text-center">
         {row.issueCount > 0 ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--status-danger)] text-xs font-bold text-[var(--on-status)]">
+          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--status-danger)] text-[10px] font-bold text-[var(--on-status)]">
             {row.issueCount}
           </span>
         ) : (
@@ -1335,7 +1267,7 @@ function StatusPill({ row }: { row: StatePointRow }) {
           ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]'
           : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]';
   return (
-    <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-bold', tone)}>
+    <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold', tone)}>
       {row.statusLabel}
     </span>
   );
@@ -1381,75 +1313,64 @@ function StateEmpty({ message, title }: { message: string; title: string }) {
 }
 
 function StateContextRail({
-  commitCount,
-  edgeCount,
+  branch,
+  changedPathCount,
   headCommit,
+  lastCheckedLabel,
   operations,
   projectName,
+  readinessLabel,
   schemaName,
-  validation,
-  validationGapCount,
-  validationReady,
   warning,
 }: {
-  commitCount: number;
-  edgeCount: number;
+  branch: string;
+  changedPathCount: number;
   headCommit: ApiCommit | null;
+  lastCheckedLabel: string;
   operations: StateOperationEntry[];
   projectName: string;
+  readinessLabel: string;
   schemaName: string;
-  validation?: YSchemaValidationSummary | null;
-  validationGapCount: number;
-  validationReady: boolean;
   warning: string | null;
 }) {
   return (
-    <aside className="grid content-start gap-4 pb-1">
-      <RailCard title="About this state">
-        <p>Committed state built from source evidence through YOps.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Badge variant="pending-subtle">prd</Badge>
-          <Badge variant="outline">yaml</Badge>
-          <Badge variant="branch">branch</Badge>
-          <Badge variant={validationReady ? 'success' : 'warning'}>
-            {validationReady ? 'output-ready' : 'output blocked'}
-          </Badge>
-        </div>
-      </RailCard>
-      <RailCard title="State metadata">
-        <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
-          <RailRow label="Project" value={projectName} />
-          <RailRow
-            label="HEAD"
-            mono
-            title={headCommit?.hash}
-            value={hashTail(headCommit?.hash, 'empty')}
-          />
-          <RailRow
-            label="Parent"
-            mono
-            title={headCommit?.parents?.[0]}
-            value={hashTail(headCommit?.parents?.[0], 'none')}
-          />
-          <RailRow label="Schema" value={schemaName} />
-          <RailRow label="Readiness" value={validationLabel(validation, validationGapCount)} />
-          <RailRow label="Commits" value={String(commitCount)} />
-          <RailRow label="HEAD YOps" value={String(countStateYOps(operations))} />
-          <RailRow label="Edges" value={String(edgeCount)} />
-        </dl>
-        {warning ? (
-          <p className="mt-3 text-xs font-semibold text-[var(--status-warning)]">{warning}</p>
-        ) : null}
-      </RailCard>
-    </aside>
+    <RailCard title="State details">
+      <dl className="grid grid-cols-[74px_minmax(0,1fr)] gap-x-2 gap-y-2.5 text-[10.5px]">
+        <RailRow label="Project" value={projectName} />
+        <RailRow
+          label="Viewing"
+          value={`${branch} · pinned ${headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}`}
+        />
+        <RailRow
+          label="HEAD"
+          mono
+          title={headCommit?.hash}
+          value={headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
+        />
+        <RailRow
+          label="Parent"
+          mono
+          title={headCommit?.parents?.[0]}
+          value={headCommit?.parents?.[0] ? shortHash(headCommit.parents[0]) : 'none'}
+        />
+        <RailRow label="Schema" value={schemaName} />
+        <RailRow label="Readiness" value={readinessLabel} />
+        <RailRow label="HEAD YOps" value={String(countStateYOps(operations))} />
+        <RailRow label="Changed" value={`${String(changedPathCount)} paths`} />
+        <RailRow label="Last checked" value={lastCheckedLabel} />
+      </dl>
+      {warning ? (
+        <p className="mt-3 text-[10px] font-semibold text-[var(--status-warning)]">{warning}</p>
+      ) : null}
+    </RailCard>
   );
 }
 
 function RailCard({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm">
-      <h2 className="mb-2 text-sm font-bold text-[var(--text-primary)]">{title}</h2>
-      <div className="text-sm leading-5 text-[var(--text-secondary)]">{children}</div>
+      <h2 className="mb-3 text-xs font-bold text-[var(--text-primary)]">{title}</h2>
+      <div className="leading-5 text-[var(--text-secondary)]">{children}</div>
     </section>
   );
 }
@@ -1471,7 +1392,7 @@ function RailRow({
       <dd
         className={cn(
           'min-w-0 truncate font-bold text-[var(--text-primary)]',
-          mono && 'font-mono text-xs'
+          mono && 'font-mono text-[10px]'
         )}
         title={title ?? value}
       >
@@ -1479,10 +1400,6 @@ function RailRow({
       </dd>
     </>
   );
-}
-
-function hashTail(hash: string | null | undefined, fallback: string): string {
-  return hash ? hash.replace(/^sha256:/, '').slice(-6) : fallback;
 }
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
@@ -1588,7 +1505,25 @@ function buildStateStructureRows(rows: StatePointRow[]): StateStructureRow[] {
     );
   }
 
-  return collapseDenseBooleanGroups(structuredRows);
+  return collapseCollectionContainers(collapseDenseBooleanGroups(structuredRows));
+}
+
+function collapseCollectionContainers(rows: StateStructureRow[]): StateStructureRow[] {
+  const childrenByParent = new Map<string, StateStructureRow[]>();
+  for (const row of rows) {
+    if (!row.parentPath) continue;
+    const children = childrenByParent.get(row.parentPath) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parentPath, children);
+  }
+
+  return rows.map((row) => {
+    if (!row.expandable || row.type !== 'object' || row.depth < 2) return row;
+    const children = childrenByParent.get(row.id) ?? [];
+    return children.some((child) => child.type === 'array')
+      ? { ...row, collapseByDefault: true }
+      : row;
+  });
 }
 
 function collapseDenseBooleanGroups(rows: StateStructureRow[]): StateStructureRow[] {
@@ -1741,15 +1676,8 @@ function commitTitleFor(commit: ApiCommit | null): string {
   return commit.message || (typeof title === 'string' && title.trim() ? title : 'State committed');
 }
 
-function validationLabel(
-  validation: YSchemaValidationSummary | null | undefined,
-  gapCount: number
-): string {
-  if (!validation && gapCount > 0) return String(gapCount) + ' required field missing';
-  if (!validation) return 'YSchema pending';
-  if (gapCount === 1) return '1 required field missing';
-  if (gapCount > 1) return String(gapCount) + ' required fields missing';
-  return getYSchemaValidationPrimaryLabel(validation);
+function stateReadinessLabel(validationReady: boolean): string {
+  return validationReady ? 'Validated at HEAD' : 'Validation pending';
 }
 
 function inferSchemaName(commit: ApiCommit | null): string {
@@ -1781,15 +1709,6 @@ function schemaArtifactFileName(schemaName: string): string {
       .at(-1)
       ?.replace(/[^a-z0-9-]+/gi, '-') || 'state';
   return `${schemaKey}-state.yaml`;
-}
-
-function schemaAdapterName(schemaName: string): string {
-  const schemaKey =
-    schemaName
-      .split('/')
-      .at(-1)
-      ?.replace(/[^a-z0-9_.-]+/gi, '-') || 'state';
-  return `${schemaKey}.document`;
 }
 
 function resolveMainSchemaBindings(

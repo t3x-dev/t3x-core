@@ -212,7 +212,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     (hash: string) => {
       router.push(
         withReturnTo(
-          `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : ''}`,
+          `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : '?view=diff'}`,
           currentReturnTo
         )
       );
