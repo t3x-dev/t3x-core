@@ -1,9 +1,13 @@
+import { Braces } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { isPromptWorkspace } from '@/domain/workspaces/promptCompile';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { PromptCompilePreviewDrawer } from './PromptCompilePreviewDrawer';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -54,6 +58,7 @@ export function WorkspaceWorkbench({
   const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
     {}
   );
+  const [compilePreviewOpen, setCompilePreviewOpen] = useState(false);
   const pins = usePinsStore((state) => state.pins);
   const {
     extractCandidate,
@@ -295,7 +300,10 @@ export function WorkspaceWorkbench({
   return (
     <section className="h-full overflow-auto p-3 sm:p-4" data-project-id={projectId}>
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
-        <WorkspacesHeader />
+        <WorkspacesHeader
+          onCompilePreview={() => setCompilePreviewOpen(true)}
+          promptWorkspace={isPromptWorkspace(selectedWorkspaceWithFlow)}
+        />
 
         <WorkspaceToolbar
           activeWorkflowTab={activeWorkflowTab}
@@ -325,16 +333,35 @@ export function WorkspaceWorkbench({
           />
         )}
       </div>
+      {selectedWorkspaceWithFlow && isPromptWorkspace(selectedWorkspaceWithFlow) ? (
+        <PromptCompilePreviewDrawer
+          candidate={selectedWorkspaceWithFlow}
+          onOpenChange={setCompilePreviewOpen}
+          open={compilePreviewOpen}
+        />
+      ) : null}
     </section>
   );
 }
 
-function WorkspacesHeader() {
+function WorkspacesHeader({
+  onCompilePreview,
+  promptWorkspace,
+}: {
+  onCompilePreview: () => void;
+  promptWorkspace: boolean;
+}) {
   return (
-    <div className="flex min-h-10 items-center">
+    <div className="flex min-h-10 items-center justify-between gap-3">
       <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
         T3X Workspace
       </h2>
+      {promptWorkspace ? (
+        <Button onClick={onCompilePreview} size="sm" type="button" variant="outline">
+          <Braces aria-hidden="true" className="size-4" />
+          Compile preview
+        </Button>
+      ) : null}
     </div>
   );
 }

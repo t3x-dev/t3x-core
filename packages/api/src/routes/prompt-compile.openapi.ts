@@ -5,6 +5,7 @@ import {
   compilePrompt,
   type PromptCompileIssue,
   type PromptCompileResult,
+  type PromptContextResolution,
   type PromptResourceResolution,
   type PromptVariableResolution,
 } from '@t3x-dev/core';
@@ -20,6 +21,14 @@ const PromptRelationSchema = z
   })
   .openapi('PromptCompileRelation');
 
+const PromptCompileInputSourceSchema = z
+  .object({
+    kind: z.enum(['fixture', 'workspace', 'request']),
+    label: z.string().min(1),
+    sourceCount: z.number().int().nonnegative().default(0),
+  })
+  .openapi('PromptCompileInputSource');
+
 export const PromptCompilePreviewRequestSchema = z
   .object({
     schema_name: z.string().min(1).default('t3x/prompt'),
@@ -30,6 +39,7 @@ export const PromptCompilePreviewRequestSchema = z
     variable_values: z.record(z.string(), z.any()).optional(),
     context_contents: z.record(z.string(), z.string()).optional(),
     resource_contents: z.record(z.string(), z.string()).optional(),
+    input_source: PromptCompileInputSourceSchema.optional(),
   })
   .openapi('PromptCompilePreviewRequest');
 
@@ -81,6 +91,40 @@ const PromptResourceResolutionSchema = z
   })
   .openapi('PromptResourceResolution');
 
+const PromptContextResolutionSchema = z
+  .object({
+    key: z.string(),
+    path: z.string(),
+    kind: z.string(),
+    loadPolicy: z.string(),
+    placement: z.string(),
+    required: z.boolean(),
+    status: z.enum(['resolved', 'missing']),
+    targetMessageKeys: z.array(z.string()),
+    resourceKey: z.string().optional(),
+    contentHash: z.string().optional(),
+  })
+  .openapi('PromptContextResolution');
+
+const PromptCompileAdapterSchema = z
+  .object({
+    id: z.literal('portable-preview'),
+    mode: z.string(),
+    responseFormat: z.string(),
+    streaming: z.boolean(),
+    toolPolicy: z.string(),
+    maxOutputTokens: z.number().nonnegative(),
+  })
+  .openapi('PromptCompileAdapter');
+
+const PromptContextBudgetSchema = z
+  .object({
+    maxTokens: z.number().nonnegative(),
+    resolved: z.number().int().nonnegative(),
+    missing: z.number().int().nonnegative(),
+  })
+  .openapi('PromptContextBudget');
+
 const CompiledPromptOutputSchema = z
   .object({
     format: z.string(),
@@ -98,8 +142,14 @@ export const PromptCompilePreviewResponseSchema = z
     compiled: z.boolean(),
     schemaName: z.literal('t3x/prompt'),
     schemaVersion: z.literal('v1'),
+    compilerVersion: z.string(),
+    compileHash: z.string().optional(),
+    inputSource: PromptCompileInputSourceSchema,
+    adapter: PromptCompileAdapterSchema,
     messages: z.array(CompiledPromptMessageSchema),
     variables: z.array(PromptVariableResolutionSchema),
+    contexts: z.array(PromptContextResolutionSchema),
+    contextBudget: PromptContextBudgetSchema,
     resources: z.array(PromptResourceResolutionSchema),
     output: CompiledPromptOutputSchema,
     issues: z.array(PromptCompileIssueSchema),
@@ -110,8 +160,14 @@ export interface PromptCompilePreviewResponse {
   compiled: boolean;
   schemaName: 't3x/prompt';
   schemaVersion: 'v1';
+  compilerVersion: string;
+  compileHash?: string;
+  inputSource: z.infer<typeof PromptCompileInputSourceSchema>;
+  adapter: z.infer<typeof PromptCompileAdapterSchema>;
   messages: CompiledPromptMessage[];
   variables: PromptVariableResolution[];
+  contexts: Array<Omit<PromptContextResolution, 'content'>>;
+  contextBudget: z.infer<typeof PromptContextBudgetSchema>;
   resources: PromptResourceResolution[];
   output: CompiledPromptOutput;
   issues: PromptCompileIssue[];
@@ -174,18 +230,66 @@ promptCompileRoutes.openapi(compilePreviewRoute, async (c) => {
     resourceContents: body.resource_contents,
   });
 
-  return c.json({ success: true as const, data: toCompilePreviewResponse(result) }, 200);
+  return c.json(
+    {
+      success: true as const,
+      data: toCompilePreviewResponse(result, body.candidate, body.input_source),
+    },
+    200
+  );
 });
 
-function toCompilePreviewResponse(result: PromptCompileResult): PromptCompilePreviewResponse {
+function toCompilePreviewResponse(
+  result: PromptCompileResult,
+  candidate: Record<string, unknown>,
+  inputSource?: z.infer<typeof PromptCompileInputSourceSchema>
+): PromptCompilePreviewResponse {
+  const runtime = isRecord(candidate.runtime) ? candidate.runtime : {};
+  const contexts = isRecord(candidate.contexts) ? candidate.contexts : {};
+  const maxTokens = Object.values(contexts).reduce(
+    (total, context) =>
+      total +
+      (isRecord(context) && typeof context.max_tokens === 'number' ? context.max_tokens : 0),
+    0
+  );
   return {
     compiled: result.compiled,
     schemaName: result.schemaName,
     schemaVersion: result.schemaVersion,
+    compilerVersion: result.compilerVersion,
+    ...(result.compileHash ? { compileHash: result.compileHash } : {}),
+    inputSource: inputSource ?? {
+      kind: 'request',
+      label: 'Compile preview request',
+      sourceCount: 0,
+    },
+    adapter: {
+      id: 'portable-preview',
+      mode: stringValue(runtime.mode),
+      responseFormat: stringValue(runtime.response_format),
+      streaming: runtime.streaming === true,
+      toolPolicy: stringValue(runtime.tool_policy),
+      maxOutputTokens:
+        typeof runtime.max_output_tokens === 'number' ? runtime.max_output_tokens : 0,
+    },
     messages: result.messages,
     variables: result.variables,
+    contexts: result.contexts.map(({ content: _content, ...context }) => context),
+    contextBudget: {
+      maxTokens,
+      resolved: result.contexts.filter((context) => context.status === 'resolved').length,
+      missing: result.contexts.filter((context) => context.status === 'missing').length,
+    },
     resources: result.resources,
     output: result.output,
     issues: result.issues,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
