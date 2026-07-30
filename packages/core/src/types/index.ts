@@ -339,7 +339,7 @@ export interface CreateLeafHistoryInput {
 /**
  * What can be pinned.
  */
-export type PinType = 'conversation' | 'leaf' | 'import';
+export type PinType = 'conversation' | 'conversation_turn' | 'leaf' | 'import';
 
 /**
  * A Pin marks an item as selected for:
@@ -358,7 +358,7 @@ export interface Pin {
   /** Type of pinned item */
   type: PinType;
 
-  /** ID of the pinned item (conversation_id, leaf_id, or material/import id) */
+  /** ID of the pinned item (conversation_id, turn_hash, leaf_id, or material/import id) */
   ref_id: string;
 
   /**
@@ -752,6 +752,12 @@ export interface Draft {
   /** Target branch for commit */
   target_branch?: string;
 
+  /** Stable Workspace ID when a draft backs the Project Workspaces flow */
+  workspace_id?: string;
+
+  /** Current Workspace staged state for the Project Workspaces flow */
+  workspace_state?: Record<string, unknown>;
+
   /** Optimistic lock revision counter */
   revision: number;
 
@@ -781,6 +787,8 @@ export interface CreateDraftInput {
   parent_commit_hash?: string;
   target_branch?: string;
   preview_type?: string;
+  workspace_id?: string;
+  workspace_state?: Record<string, unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

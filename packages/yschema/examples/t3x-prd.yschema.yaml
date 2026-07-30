@@ -1,6 +1,6 @@
 yschema: "0.1"
 name: t3x/prd
-version: "0.1.0"
+version: "v2"
 description: Product requirements document reference workflow.
 strict: false
 

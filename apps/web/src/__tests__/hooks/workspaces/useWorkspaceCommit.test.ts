@@ -1,0 +1,119 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
+import { commitWorkspaceDraft, saveWorkspaceDraft } from '@/queries/workspaces';
+import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
+import { cleanupRoots, renderHook } from '../renderHook';
+
+vi.mock('@/queries/workspaces', () => ({
+  commitWorkspaceDraft: vi.fn(),
+  saveWorkspaceDraft: vi.fn(),
+}));
+
+const candidate: WorkspaceCandidate = {
+  id: 'workspace_prd_handoff',
+  projectId: 'proj_1',
+  title: 'PRD audience handoff',
+  summary: 'Source bundle for aligning PRD audience notes.',
+  status: 'ready_for_yops',
+  updatedAt: '2026-06-29T09:30:00.000Z',
+  baseCommitHash: 'sha256:base-prd',
+  targetBranch: 'feature/prd-audience',
+  sourceBundle: [],
+  schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+  schemaCandidate: { summary: 'Ready candidate.', fields: [] },
+  schemaReview: { verdict: 'ready', summary: 'Ready for YOps.', gaps: [] },
+  yopsDraft: { id: 'draft_prd_handoff', operations: [] },
+  outputTargets: [],
+};
+
+const materializedTrees: WorkspaceYOpsTreeNode[] = [
+  { key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] },
+];
+const materializedRelations = [{ from: 'prd/summary', to: 'prd/requirements', type: 'depends_on' }];
+
+describe('useWorkspaceCommit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(saveWorkspaceDraft).mockResolvedValue({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      workspace: { ...candidate, revision: 2 },
+    });
+    vi.mocked(commitWorkspaceDraft).mockResolvedValue({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      commit: { hash: 'sha256:workspace-commit' },
+      workspace: { ...candidate, lastCommitHash: 'sha256:workspace-commit', status: 'committed' },
+    });
+  });
+
+  afterEach(() => {
+    cleanupRoots();
+  });
+
+  it('persists the workspace staged state before creating a workspace commit', async () => {
+    const commitCreated = vi.fn();
+    window.addEventListener('t3x:commit-created', commitCreated);
+    const { result } = renderHook(() => useWorkspaceCommit(candidate));
+
+    let hash = '';
+    await act(async () => {
+      hash = await result.current.commit({
+        trees: materializedTrees,
+        relations: materializedRelations,
+      });
+    });
+
+    expect(hash).toBe('sha256:workspace-commit');
+    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', candidate);
+    expect(commitWorkspaceDraft).toHaveBeenCalledWith(
+      'proj_1',
+      'workspace_prd_handoff',
+      { trees: materializedTrees, relations: materializedRelations },
+      'Workspace commit: PRD audience handoff',
+      undefined,
+      2
+    );
+    expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(commitWorkspaceDraft).mock.invocationCallOrder[0]
+    );
+    expect(commitCreated).toHaveBeenCalledOnce();
+    expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      type: 'commit.created',
+      projectId: 'proj_1',
+      branch: 'feature/prd-audience',
+      payload: {
+        hash: 'sha256:workspace-commit',
+        branch: 'feature/prd-audience',
+      },
+    });
+    window.removeEventListener('t3x:commit-created', commitCreated);
+  });
+
+  it('forwards an explicitly confirmed schema review override', async () => {
+    const { result } = renderHook(() => useWorkspaceCommit(candidate));
+    const validationOverride = {
+      kind: 'schema_review' as const,
+      reason: 'User explicitly confirmed unresolved schema review gaps.',
+      blockers: ['Schema review gap: requirements.trip.acceptance'],
+    };
+
+    await act(async () => {
+      await result.current.commit(
+        { trees: materializedTrees, relations: materializedRelations },
+        validationOverride
+      );
+    });
+
+    expect(commitWorkspaceDraft).toHaveBeenCalledWith(
+      'proj_1',
+      'workspace_prd_handoff',
+      { trees: materializedTrees, relations: materializedRelations },
+      'Workspace commit: PRD audience handoff',
+      validationOverride,
+      2
+    );
+  });
+});

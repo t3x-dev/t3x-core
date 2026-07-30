@@ -391,7 +391,7 @@ export const pins = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Type of pinned item: 'conversation' | 'leaf' | 'import' */
+    /** Type of pinned item: 'conversation' | 'conversation_turn' | 'leaf' | 'import' */
     type: text('type').notNull(),
 
     /** ID of the pinned item */
@@ -770,7 +770,13 @@ export const drafts = pgTable(
     committedLeafId: text('committed_leaf_id'),
 
     /** Target branch for commit */
-    targetBranch: text('target_branch').default('main'),
+    targetBranch: text('target_branch').notNull().default('main'),
+
+    /** Stable Workspace ID for Project Workspaces staged state */
+    workspaceId: text('workspace_id'),
+
+    /** Current Workspace staged state */
+    workspaceStateJson: jsonb('workspace_state_json').$type<Record<string, unknown>>(),
 
     /** Optimistic lock revision counter */
     revision: integer('revision').notNull().default(1),
@@ -793,6 +799,14 @@ export const drafts = pgTable(
   (table) => ({
     projectIdx: index('idx_drafts_project').on(table.projectId),
     statusIdx: index('idx_drafts_status').on(table.status),
+    workspaceIdx: uniqueIndex('idx_drafts_workspace')
+      .on(table.projectId, table.workspaceId)
+      .where(sql`${table.workspaceId} IS NOT NULL`),
+    openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
+      .on(table.projectId, table.targetBranch)
+      .where(
+        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+      ),
   })
 );
 

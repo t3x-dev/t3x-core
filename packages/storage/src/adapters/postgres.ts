@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 49;
+const SCHEMA_VERSION = 53;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -102,6 +102,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
   if (rows.length > 0) {
     await ensureSourceTextRevisionsSchema(sql);
+    await ensurePullRequestsSchema(sql);
   }
 
   if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
@@ -286,6 +287,64 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
+    -- Pull requests and their deterministic readiness/audit records
+    CREATE TABLE IF NOT EXISTS pull_requests (
+      pull_request_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      source_branch TEXT NOT NULL,
+      target_branch TEXT NOT NULL,
+      source_commit_hash TEXT NOT NULL,
+      target_base_commit_hash TEXT NOT NULL,
+      merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+      merge_commit_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+      author_id TEXT NOT NULL,
+      review_owner_id TEXT,
+      linked_work TEXT,
+      diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      merged_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ,
+      UNIQUE(project_id, number),
+      CONSTRAINT pull_requests_merged_commit_required
+        CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+      ON pull_requests(project_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+      ON pull_requests(project_id, source_branch, target_branch)
+      WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+    CREATE TABLE IF NOT EXISTS pull_request_checks (
+      check_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL
+        CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+      title TEXT NOT NULL,
+      message TEXT,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+      ON pull_request_checks(pull_request_id);
+
+    CREATE TABLE IF NOT EXISTS pull_request_activity (
+      activity_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+      ON pull_request_activity(pull_request_id, created_at);
+
     -- ═══════════════════════════════════════════════════════════════════════════
     -- V4 Architecture Tables (commits_v4 RETIRED — use 'commits' table)
     -- ═══════════════════════════════════════════════════════════════════════════
@@ -407,6 +466,104 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
 
+    -- YSchema validation runs (internal deterministic validation records)
+    CREATE TABLE IF NOT EXISTS yschema_validation_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      commit_hash TEXT NOT NULL,
+      schema_name TEXT NOT NULL,
+      schema_version TEXT NOT NULL,
+      schema_hash TEXT NOT NULL,
+      validator_version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      valid BOOLEAN NOT NULL,
+      ready BOOLEAN NOT NULL,
+      error_count INTEGER NOT NULL,
+      gap_count INTEGER NOT NULL,
+      fix_count INTEGER NOT NULL,
+      result_json JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_project
+      ON yschema_validation_runs(project_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_commit
+      ON yschema_validation_runs(project_id, commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
+      ON yschema_validation_runs(schema_name, schema_hash);
+
+    -- Workspace validation runs (candidate-level external validator records)
+    CREATE TABLE IF NOT EXISTS validation_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_hash TEXT NOT NULL,
+      workflow_name TEXT NOT NULL,
+      workflow_hash TEXT NOT NULL,
+      input_hash TEXT NOT NULL,
+      validator_hash TEXT NOT NULL,
+      environment_hash TEXT,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      gate_status TEXT NOT NULL,
+      summary TEXT,
+      result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_workspace_created
+      ON validation_runs(project_id, workspace_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_subject
+      ON validation_runs(project_id, workspace_id, subject_type, subject_hash);
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_workflow
+      ON validation_runs(workflow_name, workflow_hash);
+
+    CREATE TABLE IF NOT EXISTS validation_step_runs (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+      step_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT,
+      error_code TEXT,
+      exit_code INTEGER,
+      duration_ms INTEGER,
+      command_json JSONB,
+      log_excerpt TEXT,
+      log_truncated BOOLEAN NOT NULL DEFAULT FALSE,
+      log_artifact_id TEXT,
+      result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run
+      ON validation_step_runs(run_id);
+    CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run_step
+      ON validation_step_runs(run_id, step_id);
+
+    CREATE TABLE IF NOT EXISTS validation_findings (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+      step_run_id TEXT REFERENCES validation_step_runs(id) ON DELETE CASCADE,
+      severity TEXT NOT NULL,
+      file TEXT,
+      line INTEGER,
+      state_path TEXT,
+      code TEXT NOT NULL,
+      message TEXT NOT NULL,
+      log_excerpt TEXT,
+      evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_findings_run
+      ON validation_findings(run_id);
+    CREATE INDEX IF NOT EXISTS idx_validation_findings_step
+      ON validation_findings(step_run_id);
+
     -- Templates table (reusable prompt templates for leaf generation)
     CREATE TABLE IF NOT EXISTS templates (
       template_id TEXT PRIMARY KEY,
@@ -453,7 +610,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'editing',
       committed_as TEXT,
       committed_leaf_id TEXT,
-      target_branch TEXT DEFAULT 'main',
+      target_branch TEXT NOT NULL DEFAULT 'main',
+      workspace_id TEXT,
+      workspace_state_json JSONB,
       revision INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
@@ -465,6 +624,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
@@ -1374,7 +1538,50 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
   `);
 
-  // ── Schema v49: immutable Transition objects, CommitV2 membership, and authority facts ──
+  // ── Schema v50: Workspace staged state persisted through drafts ──
+  await sql.unsafe(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
+  `);
+
+  // ── Schema v52: one open Project Workspace per branch ──
+  await sql.unsafe(`
+    UPDATE drafts
+    SET target_branch = 'main'
+    WHERE target_branch IS NULL;
+
+    ALTER TABLE drafts ALTER COLUMN target_branch SET DEFAULT 'main';
+    ALTER TABLE drafts ALTER COLUMN target_branch SET NOT NULL;
+
+    WITH ranked_open_workspaces AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY project_id, target_branch
+          ORDER BY updated_at DESC, id DESC
+        ) AS workspace_rank
+      FROM drafts
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed'
+    )
+    UPDATE drafts AS draft
+    SET status = 'abandoned', updated_at = NOW()
+    FROM ranked_open_workspaces AS ranked
+    WHERE draft.id = ranked.id
+      AND ranked.workspace_rank > 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
+      ON drafts(project_id, target_branch)
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+  `);
+
+  // ── Schema v53: immutable Transition objects, CommitV2 membership, and authority facts ──
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS transition_objects (
       digest TEXT PRIMARY KEY,
@@ -1412,12 +1619,74 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
+  await ensurePullRequestsSchema(sql);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
     ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+  `);
+}
+
+async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS pull_requests (
+      pull_request_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      source_branch TEXT NOT NULL,
+      target_branch TEXT NOT NULL,
+      source_commit_hash TEXT NOT NULL,
+      target_base_commit_hash TEXT NOT NULL,
+      merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+      merge_commit_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+      author_id TEXT NOT NULL,
+      review_owner_id TEXT,
+      linked_work TEXT,
+      diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      merged_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ,
+      UNIQUE(project_id, number),
+      CONSTRAINT pull_requests_merged_commit_required
+        CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+      ON pull_requests(project_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+      ON pull_requests(project_id, source_branch, target_branch)
+      WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+    CREATE TABLE IF NOT EXISTS pull_request_checks (
+      check_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL
+        CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+      title TEXT NOT NULL,
+      message TEXT,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+      ON pull_request_checks(pull_request_id);
+
+    CREATE TABLE IF NOT EXISTS pull_request_activity (
+      activity_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+      ON pull_request_activity(pull_request_id, created_at);
   `);
 }
 

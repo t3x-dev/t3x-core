@@ -25,6 +25,8 @@ const MOCK_COMMIT_A = {
     trees: [{ key: 'trip', type: 'node', slots: { budget: 5000 }, children: [] }],
     relations: [],
   },
+  project_id: 'proj_test1',
+  branch: 'feature',
 };
 
 const MOCK_COMMIT_B = {
@@ -35,6 +37,8 @@ const MOCK_COMMIT_B = {
     trees: [{ key: 'trip', type: 'node', slots: { budget: 8000 }, children: [] }],
     relations: [],
   },
+  project_id: 'proj_test1',
+  branch: 'release',
 };
 
 const MOCK_MERGE_DRAFT = {
@@ -42,8 +46,8 @@ const MOCK_MERGE_DRAFT = {
   projectId: 'proj_test1',
   sourceHash: 'sha256:aaa',
   targetHash: 'sha256:bbb',
-  sourceBranch: null,
-  targetBranch: 'main',
+  sourceBranch: 'feature',
+  targetBranch: 'release',
   preparedJson: JSON.stringify({
     autoKept: [],
     conflicts: [
@@ -145,13 +149,13 @@ const MOCK_LEAF = {
 const MOCK_MERGED_COMMIT = {
   hash: 'sha256:merged',
   schema: 't3x/commit/v4',
-  parents: ['sha256:aaa', 'sha256:bbb'],
+  parents: ['sha256:bbb', 'sha256:aaa'],
   author: { type: 'human', name: 'mcp' },
   committed_at: '2026-04-13T00:00:00.000Z',
   content: { trees: [], relations: [] },
   project_id: 'proj_test1',
   message: 'Merge',
-  branch: 'main',
+  branch: 'release',
 };
 
 // -- Storage mock --
@@ -163,6 +167,10 @@ vi.mock('@t3x-dev/storage', () => ({
       'sha256:bbb': MOCK_COMMIT_B,
     };
     return Promise.resolve(commits[hash] ?? null);
+  }),
+  getLatestCommit: vi.fn((_db: unknown, projectId: string, branch: string) => {
+    if (projectId === 'proj_test1' && branch === 'release') return Promise.resolve(MOCK_COMMIT_B);
+    return Promise.resolve(null);
   }),
   createMergeDraft: vi.fn(() => Promise.resolve(MOCK_MERGE_DRAFT)),
   getMergeDraft: vi.fn((_db: unknown, id: string) => {
@@ -330,6 +338,7 @@ describe('t3x_merge handler', () => {
   });
 
   it('prepare: returns draft with conflict summary', async () => {
+    const { createMergeDraft } = await import('@t3x-dev/storage');
     const result = await mergeHandler({
       action: 'prepare',
       project_id: 'proj_test1',
@@ -340,6 +349,27 @@ describe('t3x_merge handler', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.draft_id).toBe('md_test1');
     expect(data.summary.conflicts).toBe(1);
+    expect(createMergeDraft).toHaveBeenLastCalledWith(
+      mockDB,
+      expect.objectContaining({ sourceBranch: 'feature', targetBranch: 'release' })
+    );
+  });
+
+  it('prepare: rejects a commit from another project', async () => {
+    const { getCommit } = await import('@t3x-dev/storage');
+    vi.mocked(getCommit)
+      .mockResolvedValueOnce({ ...MOCK_COMMIT_A, project_id: 'proj_other' } as never)
+      .mockResolvedValueOnce(MOCK_COMMIT_B as never);
+
+    const result = await mergeHandler({
+      action: 'prepare',
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('does not belong to project');
   });
 
   // -- show_conflict --
@@ -417,6 +447,7 @@ describe('t3x_merge handler', () => {
   });
 
   it('execute: creates merge commit when all resolved', async () => {
+    const { createCommit } = await import('@t3x-dev/storage');
     const result = await mergeHandler({
       action: 'execute',
       draft_id: 'md_resolved',
@@ -425,7 +456,32 @@ describe('t3x_merge handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.commit_hash).toBe('sha256:merged');
-    expect(data.parents).toEqual(['sha256:aaa', 'sha256:bbb']);
+    expect(data.parents).toEqual(['sha256:bbb', 'sha256:aaa']);
+    expect(data.branch).toBe('release');
+    expect(createCommit).toHaveBeenLastCalledWith(
+      mockDB,
+      expect.objectContaining({
+        parents: ['sha256:bbb', 'sha256:aaa'],
+        branch: 'release',
+        enforceBranchLinearity: true,
+      })
+    );
+  });
+
+  it('execute: rejects a draft whose target is no longer the branch head', async () => {
+    const { createCommit, getLatestCommit } = await import('@t3x-dev/storage');
+    vi.mocked(getLatestCommit).mockResolvedValueOnce(null);
+    const callsBefore = vi.mocked(createCommit).mock.calls.length;
+
+    const result = await mergeHandler({
+      action: 'execute',
+      draft_id: 'md_resolved',
+      message: 'Stale merge',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('no longer the current head');
+    expect(createCommit).toHaveBeenCalledTimes(callsBefore);
   });
 
   it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {

@@ -2,23 +2,17 @@
 
 import type { Node } from '@xyflow/react';
 import {
-  AlertCircle,
   Clock,
   Copy,
   Download,
-  ExternalLink,
   FileJson,
   FileText,
   GitBranch,
-  GitCompare,
   History,
-  Loader2,
   Tag,
   X,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RelationsTab } from '@/components/relations/RelationsTab';
 import { TreeGraphView } from '@/components/tree-graph';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +27,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSemanticContent } from '@/domain/commitContent';
 import { useExportCommit } from '@/hooks/commits/useExportCommit';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit, CommitExportFormat } from '@/types/api';
 import type { CanvasNodeData, CommitDisplay, CommitSourceRef } from '@/types/nodes';
 import { cn } from '@/utils/cn';
@@ -53,7 +46,6 @@ interface CommittedCommitViewProps {
   onClose: () => void;
   onUpdate: (patch: Partial<CanvasNodeData>) => void;
   projectId: string;
-  routeProjectId: string | undefined;
   quickActions?: NodeQuickAction[];
 }
 
@@ -62,23 +54,16 @@ export function CommittedCommitView({
   onClose,
   onUpdate: _onUpdate,
   projectId,
-  routeProjectId,
   quickActions: _quickActions,
 }: CommittedCommitViewProps) {
   const { t } = useTerminology();
   const { run: exportCommit } = useExportCommit();
-  const router = useRouter();
   const data = node.data;
 
   // ========== Internal State ==========
 
   // History panel
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
-
-  // Diff state
-  const [diffTargetCommit, setDiffTargetCommit] = useState<string>('');
-  const [isDiffLoading, setIsDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<string | null>(null);
 
   // Layout: resizable panels
   const [commitLeftWidth, setCommitLeftWidth] = useState(280);
@@ -92,13 +77,6 @@ export function CommittedCommitView({
   useEffect(() => () => dragCleanupRef.current?.(), []);
 
   // ========== Computed Values ==========
-
-  // Get all committed commits for diff target selection
-  const nodes = useCanvasStore((state) => state.nodes);
-  const allCommittedCommits = useMemo(
-    () => nodes.filter((n) => n.data.kind === 'unit' && n.data.commitStatus === 'committed'),
-    [nodes]
-  );
 
   // Branch label
   const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'main';
@@ -128,27 +106,6 @@ export function CommittedCommitView({
       await exportCommit(commit, format);
     },
     [data.commit, exportCommit]
-  );
-
-  // B-15: Navigate to full-screen diff page
-  const handleDiffTargetSelect = useCallback(
-    (targetHash: string) => {
-      if (!data?.commitHash || !targetHash) return;
-
-      setDiffTargetCommit(targetHash);
-      setIsDiffLoading(true);
-      setDiffError(null);
-
-      const pid = routeProjectId || projectId;
-      try {
-        router.push(
-          `/project/${pid}/diff?base=${encodeURIComponent(data.commitHash)}&target=${encodeURIComponent(targetHash)}`
-        );
-      } finally {
-        setIsDiffLoading(false);
-      }
-    },
-    [data?.commitHash, routeProjectId, projectId, router]
   );
 
   // Commit left divider handler
@@ -252,20 +209,6 @@ export function CommittedCommitView({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            {/* Open Full Page link */}
-            {data.commitHash && (routeProjectId || projectId) && (
-              <Link
-                href={`/project/${routeProjectId || projectId}/commit/${encodeURIComponent(data.commitHash)}`}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium',
-                  'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
-                  'hover:bg-[var(--hover-bg)] transition-colors'
-                )}
-              >
-                <ExternalLink size={14} />
-                <span>Open Full Page</span>
-              </Link>
-            )}
             {data.commit && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -355,7 +298,7 @@ export function CommittedCommitView({
             </div>
 
             <MemoryContextSidebar
-              projectId={routeProjectId || projectId || undefined}
+              projectId={projectId || undefined}
               conversationId={data?.conversationId || data?.sourceConversationId}
               branch={branchLabel}
             />
@@ -375,7 +318,7 @@ export function CommittedCommitView({
                 const commit = data.commit as CommitDisplay;
                 const branchName =
                   data.branchName || (data.branchType === 'main' ? 'main' : undefined);
-                const commitProjectId = routeProjectId || projectId || undefined;
+                const commitProjectId = projectId || undefined;
 
                 return (
                   <div className="space-y-[var(--space-group)]">
@@ -643,7 +586,7 @@ export function CommittedCommitView({
             onMouseDown={handleCommitRightDivider}
           />
 
-          {/* Right Sidebar - History & Compare */}
+          {/* Right Sidebar - inline history */}
           <aside
             className="min-w-[200px] p-5 overflow-y-auto shrink-0 bg-[var(--surface-app)]"
             style={{ width: commitRightWidth }}
@@ -669,63 +612,9 @@ export function CommittedCommitView({
                   commitHash={data.commitHash}
                   open={showHistoryPanel}
                   onClose={() => setShowHistoryPanel(false)}
-                  projectId={projectId}
                 />
               </>
             )}
-
-            <div className="h-px bg-[var(--hover-bg)] my-4" />
-
-            {/* B-15: Simplified Diff Section */}
-            <div className="mb-5">
-              <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <GitCompare size={14} />
-                Compare
-              </h4>
-
-              <div className="flex flex-col gap-2">
-                <select
-                  className="w-full py-2 px-3 border border-[var(--color-border)] rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--status-info)] disabled:opacity-50 disabled:cursor-not-allowed"
-                  value={diffTargetCommit}
-                  disabled={allCommittedCommits.length <= 1 || isDiffLoading}
-                  onChange={(e) => {
-                    const target = e.target.value;
-                    if (target) {
-                      handleDiffTargetSelect(target);
-                    } else {
-                      setDiffTargetCommit('');
-                    }
-                  }}
-                >
-                  <option value="">
-                    {allCommittedCommits.length <= 1
-                      ? `Need 2+ ${t('commits').toLowerCase()}`
-                      : `Select a ${t('commit').toLowerCase()}...`}
-                  </option>
-                  {allCommittedCommits
-                    .filter((c) => c.data.commitHash !== data.commitHash)
-                    .map((c) => (
-                      <option key={c.id} value={c.data.commitHash}>
-                        {c.data.title || c.data.entryId} ({c.data.commitHash?.slice(0, 8)})
-                      </option>
-                    ))}
-                </select>
-
-                {isDiffLoading && (
-                  <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>Comparing...</span>
-                  </div>
-                )}
-
-                {diffError && (
-                  <div className="flex items-center gap-2 py-2 px-3 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-md text-[var(--status-error)] text-sm">
-                    <AlertCircle size={14} />
-                    <span>{diffError}</span>
-                  </div>
-                )}
-              </div>
-            </div>
           </aside>
         </div>
       </div>

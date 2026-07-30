@@ -132,7 +132,7 @@ const ContextManifestBaselineSchema = z.object({
 });
 
 const ContextManifestReferenceSchema = z.object({
-  type: z.enum(['conversation', 'leaf', 'import']),
+  type: z.enum(['conversation', 'conversation_turn', 'leaf', 'import']),
   id: z.string(),
   pin_id: z.string(),
   included: z.boolean(),
@@ -156,6 +156,7 @@ const ContextManifestSourceItemSchema = z.object({
   kind: z.enum([
     'baseline',
     'conversation',
+    'conversation_turn',
     'leaf',
     'commit',
     'import',

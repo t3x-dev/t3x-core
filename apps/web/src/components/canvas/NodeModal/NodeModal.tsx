@@ -2,7 +2,6 @@
 
 import type { Node } from '@xyflow/react';
 import { X } from 'lucide-react';
-import { useParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -58,8 +57,6 @@ export function NodeModal({
   isConversationLocked,
   viewMode = 'commit',
 }: NodeModalProps) {
-  const params = useParams();
-  const routeProjectId = params?.projectId as string | undefined;
   const projectId = useCanvasStore((state) => state.projectId);
 
   // For staging units: toggle between conversation view and commit config view
@@ -104,7 +101,7 @@ export function NodeModal({
         onClose={onClose}
         onUpdate={onUpdate}
         projectId={projectId || ''}
-        routeProjectId={routeProjectId}
+        onShowConversation={() => setShowCommitConfig(false)}
         onConvertDraft={onConvertDraft}
         onBranchChange={onBranchChange}
         onBranchNameChange={onBranchNameChange}
@@ -119,7 +116,6 @@ export function NodeModal({
         onClose={onClose}
         onUpdate={onUpdate}
         projectId={projectId || ''}
-        routeProjectId={routeProjectId}
         quickActions={quickActions}
       />
     );

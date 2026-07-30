@@ -13,16 +13,11 @@
 
 import type { MergeResult } from '@t3x-dev/core';
 import { Check, Circle } from 'lucide-react';
+import { isTreeResolutionComplete, type TreeResolution } from '@/types/merge';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-type TreeResolution =
-  | { type: 'source' }
-  | { type: 'target' }
-  | { type: 'both' }
-  | { type: 'per-slot'; slotChoices: Record<string, 'source' | 'target'> };
 
 interface MergeNavigatorProps {
   mergeResult: MergeResult;
@@ -91,7 +86,9 @@ export function MergeNavigator({
   onToggleKeepTarget,
 }: MergeNavigatorProps) {
   const totalConflicts = mergeResult.conflicts.length;
-  const resolvedCountActual = mergeResult.conflicts.filter((c) => resolutions.has(c.path)).length;
+  const resolvedCountActual = mergeResult.conflicts.filter((conflict) =>
+    isTreeResolutionComplete(resolutions.get(conflict.path), conflict.slotConflicts)
+  ).length;
   const progress = totalConflicts > 0 ? (resolvedCountActual / totalConflicts) * 100 : 100;
 
   function handleNodeClick(path: string) {
@@ -140,7 +137,10 @@ export function MergeNavigator({
         <>
           <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="red" />
           {mergeResult.conflicts.map((conflict) => {
-            const isResolved = resolutions.has(conflict.path);
+            const isResolved = isTreeResolutionComplete(
+              resolutions.get(conflict.path),
+              conflict.slotConflicts
+            );
             const isActive = activeNodeId === conflict.path;
             return (
               <button

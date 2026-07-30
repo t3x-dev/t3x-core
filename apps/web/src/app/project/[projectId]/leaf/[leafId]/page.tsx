@@ -9,7 +9,10 @@ import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LeafInspector } from '@/components/leaf/LeafInspector';
 import { LeafOutputDisplay } from '@/components/leaf/LeafOutputDisplay';
 import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
-import { LeafWorkspaceHeader } from '@/components/leaf/LeafWorkspaceHeader';
+import {
+  type EmbeddedLeafNavigation,
+  LeafWorkspaceHeader,
+} from '@/components/leaf/LeafWorkspaceHeader';
 import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
 import { LearnFromEditsPanel } from '@/components/leaf/LearnFromEditsPanel';
 import { QualityPanel } from '@/components/leaf/QualityPanel';
@@ -19,12 +22,12 @@ import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
-import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import {
   buildLeafSemanticPointSummary,
   buildLeafSemanticPointSummaryByNode,
   deriveLeafSemanticPointItems,
 } from '@/domain/leaf/semanticPoints';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
@@ -73,17 +76,23 @@ export default function LeafDetailPage() {
 }
 
 interface LeafDetailWorkspaceProps {
+  embeddedNavigation?: EmbeddedLeafNavigation;
+  leafIdOverride?: string;
+  projectIdOverride?: string;
   showChatSidebarToggle?: boolean;
 }
 
 export function LeafDetailWorkspace({
+  embeddedNavigation,
+  leafIdOverride,
+  projectIdOverride,
   showChatSidebarToggle = false,
 }: LeafDetailWorkspaceProps = {}) {
   const params = useParams();
   const router = useRouter();
   const introDemoRequested = useIntroDemoQueryFlag();
-  const projectId = params.projectId as string;
-  const leafId = params.leafId as string;
+  const projectId = projectIdOverride ?? (params.projectId as string);
+  const leafId = leafIdOverride ?? (params.leafId as string);
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const [introDemoAwaitingGeneration, setIntroDemoAwaitingGeneration] = useState(false);
   const introDemoCompletionTimerRef = useRef<number | null>(null);
@@ -147,10 +156,11 @@ export function LeafDetailWorkspace({
   // Re-tune with navigation
   const onRetune = useCallback(async () => {
     const conversationId = await handleRetune();
-    if (conversationId) {
-      router.push(`/chat/${conversationId}`);
+    if (conversationId && projectName) {
+      const statePath = getProjectRepoPath({ id: projectId, name: projectName });
+      router.push(`${statePath}?view=canvas&commit=${encodeURIComponent(leaf?.commit_hash ?? '')}`);
     }
-  }, [handleRetune, router, projectId]);
+  }, [handleRetune, leaf?.commit_hash, projectId, projectName, router]);
 
   // Accept AI-suggested constraints (batch add — single API call)
   const handleAcceptSuggestions = useCallback(
@@ -302,6 +312,7 @@ export function LeafDetailWorkspace({
 
       {/* ── Header ── */}
       <LeafWorkspaceHeader
+        embeddedNavigation={embeddedNavigation}
         leaf={leaf}
         projectId={projectId}
         projectName={projectName}
@@ -313,22 +324,19 @@ export function LeafDetailWorkspace({
 
       {/* ── Toolbar ── */}
       <div
-        className="flex h-[40px] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-4"
+        className="flex min-h-9 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-3 py-1.5"
         data-intro-target="leaf-status"
       >
         <div className="hidden items-center gap-2 md:flex">
-          <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
+          <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-leaf)]">
             {leaf.type} artifact
           </span>
-          <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
-            {coverageIncluded} / {coverageTotal} state points
-          </span>
-          <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-commit)]">
+          <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-commit)]">
             {semanticContent ? 'commit verified' : 'commit loading'}
           </span>
           <span
             className={cn(
-              'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium',
+              'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
               assertionCount > 0 && assertionPassedCount === assertionCount
                 ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
                 : 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
@@ -340,10 +348,10 @@ export function LeafDetailWorkspace({
 
         <div className="flex min-w-0 flex-1 items-center justify-between gap-2 md:hidden">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)]">
+            <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-leaf)]">
               {coverageIncluded}/{coverageTotal} points
             </span>
-            <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-commit)]">
+            <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-commit)]">
               verified
             </span>
           </div>
@@ -352,9 +360,9 @@ export function LeafDetailWorkspace({
               type="button"
               data-intro-target="leaf-mode-generate"
               className={cn(
-                'px-2 py-1 text-[10px] font-medium transition-all',
+                'min-h-7 px-2 py-1 text-[11px] font-medium transition-all',
                 mode === 'generate'
-                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => handleModeChange('generate')}
@@ -365,9 +373,9 @@ export function LeafDetailWorkspace({
               type="button"
               data-intro-target="leaf-mode-display"
               className={cn(
-                'px-2 py-1 text-[10px] font-medium transition-all',
+                'min-h-7 px-2 py-1 text-[11px] font-medium transition-all',
                 mode === 'display'
-                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => handleModeChange('display')}
@@ -377,18 +385,11 @@ export function LeafDetailWorkspace({
           </div>
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
           <span className="text-[11px] text-[var(--text-tertiary)]">
-            Quality first, then source review, then publish
+            Source → Constraints → Instructions → Generate &amp; verify
           </span>
           {saving && <span className="text-[10px] text-[var(--text-tertiary)]">Saving...</span>}
-          <KeyboardHintBar
-            hints={[
-              { key: 'j k', label: 'navigate' },
-              { key: 'o', label: 'require' },
-              { key: 'esc', label: 'deselect' },
-            ]}
-          />
         </div>
       </div>
 
@@ -449,6 +450,7 @@ export function LeafDetailWorkspace({
           saving={saving}
           commitHash={leaf.commit_hash}
           projectId={projectId}
+          projectName={projectName}
           onAddConstraintFromSource={handleAddConstraintFromSource}
           semanticPointSummaryByNode={semanticPointSummaryByNode}
           highlightedConstraintId={hoveredNodeId}
@@ -458,16 +460,12 @@ export function LeafDetailWorkspace({
         {/* Center: Main Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Output scroll area */}
-          <div className="flex flex-1 flex-col overflow-y-auto bg-[color-mix(in_srgb,var(--surface-app)_94%,var(--surface-panel))] p-6">
+          <div className="flex flex-1 flex-col overflow-y-auto bg-[color-mix(in_srgb,var(--surface-app)_94%,var(--surface-panel))] p-4">
             <LeafOutputDisplay
               output={leaf.output}
               generatedAt={leaf.generated_at}
               assertions={leaf.assertions}
               constraints={leaf.constraints}
-              onGenerate={handleLeafGenerate}
-              isGenerating={isGenerating}
-              generatePhase={generatePhase}
-              generateProgressMessages={generateProgressMessages}
               generateSuccessBanner={generateSuccessBanner}
               mode={mode}
               nodeCoverage={nodeCoverage}
@@ -540,7 +538,6 @@ export function LeafDetailWorkspace({
             collapsed={false}
             onRemoveConstraint={handleRemoveConstraint}
             onAddConstraint={handleAddConstraint}
-            onExport={handleExport}
             selectedAssertionIds={selectedAssertionIds}
             toggleAssertion={toggleAssertion}
             onRetune={onRetune}
@@ -551,18 +548,16 @@ export function LeafDetailWorkspace({
           <QualityPanel
             assertions={leaf.assertions ?? []}
             constraints={leaf.constraints}
-            generatedAt={leaf.generated_at ?? undefined}
             semanticPoints={semanticPointItems}
             coverageIncluded={coverageIncluded}
             coverageTotal={coverageTotal}
             onHighlightConstraint={setHoveredNodeId}
-            onExport={handleExport}
           />
         )}
       </div>
 
       {/* ── Footer ── */}
-      <LeafWorkspaceFooter leaf={leaf} projectId={projectId} />
+      <LeafWorkspaceFooter leaf={leaf} projectId={projectId} projectName={projectName} />
 
       {/* ── Dialogs ── */}
       <SuggestConstraintsDialog

@@ -17,7 +17,6 @@ const FORBIDDEN_RAW_RGBA = /rgba\([^)]*\)/g;
 const ALLOWED_FILES = new Set([
   // Logo glyphs are brand assets, not page or component color roles.
   'components/chat/sidebar/LogoIcon.tsx',
-  'components/layout/Sidebar.tsx',
   // Theme helpers are allowed to define the static brand palette they export.
   'utils/theme.ts',
 ]);
@@ -57,7 +56,7 @@ function collectViolations(patterns: RegExp[], allowedFiles = ALLOWED_FILES): st
 
   for (const scanDir of SCAN_DIRS) {
     for (const file of collectFiles(path.join(ROOT, scanDir))) {
-      const relative = path.relative(ROOT, file);
+      const relative = path.relative(ROOT, file).split(path.sep).join('/');
       if (allowedFiles.has(relative)) continue;
 
       const content = readFileSync(file, 'utf8');

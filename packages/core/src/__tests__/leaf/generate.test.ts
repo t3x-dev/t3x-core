@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
+import { type LLMProvider, LLMProviderError } from '../../llm/types';
 import type { SemanticContent } from '../../semantic/types';
 import type { Leaf } from '../../types';
 
@@ -306,6 +307,32 @@ describe('generateLeafOutput', () => {
       generateLeafOutput({
         knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
+      })
+    ).rejects.toMatchObject({
+      code: 'AUTH_ERROR',
+      statusCode: 401,
+    });
+  });
+
+  it('preserves provider authentication errors', async () => {
+    const provider = {
+      id: 'claude',
+      generate: vi
+        .fn()
+        .mockRejectedValue(
+          new LLMProviderError(
+            'claude',
+            401,
+            'API request failed: 401 {"error":{"type":"authentication_error","message":"invalid x-api-key"}}'
+          )
+        ),
+    } as unknown as LLMProvider;
+
+    await expect(
+      generateLeafOutput({
+        knowledge: createTestKnowledge(),
+        leaf: createTestLeaf(),
+        provider,
       })
     ).rejects.toMatchObject({
       code: 'AUTH_ERROR',

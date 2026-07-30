@@ -5,7 +5,37 @@ import {
   isProjectMergeRoute,
   isSettingsRoute,
   isShelllessDetailRoute,
+  resolveCanonicalRepositoryPath,
 } from '@/app/ClientLayout';
+import type { ProjectSummary } from '@/store/projectStore';
+
+const PROJECT: ProjectSummary = {
+  branchesCount: 1,
+  commitsCount: 1,
+  description: '',
+  drafts: 0,
+  id: 'proj_123',
+  name: 'Example Project',
+  nodes: 1,
+  owner: 'You',
+  status: 'active',
+  updatedAt: 'now',
+};
+
+describe('resolveCanonicalRepositoryPath', () => {
+  it('resolves the canonical shell path from both repository and legacy project params', () => {
+    expect(
+      resolveCanonicalRepositoryPath('/t3x-dev/example-project/outputs', null, [PROJECT])
+    ).toBe('/t3x-dev/example-project');
+    expect(resolveCanonicalRepositoryPath('/project/proj_123', 'proj_123', [PROJECT])).toBe(
+      '/t3x-dev/example-project'
+    );
+  });
+
+  it('does not invent repository context for organization pages', () => {
+    expect(resolveCanonicalRepositoryPath('/t3x-dev/settings', null, [PROJECT])).toBeUndefined();
+  });
+});
 
 describe('isCommitDetailRoute', () => {
   it('matches project commit detail routes that should not render the global sidebar', () => {

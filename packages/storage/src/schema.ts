@@ -297,6 +297,105 @@ export const mergeDrafts = pgTable(
 );
 
 /**
+ * Pull Requests - Review lifecycle for merging one project branch into another.
+ *
+ * The source/target hashes are immutable review snapshots. A successful merge
+ * records the resulting structured-state commit in mergeCommitHash.
+ */
+export const pullRequests = pgTable(
+  'pull_requests',
+  {
+    pullRequestId: text('pull_request_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    sourceBranch: text('source_branch').notNull(),
+    targetBranch: text('target_branch').notNull(),
+    sourceCommitHash: text('source_commit_hash').notNull(),
+    targetBaseCommitHash: text('target_base_commit_hash').notNull(),
+    mergeDraftId: text('merge_draft_id').references(() => mergeDrafts.draftId, {
+      onDelete: 'set null',
+    }),
+    mergeCommitHash: text('merge_commit_hash'),
+    status: text('status').notNull().default('open'),
+    authorId: text('author_id').notNull(),
+    reviewOwnerId: text('review_owner_id'),
+    linkedWork: text('linked_work'),
+    diffSummary: jsonb('diff_summary')
+      .$type<{
+        changed_nodes: number;
+        yops_operations: number;
+        output_impacts: number;
+        source_refs: number;
+      }>()
+      .notNull()
+      .default({ changed_nodes: 0, yops_operations: 0, output_impacts: 0, source_refs: 0 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    mergedAt: timestamp('merged_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (table) => [
+    unique('pull_requests_project_number').on(table.projectId, table.number),
+    uniqueIndex('idx_pull_requests_active_pair')
+      .on(table.projectId, table.sourceBranch, table.targetBranch)
+      .where(sql`${table.status} IN ('draft', 'open', 'checking', 'ready', 'blocked')`),
+    index('idx_pull_requests_project_status').on(table.projectId, table.status),
+    check(
+      'pull_requests_status_valid',
+      sql`${table.status} IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')`
+    ),
+    check(
+      'pull_requests_merged_commit_required',
+      sql`${table.status} <> 'merged' OR ${table.mergeCommitHash} IS NOT NULL`
+    ),
+  ]
+);
+
+/** Deterministic readiness results attached to a pull request. */
+export const pullRequestChecks = pgTable(
+  'pull_request_checks',
+  {
+    checkId: text('check_id').primaryKey(),
+    pullRequestId: text('pull_request_id')
+      .notNull()
+      .references(() => pullRequests.pullRequestId, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    status: text('status').notNull(),
+    title: text('title').notNull(),
+    message: text('message'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_pull_request_checks_pr').on(table.pullRequestId),
+    check(
+      'pull_request_checks_status_valid',
+      sql`${table.status} IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')`
+    ),
+  ]
+);
+
+/** Append-only user-visible audit trail for a pull request. */
+export const pullRequestActivity = pgTable(
+  'pull_request_activity',
+  {
+    activityId: text('activity_id').primaryKey(),
+    pullRequestId: text('pull_request_id')
+      .notNull()
+      .references(() => pullRequests.pullRequestId, { onDelete: 'cascade' }),
+    actorId: text('actor_id').notNull(),
+    type: text('type').notNull(),
+    message: text('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('idx_pull_request_activity_pr').on(table.pullRequestId, table.createdAt)]
+);
+
+/**
  * Deploy Agents - Registered agents for deployment and evaluation
  * Note: This is different from the "agent" layer (LLM draft generation)
  */
@@ -452,6 +551,151 @@ export const templates = pgTable(
   ]
 );
 
+/**
+ * YSchema Validation Runs - Internal deterministic validation records
+ *
+ * Binds a validation result to a T3X commit, schema identity, and validator
+ * version. External CI integrations should mirror this table later instead
+ * of becoming the source of truth.
+ */
+export const yschemaValidationRuns = pgTable(
+  'yschema_validation_runs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    commitHash: text('commit_hash').notNull(),
+    schemaName: text('schema_name').notNull(),
+    schemaVersion: text('schema_version').notNull(),
+    schemaHash: text('schema_hash').notNull(),
+    validatorVersion: text('validator_version').notNull(),
+    status: text('status').notNull(),
+    valid: boolean('valid').notNull(),
+    ready: boolean('ready').notNull(),
+    errorCount: integer('error_count').notNull(),
+    gapCount: integer('gap_count').notNull(),
+    fixCount: integer('fix_count').notNull(),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_yschema_validation_runs_project').on(table.projectId, table.createdAt),
+    index('idx_yschema_validation_runs_commit').on(table.projectId, table.commitHash),
+    index('idx_yschema_validation_runs_schema').on(table.schemaName, table.schemaHash),
+  ]
+);
+
+/**
+ * Workspace Validation Runs - Candidate-level validation workflow records
+ *
+ * Binds external validator evidence to a workspace candidate, workflow,
+ * materialized input, and validator contract. Gate status is stored as a
+ * summary for consumers, but freshness is calculated by workflow/API code.
+ */
+export const validationRuns = pgTable(
+  'validation_runs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectHash: text('subject_hash').notNull(),
+    workflowName: text('workflow_name').notNull(),
+    workflowHash: text('workflow_hash').notNull(),
+    inputHash: text('input_hash').notNull(),
+    validatorHash: text('validator_hash').notNull(),
+    environmentHash: text('environment_hash'),
+    provider: text('provider').notNull(),
+    status: text('status').notNull(),
+    gateStatus: text('gate_status').notNull(),
+    summary: text('summary'),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_validation_runs_workspace_created').on(
+      table.projectId,
+      table.workspaceId,
+      table.createdAt
+    ),
+    index('idx_validation_runs_subject').on(
+      table.projectId,
+      table.workspaceId,
+      table.subjectType,
+      table.subjectHash
+    ),
+    index('idx_validation_runs_workflow').on(table.workflowName, table.workflowHash),
+  ]
+);
+
+/**
+ * Workspace Validation Step Runs - Step-level evidence for a validation run.
+ */
+export const validationStepRuns = pgTable(
+  'validation_step_runs',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => validationRuns.id, { onDelete: 'cascade' }),
+    stepId: text('step_id').notNull(),
+    name: text('name').notNull(),
+    status: text('status').notNull(),
+    summary: text('summary'),
+    errorCode: text('error_code'),
+    exitCode: integer('exit_code'),
+    durationMs: integer('duration_ms'),
+    commandJson: jsonb('command_json').$type<unknown[] | null>(),
+    logExcerpt: text('log_excerpt'),
+    logTruncated: boolean('log_truncated').notNull().default(false),
+    logArtifactId: text('log_artifact_id'),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_validation_step_runs_run').on(table.runId),
+    index('idx_validation_step_runs_run_step').on(table.runId, table.stepId),
+  ]
+);
+
+/**
+ * Workspace Validation Findings - Structured validator errors and evidence.
+ */
+export const validationFindings = pgTable(
+  'validation_findings',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => validationRuns.id, { onDelete: 'cascade' }),
+    stepRunId: text('step_run_id').references(() => validationStepRuns.id, {
+      onDelete: 'cascade',
+    }),
+    severity: text('severity').notNull(),
+    file: text('file'),
+    line: integer('line'),
+    statePath: text('state_path'),
+    code: text('code').notNull(),
+    message: text('message').notNull(),
+    logExcerpt: text('log_excerpt'),
+    evidenceJson: jsonb('evidence_json').notNull().$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_validation_findings_run').on(table.runId),
+    index('idx_validation_findings_step').on(table.stepRunId),
+  ]
+);
+
 // ============================================================
 // Type Exports (for use in application code)
 // ============================================================
@@ -486,8 +730,25 @@ export type NewRun = typeof runs.$inferInsert;
 export type MergeDraft = typeof mergeDrafts.$inferSelect;
 export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
 
+export type PullRequest = typeof pullRequests.$inferSelect;
+export type NewPullRequest = typeof pullRequests.$inferInsert;
+export type PullRequestCheck = typeof pullRequestChecks.$inferSelect;
+export type NewPullRequestCheck = typeof pullRequestChecks.$inferInsert;
+export type PullRequestActivity = typeof pullRequestActivity.$inferSelect;
+export type NewPullRequestActivity = typeof pullRequestActivity.$inferInsert;
+
 export type SavedComparison = typeof savedComparisons.$inferSelect;
 export type NewSavedComparison = typeof savedComparisons.$inferInsert;
+
+export type YSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferSelect;
+export type NewYSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferInsert;
+
+export type ValidationRunRecord = typeof validationRuns.$inferSelect;
+export type NewValidationRunRecord = typeof validationRuns.$inferInsert;
+export type ValidationStepRunRecord = typeof validationStepRuns.$inferSelect;
+export type NewValidationStepRunRecord = typeof validationStepRuns.$inferInsert;
+export type ValidationFindingRecord = typeof validationFindings.$inferSelect;
+export type NewValidationFindingRecord = typeof validationFindings.$inferInsert;
 
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;

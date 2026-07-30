@@ -34,7 +34,7 @@ import {
   Tag,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FeatureTourOverlay,
@@ -47,7 +47,6 @@ import { TreeGraphView } from '@/components/tree-graph';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
-import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
 import { resolveIntroDemoApiCommitForHash } from '@/hooks/onboarding/introDemoLocalCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -57,7 +56,7 @@ import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, Leaf } from '@/types/api';
-import { safeInternalReturnTo } from '@/utils/navigationReturn';
+import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
@@ -142,6 +141,7 @@ const INTRO_COMMIT_DETAIL_TOUR_STEPS: FeatureTourStep[] = [
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const introDemoRequested = useIntroDemoQueryFlag();
   const introDemoStage = searchParams.get('introDemoStage');
@@ -153,12 +153,11 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const { loadCommit } = useCommitByHash();
   const { loadLeaves } = useLeavesByCommit();
   const { loadProject } = useProjectDetail();
-  const { loadHistory } = useCommitHistory(null, { enabled: false });
 
   // ── Data state ────────────────────────────────────
   const [commit, setCommitLocal] = useState<ApiCommit | null>(null);
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [_commitHistory, setCommitHistory] = useState<ApiCommit[]>([]);
+  const [verifiedParentHash, setVerifiedParentHash] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +180,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const baseCanvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), baseCanvasHref);
+  const currentReturnTo = buildReturnTo(pathname, searchParams.toString());
   const fallbackIntroDemoReturnTo = `${baseCanvasHref}?introDemo=1&introDemoStage=leaf`;
   const introDemoReturnTo = useMemo(
     () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackIntroDemoReturnTo),
@@ -193,9 +194,14 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setLoading(true);
       setError(null);
+      setCommitLocal(null);
+      setLeaves([]);
+      setVerifiedParentHash(null);
+      setProjectName('');
       try {
         const introDemoCommit = introDemoRequested
           ? resolveIntroDemoApiCommitForHash(projectId, commitHash)
@@ -205,41 +211,44 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           introDemoCommit ? Promise.resolve([] as Leaf[]) : loadLeaves(commitHash).catch(() => []),
           loadProject(projectId).catch(() => null),
         ]);
+        if (commitData.hash !== commitHash || commitData.project_id !== projectId) {
+          throw new Error('Commit response does not match the requested project and hash.');
+        }
+        if (cancelled) return;
         setCommitLocal(commitData);
-        setLeaves(leavesData);
+        setLeaves(leavesData.filter((leaf) => leaf.project_id === projectId));
         if (projectData?.name) setProjectName(projectData.name);
 
         // Fetch parent commit for diff computation (if single parent)
         let parentCommit: ApiCommit | null = null;
         if (!introDemoCommit && commitData.parents.length === 1) {
           try {
-            parentCommit = await loadCommit(commitData.parents[0]);
+            const candidate = await loadCommit(commitData.parents[0]);
+            if (
+              candidate.hash === commitData.parents[0] &&
+              candidate.project_id === projectId &&
+              !cancelled
+            ) {
+              parentCommit = candidate;
+              setVerifiedParentHash(candidate.hash);
+            }
           } catch {
             // Parent fetch failure is non-critical
           }
         }
 
         // Store computes enriched nodes automatically
-        storeSetCommit(commitData, parentCommit);
-
-        // Fetch commit history
-        if (introDemoCommit) {
-          setCommitHistory([]);
-        } else {
-          try {
-            const history = await loadHistory(commitHash, 10);
-            setCommitHistory(history);
-          } catch {
-            // History fetch failure is non-critical
-          }
-        }
+        if (!cancelled) storeSetCommit(commitData, parentCommit);
       } catch (err) {
-        setError(formatUserFacingError(err, 'Failed to load commit.'));
+        if (!cancelled) setError(formatUserFacingError(err, 'Failed to load commit.'));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    load();
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [
     commitHash,
     projectId,
@@ -248,7 +257,6 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     loadCommit,
     loadLeaves,
     loadProject,
-    loadHistory,
   ]);
 
   useEffect(() => {
@@ -299,12 +307,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       router.push(introDemoReturnTo);
       return;
     }
-    if (window.history.length > 1) {
-      router.back();
-      return;
-    }
-    router.push(canvasHref);
-  }, [canvasHref, introDemoReturnTo, isIntroCommitDetailsStage, router]);
+    router.replace(returnHref);
+  }, [introDemoReturnTo, isIntroCommitDetailsStage, returnHref, router]);
 
   const handleTourDone = useCallback(() => {
     if (isIntroCommitDetailsStage) {
@@ -358,7 +362,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             className="flex items-center gap-2 text-sm text-[var(--status-info)] hover:underline"
           >
             <ArrowLeft size={14} />
-            Back to Canvas
+            Back
           </button>
         </div>
       </div>
@@ -387,9 +391,20 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           <Breadcrumb
             className="text-[13px]"
             segments={[
-              { label: projectName || 'Project', href: canvasHref },
+              {
+                label: projectName || 'Project',
+                href: `/project/${encodeURIComponent(projectId)}`,
+              },
               ...(commit.branch
-                ? [{ label: commit.branch, href: `/project/${projectId}/history` }]
+                ? [
+                    {
+                      label: commit.branch,
+                      href: withReturnTo(
+                        `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(commit.branch)}`,
+                        currentReturnTo
+                      ),
+                    },
+                  ]
                 : []),
               { label: shortHash(commitHash) },
             ]}
@@ -403,9 +418,12 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           >
             <GitCommit size={13} /> Canvas
           </Link>
-          {commit.parents.length === 1 && (
+          {verifiedParentHash && (
             <Link
-              href={`/project/${projectId}/diff?base=${encodeURIComponent(commit.parents[0])}&target=${encodeURIComponent(commitHash)}`}
+              href={withReturnTo(
+                `/project/${encodeURIComponent(projectId)}/diff?base=${encodeURIComponent(verifiedParentHash)}&target=${encodeURIComponent(commitHash)}`,
+                currentReturnTo
+              )}
               className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
             >
               <Sparkles size={13} /> View Diff
@@ -547,7 +565,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
               {commit.parents.map((parentHash) => (
                 <Link
                   key={parentHash}
-                  href={`/project/${projectId}/commit/${encodeURIComponent(parentHash)}`}
+                  href={withReturnTo(
+                    `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(parentHash)}`,
+                    currentReturnTo
+                  )}
                   className="font-mono text-[var(--accent-commit)] hover:underline"
                 >
                   {shortHash(parentHash)}

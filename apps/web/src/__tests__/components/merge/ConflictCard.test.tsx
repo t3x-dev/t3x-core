@@ -36,7 +36,7 @@ describe('ConflictCard', () => {
 
     expect(screen.getByRole('button', { name: /Use feature/i })).toBeVisible();
     expect(screen.getByRole('button', { name: /Use main/i })).toBeVisible();
-    expect(screen.getByRole('button', { name: /Keep both voices/i })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Keep both voices/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit voice/i })).toBeVisible();
   });
 });

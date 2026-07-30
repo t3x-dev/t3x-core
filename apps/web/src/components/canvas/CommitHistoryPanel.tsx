@@ -125,8 +125,6 @@ interface CommitHistoryPanelProps {
   onClose: () => void;
   /** Called when user clicks a commit row (for diff view) */
   onSelectCommit?: (hash: string, parentHash: string | null) => void;
-  /** Project ID for navigation */
-  projectId?: string;
 }
 
 export function CommitHistoryPanel({

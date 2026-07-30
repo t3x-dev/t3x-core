@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 71 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(71);
+  it('has 75 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(75);
   });
 
   it('key equals value for every code', () => {
@@ -78,6 +78,7 @@ describe('ErrorCodes', () => {
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "REVIEW_REQUIRED": "REVIEW_REQUIRED",
         "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
@@ -90,8 +91,11 @@ describe('ErrorCodes', () => {
         "UNSUPPORTED_OP": "UNSUPPORTED_OP",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
+        "VALIDATION_INPUT_NOT_SUPPORTED": "VALIDATION_INPUT_NOT_SUPPORTED",
         "VERIFY_FAILED": "VERIFY_FAILED",
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
+        "WORKSPACE_BASE_BRANCH_MISMATCH": "WORKSPACE_BASE_BRANCH_MISMATCH",
+        "WORKSPACE_NOT_FOUND": "WORKSPACE_NOT_FOUND",
         "YOPS_LOG_SUPERSEDED": "YOPS_LOG_SUPERSEDED",
       }
     `);
@@ -126,6 +130,7 @@ describe('ErrorStatusCodes', () => {
     expect(ErrorStatusCodes.HASH_CONFLICT).toBe(409);
     expect(ErrorStatusCodes.BRANCH_NOT_HEAD).toBe(409);
     expect(ErrorStatusCodes.BRANCH_ROOT_EXISTS).toBe(409);
+    expect(ErrorStatusCodes.REVIEW_REQUIRED).toBe(409);
   });
 
   it('maps operation failures to 500', () => {

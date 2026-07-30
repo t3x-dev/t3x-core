@@ -3,6 +3,7 @@ export { generatePromptContract } from './promptContract';
 export type { RenderYSchemaMarkdownInput } from './renderMarkdown';
 export { renderYSchemaMarkdown } from './renderMarkdown';
 export { t3xPrdP0Fixtures } from './t3xPrdFixture';
+export { t3xSkillP0Fixtures } from './t3xSkillFixture';
 export type {
   ContentKind,
   FixProposal,

@@ -63,6 +63,22 @@ export interface CommitSourceRef {
 // Tree-based Commits
 // ============================================================================
 
+/** Tree-based commit operations from API response */
+
+export interface ApiCommitOperation {
+  created_at: string;
+  id: string;
+  model: string | null;
+  source: string;
+  turn_hash: string | null;
+  yops: unknown;
+}
+
+export interface ApiCommitOperationsResponse {
+  commit_hash: string;
+  operations: ApiCommitOperation[];
+}
+
 /** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
@@ -75,7 +91,11 @@ export interface ApiCommit {
   message: string | null;
   branch: string;
   sources: Array<{ type: string; id: string; title?: string }> | null;
-  provenance: { method: string; model?: string } | null;
+  provenance: {
+    method: string;
+    model?: string;
+    schema_ref?: { name: string; version?: string; hash?: string };
+  } | null;
   yops_log_ids?: string[];
   position_x?: number;
   position_y?: number;
@@ -87,9 +107,10 @@ export interface ApiCommit {
 export async function listCommits(
   projectId: string,
   branch?: string,
-  limit = 50
+  limit = 50,
+  offset = 0
 ): Promise<ApiCommit[]> {
-  const query = buildQueryString({ branch, limit });
+  const query = buildQueryString({ branch, limit, offset });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
   const data = await handleResponse<{ commits: ApiCommit[] }>(res);
   return data.commits;
@@ -171,6 +192,18 @@ export async function updateCommitMessage(commitHash: string, message: string): 
     }
   );
   return handleResponse<ApiCommit>(res);
+}
+
+/**
+ * Get committed YOps log entries for a commit.
+ */
+export async function getApiCommitOperations(
+  commitHash: string
+): Promise<ApiCommitOperationsResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/operations`
+  );
+  return handleResponse<ApiCommitOperationsResponse>(res);
 }
 
 /**

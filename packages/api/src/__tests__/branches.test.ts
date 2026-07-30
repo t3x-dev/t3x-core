@@ -51,12 +51,14 @@ describe('Branches Routes', () => {
       expect(data.error.code).toBe('INVALID_REQUEST');
     });
 
-    it('returns empty list for project with no branches', async () => {
+    it('backfills main for a project with no registered branches', async () => {
       const res = await app.request(`/v1/branches?project_id=${testProjectId}`);
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.branches).toEqual([]);
+      expect(data.data.branches).toEqual([
+        expect.objectContaining({ name: 'main', is_current: true }),
+      ]);
     });
 
     it('returns branches after creation', async () => {
@@ -64,14 +66,15 @@ describe('Branches Routes', () => {
       await app.request('/v1/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: testProjectId, name: 'main' }),
+        body: JSON.stringify({ project_id: testProjectId, name: 'listed-feature' }),
       });
 
       const res = await app.request(`/v1/branches?project_id=${testProjectId}`);
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
-      expect(data.data.branches.length).toBeGreaterThanOrEqual(1);
-      expect(data.data.branches[0].name).toBe('main');
+      expect(data.data.branches.map((branch: { name: string }) => branch.name)).toEqual(
+        expect.arrayContaining(['main', 'listed-feature'])
+      );
     });
   });
 
@@ -122,16 +125,17 @@ describe('Branches Routes', () => {
       expect(data.error.code).toBe('NOT_FOUND');
     });
 
-    it('returns 400 for duplicate branch name', async () => {
+    it('returns the existing branch for an identical create intent', async () => {
       const res = await app.request('/v1/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: testProjectId, name: 'feature-test' }),
       });
 
-      expect(res.status).toBe(409);
+      expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
-      expect(data.error.code).toBe('CONFLICT');
+      expect(data.success).toBe(true);
+      expect(data.data.name).toBe('feature-test');
     });
 
     it('returns 400 for invalid JSON', async () => {
@@ -212,6 +216,20 @@ describe('Branches Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.data.name).toBe('auto-created');
+    });
+
+    it('repairs and switches to main when it is missing', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Missing Main' }));
+
+      const res = await app.request('/v1/branches/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.projectId, branch_name: 'main' }),
+      });
+
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.data).toMatchObject({ name: 'main', is_current: true });
     });
 
     it('returns 400 for missing fields', async () => {

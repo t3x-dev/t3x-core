@@ -15,7 +15,7 @@ import {
   PenSquare,
   Plus,
 } from 'lucide-react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
@@ -30,7 +30,7 @@ import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
+import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { nodeEnter, reducedMotion } from '@/utils/motion';
 import { glass, toneAccent, toneGlow } from '@/utils/theme';
@@ -132,11 +132,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const params = useParams();
-  const projectId = params?.projectId as string | undefined;
-  const introDemoActive = searchParams.get('introDemo') === '1';
+  const routeProjectId = params?.projectId as string | undefined;
+  const canvasProjectId = useCanvasStore((state) => state.projectId);
+  const projectId = routeProjectId || canvasProjectId || undefined;
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
@@ -152,6 +151,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const { load: loadProjectData } = useCanvasNodeActions();
   const notify = useProjectStore((state) => state.notifyCallback);
+  const projectName = useProjectStore((state) =>
+    projectId ? state.getProject(projectId)?.name : undefined
+  );
 
   // Pin store
   const { isPinned } = usePinsStore();
@@ -230,18 +232,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const handleOpenCommitDetails = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!projectId || !commitHash) return;
-      const href = `/project/${projectId}/commit/${encodeURIComponent(commitHash)}`;
-      router.push(introDemoActive ? `${href}?introDemo=1` : href);
+      openNodeModal(id, 'commit');
     },
-    [commitHash, introDemoActive, projectId, router]
+    [id, openNodeModal]
   );
-
-  // Navigate to leaf detail page
-  const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !leaf.id) return undefined;
-    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
-  };
 
   // B-4: Next Step button logic
   const nextStep = getNextStep({
@@ -255,9 +249,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
     t,
     icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
     actions: {
-      navigateToDraft: (pId, dId) => router.push(`/project/${pId}/draft/${dId}`),
-      navigateToConversation: (conversationId) =>
-        router.push(`/chat/${encodeURIComponent(conversationId)}`),
+      navigateToDraft: () => openNodeModal(id, 'commit'),
+      navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
       openLeafPanel,
     },
@@ -596,6 +589,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             isDetail={isDetail}
             prefersReducedMotion={prefersReducedMotion}
             projectId={projectId}
+            projectName={projectName}
             nodeId={id}
             onCreateLeaf={() => openLeafPanel(id)}
             leafContextMenuHandler={leafContextMenuHandler}

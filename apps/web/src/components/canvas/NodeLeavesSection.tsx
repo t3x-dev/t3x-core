@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Circle, Clock, Loader2, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import type { EmbeddedLeaf } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { getLeafIcon } from './CanvasNodeUtils';
@@ -21,6 +22,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   isDetail,
   prefersReducedMotion,
   projectId,
+  projectName,
   nodeId,
   onCreateLeaf,
   leafContextMenuHandler,
@@ -34,6 +36,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   isDetail: boolean;
   prefersReducedMotion: boolean;
   projectId?: string;
+  projectName?: string;
   nodeId: string;
   onCreateLeaf: () => void;
   leafContextMenuHandler:
@@ -43,15 +46,17 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   removeLeafFromNode: (nodeId: string, leafId: string) => void;
 }) {
   const firstLeaf = leaves[0];
+  const firstLeafLabel = firstLeaf?.title || firstLeaf?.id || 'leaf';
   const collapsedStatus =
     firstLeaf?.status && firstLeaf.status !== 'idle'
       ? firstLeaf.status.replace('_', ' ')
       : 'not run';
 
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !leaf.id) return undefined;
-    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
+    if (!projectId || !projectName || !leaf.id) return undefined;
+    return getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id);
   };
+  const firstLeafHref = firstLeaf ? getLeafHref(firstLeaf) : undefined;
 
   const handleCreateLeaf = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -62,33 +67,61 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   return (
     <div className="border-t border-[var(--stroke-divider)]">
       {firstLeaf && !leavesExpanded && !isDetail ? (
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
-          onClick={(e) => {
-            e.stopPropagation();
-            setLeavesExpanded((prev) => !prev);
-          }}
-          type="button"
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <NodeKindIcon compact kind="leaf" label="Leaf" />
-            <span className="min-w-0">
-              <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
-                {firstLeaf.title}
+        <div className="flex items-center justify-between px-3 py-2 transition-colors hover:bg-[var(--hover-bg)]">
+          {firstLeafHref ? (
+            <Link
+              aria-label={`Open leaf ${firstLeafLabel}`}
+              className="nodrag flex min-w-0 flex-1 items-center gap-2 text-left"
+              href={firstLeafHref}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <NodeKindIcon compact kind="leaf" label="Leaf" />
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
+                  {firstLeaf.title}
+                </span>
+                <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                  leaf output
+                </span>
               </span>
-              <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
-                leaf output
+            </Link>
+          ) : (
+            <button
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLeavesExpanded((prev) => !prev);
+              }}
+              type="button"
+            >
+              <NodeKindIcon compact kind="leaf" label="Leaf" />
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
+                  {firstLeaf.title}
+                </span>
+                <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                  leaf output
+                </span>
               </span>
-            </span>
-          </span>
-          <span className="flex items-center gap-2">
+            </button>
+          )}
+          <button
+            aria-label="Expand leaf list"
+            className="nodrag ml-2 flex shrink-0 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[var(--hover-bg)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLeavesExpanded((prev) => !prev);
+            }}
+            title="Expand leaf list"
+            type="button"
+          >
             <span className="text-[11px] text-[var(--text-tertiary)]">{collapsedStatus}</span>
             <ChevronRight
               size={12}
               className="text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]"
             />
-          </span>
-        </button>
+          </button>
+        </div>
       ) : (
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <button

@@ -7,6 +7,7 @@ import type {
   SemanticContent,
   SlotConflict,
   SlotValue,
+  TreeNode,
 } from './types';
 import { deepEqual, relKey } from './utils';
 
@@ -29,7 +30,7 @@ export function prepareMerge(
   const srcMap = new Map(sourceFrames.map((f) => [f.id, f]));
   const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
 
-  const allIds = new Set([...srcMap.keys(), ...tgtMap.keys()]);
+  const allIds = new Set([...baseMap.keys(), ...srcMap.keys(), ...tgtMap.keys()]);
 
   const autoKept: string[] = [];
   const conflicts: MergeResult['conflicts'] = [];
@@ -42,11 +43,25 @@ export function prepareMerge(
     const baseFrame = baseMap.get(id);
 
     if (srcFrame && !tgtFrame) {
-      onlyInSource.push(id);
+      if (!baseFrame) {
+        onlyInSource.push(id);
+      } else if (!framesEqual(srcFrame, baseFrame)) {
+        conflicts.push({
+          path: id,
+          slotConflicts: findSlotConflicts(baseFrame, srcFrame, undefined),
+        });
+      }
       continue;
     }
     if (!srcFrame && tgtFrame) {
-      onlyInTarget.push(id);
+      if (!baseFrame) {
+        onlyInTarget.push(id);
+      } else if (!framesEqual(tgtFrame, baseFrame)) {
+        conflicts.push({
+          path: id,
+          slotConflicts: findSlotConflicts(baseFrame, undefined, tgtFrame),
+        });
+      }
       continue;
     }
     if (!srcFrame || !tgtFrame) continue;
@@ -85,11 +100,16 @@ export function prepareMerge(
     }
   }
 
+  const baseRelKeys = new Set(base.relations.map(relKey));
   const srcRelKeys = new Set(source.relations.map(relKey));
   const tgtRelKeys = new Set(target.relations.map(relKey));
   const relationsInBoth = source.relations.filter((r) => tgtRelKeys.has(relKey(r)));
-  const relationsOnlyInSource = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
-  const relationsOnlyInTarget = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
+  const relationsOnlyInSource = source.relations.filter(
+    (r) => !tgtRelKeys.has(relKey(r)) && !baseRelKeys.has(relKey(r))
+  );
+  const relationsOnlyInTarget = target.relations.filter(
+    (r) => !srcRelKeys.has(relKey(r)) && !baseRelKeys.has(relKey(r))
+  );
 
   return {
     autoKept,
@@ -123,6 +143,17 @@ export function executeMerge(
   const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
 
   const resultFrames: FlatNode[] = [];
+  const editedPaths = new Set<string>();
+  const pushResolvedFrame = (frame: FlatNode) => {
+    if (editedPaths.delete(frame.id)) removeFramesAtPath(resultFrames, frame.id);
+    resultFrames.push(frame);
+  };
+  const pushEditedFrames = (frames: FlatNode[]) => {
+    const paths = new Set(frames.map((frame) => frame.id));
+    for (const path of paths) removeFramesAtPath(resultFrames, path);
+    resultFrames.push(...frames);
+    for (const path of paths) editedPaths.add(path);
+  };
 
   // 1. Auto-kept: pick the best version
   for (const path of prepared.autoKept) {
@@ -155,22 +186,24 @@ export function executeMerge(
   }
 
   // 2. Resolve conflicts based on user decisions
-  for (const conflict of prepared.conflicts) {
+  const conflictsByDepth = [...prepared.conflicts].sort(
+    (a, b) => a.path.split('/').length - b.path.split('/').length
+  );
+  for (const conflict of conflictsByDepth) {
     const resolution: MergeResolution | undefined = decisions.conflictResolutions[conflict.path];
     const srcFrame = srcMap.get(conflict.path);
     const tgtFrame = tgtMap.get(conflict.path);
 
     if (!resolution || resolution === 'source') {
-      if (srcFrame) resultFrames.push(srcFrame);
+      if (srcFrame) pushResolvedFrame(srcFrame);
     } else if (resolution === 'target') {
-      if (tgtFrame) resultFrames.push(tgtFrame);
+      if (tgtFrame) pushResolvedFrame(tgtFrame);
     } else if (resolution === 'both') {
-      if (srcFrame) resultFrames.push(srcFrame);
-      if (tgtFrame) resultFrames.push(tgtFrame);
+      if (srcFrame) pushResolvedFrame(srcFrame);
+      if (tgtFrame) pushResolvedFrame(tgtFrame);
     } else if (typeof resolution === 'object' && 'edit' in resolution) {
-      // Convert edited TreeNode to frames
-      const editedFrames = flattenTree(resolution.edit);
-      resultFrames.push(...editedFrames);
+      const editedFrames = flattenEditedTreeAtPath(resolution.edit, conflict.path);
+      pushEditedFrames(editedFrames);
     }
   }
 
@@ -179,7 +212,7 @@ export function executeMerge(
   for (const path of prepared.onlyInSource) {
     if (keepSrcSet.has(path)) {
       const frame = srcMap.get(path);
-      if (frame) resultFrames.push(frame);
+      if (frame) pushResolvedFrame(frame);
     }
   }
 
@@ -188,7 +221,7 @@ export function executeMerge(
   for (const path of prepared.onlyInTarget) {
     if (keepTgtSet.has(path)) {
       const frame = tgtMap.get(path);
-      if (frame) resultFrames.push(frame);
+      if (frame) pushResolvedFrame(frame);
     }
   }
 
@@ -217,18 +250,48 @@ function framesEqual(a: FlatNode, b: FlatNode): boolean {
   return aKeys.every((k) => k in b.slots && deepEqual(a.slots[k], b.slots[k]));
 }
 
+function flattenEditedTreeAtPath(edit: TreeNode, conflictPath: string): FlatNode[] {
+  const conflictSegments = conflictPath.split('/');
+  const expectedKey = conflictSegments[conflictSegments.length - 1];
+  if (edit.key !== expectedKey) {
+    throw new Error(`Edited node key "${edit.key}" does not match conflict path "${conflictPath}"`);
+  }
+
+  const frames = flattenTree(edit);
+  const localRoot = frames[0]?.id;
+  if (!localRoot) return [];
+
+  return frames.map((frame) => ({
+    ...frame,
+    id:
+      frame.id === localRoot
+        ? conflictPath
+        : `${conflictPath}/${frame.id.slice(localRoot.length + 1)}`,
+  }));
+}
+
+function removeFramesAtPath(frames: FlatNode[], path: string): void {
+  for (let index = frames.length - 1; index >= 0; index--) {
+    if (frames[index].id === path) frames.splice(index, 1);
+  }
+}
+
 function findSlotConflicts(
   base: FlatNode | undefined,
-  src: FlatNode,
-  tgt: FlatNode
+  src: FlatNode | undefined,
+  tgt: FlatNode | undefined
 ): SlotConflict[] {
   const conflicts: SlotConflict[] = [];
-  const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots)]);
+  const allKeys = new Set([
+    ...Object.keys(base?.slots ?? {}),
+    ...Object.keys(src?.slots ?? {}),
+    ...Object.keys(tgt?.slots ?? {}),
+  ]);
 
   for (const key of allKeys) {
     const baseVal: SlotValue | undefined = base?.slots[key];
-    const srcVal: SlotValue | undefined = src.slots[key];
-    const tgtVal: SlotValue | undefined = tgt.slots[key];
+    const srcVal: SlotValue | undefined = src?.slots[key];
+    const tgtVal: SlotValue | undefined = tgt?.slots[key];
 
     if (deepEqual(srcVal, tgtVal)) continue;
     if (base && deepEqual(srcVal, baseVal)) continue;

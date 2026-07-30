@@ -25,6 +25,7 @@ import {
   deleteMergeDraft,
   saveMergeDraft,
 } from '@/commands/merge';
+import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
@@ -66,7 +67,21 @@ afterEach(() => {
 
 describe('useMergeWorkspaceActions.load', () => {
   it('seeds draft state via setDraftLoaded on success', async () => {
-    vi.mocked(getMergeDraft).mockResolvedValueOnce(draftResp() as never);
+    useMergeWorkspaceStore.setState({
+      treeResolutions: new Map([['stale/path', { type: 'source' }]]),
+      extendedResolutions: { 0: { type: 'both' } },
+      keepSourceNodes: new Set(['stale/source']),
+      keepTargetNodes: new Set(['stale/target']),
+    });
+    vi.mocked(getMergeDraft).mockResolvedValueOnce(
+      draftResp({
+        prepared: {
+          ...EMPTY_PREPARED,
+          onlyInSource: ['source-only'],
+          onlyInTarget: ['target-only'],
+        },
+      }) as never
+    );
 
     const { result } = renderHook(() => useMergeWorkspaceActions());
     await result.current.load('merge_1');
@@ -75,6 +90,10 @@ describe('useMergeWorkspaceActions.load', () => {
     const state = useMergeWorkspaceStore.getState();
     expect(state.draftId).toBe('merge_1');
     expect(state.sourceHash).toBe('sha256:src');
+    expect([...state.keepSourceNodes]).toEqual(['source-only']);
+    expect([...state.keepTargetNodes]).toEqual(['target-only']);
+    expect(state.treeResolutions.size).toBe(0);
+    expect(state.extendedResolutions).toEqual({});
     expect(state.loading).toBe(false);
   });
 
@@ -120,17 +139,28 @@ describe('useMergeWorkspaceActions.commit', () => {
   it('returns hash + marks committed on success', async () => {
     useMergeWorkspaceStore.setState({
       draftId: 'merge_1',
+      projectId: 'proj_1',
       message: 'msg',
       targetBranch: 'main',
     });
     vi.mocked(commitMergeDraft).mockResolvedValueOnce({ hash: 'sha256:m' } as never);
 
+    const commitCreated = vi.fn();
+    window.addEventListener(COMMIT_CREATED_EVENT, commitCreated);
     const { result } = renderHook(() => useMergeWorkspaceActions());
     const out = await result.current.commit();
     await waitForHook();
 
     expect(out.hash).toBe('sha256:m');
     expect(useMergeWorkspaceStore.getState().status).toBe('committed');
+    expect(commitCreated).toHaveBeenCalledOnce();
+    expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      type: 'commit.created',
+      projectId: 'proj_1',
+      branch: 'main',
+      payload: { hash: 'sha256:m', branch: 'main' },
+    });
+    window.removeEventListener(COMMIT_CREATED_EVENT, commitCreated);
   });
 });
 

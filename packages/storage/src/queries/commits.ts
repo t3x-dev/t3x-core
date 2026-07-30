@@ -8,12 +8,13 @@
  */
 
 import type { Author, Commit, CommitSchemaTag, Provenance, SemanticContent } from '@t3x-dev/core';
-import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
+import { COMMIT_SCHEMA, computeCommitHash, generateBranchId } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { branches } from '../schema';
 import { type CommitRecord, commits } from '../schema-commits';
 import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
@@ -47,6 +48,21 @@ export class BranchLinearityError extends Error {
 }
 
 export { BranchLinearityError as MainBranchLinearityError };
+
+export class CommitParentIntegrityError extends Error {
+  constructor(
+    public readonly code: 'PARENT_NOT_FOUND' | 'PARENT_PROJECT_MISMATCH',
+    public readonly parentHash: string,
+    public readonly projectId: string
+  ) {
+    super(
+      code === 'PARENT_NOT_FOUND'
+        ? `Parent commit "${parentHash}" does not exist`
+        : `Parent commit "${parentHash}" does not belong to project "${projectId}"`
+    );
+    this.name = 'CommitParentIntegrityError';
+  }
+}
 
 // Drizzle's tx vs db types vary by adapter; the runtime contract
 // (transaction(fn)) is uniform and callers narrow tx to AnyDB.
@@ -128,9 +144,14 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
 
   const insertWithBranchLinearityGuard = async (txOrDb: AnyDB): Promise<CommitRecord> => {
     if (enforceLinearity) {
+      await assertCommitParentIntegrity(txOrDb, input.project_id, parents);
       await assertBranchLinearity(txOrDb, input.project_id, branch, parents);
     }
-    return insertCommit(txOrDb);
+    const row = await insertCommit(txOrDb);
+    if (enforceLinearity) {
+      await advanceBranchHead(txOrDb, input.project_id, branch, parents[0] ?? null, hash);
+    }
+    return row;
   };
 
   // Fast path: nothing to lock. Skip the transaction entirely.
@@ -142,8 +163,9 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   // Race-closing path: per-project advisory transaction lock shared
   // with `supersedeActiveLLMSuggestions`. Acquired inside the
   // transaction (so it auto-releases at COMMIT/ROLLBACK), it
-  // serialises the entire critical section between extract-side
-  // supersede and commit-side validation+insert.
+  // serialises both extract-side supersede checks and branch-head
+  // validation+insert. Reusing one lock keeps commits with and without
+  // YOps log references from racing each other.
   //
   // Why advisory (and not row-level locking): under PG READ
   // COMMITTED, a waiting UPDATE re-evaluates the WHERE predicate
@@ -184,6 +206,9 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
     if (yopsLogIds.length > 0) {
       return insertWithSupersedeGuard(txOrDb);
     }
+    if (enforceLinearity) {
+      await acquireProjectSupersedeLock(txOrDb, input.project_id);
+    }
     return insertWithBranchLinearityGuard(txOrDb);
   };
 
@@ -194,6 +219,66 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       : await insertWithGuards(db);
 
   return rowToCommit(result as CommitRecord);
+}
+
+/**
+ * Keep the registered branch pointer in the same transaction as the commit.
+ *
+ * Some callers create a branch implicitly by committing to a new branch name.
+ * In that case, infer its parent branch from the first parent commit and register
+ * the branch before publishing its new head.
+ */
+async function advanceBranchHead(
+  db: AnyDB,
+  projectId: string,
+  branchName: string,
+  firstParentHash: string | null,
+  headCommitHash: string
+): Promise<void> {
+  const [existingBranch] = await db
+    .select({ branchId: branches.branchId })
+    .from(branches)
+    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
+    .limit(1);
+
+  const now = new Date();
+  if (existingBranch) {
+    await db
+      .update(branches)
+      .set({ headCommitHash, updatedAt: now })
+      .where(eq(branches.branchId, existingBranch.branchId));
+    return;
+  }
+
+  const [anyProjectBranch] = await db
+    .select({ branchId: branches.branchId })
+    .from(branches)
+    .where(eq(branches.projectId, projectId))
+    .limit(1);
+
+  let parentBranch: string | null = null;
+  if (firstParentHash) {
+    const [parentCommit] = await db
+      .select({ branch: commits.branch })
+      .from(commits)
+      .where(and(eq(commits.hash, firstParentHash), eq(commits.projectId, projectId)))
+      .limit(1);
+    if (parentCommit && parentCommit.branch !== branchName) {
+      parentBranch = parentCommit.branch;
+    }
+  }
+
+  await db.insert(branches).values({
+    branchId: generateBranchId(),
+    projectId,
+    name: branchName,
+    parentBranch,
+    headCommitHash,
+    description: null,
+    isCurrent: anyProjectBranch ? 0 : 1,
+    createdAt: now,
+    updatedAt: now,
+  });
 }
 
 /**
@@ -266,7 +351,18 @@ export async function getLatestCommit(
   const [row] = await db
     .select()
     .from(commits)
-    .where(and(eq(commits.projectId, projectId), eq(commits.branch, branch)))
+    .where(
+      and(
+        eq(commits.projectId, projectId),
+        eq(commits.branch, branch),
+        sql`NOT EXISTS (
+          SELECT 1 FROM commits AS child
+          WHERE child.project_id = ${projectId}
+            AND child.branch = ${branch}
+            AND child.parents ->> 0 = ${commits.hash}
+        )`
+      )
+    )
     .orderBy(desc(commits.committedAt), desc(commits.hash))
     .limit(1);
 
@@ -384,6 +480,30 @@ export async function updateCommitMessage(
 // Helpers
 // ============================================================
 
+async function assertCommitParentIntegrity(
+  db: AnyDB,
+  projectId: string,
+  parents: string[]
+): Promise<void> {
+  if (parents.length === 0) return;
+
+  const parentRows = await db
+    .select({ hash: commits.hash, projectId: commits.projectId })
+    .from(commits)
+    .where(inArray(commits.hash, parents));
+  const parentsByHash = new Map(parentRows.map((parent) => [parent.hash, parent]));
+
+  for (const parentHash of parents) {
+    const parent = parentsByHash.get(parentHash);
+    if (!parent) {
+      throw new CommitParentIntegrityError('PARENT_NOT_FOUND', parentHash, projectId);
+    }
+    if (parent.projectId !== projectId) {
+      throw new CommitParentIntegrityError('PARENT_PROJECT_MISMATCH', parentHash, projectId);
+    }
+  }
+}
+
 async function assertBranchLinearity(
   db: AnyDB,
   projectId: string,
@@ -401,10 +521,10 @@ async function assertBranchLinearity(
     return;
   }
 
-  if (currentHead && !parents.includes(currentHead.hash)) {
+  if (currentHead && parents[0] !== currentHead.hash) {
     throw new BranchLinearityError(
       'BRANCH_NOT_HEAD',
-      `Branch "${branch}" commits must extend the current branch head`
+      `Branch "${branch}" commits must use the current branch head as first parent`
     );
   }
 }

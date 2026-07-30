@@ -161,10 +161,6 @@ vi.mock('@/components/layout/KeyboardShortcutsDialog', () => ({
   KeyboardShortcutsDialog: () => null,
 }));
 
-vi.mock('@/components/layout/Sidebar', () => ({
-  Sidebar: () => null,
-}));
-
 vi.mock('@/components/settings/ProfileSettingsPanel', () => ({
   ProfileSettingsPanel: () => <div>Mock Profile Panel</div>,
 }));

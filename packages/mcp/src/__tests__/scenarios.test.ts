@@ -53,6 +53,7 @@ const { mockState, resetMockState } = vi.hoisted(() => {
     projectId: string;
     sourceHash: string;
     targetHash: string;
+    sourceBranch: string | null;
     targetBranch: string | null;
     preparedJson: string;
     status: 'pending' | 'committed' | 'cancelled';
@@ -433,13 +434,25 @@ vi.mock('@t3x-dev/storage', () => ({
   getCommitUnified: vi.fn(
     async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null
   ),
+  getLatestCommit: vi.fn(async (_db: unknown, projectId: string, branch: string) =>
+    [...mockState.commits.values()]
+      .reverse()
+      .find((commit) => commit.project_id === projectId && commit.branch === branch)
+  ),
   listCommits: vi.fn(async (_db: unknown, { projectId }: { projectId: string }) =>
     [...mockState.commits.values()].filter((commit) => commit.project_id === projectId)
   ),
   createMergeDraft: vi.fn(
     async (
       _db: unknown,
-      input: { projectId: string; sourceHash: string; targetHash: string; prepared: unknown }
+      input: {
+        projectId: string;
+        sourceHash: string;
+        targetHash: string;
+        sourceBranch?: string;
+        targetBranch?: string;
+        prepared: unknown;
+      }
     ) => {
       const draftId = `md_${mockState.counters.merge++}`;
       const draft = {
@@ -447,7 +460,8 @@ vi.mock('@t3x-dev/storage', () => ({
         projectId: input.projectId,
         sourceHash: input.sourceHash,
         targetHash: input.targetHash,
-        targetBranch: 'main',
+        sourceBranch: input.sourceBranch ?? null,
+        targetBranch: input.targetBranch ?? null,
         preparedJson: JSON.stringify(input.prepared),
         status: 'pending' as const,
       };
@@ -677,6 +691,10 @@ describe('mcp audit scenarios', () => {
       })
     );
     expect(prepared.summary.conflicts).toBe(1);
+    expect(mockState.mergeDrafts.get(prepared.draft_id)).toMatchObject({
+      sourceBranch: 'main',
+      targetBranch: 'main',
+    });
 
     const shown = expectOkJson(
       await callTool('t3x_merge', {
@@ -705,7 +723,8 @@ describe('mcp audit scenarios', () => {
         message: 'Merge scenario',
       })
     );
-    expect(executed.parents).toEqual([firstCommit.commit_hash, secondCommit.commit_hash]);
+    expect(executed.parents).toEqual([secondCommit.commit_hash, firstCommit.commit_hash]);
+    expect(executed.branch).toBe('main');
   });
 
   it('distinguishes empty text from non-extractable text through tools/call', async () => {

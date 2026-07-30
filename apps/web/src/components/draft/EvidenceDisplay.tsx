@@ -1,7 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronRight, ExternalLink, Quote } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronDown, ChevronRight, Quote } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import type { LocatedEvidenceAPI } from '@/types/api';
@@ -9,7 +8,6 @@ import type { LocatedEvidenceAPI } from '@/types/api';
 interface EvidenceDisplayProps {
   evidence: LocatedEvidenceAPI[];
   defaultExpanded?: boolean;
-  projectId?: string;
 }
 
 function MatchScoreBar({ score }: { score: number }) {
@@ -27,11 +25,7 @@ function MatchScoreBar({ score }: { score: number }) {
   );
 }
 
-export function EvidenceDisplay({
-  evidence,
-  defaultExpanded = false,
-  projectId,
-}: EvidenceDisplayProps) {
+export function EvidenceDisplay({ evidence, defaultExpanded = false }: EvidenceDisplayProps) {
   const enabled = evidence.filter((e) => e.enabled);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -66,20 +60,10 @@ export function EvidenceDisplay({
               >
                 <Quote className="mt-0.5 h-3 w-3 shrink-0" />
                 <div className="space-y-0.5">
-                  {projectId ? (
-                    <Link
-                      href={`/chat/${e.conversation_id}#turn_${e.turn_hash}`}
-                      className="inline-flex items-center gap-0.5 text-[10px] text-[var(--status-info)] hover:underline"
-                    >
-                      <ExternalLink className="h-2.5 w-2.5" />
-                      Conv ...{e.conversation_id.slice(-4)} · Turn ...
-                      {e.turn_hash.replace('sha256:', '').slice(-4)}
-                    </Link>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground/50 font-mono">
-                      Turn ...{e.turn_hash.replace('sha256:', '').slice(-4)}
-                    </span>
-                  )}
+                  <span className="text-[10px] text-muted-foreground/50 font-mono">
+                    Conv ...{e.conversation_id.slice(-4)} · Turn ...
+                    {e.turn_hash.replace('sha256:', '').slice(-4)}
+                  </span>
                   <p
                     className={`italic${anchorType === 'paraphrase' ? ' underline decoration-dotted decoration-[var(--status-warning)]' : ''}`}
                   >

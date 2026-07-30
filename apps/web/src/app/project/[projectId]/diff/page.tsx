@@ -10,6 +10,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { DiffPage } from '@/components/diff/DiffPage';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 
 function DiffPageContent() {
   const params = useParams();
@@ -19,6 +20,10 @@ function DiffPageContent() {
   const projectId = params.projectId as string;
   const baseHash = searchParams.get('base');
   const targetHash = searchParams.get('target');
+  const returnHref = safeInternalReturnTo(
+    searchParams.get('returnTo'),
+    `/chat/project/${encodeURIComponent(projectId)}/canvas`
+  );
 
   if (!baseHash || !targetHash) {
     return (
@@ -31,10 +36,10 @@ function DiffPageContent() {
           </p>
           <button
             type="button"
-            onClick={() => router.push(`/project/${projectId}`)}
+            onClick={() => router.replace(returnHref)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
-            Back to canvas
+            Back
           </button>
         </div>
       </div>

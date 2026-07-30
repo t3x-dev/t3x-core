@@ -441,7 +441,7 @@ export const BatchGenerateResponse = SuccessResponse(
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PinTypeEnum = z.enum(['conversation', 'leaf', 'import']);
+const PinTypeEnum = z.enum(['conversation', 'conversation_turn', 'leaf', 'import']);
 
 // POST /v1/projects/:id/pins
 export const CreatePinRequest = z.object({

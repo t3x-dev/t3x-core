@@ -25,8 +25,10 @@ export interface ProjectSummary {
   drafts: number;
   commitsCount: number;
   branchesCount: number;
+  outputsCount?: number;
   defaultProvider?: string | null;
   defaultModel?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 type ProjectStore = {
@@ -80,8 +82,10 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   drafts: project.conversations_count || 0,
   commitsCount: project.commits_count || 0,
   branchesCount: project.branches_count || 0,
+  outputsCount: project.outputs_count ?? 0,
   defaultProvider: project.default_provider ?? null,
   defaultModel: project.default_model ?? null,
+  metadata: project.metadata ?? undefined,
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({

@@ -13,7 +13,7 @@
  */
 
 import { ArrowLeft, GitBranch, GitCommit, History, Keyboard, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FeatureTourOverlay,
@@ -28,6 +28,7 @@ import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';
+import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -93,12 +94,19 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
 
 export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
+  const returnHref = safeInternalReturnTo(
+    searchParams.get('returnTo'),
+    `/project/${encodeURIComponent(projectId)}`
+  );
   const introDemoRequested = useIntroDemoQueryFlag();
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
   // State
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const selectedBranch = branchFromUrl;
   const [commits, setCommits] = useState<CommitWithDiffStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +114,23 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const { loadBranches } = useBranchesList();
   const { loadCommits } = useCommitsList();
   const { loadDiff } = useDiffRaw();
+  const currentReturnTo = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedBranch === 'all') params.delete('branch');
+    else params.set('branch', selectedBranch);
+    return buildReturnTo(pathname, params);
+  }, [pathname, searchParams, selectedBranch]);
+
+  const handleBranchChange = useCallback(
+    (branch: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (branch === 'all') params.delete('branch');
+      else params.set('branch', branch);
+      const query = params.toString();
+      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   // Fetch branches
   useEffect(() => {
@@ -186,10 +211,13 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const handleNavOpen = useCallback(
     (hash: string) => {
       router.push(
-        `/project/${projectId}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : ''}`
+        withReturnTo(
+          `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : ''}`,
+          currentReturnTo
+        )
       );
     },
-    [router, projectId, introDemoRequested]
+    [currentReturnTo, router, projectId, introDemoRequested]
   );
 
   useEffect(() => {
@@ -221,8 +249,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       >
         <div className="flex items-center gap-3">
           <button
+            aria-label="Back"
             type="button"
-            onClick={() => router.push(`/project/${projectId}`)}
+            onClick={() => router.replace(returnHref)}
             className="rounded-md p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
           >
             <ArrowLeft size={16} />
@@ -249,9 +278,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
           <div className="flex items-center gap-2" data-intro-target="history-branch-filter">
             <GitBranch size={14} className="text-[var(--text-tertiary)]" />
             <select
+              aria-label="Branch filter"
               className="py-1 px-2 border border-[var(--stroke-default)] rounded-md text-xs bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
               value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
+              onChange={(e) => handleBranchChange(e.target.value)}
             >
               <option value="all">All branches</option>
               {branches.map((b) => (
@@ -296,7 +326,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
               {selectedBranch !== 'all' && (
                 <button
                   type="button"
-                  onClick={() => setSelectedBranch('all')}
+                  onClick={() => handleBranchChange('all')}
                   className="mt-2 text-xs text-[var(--status-info)] hover:underline"
                 >
                   Show all branches
@@ -324,6 +354,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   isLast={index === commits.length - 1}
                   isActive={activeHash === item.commit.hash}
                   introDemo={introDemoRequested}
+                  returnTo={currentReturnTo}
                 />
               ))}
             </div>

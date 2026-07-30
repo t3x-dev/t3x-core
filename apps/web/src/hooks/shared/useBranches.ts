@@ -1,21 +1,19 @@
 /**
  * useBranches — branch dropdown data + creation for a project.
  *
- * Consolidates three L1 calls (listBranches, listCommits, createBranch) so
+ * Consolidates branch listing and creation so
  * components never reach into `@/infrastructure/*` directly.
  *
- * `refresh()` re-pulls both the branches table and unique branch names from
- * recent commits (so newly-used branches show up even before they are
- * registered in the branches table).
+ * The branches table is the canonical inventory. Commit labels are historical
+ * metadata and must not surface as switchable branches.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { createBranch, listBranches } from '@/infrastructure/branches';
-import { type ApiCommit, listCommits } from '@/infrastructure/commits';
+import type { Branch } from '@/infrastructure/types';
 
 function dedupSortedBranches(names: Iterable<string>): string[] {
   const set = new Set<string>(names);
-  set.add('main');
   return Array.from(set).sort((a, b) => {
     if (a === 'main') return -1;
     if (b === 'main') return 1;
@@ -24,14 +22,16 @@ function dedupSortedBranches(names: Iterable<string>): string[] {
 }
 
 export interface UseBranchesResult {
+  branchHeads: Readonly<Record<string, string | null>>;
   branches: string[];
   loading: boolean;
   refresh: () => Promise<void>;
-  create: (name: string, parentBranch: string) => Promise<void>;
+  create: (name: string, parentBranch: string) => Promise<Branch>;
 }
 
 export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
-  const [branches, setBranches] = useState<string[]>(['main']);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchHeads, setBranchHeads] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -39,15 +39,18 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
     setLoading(true);
     try {
       const branchData = await listBranches(projectId).catch(() => ({ branches: [] }));
-      const names: string[] = (branchData.branches ?? []).map((b: { name: string }) => b.name);
+      const registeredBranches = (branchData.branches ?? []) as Branch[];
+      const names: string[] = registeredBranches.map((branch) => branch.name);
+      setBranchHeads(
+        Object.fromEntries(
+          registeredBranches.map((branch) => [branch.name, branch.head_commit_hash ?? null])
+        )
+      );
 
-      const commits: ApiCommit[] = await listCommits(projectId, undefined, 100).catch(() => []);
-      for (const c of commits) {
-        if (c.branch) names.push(c.branch);
-      }
       setBranches(dedupSortedBranches(names));
     } catch {
-      setBranches(['main']);
+      setBranches([]);
+      setBranchHeads({});
     } finally {
       setLoading(false);
     }
@@ -61,18 +64,17 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
 
   const create = useCallback(
     async (name: string, parentBranch: string) => {
-      if (!projectId) return;
-      // Branch creation is best-effort — if the backend rejects it, commits
-      // under this name will still carry the label and show up on next refresh.
-      try {
-        await createBranch(projectId, name, parentBranch);
-      } catch {
-        // swallow — caller already treats create as best-effort
-      }
+      if (!projectId) throw new Error('A project is required to create a branch.');
+      const branch = await createBranch(projectId, name, parentBranch);
+      setBranchHeads((previous) => ({
+        ...previous,
+        [branch.name]: branch.head_commit_hash ?? null,
+      }));
       setBranches((prev) => (prev.includes(name) ? prev : dedupSortedBranches([...prev, name])));
+      return branch;
     },
     [projectId]
   );
 
-  return { branches, loading, refresh, create };
+  return { branchHeads, branches, loading, refresh, create };
 }

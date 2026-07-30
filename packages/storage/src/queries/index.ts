@@ -69,6 +69,7 @@ export {
 // Commits (tree-based)
 export {
   BranchLinearityError,
+  CommitParentIntegrityError,
   type CreateCommitInput,
   collectYOpsForCommitRange,
   createCommit,
@@ -136,16 +137,20 @@ export {
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
+  findWorkspaceDraft,
   forkDraft,
   insertAutoDraft,
   insertDraft,
   type ListDraftOptions,
   listDraftsByProject,
+  listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,
+  upsertWorkspaceDraft,
+  type WorkspaceDraftInput,
 } from './drafts';
 // Extraction Feedback (Anchoring L4)
 export {
@@ -318,6 +323,28 @@ export {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from './provider-credentials';
+// Pull Requests
+export {
+  type AddPullRequestActivityInput,
+  acquirePullRequestLock,
+  addPullRequestActivity,
+  type CreatePullRequestInput,
+  createPullRequest,
+  findActivePullRequestByBranches,
+  findPullRequestByNumber,
+  listPullRequestActivity,
+  listPullRequestChecks,
+  listPullRequestsByProject,
+  type PullRequestActivityType,
+  type PullRequestCheckKind,
+  type PullRequestCheckStatus,
+  type PullRequestDiffSummary,
+  type PullRequestStatus,
+  type ReplacePullRequestCheckInput,
+  replacePullRequestChecks,
+  type UpdatePullRequestInput,
+  updatePullRequest,
+} from './pull-requests';
 // Recipes (workflow automation)
 export {
   type CreateRecipeInput,
@@ -490,6 +517,25 @@ export {
   findUserByUsername,
   updateUser,
 } from './users';
+// Workspace Validation Runs
+export {
+  type CreateValidationFindingInput,
+  type CreateValidationRunInput,
+  type CreateValidationStepRunInput,
+  createValidationFinding,
+  createValidationRun,
+  createValidationStepRun,
+  findLatestValidationRunByWorkspace,
+  findValidationRunDetailsById,
+  type ValidationFindingOutput,
+  type ValidationFindingSeverity,
+  type ValidationGateStatus,
+  type ValidationRunDetailsOutput,
+  type ValidationRunOutput,
+  type ValidationRunStatus,
+  type ValidationStepRunOutput,
+  type ValidationStepRunStatus,
+} from './validation-runs';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,
@@ -518,3 +564,12 @@ export {
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+// YSchema Validation Runs
+export {
+  type CreateYSchemaValidationRunInput,
+  createYSchemaValidationRun,
+  findLatestYSchemaValidationRun,
+  findYSchemaValidationRunById,
+  type YSchemaValidationRunOutput,
+  type YSchemaValidationRunStatus,
+} from './yschema-validation-runs';

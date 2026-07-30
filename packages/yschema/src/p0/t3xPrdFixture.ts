@@ -3,7 +3,7 @@ import type { PromptContract, ValidationResult, YSchema } from './types';
 export const normalizedT3xPrdYSchema: YSchema = {
   yschema: '0.1',
   name: 't3x/prd',
-  version: '0.1.0',
+  version: 'v2',
   description: 'Product requirements document reference workflow.',
   strict: false,
   nodes: {
@@ -183,7 +183,7 @@ export const candidateWithRelations = {
 
 export const expectedPromptContract: PromptContract = {
   schemaName: 't3x/prd',
-  schemaVersion: '0.1.0',
+  schemaVersion: 'v2',
   description: 'Product requirements document reference workflow.',
   nodes: [
     {

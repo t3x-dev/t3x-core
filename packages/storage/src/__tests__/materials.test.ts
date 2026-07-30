@@ -18,7 +18,7 @@ import {
   restoreArchivedMaterial,
 } from '../queries/materials';
 import { insertProject } from '../queries/projects';
-import { createTestDB, testData } from './setup';
+import { createTestDB, sleep, testData } from './setup';
 
 describe('Materials Storage', () => {
   let db: AnyDB;
@@ -82,6 +82,7 @@ describe('Materials Storage', () => {
       metadata: { content_hash: 'sha256:older-material' },
       token_estimate: 6,
     });
+    await sleep(5);
     const newer = await createMaterial(db, {
       project_id: testProjectId,
       source_type: 'document',

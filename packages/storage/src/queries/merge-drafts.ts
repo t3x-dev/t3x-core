@@ -176,7 +176,9 @@ export async function findPendingMergeDraft(
   db: AnyDB,
   projectId: string,
   sourceHash: string,
-  targetHash: string
+  targetHash: string,
+  sourceBranch?: string,
+  targetBranch?: string
 ): Promise<MergeDraft | null> {
   const [draft] = await db
     .select()
@@ -186,9 +188,12 @@ export async function findPendingMergeDraft(
         eq(mergeDrafts.projectId, projectId),
         eq(mergeDrafts.sourceHash, sourceHash),
         eq(mergeDrafts.targetHash, targetHash),
-        eq(mergeDrafts.status, 'pending')
+        eq(mergeDrafts.status, 'pending'),
+        sourceBranch === undefined ? undefined : eq(mergeDrafts.sourceBranch, sourceBranch),
+        targetBranch === undefined ? undefined : eq(mergeDrafts.targetBranch, targetBranch)
       )
     )
+    .orderBy(desc(mergeDrafts.updatedAt))
     .limit(1);
 
   return draft ?? null;

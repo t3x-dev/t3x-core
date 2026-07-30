@@ -432,6 +432,10 @@ export {
   getTreeNodeJsonSchema,
 } from './semantic/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
+// Portable Skill schema policy and deterministic artifact compiler
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './skill';
+// ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 // ═══════════════════════════════════════════════════════════════════════════

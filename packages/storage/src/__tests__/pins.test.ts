@@ -548,7 +548,12 @@ describe('Pins Storage', () => {
   });
 
   describe('pin types', () => {
-    it.each(['conversation', 'leaf', 'import'] as const)('supports pin type: %s', async (type) => {
+    it.each([
+      'conversation',
+      'conversation_turn',
+      'leaf',
+      'import',
+    ] as const)('supports pin type: %s', async (type) => {
       const project = await insertProject(db, testData.project({ name: `Pin Type ${type} Test` }));
 
       const created = await createPin(db, {

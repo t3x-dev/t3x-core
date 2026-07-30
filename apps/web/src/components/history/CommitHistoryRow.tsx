@@ -11,6 +11,7 @@ import { Minus, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
+import { withReturnTo } from '@/utils/navigationReturn';
 
 // ============================================================================
 // Types
@@ -41,6 +42,8 @@ export interface CommitHistoryRowProps {
   isActive?: boolean;
   /** Whether the demo tour should continue after opening this commit */
   introDemo?: boolean;
+  /** History URL restored by the commit page Back action. */
+  returnTo: string;
 }
 
 // ============================================================================
@@ -61,10 +64,13 @@ export function CommitHistoryRow({
   isLast,
   isActive,
   introDemo = false,
+  returnTo,
 }: CommitHistoryRowProps) {
+  const commitHref = `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : ''}`;
+
   return (
     <Link
-      href={`/project/${projectId}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : ''}`}
+      href={withReturnTo(commitHref, returnTo)}
       data-commit-hash={hash}
       className={cn(
         'group flex items-stretch hover:bg-[var(--hover-bg)] transition-colors rounded-md -mx-2 px-2',

@@ -9,10 +9,11 @@
  */
 
 import type { SemanticContent, SlotValue } from '@t3x-dev/core';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Plus, Search, X } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { LeafSemanticPointSummary } from '@/domain/leaf/semanticPoints';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
@@ -30,6 +31,7 @@ interface YAMLTreePanelProps {
   saving: boolean;
   commitHash?: string;
   projectId?: string;
+  projectName?: string;
   onAddConstraintFromSource: (
     type: 'require' | 'exclude',
     value: string,
@@ -69,14 +71,27 @@ export function YAMLTreePanel({
   saving,
   commitHash,
   projectId,
+  projectName,
   onAddConstraintFromSource,
   semanticPointSummaryByNode,
   highlightedConstraintId,
   onHoverNode,
 }: YAMLTreePanelProps) {
+  const [query, setQuery] = useState('');
   const nested = useMemo(() => {
     return contentToNodes(content);
   }, [content]);
+  const filteredNested = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return nested;
+    return nested.filter((node) => {
+      const searchable = [node.type, ...Object.keys(node.slots), ...Object.values(node.slots)]
+        .map((value) => (typeof value === 'string' ? value : formatSlotValue(value)))
+        .join(' ')
+        .toLowerCase();
+      return searchable.includes(normalizedQuery);
+    });
+  }, [nested, query]);
 
   // Determine which  node is highlighted based on hovered constraint
   const highlightedNodeId = useMemo(() => {
@@ -99,28 +114,47 @@ export function YAMLTreePanel({
   return (
     <aside
       className={cn(
-        'hidden w-[300px] min-w-[300px] shrink-0 flex-col overflow-y-auto border-r md:flex',
+        'hidden w-[280px] min-w-[280px] shrink-0 flex-col overflow-hidden border-r md:flex',
         'bg-[color-mix(in_srgb,var(--surface-panel)_88%,transparent)]',
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}
       data-intro-target="leaf-source-panel"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-            Source Frames
+            Source nodes
           </span>
         </div>
-        <span className="text-[11px] text-[var(--text-tertiary)]">{nested.length} frames</span>
+        <span className="text-[11px] text-[var(--text-tertiary)]">
+          {filteredNested.length}/{nested.length}
+        </span>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-        {nested.map((node, index) => {
+      <div className="shrink-0 border-b border-[var(--stroke-divider)] p-2">
+        <label className="relative block">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
+          />
+          <input
+            aria-label="Filter source nodes"
+            className="h-8 w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-8 pr-2 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]"
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Filter source nodes..."
+            type="search"
+            value={query}
+          />
+        </label>
+      </div>
+
+      <div className="flex-1 space-y-2 overflow-y-auto px-3 py-2">
+        {filteredNested.map((node) => {
           const semanticSummary = semanticPointSummaryByNode?.get(node.id);
           const slotEntries = Object.entries(node.slots).slice(0, 4);
           const isHighlighted = highlightedNodeId === node.id;
-          const isEmphasized = isHighlighted || index === 0;
+          const isEmphasized = isHighlighted;
           const nodeValue = getNodeValue(node.slots);
           const frameAssertions =
             assertions?.filter((assertion) => {
@@ -141,10 +175,10 @@ export function YAMLTreePanel({
               className={cn(
                 'group transition-all',
                 isEmphasized
-                  ? 'border-[var(--source)] bg-[var(--source-dim)]'
+                  ? 'border-[var(--accent-commit)] bg-[var(--accent-commit-soft)]'
                   : 'border-[var(--stroke-divider)] hover:bg-[var(--surface-hover)]',
                 isEmphasized
-                  ? 'rounded-xl border px-3 py-3 shadow-[var(--fx-shadow-sm)]'
+                  ? 'rounded-md border px-3 py-3 shadow-[var(--fx-shadow-sm)]'
                   : 'border-b px-3 py-2.5'
               )}
               onMouseEnter={() => onHoverNode?.(node.id)}
@@ -155,7 +189,7 @@ export function YAMLTreePanel({
                   {node.type}
                 </h2>
                 {semanticSummary ? (
-                  <span className="shrink-0 font-mono text-[11px] font-semibold text-[var(--accent-leaf)]">
+                  <span className="shrink-0 font-mono text-[11px] font-semibold text-[var(--accent-commit)]">
                     {semanticSummary.included}/{semanticSummary.total}
                   </span>
                 ) : frameAssertions.length > 0 ? (
@@ -176,7 +210,7 @@ export function YAMLTreePanel({
                 {slotEntries.map(([key, value]) => (
                   <div key={key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
                     <dt className="truncate text-[11px] text-[var(--text-secondary)]">{key}</dt>
-                    <dd className="max-w-[130px] truncate text-right font-mono text-[11px] text-[var(--source)]">
+                    <dd className="max-w-[120px] truncate text-right font-mono text-[11px] text-[var(--text-secondary)]">
                       {formatSlotValue(value)}
                     </dd>
                   </div>
@@ -184,10 +218,10 @@ export function YAMLTreePanel({
               </dl>
 
               {mode === 'generate' && (
-                <div className="mt-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="mt-2 flex items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--accent-leaf)]"
+                    className="inline-flex min-h-7 items-center gap-1 rounded-md border border-[var(--accent-branch)]/30 bg-[var(--accent-branch-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--accent-branch)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/30"
                     onClick={(event) => {
                       event.stopPropagation();
                       onAddConstraintFromSource('require', nodeValue, node.id);
@@ -199,7 +233,7 @@ export function YAMLTreePanel({
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--status-error)]"
+                    className="inline-flex min-h-7 items-center gap-1 rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-2 py-1 text-[11px] font-semibold text-[var(--status-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/30"
                     onClick={(event) => {
                       event.stopPropagation();
                       onAddConstraintFromSource('exclude', nodeValue, node.id);
@@ -228,16 +262,16 @@ export function YAMLTreePanel({
           );
         })}
 
-        {nested.length === 0 && (
+        {filteredNested.length === 0 && (
           <p className="py-8 text-center text-xs text-[var(--text-tertiary)]">
-            No content in this commit.
+            {nested.length === 0 ? 'No content in this commit.' : 'No matching source nodes.'}
           </p>
         )}
 
-        {commitHash && projectId && (
+        {commitHash && projectId && projectName && (
           <Link
-            href={`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`}
-            className="flex h-9 items-center justify-center gap-1 rounded-lg border border-[var(--source)]/30 bg-[var(--source-dim)] text-[12px] font-semibold text-[var(--source)] transition-colors hover:border-[var(--source)]"
+            href={`${getProjectRepoPath({ id: projectId, name: projectName })}?view=canvas&commit=${encodeURIComponent(commitHash)}`}
+            className="flex h-9 items-center justify-center gap-1 rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] text-[12px] font-semibold text-[var(--accent-commit)] transition-colors hover:border-[var(--accent-commit)]"
           >
             Open full source YAML
           </Link>

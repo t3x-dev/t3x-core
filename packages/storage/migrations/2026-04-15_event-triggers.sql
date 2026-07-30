@@ -1,6 +1,5 @@
 -- Migration: Add triggers for cross-process realtime sync.
 -- Fires commit.created / draft.changed / yops.applied / conversation.renamed events.
--- See: docs/superpowers/plans/2026-04-15-realtime-sync-mcp.md
 
 BEGIN;
 

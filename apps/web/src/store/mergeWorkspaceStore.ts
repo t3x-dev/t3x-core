@@ -13,10 +13,14 @@
 
 import type { MergeResult } from '@t3x-dev/core';
 import { create } from 'zustand';
-import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/shared/useTerminology';
 import { isDeveloperMode } from '@/store/shared';
-import type { MergeDraft, TurnContextData } from '@/types/merge';
+import {
+  isTreeResolutionComplete,
+  type MergeDraft,
+  type TreeResolution,
+  type TurnContextData,
+} from '@/types/merge';
 import type { SaveStatus } from './saveStatus';
 
 // ============================================================================
@@ -231,15 +235,24 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({
       treeMergeResult: result,
       treeResolutions: new Map(),
+      extendedResolutions: {},
       keepSourceNodes: keepSource,
       keepTargetNodes: keepTarget,
     });
   },
 
   resolveTreeConflict: (path, resolution) => {
-    const next = new Map(get().treeResolutions);
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    const next = new Map(treeResolutions);
     next.set(path, resolution);
-    set({ treeResolutions: next, isDirty: true });
+    const nextExtended = { ...extendedResolutions };
+    const conflictIndex = treeMergeResult?.conflicts.findIndex(
+      (conflict) => conflict.path === path
+    );
+    if (conflictIndex !== undefined && conflictIndex >= 0) {
+      delete nextExtended[String(conflictIndex)];
+    }
+    set({ treeResolutions: next, extendedResolutions: nextExtended, isDirty: true });
   },
 
   toggleKeepSourceNode: (path) => {
@@ -259,7 +272,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   allTreeConflictsResolved: () => {
     const { treeMergeResult, treeResolutions } = get();
     if (!treeMergeResult) return true;
-    return treeMergeResult.conflicts.every((c: { path: string }) => treeResolutions.has(c.path));
+    return treeMergeResult.conflicts.every((conflict) =>
+      isTreeResolutionComplete(treeResolutions.get(conflict.path), conflict.slotConflicts)
+    );
   },
 
   // ── Passive setters ──
@@ -267,7 +282,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   setLoading: () => set({ loading: true, error: null }),
   setLoadError: (message) => set({ loading: false, error: message }),
 
-  setDraftLoaded: (draft) =>
+  setDraftLoaded: (draft) => {
+    const prepared = draft.prepared ?? null;
     set({
       draftId: draft.draftId,
       projectId: draft.projectId,
@@ -275,12 +291,17 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       targetHash: draft.targetHash,
       sourceBranch: draft.sourceBranch,
       targetBranch: draft.targetBranch,
-      treeMergeResult: draft.prepared ?? null,
+      treeMergeResult: prepared,
+      treeResolutions: new Map(),
+      keepSourceNodes: new Set(prepared?.onlyInSource ?? []),
+      keepTargetNodes: new Set(prepared?.onlyInTarget ?? []),
+      extendedResolutions: {},
       status: draft.status,
       message: draft.message || '',
       loading: false,
       isDirty: false,
-    }),
+    });
+  },
 
   setSaveStarted: () => set({ saveStatus: 'saving' }),
   setSaveSucceeded: () => {
@@ -333,7 +354,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const conflict = treeMergeResult.conflicts[i];
       const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
-      if (!resolution && !extRes) count++;
+      if (!isTreeResolutionComplete(resolution, conflict.slotConflicts) && !extRes) count++;
     }
     return count;
   },
@@ -347,7 +368,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const conflict = treeMergeResult.conflicts[i];
       const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
-      if (resolution) {
+      if (isTreeResolutionComplete(resolution, conflict.slotConflicts) && resolution) {
         if (resolution.type === 'both') stats.both++;
         else stats.standard++;
       } else if (extRes?.type === 'both') {
@@ -422,8 +443,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   getTreeUnresolvedCount: () => {
     const { treeMergeResult, treeResolutions } = get();
     if (!treeMergeResult) return 0;
-    return treeMergeResult.conflicts.filter((c: { path: string }) => !treeResolutions.has(c.path))
-      .length;
+    return treeMergeResult.conflicts.filter(
+      (conflict) =>
+        !isTreeResolutionComplete(treeResolutions.get(conflict.path), conflict.slotConflicts)
+    ).length;
   },
 
   getTreeMergeChecks: (): MergeCheck[] => {
@@ -483,11 +506,12 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
     for (const conflict of treeMergeResult.conflicts) {
       const resolution = treeResolutions.get(conflict.path);
-      if (!resolution) continue;
+      if (!isTreeResolutionComplete(resolution, conflict.slotConflicts) || !resolution) continue;
       switch (resolution.type) {
         case 'source':
         case 'target':
         case 'both':
+        case 'per-slot':
           paths.push(conflict.path);
           break;
       }

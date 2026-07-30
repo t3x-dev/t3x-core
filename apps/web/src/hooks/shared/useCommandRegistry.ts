@@ -27,25 +27,17 @@ export interface CommandRegistryGroup {
 }
 
 interface UseCommandRegistryParams {
-  projectId?: string;
+  repositoryPath?: string;
   onCreateConversation?: () => void;
 }
 
 export function useCommandRegistry({
-  projectId,
+  repositoryPath,
   onCreateConversation,
 }: UseCommandRegistryParams): CommandRegistryGroup[] {
   const router = useRouter();
 
   const routeTo = useCallback((href: string) => () => router.push(href), [router]);
-
-  const newConversation = useCallback(() => {
-    if (onCreateConversation) {
-      onCreateConversation();
-      return;
-    }
-    router.push('/chat');
-  }, [onCreateConversation, router]);
 
   const openKeyboardShortcuts = useCallback(() => {
     document.dispatchEvent(new CustomEvent(OPEN_KEYBOARD_SHORTCUTS_EVENT));
@@ -64,14 +56,14 @@ export function useCommandRegistry({
             shortcut: '⌘H',
             run: routeTo('/'),
           },
-          ...(projectId
+          ...(repositoryPath
             ? [
                 {
                   id: 'go-project-canvas',
                   title: 'Go to Project Canvas',
                   icon: 'file-text' as const,
                   shortcut: '⌘P',
-                  run: routeTo(`/project/${projectId}`),
+                  run: routeTo(repositoryPath),
                 },
               ]
             : []),
@@ -99,13 +91,27 @@ export function useCommandRegistry({
         id: 'actions' as const,
         title: 'Actions',
         commands: [
-          {
-            id: 'new-conversation',
-            title: 'New Conversation',
-            icon: 'message-plus' as const,
-            shortcut: '⌘N',
-            run: newConversation,
-          },
+          ...(repositoryPath
+            ? [
+                {
+                  id: 'open-workspaces',
+                  title: 'Open Workspaces',
+                  icon: 'message-plus' as const,
+                  shortcut: '⌘N',
+                  run: routeTo(`${repositoryPath}/workspaces`),
+                },
+              ]
+            : []),
+          ...(onCreateConversation
+            ? [
+                {
+                  id: 'new-conversation',
+                  title: 'New Conversation',
+                  icon: 'message-plus' as const,
+                  run: onCreateConversation,
+                },
+              ]
+            : []),
           {
             id: 'keyboard-shortcuts',
             title: 'Keyboard Shortcuts',
@@ -116,6 +122,6 @@ export function useCommandRegistry({
         ],
       },
     ],
-    [newConversation, openKeyboardShortcuts, projectId, routeTo]
+    [onCreateConversation, openKeyboardShortcuts, repositoryPath, routeTo]
   );
 }

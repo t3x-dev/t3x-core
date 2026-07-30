@@ -233,6 +233,7 @@ function unitNode(id: string): Node<CanvasNodeData> {
       title: 'Unit',
       summary: 'Summary',
       timestamp: 'now',
+      tags: ['unit'],
       commitStatus: 'committed',
       branchType: 'main',
     },
@@ -266,7 +267,9 @@ describe('CanvasWorkspace initial fit view', () => {
       hasMainCommit: true,
       initialLoadingComplete: true,
       loading: false,
+      modalViewMode: null,
       nodes,
+      openNodeId: null,
       projectId: 'proj_test',
     } as Partial<ReturnType<typeof useCanvasStore.getState>>);
 
@@ -288,7 +291,9 @@ describe('CanvasWorkspace initial fit view', () => {
       edges: [],
       hasDbPositions: false,
       loading: false,
+      modalViewMode: null,
       nodes: [],
+      openNodeId: null,
       projectId: null,
     });
   });
@@ -340,6 +345,23 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(style).toContain('--surface-canvas');
   });
 
+  it('links the independent canvas surface back to repository State', () => {
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+
+    render(
+      <CanvasWorkspace projectName="Trust Gate" stateHref="/chat/project/t3x-dev/trust-gate" />
+    );
+
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
+      'href',
+      '/chat/project/t3x-dev/trust-gate'
+    );
+    expect(screen.getByRole('link', { name: 'Back to State' })).toHaveAttribute(
+      'href',
+      '/chat/project/t3x-dev/trust-gate'
+    );
+  });
+
   it('lays out committed version paths from left to right even when DB positions exist', async () => {
     const nodes = [
       {
@@ -353,6 +375,67 @@ describe('CanvasWorkspace initial fit view', () => {
     ];
     useCanvasStore.setState({
       edges: [{ id: 'e1', source: 'sha256:parent', target: 'sha256:child' }],
+      hasDbPositions: true,
+      nodes,
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    flowMocks.getEdges.mockImplementation(() => useCanvasStore.getState().edges);
+    layoutMocks.getLayoutedElements.mockResolvedValue(nodes);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(layoutMocks.getLayoutedElements).toHaveBeenCalledWith(
+        nodes,
+        useCanvasStore.getState().edges,
+        expect.objectContaining({ direction: 'RIGHT' })
+      );
+    });
+  });
+
+  it('selects and centers the commit requested by a State deep link', async () => {
+    const focusedNode = {
+      ...unitNode('sha256:focused'),
+      position: { x: 120, y: 80 },
+      data: { ...unitNode('sha256:focused').data, commitHash: 'sha256:focused' },
+    };
+    useCanvasStore.setState({
+      edges: [],
+      hasDbPositions: true,
+      nodes: [focusedNode],
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    layoutMocks.getLayoutedElements.mockResolvedValue([focusedNode]);
+
+    render(<CanvasWorkspace focusedCommitHash="sha256:focused" projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(flowMocks.setCenter).toHaveBeenCalledWith(264, 160, { duration: 300 });
+    });
+    expect(flowMocks.setNodes).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: 'sha256:focused', selected: true }),
+    ]);
+    expect(useCanvasStore.getState().openNodeId).toBe('sha256:focused');
+    expect(screen.getByTestId('node-modal')).toBeInTheDocument();
+  });
+
+  it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {
+    const committed = {
+      ...unitNode('sha256:parent'),
+      data: { ...unitNode('sha256:parent').data, commitHash: 'sha256:parent' },
+    };
+    const draft = {
+      ...unitNode('draft_1'),
+      data: {
+        ...unitNode('draft_1').data,
+        branchType: undefined,
+        commitStatus: 'draft' as const,
+        draftId: 'draft_1',
+      },
+    };
+    const nodes = [committed, draft];
+    useCanvasStore.setState({
+      edges: [],
       hasDbPositions: true,
       nodes,
     } as Partial<ReturnType<typeof useCanvasStore.getState>>);
@@ -471,9 +554,62 @@ describe('CanvasWorkspace initial fit view', () => {
       'data-intro-target',
       'canvas-action-details'
     );
+    screen.getByRole('button', { name: 'Details' }).click();
+    expect(useCanvasStore.getState().openNodeId).toBe(node.id);
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Create Leaf From This Version' })).toHaveAttribute(
       'data-intro-target',
       'canvas-action-new-leaf'
+    );
+  });
+
+  it('keeps a pending conversation on the canvas when the node is selected', () => {
+    const pendingNode = {
+      ...unitNode('pending_1'),
+      data: {
+        ...unitNode('pending_1').data,
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending_1',
+      },
+    };
+    useCanvasStore.setState({ nodes: [pendingNode] });
+    layoutMocks.getLayoutedElements.mockResolvedValue([pendingNode]);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: document.createElement('div') },
+        pendingNode
+      );
+    });
+
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('opens an existing Leaf inside the repository Outputs workspace', () => {
+    viewportMocks.selectionPanelVisible = true;
+    const node = {
+      ...unitNode('sha256:with-leaf'),
+      data: {
+        ...unitNode('sha256:with-leaf').data,
+        commitHash: 'sha256:with-leaf',
+        leaves: [{ id: 'leaf_audience', title: 'Audience handoff', type: 'article' as const }],
+      },
+    };
+    useCanvasStore.setState({ nodes: [node] });
+    layoutMocks.getLayoutedElements.mockResolvedValue([node]);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: document.createElement('div') },
+        node
+      );
+    });
+    screen.getByRole('button', { name: 'Open Leaf' }).click();
+
+    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
+      '/t3x-dev/trust-gate/outputs?leaf=leaf_audience'
     );
   });
 

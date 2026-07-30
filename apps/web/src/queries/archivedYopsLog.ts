@@ -3,8 +3,7 @@
  *
  * Rows enter `superseded_at` state via explicit Replace
  * (active_dirty Apply with `replaceActiveScript`) or Repair
- * (`repairYopsLogId`). The re-extract path no longer supersedes — see
- * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+ * (`repairYopsLogId`). The re-extract path no longer supersedes.
  * Superseded rows stay in `yops_log` and are not part of the live
  * workspace (replay walks active rows only) but they're audit-relevant
  * — users should be able to see what got replaced and when.
