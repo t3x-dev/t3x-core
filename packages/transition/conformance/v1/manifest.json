@@ -54,7 +54,14 @@
     "invalid": "vectors/invalid.json",
     "canonical": "vectors/canonical.json",
     "identity": "vectors/identity.json",
-    "semantic": "vectors/semantic.json"
+    "semantic": "vectors/semantic.json",
+    "execution": "vectors/execution.json"
+  },
+  "deliveredExtensionProof": {
+    "stateCodec": "application/yaml@1",
+    "mutationDriver": "t3x.dev/yaml-source-edit@1",
+    "source": "t3x-dev/t3x-core#1259",
+    "claim": "behavioral replay over an exact-source string State"
   },
   "compatibility": "compatibility.json"
 }

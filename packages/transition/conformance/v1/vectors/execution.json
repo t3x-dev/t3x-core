@@ -1,0 +1,588 @@
+{
+  "schema": "t3x/transition-execution/v1",
+  "conformanceDriver": {
+    "ref": {
+      "protocol": "t3x.conformance/string-replace",
+      "protocolVersion": "1",
+      "specDigest": "sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9"
+    },
+    "specDigestDomain": "t3x-conformance-string-replace-driver-spec-v1",
+    "spec": {
+      "protocol": "t3x.conformance/string-replace",
+      "protocolVersion": "1",
+      "stateCodec": {
+        "mediaType": "text/plain; charset=utf-8",
+        "version": "1"
+      },
+      "operations": [
+        {
+          "op": "test",
+          "value": "exact string equality precondition"
+        },
+        {
+          "op": "replace",
+          "value": "exact replacement string"
+        }
+      ],
+      "ordering": "listed",
+      "atomicity": "all_or_no_result",
+      "namedInputs": "unsupported"
+    }
+  },
+  "cases": [
+    {
+      "id": "effect-replay-valid",
+      "operation": "verify_effect",
+      "drivers": ["t3x.conformance/string-replace@1"],
+      "subject": {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:45e5042e79891c60f2221c6c7ebe3b1b19239bbae9c60ebc61f2b5eaca8b50f4"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: DEBUG\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: INFO\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:45e5042e79891c60f2221c6c7ebe3b1b19239bbae9c60ebc61f2b5eaca8b50f4"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[{\"op\":\"test\",\"value\":\"mode: DEBUG\\n\"},{\"op\":\"replace\",\"value\":\"mode: INFO\\n\"}],\"result\":{\"digest\":\"sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        }
+      ],
+      "expected": {
+        "status": "verified",
+        "result": {
+          "kind": "state",
+          "schema": "t3x/state/v1",
+          "digest": "sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a"
+        }
+      }
+    },
+    {
+      "id": "effect-replay-false-precondition",
+      "operation": "verify_effect",
+      "drivers": ["t3x.conformance/string-replace@1"],
+      "subject": {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:01142ea0e635a903b2f0398f2a04c4890d7f5420516f5f8065c041a7b837472b"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: DEBUG\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: INFO\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:01142ea0e635a903b2f0398f2a04c4890d7f5420516f5f8065c041a7b837472b"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[{\"op\":\"test\",\"value\":\"mode: VERBOSE\\n\"},{\"op\":\"replace\",\"value\":\"mode: INFO\\n\"}],\"result\":{\"digest\":\"sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "EFFECT_CLAIM_FALSE"
+      }
+    },
+    {
+      "id": "effect-replay-wrong-claimed-result",
+      "operation": "verify_effect",
+      "drivers": ["t3x.conformance/string-replace@1"],
+      "subject": {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:4f2da82649e82e6254587c914b12cbf1fc57c25e9301d517aec067a68a9087de"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: DEBUG\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:bee55f65496df9413cc8dbb2cef358b607f3b01b5826a469e2b076159193b78f"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: WARN\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:4f2da82649e82e6254587c914b12cbf1fc57c25e9301d517aec067a68a9087de"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[{\"op\":\"test\",\"value\":\"mode: DEBUG\\n\"},{\"op\":\"replace\",\"value\":\"mode: INFO\\n\"}],\"result\":{\"digest\":\"sha256:bee55f65496df9413cc8dbb2cef358b607f3b01b5826a469e2b076159193b78f\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "EFFECT_CLAIM_FALSE"
+      }
+    },
+    {
+      "id": "effect-replay-missing-driver",
+      "operation": "verify_effect",
+      "drivers": [],
+      "subject": {
+        "kind": "effect",
+        "schema": "t3x/effect/v1",
+        "digest": "sha256:b8a15307109817042194f70ce90badeb34f9cad16f9d6704be8bdda8fd87898f"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: DEBUG\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: INFO\\n\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:b8a15307109817042194f70ce90badeb34f9cad16f9d6704be8bdda8fd87898f"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/missing\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"inputs\":[],\"operations\":[{\"op\":\"test\",\"value\":\"mode: DEBUG\\n\"},{\"op\":\"replace\",\"value\":\"mode: INFO\\n\"}],\"result\":{\"digest\":\"sha256:64cb166ccd252b3ce3bdb605a48043bd53a8371a6eb41038b9f20daa3b33725a\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "UNSUPPORTED_SEMANTICS"
+      }
+    },
+    {
+      "id": "resolver-digest-mismatch",
+      "operation": "resolve",
+      "drivers": [],
+      "subject": {
+        "kind": "state",
+        "schema": "t3x/state/v1",
+        "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:48c53145b51fcccfe2e963687627713b736afa9853886494c99062f76419f49d"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"mode: INFO\\n\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "OBJECT_DIGEST_MISMATCH"
+      }
+    },
+    {
+      "id": "commit-integrity-valid",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:8fab3ea882d1df1b7378959033bed04b2771ddf56ea89204167e06ba4c6d8dc0"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:08536e66a159963284e93671e8108986cd5c55a81d39a0e7e6dc6d41ec8f30c2"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"application/json\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":{}}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"portable result\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:08536e66a159963284e93671e8108986cd5c55a81d39a0e7e6dc6d41ec8f30c2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:742f555e739084b620df4edfec3dfb274b3a2e013c7f6be89f519472fdac94f6"
+          },
+          "bytes": "{\"actor\":{\"id\":\"agent:conformance\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Exercise portable verification\"},\"rationale\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Prove the protocol in two runtimes\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:71b978841425953e495b874ef8e4e5cf6fa70dc958175d1cccbf41adb816c421"
+          },
+          "bytes": "{\"actor\":{\"id\":\"user:conformance\",\"kind\":\"human\"},\"predicate\":{\"considered\":[],\"decidedAt\":\"2026-07-30T00:00:00.000Z\",\"outcome\":\"accepted\",\"policy\":{\"mode\":\"not_evaluated\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.decision/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:742f555e739084b620df4edfec3dfb274b3a2e013c7f6be89f519472fdac94f6\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:8fab3ea882d1df1b7378959033bed04b2771ddf56ea89204167e06ba4c6d8dc0"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:71b978841425953e495b874ef8e4e5cf6fa70dc958175d1cccbf41adb816c421\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "status": "verified"
+      }
+    },
+    {
+      "id": "commit-wrong-decision-predicate",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:9fd2e8828a74a8fbc1f352ffc3d6806f495d9ef7e85cb17a80925d1723f64c71"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"portable result\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:08536e66a159963284e93671e8108986cd5c55a81d39a0e7e6dc6d41ec8f30c2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:24f7c1a1d1639bd35e117da69ab61c0721882857e376fb837ab70e8e5f856508"
+          },
+          "bytes": "{\"actor\":{\"id\":\"service:conformance\",\"kind\":\"service\"},\"predicate\":{\"verified\":true},\"predicateType\":\"t3x.dev/conformance-note/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:9fd2e8828a74a8fbc1f352ffc3d6806f495d9ef7e85cb17a80925d1723f64c71"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:24f7c1a1d1639bd35e117da69ab61c0721882857e376fb837ab70e8e5f856508\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "INTEGRITY_CHAIN_INVALID"
+      }
+    },
+    {
+      "id": "commit-wrong-proposal-predicate",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:cf2fffb83de2f76430a27faf48973d7e44d3df8e51e4d846c5c569b10b6dd079"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"portable result\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:08536e66a159963284e93671e8108986cd5c55a81d39a0e7e6dc6d41ec8f30c2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:00e3d2e3a143d83dae14cd39498cc69a0046844c52597c86a0cff83fd65133e4"
+          },
+          "bytes": "{\"actor\":{\"id\":\"service:conformance\",\"kind\":\"service\"},\"predicate\":{\"verified\":true},\"predicateType\":\"t3x.dev/human-confirmation/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:3a1656ca48eb211e34a780c4f8fc7ed7f95e0c43b35322094749b4eb57d22642"
+          },
+          "bytes": "{\"actor\":{\"id\":\"user:conformance\",\"kind\":\"human\"},\"predicate\":{\"considered\":[],\"decidedAt\":\"2026-07-30T00:00:00.000Z\",\"outcome\":\"accepted\",\"policy\":{\"mode\":\"not_evaluated\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.decision/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:00e3d2e3a143d83dae14cd39498cc69a0046844c52597c86a0cff83fd65133e4\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:cf2fffb83de2f76430a27faf48973d7e44d3df8e51e4d846c5c569b10b6dd079"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:3a1656ca48eb211e34a780c4f8fc7ed7f95e0c43b35322094749b4eb57d22642\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "INTEGRITY_CHAIN_INVALID"
+      }
+    },
+    {
+      "id": "commit-rejected-decision",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:1c6b419e1dbd1c25de75a7d88463dfd16026bd4b1c11f2be43f96c49c9e15ac5"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"portable result\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:08536e66a159963284e93671e8108986cd5c55a81d39a0e7e6dc6d41ec8f30c2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:742f555e739084b620df4edfec3dfb274b3a2e013c7f6be89f519472fdac94f6"
+          },
+          "bytes": "{\"actor\":{\"id\":\"agent:conformance\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Exercise portable verification\"},\"rationale\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Prove the protocol in two runtimes\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:2d0406e8cc2b91c56d0d452f0c6ebf43e0ad82234c2544aa59fd37dc99acbf43\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:1187b4f035bafb09a39beaf446f244c23b56923eb35fabe4757fd7eaab54e935"
+          },
+          "bytes": "{\"actor\":{\"id\":\"user:conformance\",\"kind\":\"human\"},\"predicate\":{\"considered\":[],\"decidedAt\":\"2026-07-30T00:00:00.000Z\",\"outcome\":\"rejected\",\"policy\":{\"mode\":\"not_evaluated\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.decision/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:742f555e739084b620df4edfec3dfb274b3a2e013c7f6be89f519472fdac94f6\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:1c6b419e1dbd1c25de75a7d88463dfd16026bd4b1c11f2be43f96c49c9e15ac5"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:1187b4f035bafb09a39beaf446f244c23b56923eb35fabe4757fd7eaab54e935\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:7711987198a2b0e57d13b9b400e01df2de265c3497d614b3d863c44a5e42c700\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "INTEGRITY_CHAIN_INVALID"
+      }
+    },
+    {
+      "id": "commit-nonempty-genesis",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:f7cf6f2aa82ad3b821466b15e7692298cc365c3b02e9ed58c7f8f110236379dc"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:cf8cec5989ad70ceef028e102ff5df44df648ce5e46e919d8ef743ac13f5090b"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"already initialized\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:f73212fcbe8c5decfc2d90c2b6e3aa2b30c48b186e52bee5a615db51416928b2"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"changed\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:9cf6cab6eb6b111762480dbd8c9c4a33172ffb8db4896ba9791d32c0ab134b86"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:cf8cec5989ad70ceef028e102ff5df44df648ce5e46e919d8ef743ac13f5090b\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:f73212fcbe8c5decfc2d90c2b6e3aa2b30c48b186e52bee5a615db51416928b2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:53bc9955fb478e9ee94b29ef319af70b00c9c0cc2d3db78af18806bb352f894f"
+          },
+          "bytes": "{\"actor\":{\"id\":\"agent:conformance\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Exercise portable verification\"},\"rationale\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Prove the protocol in two runtimes\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:9cf6cab6eb6b111762480dbd8c9c4a33172ffb8db4896ba9791d32c0ab134b86\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:3c5eb16b06f7f0b3453cb856034773008641e1f1f40d57e73ea5f3ad3476458c"
+          },
+          "bytes": "{\"actor\":{\"id\":\"user:conformance\",\"kind\":\"human\"},\"predicate\":{\"considered\":[],\"decidedAt\":\"2026-07-30T00:00:00.000Z\",\"outcome\":\"accepted\",\"policy\":{\"mode\":\"not_evaluated\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.decision/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:53bc9955fb478e9ee94b29ef319af70b00c9c0cc2d3db78af18806bb352f894f\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:f7cf6f2aa82ad3b821466b15e7692298cc365c3b02e9ed58c7f8f110236379dc"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:3c5eb16b06f7f0b3453cb856034773008641e1f1f40d57e73ea5f3ad3476458c\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:f73212fcbe8c5decfc2d90c2b6e3aa2b30c48b186e52bee5a615db51416928b2\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "INTEGRITY_CHAIN_INVALID"
+      }
+    },
+    {
+      "id": "commit-merge-parent-input-omitted",
+      "operation": "verify_commit",
+      "drivers": [],
+      "subject": {
+        "kind": "commit",
+        "schema": "t3x/commit/v2",
+        "digest": "sha256:54c1ad613e5383f5e813731e62a77354b8125bfd4179b2a90e46c9a3b8159d94"
+      },
+      "objects": [
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:7be348204ef1c856bb190f4d6eb896687575891ddcdb90e7f57cf3bd5fe6f7b6"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"parent-a\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:6063820d57fb3841d1a52b805863d86f9873ff28634db3008f545d0088a30462"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"parent-b\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "state",
+            "schema": "t3x/state/v1",
+            "digest": "sha256:fe05d9387d17c2cf829836840c0ac443690eacb27cc237863bb5456340e30891"
+          },
+          "bytes": "{\"codec\":{\"mediaType\":\"text/plain; charset=utf-8\",\"version\":\"1\"},\"schema\":\"t3x/state/v1\",\"value\":\"merged\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:19d23386e2baa782835c86a400f614b174c75a84a40daeda48c7eb908de92491"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:7be348204ef1c856bb190f4d6eb896687575891ddcdb90e7f57cf3bd5fe6f7b6\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:49d97441c0d29befc9885144e1a93b31b59b5bcbd0b7d7e0c557a13a551c749d"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[],\"result\":{\"digest\":\"sha256:6063820d57fb3841d1a52b805863d86f9873ff28634db3008f545d0088a30462\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "effect",
+            "schema": "t3x/effect/v1",
+            "digest": "sha256:168cbd082486debfd2f8143f9c8a4242bfe923aeb506a8f3e64a3153cb4fc359"
+          },
+          "bytes": "{\"base\":{\"digest\":\"sha256:7be348204ef1c856bb190f4d6eb896687575891ddcdb90e7f57cf3bd5fe6f7b6\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"driver\":{\"protocol\":\"t3x.conformance/string-replace\",\"protocolVersion\":\"1\",\"specDigest\":\"sha256:9e96c5db93c835b2b35c495b25cd8e67fdd09e4ae234f02e30e7cc87daba56a9\"},\"inputs\":[],\"operations\":[],\"result\":{\"digest\":\"sha256:fe05d9387d17c2cf829836840c0ac443690eacb27cc237863bb5456340e30891\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/effect/v1\"}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:c15e4a60e015cd2b6523f6d5e32180196664fe32c5fe27d08823a318871f1b78"
+          },
+          "bytes": "{\"actor\":{\"id\":\"agent:conformance\",\"kind\":\"agent\"},\"predicate\":{\"intent\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Exercise portable verification\"},\"rationale\":{\"evidence\":[],\"mode\":\"authored\",\"value\":\"Prove the protocol in two runtimes\"}},\"predicateType\":\"t3x.proposal/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:168cbd082486debfd2f8143f9c8a4242bfe923aeb506a8f3e64a3153cb4fc359\",\"kind\":\"effect\",\"schema\":\"t3x/effect/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "statement",
+            "schema": "t3x/statement/v1",
+            "digest": "sha256:a8a169e1139c0435c7a999c576e5f0113eb4dcd30d3b2dc27fe78bf49ea635b7"
+          },
+          "bytes": "{\"actor\":{\"id\":\"user:conformance\",\"kind\":\"human\"},\"predicate\":{\"considered\":[],\"decidedAt\":\"2026-07-30T00:00:00.000Z\",\"outcome\":\"accepted\",\"policy\":{\"mode\":\"not_evaluated\"},\"rationale\":{\"mode\":\"unspecified\"}},\"predicateType\":\"t3x.decision/v1\",\"schema\":\"t3x/statement/v1\",\"subjects\":[{\"digest\":\"sha256:c15e4a60e015cd2b6523f6d5e32180196664fe32c5fe27d08823a318871f1b78\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"}]}"
+        },
+        {
+          "descriptor": {
+            "kind": "commit",
+            "schema": "t3x/commit/v2",
+            "digest": "sha256:54c1ad613e5383f5e813731e62a77354b8125bfd4179b2a90e46c9a3b8159d94"
+          },
+          "bytes": "{\"decision\":{\"digest\":\"sha256:a8a169e1139c0435c7a999c576e5f0113eb4dcd30d3b2dc27fe78bf49ea635b7\",\"kind\":\"statement\",\"schema\":\"t3x/statement/v1\"},\"parents\":[{\"digest\":\"sha256:19d23386e2baa782835c86a400f614b174c75a84a40daeda48c7eb908de92491\",\"kind\":\"commit\",\"schema\":\"t3x/commit/v2\"},{\"digest\":\"sha256:49d97441c0d29befc9885144e1a93b31b59b5bcbd0b7d7e0c557a13a551c749d\",\"kind\":\"commit\",\"schema\":\"t3x/commit/v2\"}],\"result\":{\"digest\":\"sha256:fe05d9387d17c2cf829836840c0ac443690eacb27cc237863bb5456340e30891\",\"kind\":\"state\",\"schema\":\"t3x/state/v1\"},\"schema\":\"t3x/commit/v2\"}"
+        }
+      ],
+      "expected": {
+        "errorCode": "INTEGRITY_CHAIN_INVALID"
+      }
+    }
+  ]
+}
