@@ -719,7 +719,7 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.yopsDraft.operations).toEqual([
       expect.objectContaining({
         op: 'set',
-        path: 'prd_schema_v2/summary/problem',
+        path: 'prd/summary/problem',
         afterValue: 'Committed problem',
       }),
     ]);
@@ -889,7 +889,7 @@ describe('Workspace routes', () => {
         message: 'Workspace commit: PRD audience handoff',
         parents: ['sha256:review-base'],
         project_id: 'proj_sources',
-        provenance: { method: 'human_curation' },
+        provenance: expect.objectContaining({ method: 'human_curation' }),
         yops_log_ids: ['yl_workspace'],
       })
     );

@@ -23,6 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { parseWorkspaceYOpsScript } from '@/domain/workspaces/yopsScript';
 import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
+import { useWorkspaceValidationRuns } from '@/hooks/workspaces/useWorkspaceValidationRuns';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
@@ -35,6 +36,7 @@ import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
+import { WorkspaceRequiredChecks } from './WorkspaceRequiredChecks';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -539,6 +541,7 @@ function ValidationReviewView({
     operations[0]?.id ?? null
   );
   const [diffOpen, setDiffOpen] = useState(false);
+  const workspaceValidation = useWorkspaceValidationRuns(candidate);
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
   const validationRan = generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
@@ -549,6 +552,28 @@ function ValidationReviewView({
     : validationRan
       ? 'Ready for Preview'
       : 'Ready to validate';
+  const extraChecksDisabled = workspaceValidation.running;
+  const extraChecksTitle = hasBlockingIssues
+    ? 'Resolve YSchema proposal issues before running extra checks'
+    : validationRan
+      ? 'Run extra workspace validation checks'
+      : 'Validate proposal before running extra checks';
+
+  function handleExtraChecks() {
+    if (hasBlockingIssues) {
+      workspaceValidation.blockExtraChecks(
+        'Extra checks are blocked until YSchema Proposal passes.'
+      );
+      return;
+    }
+    if (!validationRan) {
+      workspaceValidation.blockExtraChecks(
+        'Extra checks are blocked until Validate proposal passes.'
+      );
+      return;
+    }
+    workspaceValidation.runExtraChecks();
+  }
 
   useEffect(() => {
     setSelectedOperationId(operations[0]?.id ?? null);
@@ -603,6 +628,19 @@ function ValidationReviewView({
               Validate proposal
             </Button>
           ) : null}
+          <Button
+            disabled={extraChecksDisabled}
+            onClick={handleExtraChecks}
+            size="sm"
+            title={extraChecksTitle}
+            type="button"
+            variant="canvas-outline"
+          >
+            {workspaceValidation.running ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : null}
+            Extra checks
+          </Button>
           <Button
             aria-label="Apply YOps to Preview"
             disabled={!canApplyYOps}
@@ -742,6 +780,19 @@ function ValidationReviewView({
             No proposal changes are available to validate.
           </div>
         ) : null}
+
+        <WorkspaceRequiredChecks
+          details={workspaceValidation.details}
+          errorCode={workspaceValidation.error?.code}
+          errorMessage={workspaceValidation.error?.message}
+          feedback={workspaceValidation.feedback}
+          fresh={workspaceValidation.fresh}
+          hasBlockingIssues={hasBlockingIssues}
+          loading={workspaceValidation.loading}
+          running={workspaceValidation.running}
+          staleReason={workspaceValidation.staleReason}
+          validationRan={validationRan}
+        />
       </section>
 
       {selectedOperation ? (

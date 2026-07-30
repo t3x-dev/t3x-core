@@ -121,4 +121,17 @@ export type {
   Project,
   Turn,
 } from '@/infrastructure/types';
+export type {
+  CreateWorkspaceValidationRunPayload,
+  LatestWorkspaceValidationRunOptions,
+  LatestWorkspaceValidationRunResponse,
+  WorkspaceValidationFinding,
+  WorkspaceValidationGateStatus,
+  WorkspaceValidationRun,
+  WorkspaceValidationRunDetails,
+  WorkspaceValidationRunStatus,
+  WorkspaceValidationStaleReason,
+  WorkspaceValidationStepRun,
+  WorkspaceValidationStepRunStatus,
+} from '@/infrastructure/workspaces';
 export type { NodeMember } from '@/types/knowledgeGraph';

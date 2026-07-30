@@ -109,6 +109,7 @@ describe('Workspace validation routes', () => {
     );
     const latest: ApiResponse = await latestRes.json();
     expect(latest.data.run.id).toBe(body.data.run.id);
+    expect(latest.data).toMatchObject({ fresh: true, stale_reason: null });
   });
 
   it('persists ESPHome config failures with a finding', async () => {
@@ -185,6 +186,7 @@ describe('Workspace validation routes', () => {
 
   it('reads the latest workspace validation run', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'ESPHome Project' }));
+    await createEsphomeWorkspace(project.projectId);
     await createStoredValidationRun(project.projectId, {
       subject_hash: 'sha256:subject-old',
       input_hash: 'sha256:input-old',
@@ -219,13 +221,17 @@ describe('Workspace validation routes', () => {
       status: 'passed',
       gate_status: 'ready',
     });
+    expect(body.data).toMatchObject({ fresh: false, stale_reason: 'workflow_changed' });
 
     const emptyRes = await app.request(
       `/v1/projects/${project.projectId}/workspaces/workspace_missing/validation-runs/latest`
     );
 
     expect(emptyRes.status).toBe(200);
-    await expect(emptyRes.json()).resolves.toEqual({ success: true, data: { run: null } });
+    await expect(emptyRes.json()).resolves.toEqual({
+      success: true,
+      data: { run: null, fresh: false, stale_reason: null },
+    });
   });
 
   it('reads validation run details with steps and findings', async () => {
