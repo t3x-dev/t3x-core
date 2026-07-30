@@ -29,8 +29,10 @@ import {
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { StateGenericReader } from '@/components/project/StateGenericReader';
 import { StatePaneResizeHandle } from '@/components/project/StatePaneResizeHandle';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
+import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { T3XDiff } from '@/components/shared/T3XDiff';
@@ -43,10 +45,12 @@ import {
   buildCanonicalStateYaml,
   buildStatePointRows,
   countStateYOps,
+  resolveStateReaderKind,
   type StateOperationEntry,
   type StatePointRow,
   type StateValidationGapLike,
   selectPrdRenderModel,
+  selectPromptRenderModel,
   selectSkillRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
@@ -365,24 +369,43 @@ export function ProjectStateTab({
     [headCommit]
   );
   const schemaName = currentValidation?.schemaName ?? inferSchemaName(headCommit);
-  const isSkillSchema = schemaName === 't3x/skill';
+  const readerKind = resolveStateReaderKind(schemaName);
   const prdRenderModel = useMemo(
     () =>
-      headCommit && !isSkillSchema
+      headCommit && readerKind === 'prd'
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
           })
         : null,
-    [effectiveOperations, headCommit, isSkillSchema, validationGaps]
+    [effectiveOperations, headCommit, readerKind, validationGaps]
   );
   const skillRenderModel = useMemo(
-    () => (headCommit && isSkillSchema ? selectSkillRenderModel(headCommit.content) : null),
-    [headCommit, isSkillSchema]
+    () =>
+      headCommit && readerKind === 'skill' ? selectSkillRenderModel(headCommit.content) : null,
+    [headCommit, readerKind]
   );
-  const skillArtifact = useSkillArtifact(projectId, headCommit?.hash ?? null, isSkillSchema);
+  const promptRenderModel = useMemo(
+    () =>
+      headCommit && readerKind === 'prompt'
+        ? selectPromptRenderModel(headCommit.content, {
+            issues: currentValidation?.issues ?? validationGaps,
+            operations: effectiveOperations,
+            sources: headCommit.sources,
+          })
+        : null,
+    [currentValidation?.issues, effectiveOperations, headCommit, readerKind, validationGaps]
+  );
+  const skillArtifact = useSkillArtifact(
+    projectId,
+    headCommit?.hash ?? null,
+    readerKind === 'skill'
+  );
   const validationReady = currentValidation?.status === 'verified';
   const validationGapCount = currentValidation?.gapCount ?? validationGaps.length;
+  const validationIssueCount = currentValidation
+    ? currentValidation.errorCount + currentValidation.gapCount
+    : validationGaps.length;
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
@@ -647,6 +670,22 @@ export function ProjectStateTab({
                       schemaName={schemaName}
                       validationGapCount={validationGapCount}
                       validationReady={validationReady}
+                      yamlText={yamlText}
+                    />
+                  ) : null}
+                  {activeView === 'render' && promptRenderModel ? (
+                    <StatePromptReader
+                      model={promptRenderModel}
+                      schemaName={schemaName}
+                      validationGapCount={validationIssueCount}
+                      validationReady={validationReady}
+                      yamlText={yamlText}
+                    />
+                  ) : null}
+                  {activeView === 'render' && readerKind === 'generic' ? (
+                    <StateGenericReader
+                      rows={pointRows}
+                      schemaName={schemaName}
                       yamlText={yamlText}
                     />
                   ) : null}
@@ -1718,6 +1757,14 @@ function inferSchemaName(commit: ApiCommit | null): string {
   if (provenanceSchema) return provenanceSchema;
 
   const rootKeys = new Set(commit?.content.trees?.map((tree) => tree.key) ?? []);
+  if (
+    rootKeys.has('prompt') ||
+    ['manifest', 'contract', 'variables', 'messages', 'runtime', 'output'].every((key) =>
+      rootKeys.has(key)
+    )
+  ) {
+    return 't3x/prompt';
+  }
   if (
     rootKeys.has('skill') ||
     ['manifest', 'activation', 'contract', 'instructions'].every((key) => rootKeys.has(key))
