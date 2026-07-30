@@ -64,6 +64,12 @@ const ValidationStepRunStatusSchema = z.enum([
 
 const ValidationGateStatusSchema = z.enum(['ready', 'blocked', 'pending', 'stale']);
 const ValidationFindingSeveritySchema = z.enum(['error', 'warning', 'info']);
+const ValidationStaleReasonSchema = z.enum([
+  'subject_changed',
+  'input_changed',
+  'workflow_changed',
+  'validator_changed',
+]);
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -125,6 +131,8 @@ const ValidationFindingResponseSchema = z.object({
 
 const LatestValidationRunResponseSchema = z.object({
   run: ValidationRunResponseSchema.nullable(),
+  fresh: z.boolean(),
+  stale_reason: ValidationStaleReasonSchema.nullable(),
 });
 
 const ValidationRunDetailsResponseSchema = z.object({
@@ -305,8 +313,15 @@ workspaceValidationRoutes.openapi(getLatestWorkspaceValidationRunRoute, async (c
       workspace_id: workspaceId,
       workflow_name,
     });
+    const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+    const freshness = getLatestValidationFreshness({
+      projectId,
+      run,
+      workspaceId,
+      workspaceState: draft?.workspace_state,
+    });
 
-    return c.json({ success: true as const, data: { run } }, 200);
+    return c.json({ success: true as const, data: { run, ...freshness } }, 200);
   } catch (error) {
     return validationErrorResponse(c, error);
   }
@@ -406,4 +421,46 @@ function validationErrorResponse(c: Context, error: unknown) {
 
   const message = error instanceof Error ? error.message : 'Unknown error';
   return c.json(createError('VALIDATION_FAILED', message), 500);
+}
+
+function getLatestValidationFreshness(input: {
+  projectId: string;
+  run: z.infer<typeof ValidationRunResponseSchema> | null;
+  workspaceId: string;
+  workspaceState: Record<string, unknown> | undefined;
+}): { fresh: boolean; stale_reason: z.infer<typeof ValidationStaleReasonSchema> | null } {
+  if (!input.run) return { fresh: false, stale_reason: null };
+  if (input.run.status === 'stale' || input.run.gate_status === 'stale') {
+    return { fresh: false, stale_reason: 'subject_changed' };
+  }
+  if (!input.workspaceState) return { fresh: false, stale_reason: 'subject_changed' };
+
+  let materialized: MaterializedEsphomeDeviceInput;
+  try {
+    materialized = materializeEsphomeDeviceInput({
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      workspace: input.workspaceState,
+    });
+  } catch (error) {
+    if (error instanceof WorkspaceValidationMaterializerError) {
+      return { fresh: false, stale_reason: 'input_changed' };
+    }
+    throw error;
+  }
+
+  if (input.run.workflow_hash !== materialized.workflow_hash) {
+    return { fresh: false, stale_reason: 'workflow_changed' };
+  }
+  if (input.run.validator_hash !== materialized.validator_hash) {
+    return { fresh: false, stale_reason: 'validator_changed' };
+  }
+  if (input.run.input_hash !== materialized.input_hash) {
+    return { fresh: false, stale_reason: 'input_changed' };
+  }
+  if (input.run.subject_hash !== materialized.subject_hash) {
+    return { fresh: false, stale_reason: 'subject_changed' };
+  }
+
+  return { fresh: true, stale_reason: null };
 }

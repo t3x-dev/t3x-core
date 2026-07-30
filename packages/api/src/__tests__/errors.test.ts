@@ -117,6 +117,7 @@ describe('ErrorStatusCodes', () => {
       'LEAF_NOT_FOUND',
       'PIN_NOT_FOUND',
       'CONVERSATION_NOT_FOUND',
+      'WORKSPACE_NOT_FOUND',
       'HISTORY_NOT_FOUND',
       'GRAPH_NODE_NOT_FOUND',
     ];

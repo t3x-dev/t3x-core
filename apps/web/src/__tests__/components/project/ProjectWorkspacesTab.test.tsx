@@ -41,7 +41,14 @@ vi.mock('@/queries/materials', () => ({
 }));
 
 vi.mock('@/queries/workspaces', () => ({
+  fetchLatestWorkspaceValidationRun: vi.fn(async () => ({
+    fresh: false,
+    run: null,
+    stale_reason: null,
+  })),
   fetchProjectWorkspaces: (...args: unknown[]) => fetchProjectWorkspacesMock(...args),
+  fetchWorkspaceValidationRunDetails: vi.fn(),
+  runWorkspaceValidation: vi.fn(),
 }));
 
 describe('ProjectWorkspacesTab', () => {
