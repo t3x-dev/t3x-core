@@ -79,7 +79,7 @@ export function StateBranchControls({
       </label>
 
       <Button
-        className="text-[10.5px]"
+        className="text-xs"
         onClick={() => setDialogOpen(true)}
         size="sm"
         type="button"
