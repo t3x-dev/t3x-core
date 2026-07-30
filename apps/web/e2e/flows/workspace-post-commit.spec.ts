@@ -124,12 +124,16 @@ async function createCommittedWorkspaceFixture(
       }
     );
     expect(saveResponse.status()).toBe(200);
+    const savePayload = await saveResponse.json();
+    const workspaceRevision = savePayload.data.workspace.revision as number;
+    expect(workspaceRevision).toBeGreaterThan(0);
 
     const commitResponse = await request.post(
       `${API_BASE}/projects/${projectId}/workspaces/${workspaceId}/commit`,
       {
         data: {
           content: { relations: [], trees: WORKSPACE_TREE },
+          if_revision: workspaceRevision,
           message,
         },
       }
@@ -305,8 +309,8 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     const workspaceSave = page.waitForResponse(
       (response) =>
         response.request().method() === 'PATCH' &&
-        response.url().endsWith(
-          `/api/v1/projects/${fixture.projectId}/workspaces/${fixture.workspaceId}`
+        response.url().startsWith(
+          `${API_BASE}/projects/${fixture.projectId}/workspaces/workspace_`
         )
     );
     const conversationCreate = page.waitForResponse(
@@ -320,6 +324,9 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     expect(branchCreateResponse.status()).toBe(201);
     expect(workspaceSaveResponse.status()).toBe(200);
     expect(conversationCreateResponse.status()).toBe(201);
+    const workspaceSavePayload = await workspaceSaveResponse.json();
+    const nextWorkspaceId = workspaceSavePayload.data.workspace.id as string;
+    const nextFixture = { ...fixture, workspaceId: nextWorkspaceId };
 
     await expect(page.getByRole('tab', { exact: true, name: 'Source' })).toHaveAttribute(
       'aria-selected',
@@ -329,7 +336,7 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     await expect(page.getByText(`Next commit to ${branchName}`)).toBeVisible();
     await expect(page.getByText('No source chat turns yet.')).toBeVisible();
 
-    const workspace = await readWorkspace(request, fixture);
+    const workspace = await readWorkspace(request, nextFixture);
     expect(workspace.status).toBe('draft');
     expect(workspace.baseCommitHash).toBe(fixture.commitHash);
     expect(workspace.targetBranch).toBe(branchName);
@@ -345,12 +352,12 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     );
     expect(branch).toMatchObject({ name: branchName, parent_branch: 'main' });
 
-    const conversations = await readWorkspaceConversations(request, fixture);
+    const conversations = await readWorkspaceConversations(request, nextFixture);
     expect(conversations).toHaveLength(1);
     expect(conversations[0].parent_commit_hash).toBe(fixture.commitHash);
     expect(conversations[0].metadata).toMatchObject({
       target_branch: branchName,
-      workspace_id: fixture.workspaceId,
+      workspace_id: nextWorkspaceId,
     });
     expect(browserErrors, browserErrors.join('\n')).toEqual([]);
   } finally {

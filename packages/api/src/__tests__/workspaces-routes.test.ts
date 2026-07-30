@@ -719,7 +719,7 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.yopsDraft.operations).toEqual([
       expect.objectContaining({
         op: 'set',
-        path: 'prd_schema_v2/summary/problem',
+        path: 'prd/summary/problem',
         afterValue: 'Committed problem',
       }),
     ]);
@@ -881,15 +881,18 @@ describe('Workspace routes', () => {
     expect(storageMock.createCommit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        author: { name: 'api', type: 'human' },
         branch: 'feature/reviewed-prd',
         content: {
           trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
           relations: [],
         },
+        enforceBranchLinearity: true,
         message: 'Workspace commit: PRD audience handoff',
         parents: ['sha256:review-base'],
         project_id: 'proj_sources',
-        provenance: { method: 'human_curation' },
+        provenance: { method: 'human_curation', schema_ref: { name: 't3x/prd' } },
+        sources: [{ id: 'conv_prd', title: 'Reviewed source', type: 'conversation' }],
         yops_log_ids: ['yl_workspace'],
       })
     );

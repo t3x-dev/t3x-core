@@ -193,7 +193,8 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () => `/project/${projectId}/leaf/${leafId}`,
           ready: async (p) => {
             await expect(p.getByText('Output').first()).toBeVisible({ timeout: 15000 });
-            await expect(p.getByText('SOURCE YAML').first()).toBeVisible();
+            await expect(p.getByText('Source nodes').first()).toBeVisible();
+            await expect(p.getByRole('button', { name: 'Generate & Verify' })).toBeVisible();
           },
         },
         {
@@ -213,7 +214,7 @@ test.describe('Open-source workbench visual smoke', () => {
           ready: async (p) => {
             await expect(p.getByText('Conflicts (2)')).toBeVisible({ timeout: 15000 });
             await expect(
-              p.getByRole('button', { name: /(Accept Source|Use source|Use feature)/i }).first()
+              p.getByRole('button', { name: /^Use (phase-two-source|main)$/i }).first()
             ).toBeVisible();
           },
         },

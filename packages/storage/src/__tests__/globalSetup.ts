@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
+import type EmbeddedPostgres from 'embedded-postgres';
 import {
   getTestPostgresDataDir,
   getTestPostgresPort,
@@ -62,7 +62,23 @@ export async function setup(): Promise<void> {
 
   const absoluteDataDir = resolveRepoRelativePath(DATA_DIR);
 
-  pg = new EmbeddedPostgres({
+  const lifecycleListeners = new Map([
+    ['beforeExit', new Set(process.listeners('beforeExit'))],
+    ['exit', new Set(process.listeners('exit'))],
+  ] as const);
+  const { default: EmbeddedPostgresConstructor } = await import('embedded-postgres');
+
+  // embedded-postgres registers async-exit-hook with a hard-coded success status for
+  // beforeExit, and its exit listener assumes the async beforeExit hook already ran.
+  // This setup owns normal teardown explicitly, so retain signal hooks but remove the
+  // package's normal-exit listeners without disturbing listeners owned by Vitest.
+  for (const [event, existingListeners] of lifecycleListeners) {
+    for (const listener of process.listeners(event)) {
+      if (!existingListeners.has(listener)) process.removeListener(event, listener);
+    }
+  }
+
+  pg = new EmbeddedPostgresConstructor({
     databaseDir: absoluteDataDir,
     port: TEST_PORT,
     user: 'postgres',

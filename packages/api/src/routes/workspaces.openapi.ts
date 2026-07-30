@@ -1470,83 +1470,57 @@ function extractWorkspaceSourceRefs(workspace: Record<string, unknown>): string[
 }
 
 function extractAudience(text: string): string {
-  const explicit = matchLabeledValue(text, ['audience', 'reviewers', '受众', '评审']);
+  const explicit = matchLabeledValue(text, ['audience', 'reviewers']);
   if (explicit) return trimSentence(explicit);
   if (/product/i.test(text) && /engineering/i.test(text))
     return 'Product and engineering reviewers';
-  if (/用户|客户|受众/.test(text)) return trimSentence(text);
   return '';
 }
 
 function extractProblem(text: string): string {
-  const explicit = matchLabeledValue(text, ['problem', 'pain point', 'challenge', '问题', '痛点']);
+  const explicit = matchLabeledValue(text, ['problem', 'pain point', 'challenge']);
   if (explicit) return trimSentence(explicit);
-  const sentence = findSentence(text, /problem|pain|challenge|need|问题|痛点|难以|无法|依赖|不足/i);
+  const sentence = findSentence(text, /problem|pain|challenge|need/i);
   return sentence ? trimSentence(sentence) : '';
 }
 
 function extractOutcome(text: string): string {
-  const explicit = matchLabeledValue(text, [
-    'outcome',
-    'result',
-    'goal',
-    'objective',
-    'purpose',
-    '结果',
-    '目标',
-  ]);
+  const explicit = matchLabeledValue(text, ['outcome', 'result', 'goal', 'objective', 'purpose']);
   if (explicit) return trimSentence(explicit);
-  const sentence = findSentence(text, /outcome|result|goal|objective|提升|实现|支持|降低|减少/i);
+  const sentence = findSentence(text, /outcome|result|goal|objective/i);
   return sentence ? trimSentence(sentence) : firstMeaningfulSentence(text);
 }
 
 function extractRequirementTitle(text: string): string {
-  const explicit = matchLabeledValue(text, [
-    'requirement',
-    'requirements',
-    'feature',
-    'title',
-    '需求',
-    '功能',
-    '特性',
-  ]);
+  const explicit = matchLabeledValue(text, ['requirement', 'requirements', 'feature', 'title']);
   if (explicit) return trimSentence(explicit);
   return extractOutcome(text) || firstMeaningfulSentence(text);
 }
 
 function extractRequirementPriority(text: string): string {
-  const explicit = matchLabeledValue(text, ['priority', '优先级']);
-  if (/^must|必须|最高|高$/i.test(explicit)) return 'must';
-  if (/^could|可以|低$/i.test(explicit)) return 'could';
-  if (/^should|应该|中$/i.test(explicit)) return 'should';
-  if (/must|必须|关键|核心/i.test(text)) return 'must';
-  if (/could|可以|可选/i.test(text)) return 'could';
+  const explicit = matchLabeledValue(text, ['priority']);
+  if (/^must|high$/i.test(explicit)) return 'must';
+  if (/^could|low$/i.test(explicit)) return 'could';
+  if (/^should|medium$/i.test(explicit)) return 'should';
+  if (/must|critical|core/i.test(text)) return 'must';
+  if (/could|optional/i.test(text)) return 'could';
   return '';
 }
 
 function extractRequirementAcceptance(text: string): string {
-  const explicit = matchLabeledValue(text, [
-    'acceptance',
-    'acceptance criteria',
-    'criteria',
-    '成功标准',
-    '验收',
-  ]);
+  const explicit = matchLabeledValue(text, ['acceptance', 'acceptance criteria', 'criteria']);
   if (explicit) return trimSentence(explicit);
-  const sentence = findSentence(
-    text,
-    /support|ensure|verify|detect|识别|支持|确保|验证|检测|兼顾/i
-  );
+  const sentence = findSentence(text, /support|ensure|verify|detect/i);
   return sentence ? trimSentence(sentence) : '';
 }
 
 function extractMilestoneTitle(text: string): string {
-  const explicit = matchLabeledValue(text, ['milestone', 'delivery', 'phase', '里程碑', '阶段']);
+  const explicit = matchLabeledValue(text, ['milestone', 'delivery', 'phase']);
   return explicit ? trimSentence(explicit) : '';
 }
 
 function extractMilestoneSequence(text: string): string {
-  const explicit = matchLabeledValue(text, ['sequence', 'order', '顺序', '序号']);
+  const explicit = matchLabeledValue(text, ['sequence', 'order']);
   const numeric = explicit.match(/\d+/)?.[0];
   if (numeric) return numeric;
   return extractMilestoneTitle(text) ? '1' : '';

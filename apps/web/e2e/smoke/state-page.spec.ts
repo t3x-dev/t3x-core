@@ -15,7 +15,7 @@ const PRD_TREE = [
         slots: {
           problem: 'You: i need food and drink',
           audience: '',
-          outcome: '办公室上班族',
+          outcome: 'Office workers',
         },
         children: [],
       },
@@ -26,9 +26,9 @@ const PRD_TREE = [
           {
             key: 'you_i_need_food_and_drink',
             slots: {
-              title: '找到食物和饮品',
+              title: 'Find food and drinks',
               priority: 'P1',
-              acceptance: '用户能快速找到并满意',
+              acceptance: 'Users can quickly find satisfying options',
             },
             children: [],
           },
@@ -84,14 +84,14 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
                   summary: 'Set summary.problem',
                 },
                 {
-                  afterValue: '办公室上班族',
+                  afterValue: 'Office workers',
                   id: 'op_backend_2',
                   op: 'set',
                   path: 'prd/summary/outcome',
                   summary: 'Set summary.outcome',
                 },
                 {
-                  afterValue: '找到食物和饮品',
+                  afterValue: 'Find food and drinks',
                   id: 'op_backend_3',
                   op: 'set',
                   path: 'prd/requirements/you_i_need_food_and_drink/title',

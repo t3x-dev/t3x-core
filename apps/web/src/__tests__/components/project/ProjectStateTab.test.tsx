@@ -124,7 +124,7 @@ const PRD_COMMIT: ApiCommit = {
             slots: {
               problem: 'You: i need food and drink',
               audience: '',
-              outcome: '办公室上班族',
+              outcome: 'Office workers',
             },
             children: [],
           },
@@ -135,9 +135,9 @@ const PRD_COMMIT: ApiCommit = {
               {
                 key: '0',
                 slots: {
-                  title: '找到食物和饮品',
+                  title: 'Find food and drinks',
                   priority: 'P1',
-                  acceptance: '用户能快速找到并满意',
+                  acceptance: 'Users can quickly find satisfying options',
                 },
                 children: [],
               },
@@ -323,14 +323,14 @@ function setupHookMocks() {
         turn_hash: 'turn_1',
         yops: [
           { set: { path: 'prd.summary.problem', value: 'You: i need food and drink' } },
-          { set: { path: 'prd.summary.outcome', value: '办公室上班族' } },
+          { set: { path: 'prd.summary.outcome', value: 'Office workers' } },
           {
             populate: {
               path: 'prd.requirements.0',
               values: {
-                title: '找到食物和饮品',
+                title: 'Find food and drinks',
                 priority: 'P1',
-                acceptance: '用户能快速找到并满意',
+                acceptance: 'Users can quickly find satisfying options',
               },
             },
           },
@@ -603,7 +603,7 @@ describe('ProjectStateTab', () => {
     fireEvent.click(within(diff).getByRole('button', { name: 'outcome' }));
     expect(within(diff).getByText('Updated desired outcome')).toBeInTheDocument();
     expect(within(diff).getByText('Find a meal')).toBeInTheDocument();
-    expect(within(diff).getByText('办公室上班族')).toBeInTheDocument();
+    expect(within(diff).getByText('Office workers')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide changed paths' })).toHaveAttribute(
@@ -630,7 +630,7 @@ describe('ProjectStateTab', () => {
       screen.getByRole('heading', { name: 'Problem, audience, and intended outcome' })
     ).toBeInTheDocument();
     expect(screen.getByText('This field is required by the schema.')).toBeInTheDocument();
-    expect(screen.getAllByText('找到食物和饮品')).not.toHaveLength(0);
+    expect(screen.getAllByText('Find food and drinks')).not.toHaveLength(0);
     expect(screen.getByRole('navigation', { name: 'PRD semantic nodes' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Document outline' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'PRD inspector' })).toBeInTheDocument();
@@ -685,7 +685,7 @@ describe('ProjectStateTab', () => {
     fireEvent.doubleClick(inspectorSeparator);
 
     const requirementButton = screen.getByRole('button', {
-      name: 'Inspect requirement 找到食物和饮品',
+      name: 'Inspect requirement Find food and drinks',
     });
     expect(requirementButton).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(requirementButton);
@@ -697,10 +697,10 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '找到食物和饮品 · 0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Find food and drinks · 0' }));
     const inspector = screen.getByRole('complementary', { name: 'PRD inspector' });
     expect(
-      within(inspector).getByRole('heading', { name: '0 · 找到食物和饮品' })
+      within(inspector).getByRole('heading', { name: '0 · Find food and drinks' })
     ).toBeInTheDocument();
     expect(within(inspector).getByText('State → prd → requirements → 0')).toBeInTheDocument();
     expect(within(inspector).getByText('1 acceptance criterion')).toBeInTheDocument();
@@ -932,14 +932,14 @@ describe('ProjectStateTab', () => {
               summary: 'Set summary.problem',
             },
             {
-              afterValue: '办公室上班族',
+              afterValue: 'Office workers',
               id: 'op_backend_2',
               op: 'set',
               path: 'prd/summary/outcome',
               summary: 'Set summary.outcome',
             },
             {
-              afterValue: '找到食物和饮品',
+              afterValue: 'Find food and drinks',
               id: 'op_backend_3',
               op: 'set',
               path: 'prd/requirements/0/title',

@@ -22,7 +22,7 @@ const PRD_CONTENT: SemanticContent = {
           slots: {
             problem: 'You: i need food and drink',
             audience: '',
-            outcome: '办公室上班族',
+            outcome: 'Office workers',
           },
           children: [],
         },
@@ -33,8 +33,8 @@ const PRD_CONTENT: SemanticContent = {
             {
               key: '0',
               slots: {
-                title: '找到食物和饮品',
-                acceptance: '用户能快速找到并满意',
+                title: 'Find food and drinks',
+                acceptance: 'Users can quickly find satisfying options',
                 priority: 'P1',
               },
               children: [],
@@ -247,14 +247,14 @@ describe('stateViewModel', () => {
           turn_hash: 'turn_1',
           yops: [
             { set: { path: 'prd.summary.problem', value: 'You: i need food and drink' } },
-            { set: { path: 'prd.summary.outcome', value: '办公室上班族' } },
+            { set: { path: 'prd.summary.outcome', value: 'Office workers' } },
             {
               populate: {
                 path: 'prd.requirements.0',
                 values: {
-                  acceptance: '用户能快速找到并满意',
+                  acceptance: 'Users can quickly find satisfying options',
                   priority: 'P1',
-                  title: '找到食物和饮品',
+                  title: 'Find food and drinks',
                 },
               },
             },
@@ -292,14 +292,14 @@ describe('stateViewModel', () => {
         op: 'set',
         path: 'prd/summary/outcome',
         summary: 'Set outcome',
-        afterValue: '办公室上班族',
+        afterValue: 'Office workers',
       },
       {
         id: 'draft_op_3',
         op: 'set',
         path: 'prd/requirements/0/title',
         summary: 'Set title',
-        afterValue: '找到食物和饮品',
+        afterValue: 'Find food and drinks',
       },
     ]);
 
@@ -359,10 +359,10 @@ describe('stateViewModel', () => {
     expect(model.audienceMissing).toBe(true);
     expect(model.requirements).toEqual([
       expect.objectContaining({
-        acceptance: '用户能快速找到并满意',
+        acceptance: 'Users can quickly find satisfying options',
         key: '0',
         priority: 'P1',
-        title: '找到食物和饮品',
+        title: 'Find food and drinks',
       }),
     ]);
     expect(model.changes).toEqual([]);
@@ -455,7 +455,7 @@ describe('stateViewModel', () => {
             {
               populate: {
                 path: 'prd.requirements.0',
-                values: { priority: 'P1', title: '找到食物和饮品' },
+                values: { priority: 'P1', title: 'Find food and drinks' },
               },
             },
           ],

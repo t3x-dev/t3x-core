@@ -257,6 +257,11 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Workspaces', description: 'Workspace review and YOps handoff workflows' },
+      {
+        name: 'Workspace Validation',
+        description: 'Workspace validation profiles, runs, and results',
+      },
+      { name: 'Artifacts', description: 'Generated and stored workspace artifacts' },
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
