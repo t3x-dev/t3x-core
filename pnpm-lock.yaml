@@ -680,6 +680,9 @@ importers:
       '@t3x-dev/storage':
         specifier: workspace:*
         version: link:../storage
+      '@t3x-dev/transition':
+        specifier: workspace:*
+        version: link:../transition
       '@t3x-dev/yschema':
         specifier: workspace:*
         version: link:../yschema

@@ -19,6 +19,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import type { WorkspaceSourceTransitionCapabilities } from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
@@ -40,6 +41,7 @@ import {
   comparisonsRoutes,
   contextRoutes,
   conversationRoutes,
+  createWorkspaceSourceTransitionRoutes,
   curateRoutes,
   deployAgentRoutes,
   diffRoutes,
@@ -102,6 +104,8 @@ export interface CreateAppOptions {
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
   routes?: (api: OpenAPIHono) => void;
+  /** Server-owned exact-source secret and Runner capabilities. */
+  workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
 }
 
 export interface CreateAppResult {
@@ -219,6 +223,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);
+  api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
   api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)

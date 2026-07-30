@@ -39,6 +39,7 @@
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/runner": "workspace:*",
     "@t3x-dev/storage": "workspace:*",
+    "@t3x-dev/transition": "workspace:*",
     "@t3x-dev/yschema": "workspace:*",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
