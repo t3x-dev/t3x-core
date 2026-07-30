@@ -85,18 +85,26 @@ function LegacyTransitionReview({ view }: { view: Extract<TransitionViewV1, { mo
 }
 
 function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
+  const pending = view.decision.observation !== 'supplied';
+  const rejected = view.decision.observation === 'supplied' && view.decision.outcome === 'rejected';
   return (
     <section
-      aria-label="Saved change review"
+      aria-label={pending ? 'Change review' : 'Saved change review'}
       className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
     >
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Saved change</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            {pending ? 'Review change' : rejected ? 'Rejected change' : 'Saved change'}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
             {view.change.operations.length}{' '}
-            {view.change.operations.length === 1 ? 'structured update' : 'structured updates'} were
-            saved with verified history.
+            {view.change.operations.length === 1 ? 'structured update' : 'structured updates'}{' '}
+            {pending
+              ? 'are ready for your decision.'
+              : rejected
+                ? 'were rejected and recorded without changing the branch.'
+                : 'were saved with verified history.'}
           </p>
         </div>
         <Badge variant={decisionBadgeVariant(view)}>{decisionLabel(view)}</Badge>
@@ -146,7 +154,9 @@ function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
         />
       </section>
 
-      <CapabilityNote capability={view.capabilities.revert} />
+      {view.history.observation === 'committed' ? (
+        <CapabilityNote capability={view.capabilities.revert} />
+      ) : null}
 
       <details className="mt-4 border-t border-[var(--stroke-divider)] pt-3 text-xs">
         <summary className="cursor-pointer font-semibold text-[var(--text-secondary)]">

@@ -12,7 +12,9 @@ vi.mock('@/infrastructure/core', () => ({
 
 import {
   commitProjectWorkspace,
+  decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
 } from '@/infrastructure/workspaces';
 
@@ -149,5 +151,76 @@ describe('infrastructure/workspaces', () => {
         }),
       })
     );
+  });
+
+  it('requests a Transition review with content, rationale, and revision only', async () => {
+    const response = new Response('{}');
+    const content = {
+      relations: [],
+      trees: [{ key: 'prd', slots: { title: 'Reviewed PRD' }, children: [] }],
+    };
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
+
+    await reviewProjectWorkspaceTransition(
+      'proj/with space',
+      'workspace/prd handoff',
+      content,
+      'Keep the audience current.',
+      7
+    );
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      'https://api.test/api/v1/projects/proj%2Fwith%20space/workspaces/workspace%2Fprd%20handoff/transition/review',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          why: 'Keep the audience current.',
+          if_revision: 7,
+        }),
+      })
+    );
+  });
+
+  it('decides with the immutable precondition and no client authority fields', async () => {
+    const response = new Response('{}');
+    const content = {
+      relations: [],
+      trees: [{ key: 'prd', slots: { title: 'Reviewed PRD' }, children: [] }],
+    };
+    const precondition = {
+      workspace_revision: 7,
+      ref_head: null,
+      effect_digest: `sha256:${'a'.repeat(64)}`,
+      proposal_digest: `sha256:${'b'.repeat(64)}`,
+      statement_digests: [`sha256:${'c'.repeat(64)}`],
+      policy_digest: `sha256:${'d'.repeat(64)}`,
+    };
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
+
+    await decideProjectWorkspaceTransition('proj_1', 'workspace_prd_handoff', {
+      content,
+      why: 'Keep the audience current.',
+      outcome: 'overridden',
+      decisionReason: 'The known gap is acceptable for this draft.',
+      precondition,
+    });
+
+    const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
+    expect(body).toEqual({
+      content,
+      why: 'Keep the audience current.',
+      outcome: 'overridden',
+      decision_reason: 'The known gap is acceptable for this draft.',
+      precondition,
+    });
+    expect(body).not.toHaveProperty('actor');
+    expect(body).not.toHaveProperty('issuer');
+    expect(body).not.toHaveProperty('policy');
+    expect(body).not.toHaveProperty('capabilities');
+    expect(body).not.toHaveProperty('result');
   });
 });
