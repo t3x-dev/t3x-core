@@ -1,4 +1,19 @@
 export {
+  type BindEspHomeSourceInputsInput,
+  bindEspHomeSourceInputs,
+  createYamlSourceResourceDescriptor,
+  ESPHOME_SOURCE_INPUT_MANIFEST_FORMAT,
+  ESPHOME_SOURCE_INPUT_MANIFEST_MEDIA_TYPE,
+  type EspHomeSourceInputIssue,
+  type EspHomeSourceInputIssueCode,
+  type EspHomeSourceInputManifest,
+  type EspHomeSourceInputResult,
+  type EspHomeSourceResourceInput,
+  type IncompleteEspHomeSourceInputs,
+  type ReadyEspHomeSourceInputs,
+  type UnsupportedEspHomeSourceInputs,
+} from './esphomeSourceInputs';
+export {
   createYOpsState,
   YOPS_STATE_CODEC_VERSION,
   YOPS_STATE_MEDIA_TYPE,

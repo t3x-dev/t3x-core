@@ -1,0 +1,4 @@
+# Shared local package; ESPHome owns how this file merges with device.yaml.
+sensor:
+  - platform: uptime
+    name: ${friendly_name} Uptime
