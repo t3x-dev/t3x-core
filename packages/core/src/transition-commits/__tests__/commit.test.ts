@@ -236,6 +236,12 @@ describe('CommitV2 application boundary', () => {
     });
     if (!result.ok || result.authorization === null) throw new Error('authorization missing');
     expect(isRepositoryDecisionAuthorization(result.authorization)).toBe(true);
+    expect(result.authorization.observations).toHaveLength(
+      result.authorization.evaluation.considered.length
+    );
+    expect(
+      result.authorization.observations.map((observation) => observation.issuerContext.actor)
+    ).toContainEqual(fixtures.replay.actor);
     const authorizedDecision = describeProtocolObject(result.authorization.decision).digest;
     result.decision.actor.id = 'human:mutated-after-issuance';
     expect(describeProtocolObject(result.authorization.decision).digest).toBe(authorizedDecision);

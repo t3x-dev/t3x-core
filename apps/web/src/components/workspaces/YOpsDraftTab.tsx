@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { parseWorkspaceYOpsScript } from '@/domain/workspaces/yopsScript';
+import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -35,6 +36,7 @@ import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
+import { TransitionReviewPanel } from './TransitionReviewPanel';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -94,6 +96,11 @@ export function YOpsDraftTab({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
+  const transitionReview = useCommitTransitionView(
+    candidate.projectId,
+    targetBranch,
+    isCanonicalCommitHash(committedHash) ? committedHash : null
+  );
 
   const commitCandidate = useMemo(
     () => ({ ...candidate, targetBranch }),
@@ -500,6 +507,7 @@ export function YOpsDraftTab({
           status={status}
           schemaOverrideBlockers={schemaOverrideBlockers}
           targetBranch={targetBranch}
+          transitionReview={transitionReview}
           validationReady={Boolean(committedHash) || (validationPassed && !validationBlocked)}
         />
       ) : null}
@@ -1006,6 +1014,7 @@ function CommitReviewView({
   status,
   schemaOverrideBlockers,
   targetBranch,
+  transitionReview,
   validationReady,
 }: {
   appliedCount: number;
@@ -1030,6 +1039,7 @@ function CommitReviewView({
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
   schemaOverrideBlockers: string[];
   targetBranch: string;
+  transitionReview: ReturnType<typeof useCommitTransitionView>;
   validationReady: boolean;
 }) {
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
@@ -1152,6 +1162,12 @@ function CommitReviewView({
           </Button>
         </aside>
       )}
+
+      {committedHash ? (
+        <div className="lg:col-span-2">
+          <TransitionReviewPanel {...transitionReview} />
+        </div>
+      ) : null}
 
       <Dialog onOpenChange={setOverrideDialogOpen} open={overrideDialogOpen}>
         <DialogContent className="sm:max-w-[520px]">

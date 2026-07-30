@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 75 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(75);
+  it('has 76 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(76);
   });
 
   it('key equals value for every code', () => {
@@ -86,6 +86,7 @@ describe('ErrorCodes', () => {
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
+        "TRANSITION_VIEW_UNAVAILABLE": "TRANSITION_VIEW_UNAVAILABLE",
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UNRESOLVED_PAIRS": "UNRESOLVED_PAIRS",
         "UNSUPPORTED_OP": "UNSUPPORTED_OP",

@@ -58,6 +58,8 @@ export interface RepositoryDecisionAuthorization {
   readonly decision: DecisionStatement;
   readonly evaluation: PolicyEvaluation;
   readonly observationScope: ObservationScope;
+  /** Trusted issuer facts for the exact Statements considered by the Decision. */
+  readonly observations: readonly StatementObservation[];
   readonly objects: readonly ProtocolObject[];
 }
 
@@ -127,6 +129,13 @@ export async function authorizeDecisionForRepository(
     ...trusted.statements.map((observation) => observation.statement),
     created.decision,
   ];
+  const considered = new Set(created.evaluation.considered.map((statement) => statement.digest));
+  const observations = trusted.statements.filter((observation) =>
+    considered.has(describeProtocolObject(observation.statement).digest)
+  );
+  if (observations.length !== considered.size) {
+    throw new TypeError('Repository Decision authorization lost trusted Statement issuer facts');
+  }
   const authorization = immutableSnapshot<RepositoryDecisionAuthorization>({
     projectId: input.projectId,
     refName: input.refName,
@@ -136,6 +145,7 @@ export async function authorizeDecisionForRepository(
       completeness: trusted.observationScope.completeness,
       sources: [...trusted.observationScope.sources].sort(),
     },
+    observations,
     objects,
   });
   issuedAuthorizations.add(authorization);

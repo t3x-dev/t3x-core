@@ -95,7 +95,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(53);
+      expect(schemaVersion?.version).toBe(54);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -145,7 +145,43 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(53);
+      expect(schemaVersion?.version).toBe(54);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('adds trusted Statement issuer facts when upgrading from v53', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        ALTER TABLE transition_decision_authorizations
+          DROP COLUMN IF EXISTS statement_issuers;
+        UPDATE _schema_version
+        SET version = 53, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [column] = await testDb.sql<Array<{ is_nullable: string; column_default: string }>>`
+        SELECT is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'transition_decision_authorizations'
+          AND column_name = 'statement_issuers'
+      `;
+      expect(column?.is_nullable).toBe('NO');
+      expect(column?.column_default).toContain("'[]'::jsonb");
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version
+        FROM _schema_version
+        WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(54);
     } finally {
       await testDb.cleanup();
     }

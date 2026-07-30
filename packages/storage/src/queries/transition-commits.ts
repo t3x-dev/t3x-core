@@ -3,6 +3,7 @@ import {
   type CommitHistoryProjection,
   type CommitV2,
   describeCommitV2,
+  describeTransitionObject,
   isRepositoryDecisionAuthorization,
   type ObjectDescriptor,
   type ObjectResolver,
@@ -11,8 +12,11 @@ import {
   parseSerializedTransitionObject,
   projectCommitV2,
   projectLegacyCommit,
+  projectTransitionView,
   type RepositoryDecisionAuthorization,
+  type StatementObservation,
   serializeTransitionObject,
+  type TransitionViewV1,
   verifyCommitV2,
 } from '@t3x-dev/core';
 import { and, desc, eq, isNull } from 'drizzle-orm';
@@ -83,6 +87,15 @@ export class TransitionRefNotFoundError extends Error {
   }
 }
 
+export class TransitionProjectionAuthorizationInvalidError extends Error {
+  readonly code = 'INTEGRITY_CHAIN_INVALID';
+
+  constructor(readonly decisionDigest: string) {
+    super(`Stored authorization facts do not verify for Decision ${decisionDigest}`);
+    this.name = 'TransitionProjectionAuthorizationInvalidError';
+  }
+}
+
 class DatabaseTransitionObjectResolver implements ObjectResolver {
   private readonly encoder = new TextEncoder();
 
@@ -106,6 +119,66 @@ function sameScope(
     left.completeness === right.completeness &&
     left.sources.length === right.sources.length &&
     left.sources.every((source, index) => source === right.sources[index])
+  );
+}
+
+type StoredStatementIssuer = {
+  statement: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  actor: RepositoryDecisionAuthorization['evaluation']['actor'];
+};
+
+function sameActor(
+  left: RepositoryDecisionAuthorization['evaluation']['actor'],
+  right: RepositoryDecisionAuthorization['evaluation']['actor']
+): boolean {
+  return left.kind === right.kind && left.id === right.id;
+}
+
+function isStoredStatementIssuerValid(issuer: StoredStatementIssuer): boolean {
+  return (
+    issuer.statement.kind === 'statement' &&
+    issuer.statement.schema === 't3x/statement/v1' &&
+    issuer.statement.digest.length > 0 &&
+    ['agent', 'human', 'service'].includes(issuer.actor.kind) &&
+    issuer.actor.id.length > 0
+  );
+}
+
+function sameDescriptor(
+  left: { kind: string; schema: string; digest: string },
+  right: { kind: string; schema: string; digest: string }
+): boolean {
+  return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
+}
+
+function statementIssuers(authorization: RepositoryDecisionAuthorization): StoredStatementIssuer[] {
+  return authorization.observations
+    .map((observation) => ({
+      statement: describeTransitionObject(
+        observation.statement
+      ) as StoredStatementIssuer['statement'],
+      actor: { ...observation.issuerContext.actor },
+    }))
+    .sort((left, right) =>
+      left.statement.digest < right.statement.digest
+        ? -1
+        : left.statement.digest > right.statement.digest
+          ? 1
+          : 0
+    );
+}
+
+function sameStatementIssuers(
+  left: readonly StoredStatementIssuer[],
+  right: readonly StoredStatementIssuer[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        sameDescriptor(entry.statement, right[index]!.statement) &&
+        sameActor(entry.actor, right[index]!.actor)
+    )
   );
 }
 
@@ -166,6 +239,7 @@ export async function recordRepositoryDecisionAuthorization(
     completeness: authorization.observationScope.completeness,
     sources: [...authorization.observationScope.sources],
   };
+  const issuers = statementIssuers(authorization);
   const run = async (tx: AnyDB) => {
     await persistTransitionObjects(tx, authorization.objects);
     await tx
@@ -180,6 +254,7 @@ export async function recordRepositoryDecisionAuthorization(
         actorId: authorization.evaluation.actor.id,
         outcome: authorization.evaluation.requestedOutcome,
         observationScope: scope,
+        statementIssuers: issuers,
       })
       .onConflictDoNothing();
     const [stored] = await tx
@@ -200,13 +275,122 @@ export async function recordRepositoryDecisionAuthorization(
       stored.actorKind !== authorization.evaluation.actor.kind ||
       stored.actorId !== authorization.evaluation.actor.id ||
       stored.outcome !== authorization.evaluation.requestedOutcome ||
-      !sameScope(stored.observationScope, scope)
+      !sameScope(stored.observationScope, scope) ||
+      !sameStatementIssuers(stored.statementIssuers, issuers)
     ) {
       throw new DecisionAuthorizationConflictError(decisionDigest);
     }
   };
 
   await (db as unknown as TxRunner).transaction(async (tx) => run(tx as AnyDB));
+}
+
+async function resolveStoredObject(
+  resolver: ObjectResolver,
+  descriptor: ObjectDescriptor
+): Promise<ProtocolObject> {
+  const bytes = await resolver.get(descriptor);
+  if (bytes === undefined) {
+    throw new TypeError(`Transition object ${descriptor.digest} was not found`);
+  }
+  const canonicalJson = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  const object = parseSerializedTransitionObject(canonicalJson);
+  const actual = describeTransitionObject(object);
+  if (!sameDescriptor(actual, descriptor)) {
+    throw new TypeError(`Transition object ${descriptor.digest} failed identity verification`);
+  }
+  return object;
+}
+
+/**
+ * Resolve a committed Transition into the shared, non-authoritative product
+ * projection. Every protocol object and every stored trust fact is verified at
+ * read time; request-shaped actor, issuer, policy, or scope data is never used.
+ */
+export async function getTransitionViewForCommit(
+  db: AnyDB,
+  input: { projectId: string; refName: string; commitId: string }
+): Promise<TransitionViewV1 | null> {
+  const transition = await getTransitionCommit(db, input.projectId, input.commitId);
+  if (transition === null) {
+    const legacy = await getCommit(db, input.commitId);
+    return legacy?.project_id === input.projectId && legacy.branch === input.refName
+      ? projectTransitionView({ mode: 'legacy', commit: legacy })
+      : null;
+  }
+
+  const resolver = new DatabaseTransitionObjectResolver(db);
+  const verified = await verifyCommitV2(transition.commit, resolver);
+  const decisionDigest = transition.commit.decision.digest;
+  const [authorization] = await db
+    .select()
+    .from(transitionDecisionAuthorizations)
+    .where(
+      and(
+        eq(transitionDecisionAuthorizations.projectId, input.projectId),
+        eq(transitionDecisionAuthorizations.refName, input.refName),
+        eq(transitionDecisionAuthorizations.decisionDigest, decisionDigest)
+      )
+    )
+    .limit(1);
+  if (authorization === undefined) {
+    throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+  }
+
+  const policy = verified.decision.predicate.policy;
+  if (
+    policy.mode !== 'evaluated' ||
+    policy.resource.uri !== authorization.policyUri ||
+    policy.resource.digest !== authorization.policyDigest ||
+    !sameActor(verified.decision.actor, {
+      kind: authorization.actorKind as RepositoryDecisionAuthorization['evaluation']['actor']['kind'],
+      id: authorization.actorId,
+    }) ||
+    verified.decision.predicate.outcome !== authorization.outcome
+  ) {
+    throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+  }
+
+  const issuerByDigest = new Map<string, StoredStatementIssuer>();
+  for (const issuer of authorization.statementIssuers) {
+    if (!isStoredStatementIssuerValid(issuer) || issuerByDigest.has(issuer.statement.digest)) {
+      throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+    }
+    issuerByDigest.set(issuer.statement.digest, issuer);
+  }
+
+  const observations: StatementObservation[] = [];
+  for (const descriptor of verified.decision.predicate.considered) {
+    const issuer = issuerByDigest.get(descriptor.digest);
+    if (issuer === undefined || !sameDescriptor(issuer.statement, descriptor)) {
+      throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+    }
+    const object = await resolveStoredObject(resolver, descriptor);
+    if (object.schema !== 't3x/statement/v1') {
+      throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+    }
+    observations.push({
+      // parseSerializedTransitionObject already validated the closed Statement
+      // envelope. The cast only bridges specialized core predicates to the
+      // generic StatementObservation envelope used by the policy layer.
+      statement: object as StatementObservation['statement'],
+      issuerContext: { actor: { ...issuer.actor } },
+    });
+  }
+  if (issuerByDigest.size !== observations.length) {
+    throw new TransitionProjectionAuthorizationInvalidError(decisionDigest);
+  }
+
+  return projectTransitionView({
+    mode: 'transition',
+    effect: verified.effect,
+    proposal: verified.proposal,
+    observations,
+    observationScope: authorization.observationScope,
+    objectIntegrity: 'verified',
+    decision: verified.decision,
+    commit: { object: transition.commit, recordedAt: transition.recordedAt },
+  });
 }
 
 export interface CreateTransitionCommitInput {
