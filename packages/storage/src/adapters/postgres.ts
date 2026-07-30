@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 54;
+const SCHEMA_VERSION = 55;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1623,6 +1623,88 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     ALTER TABLE transition_decision_authorizations
       ADD COLUMN IF NOT EXISTS statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+
+  // ── Schema v55: append-only trusted Decision audit ledger ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_decision_ledger (
+      decision_digest TEXT PRIMARY KEY REFERENCES transition_objects(digest),
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      policy_uri TEXT NOT NULL,
+      policy_digest TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      observation_scope JSONB NOT NULL,
+      statement_issuers JSONB NOT NULL,
+      recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_decision_ledger_project_ref_recorded
+      ON transition_decision_ledger(project_id, ref_name, recorded_at, decision_digest);
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT decision_digest
+        FROM transition_decision_authorizations
+        GROUP BY decision_digest
+        HAVING COUNT(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate a Decision authorized for multiple repository refs';
+      END IF;
+    END $$;
+
+    INSERT INTO transition_decision_ledger (
+      decision_digest,
+      project_id,
+      ref_name,
+      policy_uri,
+      policy_digest,
+      actor_kind,
+      actor_id,
+      outcome,
+      observation_scope,
+      statement_issuers,
+      recorded_at
+    )
+    SELECT
+      decision_digest,
+      project_id,
+      ref_name,
+      policy_uri,
+      policy_digest,
+      actor_kind,
+      actor_id,
+      outcome,
+      observation_scope,
+      statement_issuers,
+      authorized_at
+    FROM transition_decision_authorizations
+    ON CONFLICT (decision_digest) DO NOTHING;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_decision_authorizations AS source_authorization
+        LEFT JOIN transition_decision_ledger AS ledger
+          ON ledger.decision_digest = source_authorization.decision_digest
+        WHERE ledger.decision_digest IS NULL
+          OR ledger.project_id IS DISTINCT FROM source_authorization.project_id
+          OR ledger.ref_name IS DISTINCT FROM source_authorization.ref_name
+          OR ledger.policy_uri IS DISTINCT FROM source_authorization.policy_uri
+          OR ledger.policy_digest IS DISTINCT FROM source_authorization.policy_digest
+          OR ledger.actor_kind IS DISTINCT FROM source_authorization.actor_kind
+          OR ledger.actor_id IS DISTINCT FROM source_authorization.actor_id
+          OR ledger.outcome IS DISTINCT FROM source_authorization.outcome
+          OR ledger.observation_scope IS DISTINCT FROM source_authorization.observation_scope
+          OR ledger.statement_issuers IS DISTINCT FROM source_authorization.statement_issuers
+          OR ledger.recorded_at IS DISTINCT FROM source_authorization.authorized_at
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate a conflicting existing Decision ledger row';
+      END IF;
+    END $$;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

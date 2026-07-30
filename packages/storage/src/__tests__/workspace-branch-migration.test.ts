@@ -95,7 +95,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(54);
+      expect(schemaVersion?.version).toBe(55);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -111,6 +111,7 @@ describe('workspace and Transition schema migrations', () => {
 
     try {
       await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_decision_ledger;
         DROP TABLE IF EXISTS transition_decision_authorizations;
         DROP TABLE IF EXISTS transition_commits;
         DROP TABLE IF EXISTS transition_objects;
@@ -127,17 +128,20 @@ describe('workspace and Transition schema migrations', () => {
           objects: string | null;
           commits: string | null;
           authorizations: string | null;
+          ledger: string | null;
         }>
       >`
         SELECT
           to_regclass('transition_objects')::text AS objects,
           to_regclass('transition_commits')::text AS commits,
-          to_regclass('transition_decision_authorizations')::text AS authorizations
+          to_regclass('transition_decision_authorizations')::text AS authorizations,
+          to_regclass('transition_decision_ledger')::text AS ledger
       `;
       expect(tables).toEqual({
         objects: 'transition_objects',
         commits: 'transition_commits',
         authorizations: 'transition_decision_authorizations',
+        ledger: 'transition_decision_ledger',
       });
 
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
@@ -145,7 +149,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(54);
+      expect(schemaVersion?.version).toBe(55);
     } finally {
       await testDb.cleanup();
     }
@@ -175,6 +179,172 @@ describe('workspace and Transition schema migrations', () => {
       `;
       expect(column?.is_nullable).toBe('NO');
       expect(column?.column_default).toContain("'[]'::jsonb");
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version
+        FROM _schema_version
+        WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(55);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs the trusted Decision ledger when upgrading from v54', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      const project = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Decision Ledger Migration Test' })
+      );
+      const decisionDigest = `sha256:${'f'.repeat(64)}`;
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_decision_ledger;
+        UPDATE _schema_version
+        SET version = 54, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+      await testDb.sql`
+        INSERT INTO transition_objects (digest, kind, schema, canonical_json)
+        VALUES (${decisionDigest}, 'statement', 't3x/statement/v1', '{}')
+      `;
+      await testDb.sql`
+        INSERT INTO transition_decision_authorizations (
+          project_id,
+          ref_name,
+          decision_digest,
+          policy_uri,
+          policy_digest,
+          actor_kind,
+          actor_id,
+          outcome,
+          observation_scope,
+          statement_issuers
+        ) VALUES (
+          ${project.projectId},
+          'main',
+          ${decisionDigest},
+          't3x://project/policies/default',
+          ${`sha256:${'e'.repeat(64)}`},
+          'human',
+          'human:migration',
+          'accepted',
+          jsonb_build_object('completeness', 'complete', 'sources', jsonb_build_array('store')),
+          '[]'::jsonb
+        )
+      `;
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [table] = await testDb.sql<Array<{ ledger: string | null }>>`
+        SELECT to_regclass('transition_decision_ledger')::text AS ledger
+      `;
+      expect(table?.ledger).toBe('transition_decision_ledger');
+      const [ledger] = await testDb.sql<
+        Array<{ decision_digest: string; project_id: string; ref_name: string }>
+      >`
+        SELECT decision_digest, project_id, ref_name
+        FROM transition_decision_ledger
+        WHERE decision_digest = ${decisionDigest}
+      `;
+      expect(ledger).toEqual({
+        decision_digest: decisionDigest,
+        project_id: project.projectId,
+        ref_name: 'main',
+      });
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version
+        FROM _schema_version
+        WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(55);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('fails a v54 retry when an existing Decision ledger row conflicts with authority', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      const authorizedProject = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Authorized Decision Project' })
+      );
+      const conflictingProject = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Conflicting Decision Project' })
+      );
+      const decisionDigest = `sha256:${'d'.repeat(64)}`;
+      const policyDigest = `sha256:${'c'.repeat(64)}`;
+      await testDb.sql`
+        INSERT INTO transition_objects (digest, kind, schema, canonical_json)
+        VALUES (${decisionDigest}, 'statement', 't3x/statement/v1', '{}')
+      `;
+      await testDb.sql`
+        INSERT INTO transition_decision_authorizations (
+          project_id,
+          ref_name,
+          decision_digest,
+          policy_uri,
+          policy_digest,
+          actor_kind,
+          actor_id,
+          outcome,
+          observation_scope,
+          statement_issuers
+        ) VALUES (
+          ${authorizedProject.projectId},
+          'main',
+          ${decisionDigest},
+          't3x://project/policies/default',
+          ${policyDigest},
+          'human',
+          'human:migration',
+          'accepted',
+          jsonb_build_object('completeness', 'complete', 'sources', jsonb_build_array('store')),
+          '[]'::jsonb
+        )
+      `;
+      await testDb.sql`
+        INSERT INTO transition_decision_ledger (
+          decision_digest,
+          project_id,
+          ref_name,
+          policy_uri,
+          policy_digest,
+          actor_kind,
+          actor_id,
+          outcome,
+          observation_scope,
+          statement_issuers
+        ) VALUES (
+          ${decisionDigest},
+          ${conflictingProject.projectId},
+          'other',
+          't3x://project/policies/default',
+          ${policyDigest},
+          'human',
+          'human:migration',
+          'accepted',
+          jsonb_build_object('completeness', 'complete', 'sources', jsonb_build_array('store')),
+          '[]'::jsonb
+        )
+      `;
+      await testDb.sql`
+        UPDATE _schema_version
+        SET version = 54, applied_at = NOW()
+        WHERE singleton = TRUE
+      `;
+
+      await closePostgresStorage();
+      await expect(
+        createPostgresStorage({ connectionString: testDb.connectionString })
+      ).rejects.toThrow('Cannot migrate a conflicting existing Decision ledger row');
 
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version

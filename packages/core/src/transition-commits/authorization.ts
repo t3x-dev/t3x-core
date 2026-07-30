@@ -52,7 +52,7 @@ export interface AuthorizeRepositoryDecisionInput {
   authority: RepositoryDecisionAuthority;
 }
 
-export interface RepositoryDecisionAuthorization {
+export interface RepositoryDecisionRecord {
   readonly projectId: string;
   readonly refName: string;
   readonly decision: DecisionStatement;
@@ -63,12 +63,20 @@ export interface RepositoryDecisionAuthorization {
   readonly objects: readonly ProtocolObject[];
 }
 
+/**
+ * Separate capability for advancing CommitV2 history. Every trusted Decision
+ * is recordable, but rejected Decisions never receive this capability.
+ */
+export interface RepositoryDecisionAuthorization extends RepositoryDecisionRecord {}
+
 export type RepositoryDecisionAuthorizationResult =
   | Extract<DecisionCreationResult, { ok: false }>
   | (Extract<DecisionCreationResult, { ok: true }> & {
+      record: RepositoryDecisionRecord;
       authorization: RepositoryDecisionAuthorization | null;
     });
 
+const issuedRecords = new WeakSet<object>();
 const issuedAuthorizations = new WeakSet<object>();
 
 function freezeRecursively<T>(value: T): T {
@@ -87,6 +95,10 @@ export function isRepositoryDecisionAuthorization(
   value: unknown
 ): value is RepositoryDecisionAuthorization {
   return typeof value === 'object' && value !== null && issuedAuthorizations.has(value);
+}
+
+export function isRepositoryDecisionRecord(value: unknown): value is RepositoryDecisionRecord {
+  return typeof value === 'object' && value !== null && issuedRecords.has(value);
 }
 
 /**
@@ -119,16 +131,6 @@ export async function authorizeDecisionForRepository(
     decidedAt: input.decidedAt,
   });
   if (!created.ok) return created;
-  if (created.decision.predicate.outcome === 'rejected') {
-    return { ...created, authorization: null };
-  }
-
-  const objects = [
-    input.effect,
-    input.proposal,
-    ...trusted.statements.map((observation) => observation.statement),
-    created.decision,
-  ];
   const considered = new Set(created.evaluation.considered.map((statement) => statement.digest));
   const observations = trusted.statements.filter((observation) =>
     considered.has(describeProtocolObject(observation.statement).digest)
@@ -136,7 +138,13 @@ export async function authorizeDecisionForRepository(
   if (observations.length !== considered.size) {
     throw new TypeError('Repository Decision authorization lost trusted Statement issuer facts');
   }
-  const authorization = immutableSnapshot<RepositoryDecisionAuthorization>({
+  const objects = [
+    input.effect,
+    input.proposal,
+    ...observations.map((observation) => observation.statement),
+    created.decision,
+  ];
+  const record = immutableSnapshot<RepositoryDecisionRecord>({
     projectId: input.projectId,
     refName: input.refName,
     decision: created.decision,
@@ -148,13 +156,19 @@ export async function authorizeDecisionForRepository(
     observations,
     objects,
   });
-  issuedAuthorizations.add(authorization);
+  issuedRecords.add(record);
 
   if (
-    describeProtocolObject(authorization.decision).digest !==
+    describeProtocolObject(record.decision).digest !==
     describeProtocolObject(created.decision).digest
   ) {
-    throw new TypeError('Repository Decision authorization lost Decision identity');
+    throw new TypeError('Repository Decision record lost Decision identity');
   }
-  return { ...created, authorization };
+  if (created.decision.predicate.outcome === 'rejected') {
+    return { ...created, record, authorization: null };
+  }
+
+  const authorization = record as RepositoryDecisionAuthorization;
+  issuedAuthorizations.add(authorization);
+  return { ...created, record, authorization };
 }

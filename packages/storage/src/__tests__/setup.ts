@@ -131,6 +131,22 @@ CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
 CREATE INDEX IF NOT EXISTS idx_transition_decision_authorizations_decision
   ON transition_decision_authorizations(decision_digest);
 
+CREATE TABLE IF NOT EXISTS transition_decision_ledger (
+  decision_digest TEXT PRIMARY KEY REFERENCES transition_objects(digest),
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  ref_name TEXT NOT NULL,
+  policy_uri TEXT NOT NULL,
+  policy_digest TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  observation_scope JSONB NOT NULL,
+  statement_issuers JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_transition_decision_ledger_project_ref_recorded
+  ON transition_decision_ledger(project_id, ref_name, recorded_at, decision_digest);
+
 -- Agent Drafts (formerly drafts_v2)
 CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,

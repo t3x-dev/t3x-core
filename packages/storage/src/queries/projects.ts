@@ -244,7 +244,9 @@ export async function restoreProject(db: AnyDB, projectId: string): Promise<Proj
 }
 
 /**
- * Permanently delete a project (hard delete with cascade)
+ * Permanently delete a project and all project-scoped data through cascades,
+ * including the trusted Decision audit ledger. Normal soft deletion preserves
+ * that audit history and remains restorable.
  */
 export async function permanentDeleteProject(db: AnyDB, projectId: string): Promise<boolean> {
   const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();

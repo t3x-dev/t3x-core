@@ -5,6 +5,7 @@ import {
   describeCommitV2,
   describeTransitionObject,
   isRepositoryDecisionAuthorization,
+  isRepositoryDecisionRecord,
   type ObjectDescriptor,
   type ObjectResolver,
   overlayTransitionObjects,
@@ -14,10 +15,13 @@ import {
   projectLegacyCommit,
   projectTransitionView,
   type RepositoryDecisionAuthorization,
+  type RepositoryDecisionRecord,
   type StatementObservation,
   serializeTransitionObject,
   type TransitionViewV1,
+  type VerifiedDecisionGraph,
   verifyCommitV2,
+  verifyDecisionGraph,
 } from '@t3x-dev/core';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
@@ -25,6 +29,7 @@ import { branches } from '../schema';
 import {
   transitionCommits,
   transitionDecisionAuthorizations,
+  transitionDecisionLedger,
   transitionObjects,
 } from '../schema-transition-commits';
 import { getCommit, listCommits } from './commits';
@@ -46,6 +51,24 @@ export class DecisionAuthorizationConflictError extends Error {
   constructor(readonly decisionDigest: string) {
     super(`Decision ${decisionDigest} already has different repository authorization facts`);
     this.name = 'DecisionAuthorizationConflictError';
+  }
+}
+
+export class DecisionRecordConflictError extends Error {
+  readonly code = 'DECISION_RECORD_CONFLICT';
+
+  constructor(readonly decisionDigest: string) {
+    super(`Decision ${decisionDigest} already has different repository audit facts`);
+    this.name = 'DecisionRecordConflictError';
+  }
+}
+
+export class DecisionRecordIntegrityError extends Error {
+  readonly code = 'INTEGRITY_CHAIN_INVALID';
+
+  constructor(readonly decisionDigest: string) {
+    super(`Stored audit facts do not verify for Decision ${decisionDigest}`);
+    this.name = 'DecisionRecordIntegrityError';
   }
 }
 
@@ -127,6 +150,31 @@ type StoredStatementIssuer = {
   actor: RepositoryDecisionAuthorization['evaluation']['actor'];
 };
 
+type StoredDecisionFacts = {
+  projectId: string;
+  refName: string;
+  decisionDigest: string;
+  policyUri: string;
+  policyDigest: string;
+  actorKind: string;
+  actorId: string;
+  outcome: string;
+  observationScope: { completeness: 'complete' | 'partial'; sources: string[] };
+  statementIssuers: StoredStatementIssuer[];
+};
+
+export interface RepositoryDecisionAuditEntry extends VerifiedDecisionGraph {
+  projectId: string;
+  refName: string;
+  decisionDigest: string;
+  policyResource: { uri: string; digest: string };
+  actor: RepositoryDecisionRecord['evaluation']['actor'];
+  outcome: RepositoryDecisionRecord['evaluation']['requestedOutcome'];
+  observationScope: RepositoryDecisionRecord['observationScope'];
+  observations: readonly StatementObservation[];
+  recordedAt: string;
+}
+
 function sameActor(
   left: RepositoryDecisionAuthorization['evaluation']['actor'],
   right: RepositoryDecisionAuthorization['evaluation']['actor']
@@ -151,8 +199,8 @@ function sameDescriptor(
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
 }
 
-function statementIssuers(authorization: RepositoryDecisionAuthorization): StoredStatementIssuer[] {
-  return authorization.observations
+function statementIssuers(record: RepositoryDecisionRecord): StoredStatementIssuer[] {
+  return record.observations
     .map((observation) => ({
       statement: describeTransitionObject(
         observation.statement
@@ -179,6 +227,50 @@ function sameStatementIssuers(
         sameDescriptor(entry.statement, right[index]!.statement) &&
         sameActor(entry.actor, right[index]!.actor)
     )
+  );
+}
+
+function decisionFacts(record: RepositoryDecisionRecord): StoredDecisionFacts {
+  const decisionDigest = serializeTransitionObject(record.decision).descriptor.digest;
+  return {
+    projectId: record.projectId,
+    refName: record.refName,
+    decisionDigest,
+    policyUri: record.evaluation.policy.uri,
+    policyDigest: record.evaluation.policy.digest,
+    actorKind: record.evaluation.actor.kind,
+    actorId: record.evaluation.actor.id,
+    outcome: record.evaluation.requestedOutcome,
+    observationScope: {
+      completeness: record.observationScope.completeness,
+      sources: [...record.observationScope.sources],
+    },
+    statementIssuers: statementIssuers(record),
+  };
+}
+
+function sameDecisionFacts(left: StoredDecisionFacts, right: StoredDecisionFacts): boolean {
+  return (
+    left.projectId === right.projectId &&
+    left.refName === right.refName &&
+    left.decisionDigest === right.decisionDigest &&
+    left.policyUri === right.policyUri &&
+    left.policyDigest === right.policyDigest &&
+    left.actorKind === right.actorKind &&
+    left.actorId === right.actorId &&
+    left.outcome === right.outcome &&
+    sameScope(left.observationScope, right.observationScope) &&
+    sameStatementIssuers(left.statementIssuers, right.statementIssuers)
+  );
+}
+
+function isStoredScopeValid(scope: StoredDecisionFacts['observationScope']): boolean {
+  return (
+    ['complete', 'partial'].includes(scope.completeness) &&
+    scope.sources.length > 0 &&
+    scope.sources.every((source) => source.length > 0) &&
+    new Set(scope.sources).size === scope.sources.length &&
+    scope.sources.every((source, index) => index === 0 || scope.sources[index - 1]! < source)
   );
 }
 
@@ -226,35 +318,68 @@ async function persistTransitionObjects(
   }
 }
 
-/** Persist a trusted process-local issuance capability as an append-only server fact. */
+async function recordDecisionLedger(tx: AnyDB, record: RepositoryDecisionRecord): Promise<void> {
+  const facts = decisionFacts(record);
+  await persistTransitionObjects(tx, record.objects);
+  await tx.insert(transitionDecisionLedger).values(facts).onConflictDoNothing();
+  const [stored] = await tx
+    .select()
+    .from(transitionDecisionLedger)
+    .where(eq(transitionDecisionLedger.decisionDigest, facts.decisionDigest))
+    .limit(1);
+  if (stored === undefined || !sameDecisionFacts(stored, facts)) {
+    throw new DecisionRecordConflictError(facts.decisionDigest);
+  }
+}
+
+/**
+ * Append a trusted Decision outcome to repository audit history without
+ * granting CommitV2 authority. Exact repeats are idempotent; attempts to
+ * mutate or rebind the Decision digest fail closed.
+ */
+export async function recordRepositoryDecision(
+  db: AnyDB,
+  record: RepositoryDecisionRecord
+): Promise<void> {
+  if (!isRepositoryDecisionRecord(record)) {
+    throw new TypeError('Repository Decision record was not issued by the trusted service');
+  }
+  await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    await recordDecisionLedger(rawTx as AnyDB, record);
+  });
+}
+
+/**
+ * Persist an accepted/overridden Decision and its separate CommitV2 authority
+ * atomically. A ledger row alone is never sufficient authorization.
+ */
 export async function recordRepositoryDecisionAuthorization(
   db: AnyDB,
   authorization: RepositoryDecisionAuthorization
 ): Promise<void> {
-  if (!isRepositoryDecisionAuthorization(authorization)) {
+  if (
+    !isRepositoryDecisionRecord(authorization) ||
+    !isRepositoryDecisionAuthorization(authorization)
+  ) {
     throw new TypeError('Repository Decision authorization was not issued by the trusted service');
   }
-  const decisionDigest = serializeTransitionObject(authorization.decision).descriptor.digest;
-  const scope = {
-    completeness: authorization.observationScope.completeness,
-    sources: [...authorization.observationScope.sources],
-  };
-  const issuers = statementIssuers(authorization);
-  const run = async (tx: AnyDB) => {
-    await persistTransitionObjects(tx, authorization.objects);
+  const facts = decisionFacts(authorization);
+  await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    await recordDecisionLedger(tx, authorization);
     await tx
       .insert(transitionDecisionAuthorizations)
       .values({
-        projectId: authorization.projectId,
-        refName: authorization.refName,
-        decisionDigest,
-        policyUri: authorization.evaluation.policy.uri,
-        policyDigest: authorization.evaluation.policy.digest,
-        actorKind: authorization.evaluation.actor.kind,
-        actorId: authorization.evaluation.actor.id,
-        outcome: authorization.evaluation.requestedOutcome,
-        observationScope: scope,
-        statementIssuers: issuers,
+        projectId: facts.projectId,
+        refName: facts.refName,
+        decisionDigest: facts.decisionDigest,
+        policyUri: facts.policyUri,
+        policyDigest: facts.policyDigest,
+        actorKind: facts.actorKind,
+        actorId: facts.actorId,
+        outcome: facts.outcome,
+        observationScope: facts.observationScope,
+        statementIssuers: facts.statementIssuers,
       })
       .onConflictDoNothing();
     const [stored] = await tx
@@ -262,27 +387,16 @@ export async function recordRepositoryDecisionAuthorization(
       .from(transitionDecisionAuthorizations)
       .where(
         and(
-          eq(transitionDecisionAuthorizations.projectId, authorization.projectId),
-          eq(transitionDecisionAuthorizations.refName, authorization.refName),
-          eq(transitionDecisionAuthorizations.decisionDigest, decisionDigest)
+          eq(transitionDecisionAuthorizations.projectId, facts.projectId),
+          eq(transitionDecisionAuthorizations.refName, facts.refName),
+          eq(transitionDecisionAuthorizations.decisionDigest, facts.decisionDigest)
         )
       )
       .limit(1);
-    if (
-      stored === undefined ||
-      stored.policyUri !== authorization.evaluation.policy.uri ||
-      stored.policyDigest !== authorization.evaluation.policy.digest ||
-      stored.actorKind !== authorization.evaluation.actor.kind ||
-      stored.actorId !== authorization.evaluation.actor.id ||
-      stored.outcome !== authorization.evaluation.requestedOutcome ||
-      !sameScope(stored.observationScope, scope) ||
-      !sameStatementIssuers(stored.statementIssuers, issuers)
-    ) {
-      throw new DecisionAuthorizationConflictError(decisionDigest);
+    if (stored === undefined || !sameDecisionFacts(stored, facts)) {
+      throw new DecisionAuthorizationConflictError(facts.decisionDigest);
     }
-  };
-
-  await (db as unknown as TxRunner).transaction(async (tx) => run(tx as AnyDB));
+  });
 }
 
 async function resolveStoredObject(
@@ -300,6 +414,147 @@ async function resolveStoredObject(
     throw new TypeError(`Transition object ${descriptor.digest} failed identity verification`);
   }
   return object;
+}
+
+function isDecisionOutcome(
+  outcome: string
+): outcome is RepositoryDecisionRecord['evaluation']['requestedOutcome'] {
+  return ['accepted', 'overridden', 'rejected'].includes(outcome);
+}
+
+async function resolveDecisionAuditRow(
+  db: AnyDB,
+  row: typeof transitionDecisionLedger.$inferSelect
+): Promise<RepositoryDecisionAuditEntry> {
+  const decisionDigest = row.decisionDigest;
+  if (
+    !/^sha256:[0-9a-f]{64}$/.test(decisionDigest) ||
+    row.projectId.length === 0 ||
+    row.refName.length === 0 ||
+    row.policyUri.length === 0 ||
+    row.policyDigest.length === 0 ||
+    row.actorId.length === 0 ||
+    !['agent', 'human', 'service'].includes(row.actorKind) ||
+    !isDecisionOutcome(row.outcome) ||
+    !isStoredScopeValid(row.observationScope)
+  ) {
+    throw new DecisionRecordIntegrityError(decisionDigest);
+  }
+
+  const resolver = new DatabaseTransitionObjectResolver(db);
+  const decisionObject = await resolveStoredObject(resolver, {
+    kind: 'statement',
+    schema: 't3x/statement/v1',
+    digest: decisionDigest as ObjectDescriptor['digest'],
+  });
+  if (decisionObject.schema !== 't3x/statement/v1') {
+    throw new DecisionRecordIntegrityError(decisionDigest);
+  }
+  const graph = await verifyDecisionGraph(
+    decisionObject as RepositoryDecisionRecord['decision'],
+    resolver
+  );
+  const policy = graph.decision.predicate.policy;
+  if (
+    policy.mode !== 'evaluated' ||
+    policy.resource.uri !== row.policyUri ||
+    policy.resource.digest !== row.policyDigest ||
+    !sameActor(graph.decision.actor, {
+      kind: row.actorKind as RepositoryDecisionRecord['evaluation']['actor']['kind'],
+      id: row.actorId,
+    }) ||
+    graph.decision.predicate.outcome !== row.outcome
+  ) {
+    throw new DecisionRecordIntegrityError(decisionDigest);
+  }
+
+  const issuerByDigest = new Map<string, StoredStatementIssuer>();
+  for (const issuer of row.statementIssuers) {
+    if (!isStoredStatementIssuerValid(issuer) || issuerByDigest.has(issuer.statement.digest)) {
+      throw new DecisionRecordIntegrityError(decisionDigest);
+    }
+    issuerByDigest.set(issuer.statement.digest, issuer);
+  }
+
+  const observations: StatementObservation[] = [];
+  for (const descriptor of graph.decision.predicate.considered) {
+    const issuer = issuerByDigest.get(descriptor.digest);
+    if (issuer === undefined || !sameDescriptor(issuer.statement, descriptor)) {
+      throw new DecisionRecordIntegrityError(decisionDigest);
+    }
+    const object = await resolveStoredObject(resolver, descriptor);
+    if (object.schema !== 't3x/statement/v1') {
+      throw new DecisionRecordIntegrityError(decisionDigest);
+    }
+    observations.push({
+      statement: object as StatementObservation['statement'],
+      issuerContext: { actor: { ...issuer.actor } },
+    });
+  }
+  if (issuerByDigest.size !== observations.length) {
+    throw new DecisionRecordIntegrityError(decisionDigest);
+  }
+
+  return {
+    ...graph,
+    projectId: row.projectId,
+    refName: row.refName,
+    decisionDigest,
+    policyResource: { uri: row.policyUri, digest: row.policyDigest },
+    actor: {
+      kind: row.actorKind as RepositoryDecisionRecord['evaluation']['actor']['kind'],
+      id: row.actorId,
+    },
+    outcome: row.outcome,
+    observationScope: {
+      completeness: row.observationScope.completeness,
+      sources: [...row.observationScope.sources],
+    },
+    observations,
+    recordedAt: row.recordedAt.toISOString(),
+  };
+}
+
+export async function getRepositoryDecisionAudit(
+  db: AnyDB,
+  input: { projectId: string; refName: string; decisionDigest: string }
+): Promise<RepositoryDecisionAuditEntry | null> {
+  const [row] = await db
+    .select()
+    .from(transitionDecisionLedger)
+    .where(
+      and(
+        eq(transitionDecisionLedger.projectId, input.projectId),
+        eq(transitionDecisionLedger.refName, input.refName),
+        eq(transitionDecisionLedger.decisionDigest, input.decisionDigest)
+      )
+    )
+    .limit(1);
+  return row === undefined ? null : resolveDecisionAuditRow(db, row);
+}
+
+export async function listRepositoryDecisionAudit(
+  db: AnyDB,
+  input: { projectId: string; refName: string; limit?: number; offset?: number }
+): Promise<RepositoryDecisionAuditEntry[]> {
+  const limit = Math.max(1, Math.min(input.limit ?? 100, 100));
+  const offset = Math.max(0, input.offset ?? 0);
+  const rows = await db
+    .select()
+    .from(transitionDecisionLedger)
+    .where(
+      and(
+        eq(transitionDecisionLedger.projectId, input.projectId),
+        eq(transitionDecisionLedger.refName, input.refName)
+      )
+    )
+    .orderBy(
+      desc(transitionDecisionLedger.recordedAt),
+      desc(transitionDecisionLedger.decisionDigest)
+    )
+    .limit(limit)
+    .offset(offset);
+  return Promise.all(rows.map((row) => resolveDecisionAuditRow(db, row)));
 }
 
 /**

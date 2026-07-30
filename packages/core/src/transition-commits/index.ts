@@ -2,9 +2,11 @@ export {
   type AuthorizeRepositoryDecisionInput,
   authorizeDecisionForRepository,
   isRepositoryDecisionAuthorization,
+  isRepositoryDecisionRecord,
   type RepositoryDecisionAuthority,
   type RepositoryDecisionAuthorization,
   type RepositoryDecisionAuthorizationResult,
+  type RepositoryDecisionRecord,
   type TrustedDecisionFacts,
 } from './authorization';
 export {
@@ -26,7 +28,9 @@ export {
   type SerializedTransitionObject,
   type State,
   serializeTransitionObject,
+  type VerifiedDecisionGraph,
   verifyCommitV2,
+  verifyDecisionGraph,
 } from './commit';
 export {
   type CommitHistoryProjection,
