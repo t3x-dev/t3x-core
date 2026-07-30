@@ -27,6 +27,7 @@
     "test:webui": "turbo run test --filter=t3x-webui",
     "test:webui:no-deps": "pnpm --filter t3x-webui exec vitest run",
     "test:runner": "turbo run test --filter=@t3x-dev/runner",
+    "test:transition-conformance": "python3 tools/transition-conformance-python/run.py --repo-root .",
     "test:yops": "turbo run test --filter=@t3x-dev/yops",
     "screenshots:demo": "node tools/screenshot-demo.mjs",
     "typecheck": "turbo run typecheck",
