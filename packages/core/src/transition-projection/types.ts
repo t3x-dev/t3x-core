@@ -48,6 +48,7 @@ export interface TransitionChecksView {
   observationScope: AssuranceReport['observationScope'];
   replay: AssuranceReport['replay'];
   validation: AssuranceReport['validation'];
+  runner: AssuranceReport['runner'];
   humanConfirmation: AssuranceReport['humanConfirmation'];
 }
 

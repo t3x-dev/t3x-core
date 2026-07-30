@@ -23,6 +23,7 @@ import {
 import {
   buildHumanConfirmationStatement,
   buildReplayVerificationStatement,
+  buildRunnerValidationStatement,
   buildYSchemaValidationStatement,
 } from '../../transition-statements/builders';
 import { projectTransitionView } from '../project';
@@ -137,6 +138,55 @@ function validation(result: State, outcome: 'failed' | 'passed' = 'passed') {
               },
             ],
             fixes: [],
+          },
+  });
+}
+
+function runner(result: State, outcome: 'failed' | 'passed' = 'passed') {
+  const common = {
+    tool: { name: 'esphome', version: '2025.6' },
+    run: { id: `run:esphome:${outcome}`, recordedAt: '2026-07-29T01:00:02.000Z' },
+    workflow: {
+      uri: 'urn:t3x:test:workflow:esphome-config',
+      mediaType: 'application/vnd.t3x.runner-workflow+json',
+      digest: `sha256:${'1'.repeat(64)}` as const,
+    },
+    environment: {
+      uri: `oci://ghcr.io/esphome/esphome@sha256:${'2'.repeat(64)}`,
+      mediaType: 'application/vnd.t3x.runner-environment+json',
+      digest: `sha256:${'2'.repeat(64)}` as const,
+    },
+    inputManifest: {
+      uri: 'urn:t3x:test:manifest:esphome',
+      mediaType: 'application/vnd.t3x.esphome-source-input-manifest+json',
+      digest: `sha256:${'3'.repeat(64)}` as const,
+    },
+    inputArtifacts: [],
+    logs: [],
+    outputs: [],
+  };
+  return buildRunnerValidationStatement({
+    state: result,
+    actor: { kind: 'service', id: 'validator:external-runner' },
+    predicate:
+      outcome === 'passed'
+        ? {
+            ...common,
+            outcome: 'passed',
+            summary: 'ESPHome configuration passed.',
+            findings: [],
+          }
+        : {
+            ...common,
+            outcome: 'failed',
+            summary: 'ESPHome configuration failed.',
+            findings: [
+              {
+                severity: 'error',
+                code: 'CONFIG_INVALID',
+                message: 'The configuration is invalid.',
+              },
+            ],
           },
   });
 }
@@ -322,6 +372,23 @@ describe('TransitionViewV1 product projection', () => {
     });
   });
 
+  it('projects runner evidence as a separate check without persisting workflow status', () => {
+    const subject = graph();
+    const input = baseInput(subject, [
+      observe(replay(subject.effect)),
+      observe(validation(subject.result)),
+      observe(runner(subject.result)),
+    ]);
+    const view = modern(projectTransitionView(input));
+
+    expect(view.checks.runner).toMatchObject({
+      observation: 'observed',
+      outcomes: ['passed'],
+      runs: [{ predicate: { tool: { name: 'esphome' } } }],
+    });
+    expect(view).not.toHaveProperty('status');
+  });
+
   it('renders rejection without fabricating Commit history', () => {
     const input = baseInput();
     const decision = decide(input, 'rejected');
@@ -471,6 +538,15 @@ describe('TransitionViewV1 product projection', () => {
     );
     expect(() => projectTransitionView(baseInput(first, [observe(first.proposal)]))).toThrow(
       'dedicated graph positions'
+    );
+
+    const goodRunner = runner(first.result);
+    const wrongRunner = parseStatement({
+      ...goodRunner,
+      subjects: [describeProtocolObject(first.effect)],
+    });
+    expect(() => projectTransitionView(baseInput(first, [observe(wrongRunner)]))).toThrow(
+      'does not subject this Transition graph'
     );
 
     const complete = baseInput(first);

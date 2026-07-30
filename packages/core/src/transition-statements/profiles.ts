@@ -15,6 +15,13 @@ import { z } from 'zod';
 
 export const REPLAY_VERIFICATION_PREDICATE_TYPE = 't3x.dev/replay-verification/v1' as const;
 export const YSCHEMA_VALIDATION_PREDICATE_TYPE = 't3x.dev/yschema-validation/v1' as const;
+/**
+ * Shared external-validator evidence profile. Another provider may issue this
+ * profile when it can bind the same generic resources and conclusion; claims
+ * that need different semantics require a new versioned predicate type, not a
+ * kernel or plugin-manager change.
+ */
+export const RUNNER_VALIDATION_PREDICATE_TYPE = 't3x.dev/runner-validation/v1' as const;
 export const HUMAN_CONFIRMATION_PREDICATE_TYPE = 't3x.dev/human-confirmation/v1' as const;
 
 export const YSCHEMA_PROFILE_ID = 't3x.dev/yschema/native' as const;
@@ -80,6 +87,22 @@ const resourceBindingSchema = z.discriminatedUnion('mode', [
     })
     .strict(),
 ]);
+
+function canonicalSet(values: readonly unknown[], context: z.RefinementCtx): void {
+  const keys = values.map((value) => canonicalizeProtocolValue(value as ProtocolValue));
+  const sorted = [...keys].sort();
+  if (new Set(keys).size !== keys.length || keys.some((key, index) => key !== sorted[index])) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Values must be unique and canonically ordered',
+    });
+  }
+}
+
+const resourceDescriptorSetSchema = z
+  .array(resourceDescriptorSchema)
+  .max(64)
+  .superRefine(canonicalSet);
 
 const protocolValueSchema = z.custom<ProtocolValue>((value) => {
   try {
@@ -276,6 +299,67 @@ export const yschemaValidationPredicateSchema = z.union([
   yschemaUnsupportedSchema,
 ]);
 
+const runnerFindingSchema = z
+  .object({
+    severity: z.enum(['error', 'warning', 'info']),
+    code: nonEmptyString.max(256),
+    message: nonEmptyString.max(4_096),
+    path: nonEmptyString.max(1_024).optional(),
+    line: z.number().int().positive().optional(),
+    column: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const runnerMetadataShape = {
+  tool: toolBindingSchema,
+  run: runBindingSchema,
+  workflow: resourceDescriptorSchema,
+  environment: resourceDescriptorSchema,
+  inputManifest: resourceDescriptorSchema,
+  inputArtifacts: resourceDescriptorSetSchema,
+  logs: resourceDescriptorSetSchema,
+  outputs: resourceDescriptorSetSchema,
+  summary: nonEmptyString.max(4_096),
+  findings: z.array(runnerFindingSchema).max(1_000),
+};
+
+const runnerPassedSchema = z
+  .object({
+    ...runnerMetadataShape,
+    outcome: z.literal('passed'),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.findings.some((finding) => finding.severity === 'error')) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A passed runner conclusion cannot contain error findings',
+        path: ['findings'],
+      });
+    }
+  });
+
+const runnerFailedSchema = z
+  .object({
+    ...runnerMetadataShape,
+    outcome: z.literal('failed'),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.findings.some((finding) => finding.severity === 'error')) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A failed runner conclusion requires an error finding',
+        path: ['findings'],
+      });
+    }
+  });
+
+export const runnerValidationPredicateSchema = z.discriminatedUnion('outcome', [
+  runnerPassedSchema,
+  runnerFailedSchema,
+]);
+
 const CONFIRMABLE_CLAIMS = ['intent', 'rationale', 'evidence'] as const;
 const humanConfirmationPredicateSchema = z
   .object({
@@ -302,6 +386,8 @@ export type ProfileBinding = z.infer<typeof profileBindingSchema>;
 export type ResourceBinding = z.infer<typeof resourceBindingSchema>;
 export type ReplayVerificationPredicate = z.infer<typeof replayVerificationPredicateSchema>;
 export type YSchemaValidationPredicate = z.infer<typeof yschemaValidationPredicateSchema>;
+export type RunnerValidationPredicate = z.infer<typeof runnerValidationPredicateSchema>;
+export type RunnerValidationFinding = z.infer<typeof runnerFindingSchema>;
 export type YSchemaValidationError = z.infer<typeof validationErrorSchema>;
 export type YSchemaValidationGap = z.infer<typeof validationGapSchema>;
 export type YSchemaFixProposal = z.infer<typeof fixProposalSchema>;
@@ -315,6 +401,11 @@ export type ReplayVerificationStatement = ExternalStatement<
 export type YSchemaValidationStatement = ExternalStatement<
   typeof YSCHEMA_VALIDATION_PREDICATE_TYPE,
   YSchemaValidationPredicate
+> & { subjects: [StateDescriptor] };
+
+export type RunnerValidationStatement = ExternalStatement<
+  typeof RUNNER_VALIDATION_PREDICATE_TYPE,
+  RunnerValidationPredicate
 > & { subjects: [StateDescriptor] };
 
 export type HumanConfirmationStatement = ExternalStatement<
@@ -373,6 +464,19 @@ export function parseYSchemaValidationStatement(value: unknown): YSchemaValidati
     subjects: statement.subjects as [StateDescriptor],
     predicate: parsePredicate(yschemaValidationPredicateSchema, statement.predicate),
   } as YSchemaValidationStatement;
+}
+
+export function parseRunnerValidationStatement(value: unknown): RunnerValidationStatement {
+  const statement = parseStatement(value);
+  if (statement.predicateType !== RUNNER_VALIDATION_PREDICATE_TYPE) {
+    throw new SchemaInvalidError(`Expected ${RUNNER_VALIDATION_PREDICATE_TYPE}`, '$.predicateType');
+  }
+  assertSingleSubject(statement.subjects, 'state');
+  return {
+    ...statement,
+    subjects: statement.subjects as [StateDescriptor],
+    predicate: parsePredicate(runnerValidationPredicateSchema, statement.predicate),
+  } as RunnerValidationStatement;
 }
 
 export function parseHumanConfirmationStatement(value: unknown): HumanConfirmationStatement {

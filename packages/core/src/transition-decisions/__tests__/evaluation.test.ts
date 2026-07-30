@@ -13,9 +13,13 @@ import fixtures from '../../transition-statements/__fixtures__/profiles-v1.json'
 import {
   buildHumanConfirmationStatement,
   buildReplayVerificationStatement,
+  buildRunnerValidationStatement,
   buildYSchemaValidationStatement,
 } from '../../transition-statements/builders';
-import type { YSchemaValidationStatement } from '../../transition-statements/profiles';
+import type {
+  RunnerValidationStatement,
+  YSchemaValidationStatement,
+} from '../../transition-statements/profiles';
 import { createDecisionStatement } from '../decision';
 import {
   deriveDecisionCapabilities,
@@ -159,6 +163,58 @@ function validation(result: State, outcome: 'failed' | 'passed' = 'passed') {
               },
             ],
           },
+  });
+}
+
+function runner(result: State, outcome: 'failed' | 'passed' = 'passed') {
+  const base = fixtures.runner.predicate;
+  return buildRunnerValidationStatement({
+    state: result,
+    actor: fixtures.runner.actor,
+    predicate:
+      outcome === 'passed'
+        ? base
+        : {
+            ...base,
+            run: { ...base.run, id: 'run:esphome:failed' },
+            outcome: 'failed',
+            summary: 'ESPHome configuration failed.',
+            findings: [
+              {
+                severity: 'error',
+                code: 'CONFIG_INVALID',
+                message: 'The logger level is invalid.',
+                path: 'device.yaml',
+                line: 8,
+              },
+            ],
+          },
+  });
+}
+
+function policyWithRunner(input?: {
+  requirement?: 'optional' | 'required';
+  allowFailedRunner?: boolean;
+  allowMissingRunner?: boolean;
+}): AcceptancePolicy {
+  const base = policy();
+  return parseAcceptancePolicy({
+    ...base,
+    checks: {
+      ...base.checks,
+      runner: {
+        requirement: input?.requirement ?? 'required',
+        issuers: { mode: 'any' },
+        tools: { mode: 'any' },
+        workflows: { mode: 'any' },
+        environments: { mode: 'any' },
+      },
+    },
+    override: {
+      ...base.override,
+      allowFailedRunner: input?.allowFailedRunner ?? false,
+      allowMissingRunner: input?.allowMissingRunner ?? false,
+    },
   });
 }
 
@@ -472,6 +528,167 @@ describe('policy evaluation and immutable Decisions', () => {
       statements: [base.statements[0] as StatementObservation],
     });
     expect(optional).toMatchObject({ permitted: true, failures: [] });
+  });
+
+  it('keeps runner policy opt-in and accepts a trusted passed conclusion when required', () => {
+    const base = input();
+    const subject = graph();
+    const unconfigured = evaluateAcceptance({
+      ...base,
+      effect: subject.effect,
+      proposal: subject.proposal,
+      statements: [
+        observe(replay(subject.effect)),
+        observe(validation(subject.result)),
+        observe(runner(subject.result, 'failed')),
+      ],
+    });
+    expect(unconfigured).toMatchObject({ permitted: true, failures: [] });
+    expect(unconfigured.considered).not.toContainEqual(
+      describeProtocolObject(runner(subject.result, 'failed'))
+    );
+
+    const configured = policyWithRunner();
+    const bound = createAcceptancePolicyResource({
+      policy: configured,
+      uri: 't3x://project/policies/runner-required',
+    });
+    const accepted = evaluateAcceptance({
+      ...base,
+      effect: subject.effect,
+      proposal: subject.proposal,
+      policy: bound.policy,
+      policyResource: bound.resource,
+      statements: [
+        observe(replay(subject.effect)),
+        observe(validation(subject.result)),
+        observe(runner(subject.result)),
+      ],
+    });
+    expect(accepted).toMatchObject({ permitted: true, failures: [] });
+  });
+
+  it('distinguishes missing, failed, and conflicting runner evidence without latest-wins', () => {
+    const base = input();
+    const subject = graph();
+    const configured = policyWithRunner({ allowFailedRunner: true, allowMissingRunner: true });
+    const bound = createAcceptancePolicyResource({
+      policy: configured,
+      uri: 't3x://project/policies/runner-override',
+    });
+    const common = {
+      ...base,
+      effect: subject.effect,
+      proposal: subject.proposal,
+      policy: bound.policy,
+      policyResource: bound.resource,
+    };
+    const baselineStatements = [
+      observe(replay(subject.effect)),
+      observe(validation(subject.result)),
+    ];
+
+    const missing = evaluateAcceptance({ ...common, statements: baselineStatements });
+    expect(missing.failures).toEqual([
+      expect.objectContaining({ code: 'RUNNER_REQUIRED', overrideable: true }),
+    ]);
+
+    const failedStatement = runner(subject.result, 'failed');
+    const failed = evaluateAcceptance({
+      ...common,
+      statements: [...baselineStatements, observe(failedStatement)],
+    });
+    expect(failed.failures).toEqual([
+      expect.objectContaining({ code: 'RUNNER_FAILED', overrideable: true }),
+    ]);
+
+    const overridden = evaluateAcceptance({
+      ...common,
+      outcome: 'overridden',
+      rationale: { mode: 'authored', value: 'Accept the reviewed runner failure', evidence: [] },
+      statements: [...baselineStatements, observe(failedStatement)],
+    });
+    expect(overridden).toMatchObject({ permitted: true });
+
+    const futureFailure = {
+      ...failedStatement,
+      predicate: {
+        ...failedStatement.predicate,
+        run: { id: 'run:future', recordedAt: '2099-01-01T00:00:00.000Z' },
+      },
+    } as RunnerValidationStatement;
+    const conflict = evaluateAcceptance({
+      ...common,
+      statements: [observe(runner(subject.result)), ...baselineStatements, observe(futureFailure)],
+    });
+    expect(conflict.failures).toEqual([
+      expect.objectContaining({ code: 'RUNNER_CONFLICT', overrideable: true }),
+    ]);
+  });
+
+  it('matches authenticated runner issuer, tool, workflow, and environment', () => {
+    const base = input();
+    const subject = graph();
+    const trusted = runner(subject.result);
+    const configured = policyWithRunner();
+    const strict = parseAcceptancePolicy({
+      ...configured,
+      checks: {
+        ...configured.checks,
+        runner: {
+          requirement: 'required',
+          issuers: { mode: 'one_of', values: [trusted.actor] },
+          tools: { mode: 'one_of', values: [trusted.predicate.tool] },
+          workflows: { mode: 'one_of', values: [trusted.predicate.workflow] },
+          environments: { mode: 'one_of', values: [trusted.predicate.environment] },
+        },
+      },
+    });
+    const bound = createAcceptancePolicyResource({
+      policy: strict,
+      uri: 't3x://project/policies/runner-strict',
+    });
+    const common = {
+      ...base,
+      effect: subject.effect,
+      proposal: subject.proposal,
+      policy: bound.policy,
+      policyResource: bound.resource,
+      statements: [observe(replay(subject.effect)), observe(validation(subject.result))],
+    };
+
+    expect(
+      evaluateAcceptance({ ...common, statements: [...common.statements, observe(trusted)] })
+        .permitted
+    ).toBe(true);
+
+    const spoofedIssuer = evaluateAcceptance({
+      ...common,
+      statements: [
+        ...common.statements,
+        {
+          statement: trusted,
+          issuerContext: { actor: { kind: 'service', id: 'service:attacker' } },
+        },
+      ],
+    });
+    expect(spoofedIssuer.failures).toEqual([expect.objectContaining({ code: 'RUNNER_REQUIRED' })]);
+
+    const wrongWorkflow = {
+      ...trusted,
+      predicate: {
+        ...trusted.predicate,
+        workflow: {
+          ...trusted.predicate.workflow,
+          digest: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        },
+      },
+    } as RunnerValidationStatement;
+    const rejected = evaluateAcceptance({
+      ...common,
+      statements: [...common.statements, observe(wrongWorkflow)],
+    });
+    expect(rejected.failures).toEqual([expect.objectContaining({ code: 'RUNNER_REQUIRED' })]);
   });
 
   it('requires complete observation for acceptance and override', () => {

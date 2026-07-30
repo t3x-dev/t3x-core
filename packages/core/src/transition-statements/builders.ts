@@ -11,10 +11,14 @@ import {
   type HumanConfirmationStatement,
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
   REPLAY_VERIFICATION_PREDICATE_TYPE,
   type ReplayVerificationPredicate,
   type ReplayVerificationStatement,
+  RUNNER_VALIDATION_PREDICATE_TYPE,
+  type RunnerValidationPredicate,
+  type RunnerValidationStatement,
   YSCHEMA_VALIDATION_PREDICATE_TYPE,
   type YSchemaValidationPredicate,
   type YSchemaValidationStatement,
@@ -44,6 +48,20 @@ export function buildYSchemaValidationStatement(input: {
     subjects: [describeProtocolObject(input.state)],
     actor: input.actor,
     predicateType: YSCHEMA_VALIDATION_PREDICATE_TYPE,
+    predicate: input.predicate,
+  });
+}
+
+export function buildRunnerValidationStatement(input: {
+  state: State;
+  actor: ActorRef;
+  predicate: RunnerValidationPredicate;
+}): RunnerValidationStatement {
+  return parseRunnerValidationStatement({
+    schema: 't3x/statement/v1',
+    subjects: [describeProtocolObject(input.state)],
+    actor: input.actor,
+    predicateType: RUNNER_VALIDATION_PREDICATE_TYPE,
     predicate: input.predicate,
   });
 }

@@ -10,6 +10,7 @@ export {
 export {
   buildHumanConfirmationStatement,
   buildReplayVerificationStatement,
+  buildRunnerValidationStatement,
   buildYSchemaValidationStatement,
 } from './builders';
 export {
@@ -19,14 +20,20 @@ export {
   type ProfileBinding,
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
   REPLAY_VERIFICATION_PREDICATE_TYPE,
   type ReplayVerificationPredicate,
   type ReplayVerificationStatement,
   type ResourceBinding,
   type ResourceDescriptor,
+  RUNNER_VALIDATION_PREDICATE_TYPE,
   type RunBinding,
+  type RunnerValidationFinding,
+  type RunnerValidationPredicate,
+  type RunnerValidationStatement,
   replayVerificationPredicateSchema,
+  runnerValidationPredicateSchema,
   type ToolBinding,
   YSCHEMA_PROFILE_ID,
   YSCHEMA_PROFILE_VERSION,

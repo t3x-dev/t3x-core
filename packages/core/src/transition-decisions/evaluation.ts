@@ -19,8 +19,10 @@ import {
   HUMAN_CONFIRMATION_PREDICATE_TYPE,
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
   REPLAY_VERIFICATION_PREDICATE_TYPE,
+  RUNNER_VALIDATION_PREDICATE_TYPE,
   YSCHEMA_VALIDATION_PREDICATE_TYPE,
 } from '../transition-statements/profiles';
 import {
@@ -38,6 +40,9 @@ export const POLICY_FAILURE_CODES = [
   'OBSERVATION_SCOPE_INCOMPLETE',
   'REPLAY_CLAIM_FALSE',
   'REPLAY_NOT_VERIFIED',
+  'RUNNER_CONFLICT',
+  'RUNNER_FAILED',
+  'RUNNER_REQUIRED',
   'SELF_APPROVAL_FORBIDDEN',
   'UNAUTHORIZED_DECISION',
   'UNAUTHORIZED_OVERRIDE',
@@ -236,6 +241,20 @@ function validationTrustMatches(
   );
 }
 
+function runnerTrustMatches(
+  rule: NonNullable<AcceptancePolicy['checks']['runner']>,
+  statement: ReturnType<typeof parseRunnerValidationStatement>,
+  issuerContext: ActorContext
+): boolean {
+  return (
+    sameActor(statement.actor, issuerContext.actor) &&
+    selectorMatches(rule.issuers, issuerContext.actor) &&
+    selectorMatches(rule.tools, statement.predicate.tool) &&
+    selectorMatches(rule.workflows, statement.predicate.workflow) &&
+    selectorMatches(rule.environments, statement.predicate.environment)
+  );
+}
+
 function sortDescriptors(descriptors: StatementDescriptor[]): StatementDescriptor[] {
   const byDigest = new Map(descriptors.map((descriptor) => [descriptor.digest, descriptor]));
   return [...byDigest.values()].sort((left, right) =>
@@ -272,6 +291,10 @@ function policyFacts(input: EvaluateAcceptanceInput): {
     statement: ReturnType<typeof parseYSchemaValidationStatement>;
     issuerContext: ActorContext;
   }> = [];
+  const runnerStatements: Array<{
+    statement: ReturnType<typeof parseRunnerValidationStatement>;
+    issuerContext: ActorContext;
+  }> = [];
   const confirmations: Array<{
     statement: ReturnType<typeof parseHumanConfirmationStatement>;
     issuerContext: ActorContext;
@@ -290,13 +313,21 @@ function policyFacts(input: EvaluateAcceptanceInput): {
       subject !== undefined &&
       canonicalEqual(subject, effect.result) &&
       statement.predicateType.startsWith('t3x.dev/yschema-validation/');
+    const relevantRunner =
+      policy.checks.runner !== undefined &&
+      statement.subjects.length === 1 &&
+      subject !== undefined &&
+      canonicalEqual(subject, effect.result) &&
+      statement.predicateType.startsWith('t3x.dev/runner-validation/');
     const relevantConfirmation =
       statement.subjects.length === 1 &&
       subject !== undefined &&
       canonicalEqual(subject, proposalDescriptor) &&
       statement.predicateType === HUMAN_CONFIRMATION_PREDICATE_TYPE;
 
-    if (!relevantReplay && !relevantValidation && !relevantConfirmation) continue;
+    if (!relevantReplay && !relevantValidation && !relevantRunner && !relevantConfirmation) {
+      continue;
+    }
     considered.push(describeProtocolObject(statement));
     if (statement.predicateType === REPLAY_VERIFICATION_PREDICATE_TYPE) {
       replayStatements.push({
@@ -306,6 +337,11 @@ function policyFacts(input: EvaluateAcceptanceInput): {
     } else if (statement.predicateType === YSCHEMA_VALIDATION_PREDICATE_TYPE) {
       validationStatements.push({
         statement: parseYSchemaValidationStatement(statement),
+        issuerContext: observation.issuerContext,
+      });
+    } else if (statement.predicateType === RUNNER_VALIDATION_PREDICATE_TYPE) {
+      runnerStatements.push({
+        statement: parseRunnerValidationStatement(statement),
         issuerContext: observation.issuerContext,
       });
     } else if (statement.predicateType === HUMAN_CONFIRMATION_PREDICATE_TYPE) {
@@ -331,6 +367,16 @@ function policyFacts(input: EvaluateAcceptanceInput): {
       observation.issuerContext
     )
   );
+  const acceptableRunner =
+    policy.checks.runner === undefined
+      ? []
+      : runnerStatements.filter((observation) =>
+          runnerTrustMatches(
+            policy.checks.runner as NonNullable<AcceptancePolicy['checks']['runner']>,
+            observation.statement,
+            observation.issuerContext
+          )
+        );
   const acceptableConfirmations = confirmations.filter(
     (observation) =>
       sameActor(observation.statement.actor, observation.issuerContext.actor) &&
@@ -398,6 +444,34 @@ function policyFacts(input: EvaluateAcceptanceInput): {
       message: 'No acceptable passed validation Statement was observed',
       overrideable: policy.override.allowMissingValidation,
     });
+  }
+
+  if (policy.checks.runner !== undefined) {
+    const runnerOutcomes = new Set(
+      acceptableRunner.map((observation) => observation.statement.predicate.outcome)
+    );
+    if (runnerOutcomes.has('passed') && runnerOutcomes.has('failed')) {
+      failures.push({
+        code: 'RUNNER_CONFLICT',
+        path: '$.statements',
+        message: 'Conflicting acceptable runner validation Statements were observed',
+        overrideable: policy.override.allowFailedRunner ?? false,
+      });
+    } else if (runnerOutcomes.has('failed')) {
+      failures.push({
+        code: 'RUNNER_FAILED',
+        path: '$.statements',
+        message: 'An acceptable runner validation Statement reports failure',
+        overrideable: policy.override.allowFailedRunner ?? false,
+      });
+    } else if (policy.checks.runner.requirement === 'required' && !runnerOutcomes.has('passed')) {
+      failures.push({
+        code: 'RUNNER_REQUIRED',
+        path: '$.statements',
+        message: 'No acceptable passed runner validation Statement was observed',
+        overrideable: policy.override.allowMissingRunner ?? false,
+      });
+    }
   }
 
   return {

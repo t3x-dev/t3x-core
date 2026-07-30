@@ -142,6 +142,16 @@ export const acceptancePolicySchema = z
             contexts: resourceBindingSelectorSchema,
           })
           .strict(),
+        runner: z
+          .object({
+            requirement: z.enum(['optional', 'required']),
+            issuers: actorSelectorSchema,
+            tools: toolSelectorSchema,
+            workflows: resourceSelectorSchema,
+            environments: resourceSelectorSchema,
+          })
+          .strict()
+          .optional(),
         humanConfirmation: z
           .object({
             issuers: actorSelectorSchema,
@@ -155,6 +165,8 @@ export const acceptancePolicySchema = z
         allowFailedValidation: z.boolean(),
         allowMissingHumanConfirmation: z.boolean(),
         allowMissingValidation: z.boolean(),
+        allowFailedRunner: z.boolean().optional(),
+        allowMissingRunner: z.boolean().optional(),
       })
       .strict(),
   })
