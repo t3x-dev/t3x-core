@@ -1,5 +1,11 @@
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertProject, listCommitHistory } from '@t3x-dev/storage';
+import {
+  createCommit,
+  getTransitionViewForCommit,
+  insertProject,
+  listCommitHistory,
+  TransitionProjectionAuthorizationInvalidError,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -13,7 +19,11 @@ vi.mock('../lib/db', () => ({
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
-  return { ...actual, listCommitHistory: vi.fn(actual.listCommitHistory) };
+  return {
+    ...actual,
+    getTransitionViewForCommit: vi.fn(actual.getTransitionViewForCommit),
+    listCommitHistory: vi.fn(actual.listCommitHistory),
+  };
 });
 
 import { commitRoutes } from '../routes/commits.openapi';
@@ -174,5 +184,75 @@ describe('mixed commit history route', () => {
     expect(body.success).toBe(true);
     expect(body.data.history.map((entry) => entry.format)).toEqual(['legacy_v1', 'transition_v2']);
     expect(body.data.history[0]).not.toHaveProperty('decision');
+  });
+
+  it('returns the shared server-derived Transition view for a project commit and ref', async () => {
+    const commitId = `sha256:${'e'.repeat(64)}`;
+    vi.mocked(getTransitionViewForCommit).mockResolvedValueOnce({
+      schema: 't3x.dev/transition-view/v1',
+      version: 1,
+      mode: 'legacy',
+      change: { mode: 'legacy_content', commitId, content: { trees: [], relations: [] } },
+      claims: { observation: 'unavailable', reason: 'legacy_v1' },
+      checks: { observation: 'unavailable', reason: 'legacy_v1' },
+      decision: { observation: 'unavailable', reason: 'legacy_v1' },
+      history: {
+        observation: 'committed',
+        commit: {
+          format: 'legacy_v1',
+          id: commitId,
+          schema: 't3x/commit',
+          parents: [],
+          recordedAt: '2026-07-30T00:00:00.000Z',
+          result: { mode: 'legacy_content', content: { trees: [], relations: [] } },
+          assurance: {
+            mode: 'legacy_unavailable',
+            unavailable: ['proposal', 'evidence', 'replay', 'validation', 'decision'],
+          },
+        },
+      },
+      capabilities: {
+        accept: { disposition: 'not_applicable', reasons: [] },
+        override: { disposition: 'not_applicable', reasons: [] },
+        reject: { disposition: 'not_applicable', reasons: [] },
+        commit: { disposition: 'not_applicable', reasons: [] },
+        revert: { disposition: 'not_evaluated', reasons: [] },
+      },
+      audit: { format: 'legacy_v1', commitId, schema: 't3x/commit' },
+    });
+
+    const response = await app.request(
+      `/v1/projects/${projectId}/commits/${encodeURIComponent(commitId)}/transition-view?ref=feature%2Freview`
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: { transition: { schema: 't3x.dev/transition-view/v1', mode: 'legacy' } },
+    });
+    expect(getTransitionViewForCommit).toHaveBeenCalledWith(mockDB, {
+      projectId,
+      refName: 'feature/review',
+      commitId,
+    });
+  });
+
+  it('does not expose an unverifiable Transition graph', async () => {
+    vi.mocked(getTransitionViewForCommit).mockRejectedValueOnce(
+      new TransitionProjectionAuthorizationInvalidError(`sha256:${'f'.repeat(64)}`)
+    );
+
+    const response = await app.request(
+      `/v1/projects/${projectId}/commits/sha256%3Aunverified/transition-view?ref=main`
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: 'TRANSITION_VIEW_UNAVAILABLE',
+        message: 'The stored Transition graph or its repository authorization did not verify',
+      },
+    });
   });
 });

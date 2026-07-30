@@ -51,6 +51,7 @@ export const ErrorCodes = {
 
   // Mismatch errors
   HISTORY_MISMATCH: 'HISTORY_MISMATCH',
+  TRANSITION_VIEW_UNAVAILABLE: 'TRANSITION_VIEW_UNAVAILABLE',
 
   // Conflict errors
   DUPLICATE_PIN: 'DUPLICATE_PIN',
@@ -197,6 +198,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
 
   // 400 Bad Request (Mismatch)
   HISTORY_MISMATCH: 400,
+  TRANSITION_VIEW_UNAVAILABLE: 409,
 
   // 409 Conflict
   DUPLICATE_PIN: 409,

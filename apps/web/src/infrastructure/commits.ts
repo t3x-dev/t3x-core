@@ -2,7 +2,7 @@
  * Commits API (tree-based)
  */
 
-import type { SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent, TransitionViewV1 } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // ============================================================================
@@ -123,6 +123,24 @@ export async function getApiCommit(commitHash: string): Promise<ApiCommit> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
   const data = await handleResponse<{ commit: ApiCommit }>(res);
   return data.commit;
+}
+
+/** Read the server-derived Transition product projection for one commit/ref. */
+export async function getCommitTransitionView(
+  projectId: string,
+  refName: string,
+  commitId: string,
+  signal?: AbortSignal
+): Promise<TransitionViewV1> {
+  const query = buildQueryString({ ref: refName });
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitId)}/transition-view?${query}`,
+    undefined,
+    undefined,
+    signal
+  );
+  const data = await handleResponse<{ transition: TransitionViewV1 }>(res);
+  return data.transition;
 }
 
 /**

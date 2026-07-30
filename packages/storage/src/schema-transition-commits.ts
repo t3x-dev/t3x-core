@@ -51,6 +51,14 @@ export const transitionDecisionAuthorizations = pgTable(
     observationScope: jsonb('observation_scope')
       .$type<{ completeness: 'complete' | 'partial'; sources: string[] }>()
       .notNull(),
+    statementIssuers: jsonb('statement_issuers')
+      .$type<
+        Array<{
+          statement: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+          actor: { kind: 'human' | 'agent' | 'service'; id: string };
+        }>
+      >()
+      .notNull(),
     authorizedAt: timestamp('authorized_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

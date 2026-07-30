@@ -465,11 +465,13 @@ export {
   DecisionNotAuthorizedError,
   getCommitHistoryEntry,
   getTransitionCommit,
+  getTransitionViewForCommit,
   listCommitHistory,
   listTransitionCommits,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
   TransitionParentHeadMismatchError,
+  TransitionProjectionAuthorizationInvalidError,
   TransitionRefNotFoundError,
 } from './transition-commits';
 // Tree State (source-of-truth for current trees)

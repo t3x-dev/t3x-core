@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
   actor_id TEXT NOT NULL,
   outcome TEXT NOT NULL,
   observation_scope JSONB NOT NULL,
+  statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb,
   authorized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (project_id, ref_name, decision_digest)
 );

@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 53;
+const SCHEMA_VERSION = 54;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1611,11 +1611,18 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       actor_id TEXT NOT NULL,
       outcome TEXT NOT NULL,
       observation_scope JSONB NOT NULL,
+      statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb,
       authorized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (project_id, ref_name, decision_digest)
     );
     CREATE INDEX IF NOT EXISTS idx_transition_decision_authorizations_decision
       ON transition_decision_authorizations(decision_digest);
+  `);
+
+  // ── Schema v54: trusted issuer facts for committed Transition projections ──
+  await sql.unsafe(`
+    ALTER TABLE transition_decision_authorizations
+      ADD COLUMN IF NOT EXISTS statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

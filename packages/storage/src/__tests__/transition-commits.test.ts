@@ -14,6 +14,7 @@ import {
   type RepositoryDecisionAuthorization,
   type State,
 } from '@t3x-dev/core';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
@@ -23,10 +24,13 @@ import {
   createTransitionCommit,
   DecisionNotAuthorizedError,
   getTransitionCommit,
+  getTransitionViewForCommit,
   listCommitHistory,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
+  TransitionProjectionAuthorizationInvalidError,
 } from '../queries/transition-commits';
+import { transitionDecisionAuthorizations } from '../schema-transition-commits';
 import { createTestDB, testData } from './setup';
 
 const DECIDED_AT = '2026-07-28T00:00:00.000Z';
@@ -236,6 +240,125 @@ describe('CommitV2 repository', () => {
     expect(refreshed?.headCommitHash).toBe(created.digest);
   });
 
+  it('derives a committed TransitionView from verified objects and trusted issuer facts', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Transition View Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'office' }),
+      'view'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const created = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+
+    const view = await getTransitionViewForCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      commitId: created.digest,
+    });
+
+    expect(view).toMatchObject({
+      schema: 't3x.dev/transition-view/v1',
+      mode: 'transition',
+      claims: {
+        actor: prepared.subject.proposal.actor,
+        intent: { mode: 'inferred', origin: 'inferred', value: 'Apply view' },
+        rationale: { mode: 'authored', origin: 'actor_authored', value: 'Prepare view' },
+      },
+      checks: {
+        objectIntegrity: 'verified',
+        observationScope: { completeness: 'complete', sources: ['project-store'] },
+        replay: { observation: 'observed', outcomes: ['verified'] },
+      },
+      decision: { observation: 'supplied', outcome: 'accepted' },
+      history: { observation: 'committed', commit: { id: created.digest } },
+    });
+    expect(view).toHaveProperty('audit.statements.0.issuerActor', prepared.subject.replay.actor);
+  });
+
+  it('fails closed when trusted issuer facts are missing or the ref is wrong', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Transition View Trust Project' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    await insertBranch(db, { projectId: project.projectId, name: 'other' });
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'trusted' }),
+      'trusted-view'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const created = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+
+    await expect(
+      getTransitionViewForCommit(db, {
+        projectId: project.projectId,
+        refName: 'other',
+        commitId: created.digest,
+      })
+    ).rejects.toBeInstanceOf(TransitionProjectionAuthorizationInvalidError);
+
+    await db
+      .update(transitionDecisionAuthorizations)
+      .set({
+        statementIssuers: [
+          {
+            statement: describeTransitionObject(prepared.subject.replay),
+            actor: { kind: 'service', id: '' },
+          },
+        ],
+      })
+      .where(
+        and(
+          eq(transitionDecisionAuthorizations.projectId, project.projectId),
+          eq(transitionDecisionAuthorizations.refName, 'main'),
+          eq(transitionDecisionAuthorizations.decisionDigest, prepared.commit.decision.digest)
+        )
+      );
+    await expect(
+      getTransitionViewForCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        commitId: created.digest,
+      })
+    ).rejects.toBeInstanceOf(TransitionProjectionAuthorizationInvalidError);
+
+    await db
+      .update(transitionDecisionAuthorizations)
+      .set({ statementIssuers: [] })
+      .where(
+        and(
+          eq(transitionDecisionAuthorizations.projectId, project.projectId),
+          eq(transitionDecisionAuthorizations.refName, 'main'),
+          eq(transitionDecisionAuthorizations.decisionDigest, prepared.commit.decision.digest)
+        )
+      );
+    await expect(
+      getTransitionViewForCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        commitId: created.digest,
+      })
+    ).rejects.toBeInstanceOf(TransitionProjectionAuthorizationInvalidError);
+  });
+
   it('binds authorization to the exact project and ref', async () => {
     const project = await insertProject(db, testData.project({ name: 'Ref Binding Project' }));
     await ensureMainBranch(db, project.projectId);
@@ -356,5 +479,24 @@ describe('CommitV2 repository', () => {
       assurance: { mode: 'legacy_unavailable' },
     });
     expect(legacyEntry).not.toHaveProperty('decision');
+
+    const legacyView = await getTransitionViewForCommit(db, {
+      projectId: project.projectId,
+      refName: 'legacy',
+      commitId: legacy.hash,
+    });
+    expect(legacyView).toMatchObject({
+      schema: 't3x.dev/transition-view/v1',
+      mode: 'legacy',
+      claims: { observation: 'unavailable', reason: 'legacy_v1' },
+      checks: { observation: 'unavailable', reason: 'legacy_v1' },
+    });
+    await expect(
+      getTransitionViewForCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        commitId: legacy.hash,
+      })
+    ).resolves.toBeNull();
   });
 });

@@ -21,12 +21,14 @@ import {
   createCommit,
   findConversationById,
   getCommit,
+  getTransitionViewForCommit,
   getYOpsForCommit,
   insertRewrite,
   isCommitSuperseded,
   listCommitHistory,
   listCommits,
   markConversationCommitted,
+  TransitionProjectionAuthorizationInvalidError,
   updateCommitMessage,
   updateCommitPosition,
 } from '@t3x-dev/storage';
@@ -446,6 +448,85 @@ commitRoutes.openapi(listCommitHistoryRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to list commit history';
     return errorResponse(c, 'LIST_FAILED', message);
+  }
+});
+
+// ============================================================
+// GET /v1/projects/:projectId/commits/:commitId/transition-view
+// ============================================================
+
+const getTransitionViewRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commits/{commitId}/transition-view',
+  tags: ['Commits'],
+  summary: 'Resolve a verified task-oriented Transition view for one commit',
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      commitId: z.string().min(1),
+    }),
+    query: z.object({ ref: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: 'Server-derived TransitionViewV1',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              transition: z
+                .unknown()
+                .openapi({ description: 'Shared @t3x-dev/core TransitionViewV1 contract' }),
+            })
+          ),
+        },
+      },
+    },
+    404: {
+      description: 'Commit not found in the project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Stored Transition graph or authorization facts do not verify',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(getTransitionViewRoute, async (c) => {
+  const { projectId, commitId } = c.req.valid('param');
+  const { ref } = c.req.valid('query');
+  const db = await getDB();
+
+  try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const transition = await getTransitionViewForCommit(db, {
+      projectId,
+      refName: ref,
+      commitId: decodeURIComponent(commitId),
+    });
+    if (transition === null) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${commitId} not found`);
+    }
+    return c.json({ success: true as const, data: { transition } }, 200);
+  } catch (err) {
+    if (
+      err instanceof TransitionProjectionAuthorizationInvalidError ||
+      (typeof err === 'object' && err !== null && 'code' in err)
+    ) {
+      return errorResponse(
+        c,
+        'TRANSITION_VIEW_UNAVAILABLE',
+        'The stored Transition graph or its repository authorization did not verify'
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Failed to resolve Transition view';
+    return errorResponse(c, 'GET_FAILED', message);
   }
 });
 
