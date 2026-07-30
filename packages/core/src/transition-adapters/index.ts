@@ -20,6 +20,17 @@ export {
   yopsStateCodec,
 } from './stateCodec';
 export {
+  type CreatedStateImportEffect,
+  type CreateStateImportEffectInput,
+  createStateImportEffect,
+  STATE_IMPORT_DRIVER_PROTOCOL,
+  STATE_IMPORT_DRIVER_PROTOCOL_VERSION,
+  STATE_IMPORT_DRIVER_SPEC_DIGEST,
+  STATE_IMPORT_MUTATION_DRIVER_REF,
+  stateImportMutationDriver,
+  stateImportMutationDrivers,
+} from './stateImportDriver';
+export {
   type CreatedYamlSourceEffect,
   type CreateYamlSourceEffectInput,
   createYamlSourceEffect,
