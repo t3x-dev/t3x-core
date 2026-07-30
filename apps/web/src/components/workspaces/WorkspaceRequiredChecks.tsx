@@ -268,6 +268,7 @@ export function WorkspaceRequiredChecks({
             <div className="border-b border-[var(--stroke-divider)] last:border-b-0" key={row.id}>
               <button
                 aria-expanded={expanded}
+                aria-label={`${expanded ? 'Hide' : 'Show'} ${row.title} check details`}
                 className={cn(
                   'grid min-h-[52px] w-full grid-cols-[52px_minmax(260px,1fr)_minmax(260px,1fr)_minmax(180px,max-content)_32px] items-center gap-3 px-3 text-left transition-colors',
                   expanded
