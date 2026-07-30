@@ -693,17 +693,17 @@ function StateRepositoryToolbar({
           onBranchChange={onBranchChange}
           onCreateBranch={onCreateBranch}
         />
-        <span className="text-[10px] font-semibold text-[var(--text-secondary)]">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
           {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
         </span>
-        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{schemaName}</span>
+        <span className="font-mono text-xs text-[var(--text-secondary)]">{schemaName}</span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button asChild className="text-[10.5px]" size="sm" variant="canvas-outline">
+        <Button asChild className="text-xs" size="sm" variant="canvas-outline">
           <Link aria-label="History" href={historyHref}>
             <History className="size-3.5" />
             History
-            <Badge className="min-w-[18px] px-1.5 py-0 text-[9px]" variant="outline">
+            <Badge className="min-w-5 px-1.5 py-0 text-xs" variant="outline">
               {commitCount}
             </Badge>
           </Link>
@@ -727,7 +727,7 @@ function StateUpdateBanner({
   return (
     <output
       aria-live="polite"
-      className="flex min-h-[42px] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--accent-commit)]/15 bg-[var(--accent-commit)]/10 px-3 py-1.5 text-[11px] text-[var(--accent-commit)]"
+      className="flex min-h-[42px] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--accent-commit)]/15 bg-[var(--accent-commit)]/10 px-3 py-1.5 text-xs leading-5 text-[var(--accent-commit)]"
     >
       <GitCommit aria-hidden="true" className="size-3.5" />
       <span>
@@ -737,10 +737,10 @@ function StateUpdateBanner({
         {' · just now'}
       </span>
       <div className="ml-auto flex items-center gap-1.5">
-        <Button className="text-[10.5px]" onClick={onDismiss} size="sm" variant="canvas-ghost">
+        <Button className="text-xs" onClick={onDismiss} size="sm" variant="canvas-ghost">
           Dismiss
         </Button>
-        <Button className="text-[10.5px]" onClick={onViewLatest} size="sm" variant="commit">
+        <Button className="text-xs" onClick={onViewLatest} size="sm" variant="commit">
           View latest
         </Button>
       </div>
@@ -767,19 +767,19 @@ function StateCommitRow({
     <div className="flex min-h-[34px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
       <div className="flex min-w-0 items-center gap-2">
         <span
-          className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-[11px] font-extrabold text-[var(--accent-branch)]"
+          className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-xs font-bold text-[var(--accent-branch)]"
           title={`Author ${author}`}
         >
           W
         </span>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="truncate text-xs font-bold text-[var(--text-primary)]">{title}</h2>
-          <p className="whitespace-nowrap text-[9.5px] text-[var(--text-tertiary)]">
+          <h2 className="truncate text-base font-semibold text-[var(--text-primary)]">{title}</h2>
+          <p className="whitespace-nowrap text-xs leading-5 text-[var(--text-secondary)]">
             Committed state · {yopsCount} deterministic {yopsCount === 1 ? 'YOp' : 'YOps'}
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 text-[10px] text-[var(--text-secondary)]">
+      <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
         {commitHref && hash ? (
           <Link
             className="font-mono hover:text-[var(--accent-commit)] hover:underline"
@@ -824,14 +824,14 @@ function StateObjectLine({
   return (
     <div className="flex min-h-[38px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <div className="min-w-0 truncate text-[10.5px] text-[var(--text-secondary)]">
+        <div className="min-w-0 truncate text-sm text-[var(--text-secondary)]">
           state{' '}
           <span className="font-bold text-[var(--text-primary)]">
             {schemaArtifactFileName(schemaName)}
           </span>{' '}
           / <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 text-[9.5px] text-[var(--text-tertiary)]">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs text-[var(--text-secondary)]">
           <span>
             HEAD{' '}
             <span className="font-mono">
@@ -856,14 +856,14 @@ function StateObjectLine({
       </div>
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <Badge
-          className="min-h-[23px] px-2 text-[10px] font-bold"
+          className="min-h-[23px] px-2 text-xs font-semibold"
           variant={validationReady ? 'success' : 'warning'}
         >
           {readinessLabel}
         </Badge>
         {validationError ? (
           <span
-            className="max-w-44 truncate text-[10px] font-semibold text-[var(--status-warning)]"
+            className="max-w-44 truncate text-xs font-semibold text-[var(--status-warning)]"
             title={validationError}
           >
             {validationError}
@@ -871,7 +871,7 @@ function StateObjectLine({
         ) : null}
         {!validationReady && onRunValidation ? (
           <Button
-            className="text-[10.5px]"
+            className="text-xs"
             disabled={validationRunning}
             onClick={onRunValidation}
             size="sm"
@@ -882,7 +882,7 @@ function StateObjectLine({
             {validationRunning ? 'Running…' : 'Run validation'}
           </Button>
         ) : null}
-        <Button asChild className="text-[10.5px]" size="sm" variant="canvas-outline">
+        <Button asChild className="text-xs" size="sm" variant="canvas-outline">
           <Link href={workspaceHref}>Open workspace</Link>
         </Button>
       </div>
@@ -936,10 +936,10 @@ function StateModeTabs({
             role="tab"
             type="button"
           >
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-bold">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">
               <Icon aria-hidden="true" className="size-3.5" />
               {mode.label}
-              <span className="hidden text-[10px] font-medium text-[var(--text-tertiary)] lg:inline">
+              <span className="hidden text-xs font-normal text-[var(--text-secondary)] lg:inline">
                 · {mode.subtitle}
               </span>
             </span>
@@ -985,11 +985,11 @@ function StateViewTabs({
               role="tab"
               type="button"
             >
-              <span className="flex items-center gap-1.5 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-sm font-semibold">
                 <Icon aria-hidden="true" className="size-3.5" />
                 {view.label}
               </span>
-              <span className="mt-0.5 block text-[9px] font-semibold text-[var(--text-tertiary)]">
+              <span className="mt-0.5 block text-xs leading-4 text-[var(--text-secondary)]">
                 {view.subtitle}
               </span>
             </button>
@@ -998,7 +998,7 @@ function StateViewTabs({
       </div>
       <Button
         aria-expanded={detailsOpen}
-        className="my-auto mr-2 text-[10.5px] min-[1121px]:hidden"
+        className="my-auto mr-2 text-xs min-[1121px]:hidden"
         onClick={onDetailsToggle}
         size="sm"
         type="button"
@@ -1121,18 +1121,18 @@ function StateStructureView({
             className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
           />
           <input
-            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-[10.5px] font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             onChange={(event) => onPathQueryChange(event.target.value)}
             placeholder="Search paths, titles, types..."
             value={pathQuery}
           />
         </label>
-        <span className="text-[10px] text-[var(--text-tertiary)]">
+        <span className="text-xs text-[var(--text-secondary)]">
           {visibleRows.length} visible {visibleRows.length === 1 ? 'row' : 'rows'}
         </span>
       </div>
       <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
-        <table className="w-full min-w-[1010px] table-fixed border-collapse text-left text-[10px]">
+        <table className="w-full min-w-[1010px] table-fixed border-collapse text-left text-base leading-5">
           <colgroup>
             <col className="w-[250px]" />
             <col />
@@ -1141,7 +1141,7 @@ function StateStructureView({
             <col className="w-[130px]" />
             <col className="w-[62px]" />
           </colgroup>
-          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-[9px] font-extrabold uppercase tracking-[0.035em] text-[var(--text-tertiary)] shadow-[0_1px_0_var(--stroke-divider)]">
+          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-semibold uppercase tracking-[0.04em] text-[var(--text-secondary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
               <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
                 Path / Key
@@ -1190,7 +1190,7 @@ function StatePointTableRow({
   return (
     <tr
       className={cn(
-        'group h-[37px] border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
+        'group h-10 border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
         row.expandable && 'cursor-pointer transition-colors hover:bg-[var(--surface-hover)]',
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
       )}
@@ -1198,7 +1198,7 @@ function StatePointTableRow({
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 font-bold transition-colors',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 font-semibold transition-colors',
           row.expandable && 'group-hover:bg-[var(--surface-hover)]',
           row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
         )}
@@ -1228,25 +1228,25 @@ function StatePointTableRow({
             {row.key}
           </span>
           {row.childCount ? (
-            <Badge className="shrink-0 px-1.5 py-0 text-[9px]" variant="outline">
+            <Badge className="shrink-0 px-1.5 py-0 text-xs" variant="outline">
               {row.childCount}
             </Badge>
           ) : null}
         </span>
       </td>
-      <td className="truncate px-3 py-2 text-[10px] text-[var(--text-secondary)]" title={row.value}>
+      <td className="truncate px-3 py-2 text-base text-[var(--text-secondary)]" title={row.value}>
         {row.value}
       </td>
-      <td className="px-3 py-2 text-[10px] text-[var(--text-secondary)]">{row.type}</td>
+      <td className="px-3 py-2 text-base text-[var(--text-secondary)]">{row.type}</td>
       <td className="px-3 py-2">
         <StatusPill row={row} />
       </td>
-      <td className="px-3 py-2 font-mono text-[10px] text-[var(--text-secondary)]">
+      <td className="px-3 py-2 font-mono text-[13px] text-[var(--text-secondary)]">
         {row.sourceOp}
       </td>
       <td className="px-3 py-2 text-center">
         {row.issueCount > 0 ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--status-danger)] text-[10px] font-bold text-[var(--on-status)]">
+          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--status-danger)] text-xs font-bold text-[var(--on-status)]">
             {row.issueCount}
           </span>
         ) : (
@@ -1267,7 +1267,7 @@ function StatusPill({ row }: { row: StatePointRow }) {
           ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]'
           : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]';
   return (
-    <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold', tone)}>
+    <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', tone)}>
       {row.statusLabel}
     </span>
   );
@@ -1335,7 +1335,7 @@ function StateContextRail({
 }) {
   return (
     <RailCard title="State details">
-      <dl className="grid grid-cols-[74px_minmax(0,1fr)] gap-x-2 gap-y-2.5 text-[10.5px]">
+      <dl className="grid grid-cols-[74px_minmax(0,1fr)] gap-x-2 gap-y-2.5 text-xs leading-5">
         <RailRow label="Project" value={projectName} />
         <RailRow
           label="Viewing"
@@ -1360,7 +1360,7 @@ function StateContextRail({
         <RailRow label="Last checked" value={lastCheckedLabel} />
       </dl>
       {warning ? (
-        <p className="mt-3 text-[10px] font-semibold text-[var(--status-warning)]">{warning}</p>
+        <p className="mt-3 text-xs font-semibold text-[var(--status-warning)]">{warning}</p>
       ) : null}
     </RailCard>
   );
@@ -1369,7 +1369,7 @@ function StateContextRail({
 function RailCard({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm">
-      <h2 className="mb-3 text-xs font-bold text-[var(--text-primary)]">{title}</h2>
+      <h2 className="mb-3 text-base font-semibold text-[var(--text-primary)]">{title}</h2>
       <div className="leading-5 text-[var(--text-secondary)]">{children}</div>
     </section>
   );
@@ -1388,11 +1388,11 @@ function RailRow({
 }) {
   return (
     <>
-      <dt className="font-bold text-[var(--text-tertiary)]">{label}</dt>
+      <dt className="font-semibold text-[var(--text-secondary)]">{label}</dt>
       <dd
         className={cn(
-          'min-w-0 truncate font-bold text-[var(--text-primary)]',
-          mono && 'font-mono text-[10px]'
+          'min-w-0 truncate font-semibold text-[var(--text-primary)]',
+          mono && 'font-mono text-xs'
         )}
         title={title ?? value}
       >

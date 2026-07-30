@@ -37,6 +37,22 @@ describe('ProjectTabs', () => {
     expect(screen.queryByRole('link', { name: 'YSchema' })).not.toBeInTheDocument();
   });
 
+  it('keeps the compact navigation geometry when the active tab changes', () => {
+    const view = render(
+      <ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />
+    );
+
+    view.rerender(
+      <ProjectTabs activeTab="schemas" outputCount={1} repoPath="/t3x-dev/test-project" />
+    );
+
+    expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-8');
+    for (const tab of PROJECT_TABS) {
+      expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-xs');
+    }
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
