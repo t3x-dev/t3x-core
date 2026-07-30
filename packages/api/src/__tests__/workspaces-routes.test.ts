@@ -28,6 +28,9 @@ const storageMock = vi.hoisted(() => {
       workspaceDraft = null;
     },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
+    findProjectById: vi.fn((_db, projectId: string) =>
+      Promise.resolve({ projectId, ownerId: null })
+    ),
     findBranchByName: vi.fn((_db, _projectId: string, name: string) =>
       Promise.resolve({ name, parentBranch: name === 'main' ? null : 'main' })
     ),
@@ -133,6 +136,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
   return {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
+    findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     getCommit: storageMock.getCommit,
@@ -157,6 +161,7 @@ describe('Workspace routes', () => {
   beforeEach(() => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
+    storageMock.findProjectById.mockClear();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
     storageMock.createCommit.mockClear();
@@ -166,6 +171,23 @@ describe('Workspace routes', () => {
     storageMock.insertYOpsLogEntry.mockClear();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
+  });
+
+  it('rejects client-supplied trust facts on Transition review requests', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: { trees: [], relations: [] },
+          actor: { kind: 'human', id: 'attacker-controlled' },
+        }),
+      }
+    );
+
+    expect(res.status).toBe(400);
+    expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {

@@ -468,6 +468,7 @@ export {
   getCommitHistoryEntry,
   getRepositoryDecisionAudit,
   getTransitionCommit,
+  getTransitionRefHead,
   getTransitionViewForCommit,
   listCommitHistory,
   listRepositoryDecisionAudit,
@@ -478,6 +479,8 @@ export {
   TransitionHeadConflictError,
   TransitionParentHeadMismatchError,
   TransitionProjectionAuthorizationInvalidError,
+  type TransitionRefHead,
+  TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
 } from './transition-commits';
 // Tree State (source-of-truth for current trees)

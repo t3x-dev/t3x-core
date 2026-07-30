@@ -20,6 +20,9 @@ import {
   getLatestCommit,
   insertYOpsLogEntry,
   listWorkspaceDrafts,
+  TransitionHeadConflictError,
+  TransitionRefHeadIntegrityError,
+  TransitionRefNotFoundError,
   updateBranchHead,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
@@ -27,6 +30,17 @@ import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
+import {
+  decideWorkspaceTransition,
+  reviewWorkspaceTransition,
+  WorkspaceTransitionDecisionDeniedError,
+  WorkspaceTransitionLegacyHeadError,
+  WorkspaceTransitionNotFoundError,
+  type WorkspaceTransitionPrecondition,
+  WorkspaceTransitionReviewStaleError,
+  WorkspaceTransitionSchemaUnavailableError,
+} from '../lib/workspace-transition';
 import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
@@ -90,6 +104,56 @@ const CommitWorkspaceRequestSchema = z.object({
   if_revision: z.number().int().min(1).optional(),
 });
 
+const TransitionContentSchema = z
+  .object({
+    trees: z.array(z.any()),
+    relations: z.array(z.any()).default([]),
+  })
+  .strict();
+
+const TransitionDigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+const WorkspaceTransitionPreconditionSchema = z
+  .object({
+    workspace_revision: z.number().int().min(1),
+    ref_head: TransitionDigestSchema.nullable(),
+    effect_digest: TransitionDigestSchema,
+    proposal_digest: TransitionDigestSchema,
+    statement_digests: z.array(TransitionDigestSchema),
+    policy_digest: TransitionDigestSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const sorted = [...value.statement_digests].sort();
+    if (
+      new Set(value.statement_digests).size !== value.statement_digests.length ||
+      value.statement_digests.some((digest, index) => digest !== sorted[index])
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['statement_digests'],
+        message: 'Statement digests must be unique and sorted',
+      });
+    }
+  });
+
+const ReviewWorkspaceTransitionRequestSchema = z
+  .object({
+    content: TransitionContentSchema,
+    why: z.string().trim().min(1).max(2000).optional(),
+    if_revision: z.number().int().min(1).optional(),
+  })
+  .strict();
+
+const DecideWorkspaceTransitionRequestSchema = z
+  .object({
+    content: TransitionContentSchema,
+    why: z.string().trim().min(1).max(2000).optional(),
+    outcome: z.enum(['accepted', 'overridden', 'rejected']),
+    decision_reason: z.string().trim().min(1).max(2000).optional(),
+    precondition: WorkspaceTransitionPreconditionSchema,
+  })
+  .strict();
+
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
   yops_draft_id: z.string().optional(),
@@ -98,6 +162,17 @@ const WorkspaceResponseSchema = z.object({
 
 const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
   commit: z.any(),
+});
+
+const WorkspaceTransitionReviewResponseSchema = z.object({
+  transition: z.any(),
+  precondition: WorkspaceTransitionPreconditionSchema,
+});
+
+const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewResponseSchema.extend({
+  decision_digest: TransitionDigestSchema,
+  commit: z.any().optional(),
+  workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
 const ListWorkspacesResponseSchema = z.object({
@@ -147,6 +222,10 @@ const listWorkspacesRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -172,6 +251,10 @@ const getWorkspaceRoute = createRoute({
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -205,6 +288,10 @@ const extractCandidateRoute = createRoute({
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Workspace not found',
@@ -245,6 +332,10 @@ const sendYOpsDraftRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Workspace not found',
       content: {
@@ -283,6 +374,10 @@ const saveWorkspaceRoute = createRoute({
           schema: SuccessResponseSchema(WorkspaceResponseSchema),
         },
       },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Workspace target branch not found',
@@ -323,6 +418,10 @@ const commitWorkspaceRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Workspace not found',
       content: {
@@ -340,6 +439,96 @@ const commitWorkspaceRoute = createRoute({
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
+    },
+  },
+});
+
+const reviewWorkspaceTransitionRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review',
+  tags: ['Workspaces'],
+  summary: 'Build a verified Transition review from persisted Workspace state',
+  request: {
+    params: workspaceParams,
+    body: {
+      content: {
+        'application/json': { schema: ReviewWorkspaceTransitionRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Verified Transition review and immutable review precondition',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewResponseSchema),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid Transition target or unavailable Schema',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace or target ref not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Workspace revision conflict or legacy read-only head',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Stored Transition integrity verification failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const decideWorkspaceTransitionRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide',
+  tags: ['Workspaces'],
+  summary: 'Re-derive, decide, audit, and conditionally commit a Workspace Transition',
+  request: {
+    params: workspaceParams,
+    body: {
+      content: {
+        'application/json': { schema: DecideWorkspaceTransitionRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Audited Decision and optional committed Transition',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionDecisionResponseSchema),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid Decision request or unavailable Schema',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace or target ref not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Review facts changed or the requested Decision is not permitted',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Stored Transition integrity verification failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -363,9 +552,78 @@ workspaceRoutes.onError((error, c) => {
   return c.text('Internal Server Error', 500);
 });
 
+workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { content, why, if_revision: expectedRevision } = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  try {
+    const reviewed = await reviewWorkspaceTransition(db, {
+      projectId,
+      workspaceId,
+      content,
+      why,
+      expectedRevision,
+      actor: workspaceHumanActor(c),
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        transition: reviewed.transition,
+        precondition: transitionPreconditionToWire(reviewed.precondition),
+      },
+    });
+  } catch (error) {
+    return workspaceTransitionErrorResponse(c, error);
+  }
+});
+
+workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const {
+    content,
+    why,
+    outcome,
+    decision_reason: decisionReason,
+    precondition,
+  } = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  try {
+    const decided = await decideWorkspaceTransition(db, {
+      projectId,
+      workspaceId,
+      content,
+      why,
+      outcome,
+      decisionReason,
+      precondition: transitionPreconditionFromWire(precondition),
+      actor: workspaceHumanActor(c),
+    });
+    return c.json({
+      success: true as const,
+      data: {
+        transition: decided.transition,
+        precondition: transitionPreconditionToWire(decided.precondition),
+        decision_digest: decided.decisionDigest,
+        ...(decided.commit === undefined ? {} : { commit: decided.commit }),
+        ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
+      },
+    });
+  } catch (error) {
+    return workspaceTransitionErrorResponse(c, error);
+  }
+});
+
 workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   const drafts = await listWorkspaceDrafts(db, projectId);
   const workspaces = drafts.flatMap((draft) =>
     draft.workspace_state ? [workspaceFromDraft(draft, draft.workspace_id ?? draft.id)] : []
@@ -380,6 +638,8 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
 workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
 
   if (!draft?.workspace_state) {
@@ -396,6 +656,8 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
   const storedWorkspace = storedDraft?.workspace_state ?? {};
   const {
@@ -455,6 +717,8 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
     const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
@@ -760,6 +1024,8 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { sources, workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
   const schemaResolution = resolveWorkspaceYSchema(workspace);
@@ -814,6 +1080,8 @@ workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { workspace, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
   const sourceWorkspace = storedDraft?.workspace_state ?? workspace;
   const reviewWorkspace = reopenCommittedWorkspaceForReview(sourceWorkspace);
@@ -914,6 +1182,76 @@ function notFoundError(message: string) {
     success: false as const,
     error: { code: 'NOT_FOUND', message },
   };
+}
+
+function workspaceHumanActor(c: Parameters<typeof getUserId>[0]) {
+  const userId = getUserId(c);
+  return {
+    kind: 'human' as const,
+    id: userId ? `user:${userId}` : 'human:local-user',
+  };
+}
+
+function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondition) {
+  return {
+    workspace_revision: precondition.workspaceRevision,
+    ref_head: precondition.refHead,
+    effect_digest: precondition.effectDigest,
+    proposal_digest: precondition.proposalDigest,
+    statement_digests: [...precondition.statementDigests],
+    policy_digest: precondition.policyDigest,
+  };
+}
+
+function transitionPreconditionFromWire(
+  precondition: z.infer<typeof WorkspaceTransitionPreconditionSchema>
+): WorkspaceTransitionPrecondition {
+  return {
+    workspaceRevision: precondition.workspace_revision,
+    refHead: precondition.ref_head,
+    effectDigest: precondition.effect_digest,
+    proposalDigest: precondition.proposal_digest,
+    statementDigests: [...precondition.statement_digests],
+    policyDigest: precondition.policy_digest,
+  };
+}
+
+function workspaceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (error instanceof WorkspaceTransitionNotFoundError) {
+    return errorResponse(c, 'WORKSPACE_NOT_FOUND', error.message);
+  }
+  if (error instanceof TransitionRefNotFoundError) {
+    return errorResponse(c, 'NOT_FOUND', error.message);
+  }
+  if (error instanceof WorkspaceTransitionLegacyHeadError) {
+    return errorResponse(c, 'LEGACY_HEAD_READ_ONLY', error.message, { head: error.head });
+  }
+  if (
+    error instanceof ConflictError ||
+    error instanceof WorkspaceTransitionReviewStaleError ||
+    error instanceof TransitionHeadConflictError
+  ) {
+    return errorResponse(c, 'STALE_REVIEW', 'Workspace or ref facts changed; review again.');
+  }
+  if (error instanceof WorkspaceTransitionSchemaUnavailableError) {
+    return errorResponse(c, 'SCHEMA_UNAVAILABLE', error.message, {
+      schema_name: error.schemaName,
+      ...(error.version ? { schema_version: error.version } : {}),
+    });
+  }
+  if (error instanceof WorkspaceTransitionDecisionDeniedError) {
+    return errorResponse(c, 'DECISION_NOT_PERMITTED', error.message, {
+      failures: error.failures,
+    });
+  }
+  if (error instanceof TransitionRefHeadIntegrityError) {
+    return errorResponse(c, 'VERIFY_FAILED', error.message);
+  }
+  if (error instanceof TypeError) {
+    return errorResponse(c, 'INVALID_REQUEST', error.message);
+  }
+  console.error(error);
+  return errorResponse(c, 'INTERNAL_ERROR', 'Workspace Transition operation failed');
 }
 
 function isWorkspaceBranchConflict(error: unknown): boolean {

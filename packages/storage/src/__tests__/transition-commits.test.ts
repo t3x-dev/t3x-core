@@ -27,6 +27,7 @@ import {
   DecisionRecordIntegrityError,
   getRepositoryDecisionAudit,
   getTransitionCommit,
+  getTransitionRefHead,
   getTransitionViewForCommit,
   listCommitHistory,
   listRepositoryDecisionAudit,
@@ -35,7 +36,9 @@ import {
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
+  TransitionRefHeadIntegrityError,
 } from '../queries/transition-commits';
+import { branches } from '../schema';
 import {
   transitionDecisionAuthorizations,
   transitionDecisionLedger,
@@ -199,6 +202,77 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('CommitV2 repository', () => {
+  it('classifies empty and legacy ref heads without fabricating Transition assurance', async () => {
+    const emptyProject = await insertProject(db, testData.project({ name: 'Empty Ref Project' }));
+    await ensureMainBranch(db, emptyProject.projectId);
+    await expect(
+      getTransitionRefHead(db, { projectId: emptyProject.projectId, refName: 'main' })
+    ).resolves.toEqual({ format: 'empty', refName: 'main', head: null });
+
+    const legacyProject = await insertProject(db, testData.project({ name: 'Legacy Ref Project' }));
+    await ensureMainBranch(db, legacyProject.projectId);
+    const legacy = await createCommit(db, {
+      project_id: legacyProject.projectId,
+      content: { trees: [], relations: [] },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    await expect(
+      getTransitionRefHead(db, { projectId: legacyProject.projectId, refName: 'main' })
+    ).resolves.toEqual({ format: 'legacy_v1', refName: 'main', head: legacy.hash });
+  });
+
+  it('returns only a verified CommitV2 result State as a ref base', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Verified Ref Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: 'verified-head' }),
+      'verified-head'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const created = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({
+      format: 'transition_v2',
+      refName: 'main',
+      head: created.digest,
+      commit: prepared.commit,
+      state: prepared.subject.result,
+    });
+  });
+
+  it('fails closed when a ref points to a commit outside its project', async () => {
+    const owner = await insertProject(db, testData.project({ name: 'Head Owner Project' }));
+    await ensureMainBranch(db, owner.projectId);
+    const legacy = await createCommit(db, {
+      project_id: owner.projectId,
+      content: { trees: [], relations: [] },
+      author: { type: 'human', id: 'human:owner' },
+    });
+    const other = await insertProject(db, testData.project({ name: 'Cross Project Head' }));
+    await ensureMainBranch(db, other.projectId);
+    await db
+      .update(branches)
+      .set({ headCommitHash: legacy.hash })
+      .where(and(eq(branches.projectId, other.projectId), eq(branches.name, 'main')));
+
+    await expect(
+      getTransitionRefHead(db, { projectId: other.projectId, refName: 'main' })
+    ).rejects.toBeInstanceOf(TransitionRefHeadIntegrityError);
+  });
+
   it('requires the unforgeable issuance capability before recording authority', async () => {
     const project = await insertProject(db, testData.project({ name: 'Capability Project' }));
     await ensureMainBranch(db, project.projectId);
