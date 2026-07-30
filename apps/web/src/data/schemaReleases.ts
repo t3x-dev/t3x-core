@@ -5,6 +5,7 @@ import type {
 } from '@/types/schemas';
 
 const PRD_CURRENT_RELEASE_ID = 'schema_prd_v2';
+const PROMPT_CURRENT_RELEASE_ID = 'schema_prompt_v1';
 const SKILL_CURRENT_RELEASE_ID = 'schema_skill_v1';
 
 const prdSchemaReleases: SchemaReleasePreview[] = [
@@ -16,6 +17,7 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     description:
       'Draft version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
     status: 'draft',
+    runtimeAvailable: false,
     usedByCommitCount: 0,
     usedByWorkspaceCount: 1,
     breakingChangeLevel: 'minor',
@@ -28,6 +30,7 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
       'Comparison only. Existing v2 commits remain valid; one workspace is testing this draft without changing the current version.',
     canonicalName: 't3x/prd',
     relationTypes: [],
+    rules: [],
     schemaHash: 'sha256:91ef3f8b4ca7',
     updatedLabel: 'Updated 2026-07-10',
     structure: [
@@ -135,6 +138,7 @@ nodes:
     description:
       'Current project contract for product requirements, source-backed summaries, and structured requirement nodes.',
     status: 'active',
+    runtimeAvailable: true,
     releasedAt: '2026-06-20T00:00:00.000Z',
     releasedBy: 'HLQ',
     usedByCommitCount: 8,
@@ -149,6 +153,7 @@ nodes:
       'Current version. New workspaces use v2; existing commits retain the exact version they were validated against.',
     canonicalName: 't3x/prd',
     relationTypes: [],
+    rules: [],
     schemaHash: 'sha256:40a09e96859420df665ad14dcde306886ddfbf7775febb0b749690b350c5337a',
     updatedLabel: '2026-06-20',
     structure: [
@@ -234,6 +239,7 @@ nodes:
     description:
       'Historical PRD contract kept for commits created before audience and outcome became required summary fields.',
     status: 'deprecated',
+    runtimeAvailable: false,
     releasedAt: '2026-05-30T00:00:00.000Z',
     releasedBy: 'T3X',
     usedByCommitCount: 3,
@@ -248,6 +254,7 @@ nodes:
       'Read-only historical version. Existing v1 commits remain inspectable; new workspaces use the current v2 contract.',
     canonicalName: 't3x/prd',
     relationTypes: [],
+    rules: [],
     schemaHash: 'sha256:0c833f19be6a',
     updatedLabel: '2026-05-30',
     structure: [
@@ -330,6 +337,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
     description:
       'Portable workflow-routed agent skill with explicit resources, failure behavior, and deterministic delivery checks.',
     status: 'active',
+    runtimeAvailable: true,
     releasedAt: '2026-07-28T00:00:00.000Z',
     releasedBy: 'T3X',
     usedByCommitCount: 0,
@@ -365,6 +373,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'string',
         required: true,
         constraint: 'lowercase hyphen-case',
+        constraintTags: ['pattern'],
         depth: 1,
       },
       {
@@ -414,6 +423,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'evidence | inference | generation',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -421,6 +431,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: false,
         constraint: 'UI authoring default only',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -435,6 +446,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'primary | supporting | persistence | review',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -449,6 +461,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'continue | fallback | ask | stop',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -456,6 +469,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'object[]',
         required: true,
         constraint: 'ordered executable guidance',
+        constraintTags: ['executable'],
         depth: 0,
       },
       {
@@ -463,6 +477,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'high | medium | low',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -470,6 +485,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'none | read | write | external',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -484,6 +500,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'always | on demand | execute | output',
+        constraintTags: ['enum'],
         depth: 1,
       },
       {
@@ -498,6 +515,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'object[]',
         required: true,
         constraint: 'deterministic delivery gates',
+        constraintTags: ['blocking', 'executable'],
         depth: 0,
       },
       {
@@ -505,6 +523,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'enum',
         required: true,
         constraint: 'command | checklist | smoke test',
+        constraintTags: ['enum', 'executable'],
         depth: 1,
       },
       {
@@ -512,6 +531,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         type: 'boolean',
         required: true,
         constraint: 'mutation or export gate',
+        constraintTags: ['blocking'],
         depth: 1,
       },
       {
@@ -520,6 +540,32 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
         required: false,
         constraint: 'model behavior quality signals',
         depth: 0,
+      },
+    ],
+    rules: [
+      {
+        id: 'skill.workflow-routing',
+        kind: 'executable',
+        description: 'Every workflow owns steps and every instruction belongs to a workflow.',
+        scope: 'workflows/* → instructions/*',
+        blocking: true,
+        signals: ['relation coverage', 'orphan steps'],
+      },
+      {
+        id: 'skill.side-effect-approval',
+        kind: 'executable',
+        description: 'Write and external effects require an explicit approval gate.',
+        scope: 'instructions/*',
+        blocking: true,
+        signals: ['effect', 'approval'],
+      },
+      {
+        id: 'skill.generated-trigger-description',
+        kind: 'descriptive',
+        description: 'Host descriptions should summarize the manifest and activation boundaries.',
+        scope: 'manifest + activation',
+        blocking: false,
+        signals: ['adapter guidance'],
       },
     ],
     relationTypes: [
@@ -614,6 +660,482 @@ relation_types:
   },
 ];
 
+const promptSchemaReleases: SchemaReleasePreview[] = [
+  {
+    id: PROMPT_CURRENT_RELEASE_ID,
+    projectId: 'preview_project',
+    name: 'Prompt Schema',
+    version: 'v1',
+    description:
+      'Portable, typed, and testable contract for compiling one model invocation without calling a model.',
+    status: 'active',
+    runtimeAvailable: true,
+    releasedAt: '2026-07-30T00:00:00.000Z',
+    releasedBy: 'T3X',
+    usedByCommitCount: 0,
+    usedByWorkspaceCount: 0,
+    breakingChangeLevel: 'none',
+    source: 'official',
+    category: 'Prompt runtime',
+    rootKey: 'prompt',
+    requiredFields: [
+      'manifest.name',
+      'contract.goal',
+      'variables.*',
+      'messages.*',
+      'runtime',
+      'output',
+      'checks.*',
+    ],
+    compatibleWith: ['YSchema validation', 'Prompt compiler', 'Compile Preview API'],
+    migrationSummary:
+      'Current Prompt contract. Compilation is deterministic and does not invoke an LLM, network, or provider adapter.',
+    canonicalName: 't3x/prompt',
+    schemaHash: 'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930',
+    updatedLabel: '2026-07-30',
+    structure: [
+      {
+        path: 'manifest',
+        type: 'object',
+        required: true,
+        constraint: 'stable identity and discovery',
+        depth: 0,
+      },
+      {
+        path: 'manifest.name',
+        type: 'string',
+        required: true,
+        constraint: 'lowercase hyphen-case, max 64 chars',
+        constraintTags: ['pattern'],
+        depth: 1,
+      },
+      {
+        path: 'manifest.summary',
+        type: 'string',
+        required: true,
+        constraint: 'max 60 words',
+        depth: 1,
+      },
+      {
+        path: 'contract',
+        type: 'object',
+        required: true,
+        constraint: 'goal, boundaries, and truth policy',
+        depth: 0,
+      },
+      {
+        path: 'contract.truth_policy',
+        type: 'enum',
+        required: true,
+        constraint: 'evidence only | approved inference | open generation',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'variables.*',
+        type: 'object[]',
+        required: true,
+        constraint: 'typed template inputs',
+        depth: 0,
+      },
+      {
+        path: 'variables.*.value_type',
+        type: 'enum',
+        required: true,
+        constraint: 'string | number | integer | boolean | array | object',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'variables.*.source',
+        type: 'enum',
+        required: true,
+        constraint: 'user | context | runtime | default',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'variables.*.value_pattern',
+        type: 'string',
+        required: false,
+        constraint: 'compiler-applied regular expression',
+        constraintTags: ['pattern', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'variables.*.on_missing',
+        type: 'enum',
+        required: true,
+        constraint: 'ask | default | empty | stop',
+        constraintTags: ['enum', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'messages.*',
+        type: 'object[]',
+        required: true,
+        constraint: 'ordered text message templates',
+        constraintTags: ['executable'],
+        depth: 0,
+      },
+      {
+        path: 'messages.*.sequence',
+        type: 'integer',
+        required: true,
+        constraint: 'unique, minimum 1',
+        constraintTags: ['executable'],
+        depth: 1,
+      },
+      {
+        path: 'messages.*.role',
+        type: 'enum',
+        required: true,
+        constraint: 'system | developer | user | assistant',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'messages.*.template',
+        type: 'string',
+        required: true,
+        constraint: 'declared double-brace variables',
+        constraintTags: ['pattern', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'contexts.*',
+        type: 'object[]',
+        required: false,
+        constraint: 'runtime context sources and budgets',
+        depth: 0,
+      },
+      {
+        path: 'contexts.*.load_policy',
+        type: 'enum',
+        required: true,
+        constraint: 'always | on demand',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'contexts.*.resource_key',
+        type: 'string',
+        required: false,
+        constraint: 'declared resource key',
+        constraintTags: ['pattern', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'runtime',
+        type: 'object',
+        required: true,
+        constraint: 'portable adapter requirements',
+        depth: 0,
+      },
+      {
+        path: 'runtime.mode',
+        type: 'enum',
+        required: true,
+        constraint: 'chat | completion',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'runtime.response_format',
+        type: 'enum',
+        required: true,
+        constraint: 'text | markdown | json | json schema',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'output',
+        type: 'object',
+        required: true,
+        constraint: 'response parsing and failure behavior',
+        depth: 0,
+      },
+      {
+        path: 'output.format',
+        type: 'enum',
+        required: true,
+        constraint: 'must match runtime response format',
+        constraintTags: ['enum', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'output.schema_resource',
+        type: 'string',
+        required: false,
+        constraint: 'required for JSON Schema output',
+        constraintTags: ['pattern', 'blocking', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'resources.*',
+        type: 'object[]',
+        required: false,
+        constraint: 'schemas, fixtures, data, references, templates',
+        depth: 0,
+      },
+      {
+        path: 'resources.*.kind',
+        type: 'enum',
+        required: true,
+        constraint: 'schema | fixture | data | reference | template',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'resources.*.path',
+        type: 'string',
+        required: true,
+        constraint: 'safe relative bundle path',
+        constraintTags: ['pattern', 'blocking'],
+        depth: 1,
+      },
+      {
+        path: 'resources.*.load_policy',
+        type: 'enum',
+        required: true,
+        constraint: 'always | on demand | execute only | output only',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'dependencies.*',
+        type: 'object[]',
+        required: false,
+        constraint: 'external runtime capabilities',
+        depth: 0,
+      },
+      {
+        path: 'dependencies.*.kind',
+        type: 'enum',
+        required: true,
+        constraint: 'tool | MCP | plugin | runtime | package',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+      {
+        path: 'checks.*',
+        type: 'object[]',
+        required: true,
+        constraint: 'deterministic compile and delivery gates',
+        constraintTags: ['blocking', 'executable'],
+        depth: 0,
+      },
+      {
+        path: 'checks.*.kind',
+        type: 'enum',
+        required: true,
+        constraint: 'template | fixture | output schema | checklist',
+        constraintTags: ['enum', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'checks.*.blocking',
+        type: 'boolean',
+        required: true,
+        constraint: 'blocks compilation when true',
+        constraintTags: ['blocking', 'executable'],
+        depth: 1,
+      },
+      {
+        path: 'evals.*',
+        type: 'object[]',
+        required: false,
+        constraint: 'behavior and quality signals',
+        depth: 0,
+      },
+      {
+        path: 'evals.*.kind',
+        type: 'enum',
+        required: true,
+        constraint: 'behavior | quality | safety | regression',
+        constraintTags: ['enum'],
+        depth: 1,
+      },
+    ],
+    rules: [
+      {
+        id: 'prompt.placeholders_declared',
+        kind: 'executable',
+        description: 'Every template placeholder must resolve to a declared variable.',
+        scope: 'messages/*/template',
+        blocking: true,
+        signals: ['undeclared', 'malformed'],
+      },
+      {
+        id: 'prompt.required_variables_used',
+        kind: 'executable',
+        description: 'Every required variable must be referenced by at least one message.',
+        scope: 'variables/*',
+        blocking: true,
+        signals: ['unused required variable'],
+      },
+      {
+        id: 'prompt.message_sequence_unique',
+        kind: 'executable',
+        description: 'Message sequence values must be unique and compile in ascending order.',
+        scope: 'messages/*/sequence',
+        blocking: true,
+        signals: ['duplicate sequence'],
+      },
+      {
+        id: 'prompt.resources_resolvable',
+        kind: 'executable',
+        description: 'Referenced context, fixture, and message resources must exist.',
+        scope: 'contexts + messages + resources',
+        blocking: true,
+        signals: ['missing resource', 'stale relation'],
+      },
+      {
+        id: 'prompt.output_schema_resolvable',
+        kind: 'executable',
+        description: 'JSON Schema output must resolve to a valid bundled schema resource.',
+        scope: 'output/schema_resource',
+        blocking: true,
+        signals: ['missing schema', 'invalid JSON Schema'],
+      },
+      {
+        id: 'prompt.blocking_check_required',
+        kind: 'executable',
+        description: 'A ready prompt requires a blocking compile or output check.',
+        scope: 'checks/*',
+        blocking: true,
+        signals: ['missing gate'],
+      },
+    ],
+    relationTypes: [
+      {
+        id: 'precedes',
+        from: 'messages/*',
+        to: 'messages/*',
+        description: 'Source message compiles before the target message.',
+        constraints: ['acyclic'],
+      },
+      {
+        id: 'uses_variable',
+        from: 'messages/*',
+        to: 'variables/*',
+        description: 'Message template references a declared variable.',
+        constraints: ['derived from placeholders'],
+      },
+      {
+        id: 'uses_resource',
+        from: 'messages/*',
+        to: 'resources/*',
+        description: 'Message loads or references a bundled resource.',
+        constraints: [],
+      },
+      {
+        id: 'provides_context',
+        from: 'contexts/*',
+        to: 'messages/*',
+        description: 'Context contributes content to a compiled message.',
+        constraints: [],
+      },
+      {
+        id: 'requires',
+        from: 'messages/*',
+        to: 'dependencies/*',
+        description: 'Message requires an external runtime capability.',
+        constraints: [],
+      },
+      {
+        id: 'uses_output_schema',
+        from: 'output',
+        to: 'resources/*',
+        description: 'Output resolves its JSON Schema from a bundled resource.',
+        constraints: ['blocking'],
+      },
+      {
+        id: 'verifies_message',
+        from: 'checks/*',
+        to: 'messages/*',
+        description: 'Deterministic check validates a compiled message.',
+        constraints: ['blocking'],
+      },
+      {
+        id: 'verifies_output',
+        from: 'checks/*',
+        to: 'output',
+        description: 'Deterministic check validates the output contract.',
+        constraints: ['blocking'],
+      },
+      {
+        id: 'evaluates',
+        from: 'evals/*',
+        to: 'messages/*',
+        description: 'Model evaluation covers behavior driven by a message.',
+        constraints: ['non-blocking quality signal'],
+      },
+    ],
+    canonicalYaml: `yschema: "0.1"
+name: t3x/prompt
+version: "v1"
+description: Portable, typed, and testable contract for one model invocation.
+strict: true
+nodes:
+  manifest:
+    required: true
+    required_slots: [name, summary]
+  contract:
+    required: true
+    required_slots: [goal, inputs, outputs, non_goals, truth_policy]
+  variables:
+    required: true
+    repeated: true
+    required_slots: [value_type, required, source, description, on_missing]
+  messages:
+    required: true
+    repeated: true
+    required_slots: [sequence, role, template, purpose, optional, on_missing_variable]
+  contexts:
+    repeated: true
+    required_slots: [kind, required, load_policy, placement, on_empty]
+  runtime:
+    required: true
+    required_slots: [mode, response_format, streaming, tool_policy]
+  output:
+    required: true
+    required_slots: [format, strict, on_parse_failure]
+  resources:
+    repeated: true
+    required_slots: [kind, path, description, load_policy]
+  dependencies:
+    repeated: true
+    required_slots: [kind, identifier, required, permissions]
+  checks:
+    required: true
+    repeated: true
+    required_slots: [kind, run_when, blocking]
+  evals:
+    repeated: true
+    required_slots: [kind, fixture_resource, assertions]
+relation_types:
+  precedes: { from: messages/*, to: messages/*, acyclic: true }
+  uses_variable: { from: messages/*, to: variables/* }
+  uses_resource: { from: messages/*, to: resources/* }
+  provides_context: { from: contexts/*, to: messages/* }
+  requires: { from: messages/*, to: dependencies/* }
+  uses_output_schema: { from: output, to: resources/* }
+  verifies_message: { from: checks/*, to: messages/* }
+  verifies_output: { from: checks/*, to: output }
+  evaluates: { from: evals/*, to: messages/* }
+rules:
+  - id: prompt.placeholders_declared
+  - id: prompt.required_variables_used
+  - id: prompt.message_sequence_unique
+  - id: prompt.resources_resolvable
+  - id: prompt.output_schema_resolvable
+  - id: prompt.blocking_check_required`,
+    changesBaseReleaseId: PROMPT_CURRENT_RELEASE_ID,
+    changes: [],
+  },
+];
+
 const schemaFamilies: SchemaFamilyPreview[] = [
   {
     id: 'prd',
@@ -630,6 +1152,14 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     description: 'Portable agent capabilities, workflow routing, resources, checks, and evals.',
     currentReleaseId: SKILL_CURRENT_RELEASE_ID,
     releases: skillSchemaReleases,
+  },
+  {
+    id: 'prompt',
+    name: 'Prompt Schema',
+    canonicalName: 't3x/prompt',
+    description: 'Typed messages, variables, resources, output contracts, checks, and evals.',
+    currentReleaseId: PROMPT_CURRENT_RELEASE_ID,
+    releases: promptSchemaReleases,
   },
 ];
 

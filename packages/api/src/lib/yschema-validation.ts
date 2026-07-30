@@ -3,6 +3,7 @@ import {
   type SemanticContent,
   type SlotValue,
   type TreeNode,
+  validatePromptPolicy,
   validateSkillPolicy,
 } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
@@ -22,6 +23,7 @@ interface RunValidationInput {
   projectId: string;
   commitHash?: string;
   schemaName?: string;
+  schemaVersion?: string;
 }
 
 export interface YSchemaValidationRunView extends Omit<YSchemaValidationRunOutput, 'result_json'> {
@@ -57,14 +59,13 @@ export async function runYSchemaValidationForCommit(
 
   const commitSchemaRef = commit.provenance?.schema_ref;
   const schemaName = input.schemaName ?? commitSchemaRef?.name ?? 't3x/prd';
-  const schema = resolveBuiltInYSchema(
-    schemaName,
-    input.schemaName === undefined ? commitSchemaRef?.version : undefined
-  );
+  const schemaVersion =
+    input.schemaVersion ?? (input.schemaName === undefined ? commitSchemaRef?.version : undefined);
+  const schema = resolveBuiltInYSchema(schemaName, schemaVersion);
   if (!schema) {
     throw new YSchemaValidationError(
       'SCHEMA_NOT_SUPPORTED',
-      `YSchema ${schemaName} is not supported by the local validator yet`
+      `YSchema ${schemaName}${schemaVersion ? `@${schemaVersion}` : ''} is not available in the local runtime registry`
     );
   }
   const candidate = semanticContentToCandidate(commit.content);
@@ -79,7 +80,9 @@ export async function runYSchemaValidationForCommit(
   const policyValidation =
     schema.name === 't3x/skill'
       ? validateSkillPolicy(candidate, relations)
-      : { valid: true, ready: true, errors: [], gaps: [] };
+      : schema.name === 't3x/prompt'
+        ? validatePromptPolicy(candidate, relations)
+        : { valid: true, ready: true, errors: [], gaps: [] };
   const validation = {
     valid: structuralValidation.valid && policyValidation.valid,
     ready: structuralValidation.ready && policyValidation.ready,

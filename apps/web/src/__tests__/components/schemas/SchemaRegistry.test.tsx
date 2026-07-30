@@ -11,7 +11,7 @@ function renderRegistry(projectId = 'proj_test') {
 }
 
 describe('SchemaRegistry', () => {
-  it('shows PRD and Skill as selectable Schema families with independent current versions', () => {
+  it('shows PRD, Skill, and Prompt as selectable Schema families with current versions', () => {
     renderRegistry();
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
@@ -21,8 +21,13 @@ describe('SchemaRegistry', () => {
       'true'
     );
     expect(screen.getByRole('tab', { name: /Skill Schema v1/i })).toBeInTheDocument();
-    expect(screen.getByText('2 families')).toBeInTheDocument();
-    expect(screen.getByText('8 contract paths')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Prompt Schema v1/i })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Schema families' })).toHaveAttribute(
+      'aria-orientation',
+      'horizontal'
+    );
+    expect(screen.getByText('3 families')).toBeInTheDocument();
+    expect(screen.getByText(/2 nodes · 8 paths/)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
@@ -35,7 +40,7 @@ describe('SchemaRegistry', () => {
     });
 
     expect(screen.getAllByText('Skill Schema v1')).toHaveLength(2);
-    expect(screen.getByText('24 contract paths')).toBeInTheDocument();
+    expect(screen.getByText(/9 nodes · 24 paths/)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Relations' })).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Relations' }), {
@@ -47,6 +52,77 @@ describe('SchemaRegistry', () => {
     expect(screen.getByText('has_step')).toBeInTheDocument();
     expect(screen.getByText('checks/*')).toBeInTheDocument();
     expect(screen.getAllByText('workflows/*')).not.toHaveLength(0);
+  });
+
+  it('exposes the Prompt structure, relations, executable rules, YAML, and changes views', () => {
+    renderRegistry();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Prompt Schema v1/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.getAllByText('Prompt Schema v1')).toHaveLength(2);
+    const rootFact = screen.getByText('Root').parentElement;
+    expect(rootFact).not.toBeNull();
+    expect(rootFact).toHaveTextContent('prompt');
+    expect(screen.getByText(/11 nodes · 34 paths/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Relations' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Rules' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Canonical YAML' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Changes' })).toBeInTheDocument();
+
+    const messagesToggle = screen.getByRole('button', { name: 'Expand messages.* structure' });
+    expect(messagesToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('messages.*.template')).not.toBeInTheDocument();
+    fireEvent.click(messagesToggle);
+    expect(messagesToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('messages.*.template')).toBeInTheDocument();
+    expect(screen.getByText('pattern')).toBeInTheDocument();
+    expect(screen.getAllByText('executable').length).toBeGreaterThan(0);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Rules' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByText('6 executable')).toBeInTheDocument();
+    expect(screen.getByText('prompt.placeholders_declared')).toBeInTheDocument();
+    expect(screen.getAllByText('blocking')).toHaveLength(6);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Relations' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByText('9 relation types')).toBeInTheDocument();
+    expect(screen.getByText('uses_output_schema')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Canonical YAML' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByText('t3x/prompt@v1')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByText('Changes from current')).toBeInTheDocument();
+  });
+
+  it('labels executable and descriptive rules distinctly', () => {
+    renderRegistry();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Skill Schema v1/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Rules' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.getByText('2 executable')).toBeInTheDocument();
+    expect(screen.getByText('descriptive')).toBeInTheDocument();
+    expect(screen.getByText('skill.generated-trigger-description')).toBeInTheDocument();
   });
 
   it('binds only the registered current release through explicit Workspace actions', () => {
@@ -113,7 +189,7 @@ describe('SchemaRegistry', () => {
 
     expect(screen.getByText('PRD Schema v3')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('9 contract paths')).toBeInTheDocument();
+    expect(screen.getByText(/2 nodes · 9 paths/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Compare with v2' }));
 

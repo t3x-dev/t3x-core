@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
   applyProjectWorkspaceSchemaBindings,
   getProjectDefaultSchemaBinding,
@@ -7,10 +8,13 @@ import {
   schemaReleaseToWorkspaceBinding,
   withProjectDefaultSchemaBinding,
 } from '@/domain/workspaces/schemaBindings';
-import type { SchemaRelease } from '@/types/schemas';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
+const PROMPT_SCHEMA_HASH =
+  'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
+
 const baseCandidate = {
+  revision: 1,
   projectId: 'proj_1',
   summary: 'Summary',
   status: 'draft',
@@ -24,24 +28,13 @@ const baseCandidate = {
   outputTargets: [],
 } satisfies Omit<WorkspaceCandidate, 'id' | 'title' | 'schemaBindings'>;
 
-const release = {
-  id: 'schema_docker_v2',
-  projectId: 'proj_1',
-  name: 'Docker Compose',
-  version: 'v2',
-  status: 'active',
-  description: 'Compose service template.',
-  source: 'official',
-  category: 'Infra',
-  rootKey: 'compose',
-  requiredFields: ['services.*.image'],
-  compatibleWith: ['workspace yschema'],
-  migrationSummary: 'Keeps service image identity stable.',
-  breakingChangeLevel: 'minor',
-  usedByCommitCount: 0,
-  usedByWorkspaceCount: 0,
-  releasedAt: '2026-07-01T00:00:00.000Z',
-} satisfies SchemaRelease;
+const registry = getSchemaRegistryPreview('proj_1');
+const release = registry.families.find((family) => family.id === 'prompt')?.releases[0];
+const draftRelease = registry.families
+  .find((family) => family.id === 'prd')
+  ?.releases.find((candidate) => candidate.status === 'draft');
+
+if (!release || !draftRelease) throw new Error('Schema release fixtures are incomplete');
 
 const candidates: WorkspaceCandidate[] = [
   {
@@ -61,10 +54,21 @@ const candidates: WorkspaceCandidate[] = [
 describe('workspace schema bindings', () => {
   it('converts a schema release into a workspace binding', () => {
     expect(schemaReleaseToWorkspaceBinding(release, 'pinned')).toEqual({
-      schemaName: 'Docker Compose',
-      version: 'v2',
+      canonicalName: 't3x/prompt',
+      schemaHash: PROMPT_SCHEMA_HASH,
+      schemaName: 'Prompt Schema',
+      version: 'v1',
       mode: 'pinned',
     });
+  });
+
+  it('rejects releases that are not active and runtime available', () => {
+    expect(() => schemaReleaseToWorkspaceBinding(draftRelease, 'draft_override')).toThrow(
+      'is not available for binding'
+    );
+    expect(() =>
+      schemaReleaseToWorkspaceBinding({ ...release, runtimeAvailable: false }, 'pinned')
+    ).toThrow('is not available for binding');
   });
 
   it('pins a selected schema to the current workspace', () => {
@@ -75,21 +79,54 @@ describe('workspace schema bindings', () => {
     });
 
     expect(updated[0].schemaBindings).toEqual([
-      { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
+      {
+        canonicalName: 't3x/prompt',
+        schemaHash: PROMPT_SCHEMA_HASH,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
+        mode: 'pinned',
+      },
     ]);
     expect(updated[1].schemaBindings).toEqual(candidates[1].schemaBindings);
   });
 
-  it('updates project defaults without overriding pinned workspaces', () => {
+  it('uses project defaults only for new workspaces without overriding persisted bindings', () => {
     const updated = applyProjectWorkspaceSchemaBindings(candidates, {
       projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
       byWorkspaceId: {},
     });
 
     expect(updated[0].schemaBindings).toEqual(candidates[0].schemaBindings);
-    expect(updated[1].schemaBindings).toEqual([
-      { schemaName: 'Docker Compose', version: 'v2', mode: 'project_default' },
+    expect(updated[1].schemaBindings).toEqual(candidates[1].schemaBindings);
+
+    const newWorkspace = { ...candidates[1], id: 'workspace_new', revision: undefined };
+    const [initialized] = applyProjectWorkspaceSchemaBindings([newWorkspace], {
+      projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
+      byWorkspaceId: {},
+    });
+    expect(initialized.schemaBindings).toEqual([
+      {
+        canonicalName: 't3x/prompt',
+        schemaHash: PROMPT_SCHEMA_HASH,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
+        mode: 'project_default',
+      },
     ]);
+
+    const draftOverride = {
+      ...newWorkspace,
+      id: 'workspace_draft_override',
+      schemaBindings: [
+        { schemaName: 'Draft Schema', version: 'v3', mode: 'draft_override' as const },
+      ],
+    };
+    expect(
+      applyProjectWorkspaceSchemaBindings([draftOverride], {
+        projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
+        byWorkspaceId: {},
+      })[0].schemaBindings
+    ).toEqual(draftOverride.schemaBindings);
   });
 
   it('round-trips the project default through project metadata without dropping other metadata', () => {
@@ -165,7 +202,27 @@ describe('workspace schema bindings', () => {
     );
 
     expect(rebound.schemaBindings).toEqual([
-      { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
+      {
+        canonicalName: 't3x/prompt',
+        schemaHash: PROMPT_SCHEMA_HASH,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
+        mode: 'pinned',
+      },
     ]);
+  });
+
+  it('treats a changed release hash as a stale binding even when name and version match', () => {
+    const promptBinding = schemaReleaseToWorkspaceBinding(release, 'pinned');
+    const candidate = {
+      ...candidates[0],
+      schemaBindings: [{ ...promptBinding, schemaHash: `sha256:${'0'.repeat(64)}` }],
+    };
+
+    const rebound = rebindWorkspaceCandidate(candidate, promptBinding);
+
+    expect(rebound).not.toBe(candidate);
+    expect(rebound.schemaBindings).toEqual([promptBinding]);
+    expect(rebound.schemaReview.verdict).toBe('needs_review');
   });
 });

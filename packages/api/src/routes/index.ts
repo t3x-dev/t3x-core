@@ -38,6 +38,7 @@ export { mergeRoutes } from './merge.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects.openapi';
+export { promptCompileRoutes } from './prompt-compile.openapi';
 export { providersRoutes } from './providers.openapi';
 export { pullRequestRoutes } from './pull-requests.openapi';
 export { recipesRoutes } from './recipes.openapi';
