@@ -10,6 +10,7 @@ import type {
   WorkspaceCandidate,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
+import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { WorkspaceYOpsEditor } from './WorkspaceYOpsEditor';
 
@@ -549,7 +550,8 @@ function getSourceExcerpt(
   );
 }
 
-function formatDisplayValue(value: string | undefined): string {
+function formatDisplayValue(value: WorkspaceYOpsValue | undefined): string {
   if (value === undefined || value === '') return 'Empty';
-  return value;
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
 }

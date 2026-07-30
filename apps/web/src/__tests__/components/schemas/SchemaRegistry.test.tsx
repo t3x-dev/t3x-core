@@ -11,7 +11,7 @@ function renderRegistry(projectId = 'proj_test') {
 }
 
 describe('SchemaRegistry', () => {
-  it('shows PRD, Skill, and Prompt as selectable Schema families with current versions', () => {
+  it('shows PRD, Skill, Prompt, and ESPHome Device as selectable Schema families', () => {
     renderRegistry();
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
@@ -22,11 +22,12 @@ describe('SchemaRegistry', () => {
     );
     expect(screen.getByRole('tab', { name: /Skill Schema v1/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Prompt Schema v1/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /ESPHome Device v1/i })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Schema families' })).toHaveAttribute(
       'aria-orientation',
       'horizontal'
     );
-    expect(screen.getByText('3 families')).toBeInTheDocument();
+    expect(screen.getByText('4 families')).toBeInTheDocument();
     expect(screen.getByText(/2 nodes · 8 paths/)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
@@ -107,6 +108,30 @@ describe('SchemaRegistry', () => {
       ctrlKey: false,
     });
     expect(screen.getByText('Changes from current')).toBeInTheDocument();
+  });
+
+  it('exposes ESPHome Device v1 as a bindable device-state Schema', () => {
+    renderRegistry();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /ESPHome Device v1/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.getAllByText('ESPHome Device v1')).toHaveLength(2);
+    const rootFact = screen.getByText('Root').parentElement;
+    expect(rootFact).not.toBeNull();
+    expect(rootFact).toHaveTextContent('device');
+    expect(screen.getByText(/5 nodes · 8 paths/)).toBeInTheDocument();
+    expect(screen.getByText('t3x/esphome-device')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open ESPHome Device v1 canonical YAML' }));
+
+    expect(screen.getByRole('tab', { name: 'Canonical YAML' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByText('t3x/esphome-device@v1')).toBeInTheDocument();
   });
 
   it('labels executable and descriptive rules distinctly', () => {

@@ -1,3 +1,5 @@
+import type { WorkspaceYOpsValue } from './workspaceYops';
+
 export type WorkspaceStatus = 'draft' | 'ready_for_yops' | 'schema_review' | 'committed';
 
 export type WorkspaceStatusFilter = 'all' | WorkspaceStatus;
@@ -143,8 +145,8 @@ export interface WorkspaceYOpsDraftOperation {
   op: string;
   path: string;
   summary: string;
-  beforeValue?: string;
-  afterValue?: string;
+  beforeValue?: WorkspaceYOpsValue;
+  afterValue?: WorkspaceYOpsValue;
   reason?: string;
   sourceRefs?: string[];
 }

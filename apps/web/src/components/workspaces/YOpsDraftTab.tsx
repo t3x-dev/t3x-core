@@ -34,7 +34,11 @@ import type {
   WorkspaceSchemaFieldStatus,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
-import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
+import type {
+  WorkspaceYOp,
+  WorkspaceYOpsTreeNode,
+  WorkspaceYOpsValue,
+} from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
@@ -126,8 +130,8 @@ export function YOpsDraftTab({
             operation.id,
             operation.op,
             operation.path,
-            operation.beforeValue ?? '',
-            operation.afterValue ?? '',
+            fingerprintYOpsValue(operation.beforeValue),
+            fingerprintYOpsValue(operation.afterValue),
           ].join('\u001f')
         )
         .join('\u001e'),
@@ -741,7 +745,7 @@ function ValidationReviewView({
                   <div className="grid grid-cols-3 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)]">
                     <ValidationDetailCell label="1 · Projected value">
                       <p className="break-words font-mono text-xs leading-5 text-[var(--text-primary)]">
-                        {operation.afterValue || 'Empty'}
+                        {formatTreeValue(operation.afterValue)}
                       </p>
                     </ValidationDetailCell>
                     <ValidationDetailCell label="2 · YSchema rule">
@@ -1762,7 +1766,9 @@ function buildYOpsScriptLines(
     const opName = operation.op === 'add' ? 'append' : operation.op;
     lines.push(`  - ${opName}:`);
     lines.push(`      path: ${operationPreviewPath(operation, rootKey)}`);
-    if (operation.afterValue) lines.push(`      value: ${quoteYamlValue(operation.afterValue)}`);
+    if (operation.afterValue !== undefined) {
+      lines.push(`      value: ${quoteYamlUnknown(operation.afterValue)}`);
+    }
     if (operation.reason) lines.push(`      reason: ${quoteYamlValue(operation.reason)}`);
     if (operation.sourceRefs?.length) {
       lines.push('      source_refs:');
@@ -1786,6 +1792,12 @@ function buildYOpsCommandLines(yops: WorkspaceYOp[]): string[] {
     if ('value' in payload) lines.push(`      value: ${quoteYamlUnknown(payload.value)}`);
   }
   return lines;
+}
+
+function fingerprintYOpsValue(value: WorkspaceYOpsValue | undefined): string {
+  if (value === undefined) return '';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
 }
 
 function quoteYamlValue(value: string): string {
@@ -1857,8 +1869,9 @@ function lineTouchedByYOps(path: string, changedPaths: Set<string>) {
 }
 
 function formatTreeValue(value: unknown): string {
+  if (value === undefined || value === '') return 'Empty';
   if (typeof value === 'string') return value;
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? String(value);
 }
 
 function operationPreviewPath(operation: WorkspaceYOpsDraftOperation, rootKey: string) {

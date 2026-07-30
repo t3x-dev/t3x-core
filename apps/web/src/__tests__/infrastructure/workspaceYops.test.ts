@@ -258,4 +258,66 @@ describe('validateWorkspaceYOps', () => {
     expect(requestBody?.relations).toEqual(inheritedRelations);
     expect(result.previewRelations).toEqual(inheritedRelations);
   });
+
+  it('validates ESPHome Device operations under device root with object values', async () => {
+    const device = {
+      esphome: { name: 'office-lunch-demo' },
+      esp32: { board: 'esp32dev' },
+      logger: {},
+      api: {},
+    };
+    const candidate: WorkspaceCandidate = {
+      id: 'workspace_esphome_device',
+      projectId: 'proj_1',
+      title: 'ESPHome workspace',
+      summary: 'Validate an ESPHome device.',
+      status: 'schema_review',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+      baseCommitHash: null,
+      targetBranch: 'main',
+      sourceBundle: [{ id: 'src_yaml', type: 'document', title: 'Device YAML' }],
+      schemaBindings: [
+        {
+          canonicalName: 't3x/esphome-device',
+          schemaName: 'ESPHome Device',
+          version: 'v1',
+          mode: 'pinned',
+        },
+      ],
+      schemaCandidate: { summary: 'ESPHome Device mapped from source.', fields: [] },
+      schemaReview: { verdict: 'ready', summary: 'Ready.', gaps: [] },
+      yopsDraft: {
+        id: 'draft_esphome_device',
+        operations: [
+          {
+            id: 'op_esphome_device',
+            op: 'set',
+            path: 'device',
+            summary: 'Set ESPHome device config.',
+            beforeValue: '',
+            afterValue: device,
+            sourceRefs: ['src_yaml'],
+          },
+        ],
+      },
+      outputTargets: [],
+    };
+    let requestBody: { trees: Array<{ key: string }>; yops: unknown[] } | null = null;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        success: true,
+        data: {
+          ok: true,
+          applied: 1,
+          preview: { trees: [], relations: [] },
+        },
+      });
+    });
+
+    await validateWorkspaceYOps(candidate);
+
+    expect(requestBody?.trees[0]?.key).toBe('device');
+    expect(requestBody?.yops).toEqual([{ set: { path: 'device', value: device } }]);
+  });
 });
