@@ -509,10 +509,7 @@ describe('ProjectStateTab', () => {
       'min-h-0',
       'overflow-hidden'
     );
-    expect(screen.getByRole('region', { name: 'State overview' })).toHaveClass(
-      'ml-auto',
-      'items-center'
-    );
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Path / Key')).toBeInTheDocument();
@@ -523,15 +520,13 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
-    const stateMetadata = screen
-      .getByRole('heading', { name: 'State metadata' })
-      .closest('section');
-    expect(stateMetadata).not.toBeNull();
-    expect(within(stateMetadata as HTMLElement).getByText('000000')).toHaveAttribute(
+    const stateDetails = screen.getByRole('heading', { name: 'State details' }).closest('section');
+    expect(stateDetails).not.toBeNull();
+    expect(within(stateDetails as HTMLElement).getAllByText('cb5813f')[0]).toHaveAttribute(
       'title',
       PRD_COMMIT.hash
     );
-    expect(within(stateMetadata as HTMLElement).getByText('se-prd')).toHaveAttribute(
+    expect(within(stateDetails as HTMLElement).getByText('base-pr')).toHaveAttribute(
       'title',
       PRD_COMMIT.parents[0]
     );
@@ -539,23 +534,20 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project?view=canvas'
+      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
     );
     expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
       'href',
       '/t3x-dev/test-project/workspaces?branch=main'
     );
-    expect(screen.getByRole('link', { name: 'Open commit' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'cb5813f' })).toHaveAttribute(
       'href',
-      `/t3x-dev/test-project?view=canvas&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
+      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
     );
-    for (const link of screen.getAllByRole('link')) {
-      expect(link.getAttribute('href')).not.toMatch(/^\/(?:project|chat)\//);
-    }
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View 2 changed paths' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
+    expect(screen.getByRole('link', { name: '2 changed paths' })).toHaveAttribute(
+      'href',
+      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -570,8 +562,8 @@ describe('ProjectStateTab', () => {
     const structureScrollArea = structureScroller.closest('[data-slot="state-scroll-area"]');
     expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
-    expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1200px]');
-    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[360px]');
+    expect(within(structureView).getByRole('table')).toHaveClass('min-w-[1010px]');
+    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[250px]');
     expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
       'sticky',
       'top-0'
@@ -581,35 +573,9 @@ describe('ProjectStateTab', () => {
       'left-0'
     );
 
-    const stateDetailsSeparator = screen.getByRole('separator', {
-      name: 'Resize state details',
-    });
-    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '330');
-    fireEvent.keyDown(stateDetailsSeparator, { key: 'ArrowLeft' });
-    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '346');
-    fireEvent.doubleClick(stateDetailsSeparator);
-    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '330');
-
-    vi.spyOn(
-      stateDetailsSeparator.parentElement as HTMLElement,
-      'getBoundingClientRect'
-    ).mockReturnValue({
-      bottom: 760,
-      height: 640,
-      left: 0,
-      right: 1800,
-      top: 120,
-      width: 1800,
-      x: 0,
-      y: 120,
-      toJSON: () => ({}),
-    });
-    fireEvent.mouseDown(stateDetailsSeparator, { clientX: 1400 });
-    fireEvent.mouseMove(document, { clientX: 1300 });
-    expect(stateDetailsSeparator).toHaveAttribute('aria-valuenow', '430');
-    fireEvent.mouseUp(document);
-    expect(document.body).not.toHaveStyle({ cursor: 'col-resize' });
-    fireEvent.doubleClick(stateDetailsSeparator);
+    expect(
+      screen.queryByRole('separator', { name: 'Resize state details' })
+    ).not.toBeInTheDocument();
   });
 
   it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
@@ -712,42 +678,66 @@ describe('ProjectStateTab', () => {
     ).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('reloads the State snapshot and supporting repository data on refresh', async () => {
+  it('checks branch freshness on focus without exposing a manual Refresh action', async () => {
     renderStateTab();
 
     await screen.findByText('PRD audience handoff committed');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+    fireEvent.focus(window);
 
-    await waitFor(() => expect(hookMocks.loadCommits).toHaveBeenCalledTimes(2));
-    expect(hookMocks.loadOperations).toHaveBeenCalledTimes(2);
-    expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1);
-    expect(hookMocks.refreshWorkspaces).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Just now')).toBeInTheDocument();
+    expect(hookMocks.refreshWorkspaces).not.toHaveBeenCalled();
   });
 
-  it('shows the parent-to-HEAD diff inline and restores the state view when closed', async () => {
-    renderStateTab();
+  it('announces a newer branch HEAD while keeping the inspected commit pinned until View latest', async () => {
+    const newerHead: ApiCommit = {
+      ...PRD_COMMIT,
+      committed_at: '2026-07-30T05:00:00.000Z',
+      hash: 'sha256:9f31c42000000000000000000000000000000000000000000000000000000000',
+      message: 'Confirm retry recovery validation evidence',
+      parents: [PRD_COMMIT.hash],
+    };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) => {
+      if (hash === newerHead.hash) return newerHead;
+      if (hash === PRD_COMMIT.hash) return PRD_COMMIT;
+      return PARENT_COMMIT;
+    });
+    const view = renderStateTab();
 
-    const showChanges = await screen.findByRole('button', { name: 'View 2 changed paths' });
-    fireEvent.click(showChanges);
-
-    const diff = screen.getByRole('region', { name: 'T3X Diff' });
-    expect(within(diff).getByText('Commit · Parent → HEAD')).toBeInTheDocument();
-    fireEvent.click(within(diff).getByRole('button', { name: 'outcome' }));
-    expect(within(diff).getByText('Updated desired outcome')).toBeInTheDocument();
-    expect(within(diff).getByText('Find a meal')).toBeInTheDocument();
-    expect(within(diff).getByText('办公室上班族')).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Hide changed paths' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
+    await screen.findByText('PRD audience handoff committed');
+    hookMocks.branchHeads = { main: newerHead.hash };
+    hookMocks.loadCommits.mockResolvedValue([newerHead, PRD_COMMIT]);
+    view.rerender(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide changed paths' }));
+    const update = await screen.findByRole('status');
+    expect(update).toHaveTextContent('Newer commit available on main');
+    expect(update).toHaveTextContent('9f31c42');
+    expect(
+      screen.getByRole('heading', { name: 'PRD audience handoff committed' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('main · pinned cb5813f')).toBeInTheDocument();
 
+    fireEvent.click(within(update).getByRole('button', { name: 'View latest' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm retry recovery validation evidence' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Newer commit available on main')).not.toBeInTheDocument();
+  });
+
+  it('routes changed paths to the shared commit T3X Diff instead of drawing an inline diff', async () => {
+    renderStateTab();
+
+    const changedPaths = await screen.findByRole('link', { name: '2 changed paths' });
+    expect(changedPaths).toHaveAttribute(
+      'href',
+      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+    );
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
   });
 
   it('switches to the schema-selected Render view', async () => {
@@ -916,7 +906,8 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('Add review-code Skill');
     expect(screen.getByText('skill-state.yaml')).toBeInTheDocument();
-    expect(screen.getAllByText('adapter skill.document').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
+    expect(screen.queryByText('adapter skill.document')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
     expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
@@ -1166,8 +1157,8 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('02 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('03 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.getByText('Not validated at HEAD')).toBeInTheDocument();
-    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
     expect(screen.queryByText('INITIAL CREATE')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
   });
@@ -1184,8 +1175,8 @@ describe('ProjectStateTab', () => {
     );
 
     await screen.findByText('PRD audience handoff committed');
-    expect(screen.getByText('Not validated at HEAD')).toBeInTheDocument();
-    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
     expect(onRunValidation).toHaveBeenCalledWith(PRD_COMMIT.hash, 't3x/prd');
@@ -1210,7 +1201,8 @@ describe('ProjectStateTab', () => {
     });
 
     await screen.findByText('PRD audience handoff committed');
-    expect(screen.getByText('Up to date')).toBeInTheDocument();
+    expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
     expect(screen.queryByText('missing')).not.toBeInTheDocument();
   });
 
@@ -1284,14 +1276,14 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getAllByText('0 commits').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'History' })).toHaveTextContent('0');
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
-    const metadata = screen.getByRole('heading', { name: 'State metadata' }).closest('section');
-    expect(metadata).not.toBeNull();
-    const edgesLabel = within(metadata as HTMLElement).getByText('Edges');
-    expect(edgesLabel.nextElementSibling).toHaveTextContent('0');
+    const details = screen.getByRole('heading', { name: 'State details' }).closest('section');
+    expect(details).not.toBeNull();
+    const changedLabel = within(details as HTMLElement).getByText('Changed');
+    expect(changedLabel.nextElementSibling).toHaveTextContent('0 paths');
   });
 
   it('keeps an empty main branch selected instead of redirecting to another branch', async () => {
@@ -1345,7 +1337,7 @@ describe('ProjectStateTab', () => {
     });
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
+      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
     );
   });
 
@@ -1373,7 +1365,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
+      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
     );
   });
 });
