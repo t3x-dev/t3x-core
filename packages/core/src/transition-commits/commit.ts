@@ -12,6 +12,7 @@ import {
   type ProposalStatement,
   type ProtocolObject,
   parseCommitV2,
+  parseDecisionStatement,
   parseEffect,
   parseProposalStatement,
   parseProtocolBytes,
@@ -91,6 +92,26 @@ export interface CreateCommitV2Input {
   resolver: ObjectResolver;
 }
 
+export interface VerifiedDecisionGraph {
+  decision: DecisionStatement;
+  proposal: ProposalStatement;
+  effect: Effect;
+}
+
+/** Resolve and verify the typed Decision -> Proposal -> Effect chain for any outcome. */
+export async function verifyDecisionGraph(
+  decision: DecisionStatement,
+  resolver: ObjectResolver
+): Promise<VerifiedDecisionGraph> {
+  const parsedDecision = parseDecisionStatement(decision);
+  const decisionResolver = overlayTransitionObjects(resolver, [parsedDecision]);
+  const proposal = parseProposalStatement(
+    await resolveProtocolObject(decisionResolver, parsedDecision.subjects[0])
+  );
+  const effect = parseEffect(await resolveProtocolObject(decisionResolver, proposal.subjects[0]));
+  return { decision: parsedDecision, proposal, effect };
+}
+
 /**
  * Build the minimal immutable CommitV2 object and verify its complete structural chain.
  * Repository authorization and branch advancement intentionally remain separate.
@@ -98,10 +119,7 @@ export interface CreateCommitV2Input {
 export async function createCommitV2(input: CreateCommitV2Input): Promise<CommitV2> {
   const decisionDescriptor = describeProtocolObject(input.decision);
   const resolver = overlayTransitionObjects(input.resolver, [input.decision]);
-  const proposal = parseProposalStatement(
-    await resolveProtocolObject(resolver, input.decision.subjects[0])
-  );
-  const effect = parseEffect(await resolveProtocolObject(resolver, proposal.subjects[0]));
+  const { effect } = await verifyDecisionGraph(input.decision, resolver);
   const commit = parseCommitV2({
     schema: 't3x/commit/v2',
     parents: input.parents.map((parent) => ({ ...parent })),

@@ -23,14 +23,24 @@ import { insertProject } from '../queries/projects';
 import {
   createTransitionCommit,
   DecisionNotAuthorizedError,
+  DecisionRecordConflictError,
+  DecisionRecordIntegrityError,
+  getRepositoryDecisionAudit,
   getTransitionCommit,
   getTransitionViewForCommit,
   listCommitHistory,
+  listRepositoryDecisionAudit,
+  listTransitionCommits,
+  recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
 } from '../queries/transition-commits';
-import { transitionDecisionAuthorizations } from '../schema-transition-commits';
+import {
+  transitionDecisionAuthorizations,
+  transitionDecisionLedger,
+  transitionObjects,
+} from '../schema-transition-commits';
 import { createTestDB, testData } from './setup';
 
 const DECIDED_AT = '2026-07-28T00:00:00.000Z';
@@ -203,6 +213,10 @@ describe('CommitV2 repository', () => {
     await expect(recordRepositoryDecisionAuthorization(db, forged)).rejects.toThrow(
       'was not issued by the trusted service'
     );
+    await expect(recordRepositoryDecision(db, { ...prepared.issued.record })).rejects.toThrow(
+      'was not issued by the trusted service'
+    );
+    await recordRepositoryDecision(db, prepared.issued.record);
     await expect(
       createTransitionCommit(db, {
         projectId: project.projectId,
@@ -212,6 +226,186 @@ describe('CommitV2 repository', () => {
         objects: prepared.objects,
       })
     ).rejects.toBeInstanceOf(DecisionNotAuthorizedError);
+    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
+  });
+
+  it('durably records rejection without granting commit authority or rebinding its ref', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Decision Ledger Project' }));
+    const branch = await ensureMainBranch(db, project.projectId);
+    await insertBranch(db, { projectId: project.projectId, name: 'other' });
+    const subject = graph(state({}), state({ device: 'revise-me' }), 'rejected-ledger');
+    const rejected = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'authored', value: 'Revise the proposal', evidence: [] },
+      decidedAt: DECIDED_AT,
+      authority: authority(subject),
+    });
+    if (!rejected.ok) throw new Error('Fixture rejection failed');
+
+    await recordRepositoryDecision(db, rejected.record);
+    await recordRepositoryDecision(db, rejected.record);
+
+    const entry = await getRepositoryDecisionAudit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      decisionDigest: describeTransitionObject(rejected.decision).digest,
+    });
+    expect(entry).toMatchObject({
+      projectId: project.projectId,
+      refName: 'main',
+      decision: { predicate: { outcome: 'rejected' } },
+      proposal: subject.proposal,
+      effect: subject.effect,
+      observations: [{ issuerContext: { actor: subject.replay.actor } }],
+    });
+    expect(
+      await listRepositoryDecisionAudit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).toHaveLength(1);
+    expect((await findBranchByName(db, project.projectId, branch.name))?.headCommitHash).toBeNull();
+    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
+
+    const rebound = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'other',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'authored', value: 'Revise the proposal', evidence: [] },
+      decidedAt: DECIDED_AT,
+      authority: authority(subject),
+    });
+    if (!rebound.ok) throw new Error('Fixture rebound rejection failed');
+    expect(describeTransitionObject(rebound.decision)).toEqual(
+      describeTransitionObject(rejected.decision)
+    );
+    await expect(recordRepositoryDecision(db, rebound.record)).rejects.toBeInstanceOf(
+      DecisionRecordConflictError
+    );
+  });
+
+  it('fails closed when persisted Decision audit issuer facts are corrupted', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Audit Integrity Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const subject = graph(state({}), state({ device: 'audit' }), 'audit-integrity');
+    const issued = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'unspecified' },
+      decidedAt: DECIDED_AT,
+      authority: authority(subject),
+    });
+    if (!issued.ok) throw new Error('Fixture Decision failed');
+    const digest = describeTransitionObject(issued.decision).digest;
+    await recordRepositoryDecision(db, issued.record);
+    await db
+      .update(transitionDecisionLedger)
+      .set({ statementIssuers: [] })
+      .where(eq(transitionDecisionLedger.decisionDigest, digest));
+
+    await expect(
+      getRepositoryDecisionAudit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        decisionDigest: digest,
+      })
+    ).rejects.toBeInstanceOf(DecisionRecordIntegrityError);
+  });
+
+  it('fails closed when a persisted Decision graph object is missing', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Audit Graph Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const subject = graph(state({}), state({ device: 'graph' }), 'audit-graph');
+    const issued = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'unspecified' },
+      decidedAt: DECIDED_AT,
+      authority: authority(subject),
+    });
+    if (!issued.ok) throw new Error('Fixture Decision failed');
+    const digest = describeTransitionObject(issued.decision).digest;
+    await recordRepositoryDecision(db, issued.record);
+    await db
+      .delete(transitionObjects)
+      .where(eq(transitionObjects.digest, describeTransitionObject(subject.proposal).digest));
+
+    await expect(
+      getRepositoryDecisionAudit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        decisionDigest: digest,
+      })
+    ).rejects.toThrow('was not found');
+  });
+
+  it('orders Decision audit by repository time rather than claimed decidedAt', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Audit Ordering Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const firstSubject = graph(state({}), state({ device: 'first' }), 'audit-first');
+    const secondSubject = graph(state({}), state({ device: 'second' }), 'audit-second');
+    const first = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: firstSubject.proposal,
+      effect: firstSubject.effect,
+      outcome: 'accepted',
+      rationale: { mode: 'unspecified' },
+      decidedAt: '2030-01-01T00:00:00.000Z',
+      authority: authority(firstSubject),
+    });
+    const second = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: secondSubject.proposal,
+      effect: secondSubject.effect,
+      outcome: 'accepted',
+      rationale: { mode: 'unspecified' },
+      decidedAt: '2020-01-01T00:00:00.000Z',
+      authority: authority(secondSubject),
+    });
+    if (!first.ok || !second.ok) throw new Error('Fixture Decisions failed');
+    await recordRepositoryDecision(db, first.record);
+    await recordRepositoryDecision(db, second.record);
+    const firstDigest = describeTransitionObject(first.decision).digest;
+    const secondDigest = describeTransitionObject(second.decision).digest;
+    await db
+      .update(transitionDecisionLedger)
+      .set({ recordedAt: new Date('2026-01-01T00:00:00.000Z') })
+      .where(eq(transitionDecisionLedger.decisionDigest, firstDigest));
+    await db
+      .update(transitionDecisionLedger)
+      .set({ recordedAt: new Date('2026-01-02T00:00:00.000Z') })
+      .where(eq(transitionDecisionLedger.decisionDigest, secondDigest));
+
+    const page = await listRepositoryDecisionAudit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      limit: 1,
+    });
+    expect(page.map((entry) => entry.decisionDigest)).toEqual([secondDigest]);
+    expect(
+      (
+        await listRepositoryDecisionAudit(db, {
+          projectId: project.projectId,
+          refName: 'main',
+          limit: 1,
+          offset: 1,
+        })
+      ).map((entry) => entry.decisionDigest)
+    ).toEqual([firstDigest]);
   });
 
   it('persists canonical CommitV2 bytes and advances the ref only after exact authorization', async () => {
@@ -225,6 +419,11 @@ describe('CommitV2 repository', () => {
       'genesis'
     );
     await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const audit = await getRepositoryDecisionAudit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      decisionDigest: describeTransitionObject(prepared.issued.decision).digest,
+    });
     const created = await createTransitionCommit(db, {
       projectId: project.projectId,
       refName: 'main',
@@ -235,6 +434,7 @@ describe('CommitV2 repository', () => {
     const stored = await getTransitionCommit(db, project.projectId, created.digest);
 
     expect(created.mediaType).toBe('application/vnd.t3x.commit-v2+json');
+    expect(audit).toMatchObject({ outcome: 'accepted', decision: prepared.issued.decision });
     expect(stored?.commit).toEqual(prepared.commit);
     const refreshed = await findBranchByName(db, project.projectId, branch.name);
     expect(refreshed?.headCommitHash).toBe(created.digest);

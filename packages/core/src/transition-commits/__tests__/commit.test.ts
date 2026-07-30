@@ -21,6 +21,7 @@ import {
   createCommitV2,
   describeCommitV2,
   isRepositoryDecisionAuthorization,
+  isRepositoryDecisionRecord,
   projectLegacyCommit,
   type RepositoryDecisionAuthority,
 } from '..';
@@ -268,7 +269,7 @@ describe('CommitV2 application boundary', () => {
     expect(partial.ok).toBe(false);
   });
 
-  it('issues accepted and overridden authorization through one shape for human or agent actors', async () => {
+  it('records every trusted outcome while authorizing only accepted and overridden Decisions', async () => {
     const subject = graph();
     const accepted = await authorizeDecisionForRepository({
       projectId: 'project:test',
@@ -290,6 +291,16 @@ describe('CommitV2 application boundary', () => {
       decidedAt: DECIDED_AT,
       authority: authority({ kind: 'agent', id: 'agent:release-bot' }, { validation: 'required' }),
     });
+    const rejected = await authorizeDecisionForRepository({
+      projectId: 'project:test',
+      refName: 'main',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'authored', value: 'Needs revision', evidence: [] },
+      decidedAt: DECIDED_AT,
+      authority: authority({ kind: 'human', id: 'human:maintainer' }),
+    });
     expect(accepted).toMatchObject({
       ok: true,
       authorization: { decision: { schema: 't3x/statement/v1' } },
@@ -298,7 +309,19 @@ describe('CommitV2 application boundary', () => {
       ok: true,
       authorization: { decision: { schema: 't3x/statement/v1' } },
     });
-    if (!accepted.ok || !overridden.ok) throw new Error('fixture authorization failed');
+    expect(rejected).toMatchObject({
+      ok: true,
+      record: { decision: { predicate: { outcome: 'rejected' } } },
+      authorization: null,
+    });
+    if (!accepted.ok || !overridden.ok || !rejected.ok) {
+      throw new Error('fixture authorization failed');
+    }
+    expect(accepted.record).toBe(accepted.authorization);
+    expect(isRepositoryDecisionRecord(accepted.record)).toBe(true);
+    expect(isRepositoryDecisionRecord(rejected.record)).toBe(true);
+    expect(isRepositoryDecisionAuthorization(rejected.record)).toBe(false);
+    expect(isRepositoryDecisionRecord({ ...rejected.record })).toBe(false);
     expect(Object.keys(accepted.decision).sort()).toEqual(Object.keys(overridden.decision).sort());
   });
 
