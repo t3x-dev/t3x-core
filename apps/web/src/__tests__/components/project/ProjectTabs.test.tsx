@@ -15,10 +15,11 @@ describe('ProjectTabs', () => {
   it('renders stable route links and marks the active project view', () => {
     expect(typeof ProjectTabs).toBe('function');
 
-    render(<ProjectTabs activeTab="state" repoPath="/t3x-dev/test-project" />);
+    render(<ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />);
 
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation).toHaveClass('min-h-10', 'items-stretch');
+    expect(projectNavigation).toHaveClass('min-h-8', 'items-stretch');
+    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs1');
 
     for (const tab of PROJECT_TABS) {
       const href =

@@ -61,6 +61,7 @@ import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
+import { CommitT3XDiffView } from './CommitT3XDiffView';
 import { CommitTreeIndex } from './CommitTreeIndex';
 import { CommitYAMLDocument } from './CommitYAMLDocument';
 import { SourceSlideIn } from './SourceSlideIn';
@@ -165,6 +166,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   // ── Store ──────────────────────────────────────────
   const enrichedNodes = useCommitDetailStore((s) => s.enrichedNodes);
   const removedNodes = useCommitDetailStore((s) => s.removedNodes);
+  const parentCommit = useCommitDetailStore((s) => s.parentCommit);
   const activeNodeId = useCommitDetailStore((s) => s.activeNodeId);
   const setActiveNode = useCommitDetailStore((s) => s.setActiveNode);
   const sourceViewer = useCommitDetailStore((s) => s.sourceViewer);
@@ -191,6 +193,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const commitTourSteps = isIntroCommitDetailsStage
     ? INTRO_COMMIT_DETAIL_TOUR_STEPS
     : COMMIT_TOUR_STEPS;
+  const isT3XDiffView = searchParams.get('view') === 'diff' && !introDemoRequested;
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
@@ -219,9 +222,9 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         setLeaves(leavesData.filter((leaf) => leaf.project_id === projectId));
         if (projectData?.name) setProjectName(projectData.name);
 
-        // Fetch parent commit for diff computation (if single parent)
+        // Fetch the first parent for commit-to-commit T3X Diff.
         let parentCommit: ApiCommit | null = null;
-        if (!introDemoCommit && commitData.parents.length === 1) {
+        if (!introDemoCommit && commitData.parents.length > 0) {
           try {
             const candidate = await loadCommit(commitData.parents[0]);
             if (
@@ -366,6 +369,25 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (isT3XDiffView) {
+    const backLabel = returnHref.includes('/history')
+      ? 'History'
+      : returnHref.includes('/workspaces')
+        ? 'Workspace'
+        : returnHref.includes('/canvas')
+          ? 'Canvas'
+          : 'State';
+    return (
+      <CommitT3XDiffView
+        backLabel={backLabel}
+        commit={commit}
+        onBack={handleBack}
+        parentCommit={parentCommit}
+        projectName={projectName}
+      />
     );
   }
 
