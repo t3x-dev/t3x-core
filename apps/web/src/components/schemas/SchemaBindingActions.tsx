@@ -1,6 +1,7 @@
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { isSchemaReleaseBindable } from '@/domain/workspaces/schemaBindings';
 import type { SchemaReleasePreview } from '@/types/schemas';
 import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 
@@ -35,7 +36,7 @@ export function SchemaBindingActions({
   selectedRelease,
 }: SchemaBindingActionsProps) {
   const isRuntimeRelease =
-    selectedRelease.status === 'active' && selectedRelease.id === currentRelease?.id;
+    isSchemaReleaseBindable(selectedRelease) && selectedRelease.id === currentRelease?.id;
   const defaultMatches = bindingMatchesRelease(actions.defaultBinding, selectedRelease);
   const workspaceMatches = bindingMatchesRelease(actions.workspaceTarget?.binding, selectedRelease);
   const busy = actions.pending !== null;
@@ -129,6 +130,7 @@ function bindingMatchesRelease(
     : binding.schemaName === release.name;
   return (
     canonicalNameMatches &&
+    binding.schemaHash === release.schemaHash &&
     binding.schemaName === release.name &&
     binding.version === release.version
   );

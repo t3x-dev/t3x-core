@@ -300,6 +300,115 @@ describe('Workspace routes', () => {
     });
   });
 
+  it('persists a complete Prompt binding and regenerates YOps under the Prompt root', async () => {
+    const promptSchemaHash =
+      'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
+    const binding = {
+      canonicalName: 't3x/prompt',
+      schemaHash: promptSchemaHash,
+      schemaName: 'Prompt Schema',
+      version: 'v1',
+      mode: 'pinned',
+    };
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            title: 'Prompt workspace',
+            targetBranch: 'main',
+            schemaBindings: [binding],
+            sourceBundle: [],
+            schemaReview: {
+              verdict: 'needs_review',
+              summary: 'Regenerate against Prompt Schema.',
+              gaps: ['Prompt candidate is stale.'],
+            },
+            yopsDraft: {
+              id: 'draft:stale-prompt',
+              operations: [{ id: 'old-op', op: 'set', path: 'skill/manifest/name' }],
+            },
+          },
+          sources: [
+            {
+              id: 'src_prompt',
+              type: 'document',
+              title: 'Prompt definition',
+              previewText: [
+                'name: source-backed-summary',
+                'summary: Summarize supplied source evidence.',
+                'goal: Produce a concise source-backed summary.',
+                'inputs: Source material',
+                'outputs: Markdown summary',
+                'non goals: Invent unsupported claims',
+                'truth policy: evidence_only',
+                'sequence: 1',
+                'role: user',
+                'template: Summarize {{source_material}}',
+                'purpose: Request a grounded summary',
+                'optional: false',
+                'on missing variable: report_and_stop',
+                'mode: chat',
+                'response format: markdown',
+                'streaming: false',
+                'tool policy: none',
+                'format: markdown',
+                'strict: true',
+                'on parse failure: report_and_stop',
+                'kind: template_compile',
+                'run when: pre_compile',
+                'blocking: true',
+              ].join('\n'),
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    expect(extractBody.data.workspace.schemaBindings).toEqual([binding]);
+    expect(extractBody.data.workspace.schemaCandidate.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'manifest' }),
+        expect.objectContaining({ path: 'messages' }),
+        expect.objectContaining({ path: 'runtime' }),
+        expect.objectContaining({ path: 'output' }),
+      ])
+    );
+
+    const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
+    expect(getRes.status).toBe(200);
+    const getBody: ApiResponse = await getRes.json();
+    expect(getBody.data.workspace.schemaBindings).toEqual([binding]);
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations.length).toBeGreaterThan(0);
+    expect(
+      yopsBody.data.workspace.yopsDraft.operations.every((operation: ApiResponse) =>
+        operation.path.startsWith('prompt/')
+      )
+    ).toBe(true);
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
+  });
+
   it('merges complementary evidence for the same repeated requirement', async () => {
     const res = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',

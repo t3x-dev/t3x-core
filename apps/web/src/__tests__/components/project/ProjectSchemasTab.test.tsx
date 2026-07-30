@@ -12,6 +12,8 @@ const refreshWorkspaces = vi.fn();
 const saveDraft = vi.fn();
 const extractCandidate = vi.fn();
 let workspaces: WorkspaceCandidate[] = [];
+const PROMPT_SCHEMA_HASH =
+  'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
 
 vi.mock('@/commands/projects', () => ({ updateProject: vi.fn() }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
@@ -97,6 +99,10 @@ describe('ProjectSchemasTab', () => {
       <ProjectSchemasTab projectId="proj_test" projectMetadata={{ description: 'Test project' }} />
     );
 
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Use for new Workspaces' }));
 
     await waitFor(() => {
@@ -104,10 +110,11 @@ describe('ProjectSchemasTab', () => {
         metadata: expect.objectContaining({
           description: 'Test project',
           default_schema_binding: expect.objectContaining({
-            canonicalName: 't3x/prd',
+            canonicalName: 't3x/prompt',
             mode: 'project_default',
-            schemaName: 'PRD Schema',
-            version: 'v2',
+            schemaHash: PROMPT_SCHEMA_HASH,
+            schemaName: 'Prompt Schema',
+            version: 'v1',
           }),
         }),
       });
@@ -131,15 +138,20 @@ describe('ProjectSchemasTab', () => {
     }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
     const staleWorkspace = saveDraft.mock.calls[0][0] as WorkspaceCandidate;
     expect(staleWorkspace.schemaBindings[0]).toEqual(
       expect.objectContaining({
-        canonicalName: 't3x/prd',
-        schemaName: 'PRD Schema',
-        version: 'v2',
+        canonicalName: 't3x/prompt',
+        schemaHash: PROMPT_SCHEMA_HASH,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
         mode: 'pinned',
       })
     );
@@ -147,5 +159,68 @@ describe('ProjectSchemasTab', () => {
     expect(staleWorkspace.yopsDraft.operations).toEqual([]);
     await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+  });
+
+  it('keeps the persisted stale Prompt binding recoverable when regeneration fails', async () => {
+    workspaces = [workspace];
+    saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
+      candidate_id: candidate.id,
+      workspace: { ...candidate, revision: 2 },
+    }));
+    extractCandidate.mockRejectedValue(new Error('Prompt source could not be regenerated'));
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
+
+    expect(await screen.findByText(/regeneration failed/)).toBeInTheDocument();
+    const savedWorkspace = saveDraft.mock.calls[0][0] as WorkspaceCandidate;
+    expect(savedWorkspace.schemaBindings).toEqual([
+      {
+        canonicalName: 't3x/prompt',
+        schemaHash: PROMPT_SCHEMA_HASH,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
+        mode: 'pinned',
+      },
+    ]);
+    expect(savedWorkspace.schemaCandidate.fields).toEqual([]);
+    expect(savedWorkspace.schemaReview.verdict).toBe('needs_review');
+    expect(savedWorkspace.yopsDraft.operations).toEqual([]);
+    expect(
+      useProjectWorkspaceSchemaBindingsStore.getState().bindingsByProjectId.proj_test.byWorkspaceId
+        .workspace_main
+    ).toEqual(savedWorkspace.schemaBindings[0]);
+    expect(refreshWorkspaces).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores a persisted Prompt binding after the client binding store is reset', () => {
+    workspaces = [
+      {
+        ...workspace,
+        revision: 4,
+        schemaBindings: [
+          {
+            canonicalName: 't3x/prompt',
+            schemaHash: PROMPT_SCHEMA_HASH,
+            schemaName: 'Prompt Schema',
+            version: 'v1',
+            mode: 'pinned',
+          },
+        ],
+      },
+    ];
+    useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
+
+    render(<ProjectSchemasTab projectId="proj_test" />);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.getByRole('button', { name: 'Applied to Main workspace' })).toBeDisabled();
   });
 });

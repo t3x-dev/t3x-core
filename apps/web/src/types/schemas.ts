@@ -63,6 +63,7 @@ export interface SchemaRulePreview {
 /** Fixture-backed view model for the Schemas version browser. */
 export interface SchemaReleasePreview extends SchemaRelease {
   canonicalName: string;
+  runtimeAvailable: boolean;
   schemaHash: string;
   updatedLabel: string;
   canonicalYaml: string;

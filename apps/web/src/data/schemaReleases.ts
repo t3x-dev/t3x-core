@@ -17,6 +17,7 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     description:
       'Draft version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
     status: 'draft',
+    runtimeAvailable: false,
     usedByCommitCount: 0,
     usedByWorkspaceCount: 1,
     breakingChangeLevel: 'minor',
@@ -137,6 +138,7 @@ nodes:
     description:
       'Current project contract for product requirements, source-backed summaries, and structured requirement nodes.',
     status: 'active',
+    runtimeAvailable: true,
     releasedAt: '2026-06-20T00:00:00.000Z',
     releasedBy: 'HLQ',
     usedByCommitCount: 8,
@@ -237,6 +239,7 @@ nodes:
     description:
       'Historical PRD contract kept for commits created before audience and outcome became required summary fields.',
     status: 'deprecated',
+    runtimeAvailable: false,
     releasedAt: '2026-05-30T00:00:00.000Z',
     releasedBy: 'T3X',
     usedByCommitCount: 3,
@@ -334,6 +337,7 @@ const skillSchemaReleases: SchemaReleasePreview[] = [
     description:
       'Portable workflow-routed agent skill with explicit resources, failure behavior, and deterministic delivery checks.',
     status: 'active',
+    runtimeAvailable: true,
     releasedAt: '2026-07-28T00:00:00.000Z',
     releasedBy: 'T3X',
     usedByCommitCount: 0,
@@ -665,6 +669,7 @@ const promptSchemaReleases: SchemaReleasePreview[] = [
     description:
       'Portable, typed, and testable contract for compiling one model invocation without calling a model.',
     status: 'active',
+    runtimeAvailable: true,
     releasedAt: '2026-07-30T00:00:00.000Z',
     releasedBy: 'T3X',
     usedByCommitCount: 0,
