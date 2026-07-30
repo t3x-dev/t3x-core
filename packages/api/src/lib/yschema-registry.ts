@@ -1,7 +1,13 @@
-import { t3xPrdP0Fixtures, t3xSkillP0Fixtures, type YSchema } from '@t3x-dev/yschema';
+import {
+  t3xPrdP0Fixtures,
+  t3xPromptP0Fixtures,
+  t3xSkillP0Fixtures,
+  type YSchema,
+} from '@t3x-dev/yschema';
 
 const BUILT_IN_SCHEMAS = new Map<string, YSchema>([
   ['t3x/prd', t3xPrdP0Fixtures.normalizedYSchema],
+  ['t3x/prompt', t3xPromptP0Fixtures.normalizedYSchema],
   ['t3x/skill', t3xSkillP0Fixtures.normalizedYSchema],
 ]);
 
@@ -19,6 +25,7 @@ export function canonicalSchemaNameFromBinding(binding: unknown): string | null 
   }
 
   const displayName = typeof record.schemaName === 'string' ? record.schemaName : '';
+  if (/prompt/i.test(displayName)) return 't3x/prompt';
   if (/skill/i.test(displayName)) return 't3x/skill';
   if (/prd/i.test(displayName)) return 't3x/prd';
   return null;

@@ -22,6 +22,7 @@ const RunParamSchema = z.object({
 const CreateYSchemaValidationRunRequest = z.object({
   commit_hash: z.string().min(1).optional(),
   schema_name: z.string().min(1).optional(),
+  schema_version: z.string().min(1).optional(),
 });
 
 const LatestYSchemaValidationQuery = z.object({
@@ -172,6 +173,7 @@ yschemaValidationRoutes.openapi(createValidationRunRoute, async (c) => {
       projectId,
       commitHash: body.commit_hash,
       schemaName: body.schema_name,
+      schemaVersion: body.schema_version,
     });
 
     return c.json({ success: true as const, data: run }, 201);
@@ -227,7 +229,7 @@ function validationErrorResponse(c: Context, error: unknown) {
     if (error.code === 'COMMIT_PROJECT_MISMATCH') {
       return c.json(createError('FORBIDDEN', error.message), 403);
     }
-    return c.json(createError('VALIDATION_FAILED', error.message), 400);
+    return c.json(createError('INVALID_REQUEST', error.message), 400);
   }
 
   const message = error instanceof Error ? error.message : 'Unknown error';
