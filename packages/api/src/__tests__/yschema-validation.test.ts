@@ -3,7 +3,7 @@
 import { yamlToTree } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
-import { t3xSkillP0Fixtures } from '@t3x-dev/yschema';
+import { t3xPromptP0Fixtures, t3xSkillP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -207,5 +207,51 @@ describe('YSchema validation routes', () => {
     const latest: ApiResponse = await latestResponse.json();
     expect(latest.data.id).toBe(body.data.id);
     expect(latest.data.schema_name).toBe('t3x/skill');
+  });
+
+  it('runs structural and Prompt policy validation through the shared commit path', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Prompt Validation' }));
+    const candidate = t3xPromptP0Fixtures.validCandidateTree;
+    const commit = await createCommit(mockDB, {
+      author: { type: 'human', name: 'YX' },
+      content: {
+        trees: Object.entries(candidate).map(([key, value]) => yamlToTree(key, value)),
+        relations: [...t3xPromptP0Fixtures.validRelations],
+      },
+      message: 'Validated Prompt candidate',
+      project_id: project.projectId,
+      sources: [{ type: 'import', id: 'mat_prompt_complete' }],
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/yschema-validation/runs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: commit.hash,
+          schema_name: 't3x/prompt',
+          schema_version: 'v1',
+        }),
+      }
+    );
+
+    expect(response.status).toBe(201);
+    const body: ApiResponse = await response.json();
+    expect(body.data).toMatchObject({
+      schema_name: 't3x/prompt',
+      schema_version: 'v1',
+      status: 'passed',
+      valid: true,
+      ready: true,
+      error_count: 0,
+      gap_count: 0,
+    });
+    expect(body.data.result.policy_validation).toEqual({
+      valid: true,
+      ready: true,
+      errors: [],
+      gaps: [],
+    });
   });
 });

@@ -63,6 +63,7 @@ import {
   notificationsRoutes,
   pinsRoutes,
   projectRoutes,
+  promptCompileRoutes,
   providersRoutes,
   pullRequestRoutes,
   recipesRoutes,
@@ -184,6 +185,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
@@ -257,10 +259,13 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Workspaces', description: 'Workspace review and YOps handoff workflows' },
+      { name: 'Workspace Validation', description: 'Workspace candidate validation workflows' },
+      { name: 'Artifacts', description: 'Compiled and exported commit artifacts' },
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
       { name: 'YSchema', description: 'YSchema validation workflows' },
+      { name: 'Prompts', description: 'Deterministic Prompt validation and compilation previews' },
       { name: 'YOps', description: 'YOps validation and mutation operations' },
       { name: 'YOps Log', description: 'Structured-state change log (incremental tree changes)' },
       { name: 'Diff', description: 'Structured diff operations' },
