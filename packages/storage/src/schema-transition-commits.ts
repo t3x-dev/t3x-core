@@ -68,7 +68,11 @@ export const transitionDecisionAuthorizations = pgTable(
 );
 
 /**
- * Append-only repository membership for every trusted Decision outcome.
+ * Repository-API append-only membership for every trusted Decision outcome.
+ * Soft-deleting a project preserves this audit history. Explicit permanent
+ * project deletion removes it through the project foreign-key cascade so
+ * tenant data can still be erased deliberately.
+ *
  * This is audit metadata, never CommitV2 authorization or protocol identity.
  */
 export const transitionDecisionLedger = pgTable(

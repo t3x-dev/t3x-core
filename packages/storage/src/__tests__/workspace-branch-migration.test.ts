@@ -266,4 +266,94 @@ describe('workspace and Transition schema migrations', () => {
       await testDb.cleanup();
     }
   });
+
+  it('fails a v54 retry when an existing Decision ledger row conflicts with authority', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      const authorizedProject = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Authorized Decision Project' })
+      );
+      const conflictingProject = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Conflicting Decision Project' })
+      );
+      const decisionDigest = `sha256:${'d'.repeat(64)}`;
+      const policyDigest = `sha256:${'c'.repeat(64)}`;
+      await testDb.sql`
+        INSERT INTO transition_objects (digest, kind, schema, canonical_json)
+        VALUES (${decisionDigest}, 'statement', 't3x/statement/v1', '{}')
+      `;
+      await testDb.sql`
+        INSERT INTO transition_decision_authorizations (
+          project_id,
+          ref_name,
+          decision_digest,
+          policy_uri,
+          policy_digest,
+          actor_kind,
+          actor_id,
+          outcome,
+          observation_scope,
+          statement_issuers
+        ) VALUES (
+          ${authorizedProject.projectId},
+          'main',
+          ${decisionDigest},
+          't3x://project/policies/default',
+          ${policyDigest},
+          'human',
+          'human:migration',
+          'accepted',
+          jsonb_build_object('completeness', 'complete', 'sources', jsonb_build_array('store')),
+          '[]'::jsonb
+        )
+      `;
+      await testDb.sql`
+        INSERT INTO transition_decision_ledger (
+          decision_digest,
+          project_id,
+          ref_name,
+          policy_uri,
+          policy_digest,
+          actor_kind,
+          actor_id,
+          outcome,
+          observation_scope,
+          statement_issuers
+        ) VALUES (
+          ${decisionDigest},
+          ${conflictingProject.projectId},
+          'other',
+          't3x://project/policies/default',
+          ${policyDigest},
+          'human',
+          'human:migration',
+          'accepted',
+          jsonb_build_object('completeness', 'complete', 'sources', jsonb_build_array('store')),
+          '[]'::jsonb
+        )
+      `;
+      await testDb.sql`
+        UPDATE _schema_version
+        SET version = 54, applied_at = NOW()
+        WHERE singleton = TRUE
+      `;
+
+      await closePostgresStorage();
+      await expect(
+        createPostgresStorage({ connectionString: testDb.connectionString })
+      ).rejects.toThrow('Cannot migrate a conflicting existing Decision ledger row');
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version
+        FROM _schema_version
+        WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(54);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
 });

@@ -332,7 +332,11 @@ async function recordDecisionLedger(tx: AnyDB, record: RepositoryDecisionRecord)
   }
 }
 
-/** Persist every trusted Decision outcome without granting CommitV2 authority. */
+/**
+ * Append a trusted Decision outcome to repository audit history without
+ * granting CommitV2 authority. Exact repeats are idempotent; attempts to
+ * mutate or rebind the Decision digest fail closed.
+ */
 export async function recordRepositoryDecision(
   db: AnyDB,
   record: RepositoryDecisionRecord

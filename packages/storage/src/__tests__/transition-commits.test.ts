@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
 import { createCommit } from '../queries/commits';
-import { insertProject } from '../queries/projects';
+import { deleteProject, insertProject, permanentDeleteProject } from '../queries/projects';
 import {
   createTransitionCommit,
   DecisionNotAuthorizedError,
@@ -288,6 +288,43 @@ describe('CommitV2 repository', () => {
     await expect(recordRepositoryDecision(db, rebound.record)).rejects.toBeInstanceOf(
       DecisionRecordConflictError
     );
+  });
+
+  it('preserves Decision audit on soft delete and removes it on permanent project deletion', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Audit Retention Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const subject = graph(state({}), state({ device: 'retain-me' }), 'audit-retention');
+    const rejected = await authorizeDecisionForRepository({
+      projectId: project.projectId,
+      refName: 'main',
+      proposal: subject.proposal,
+      effect: subject.effect,
+      outcome: 'rejected',
+      rationale: { mode: 'authored', value: 'Revise the proposal', evidence: [] },
+      decidedAt: DECIDED_AT,
+      authority: authority(subject),
+    });
+    if (!rejected.ok) throw new Error('Fixture rejection failed');
+    const decisionDigest = describeTransitionObject(rejected.decision).digest;
+    await recordRepositoryDecision(db, rejected.record);
+
+    expect(await deleteProject(db, project.projectId)).toBe(true);
+    expect(
+      await getRepositoryDecisionAudit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        decisionDigest,
+      })
+    ).not.toBeNull();
+
+    expect(await permanentDeleteProject(db, project.projectId)).toBe(true);
+    expect(
+      await getRepositoryDecisionAudit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        decisionDigest,
+      })
+    ).toBeNull();
   });
 
   it('fails closed when persisted Decision audit issuer facts are corrupted', async () => {

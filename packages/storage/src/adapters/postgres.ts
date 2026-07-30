@@ -1682,6 +1682,29 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       authorized_at
     FROM transition_decision_authorizations
     ON CONFLICT (decision_digest) DO NOTHING;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_decision_authorizations AS source_authorization
+        LEFT JOIN transition_decision_ledger AS ledger
+          ON ledger.decision_digest = source_authorization.decision_digest
+        WHERE ledger.decision_digest IS NULL
+          OR ledger.project_id IS DISTINCT FROM source_authorization.project_id
+          OR ledger.ref_name IS DISTINCT FROM source_authorization.ref_name
+          OR ledger.policy_uri IS DISTINCT FROM source_authorization.policy_uri
+          OR ledger.policy_digest IS DISTINCT FROM source_authorization.policy_digest
+          OR ledger.actor_kind IS DISTINCT FROM source_authorization.actor_kind
+          OR ledger.actor_id IS DISTINCT FROM source_authorization.actor_id
+          OR ledger.outcome IS DISTINCT FROM source_authorization.outcome
+          OR ledger.observation_scope IS DISTINCT FROM source_authorization.observation_scope
+          OR ledger.statement_issuers IS DISTINCT FROM source_authorization.statement_issuers
+          OR ledger.recorded_at IS DISTINCT FROM source_authorization.authorized_at
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate a conflicting existing Decision ledger row';
+      END IF;
+    END $$;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
