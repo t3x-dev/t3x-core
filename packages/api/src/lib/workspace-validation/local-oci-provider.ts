@@ -2,26 +2,43 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import {
-  ESPHOME_CONFIG_COMMAND,
-  ESPHOME_DEVICE_CONFIG_PATH,
-  stableHash,
-} from './esphome-materializer';
+import yaml from 'js-yaml';
+import { stableHash } from './esphome-materializer';
 
-export const ESPHOME_OCI_IMAGE = 'ghcr.io/esphome/esphome:2025.6';
+export const ESPHOME_TOOL_VERSION = '2025.6';
+export const ESPHOME_OCI_IMAGE =
+  'ghcr.io/esphome/esphome@sha256:6a938e900f3ac586de0d44bbba6e19cf88fc76601465e34ab2180f8a6329dbc4';
+export const ESPHOME_OCI_PLATFORM = 'linux/amd64';
 export const LOCAL_OCI_PREFLIGHT_STEP_ID = 'local-oci-preflight';
 export const ESPHOME_CONFIG_STEP_ID = 'esphome-config';
 export const OCI_RUNTIME_MISSING_CODE = 'OCI_RUNTIME_MISSING';
 export const OCI_RUNTIME_FAILED_CODE = 'OCI_RUNTIME_FAILED';
 export const ESPHOME_CONFIG_FAILED_CODE = 'ESPHOME_CONFIG_FAILED';
 export const ESPHOME_CONFIG_TIMED_OUT_CODE = 'ESPHOME_CONFIG_TIMED_OUT';
+export const LOCAL_OCI_ISOLATION_ARGS = Object.freeze([
+  '--network',
+  'none',
+  '--cap-drop',
+  'ALL',
+  '--security-opt',
+  'no-new-privileges',
+  '--pids-limit',
+  '256',
+  '--memory',
+  '2g',
+  '--cpus',
+  '2',
+  '--read-only',
+  '--tmpfs',
+  '/tmp:rw,noexec,nosuid,nodev,size=256m',
+] as const);
 
 const DEFAULT_PREFLIGHT_TIMEOUT_MS = 5_000;
 const DEFAULT_CONFIG_TIMEOUT_MS = 120_000;
 const LOG_EXCERPT_LIMIT = 8_000;
 const PROCESS_OUTPUT_LIMIT = 64_000;
 const CONFIG_CONTAINER_DIR = '/config';
-const ESPHOME_CONFIG_CONTAINER_COMMAND = ['config', ESPHOME_DEVICE_CONFIG_PATH] as const;
+const PORTABLE_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
 type LocalOciRuntime = 'docker' | 'podman';
 
@@ -53,6 +70,21 @@ export interface RunLocalEsphomeConfigValidationOptions {
   tempRoot?: string;
   preflightTimeoutMs?: number;
   configTimeoutMs?: number;
+  /** Optional OCI platform; exact-source validation freezes this to the reference platform. */
+  platform?: string;
+}
+
+export interface LocalEsphomeSourceFile {
+  path: string;
+  content: string;
+}
+
+export interface RunLocalEsphomeSourceValidationInput {
+  rootPath: string;
+  rootSource: string;
+  files: readonly LocalEsphomeSourceFile[];
+  /** Trusted transient values. Callers must bind and authorize names separately. */
+  secretValues: Readonly<Record<string, string>>;
 }
 
 export interface LocalEsphomeValidationStep {
@@ -105,6 +137,33 @@ export async function runLocalEsphomeConfigValidation(
   input: { deviceYaml: string },
   options: RunLocalEsphomeConfigValidationOptions = {}
 ): Promise<LocalEsphomeValidationResult> {
+  return runLocalEsphomeMaterializedValidation(
+    {
+      rootPath: 'device.yaml',
+      rootSource: input.deviceYaml,
+      files: [],
+      secretValues: {},
+    },
+    options
+  );
+}
+
+export async function runLocalEsphomeSourceValidation(
+  input: RunLocalEsphomeSourceValidationInput,
+  options: RunLocalEsphomeConfigValidationOptions = {}
+): Promise<LocalEsphomeValidationResult> {
+  assertImmutableOciImage(options.image ?? ESPHOME_OCI_IMAGE);
+  validateMaterializedInput(input);
+  return runLocalEsphomeMaterializedValidation(input, {
+    ...options,
+    platform: ESPHOME_OCI_PLATFORM,
+  });
+}
+
+async function runLocalEsphomeMaterializedValidation(
+  materialized: RunLocalEsphomeSourceValidationInput,
+  options: RunLocalEsphomeConfigValidationOptions
+): Promise<LocalEsphomeValidationResult> {
   const executor = options.executor ?? executeLocalOciCommand;
   const image = options.image ?? ESPHOME_OCI_IMAGE;
   const startedAt = Date.now();
@@ -144,9 +203,10 @@ export async function runLocalEsphomeConfigValidation(
     };
   }
 
-  return runEsphomeConfigInRuntime(input.deviceYaml, {
+  return runEsphomeConfigInRuntime(materialized, {
     executor,
     image,
+    platform: options.platform,
     runtime: preflight.runtime,
     tempRoot: options.tempRoot,
     timeoutMs: options.configTimeoutMs,
@@ -229,13 +289,14 @@ async function findLocalOciRuntime(
 }
 
 async function runEsphomeConfigInRuntime(
-  deviceYaml: string,
+  materialized: RunLocalEsphomeSourceValidationInput,
   input: {
     executor: LocalOciCommandExecutor;
     image: string;
     runtime: LocalOciRuntime;
     tempRoot?: string;
     timeoutMs?: number;
+    platform?: string;
   }
 ): Promise<LocalEsphomeValidationResult> {
   const tempDir = await mkdtemp(path.join(input.tempRoot ?? tmpdir(), 't3x-esphome-'));
@@ -244,21 +305,29 @@ async function runEsphomeConfigInRuntime(
 
   try {
     await mkdir(configDir, { recursive: true });
-    await writeFile(path.join(configDir, 'device.yaml'), deviceYaml, 'utf8');
+    await materializeConfigInput(configDir, materialized);
 
-    const ociCommand = buildOciRunCommand(input.runtime, configDir, input.image);
+    const configPath = `${CONFIG_CONTAINER_DIR}/${materialized.rootPath}`;
+    const containerCommand = ['config', configPath] as const;
+    const ociCommand = buildOciRunCommand(
+      input.runtime,
+      configDir,
+      input.image,
+      containerCommand,
+      input.platform
+    );
     const result = await input.executor(ociCommand.command, ociCommand.args, {
       timeoutMs: input.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     });
     const durationMs = Date.now() - startedAt;
-    const log = buildBoundedLog(result);
+    const log = buildBoundedLog(result, Object.values(materialized.secretValues));
 
     if (result.exit_code === 0) {
       return {
         status: 'passed',
         gate_status: 'ready',
         summary: 'ESPHome config passed.',
-        environment_hash: runtimeEnvironmentHash(input.runtime, input.image),
+        environment_hash: runtimeEnvironmentHash(input.runtime, input.image, input.platform),
         step: configStep({
           status: 'passed',
           summary: 'ESPHome config passed.',
@@ -269,6 +338,7 @@ async function runEsphomeConfigInRuntime(
           runtime: input.runtime,
           image: input.image,
           ociCommand,
+          containerCommand,
         }),
         findings: [],
       };
@@ -279,7 +349,7 @@ async function runEsphomeConfigInRuntime(
         status: 'timed_out',
         gate_status: 'blocked',
         summary: 'ESPHome config timed out.',
-        environment_hash: runtimeEnvironmentHash(input.runtime, input.image),
+        environment_hash: runtimeEnvironmentHash(input.runtime, input.image, input.platform),
         step: configStep({
           status: 'timed_out',
           summary: 'ESPHome config timed out.',
@@ -290,6 +360,7 @@ async function runEsphomeConfigInRuntime(
           runtime: input.runtime,
           image: input.image,
           ociCommand,
+          containerCommand,
         }),
         findings: [
           {
@@ -326,6 +397,7 @@ async function runEsphomeConfigInRuntime(
           runtime: input.runtime,
           image: input.image,
           ociCommand,
+          containerCommand,
         }),
         findings: [
           {
@@ -350,7 +422,7 @@ async function runEsphomeConfigInRuntime(
       status: 'failed',
       gate_status: 'blocked',
       summary: 'ESPHome config failed.',
-      environment_hash: runtimeEnvironmentHash(input.runtime, input.image),
+      environment_hash: runtimeEnvironmentHash(input.runtime, input.image, input.platform),
       step: configStep({
         status: 'failed',
         summary: 'ESPHome config failed.',
@@ -361,12 +433,13 @@ async function runEsphomeConfigInRuntime(
         runtime: input.runtime,
         image: input.image,
         ociCommand,
+        containerCommand,
       }),
       findings: [
         {
           severity: 'error',
-          file: 'device.yaml',
-          line: extractDeviceYamlLine(log.excerpt),
+          file: materialized.rootPath,
+          line: extractSourceLine(log.excerpt, materialized.rootPath),
           state_path: null,
           code: ESPHOME_CONFIG_FAILED_CODE,
           message,
@@ -383,18 +456,89 @@ async function runEsphomeConfigInRuntime(
   }
 }
 
-function buildOciRunCommand(runtime: LocalOciRuntime, configDir: string, image: string) {
+export function assertImmutableOciImage(image: string): void {
+  if (!/^[^\s@]+@sha256:[0-9a-f]{64}$/.test(image)) {
+    throw new TypeError('ESPHome runner image must use an immutable sha256 digest reference');
+  }
+}
+
+function assertPortablePath(value: string, label: string): void {
+  if (
+    !PORTABLE_PATH_PATTERN.test(value) ||
+    value.startsWith('/') ||
+    value.endsWith('/') ||
+    value.includes('//') ||
+    value.includes('\\') ||
+    value.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
+  ) {
+    throw new TypeError(`${label} must be a normalized portable relative path`);
+  }
+}
+
+function validateMaterializedInput(input: RunLocalEsphomeSourceValidationInput): void {
+  assertPortablePath(input.rootPath, 'ESPHome root path');
+  if (input.rootPath.split('/').at(-1)?.toLowerCase() === 'secrets.yaml') {
+    throw new TypeError('ESPHome root path cannot be secrets.yaml');
+  }
+  const paths = new Set([input.rootPath]);
+  input.files.forEach((file, index) => {
+    assertPortablePath(file.path, `ESPHome source file ${index} path`);
+    if (file.path.split('/').at(-1)?.toLowerCase() === 'secrets.yaml') {
+      throw new TypeError('ESPHome source files cannot supply secrets.yaml');
+    }
+    if (paths.has(file.path)) throw new TypeError(`Duplicate ESPHome source path ${file.path}`);
+    paths.add(file.path);
+  });
+  for (const [name, value] of Object.entries(input.secretValues)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new TypeError('ESPHome secret names must be portable identifiers');
+    }
+    if (typeof value !== 'string') throw new TypeError('ESPHome secret values must be strings');
+  }
+}
+
+async function materializeConfigInput(
+  configDir: string,
+  input: RunLocalEsphomeSourceValidationInput
+): Promise<void> {
+  const files = [
+    { path: input.rootPath, content: input.rootSource },
+    ...input.files.map((file) => ({ ...file })),
+  ];
+  for (const file of files) {
+    const destination = path.join(configDir, file.path);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, file.content, 'utf8');
+  }
+
+  if (Object.keys(input.secretValues).length > 0) {
+    const secretsPath = path.join(configDir, path.dirname(input.rootPath), 'secrets.yaml');
+    await writeFile(
+      secretsPath,
+      yaml.dump({ ...input.secretValues }, { lineWidth: -1, noRefs: true, sortKeys: true }),
+      'utf8'
+    );
+  }
+}
+
+function buildOciRunCommand(
+  runtime: LocalOciRuntime,
+  configDir: string,
+  image: string,
+  containerCommand: readonly string[],
+  platform?: string
+) {
   return {
     command: runtime,
     args: [
       'run',
       '--rm',
-      '--network',
-      'none',
+      ...(platform === undefined ? [] : ['--platform', platform]),
+      ...LOCAL_OCI_ISOLATION_ARGS,
       '-v',
       `${configDir}:${CONFIG_CONTAINER_DIR}:rw`,
       image,
-      ...ESPHOME_CONFIG_CONTAINER_COMMAND,
+      ...containerCommand,
     ],
   };
 }
@@ -409,6 +553,7 @@ function configStep(input: {
   runtime: LocalOciRuntime;
   image: string;
   ociCommand: { command: string; args: string[] };
+  containerCommand: readonly string[];
 }): LocalEsphomeValidationStep {
   return {
     step_id: ESPHOME_CONFIG_STEP_ID,
@@ -418,7 +563,7 @@ function configStep(input: {
     error_code: input.errorCode,
     exit_code: input.exitCode,
     duration_ms: input.durationMs,
-    command_json: [...ESPHOME_CONFIG_COMMAND],
+    command_json: ['esphome', ...input.containerCommand],
     log_excerpt: input.log.excerpt,
     log_truncated: input.log.truncated,
     result_json: {
@@ -429,13 +574,19 @@ function configStep(input: {
   };
 }
 
-function buildBoundedLog(result: LocalOciCommandResult): {
+function buildBoundedLog(
+  result: LocalOciCommandResult,
+  secretValues: readonly string[] = []
+): {
   excerpt: string | null;
   truncated: boolean;
 } {
-  const combined = [result.stdout.trimEnd(), result.stderr.trimEnd(), result.error?.message ?? '']
-    .filter(Boolean)
-    .join('\n');
+  const combined = redactSecrets(
+    [result.stdout.trimEnd(), result.stderr.trimEnd(), result.error?.message ?? '']
+      .filter(Boolean)
+      .join('\n'),
+    secretValues
+  );
   if (!combined) {
     return { excerpt: null, truncated: Boolean(result.output_truncated) };
   }
@@ -448,6 +599,15 @@ function buildBoundedLog(result: LocalOciCommandResult): {
     excerpt: combined.slice(0, LOG_EXCERPT_LIMIT),
     truncated: true,
   };
+}
+
+function redactSecrets(value: string, secretValues: readonly string[]): string {
+  let redacted = value;
+  const unique = [...new Set(secretValues.filter((secret) => secret.length > 0))].sort(
+    (left, right) => right.length - left.length
+  );
+  for (const secret of unique) redacted = redacted.split(secret).join('[REDACTED]');
+  return redacted;
 }
 
 function isOciRuntimeFailure(result: LocalOciCommandResult, logExcerpt: string | null): boolean {
@@ -500,18 +660,24 @@ function isEsphomeBoilerplateLogLine(line: string): boolean {
   );
 }
 
-function extractDeviceYamlLine(logExcerpt: string | null): number | null {
+function extractSourceLine(logExcerpt: string | null, sourcePath: string): number | null {
   if (!logExcerpt) return null;
-  const match = logExcerpt.match(/(?:\/config\/)?device\.ya?ml:(\d+)/);
+  const escaped = sourcePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = logExcerpt.match(new RegExp(`(?:/config/)?${escaped}:(\\d+)`));
   if (!match) return null;
   return Number.parseInt(match[1], 10);
 }
 
-function runtimeEnvironmentHash(runtime: LocalOciRuntime, image: string): string {
+function runtimeEnvironmentHash(
+  runtime: LocalOciRuntime,
+  image: string,
+  platform?: string
+): string {
   return stableHash({
     provider: 'local-oci',
     runtime,
     image,
+    ...(platform === undefined ? {} : { platform }),
   });
 }
 

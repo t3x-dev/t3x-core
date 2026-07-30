@@ -14,9 +14,12 @@ import {
   type HumanConfirmationPredicate,
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
   REPLAY_VERIFICATION_PREDICATE_TYPE,
   type ReplayVerificationPredicate,
+  RUNNER_VALIDATION_PREDICATE_TYPE,
+  type RunnerValidationPredicate,
   YSCHEMA_VALIDATION_PREDICATE_TYPE,
   type YSchemaValidationPredicate,
 } from './profiles';
@@ -71,6 +74,12 @@ export interface AssuranceReport {
     runs: ObservedRun<YSchemaValidationPredicate>[];
     unsupportedProfiles: UnsupportedProfileObservation[];
   };
+  runner: {
+    observation: ObservationState;
+    outcomes: Array<RunnerValidationPredicate['outcome'] | 'unsupported'>;
+    runs: ObservedRun<RunnerValidationPredicate>[];
+    unsupportedProfiles: UnsupportedProfileObservation[];
+  };
   humanConfirmation: {
     observation: ObservationState;
     runs: ObservedRun<HumanConfirmationPredicate>[];
@@ -108,7 +117,13 @@ function evidenceCount(claim: ProposalStatement['predicate']['intent']): number 
 }
 
 function sortedRuns<T extends { statement: StatementDescriptor }>(runs: T[]): T[] {
-  return runs.sort((left, right) => left.statement.digest.localeCompare(right.statement.digest));
+  return runs.sort((left, right) =>
+    left.statement.digest < right.statement.digest
+      ? -1
+      : left.statement.digest > right.statement.digest
+        ? 1
+        : 0
+  );
 }
 
 function sortedOutcomes<T extends string>(outcomes: T[]): T[] {
@@ -130,9 +145,11 @@ function unsupportedProfile(statement: Statement): UnsupportedProfileObservation
 export function deriveAssuranceReport(input: DeriveAssuranceReportInput): AssuranceReport {
   const replayRuns: ObservedRun<ReplayVerificationPredicate>[] = [];
   const validationRuns: ObservedRun<YSchemaValidationPredicate>[] = [];
+  const runnerRuns: ObservedRun<RunnerValidationPredicate>[] = [];
   const confirmationRuns: ObservedRun<HumanConfirmationPredicate>[] = [];
   const replayUnsupported: UnsupportedProfileObservation[] = [];
   const validationUnsupported: UnsupportedProfileObservation[] = [];
+  const runnerUnsupported: UnsupportedProfileObservation[] = [];
 
   for (const candidate of input.statements) {
     const statement = parseStatement(candidate);
@@ -160,6 +177,19 @@ export function deriveAssuranceReport(input: DeriveAssuranceReportInput): Assura
       validationUnsupported.push(unsupportedProfile(statement));
       continue;
     }
+    if (statement.predicateType === RUNNER_VALIDATION_PREDICATE_TYPE) {
+      const parsed = parseRunnerValidationStatement(statement);
+      runnerRuns.push({
+        statement: descriptor,
+        actor: parsed.actor,
+        predicate: parsed.predicate,
+      });
+      continue;
+    }
+    if (statement.predicateType.startsWith('t3x.dev/runner-validation/')) {
+      runnerUnsupported.push(unsupportedProfile(statement));
+      continue;
+    }
     if (statement.predicateType === HUMAN_CONFIRMATION_PREDICATE_TYPE) {
       const parsed = parseHumanConfirmationStatement(statement);
       confirmationRuns.push({
@@ -176,6 +206,7 @@ export function deriveAssuranceReport(input: DeriveAssuranceReportInput): Assura
     input.decision === undefined ? undefined : parseDecisionStatement(input.decision);
   const replayObserved = replayRuns.length + replayUnsupported.length > 0;
   const validationObserved = validationRuns.length + validationUnsupported.length > 0;
+  const runnerObserved = runnerRuns.length + runnerUnsupported.length > 0;
 
   return {
     structure: 'valid',
@@ -215,6 +246,15 @@ export function deriveAssuranceReport(input: DeriveAssuranceReportInput): Assura
       ]),
       runs: sortedRuns(validationRuns),
       unsupportedProfiles: sortedRuns(validationUnsupported),
+    },
+    runner: {
+      observation: runnerObserved ? 'observed' : 'no_statement_observed',
+      outcomes: sortedOutcomes([
+        ...runnerRuns.map((run) => run.predicate.outcome),
+        ...runnerUnsupported.map(() => 'unsupported' as const),
+      ]),
+      runs: sortedRuns(runnerRuns),
+      unsupportedProfiles: sortedRuns(runnerUnsupported),
     },
     humanConfirmation: {
       observation: confirmationRuns.length > 0 ? 'observed' : 'no_statement_observed',

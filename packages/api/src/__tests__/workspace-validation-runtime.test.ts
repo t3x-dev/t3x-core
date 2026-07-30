@@ -7,12 +7,15 @@ import {
   ESPHOME_CONFIG_STEP_ID,
   ESPHOME_CONFIG_TIMED_OUT_CODE,
   ESPHOME_OCI_IMAGE,
+  ESPHOME_OCI_PLATFORM,
+  LOCAL_OCI_ISOLATION_ARGS,
   LOCAL_OCI_PREFLIGHT_STEP_ID,
   type LocalOciCommandExecutor,
   type LocalOciCommandResult,
   OCI_RUNTIME_FAILED_CODE,
   OCI_RUNTIME_MISSING_CODE,
   runLocalEsphomeConfigValidation,
+  runLocalEsphomeSourceValidation,
 } from '../lib/workspace-validation/local-oci-provider';
 
 const DEVICE_YAML = 'esphome:\n  name: energy-meter\n';
@@ -73,8 +76,7 @@ describe('local OCI ESPHome validation provider', () => {
       args: [
         'run',
         '--rm',
-        '--network',
-        'none',
+        ...LOCAL_OCI_ISOLATION_ARGS,
         '-v',
         expect.stringContaining(':/config:rw'),
         ESPHOME_OCI_IMAGE,
@@ -93,6 +95,69 @@ describe('local OCI ESPHome validation provider', () => {
     });
     expect(result.findings).toEqual([]);
     expect(result.environment_hash).toMatch(/^sha256:/);
+  });
+
+  it('materializes exact source inputs, redacts transient secrets, and removes the directory', async () => {
+    const secret = 'runner-secret-sentinel';
+    let materializedConfigDir: string | undefined;
+    const result = await runLocalEsphomeSourceValidation(
+      {
+        rootPath: 'device.yaml',
+        rootSource: [
+          'packages:',
+          '  common: !include packages/common.yaml',
+          'wifi:',
+          '  password: !secret wifi_password',
+          '',
+        ].join('\n'),
+        files: [{ path: 'packages/common.yaml', content: 'logger:\n  level: INFO\n' }],
+        secretValues: { wifi_password: secret },
+      },
+      {
+        tempRoot,
+        platform: 'linux/arm64',
+        executor: dockerRunExecutor(async (args) => {
+          expect(args.slice(0, 4)).toEqual(['run', '--rm', '--platform', ESPHOME_OCI_PLATFORM]);
+          const volume = args[args.indexOf('-v') + 1];
+          materializedConfigDir = volume.slice(0, -':/config:rw'.length);
+          await expect(
+            readFile(path.join(materializedConfigDir, 'device.yaml'), 'utf8')
+          ).resolves.toContain('!secret wifi_password');
+          await expect(
+            readFile(path.join(materializedConfigDir, 'packages/common.yaml'), 'utf8')
+          ).resolves.toBe('logger:\n  level: INFO\n');
+          await expect(
+            readFile(path.join(materializedConfigDir, 'secrets.yaml'), 'utf8')
+          ).resolves.toContain(secret);
+          return commandResult({
+            exit_code: 1,
+            stderr: `Failed config\ncredential ${secret} must not escape`,
+          });
+        }),
+      }
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.step.log_excerpt).toContain('[REDACTED]');
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(materializedConfigDir).toBeDefined();
+    await expect(
+      readFile(path.join(materializedConfigDir!, 'secrets.yaml'), 'utf8')
+    ).rejects.toThrow();
+  });
+
+  it('rejects mutable image tags for exact-source validation', async () => {
+    await expect(
+      runLocalEsphomeSourceValidation(
+        {
+          rootPath: 'device.yaml',
+          rootSource: DEVICE_YAML,
+          files: [],
+          secretValues: {},
+        },
+        { image: 'ghcr.io/esphome/esphome:2025.6', tempRoot }
+      )
+    ).rejects.toThrow('immutable sha256 digest');
   });
 
   it('returns a failed result with bounded ESPHome evidence when config exits nonzero', async () => {

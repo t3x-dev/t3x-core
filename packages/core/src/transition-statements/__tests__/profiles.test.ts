@@ -1,10 +1,15 @@
 import { describeProtocolObject, parseProposalStatement, parseState } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
 import fixtures from '../__fixtures__/profiles-v1.json';
-import { buildHumanConfirmationStatement, buildYSchemaValidationStatement } from '../builders';
+import {
+  buildHumanConfirmationStatement,
+  buildRunnerValidationStatement,
+  buildYSchemaValidationStatement,
+} from '../builders';
 import {
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
 } from '../profiles';
 
@@ -12,6 +17,7 @@ describe('Transition Statement profiles', () => {
   it('strict-parses the language-neutral v1 fixtures', () => {
     expect(parseReplayVerificationStatement(fixtures.replay)).toEqual(fixtures.replay);
     expect(parseYSchemaValidationStatement(fixtures.yschema)).toEqual(fixtures.yschema);
+    expect(parseRunnerValidationStatement(fixtures.runner)).toEqual(fixtures.runner);
     expect(parseHumanConfirmationStatement(fixtures.humanConfirmation)).toEqual(
       fixtures.humanConfirmation
     );
@@ -28,6 +34,13 @@ describe('Transition Statement profiles', () => {
     expect(() =>
       parseYSchemaValidationStatement({
         ...fixtures.yschema,
+        subjects: fixtures.replay.subjects,
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
         subjects: fixtures.replay.subjects,
       })
     ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
@@ -86,6 +99,13 @@ describe('Transition Statement profiles', () => {
     ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
 
     expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: { ...fixtures.runner.predicate, outcome: 'not_run' },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    expect(() =>
       parseHumanConfirmationStatement({
         ...fixtures.humanConfirmation,
         predicate: { confirms: ['rationale', 'intent'] },
@@ -96,6 +116,70 @@ describe('Transition Statement profiles', () => {
       parseHumanConfirmationStatement({
         ...fixtures.humanConfirmation,
         actor: { kind: 'agent', id: 'agent:self-approver' },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+  });
+
+  it('keeps runner evidence closed, bounded, and canonically ordered', () => {
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: { ...fixtures.runner.predicate, exitCode: 0 },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    const artifact = fixtures.runner.predicate.inputArtifacts[0];
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: {
+          ...fixtures.runner.predicate,
+          inputArtifacts: [artifact, artifact],
+        },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: {
+          ...fixtures.runner.predicate,
+          findings: [
+            {
+              severity: 'error',
+              code: 'CONFIG_INVALID',
+              message: 'x'.repeat(4_097),
+            },
+          ],
+          outcome: 'failed',
+        },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: {
+          ...fixtures.runner.predicate,
+          findings: [
+            {
+              severity: 'error',
+              code: 'CONTRADICTORY_PASS',
+              message: 'A passing conclusion cannot carry an error.',
+            },
+          ],
+        },
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    expect(() =>
+      parseRunnerValidationStatement({
+        ...fixtures.runner,
+        predicate: {
+          ...fixtures.runner.predicate,
+          outcome: 'failed',
+          findings: [],
+        },
       })
     ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
   });
@@ -142,6 +226,24 @@ describe('Transition Statement profiles', () => {
 
     expect(first.subjects).toEqual(second.subjects);
     expect(describeProtocolObject(first)).not.toEqual(describeProtocolObject(second));
+    expect(describeProtocolObject(state)).toEqual(before);
+  });
+
+  it('attaches a runner conclusion to the exact State without rewriting State identity', () => {
+    const state = parseState({
+      schema: 't3x/state/v1',
+      codec: { mediaType: 'application/yaml', version: '1' },
+      value: 'esphome:\n  name: sensor\n',
+    });
+    const before = describeProtocolObject(state);
+    const fixture = parseRunnerValidationStatement(fixtures.runner);
+    const statement = buildRunnerValidationStatement({
+      state,
+      actor: fixture.actor,
+      predicate: fixture.predicate,
+    });
+
+    expect(statement.subjects).toEqual([before]);
     expect(describeProtocolObject(state)).toEqual(before);
   });
 

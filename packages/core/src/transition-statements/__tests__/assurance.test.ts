@@ -11,6 +11,7 @@ import { deriveAssuranceReport } from '../assurance';
 import {
   parseHumanConfirmationStatement,
   parseReplayVerificationStatement,
+  parseRunnerValidationStatement,
   parseYSchemaValidationStatement,
 } from '../profiles';
 
@@ -69,7 +70,43 @@ describe('Transition assurance projection', () => {
     });
     expect(report.replay.observation).toBe('no_statement_observed');
     expect(report.validation.observation).toBe('no_statement_observed');
+    expect(report.runner.observation).toBe('no_statement_observed');
     expect(JSON.stringify(report)).not.toContain('not_run');
+  });
+
+  it('retains every runner conclusion as an unordered digest-sorted set', () => {
+    const passed = parseRunnerValidationStatement(fixtures.runner);
+    const failed = parseRunnerValidationStatement({
+      ...fixtures.runner,
+      predicate: {
+        ...fixtures.runner.predicate,
+        run: { ...fixtures.runner.predicate.run, id: 'run:esphome:failed' },
+        outcome: 'failed',
+        summary: 'ESPHome configuration failed.',
+        findings: [
+          {
+            severity: 'error',
+            code: 'CONFIG_INVALID',
+            message: 'The logger level is invalid.',
+            path: 'device.yaml',
+            line: 8,
+          },
+        ],
+      },
+    });
+    const report = deriveAssuranceReport({
+      observationScope: { completeness: 'complete', sources: ['runner-store'] },
+      statements: [failed, passed],
+    });
+
+    expect(report.runner).toMatchObject({
+      observation: 'observed',
+      outcomes: ['failed', 'passed'],
+    });
+    expect(report.runner.runs).toHaveLength(2);
+    expect(report.runner.runs.map((run) => run.statement.digest)).toEqual(
+      [...report.runner.runs.map((run) => run.statement.digest)].sort()
+    );
   });
 
   it('preserves conflicting runs and valid/ready as independent facts', () => {
@@ -125,6 +162,25 @@ describe('Transition assurance projection', () => {
     });
     expect(report.validation.unsupportedProfiles[0]).toMatchObject({
       predicateType: 't3x.dev/yschema-validation/v2',
+    });
+  });
+
+  it('treats unknown runner profile versions as observed but unsupported', () => {
+    const unknown = parseStatement({
+      ...fixtures.runner,
+      predicateType: 't3x.dev/runner-validation/v2',
+      predicate: { future: true },
+    });
+    const report = deriveAssuranceReport({
+      observationScope: { completeness: 'complete', sources: ['runner-store'] },
+      statements: [unknown],
+    });
+
+    expect(report.runner).toMatchObject({
+      observation: 'observed',
+      outcomes: ['unsupported'],
+      runs: [],
+      unsupportedProfiles: [{ predicateType: 't3x.dev/runner-validation/v2' }],
     });
   });
 

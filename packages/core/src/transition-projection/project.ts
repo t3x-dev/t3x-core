@@ -218,6 +218,8 @@ function assertKnownStatementSubject(
     expected = effectDescriptor;
   } else if (statement.predicateType.startsWith('t3x.dev/yschema-validation/')) {
     expected = resultDescriptor;
+  } else if (statement.predicateType.startsWith('t3x.dev/runner-validation/')) {
+    expected = resultDescriptor;
   } else if (statement.predicateType === HUMAN_CONFIRMATION_PREDICATE_TYPE) {
     expected = proposalDescriptor;
   }
@@ -414,6 +416,7 @@ function projectModern(input: ProjectTransitionGraphInput): TransitionGraphViewV
       observationScope: assurance.observationScope,
       replay: assurance.replay,
       validation: assurance.validation,
+      runner: assurance.runner,
       humanConfirmation: assurance.humanConfirmation,
     },
     decision: projectDecision(decision),
