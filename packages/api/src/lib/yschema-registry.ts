@@ -25,6 +25,7 @@ export function canonicalSchemaNameFromBinding(binding: unknown): string | null 
   }
 
   const displayName = typeof record.schemaName === 'string' ? record.schemaName : '';
+  if (/esphome\s+device/i.test(displayName)) return 't3x/esphome-device';
   if (/prompt/i.test(displayName)) return 't3x/prompt';
   if (/skill/i.test(displayName)) return 't3x/skill';
   if (/prd/i.test(displayName)) return 't3x/prd';
@@ -39,6 +40,7 @@ export function schemaVersionFromBinding(binding: unknown): string | undefined {
 
 export function schemaRootKeyFromBinding(binding: unknown): string {
   const canonicalName = canonicalSchemaNameFromBinding(binding);
+  if (canonicalName === 't3x/esphome-device') return 'device';
   if (canonicalName) return canonicalName.split('/').at(-1) ?? 'candidate';
 
   if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return 'candidate';

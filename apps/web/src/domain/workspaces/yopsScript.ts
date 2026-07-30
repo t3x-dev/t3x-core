@@ -105,7 +105,7 @@ function workspaceOperationFromRawYOp(
         error: `${workspaceOpName.toUpperCase()} operation ${index + 1} is missing value.`,
       };
     }
-    next.afterValue = stringifyWorkspaceValue(payload.value);
+    next.afterValue = workspaceYOpsValue(payload.value);
   }
 
   return { ok: true, operation: next };
@@ -182,9 +182,22 @@ function operationSourceRefs(
   return existing?.sourceRefs;
 }
 
-function stringifyWorkspaceValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value as WorkspaceYOpsValue) ?? '';
+function workspaceYOpsValue(value: unknown): WorkspaceYOpsValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(workspaceYOpsValue);
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, childValue]) => [key, workspaceYOpsValue(childValue)])
+    );
+  }
+  return String(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
