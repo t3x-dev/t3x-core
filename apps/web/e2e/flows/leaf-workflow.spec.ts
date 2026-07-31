@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestCommit,
   createTestLeaf,
@@ -128,7 +129,7 @@ test.describe('Leaf Workflow', () => {
   // LW-04: Validate output shows assertions (LLM optional — test what IS there)
   test('LW-04: Validate output shows assertions', async ({ page, request }) => {
     // Set mock output via API so validation has something to check
-    await request.patch(`http://localhost:8000/api/v1/leaves/${leafId}`, {
+    await request.patch(`${API_BASE}/leaves/${leafId}`, {
       data: { output: 'User prefers dark mode and speaks English fluently.' },
     });
 
@@ -170,7 +171,7 @@ test.describe('Leaf Workflow', () => {
   // LW-05: Export output
   test('LW-05: Export output', async ({ page, request }) => {
     // Ensure leaf has output
-    await request.patch(`http://localhost:8000/api/v1/leaves/${leafId}`, {
+    await request.patch(`${API_BASE}/leaves/${leafId}`, {
       data: { output: 'Exported test output content.' },
     });
 

@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestCommit,
   createTestProject,
@@ -20,7 +21,7 @@ test.describe('Inherited baseline workspace state', () => {
       { message: 'Parent food preferences' }
     );
 
-    const childResponse = await request.post('http://localhost:8000/api/v1/conversations', {
+    const childResponse = await request.post(`${API_BASE}/conversations`, {
       data: {
         project_id: projectId,
         title: 'Child with parent only',

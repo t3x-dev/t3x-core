@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestBranch,
   createTestCommit,
@@ -140,7 +141,7 @@ test.describe('Branch Workflow', () => {
   test.fixme('BR-09: Delete feature branch', async ({ request }) => {
     // The branch API may not have a DELETE endpoint — check the response
     const response = await request.delete(
-      `http://localhost:8000/api/v1/branches/${featureBranchId}`,
+      `${API_BASE}/branches/${featureBranchId}`,
       {
         data: { project_id: projectId },
       }
@@ -160,7 +161,7 @@ test.describe('Branch Workflow', () => {
     const current = await getCurrentBranch(request, projectId);
 
     const response = await request.delete(
-      `http://localhost:8000/api/v1/branches/${current.branch_id}`,
+      `${API_BASE}/branches/${current.branch_id}`,
       {
         data: { project_id: projectId },
       }

@@ -1,7 +1,8 @@
 import type { APIRequestContext } from '@playwright/test';
 import type { DemoTreeNode } from './open-source-demo-datasets';
 
-export const API_BASE = 'http://localhost:8000/api/v1';
+export const API_ORIGIN = process.env.API_URL ?? 'http://localhost:8000';
+export const API_BASE = `${API_ORIGIN}/api/v1`;
 
 interface ApiTreeNode {
   key: string;

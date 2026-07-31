@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures/test';
 import {
+  API_BASE,
   cleanupProject,
   createTestCommitFromTrees,
   createTestProject,
@@ -51,7 +52,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     });
 
     const workspaceResponse = await request.patch(
-      'http://localhost:8000/api/v1/projects/' + projectId + '/workspaces/workspace_prd_handoff',
+      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff`,
       {
         data: {
           workspace: {
@@ -108,7 +109,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     const workspaceRevision = workspaceResponseBody.data.workspace.revision;
     expect(workspaceRevision).toBeGreaterThan(0);
     const workspaceCommitResponse = await request.post(
-      'http://localhost:8000/api/v1/projects/' + projectId + '/workspaces/workspace_prd_handoff/commit',
+      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff/commit`,
       {
         data: {
           content: { trees: PRD_TREE, relations: [] },

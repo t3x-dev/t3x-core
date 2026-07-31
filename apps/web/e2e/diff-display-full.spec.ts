@@ -1,3 +1,4 @@
+import { API_BASE } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -6,8 +7,6 @@ import { expect, test } from './fixtures/test';
  * Creates complete test data with real conversations and turns,
  * then tests the full diff comparison flow in the UI.
  */
-
-const API_BASE = 'http://localhost:8000/api/v1';
 
 test.describe('DiffDisplayView Full E2E', () => {
   test.describe.configure({ mode: 'serial' });

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { API_BASE } from '../fixtures/api-helpers';
 
 /**
  * Cleanup-aftermath smoke — assert core routes render without console errors.
@@ -28,7 +29,7 @@ const BENIGN_CONSOLE_ERRORS = [/ERR_CONNECTION_REFUSED/];
 let projectId = '';
 
 test.beforeAll(async ({ request }) => {
-  const resp = await request.post('http://localhost:8000/api/v1/projects', {
+  const resp = await request.post(`${API_BASE}/projects`, {
     data: { name: `smoke-${Date.now()}` },
   });
   const body = await resp.json();
