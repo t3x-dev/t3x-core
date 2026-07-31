@@ -27,8 +27,6 @@ what happened before committing it and understand it later.
 
 <p align="center">
   <img src=".github/assets/t3x-state-transition.png" alt="A transition connecting one version of structured state to the next" width="960" />
-  <br />
-  <sub>State → transition → state.</sub>
 </p>
 
 ## Features
@@ -47,8 +45,6 @@ what happened before committing it and understand it later.
 
 <p align="center">
   <img src=".github/assets/t3x-review-process.png" alt="A proposal moving through comparison, checks, decision, and durable history" width="960" />
-  <br />
-  <sub>Proposal → checks → decision → history.</sub>
 </p>
 
 ## Quickstart
