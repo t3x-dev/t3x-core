@@ -156,7 +156,7 @@ test.describe('commit ceremony', () => {
         const ceremony = page.getByRole('status', { name: 'Commit sealed' });
         await expect(ceremony).toBeVisible({ timeout: 1_000 });
         await expect(ceremony).toHaveAttribute('data-motion', 'standard');
-        await expect(page.getByTitle(COMMIT_HASH)).toContainText('1234567890ab');
+        await expect(ceremony.getByTitle(COMMIT_HASH)).toContainText('1234567890ab');
         await testInfo.attach(`commit-ceremony-desktop-${theme}`, {
           body: await page.screenshot({ fullPage: false }),
           contentType: 'image/png',
