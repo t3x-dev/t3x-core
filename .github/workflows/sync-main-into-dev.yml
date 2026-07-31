@@ -92,7 +92,7 @@ jobs:
           ## Verification
 
           - PR Validation is expected to run on this generated PR.
-          - local-smoke may run when package, runtime, workflow, or tool paths changed.
+          - Full-stack E2E remains a manual post-merge and pre-release qualification.
           EOF
 
           pr_number="$(

@@ -1,31 +1,8 @@
 name: local-smoke
 
+# Manual compatibility check. The broader full-stack qualification workflow
+# owns post-merge and pre-release execution; this workflow is no longer a PR gate.
 on:
-  pull_request:
-    paths:
-      - '.changeset/**'
-      - '.github/workflows/local-smoke.yml'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/sync-main-into-dev.yml'
-      - 'apps/cli/**'
-      - 'apps/api/**'
-      - 'apps/agent-demo/**'
-      - 'apps/local/**'
-      - 'apps/mcp/**'
-      - 'apps/runner/**'
-      - 'apps/web/**'
-      - 'packages/api-client/**'
-      - 'packages/api/**'
-      - 'packages/core/**'
-      - 'packages/mcp/**'
-      - 'packages/storage/**'
-      - 'packages/yops/**'
-      - 'packages/yschema/**'
-      - 'biome.json'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'turbo.json'
-      - 'tools/**'
   workflow_dispatch: {}
 
 jobs:
