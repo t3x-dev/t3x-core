@@ -92,7 +92,7 @@ beyond localhost.
 
 ## Availability
 
-T3X is a public alpha.
+T3X is a public alpha. The current npm release surface is intentionally narrow:
 
 | Package | Status | Use |
 |:--|:--|:--|
