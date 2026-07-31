@@ -12,11 +12,14 @@ vi.mock('@/infrastructure/core', () => ({
 
 import {
   commitProjectWorkspace,
+  decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
 } from '@/infrastructure/workspaces';
+import { WORKSPACE_SOURCE_ARTIFACT_FORMAT } from '@/types/workspaces';
 
 describe('infrastructure/workspaces', () => {
   beforeEach(() => {
@@ -221,6 +224,126 @@ describe('infrastructure/workspaces', () => {
     expect(body).not.toHaveProperty('issuer');
     expect(body).not.toHaveProperty('policy');
     expect(body).not.toHaveProperty('capabilities');
+    expect(body).not.toHaveProperty('result');
+  });
+
+  it('reviews an exact-source import with selectors instead of source bytes or authority facts', async () => {
+    const response = new Response('{}');
+    const artifact = {
+      format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+      rootPath: 'device.yaml',
+      root: { materialId: 'mat_root', contentHash: 'hash:root' },
+      resources: [
+        {
+          path: 'packages/common.yaml',
+          materialId: 'mat_common',
+          contentHash: 'hash:common',
+        },
+      ],
+    };
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
+
+    await reviewProjectWorkspaceSourceTransition('proj/with space', 'workspace/source', {
+      artifact,
+      change: { mode: 'import', root: artifact.root },
+      why: 'Import the existing device configuration.',
+      ifRevision: 4,
+    });
+
+    const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      'https://api.test/api/v1/projects/proj%2Fwith%20space/workspaces/workspace%2Fsource/source-transition/review',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(body).toEqual({
+      artifact: {
+        format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+        root_path: 'device.yaml',
+        resources: [
+          {
+            path: 'packages/common.yaml',
+            material_id: 'mat_common',
+            content_hash: 'hash:common',
+          },
+        ],
+      },
+      change: {
+        mode: 'import',
+        root: { material_id: 'mat_root', content_hash: 'hash:root' },
+      },
+      why: 'Import the existing device configuration.',
+      if_revision: 4,
+    });
+    expect(body).not.toHaveProperty('source');
+    expect(body).not.toHaveProperty('actor');
+    expect(body).not.toHaveProperty('policy');
+    expect(JSON.stringify(body)).not.toContain('secret_value');
+  });
+
+  it('decides an exact-source edit with only the reviewed task and opaque precondition', async () => {
+    const response = new Response('{}');
+    const artifact = {
+      format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+      rootPath: 'device.yaml',
+      root: { materialId: 'mat_root', contentHash: 'hash:root' },
+      resources: [],
+    };
+    const precondition = {
+      workspace_revision: 5,
+      ref_head: `sha256:${'a'.repeat(64)}`,
+      source_selector_digest: `sha256:${'b'.repeat(64)}`,
+      source_input_manifest_digest: null,
+      effect_digest: `sha256:${'c'.repeat(64)}`,
+      proposal_digest: `sha256:${'d'.repeat(64)}`,
+      statement_digests: [`sha256:${'e'.repeat(64)}`],
+      policy_digest: `sha256:${'f'.repeat(64)}`,
+    };
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
+
+    await decideProjectWorkspaceSourceTransition('proj_1', 'workspace_source', {
+      artifact,
+      change: {
+        mode: 'edit',
+        operations: [
+          {
+            op: 'replace_scalar',
+            path: ['logger', 'level'],
+            expect: 'DEBUG',
+            value: 'INFO',
+          },
+        ],
+      },
+      outcome: 'overridden',
+      decisionReason: 'The known environment failure is acceptable for this fixture.',
+      precondition,
+    });
+
+    const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
+    expect(body).toEqual({
+      artifact: {
+        format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+        root_path: 'device.yaml',
+        resources: [],
+      },
+      change: {
+        mode: 'edit',
+        operations: [
+          {
+            op: 'replace_scalar',
+            path: ['logger', 'level'],
+            expect: 'DEBUG',
+            value: 'INFO',
+          },
+        ],
+      },
+      outcome: 'overridden',
+      decision_reason: 'The known environment failure is acceptable for this fixture.',
+      precondition,
+    });
+    expect(body).not.toHaveProperty('capabilities');
+    expect(body).not.toHaveProperty('runner');
     expect(body).not.toHaveProperty('result');
   });
 });

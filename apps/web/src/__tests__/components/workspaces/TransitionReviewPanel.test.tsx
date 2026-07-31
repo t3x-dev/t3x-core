@@ -55,6 +55,12 @@ function transitionView(): Extract<TransitionViewV1, { mode: 'transition' }> {
         runs: [],
         unsupportedProfiles: [],
       },
+      runner: {
+        observation: 'observed',
+        outcomes: ['passed'],
+        runs: [],
+        unsupportedProfiles: [],
+      },
       humanConfirmation: { observation: 'no_statement_observed', runs: [] },
     },
     decision: {
@@ -139,6 +145,7 @@ describe('TransitionReviewPanel', () => {
     expect(screen.getByRole('region', { name: 'Saved change checks' })).toHaveTextContent(
       'Change integrity'
     );
+    expect(screen.getByLabelText('Environment: passed')).toHaveTextContent('passed');
     expect(
       screen.getByText('Next action: Revert requires a new reviewed change.')
     ).toBeInTheDocument();
@@ -201,6 +208,32 @@ describe('TransitionReviewPanel', () => {
 
     expect(screen.getByLabelText('Validation: attention required')).toHaveTextContent('failed');
     expect(screen.queryByLabelText('Validation: passed')).not.toBeInTheDocument();
+  });
+
+  it('renders exact-source before and after values without interpreting policy', () => {
+    const view = transitionView();
+    view.change.operations = [
+      {
+        op: 'replace_scalar',
+        path: ['logger', 'level'],
+        expect: 'DEBUG',
+        value: 'INFO',
+      },
+    ];
+    view.checks.runner = {
+      observation: 'no_statement_observed',
+      outcomes: [],
+      runs: [],
+      unsupportedProfiles: [],
+    };
+
+    render(<TransitionReviewPanel error={null} loading={false} view={view} />);
+
+    expect(screen.getByText('REPLACE_SCALAR logger/level')).toBeInTheDocument();
+    expect(screen.getByText('"DEBUG" → "INFO"')).toBeInTheDocument();
+    expect(screen.getByLabelText('Environment: not observed')).toHaveTextContent(
+      'No check observed'
+    );
   });
 
   it('renders an uncommitted graph as a pending review rather than saved history', () => {

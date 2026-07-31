@@ -1,16 +1,22 @@
 import {
+  decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
   type WorkspaceSaveResponse,
+  type WorkspaceSourceChange,
+  type WorkspaceSourceTransitionDecisionResponse,
+  type WorkspaceSourceTransitionPrecondition,
+  type WorkspaceSourceTransitionReviewResponse,
   type WorkspaceTransitionContent,
   type WorkspaceTransitionDecisionResponse,
   type WorkspaceTransitionOutcome,
   type WorkspaceTransitionPrecondition,
   type WorkspaceTransitionReviewResponse,
 } from '@/infrastructure/workspaces';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceSourceArtifact } from '@/types/workspaces';
 
 export function fetchProjectWorkspaces(projectId: string): Promise<WorkspaceCandidate[]> {
   return listProjectWorkspaces(projectId);
@@ -47,3 +53,37 @@ export function decideWorkspaceTransition(
 ): Promise<WorkspaceTransitionDecisionResponse> {
   return decideProjectWorkspaceTransition(projectId, workspaceId, input);
 }
+
+export function reviewWorkspaceSourceTransition(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    artifact: WorkspaceSourceArtifact;
+    change: WorkspaceSourceChange;
+    why?: string;
+    ifRevision: number;
+  }
+): Promise<WorkspaceSourceTransitionReviewResponse> {
+  return reviewProjectWorkspaceSourceTransition(projectId, workspaceId, input);
+}
+
+export function decideWorkspaceSourceTransition(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    artifact: WorkspaceSourceArtifact;
+    change: WorkspaceSourceChange;
+    why?: string;
+    outcome: WorkspaceTransitionOutcome;
+    decisionReason?: string;
+    precondition: WorkspaceSourceTransitionPrecondition;
+  }
+): Promise<WorkspaceSourceTransitionDecisionResponse> {
+  return decideProjectWorkspaceSourceTransition(projectId, workspaceId, input);
+}
+
+export type {
+  WorkspaceSourceChange,
+  WorkspaceSourceTransitionPrecondition,
+  WorkspaceSourceTransitionReviewResponse,
+};

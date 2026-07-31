@@ -22,6 +22,29 @@ export interface SourceBundleItem {
   previewText?: string;
 }
 
+export const WORKSPACE_SOURCE_ARTIFACT_FORMAT = 't3x.dev/workspace-source-artifact/v1' as const;
+
+export interface WorkspaceSourceMaterialSelector {
+  materialId: string;
+  contentHash?: string;
+}
+
+export interface WorkspaceSourceResourceSelector extends WorkspaceSourceMaterialSelector {
+  path: string;
+}
+
+/**
+ * Application-owned source selection for the exact-source Workspace path.
+ * Source bytes and secret values are deliberately absent and are re-resolved
+ * by the server during Review and Decide.
+ */
+export interface WorkspaceSourceArtifact {
+  format: typeof WORKSPACE_SOURCE_ARTIFACT_FORMAT;
+  rootPath: string;
+  root?: WorkspaceSourceMaterialSelector;
+  resources: WorkspaceSourceResourceSelector[];
+}
+
 export interface SourceConversationTurn {
   id: string;
   role: 'user' | 'assistant';
@@ -58,6 +81,7 @@ export interface WorkspaceCandidate {
   schemaReview: WorkspaceSchemaReview;
   yopsDraft: WorkspaceYOpsDraft;
   outputTargets: WorkspaceOutputTarget[];
+  sourceArtifact?: WorkspaceSourceArtifact;
   lastCommitHash?: string;
   commitOverride?: WorkspaceValidationOverride & { confirmedAt?: string };
 }
