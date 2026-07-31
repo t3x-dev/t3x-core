@@ -28,8 +28,72 @@ import { expect, test } from './fixtures/test';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
 const YOPS_LOG_URL = '**/api/v1/conversations/*/yops';
+const LOCAL_PROVIDER_URL = '**/api/v1/providers/local/*';
+const LLM_MODELS_URL = '**/api/v1/llm/models';
 
 const USER_CONTENT = 'I want to go to Paris with a budget of ten thousand dollars.';
+
+/**
+ * Extraction is mocked below, but the product still requires a runtime-usable
+ * model before enabling the Extract button. Supply a deterministic catalog and
+ * local credential status so this test exercises the UI gate without allowing
+ * any external provider call.
+ */
+async function mockConfiguredExtractionModel(
+  page: import('@playwright/test').Page
+): Promise<void> {
+  await page.route(LOCAL_PROVIDER_URL, async (route: Route) => {
+    const provider = new URL(route.request().url()).pathname.split('/').pop() ?? 'anthropic';
+    const configured = provider === 'anthropic';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          provider,
+          configured,
+          default_model: configured ? 'mock-model' : null,
+          last_test_status: configured ? 'ok' : null,
+          last_tested_at: null,
+          last_test_error: null,
+          api_key_source: configured ? 'file' : 'none',
+          api_key_preview: configured ? '…test' : null,
+          env_overrides_stored: false,
+        },
+      }),
+    });
+  });
+
+  await page.route(LLM_MODELS_URL, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          generation_provider_order: ['anthropic'],
+          default_provider: 'anthropic',
+          providers: [
+            {
+              name: 'anthropic',
+              label: 'Mock Anthropic',
+              available: true,
+              models: [
+                {
+                  id: 'mock-model',
+                  label: 'Mock Model',
+                  capabilities: [],
+                  max_output_tokens: 4096,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+  });
+}
 
 function validOps(turnHash: string) {
   return [
@@ -148,7 +212,8 @@ test.describe('Gold-edit flow', () => {
   // to the real yops log, so reusing the conversation across tests would
   // replay `define trip` twice and halt with ALREADY_EXISTS before the
   // gold edit runs (B-10, audit 2026-04-15).
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    await mockConfiguredExtractionModel(page);
     ({ projectId } = await createTestProject(request, `Gold Edit E2E ${Date.now()}`));
     conversationId = await createTestConversation(request, projectId, 'E2E Gold Edit');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', USER_CONTENT);
@@ -300,15 +365,14 @@ test.describe('Gold-edit flow', () => {
     const tripNodeText = afterPanel.getByText('trip:', { exact: false }).first();
     await tripNodeText.hover();
 
-    // Handle the window.prompt dialog for new child name
-    page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('prompt');
-      await dialog.accept('notes');
-    });
-
     // Click the add-child button (first one visible = trip node row)
     const addChildBtn = page.getByTestId('add-child-button').first();
     await addChildBtn.click();
+
+    const addNodeDialog = page.getByRole('dialog');
+    await expect(addNodeDialog).toContainText('Add Node');
+    await addNodeDialog.getByLabel('Node name').fill('notes');
+    await addNodeDialog.getByRole('button', { name: 'Add Node' }).click();
 
     // Verify the new 'notes' child node appears in the AfterPanel
     await expect(afterPanel).toContainText('notes', { timeout: 5_000 });
