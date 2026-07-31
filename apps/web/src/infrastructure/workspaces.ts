@@ -272,6 +272,64 @@ export async function decideProjectWorkspaceSourceTransition(
   return handleResponse<WorkspaceSourceTransitionDecisionResponse>(res);
 }
 
+/** Request a server-derived reverse Effect for the current committed exact-source edit. */
+export async function reviewProjectWorkspaceSourceRevert(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    commitId: string;
+    why?: string;
+    ifRevision: number;
+  }
+): Promise<WorkspaceSourceTransitionReviewResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+      workspaceId
+    )}/source-transition/revert/review`,
+    {
+      body: JSON.stringify({
+        commit_id: input.commitId,
+        ...(input.why ? { why: input.why } : {}),
+        if_revision: input.ifRevision,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }
+  );
+  return handleResponse<WorkspaceSourceTransitionReviewResponse>(res);
+}
+
+/** Re-derive and decide the reverse Effect bound by an opaque Review precondition. */
+export async function decideProjectWorkspaceSourceRevert(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    commitId: string;
+    why?: string;
+    outcome: WorkspaceTransitionOutcome;
+    decisionReason?: string;
+    precondition: WorkspaceSourceTransitionPrecondition;
+  }
+): Promise<WorkspaceSourceTransitionDecisionResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+      workspaceId
+    )}/source-transition/revert/decide`,
+    {
+      body: JSON.stringify({
+        commit_id: input.commitId,
+        ...(input.why ? { why: input.why } : {}),
+        outcome: input.outcome,
+        ...(input.decisionReason ? { decision_reason: input.decisionReason } : {}),
+        precondition: input.precondition,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }
+  );
+  return handleResponse<WorkspaceSourceTransitionDecisionResponse>(res);
+}
+
 function sourceArtifactToWire(artifact: WorkspaceSourceArtifact) {
   return {
     format: artifact.format,

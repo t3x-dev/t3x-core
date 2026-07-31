@@ -12,9 +12,11 @@ vi.mock('@/infrastructure/core', () => ({
 
 import {
   commitProjectWorkspace,
+  decideProjectWorkspaceSourceRevert,
   decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceSourceRevert,
   reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
@@ -345,5 +347,56 @@ describe('infrastructure/workspaces', () => {
     expect(body).not.toHaveProperty('capabilities');
     expect(body).not.toHaveProperty('runner');
     expect(body).not.toHaveProperty('result');
+  });
+
+  it('reviews and decides a revert without client-derived mutation or authority facts', async () => {
+    const response = new Response('{}');
+    const commitId = `sha256:${'9'.repeat(64)}`;
+    const precondition = {
+      workspace_revision: 8,
+      ref_head: commitId,
+      source_selector_digest: `sha256:${'b'.repeat(64)}`,
+      source_input_manifest_digest: null,
+      effect_digest: `sha256:${'c'.repeat(64)}`,
+      proposal_digest: `sha256:${'d'.repeat(64)}`,
+      statement_digests: [`sha256:${'e'.repeat(64)}`],
+      policy_digest: `sha256:${'f'.repeat(64)}`,
+    };
+    fetchWithTimeoutMock.mockResolvedValue(response);
+    handleResponseMock.mockResolvedValue({ transition: { mode: 'transition' } });
+
+    await reviewProjectWorkspaceSourceRevert('proj_1', 'workspace_source', {
+      commitId,
+      why: 'Restore the previous configuration.',
+      ifRevision: 8,
+    });
+    const reviewBody = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
+    expect(reviewBody).toEqual({
+      commit_id: commitId,
+      why: 'Restore the previous configuration.',
+      if_revision: 8,
+    });
+
+    await decideProjectWorkspaceSourceRevert('proj_1', 'workspace_source', {
+      commitId,
+      why: 'Restore the previous configuration.',
+      outcome: 'accepted',
+      precondition,
+    });
+    const decisionBody = JSON.parse(String(fetchWithTimeoutMock.mock.calls[1]?.[1]?.body));
+    expect(decisionBody).toEqual({
+      commit_id: commitId,
+      why: 'Restore the previous configuration.',
+      outcome: 'accepted',
+      precondition,
+    });
+    for (const body of [reviewBody, decisionBody]) {
+      expect(body).not.toHaveProperty('operations');
+      expect(body).not.toHaveProperty('reverse_operations');
+      expect(body).not.toHaveProperty('target_state');
+      expect(body).not.toHaveProperty('actor');
+      expect(body).not.toHaveProperty('issuer');
+      expect(body).not.toHaveProperty('policy');
+    }
   });
 });

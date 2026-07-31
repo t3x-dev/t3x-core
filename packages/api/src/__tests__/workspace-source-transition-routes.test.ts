@@ -56,4 +56,34 @@ describe('exact-source Workspace Transition route boundary', () => {
 
     expect(response.status).toBe(400);
   });
+
+  it('rejects client-derived revert operations, target State, and authority facts', async () => {
+    const response = await app.request(
+      '/v1/projects/project/workspaces/workspace/source-transition/revert/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_id: `sha256:${'a'.repeat(64)}`,
+          reverse_operations: [
+            {
+              op: 'replace_scalar',
+              path: ['logger', 'level'],
+              expect: 'INFO',
+              value: 'DEBUG',
+            },
+          ],
+          target_state: { value: 'attacker-controlled' },
+          actor: { kind: 'human', id: 'attacker-controlled' },
+          policy: { mode: 'attacker-controlled' },
+        }),
+      }
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_REQUEST' },
+    });
+  });
 });

@@ -28,6 +28,7 @@ export {
   type SerializedTransitionObject,
   type State,
   serializeTransitionObject,
+  type VerifiedCommitIntegrity,
   type VerifiedDecisionGraph,
   verifyCommitV2,
   verifyDecisionGraph,

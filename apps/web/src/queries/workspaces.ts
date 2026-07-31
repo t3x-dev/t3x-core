@@ -1,7 +1,9 @@
 import {
+  decideProjectWorkspaceSourceRevert,
   decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
   listProjectWorkspaces,
+  reviewProjectWorkspaceSourceRevert,
   reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
@@ -80,6 +82,28 @@ export function decideWorkspaceSourceTransition(
   }
 ): Promise<WorkspaceSourceTransitionDecisionResponse> {
   return decideProjectWorkspaceSourceTransition(projectId, workspaceId, input);
+}
+
+export function reviewWorkspaceSourceRevert(
+  projectId: string,
+  workspaceId: string,
+  input: { commitId: string; why?: string; ifRevision: number }
+): Promise<WorkspaceSourceTransitionReviewResponse> {
+  return reviewProjectWorkspaceSourceRevert(projectId, workspaceId, input);
+}
+
+export function decideWorkspaceSourceRevert(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    commitId: string;
+    why?: string;
+    outcome: WorkspaceTransitionOutcome;
+    decisionReason?: string;
+    precondition: WorkspaceSourceTransitionPrecondition;
+  }
+): Promise<WorkspaceSourceTransitionDecisionResponse> {
+  return decideProjectWorkspaceSourceRevert(projectId, workspaceId, input);
 }
 
 export type {

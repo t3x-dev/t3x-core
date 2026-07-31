@@ -34,6 +34,7 @@ export {
   type CreatedYamlSourceEffect,
   type CreateYamlSourceEffectInput,
   createYamlSourceEffect,
+  deriveYamlSourceRevertOperations,
   YAML_SOURCE_DRIVER_PROTOCOL,
   YAML_SOURCE_DRIVER_PROTOCOL_VERSION,
   YAML_SOURCE_DRIVER_SPEC_DIGEST,

@@ -1,4 +1,13 @@
-import { ArrowRight, CheckCircle2, FileCode2, Loader2, Play, ShieldCheck } from 'lucide-react';
+import { type TransitionViewV1, YAML_SOURCE_MUTATION_DRIVER_REF } from '@t3x-dev/core';
+import {
+  ArrowRight,
+  CheckCircle2,
+  FileCode2,
+  Loader2,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,6 +41,7 @@ export function SourceTransitionTab({
   const [expectedValue, setExpectedValue] = useState('DEBUG');
   const [replacementValue, setReplacementValue] = useState('INFO');
   const [why, setWhy] = useState('');
+  const [revertWhy, setRevertWhy] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const committedReview = useCommitTransitionView(
     candidate.projectId,
@@ -47,6 +57,7 @@ export function SourceTransitionTab({
     replacementValue,
     root: candidate.sourceArtifact?.root,
   });
+  const revertCommitId = reversibleCommitId(committedReview.view, candidate.lastCommitHash);
 
   if (!active) return null;
 
@@ -59,6 +70,12 @@ export function SourceTransitionTab({
   const handleReview = async () => {
     if (!change) return;
     const reviewed = await sourceTransition.review(change, why);
+    if (reviewed) onViewChange?.('validation');
+  };
+
+  const handleRevertReview = async () => {
+    if (!revertCommitId) return;
+    const reviewed = await sourceTransition.reviewRevert(revertCommitId, revertWhy);
     if (reviewed) onViewChange?.('validation');
   };
 
@@ -76,6 +93,8 @@ export function SourceTransitionTab({
     : committedReview;
   const busy =
     sourceTransition.state.phase === 'reviewing' || sourceTransition.state.phase === 'deciding';
+  const isRevert = sourceTransition.state.task === 'revert';
+  const displayedOperations = sourceOperations(displayedReview.view);
 
   if (view === 'ops') {
     return (
@@ -89,10 +108,14 @@ export function SourceTransitionTab({
         onPathChange={(value) => handleDraftChange(() => setPath(value))}
         onReplacementValueChange={(value) => handleDraftChange(() => setReplacementValue(value))}
         onReview={() => void handleReview()}
+        onReviewRevert={() => void handleRevertReview()}
+        onRevertWhyChange={(value) => handleDraftChange(() => setRevertWhy(value))}
         onWhyChange={(value) => handleDraftChange(() => setWhy(value))}
         path={path}
         ready={change !== null}
         replacementValue={replacementValue}
+        revertCommitId={revertCommitId}
+        revertWhy={revertWhy}
         why={why}
       />
     );
@@ -101,11 +124,10 @@ export function SourceTransitionTab({
   if (view === 'preview') {
     return (
       <SourceChangePreview
-        expectedValue={expectedValue}
-        isImport={isImport}
+        isImport={isImport && !isRevert}
+        isRevert={isRevert}
         onContinue={() => onViewChange?.('commit')}
-        path={pathSegments}
-        replacementValue={replacementValue}
+        operations={displayedOperations}
         review={displayedReview}
       />
     );
@@ -116,7 +138,15 @@ export function SourceTransitionTab({
       <SourceFlowHeader
         candidate={candidate}
         isImport={isImport}
-        title={view === 'validation' ? 'Configuration checks' : 'Save configuration change'}
+        title={
+          view === 'validation'
+            ? isRevert
+              ? 'Revert checks'
+              : 'Configuration checks'
+            : isRevert
+              ? 'Save configuration revert'
+              : 'Save configuration change'
+        }
       />
       {sourceTransition.state.error ? (
         <div
@@ -198,10 +228,14 @@ function SourceTaskEditor({
   onPathChange,
   onReplacementValueChange,
   onReview,
+  onReviewRevert,
+  onRevertWhyChange,
   onWhyChange,
   path,
   ready,
   replacementValue,
+  revertCommitId,
+  revertWhy,
   why,
 }: {
   busy: boolean;
@@ -213,10 +247,14 @@ function SourceTaskEditor({
   onPathChange: (value: string) => void;
   onReplacementValueChange: (value: string) => void;
   onReview: () => void;
+  onReviewRevert: () => void;
+  onRevertWhyChange: (value: string) => void;
   onWhyChange: (value: string) => void;
   path: string;
   ready: boolean;
   replacementValue: string;
+  revertCommitId: string | null;
+  revertWhy: string;
   why: string;
 }) {
   const artifact = candidate.sourceArtifact;
@@ -310,23 +348,64 @@ function SourceTaskEditor({
           </Button>
         </div>
       </section>
+      {revertCommitId ? (
+        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                Revert the saved change
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                T3X derives the reverse edit from the verified current commit, then reruns the same
+                checks before saving a new history entry.
+              </p>
+            </div>
+            <Badge variant="outline">{shortDigest(revertCommitId)}</Badge>
+          </div>
+          <label
+            className="mt-4 grid gap-1.5 text-xs font-semibold text-[var(--text-secondary)]"
+            htmlFor="workspace-source-revert-rationale"
+          >
+            Why revert? <span className="font-normal">(optional)</span>
+            <Textarea
+              id="workspace-source-revert-rationale"
+              maxLength={2000}
+              onChange={(event) => onRevertWhyChange(event.target.value)}
+              placeholder="Restore the previous configuration while we investigate this change."
+              value={revertWhy}
+            />
+          </label>
+          <div className="mt-4 flex justify-end">
+            <Button disabled={busy} onClick={onReviewRevert} type="button" variant="outline">
+              {busy ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw aria-hidden="true" className="size-4" />
+              )}
+              Review revert
+            </Button>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
 function SourceChangePreview({
-  expectedValue,
   isImport,
+  isRevert,
   onContinue,
-  path,
-  replacementValue,
+  operations,
   review,
 }: {
-  expectedValue: string;
   isImport: boolean;
+  isRevert: boolean;
   onContinue: () => void;
-  path: Array<string | number>;
-  replacementValue: string;
+  operations: Array<{
+    path: Array<string | number>;
+    expect: string;
+    value: string;
+  }>;
   review: Parameters<typeof TransitionReviewPanel>[0];
 }) {
   return (
@@ -334,7 +413,7 @@ function SourceChangePreview({
       <TransitionReviewPanel {...review} />
       <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-          Source-preserving preview
+          {isRevert ? 'Source-preserving revert preview' : 'Source-preserving preview'}
         </h3>
         {isImport ? (
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
@@ -342,9 +421,16 @@ function SourceChangePreview({
             version.
           </p>
         ) : (
-          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <SourceValueCard label="Before" path={path} value={expectedValue} />
-            <SourceValueCard label="After" path={path} value={replacementValue} />
+          <div className="mt-3 grid gap-3">
+            {operations.map((operation, index) => (
+              <div
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                key={`${operation.path.join('/')}:${index}`}
+              >
+                <SourceValueCard label="Before" path={operation.path} value={operation.expect} />
+                <SourceValueCard label="After" path={operation.path} value={operation.value} />
+              </div>
+            ))}
           </div>
         )}
         <div className="mt-4 flex justify-end">
@@ -438,4 +524,59 @@ function parseSourcePath(value: string): Array<string | number> {
     .map((segment) => segment.trim())
     .filter(Boolean);
   return segments.map((segment) => (/^(0|[1-9]\d*)$/.test(segment) ? Number(segment) : segment));
+}
+
+function reversibleCommitId(
+  view: TransitionViewV1 | null,
+  selectedCommitId: string | undefined
+): string | null {
+  if (
+    !selectedCommitId ||
+    view?.mode !== 'transition' ||
+    view.history.observation !== 'committed' ||
+    view.history.commit.id !== selectedCommitId ||
+    view.change.driver.protocol !== YAML_SOURCE_MUTATION_DRIVER_REF.protocol ||
+    view.change.driver.protocolVersion !== YAML_SOURCE_MUTATION_DRIVER_REF.protocolVersion ||
+    view.change.driver.specDigest !== YAML_SOURCE_MUTATION_DRIVER_REF.specDigest ||
+    sourceOperations(view).length !== view.change.operations.length ||
+    view.change.operations.length === 0
+  ) {
+    return null;
+  }
+  return selectedCommitId;
+}
+
+function sourceOperations(view: TransitionViewV1 | null): Array<{
+  path: Array<string | number>;
+  expect: string;
+  value: string;
+}> {
+  if (view?.mode !== 'transition') return [];
+  return view.change.operations.flatMap((operation) => {
+    if (
+      !operation ||
+      typeof operation !== 'object' ||
+      Array.isArray(operation) ||
+      operation.op !== 'replace_scalar' ||
+      !Array.isArray(operation.path) ||
+      !operation.path.every(
+        (segment) => typeof segment === 'string' || (typeof segment === 'number' && segment >= 0)
+      ) ||
+      typeof operation.expect !== 'string' ||
+      typeof operation.value !== 'string'
+    ) {
+      return [];
+    }
+    return [
+      {
+        path: operation.path as Array<string | number>,
+        expect: operation.expect,
+        value: operation.value,
+      },
+    ];
+  });
+}
+
+function shortDigest(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 14)}…${value.slice(-4)}` : value;
 }

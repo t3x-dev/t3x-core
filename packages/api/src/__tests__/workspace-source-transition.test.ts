@@ -17,12 +17,15 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
+  reviewWorkspaceSourceRevert,
   reviewWorkspaceSourceTransition,
   WORKSPACE_SOURCE_ARTIFACT_FORMAT,
   WorkspaceSourceArtifactError,
   type WorkspaceSourceArtifactSelector,
   WorkspaceSourceInputsError,
+  WorkspaceSourceRevertUnavailableError,
   type WorkspaceSourceRunnerCapability,
 } from '../lib/workspace-source-transition';
 import {
@@ -277,6 +280,242 @@ describe('exact-source Workspace Transition application use case', () => {
     expect(head.state.value).toContain('# Preserve the exact source.');
     expect(head.state.value).toContain('# Keep this comment.');
     expect(await listTransitionCommits(db, project.projectId)).toHaveLength(2);
+  });
+
+  it('reviews a server-derived reverse Effect and commits an append-only revert child', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Source Revert' }));
+    await ensureMainBranch(db, project.projectId);
+    const root = await material(db, project.projectId, 'Revert root', BASE_SOURCE);
+    await workspace(db, project.projectId, 'source-revert');
+    const imported = await reviewWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      artifact: artifact(),
+      change: { mode: 'import', root: { materialId: root.id } },
+      actor: HUMAN,
+    });
+    await decideWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      artifact: artifact(),
+      change: { mode: 'import', root: { materialId: root.id } },
+      outcome: 'accepted',
+      precondition: imported.precondition,
+      actor: HUMAN,
+    });
+    const change = {
+      mode: 'edit' as const,
+      operations: [
+        {
+          op: 'replace_scalar' as const,
+          path: ['logger', 'level'],
+          expect: 'DEBUG',
+          value: 'INFO',
+        },
+      ],
+    };
+    const editedReview = await reviewWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      artifact: artifact(),
+      change,
+      why: 'Reduce production log volume.',
+      actor: HUMAN,
+    });
+    const edited = await decideWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      artifact: artifact(),
+      change,
+      why: 'Reduce production log volume.',
+      outcome: 'accepted',
+      precondition: editedReview.precondition,
+      actor: HUMAN,
+    });
+    const editedCommitId = edited.transition.audit.commit?.digest;
+    if (editedCommitId === undefined) throw new Error('Expected committed source edit');
+
+    const review = await reviewWorkspaceSourceRevert(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      commitId: editedCommitId,
+      why: 'Restore the previous logging level.',
+      actor: HUMAN,
+    });
+    expect(review.transition).toMatchObject({
+      change: {
+        base: edited.transition.change.result,
+        result: edited.transition.change.base,
+        operations: [
+          {
+            op: 'replace_scalar',
+            path: ['logger', 'level'],
+            expect: 'INFO',
+            value: 'DEBUG',
+          },
+        ],
+      },
+      claims: {
+        rationale: { mode: 'authored', value: 'Restore the previous logging level.' },
+      },
+      checks: { replay: { observation: 'observed', outcomes: ['verified'] } },
+    });
+
+    const rejected = await decideWorkspaceSourceRevert(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      commitId: editedCommitId,
+      why: 'Restore the previous logging level.',
+      outcome: 'rejected',
+      decisionReason: 'Keep INFO while diagnosing the device.',
+      precondition: review.precondition,
+      actor: HUMAN,
+    });
+    expect(rejected.commit).toBeUndefined();
+    expect(
+      (await getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })).head
+    ).toBe(editedCommitId);
+    expect(await listTransitionCommits(db, project.projectId)).toHaveLength(2);
+
+    const reviewedAgain = await reviewWorkspaceSourceRevert(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      commitId: editedCommitId,
+      why: 'Restore the previous logging level.',
+      actor: HUMAN,
+    });
+    const reverted = await decideWorkspaceSourceRevert(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert',
+      commitId: editedCommitId,
+      why: 'Restore the previous logging level.',
+      outcome: 'accepted',
+      precondition: reviewedAgain.precondition,
+      actor: HUMAN,
+    });
+    expect(reverted.commit?.parents).toEqual([expect.objectContaining({ digest: editedCommitId })]);
+    const head = await getTransitionRefHead(db, {
+      projectId: project.projectId,
+      refName: 'main',
+    });
+    if (head.format !== 'transition_v2') throw new Error('Expected a TransitionV2 head');
+    expect(head.state.value).toBe(BASE_SOURCE);
+    expect(reverted.transition.change.result).toEqual(edited.transition.change.base);
+    expect(await listTransitionCommits(db, project.projectId)).toHaveLength(3);
+  });
+
+  it('refuses import and stale edit reverts without changing repository history', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Source Revert Guards' }));
+    await ensureMainBranch(db, project.projectId);
+    const root = await material(db, project.projectId, 'Revert guard root', BASE_SOURCE);
+    await workspace(db, project.projectId, 'source-revert-guards');
+    const importReview = await reviewWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: { mode: 'import', root: { materialId: root.id } },
+      actor: HUMAN,
+    });
+    const imported = await decideWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: { mode: 'import', root: { materialId: root.id } },
+      outcome: 'accepted',
+      precondition: importReview.precondition,
+      actor: HUMAN,
+    });
+    const importCommitId = imported.transition.audit.commit?.digest;
+    if (importCommitId === undefined) throw new Error('Expected committed source import');
+    await expect(
+      reviewWorkspaceSourceRevert(db, {
+        projectId: project.projectId,
+        workspaceId: 'source-revert-guards',
+        commitId: importCommitId,
+        actor: HUMAN,
+      })
+    ).rejects.toBeInstanceOf(WorkspaceSourceRevertUnavailableError);
+
+    const firstChange = {
+      mode: 'edit' as const,
+      operations: [
+        {
+          op: 'replace_scalar' as const,
+          path: ['logger', 'level'],
+          expect: 'DEBUG',
+          value: 'INFO',
+        },
+      ],
+    };
+    const firstReview = await reviewWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: firstChange,
+      actor: HUMAN,
+    });
+    const firstEdit = await decideWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: firstChange,
+      outcome: 'accepted',
+      precondition: firstReview.precondition,
+      actor: HUMAN,
+    });
+    const firstEditId = firstEdit.transition.audit.commit?.digest;
+    if (firstEditId === undefined) throw new Error('Expected committed source edit');
+    const revertReview = await reviewWorkspaceSourceRevert(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      commitId: firstEditId,
+      actor: HUMAN,
+    });
+
+    const competingChange = {
+      mode: 'edit' as const,
+      operations: [
+        {
+          op: 'replace_scalar' as const,
+          path: ['logger', 'level'],
+          expect: 'INFO',
+          value: 'WARN',
+        },
+      ],
+    };
+    const competingReview = await reviewWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: competingChange,
+      actor: HUMAN,
+    });
+    const competing = await decideWorkspaceSourceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'source-revert-guards',
+      artifact: artifact(),
+      change: competingChange,
+      outcome: 'accepted',
+      precondition: competingReview.precondition,
+      actor: HUMAN,
+    });
+    const competingId = competing.transition.audit.commit?.digest;
+    if (competingId === undefined) throw new Error('Expected competing source edit');
+
+    await expect(
+      decideWorkspaceSourceRevert(db, {
+        projectId: project.projectId,
+        workspaceId: 'source-revert-guards',
+        commitId: firstEditId,
+        outcome: 'accepted',
+        precondition: revertReview.precondition,
+        actor: HUMAN,
+      })
+    ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
+    expect(
+      (await getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })).head
+    ).toBe(competingId);
+    expect(await listTransitionCommits(db, project.projectId)).toHaveLength(3);
   });
 
   it('fails closed for zero-operation, stale, and unsupported source edits', async () => {
