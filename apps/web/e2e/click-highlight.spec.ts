@@ -7,6 +7,7 @@ import {
 } from './fixtures/api-helpers';
 import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 /**
  * Click-highlight e2e — verifies the YAML → chat highlight flow.
@@ -54,13 +55,6 @@ function validOps(turnHash: string) {
       },
     },
   ];
-}
-
-async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
-  }
 }
 
 /**

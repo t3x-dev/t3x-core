@@ -7,6 +7,7 @@ import {
 } from '../fixtures/api-helpers';
 import { mockConfiguredExtractionModel } from '../fixtures/mock-model';
 import { expect, test } from '../fixtures/test';
+import { expandWorkspaceIfCollapsed } from '../fixtures/workspace';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
 const COMMITS_URL = '**/api/v1/commits';
@@ -40,10 +41,7 @@ function validOps(turnHash: string) {
 }
 
 async function openPanelAndClickExtract(page: Page): Promise<void> {
-  const collapsedWorkspace = page.getByTestId('yops-panel-collapsed');
-  if (await collapsedWorkspace.isVisible().catch(() => false)) {
-    await collapsedWorkspace.click();
-  }
+  await expandWorkspaceIfCollapsed(page);
 
   const extractButton = page.getByTestId('extract-button');
   await extractButton.waitFor({ state: 'visible' });
