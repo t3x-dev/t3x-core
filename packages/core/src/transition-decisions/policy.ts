@@ -188,8 +188,13 @@ export function parseAcceptancePolicy(value: unknown): AcceptancePolicy {
 }
 
 export function acceptancePolicyDigest(policy: AcceptancePolicy): Digest {
-  const canonical = canonicalizeProtocolValue(policy as ProtocolValue);
+  const canonical = canonicalizeAcceptancePolicy(policy);
   return `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;
+}
+
+/** Canonical bytes persisted by repositories for content-addressed policy resources. */
+export function canonicalizeAcceptancePolicy(policy: AcceptancePolicy): string {
+  return canonicalizeProtocolValue(parseAcceptancePolicy(policy) as ProtocolValue);
 }
 
 export function createAcceptancePolicyResource(input: { policy: unknown; uri: string }): {

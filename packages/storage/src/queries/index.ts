@@ -485,6 +485,16 @@ export {
   TransitionRefNotFoundError,
   type VerifiedTransitionCommitGraph,
 } from './transition-commits';
+// Transition AcceptancePolicy bindings
+export {
+  type BindTransitionPolicyInput,
+  bindTransitionPolicy,
+  getTransitionPolicyBinding,
+  type TransitionPolicyBinding,
+  TransitionPolicyBindingIntegrityError,
+  TransitionPolicyResourceConflictError,
+  unbindTransitionPolicy,
+} from './transition-policy-bindings';
 // Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,

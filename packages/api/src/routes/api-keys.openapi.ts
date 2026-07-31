@@ -9,10 +9,11 @@
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX, type ApiKey } from '@t3x-dev/core';
+import { API_KEY_VALUE_PREFIX, type ApiKey, isTransitionWriteScope } from '@t3x-dev/core';
 import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { pinoLogger } from '../middleware/logger';
 import {
   ApiKeyCreatedResponse,
@@ -31,6 +32,22 @@ function toSafeApiKey({ key_hash, user_id, ...safe }: Record<string, unknown>) {
 function getUserId(c: any): string | null {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   return apiKey?.user_id ?? null;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: generic route context
+function getAuthenticatedApiKey(c: any): ApiKey | undefined {
+  return c.get('apiKey') as ApiKey | undefined;
+}
+
+// API-key and policy administration remain human operations. AUTH_DISABLED
+// local mode has no credential and is intentionally allowed.
+// biome-ignore lint/suspicious/noExplicitAny: generic route context
+function rejectNonHumanAdministrator(c: any): Response | null {
+  const apiKey = getAuthenticatedApiKey(c);
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'API key administration requires a human principal');
+  }
+  return null;
 }
 
 export const apiKeysRoutes = new OpenAPIHono({
@@ -78,7 +95,32 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
   const userId = getUserId(c);
 
   try {
+    const denied = rejectNonHumanAdministrator(c);
+    if (denied) return denied;
     const db = await getDB();
+
+    if (body.project_id) {
+      const access = await assertProjectAccess(c, db, body.project_id);
+      if (access instanceof Response) return access;
+    }
+    if (
+      body.principal_kind !== 'human' &&
+      body.transition_scopes.some(isTransitionWriteScope) &&
+      body.project_id === undefined
+    ) {
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        'Agent and service Transition write credentials must be project-scoped'
+      );
+    }
+    if (body.principal_kind !== 'human' && body.project_id === undefined && userId === null) {
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        'Global agent and service credentials require an authenticated owning user'
+      );
+    }
 
     // Generate a random key value
     const rawKey = `${API_KEY_VALUE_PREFIX}${randomBytes(24).toString('base64url')}`;
@@ -87,6 +129,8 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
       name: body.name,
       projectId: body.project_id,
       userId: userId ?? undefined,
+      principalKind: body.principal_kind,
+      transitionScopes: body.transition_scopes,
       keyValue: rawKey,
     });
 
@@ -99,6 +143,8 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
           key_prefix: apiKey.key_prefix,
           name: apiKey.name,
           project_id: apiKey.project_id,
+          principal_kind: apiKey.principal_kind,
+          transition_scopes: apiKey.transition_scopes,
           created_at: apiKey.created_at,
         },
       },
@@ -142,6 +188,8 @@ apiKeysRoutes.openapi(listApiKeysRoute, async (c) => {
   const userId = getUserId(c);
 
   try {
+    const denied = rejectNonHumanAdministrator(c);
+    if (denied) return denied;
     const db = await getDB();
     const keys = await listApiKeys(db, { projectId: project_id, userId: userId ?? undefined });
 
@@ -191,6 +239,8 @@ apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
   const userId = getUserId(c);
 
   try {
+    const denied = rejectNonHumanAdministrator(c);
+    if (denied) return denied;
     const db = await getDB();
 
     const existing = await findApiKeyById(db, id);

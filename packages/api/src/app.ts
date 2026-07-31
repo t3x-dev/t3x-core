@@ -78,6 +78,7 @@ import {
   statusRoutes,
   templatesRoutes,
   topicsRoutes,
+  transitionPolicyBindingRoutes,
   treeAnswerRoutes,
   treeCompressRoutes,
   treeExtractRoutes,
@@ -195,6 +196,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
+  api.route('/', transitionPolicyBindingRoutes);
   api.route('/', shareRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', comparisonsRoutes);
@@ -285,6 +287,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Search', description: 'State and project search' },
       { name: 'State Index', description: 'State graph nodes, edges, and membership' },
       { name: 'Runner', description: 'Grey-box agent evaluation' },
+      { name: 'Transition', description: 'Transition authority and policy administration' },
       { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },

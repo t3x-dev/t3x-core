@@ -33,6 +33,16 @@ export async function assertProjectAccess(c: Context, db: AnyDB, projectId: stri
   }
 
   const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (
+    apiKey?.principal_kind !== undefined &&
+    apiKey.principal_kind !== 'human' &&
+    apiKey.project_id !== null
+  ) {
+    if (apiKey.project_id !== projectId) {
+      return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+    }
+    return project;
+  }
   const userId = apiKey?.user_id;
 
   // AUTH_DISABLED mode — no user identity, allow all
@@ -66,6 +76,16 @@ export async function assertProjectAccessIncludingDeleted(
   }
 
   const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (
+    apiKey?.principal_kind !== undefined &&
+    apiKey.principal_kind !== 'human' &&
+    apiKey.project_id !== null
+  ) {
+    if (apiKey.project_id !== projectId) {
+      return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+    }
+    return project;
+  }
   const userId = apiKey?.user_id;
 
   if (!userId) return project;

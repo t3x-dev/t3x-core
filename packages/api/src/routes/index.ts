@@ -51,6 +51,7 @@ export { sourceTextRevisionRoutes } from './source-text-revisions.openapi';
 export { statusRoutes } from './status.openapi';
 export { templatesRoutes } from './templates.openapi';
 export { topicsRoutes } from './topics.openapi';
+export { transitionPolicyBindingRoutes } from './transition-policy-bindings.openapi';
 export { treeAnswerRoutes } from './tree-answer.openapi';
 export { treeCompressRoutes } from './tree-compress.openapi';
 export { treeExtractRoutes } from './tree-extract.openapi';
