@@ -13,6 +13,8 @@ const createProject = vi.fn();
 const refreshProjects = vi.fn();
 const removeProject = vi.fn();
 const renameProject = vi.fn();
+let hookError: string | null = null;
+let hookLoading = false;
 let hookProjects: Project[] = [];
 
 vi.mock('next/navigation', () => ({
@@ -34,8 +36,8 @@ vi.mock('next/link', () => ({
 vi.mock('@/hooks/projects/useProjects', () => ({
   useProjects: () => ({
     create: createProject,
-    error: null,
-    loading: false,
+    error: hookError,
+    loading: hookLoading,
     projects: hookProjects,
     refresh: refreshProjects,
     remove: removeProject,
@@ -80,6 +82,8 @@ describe('ProjectDirectoryPage', () => {
     removeProject.mockReset();
     renameProject.mockReset();
     window.localStorage.clear();
+    hookError = null;
+    hookLoading = false;
     hookProjects = projects;
     useProjectStore.setState({
       error: null,
@@ -165,6 +169,30 @@ describe('ProjectDirectoryPage', () => {
     }
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it('renders a recoverable load failure without claiming the organization is empty', () => {
+    hookError = 'Network request failed. Check your connection and try again.';
+    hookProjects = [];
+
+    render(<ProjectDirectoryPage />);
+
+    expect(screen.getByRole('heading', { name: "Couldn't load repositories" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No repositories yet' })).not.toBeInTheDocument();
+    expect(screen.getByText('— repos')).toBeInTheDocument();
+    expect(screen.getByText('— commits')).toBeInTheDocument();
+    expect(screen.getByText('Repository data is unavailable.')).toBeInTheDocument();
+  });
+
+  it('retries a failed initial repository load from the failure state', () => {
+    hookError = 'Network request failed. Check your connection and try again.';
+    hookProjects = [];
+
+    render(<ProjectDirectoryPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(refreshProjects).toHaveBeenCalledTimes(1);
   });
 
   it('renames a backend project through the shared project hook', async () => {

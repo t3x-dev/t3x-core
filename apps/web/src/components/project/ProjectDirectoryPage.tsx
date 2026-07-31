@@ -206,7 +206,13 @@ function DirectoryTopBar({
   );
 }
 
-function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
+function OrganizationHeader({
+  dataAvailable,
+  projects,
+}: {
+  dataAvailable: boolean;
+  projects: ProjectSummary[];
+}) {
   const commits = projects.reduce((sum, project) => sum + metricValue(project.commitsCount), 0);
 
   return (
@@ -222,8 +228,8 @@ function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
           </p>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
             <span>3 members</span>
-            <span>{projects.length} repos</span>
-            <span>{commits} commits</span>
+            <span>{dataAvailable ? projects.length : '—'} repos</span>
+            <span>{dataAvailable ? commits : '—'} commits</span>
           </div>
         </div>
       </div>
@@ -231,10 +237,35 @@ function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
   );
 }
 
-function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
+function DirectorySideRail({
+  dataAvailable,
+  projects,
+}: {
+  dataAvailable: boolean;
+  projects: ProjectSummary[];
+}) {
   const openReviews = projects.filter((project) => project.status === 'draft').length;
   const outputs = projects.reduce((sum, project) => sum + outputCount(project), 0);
   const recent = projects[0];
+
+  if (!dataAvailable) {
+    return (
+      <aside className="space-y-7">
+        <section>
+          <h2 className="text-base font-bold text-[var(--text-primary)]">Open work</h2>
+          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
+            Repository data is unavailable.
+          </p>
+        </section>
+        <section className="border-t border-[var(--stroke-divider)] pt-6">
+          <h2 className="text-base font-bold text-[var(--text-primary)]">Recent activity</h2>
+          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
+            Retry loading repositories to view recent activity.
+          </p>
+        </section>
+      </aside>
+    );
+  }
 
   return (
     <aside className="space-y-7">
@@ -255,6 +286,40 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
         </p>
       </section>
     </aside>
+  );
+}
+
+function DirectoryLoadFailure({
+  error,
+  onRetry,
+  retrying,
+}: {
+  error: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div
+      className="flex min-h-[280px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-8 text-center"
+      role="alert"
+    >
+      <h2 className="text-lg font-bold text-[var(--text-primary)]">
+        Couldn&apos;t load repositories
+      </h2>
+      <p className="mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
+        {error}
+      </p>
+      <Button
+        className="mt-5"
+        disabled={retrying}
+        onClick={onRetry}
+        type="button"
+        variant="outline"
+      >
+        <RefreshCw className={cn('size-4', retrying && 'animate-spin')} />
+        {retrying ? 'Retrying...' : 'Retry'}
+      </Button>
+    </div>
   );
 }
 
@@ -384,17 +449,32 @@ export function ProjectDirectoryPage() {
     [filteredProjects, recentProjectIds]
   );
   const pinnedProjects = recentProjects.length > 0 ? recentProjects : filteredProjects.slice(0, 2);
+  const hasLoadedProjects = projectSummaries.length > 0;
+  const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
       <DirectoryTopBar onRefresh={handleRefreshProjects} refreshing={loading} />
       <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-8">
-          <OrganizationHeader projects={projectSummaries} />
+          <OrganizationHeader dataAvailable={dataAvailable} projects={projectSummaries} />
 
-          {error && (
-            <div className="rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-4 text-sm font-semibold text-[var(--status-error)]">
-              {error}
+          {error && hasLoadedProjects && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-4 text-sm font-semibold text-[var(--status-error)]"
+              role="alert"
+            >
+              <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
+              <Button
+                disabled={loading}
+                onClick={handleRefreshProjects}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+                Retry
+              </Button>
             </div>
           )}
 
@@ -402,6 +482,12 @@ export function ProjectDirectoryPage() {
             <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-sm font-semibold text-[var(--text-secondary)]">
               Loading repositories...
             </div>
+          ) : error && projectSummaries.length === 0 ? (
+            <DirectoryLoadFailure
+              error={error}
+              onRetry={handleRefreshProjects}
+              retrying={loading}
+            />
           ) : projectSummaries.length === 0 ? (
             <EmptyDirectory />
           ) : (
@@ -479,7 +565,7 @@ export function ProjectDirectoryPage() {
             </>
           )}
         </div>
-        <DirectorySideRail projects={projectSummaries} />
+        <DirectorySideRail dataAvailable={dataAvailable} projects={projectSummaries} />
       </main>
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
