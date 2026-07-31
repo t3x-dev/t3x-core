@@ -255,113 +255,26 @@ test.describe('DiffDisplayView Full E2E', () => {
   });
 
   test('Can run diff comparison', async ({ page }) => {
-    // Monitor network requests for turn context API
-    const turnContextResponses: { url: string; status: number }[] = [];
-    page.on('response', (response) => {
-      if (response.url().includes('/turns/') && response.url().includes('/context')) {
-        turnContextResponses.push({ url: response.url(), status: response.status() });
-      }
-    });
+    const response = await page.goto(
+      `/project/${projectId}/diff?base=${encodeURIComponent(commit1Hash)}&target=${encodeURIComponent(commit2Hash)}`,
+      { waitUntil: 'domcontentloaded' }
+    );
+    expect(response?.status() ?? 200).toBeLessThan(400);
 
-    // Navigate directly to project canvas view
-    await page.goto(`/chat/project/${projectId}/canvas`);
-    await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
+    await expect(page.getByTitle(commit1Hash)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTitle(commit2Hash)).toBeVisible();
+    await expect(page.getByText('Added (1)', { exact: true })).toBeVisible();
+    await expect(page.getByText('Removed (1)', { exact: true })).toBeVisible();
+    await expect(page.getByText('Show identical (2)', { exact: true })).toBeVisible();
 
-    // Wait for "Loading..." to disappear
-    await page
-      .locator('text=Loading...')
-      .waitFor({ state: 'hidden', timeout: 30000 })
-      .catch(() => {});
+    const body = page.locator('body');
+    await expect(body).toContainText('Meeting scheduled for Monday');
+    await expect(body).toContainText('Deadline is Friday');
 
-    // Screenshot before trying to click
-    await page.screenshot({ path: 'test-results/diff-full-before-click.png' });
-
-    // Try to find and click View full with force
-    const viewFullBtn = page.getByText('View full').first();
-    const hasViewFull = await viewFullBtn.isVisible({ timeout: 5000 });
-
-    if (!hasViewFull) {
-      await page.screenshot({ path: 'test-results/diff-full-no-viewfull.png' });
-
-      // Alternative: click SOURCES to open modal, then navigate to commit view
-      const sourcesBtn = page.locator('text=SOURCES').first();
-      const sourcesVisible = await sourcesBtn.isVisible({ timeout: 3000 });
-      if (sourcesVisible) {
-        await sourcesBtn.click();
-
-        // Wait for modal content to appear
-        await page.locator('aside').first().waitFor({ state: 'visible', timeout: 5000 });
-
-        // Look for a way to switch to commit view or find Compare section
-        const pageText = await page.locator('body').innerText();
-
-        if (!pageText.includes('Compare')) {
-          test.skip(true, 'Compare section not found in sidebar');
-          return;
-        }
-      } else {
-        test.skip(true, 'SOURCES button not visible — cannot access Compare');
-        return;
-      }
-    } else {
-      await viewFullBtn.click();
-
-      // Wait for modal
-      await page
-        .locator('text=Commit:')
-        .waitFor({ state: 'visible', timeout: 5000 })
-        .catch(() => {});
-    }
-
-    // Look for Compare section
-    const compareBtn = page.locator('button:has-text("Compare with")');
-    const hasCompareBtn = await compareBtn.isVisible({ timeout: 5000 });
-
-    if (!hasCompareBtn) {
-      // Scroll sidebar
-      const sidebar = page.locator('aside').first();
-      await sidebar.evaluate((el) => (el.scrollTop = el.scrollHeight));
-    }
-
-    const compareBtnAfterScroll = page.locator('button:has-text("Compare with")');
-    const compareBtnVisible = await compareBtnAfterScroll.isVisible({ timeout: 3000 });
-    if (compareBtnVisible) {
-      await compareBtnAfterScroll.click();
-
-      // Wait for the select dropdown to appear
-      const select = page.locator('select').first();
-      await select.waitFor({ state: 'visible', timeout: 5000 });
-
-      const options = await select.locator('option').allTextContents();
-
-      if (options.length > 1) {
-        await select.selectOption({ index: 1 });
-
-        // Click Run Diff and wait for results
-        await page.locator('button:has-text("Run Diff")').click();
-
-        // Wait for diff results to appear by checking for diff-related content
-        await expect(page.locator('body')).toContainText(
-          /(identical|Unified|Side-by-side|only in)/,
-          { timeout: 15000 }
-        );
-
-        // Screenshot result
-        await page.screenshot({ path: 'test-results/diff-full-result.png' });
-
-        // Verify DiffDisplayView
-        const pageText = await page.locator('body').innerText();
-        const hasDiffView =
-          pageText.includes('identical') ||
-          pageText.includes('Unified') ||
-          pageText.includes('Side-by-side') ||
-          pageText.includes('only in');
-
-        expect(hasDiffView).toBe(true);
-      }
-    } else {
-      await page.screenshot({ path: 'test-results/diff-full-no-compare.png' });
-    }
+    await page.getByRole('button', { name: 'Unified', exact: true }).click();
+    await expect(body).toContainText('Meeting scheduled for Monday');
+    await expect(body).toContainText('Deadline is Friday');
+    await page.screenshot({ path: 'test-results/diff-full-result.png' });
   });
 
   test('Provides manual verification URL', async () => {
