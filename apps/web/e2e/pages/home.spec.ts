@@ -46,7 +46,7 @@ test.describe('Home Page', () => {
       'href',
       '/t3x-dev/settings'
     );
-    await expect(page.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+    await expect(page.getByLabel('New repository', { exact: true })).toHaveAttribute(
       'href',
       '/t3x-dev/new'
     );
