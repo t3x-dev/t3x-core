@@ -156,6 +156,25 @@ type ApiResponse = any;
 
 describe('Workspace routes', () => {
   const app = new Hono();
+  const esphomeDeviceSchemaHash =
+    'sha256:4dadbf6d65b4bd1f0310be317b9b0cfb90edfbcf293fe1d8bc60a0b07f05675d';
+  const esphomeYamlSource = {
+    id: 'src_yaml',
+    type: 'document',
+    title: 'Device YAML',
+    previewText: [
+      'esphome:',
+      '  name: office-lunch-demo',
+      'esp32:',
+      '  board: esp32dev',
+      'logger: {}',
+      'api: {}',
+      'sensor:',
+      '  - platform: uptime',
+      '    name: Office Lunch Demo Uptime',
+    ].join('\n'),
+  };
+
   app.route('/', workspaceRoutes);
 
   beforeEach(() => {
@@ -298,6 +317,310 @@ describe('Workspace routes', () => {
         message: expect.stringContaining('t3x/skill v999'),
       },
     });
+  });
+
+  it('does not run ESPHome Device extraction for unsupported release versions', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_esphome_version_mismatch/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_esphome_version_mismatch',
+            projectId: 'proj_sources',
+            schemaBindings: [
+              {
+                canonicalName: 't3x/esphome-device',
+                schemaHash: esphomeDeviceSchemaHash,
+                schemaName: 'ESPHome Device',
+                version: 'v999',
+                mode: 'pinned',
+              },
+            ],
+            sourceBundle: [],
+          },
+          sources: [esphomeYamlSource],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: expect.stringContaining('t3x/esphome-device v999'),
+      },
+    });
+  });
+
+  it('does not run ESPHome Device extraction for mismatched schema hashes', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_esphome_hash_mismatch/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_esphome_hash_mismatch',
+            projectId: 'proj_sources',
+            schemaBindings: [
+              {
+                canonicalName: 't3x/esphome-device',
+                schemaHash: `sha256:${'0'.repeat(64)}`,
+                schemaName: 'ESPHome Device',
+                version: 'v1',
+                mode: 'pinned',
+              },
+            ],
+            sourceBundle: [],
+          },
+          sources: [esphomeYamlSource],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: expect.stringContaining('t3x/esphome-device v1'),
+      },
+    });
+  });
+
+  it('materializes ESPHome Device YAML source into device state and object-valued YOps', async () => {
+    const binding = {
+      canonicalName: 't3x/esphome-device',
+      schemaHash: esphomeDeviceSchemaHash,
+      schemaName: 'ESPHome Device',
+      version: 'v1',
+      mode: 'pinned',
+    };
+    const device = {
+      esphome: { name: 'office-lunch-demo' },
+      esp32: { board: 'esp32dev' },
+      logger: {},
+      api: {},
+      sensor: [{ platform: 'uptime', name: 'Office Lunch Demo Uptime' }],
+    };
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_esphome_device/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_esphome_device',
+            projectId: 'proj_sources',
+            title: 'ESPHome workspace',
+            targetBranch: 'main',
+            schemaBindings: [binding],
+            sourceBundle: [],
+          },
+          sources: [
+            esphomeYamlSource,
+            {
+              id: 'src_notes',
+              type: 'text',
+              title: 'Notes',
+              previewText: 'This source is ordinary prose and should not replace the YAML device.',
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    expect(extractBody.data.workspace.device).toEqual(device);
+    expect(extractBody.data.workspace.schemaReview).toEqual(
+      expect.objectContaining({ verdict: 'ready', gaps: [] })
+    );
+    expect(extractBody.data.workspace.yopsDraft.operations).toEqual([
+      expect.objectContaining({
+        op: 'set',
+        path: 'device',
+        afterValue: device,
+        sourceRefs: ['src_yaml'],
+      }),
+    ]);
+    expect(storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state.device).toEqual(
+      device
+    );
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_esphome_device/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_esphome_device' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations).toEqual([
+      expect.objectContaining({
+        op: 'set',
+        path: 'device',
+        afterValue: device,
+      }),
+    ]);
+  });
+
+  it('rejects ESPHome Device YAML without esphome.name', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_esphome_invalid/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_esphome_invalid',
+            projectId: 'proj_sources',
+            schemaBindings: [
+              {
+                schemaName: 'ESPHome Device',
+                mode: 'pinned',
+              },
+            ],
+            sourceBundle: [],
+          },
+          sources: [
+            {
+              id: 'src_invalid_yaml',
+              type: 'document',
+              title: 'Missing name',
+              previewText: ['esp32:', '  board: esp32dev'].join('\n'),
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'ESPHome Device requires esphome.name.',
+      },
+    });
+  });
+
+  it('persists a complete Prompt binding and regenerates YOps under the Prompt root', async () => {
+    const promptSchemaHash =
+      'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
+    const binding = {
+      canonicalName: 't3x/prompt',
+      schemaHash: promptSchemaHash,
+      schemaName: 'Prompt Schema',
+      version: 'v1',
+      mode: 'pinned',
+    };
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            title: 'Prompt workspace',
+            targetBranch: 'main',
+            schemaBindings: [binding],
+            sourceBundle: [],
+            schemaReview: {
+              verdict: 'needs_review',
+              summary: 'Regenerate against Prompt Schema.',
+              gaps: ['Prompt candidate is stale.'],
+            },
+            yopsDraft: {
+              id: 'draft:stale-prompt',
+              operations: [{ id: 'old-op', op: 'set', path: 'skill/manifest/name' }],
+            },
+          },
+          sources: [
+            {
+              id: 'src_prompt',
+              type: 'document',
+              title: 'Prompt definition',
+              previewText: [
+                'name: source-backed-summary',
+                'summary: Summarize supplied source evidence.',
+                'goal: Produce a concise source-backed summary.',
+                'inputs: Source material',
+                'outputs: Markdown summary',
+                'non goals: Invent unsupported claims',
+                'truth policy: evidence_only',
+                'sequence: 1',
+                'role: user',
+                'template: Summarize {{source_material}}',
+                'purpose: Request a grounded summary',
+                'optional: false',
+                'on missing variable: report_and_stop',
+                'mode: chat',
+                'response format: markdown',
+                'streaming: false',
+                'tool policy: none',
+                'format: markdown',
+                'strict: true',
+                'on parse failure: report_and_stop',
+                'kind: template_compile',
+                'run when: pre_compile',
+                'blocking: true',
+              ].join('\n'),
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    expect(extractBody.data.workspace.schemaBindings).toEqual([binding]);
+    expect(extractBody.data.workspace.schemaCandidate.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'manifest' }),
+        expect.objectContaining({ path: 'messages' }),
+        expect.objectContaining({ path: 'runtime' }),
+        expect.objectContaining({ path: 'output' }),
+      ])
+    );
+
+    const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
+    expect(getRes.status).toBe(200);
+    const getBody: ApiResponse = await getRes.json();
+    expect(getBody.data.workspace.schemaBindings).toEqual([binding]);
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations.length).toBeGreaterThan(0);
+    expect(
+      yopsBody.data.workspace.yopsDraft.operations.every((operation: ApiResponse) =>
+        operation.path.startsWith('prompt/')
+      )
+    ).toBe(true);
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
   });
 
   it('merges complementary evidence for the same repeated requirement', async () => {

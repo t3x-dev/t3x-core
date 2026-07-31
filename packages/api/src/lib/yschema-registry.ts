@@ -1,7 +1,13 @@
-import { t3xPrdP0Fixtures, t3xSkillP0Fixtures, type YSchema } from '@t3x-dev/yschema';
+import {
+  t3xPrdP0Fixtures,
+  t3xPromptP0Fixtures,
+  t3xSkillP0Fixtures,
+  type YSchema,
+} from '@t3x-dev/yschema';
 
 const BUILT_IN_SCHEMAS = new Map<string, YSchema>([
   ['t3x/prd', t3xPrdP0Fixtures.normalizedYSchema],
+  ['t3x/prompt', t3xPromptP0Fixtures.normalizedYSchema],
   ['t3x/skill', t3xSkillP0Fixtures.normalizedYSchema],
 ]);
 
@@ -19,6 +25,8 @@ export function canonicalSchemaNameFromBinding(binding: unknown): string | null 
   }
 
   const displayName = typeof record.schemaName === 'string' ? record.schemaName : '';
+  if (/esphome\s+device/i.test(displayName)) return 't3x/esphome-device';
+  if (/prompt/i.test(displayName)) return 't3x/prompt';
   if (/skill/i.test(displayName)) return 't3x/skill';
   if (/prd/i.test(displayName)) return 't3x/prd';
   return null;
@@ -32,6 +40,7 @@ export function schemaVersionFromBinding(binding: unknown): string | undefined {
 
 export function schemaRootKeyFromBinding(binding: unknown): string {
   const canonicalName = canonicalSchemaNameFromBinding(binding);
+  if (canonicalName === 't3x/esphome-device') return 'device';
   if (canonicalName) return canonicalName.split('/').at(-1) ?? 'candidate';
 
   if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return 'candidate';

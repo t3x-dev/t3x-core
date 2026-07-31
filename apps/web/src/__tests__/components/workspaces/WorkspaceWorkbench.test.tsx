@@ -446,6 +446,28 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
   });
 
+  it('offers compiled preview only for a Prompt-bound Workspace', () => {
+    const promptWorkspace = structuredClone(workspaceCandidates[0]!);
+    promptWorkspace.schemaBindings = [
+      {
+        canonicalName: 't3x/prompt',
+        schemaHash: `sha256:${'1'.repeat(64)}`,
+        schemaName: 'Prompt Schema',
+        version: 'v1',
+        mode: 'pinned',
+      },
+    ];
+
+    const { rerender } = render(
+      <WorkspaceWorkbench candidates={[promptWorkspace]} projectId="proj_1" />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Compile preview' }));
+    expect(screen.getByRole('dialog', { name: 'Compile preview' })).toBeInTheDocument();
+
+    rerender(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    expect(screen.queryByRole('button', { name: 'Compile preview' })).not.toBeInTheDocument();
+  });
+
   it('keeps the pre-commit review dock behind Validation', () => {
     render(
       <WorkspaceWorkbench

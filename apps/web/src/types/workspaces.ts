@@ -1,3 +1,5 @@
+import type { WorkspaceYOpsValue } from './workspaceYops';
+
 export type WorkspaceStatus = 'draft' | 'ready_for_yops' | 'schema_review' | 'committed';
 
 export type WorkspaceStatusFilter = 'all' | WorkspaceStatus;
@@ -128,6 +130,14 @@ export interface WorkspaceSchemaCandidate {
   summary: string;
   proposalMode?: WorkspaceProposalMode;
   fields: WorkspaceSchemaCandidateField[];
+  promptCompileInputs?: WorkspacePromptCompileInputs;
+}
+
+export interface WorkspacePromptCompileInputs {
+  relations?: Array<{ type: string; from: string; to: string }>;
+  variableValues?: Record<string, unknown>;
+  contextContents?: Record<string, string>;
+  resourceContents?: Record<string, string>;
 }
 
 export interface WorkspaceYOpsDraftOperation {
@@ -135,8 +145,8 @@ export interface WorkspaceYOpsDraftOperation {
   op: string;
   path: string;
   summary: string;
-  beforeValue?: string;
-  afterValue?: string;
+  beforeValue?: WorkspaceYOpsValue;
+  afterValue?: WorkspaceYOpsValue;
   reason?: string;
   sourceRefs?: string[];
 }

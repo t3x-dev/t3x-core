@@ -42,6 +42,10 @@ import {
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
 import {
+  buildEsphomeDeviceWorkspace,
+  isEsphomeDeviceWorkspace,
+} from '../lib/workspace-validation/esphome-workspace-profile';
+import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
   schemaRootKeyFromBinding,
@@ -1028,21 +1032,15 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   if (access instanceof Response) return access;
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
-  const schemaResolution = resolveWorkspaceYSchema(workspace);
-  if (schemaResolution.canonicalName && !schemaResolution.schema) {
-    const releaseLabel = schemaResolution.version
-      ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
-      : schemaResolution.canonicalName;
-    return errorResponse(
-      c,
-      'INVALID_REQUEST',
-      `Bound Schema release ${releaseLabel} is not available in this runtime. Choose a registered current release before regenerating the Workspace.`
-    );
-  }
-  const nextWorkspace = reopenCommittedWorkspaceForReview(
-    buildExtractedWorkspace(workspace, projectId, sourceTexts, schemaResolution.schema)
-  );
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
+  const extractedWorkspace = isEsphomeDeviceWorkspace(workspace)
+    ? buildEsphomeDeviceWorkspace(workspace, projectId, sourceTexts, candidateId)
+    : buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
+  if (!extractedWorkspace.ok) {
+    return errorResponse(c, 'INVALID_REQUEST', extractedWorkspace.message);
+  }
+
+  const nextWorkspace = reopenCommittedWorkspaceForReview(extractedWorkspace.workspace);
   const persistedWorkspace = {
     ...nextWorkspace,
     id: stringFromWorkspace(nextWorkspace, 'id', workspaceId),
@@ -1075,6 +1073,28 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
     data: envelopeFromDraft(draft, workspaceId),
   });
 });
+
+function buildGenericExtractedWorkspace(
+  workspace: Record<string, unknown>,
+  projectId: string,
+  sourceTexts: WorkspaceSourceText[]
+): { ok: true; workspace: Record<string, unknown> } | { ok: false; message: string } {
+  const schemaResolution = resolveWorkspaceYSchema(workspace);
+  if (schemaResolution.canonicalName && !schemaResolution.schema) {
+    const releaseLabel = schemaResolution.version
+      ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
+      : schemaResolution.canonicalName;
+    return {
+      ok: false,
+      message: `Bound Schema release ${releaseLabel} is not available in this runtime. Choose a registered current release before regenerating the Workspace.`,
+    };
+  }
+
+  return {
+    ok: true,
+    workspace: buildExtractedWorkspace(workspace, projectId, sourceTexts, schemaResolution.schema),
+  };
+}
 
 workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
@@ -1737,6 +1757,25 @@ function buildFallbackCandidateFields(
 }
 
 function buildYOpsDraft(workspace: Record<string, unknown>, candidateId: string) {
+  if (isEsphomeDeviceWorkspace(workspace) && isRecord(workspace.device)) {
+    return {
+      id: `draft:${candidateId}`,
+      proposalMode: 'deterministic_scaffold',
+      operations: [
+        {
+          id: 'op_esphome_device',
+          op: 'set',
+          path: 'device',
+          summary: 'Set ESPHome device config from YAML source.',
+          beforeValue: '',
+          afterValue: workspace.device,
+          reason: 'ESPHome Device workspace state produced device config.',
+          sourceRefs: extractWorkspaceSourceRefs(workspace),
+        },
+      ],
+    };
+  }
+
   const fields = flattenCandidateFields(workspace);
   const operations = fields
     .filter((field) => field.status === 'covered' && field.value)
@@ -1781,8 +1820,10 @@ function schemaPathToYOpsPath(workspace: Record<string, unknown>, path: string) 
   const rootKey = schemaRootKeyFromBinding(
     (workspace.schemaBindings as unknown[] | undefined)?.[0]
   );
+  const segments = path.split('.').filter(Boolean);
+  if (segments[0] === rootKey) return segments.join('/');
 
-  return [rootKey, ...path.split('.').filter(Boolean)].join('/');
+  return [rootKey, ...segments].join('/');
 }
 
 function workspaceSchemaRef(workspace: Record<string, unknown>) {

@@ -8,11 +8,13 @@ import {
 describe('YSchema registry bindings', () => {
   it('resolves registered current versions exactly', () => {
     expect(resolveBuiltInYSchema('t3x/prd', 'v2')?.version).toBe('v2');
+    expect(resolveBuiltInYSchema('t3x/prompt', 'v1')?.version).toBe('v1');
     expect(resolveBuiltInYSchema('t3x/skill', 'v1')?.version).toBe('v1');
   });
 
   it('rejects a binding version that is not registered', () => {
     expect(resolveBuiltInYSchema('t3x/prd', 'v1')).toBeNull();
+    expect(resolveBuiltInYSchema('t3x/prompt', 'v2')).toBeNull();
     expect(resolveBuiltInYSchema('t3x/skill', 'v2')).toBeNull();
   });
 
@@ -25,5 +27,9 @@ describe('YSchema registry bindings', () => {
 
     expect(canonicalSchemaNameFromBinding(binding)).toBe('t3x/skill');
     expect(schemaVersionFromBinding(binding)).toBe('v1');
+  });
+
+  it('recognizes the legacy Prompt Schema display name', () => {
+    expect(canonicalSchemaNameFromBinding({ schemaName: 'Prompt Schema' })).toBe('t3x/prompt');
   });
 });

@@ -29,6 +29,7 @@ export interface YSchemaValidationSummary {
   fixCount: number;
   gapCount: number;
   gaps: YSchemaValidationGap[];
+  issues?: YSchemaValidationGap[];
   ready: boolean;
   runId?: string;
   schemaName?: string;
@@ -41,13 +42,17 @@ export function toYSchemaValidationSummary(
 ): YSchemaValidationSummary | null {
   if (!run) return null;
 
+  const gaps = extractValidationIssues(run.result, 'gaps');
+  const errors = extractValidationIssues(run.result, 'errors');
+
   return {
     checkedAt: run.finished_at ?? run.created_at,
     commitHash: run.commit_hash,
     errorCount: run.error_count,
     fixCount: run.fix_count,
     gapCount: run.gap_count,
-    gaps: extractValidationGaps(run.result),
+    gaps,
+    issues: [...errors, ...gaps],
     ready: run.ready,
     runId: run.id,
     schemaName: run.schema_name,
@@ -92,18 +97,19 @@ function deriveYSchemaValidationStatus(run: YSchemaValidationRunLike): YSchemaVa
   return 'failed';
 }
 
-function extractValidationGaps(
-  result: Record<string, unknown> | undefined
+function extractValidationIssues(
+  result: Record<string, unknown> | undefined,
+  key: 'errors' | 'gaps'
 ): YSchemaValidationGap[] {
   const validation =
     result && typeof result.validation === 'object' && result.validation !== null
       ? (result.validation as Record<string, unknown>)
       : null;
-  const gaps = Array.isArray(validation?.gaps) ? validation.gaps : [];
+  const issues = Array.isArray(validation?.[key]) ? validation[key] : [];
 
-  return gaps.flatMap((gap) => {
-    if (!gap || typeof gap !== 'object') return [];
-    const row = gap as Record<string, unknown>;
+  return issues.flatMap((issue) => {
+    if (!issue || typeof issue !== 'object') return [];
+    const row = issue as Record<string, unknown>;
     const path = typeof row.path === 'string' ? row.path : '';
     const code = typeof row.code === 'string' ? row.code : 'VALIDATION_GAP';
     const message =
@@ -116,7 +122,7 @@ function extractValidationGaps(
     return [
       {
         code,
-        label: gapCodeToLabel(code),
+        label: validationCodeToLabel(code),
         message,
         path,
       },
@@ -124,7 +130,7 @@ function extractValidationGaps(
   });
 }
 
-function gapCodeToLabel(code: string) {
+function validationCodeToLabel(code: string) {
   switch (code) {
     case 'REQUIRED_NODE_MISSING':
       return 'Missing required node';
@@ -133,6 +139,6 @@ function gapCodeToLabel(code: string) {
     case 'PROVENANCE_MISSING':
       return 'Missing source evidence';
     default:
-      return 'Validation gap';
+      return 'Validation issue';
   }
 }

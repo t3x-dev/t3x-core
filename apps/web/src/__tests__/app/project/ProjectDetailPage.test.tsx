@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 
@@ -302,7 +302,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('does not start Canvas I/O on repository surfaces', async () => {
     renderProjectContent();
 
-    expect(await screen.findByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
     expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
     expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
@@ -348,14 +349,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-    await waitFor(() => {
-      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
-    });
+    expect((await screen.findAllByText('Validated at HEAD')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    const stateOverview = await screen.findByRole('region', { name: 'State overview' });
-    expect(within(stateOverview).getByText('YSchema verified')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Committed PRD state' })).toBeInTheDocument();
-    expect(screen.getByText('output-ready')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
+    expect(screen.queryByText('output-ready')).not.toBeInTheDocument();
   });
 
   it('shows failed YSchema gaps and can rerun validation from State', async () => {
@@ -418,13 +416,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    await waitFor(() => {
-      expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
-    });
-    const stateOverview = await screen.findByRole('region', { name: 'State overview' });
-    expect(within(stateOverview).getByText('2 required fields missing')).toBeInTheDocument();
-    expect(screen.getByText('2 validation gap')).toBeInTheDocument();
-    expect(screen.getByText('output blocked')).toBeInTheDocument();
+    expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
+    expect(await screen.findAllByText('missing')).toHaveLength(2);
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
@@ -433,9 +427,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
         commit_hash: STATE_COMMIT.hash,
         schema_name: 't3x/prd',
       });
-      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('output-ready')).toBeInTheDocument();
+    expect(screen.queryByText('output-ready')).not.toBeInTheDocument();
   });
 
   it('shows an empty committed State with route links to other project views', async () => {
@@ -450,7 +444,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
-    expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
     expect(projectNavigation.parentElement).toHaveClass('h-dvh', 'overflow-hidden');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
@@ -476,7 +470,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -526,7 +520,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(await screen.findByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -567,7 +561,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
@@ -602,7 +596,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
     });
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();

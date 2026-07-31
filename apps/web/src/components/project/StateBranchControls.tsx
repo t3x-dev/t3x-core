@@ -1,6 +1,6 @@
 'use client';
 
-import { GitBranch, Plus } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,12 +61,12 @@ export function StateBranchControls({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <label className="inline-flex h-9 min-w-0 items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-sm font-bold text-[var(--text-primary)]">
+      <label className="inline-flex h-8 min-w-0 items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-xs font-bold text-[var(--text-primary)]">
         <GitBranch aria-hidden="true" className="size-3.5 text-[var(--accent-branch)]" />
         <span className="sr-only">Branch</span>
         <select
           aria-label="Branch focus"
-          className="min-w-0 bg-transparent font-mono text-sm font-bold outline-none"
+          className="min-w-0 bg-transparent font-mono text-xs font-bold outline-none"
           onChange={(event) => onBranchChange(event.target.value)}
           value={branch}
         >
@@ -78,8 +78,13 @@ export function StateBranchControls({
         </select>
       </label>
 
-      <Button onClick={() => setDialogOpen(true)} size="sm" type="button" variant="branch">
-        <Plus aria-hidden="true" className="size-4" />
+      <Button
+        className="text-xs"
+        onClick={() => setDialogOpen(true)}
+        size="sm"
+        type="button"
+        variant="canvas-outline"
+      >
         New branch
       </Button>
 
