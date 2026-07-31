@@ -2,7 +2,11 @@ import { useCallback, useState } from 'react';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
-import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import type {
+  SourceBundleItem,
+  WorkspaceCandidate,
+  WorkspaceSourceArtifact,
+} from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
@@ -148,6 +152,18 @@ export function WorkspaceWorkbench({
         extracting: false,
       });
     }
+  };
+
+  const handleSourceArtifactChange = (artifact: WorkspaceSourceArtifact | undefined) => {
+    if (!selectedWorkspace) return;
+    setWorkspaceOverrides((current) => ({
+      ...current,
+      [selectedWorkspace.id]: {
+        ...(current[selectedWorkspace.id] ?? selectedWorkspace),
+        sourceArtifact: artifact,
+      },
+    }));
+    updateSelectedFlow({ commitHash: undefined, error: undefined });
   };
 
   const handleSendToYOps = async () => {
@@ -322,6 +338,7 @@ export function WorkspaceWorkbench({
             onYOpsCommitted={handleCommitted}
             onYOpsScriptSave={handleYOpsScriptSave}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
+            onSourceArtifactChange={handleSourceArtifactChange}
           />
         )}
       </div>
@@ -372,6 +389,7 @@ function WorkspaceDetail({
   onContinueFromCommit,
   onSendToYOps,
   onSourceMaterialUploaded,
+  onSourceArtifactChange,
   onWorkflowTabChange,
   onYOpsApplied,
   onYOpsCommitted,
@@ -391,6 +409,7 @@ function WorkspaceDetail({
   ) => Promise<void>;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string) => void;
@@ -423,6 +442,7 @@ function WorkspaceDetail({
             flowState?.sourceParentCommitHash ?? getWorkspaceSourceParentCommitHash(candidate)
           }
           onSourceMaterialUploaded={onSourceMaterialUploaded}
+          onSourceArtifactChange={onSourceArtifactChange}
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}

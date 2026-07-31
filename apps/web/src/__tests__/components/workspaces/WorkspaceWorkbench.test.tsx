@@ -105,6 +105,12 @@ function workspaceTransitionView({
         runs: [],
         unsupportedProfiles: [],
       },
+      runner: {
+        observation: 'no_statement_observed',
+        outcomes: [],
+        runs: [],
+        unsupportedProfiles: [],
+      },
       humanConfirmation: { observation: 'no_statement_observed', runs: [] },
     },
     decision: decisionSupplied
@@ -473,6 +479,103 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('tab', { name: /YSchema/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /YOps/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
+  });
+
+  it('assigns YAML Materials as root and local-resource roles before opening the source task flow', async () => {
+    const yamlCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      baseCommitHash: null,
+      sourceBundle: [
+        {
+          id: 'material:mat_yaml',
+          type: 'document',
+          title: 'Greenhouse device',
+          materialId: 'mat_yaml',
+          contentHash: 'hash:yaml',
+          fileName: 'device.yaml',
+          format: 'yaml',
+          previewText: 'esphome:\n  name: greenhouse-sensor\nlogger:\n  level: DEBUG\n',
+        },
+        {
+          id: 'material:mat_include',
+          type: 'document',
+          title: 'Shared package',
+          materialId: 'mat_include',
+          contentHash: 'hash:include',
+          fileName: 'packages/common.yaml',
+          format: 'yaml',
+          previewText: 'logger:\n  baud_rate: 0\n',
+        },
+      ],
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const materialId = url.includes('/materials/mat_yaml')
+        ? 'mat_yaml'
+        : url.includes('/materials/mat_include')
+          ? 'mat_include'
+          : null;
+      if (materialId) {
+        const root = materialId === 'mat_yaml';
+        return jsonResponse({
+          success: true,
+          data: {
+            id: materialId,
+            project_id: 'proj_1',
+            source_type: 'document',
+            title: root ? 'Greenhouse device' : 'Shared package',
+            filename: root ? 'device.yaml' : 'packages/common.yaml',
+            mime_type: 'application/yaml',
+            content_hash: root ? 'hash:yaml' : 'hash:include',
+            content_excerpt: root
+              ? 'esphome:\n  name: greenhouse-sensor'
+              : 'logger:\n  baud_rate: 0',
+            content_text: root
+              ? 'esphome:\n  name: greenhouse-sensor\nlogger:\n  level: DEBUG\n'
+              : 'logger:\n  baud_rate: 0\n',
+            token_estimate: 20,
+            metadata: {},
+            created_at: '2026-07-31T00:00:00.000Z',
+            archived_at: null,
+            created_by: 'user:test',
+            page_count: null,
+            segment_count: 1,
+            segments: [
+              {
+                id: `segment_${materialId}`,
+                index: 0,
+                label: 'document',
+                text: root ? 'esphome:\n  name: greenhouse-sensor' : 'logger:\n  baud_rate: 0',
+                char_start: 0,
+                char_end: root ? 36 : 22,
+                token_estimate: 10,
+              },
+            ],
+            parse_quality: { status: 'ready', score: 1, message: 'Ready' },
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: { pins: [] } });
+    });
+
+    render(<WorkspaceWorkbench candidates={[yamlCandidate]} projectId="proj_1" />);
+
+    expect(
+      await screen.findByRole('region', { name: 'ESPHome configuration role' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Use as root configuration' }));
+    expect(screen.getByText('Root configuration')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Shared package/ }));
+    expect(await screen.findByRole('button', { name: 'Add as local resource' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add as local resource' }));
+    expect(screen.getByText('Local resource')).toBeInTheDocument();
+
+    activateTab(/Proposal/);
+    expect(screen.getByRole('heading', { name: 'Configuration proposal' })).toBeInTheDocument();
+    expect(screen.getByText('Import the selected configuration')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review and run checks' })).toBeEnabled();
+    expect(screen.queryByRole('region', { name: 'YOps proposal' })).not.toBeInTheDocument();
   });
 
   it('lets the single workflow tab rail navigate between workspace steps', () => {

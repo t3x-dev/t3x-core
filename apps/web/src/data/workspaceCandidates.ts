@@ -328,9 +328,25 @@ function materialToSourceBundleItem(material: Material) {
     contentHash: material.content_hash,
     tokenEstimate: material.token_estimate,
     fileName: material.filename ?? undefined,
-    ...(isTextMaterial(material) ? { format: 'text' as const } : {}),
+    ...(isYamlMaterial(material)
+      ? { format: 'yaml' as const }
+      : isTextMaterial(material)
+        ? { format: 'text' as const }
+        : {}),
     previewText: material.content_excerpt,
   };
+}
+
+function isYamlMaterial(material: Material): boolean {
+  const mimeType = material.mime_type?.toLowerCase() ?? '';
+  const filename = material.filename?.toLowerCase() ?? '';
+  return (
+    mimeType === 'application/yaml' ||
+    mimeType === 'application/x-yaml' ||
+    mimeType === 'text/yaml' ||
+    filename.endsWith('.yaml') ||
+    filename.endsWith('.yml')
+  );
 }
 
 export function materialSourceId(materialId: string): string {

@@ -1,6 +1,11 @@
-import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import type {
+  SourceBundleItem,
+  WorkspaceCandidate,
+  WorkspaceSourceArtifact,
+} from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { SourcesTab } from './SourcesTab';
+import { SourceTransitionTab } from './SourceTransitionTab';
 import { type WorkspaceYOpsFlowView, YOpsDraftTab } from './YOpsDraftTab';
 
 export type WorkspaceTabId = 'chat' | WorkspaceYOpsFlowView;
@@ -104,6 +109,7 @@ export function WorkspaceTabs({
   onContinueFromCommit,
   onExtractCandidate,
   onSourceMaterialUploaded,
+  onSourceArtifactChange,
   onSendToYOps,
   onYOpsApplied,
   onYOpsCommitted,
@@ -130,6 +136,7 @@ export function WorkspaceTabs({
   ) => Promise<void> | void;
   onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onSendToYOps?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
@@ -154,6 +161,7 @@ export function WorkspaceTabs({
         onExtractCandidate,
         onSendToYOps,
         onSourceMaterialUploaded,
+        onSourceArtifactChange,
         onYOpsApplied,
         onYOpsCommitted,
         onYOpsScriptSave,
@@ -183,6 +191,7 @@ interface RenderWorkspaceTabOptions {
   onExtractCandidate?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string) => void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
@@ -213,25 +222,37 @@ function renderWorkspaceTab(
           onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
           onExtractCandidate={options.onExtractCandidate}
           onMaterialUploaded={options.onSourceMaterialUploaded}
+          onSourceArtifactChange={options.onSourceArtifactChange}
         />
       ) : null}
-      <YOpsDraftTab
-        active={activeTab !== 'chat'}
-        branchOptions={options.branchOptions}
-        candidate={candidate}
-        continuationBusy={options.continuationBusy}
-        flowError={options.flowError}
-        onContinueFromCommit={options.onContinueFromCommit}
-        onSendToYOps={options.onSendToYOps}
-        onApplied={options.onYOpsApplied}
-        onCommitted={options.onYOpsCommitted}
-        onYOpsScriptSave={options.onYOpsScriptSave}
-        onViewCommitInState={options.onViewCommitInState}
-        sendingToYOps={options.sendingToYOps}
-        onViewChange={options.onWorkflowTabChange}
-        view={activeTab === 'chat' ? 'ops' : activeTab}
-        yopsDraftSent={options.yopsDraftSent}
-      />
+      {candidate.sourceArtifact ? (
+        <SourceTransitionTab
+          active={activeTab !== 'chat'}
+          candidate={candidate}
+          key={`${candidate.id}:${candidate.revision ?? 'unsaved'}:${JSON.stringify(candidate.sourceArtifact)}`}
+          onCommitted={options.onYOpsCommitted}
+          onViewChange={options.onWorkflowTabChange}
+          view={activeTab === 'chat' ? 'ops' : activeTab}
+        />
+      ) : (
+        <YOpsDraftTab
+          active={activeTab !== 'chat'}
+          branchOptions={options.branchOptions}
+          candidate={candidate}
+          continuationBusy={options.continuationBusy}
+          flowError={options.flowError}
+          onContinueFromCommit={options.onContinueFromCommit}
+          onSendToYOps={options.onSendToYOps}
+          onApplied={options.onYOpsApplied}
+          onCommitted={options.onYOpsCommitted}
+          onYOpsScriptSave={options.onYOpsScriptSave}
+          onViewCommitInState={options.onViewCommitInState}
+          sendingToYOps={options.sendingToYOps}
+          onViewChange={options.onWorkflowTabChange}
+          view={activeTab === 'chat' ? 'ops' : activeTab}
+          yopsDraftSent={options.yopsDraftSent}
+        />
+      )}
     </>
   );
 }

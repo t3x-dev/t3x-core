@@ -136,7 +136,10 @@ function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
         </ol>
       </section>
 
-      <section aria-label="Saved change checks" className="mt-4 grid gap-2 sm:grid-cols-3">
+      <section
+        aria-label="Saved change checks"
+        className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <CheckCard
           label="Change integrity"
           observation={view.checks.replay.observation}
@@ -146,6 +149,11 @@ function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
           label="Validation"
           observation={view.checks.validation.observation}
           outcomes={view.checks.validation.outcomes}
+        />
+        <CheckCard
+          label="Environment"
+          observation={view.checks.runner.observation}
+          outcomes={view.checks.runner.outcomes}
         />
         <CheckCard
           label="Confirmation"
@@ -294,12 +302,19 @@ function originLabel(origin: ClaimView['origin']): string {
 function operationLabel(operation: unknown, index: number): string {
   if (!isRecord(operation)) return `Change ${index + 1}`;
   const op = typeof operation.op === 'string' ? operation.op.toUpperCase() : 'CHANGE';
-  const path = typeof operation.path === 'string' ? operation.path : `#${index + 1}`;
+  const path = Array.isArray(operation.path)
+    ? operation.path.map(String).join('/')
+    : typeof operation.path === 'string'
+      ? operation.path
+      : `#${index + 1}`;
   return `${op} ${path}`;
 }
 
 function operationDetail(operation: unknown): string {
   if (!isRecord(operation)) return JSON.stringify(operation);
+  if ('expect' in operation && 'value' in operation) {
+    return `${JSON.stringify(operation.expect)} → ${JSON.stringify(operation.value)}`;
+  }
   if ('value' in operation) return `Value: ${JSON.stringify(operation.value)}`;
   return JSON.stringify(operation);
 }
