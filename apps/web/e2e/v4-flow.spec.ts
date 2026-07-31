@@ -286,8 +286,11 @@ test.describe('V4 WebUI UI Tests', () => {
     // Wait for page content to load
     await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
-    // Basic navigation test — chat sidebar should be visible
-    const sidebar = page.getByRole('complementary', { name: /chat navigation/i });
-    await expect(sidebar).toBeVisible({ timeout: 10000 });
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
+    await expect(navigation).toBeVisible({ timeout: 10000 });
+    await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/settings'
+    );
   });
 });

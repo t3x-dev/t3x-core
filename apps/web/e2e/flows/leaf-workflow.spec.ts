@@ -109,20 +109,18 @@ test.describe('Leaf Workflow', () => {
 
     await generateBtn.click();
 
-    // Wait for loading phase or output to appear
-    const outputSection = page.locator('text=Output').first();
-    await expect(outputSection).toBeVisible({ timeout: 30000 });
+    const outputText = page.locator('[class*="whitespace-pre"], pre').first();
+    const providerError = page
+      .getByText(/No provider key|Provider key was rejected|Provider is unavailable|rate limit/i)
+      .first();
+    await expect(outputText.or(providerError).first()).toBeVisible({ timeout: 30000 });
 
-    // Check if we got an API key error (not a bug, just missing config)
-    const apiKeyError = page.locator('text=/API key/i').first();
-    const hasApiKeyError = await apiKeyError.isVisible().catch(() => false);
-    if (hasApiKeyError) {
-      // LLM API key not configured — leaf page still rendered correctly
+    if (await providerError.isVisible().catch(() => false)) {
+      // External providers are optional for the deterministic qualification.
       return;
     }
 
     // Verify actual output content appeared
-    const outputText = page.locator('[class*="whitespace-pre"], pre').first();
     await expect(outputText).toBeVisible({ timeout: 5000 });
   });
 

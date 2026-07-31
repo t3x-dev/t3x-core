@@ -77,7 +77,7 @@ test.describe('Leaf Semantic Points', () => {
   test('shows semantic points, syncs left badges, and persists toggles', async ({ page }) => {
     await page.goto(`/project/${projectId}/leaf/${leafId}`);
 
-    await expect(page.getByText('Semantic Points', { exact: true })).toBeVisible({
+    await expect(page.getByText('State Points', { exact: true })).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByText('6 / 8 included')).toBeVisible();
