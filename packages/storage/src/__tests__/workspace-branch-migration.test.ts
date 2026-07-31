@@ -95,7 +95,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(55);
+      expect(schemaVersion?.version).toBe(56);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -149,7 +149,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(55);
+      expect(schemaVersion?.version).toBe(56);
     } finally {
       await testDb.cleanup();
     }
@@ -185,7 +185,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(55);
+      expect(schemaVersion?.version).toBe(56);
     } finally {
       await testDb.cleanup();
     }
@@ -261,7 +261,56 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(55);
+      expect(schemaVersion?.version).toBe(56);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('adds explicit empty Transition authority and policy bindings when upgrading from v55', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_policy_bindings;
+        DROP TABLE IF EXISTS transition_policy_resources;
+        ALTER TABLE api_keys DROP COLUMN IF EXISTS transition_scopes;
+        ALTER TABLE api_keys DROP COLUMN IF EXISTS principal_kind;
+        INSERT INTO api_keys (id, key_prefix, key_hash, name)
+        VALUES ('ak_legacy_v55', 't3xk_leg', 'legacy-v55-hash', 'Legacy v55 key');
+        UPDATE _schema_version
+        SET version = 55, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [legacy] = await testDb.sql<
+        Array<{ principal_kind: string; transition_scopes: unknown }>
+      >`
+        SELECT principal_kind, transition_scopes
+        FROM api_keys
+        WHERE id = 'ak_legacy_v55'
+      `;
+      expect(legacy).toEqual({ principal_kind: 'human', transition_scopes: [] });
+
+      const [tables] = await testDb.sql<
+        Array<{ resources: string | null; bindings: string | null }>
+      >`
+        SELECT
+          to_regclass('transition_policy_resources')::text AS resources,
+          to_regclass('transition_policy_bindings')::text AS bindings
+      `;
+      expect(tables).toEqual({
+        resources: 'transition_policy_resources',
+        bindings: 'transition_policy_bindings',
+      });
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version FROM _schema_version WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(56);
     } finally {
       await testDb.cleanup();
     }

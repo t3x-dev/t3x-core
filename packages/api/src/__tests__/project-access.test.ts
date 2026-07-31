@@ -51,6 +51,25 @@ function createAppWithUser(userId?: string) {
   return app;
 }
 
+function createAppWithProjectAgent(projectId: string) {
+  const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock access
+    (c as any).set('apiKey', {
+      id: 'ak_agent',
+      user_id: null,
+      project_id: projectId,
+      principal_kind: 'agent',
+      transition_scopes: ['transition:inspect'],
+      key_prefix: 't3xk_age',
+      name: 'Project agent',
+    });
+    return next();
+  });
+  app.route('/', projectRoutes);
+  return app;
+}
+
 describe('Project Access Control (#508)', () => {
   let cleanup: () => Promise<void>;
 
@@ -180,6 +199,15 @@ describe('Project Access Control (#508)', () => {
 
       const res = await app.request(`/v1/projects/${project.projectId}`);
       expect(res.status).toBe(200);
+    });
+
+    it('project-scoped agents can access only their bound project', async () => {
+      const bound = await insertProject(mockDB, { name: 'Agent bound project' });
+      const other = await insertProject(mockDB, { name: 'Other public project' });
+      const app = createAppWithProjectAgent(bound.projectId);
+
+      expect((await app.request(`/v1/projects/${bound.projectId}`)).status).toBe(200);
+      expect((await app.request(`/v1/projects/${other.projectId}`)).status).toBe(403);
     });
 
     it('non-existent project returns 404', async () => {

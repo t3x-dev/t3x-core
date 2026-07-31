@@ -147,6 +147,25 @@ CREATE TABLE IF NOT EXISTS transition_decision_ledger (
 CREATE INDEX IF NOT EXISTS idx_transition_decision_ledger_project_ref_recorded
   ON transition_decision_ledger(project_id, ref_name, recorded_at, decision_digest);
 
+CREATE TABLE IF NOT EXISTS transition_policy_resources (
+  digest TEXT PRIMARY KEY,
+  canonical_json TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS transition_policy_bindings (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  ref_name TEXT NOT NULL,
+  policy_digest TEXT NOT NULL REFERENCES transition_policy_resources(digest),
+  policy_uri TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, ref_name)
+);
+CREATE INDEX IF NOT EXISTS idx_transition_policy_bindings_digest
+  ON transition_policy_bindings(policy_digest);
+
 -- Agent Drafts (formerly drafts_v2)
 CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,
@@ -791,6 +810,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
   name TEXT NOT NULL,
   project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
   user_id TEXT,
+  principal_kind TEXT NOT NULL DEFAULT 'human',
+  transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  CHECK (principal_kind IN ('human', 'agent', 'service')),
+  CHECK (jsonb_typeof(transition_scopes) = 'array'),
+  CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ

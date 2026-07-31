@@ -60,6 +60,8 @@ describe('API Keys Storage', () => {
       expect(result.key_hash).toBeDefined();
       expect(result.key_hash.length).toBe(64); // SHA-256 hex
       expect(result.project_id).toBeNull();
+      expect(result.principal_kind).toBe('human');
+      expect(result.transition_scopes).toEqual([]);
       expect(result.created_at).toBeDefined();
       expect(result.last_used_at).toBeNull();
       expect(result.revoked_at).toBeNull();
@@ -97,6 +99,32 @@ describe('API Keys Storage', () => {
       });
 
       expect(result.key_prefix).toBe('t3xk_abc');
+    });
+
+    it('persists explicit project-scoped agent Transition authority', async () => {
+      const result = await createApiKey(db, {
+        name: 'Project Agent',
+        keyValue: testApiKey('projectagent123456789'),
+        projectId: testProjectId,
+        principalKind: 'agent',
+        transitionScopes: ['transition:verify', 'transition:propose'],
+      });
+
+      expect(result.principal_kind).toBe('agent');
+      expect(result.transition_scopes).toEqual(['transition:propose', 'transition:verify']);
+    });
+
+    it('rejects unscoped agent and service Transition writers', async () => {
+      for (const principalKind of ['agent', 'service'] as const) {
+        await expect(
+          createApiKey(db, {
+            name: `Global ${principalKind} writer`,
+            keyValue: testApiKey(`global${principalKind}writer12345`),
+            principalKind,
+            transitionScopes: ['transition:propose'],
+          })
+        ).rejects.toThrow('must be project-scoped');
+      }
     });
   });
 
@@ -297,6 +325,8 @@ describe('API Keys Storage', () => {
       expect(created).toHaveProperty('key_hash');
       expect(created).toHaveProperty('name');
       expect(created).toHaveProperty('project_id');
+      expect(created).toHaveProperty('principal_kind');
+      expect(created).toHaveProperty('transition_scopes');
       expect(created).toHaveProperty('created_at');
       expect(created).toHaveProperty('last_used_at');
       expect(created).toHaveProperty('revoked_at');

@@ -21,6 +21,7 @@ export {
   type AcceptancePolicy,
   acceptancePolicyDigest,
   acceptancePolicySchema,
+  canonicalizeAcceptancePolicy,
   createAcceptancePolicyResource,
   type ExactSelector,
   parseAcceptancePolicy,

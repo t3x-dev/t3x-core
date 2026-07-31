@@ -545,6 +545,12 @@ export const apiKeys = pgTable(
     /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
     userId: text('user_id'),
 
+    /** Trusted principal kind; legacy credentials migrate to human. */
+    principalKind: text('principal_kind').notNull().default('human'),
+
+    /** Closed Transition capabilities; no implicit grants for legacy credentials. */
+    transitionScopes: jsonb('transition_scopes').$type<string[]>().notNull().default([]),
+
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
@@ -557,6 +563,18 @@ export const apiKeys = pgTable(
   (table) => ({
     keyHashIdx: uniqueIndex('idx_api_keys_hash').on(table.keyHash),
     projectIdx: index('idx_api_keys_project').on(table.projectId),
+    principalKindCheck: check(
+      'api_keys_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    transitionScopesArrayCheck: check(
+      'api_keys_transition_scopes_array_check',
+      sql`jsonb_typeof(${table.transitionScopes}) = 'array'`
+    ),
+    transitionScopesClosedCheck: check(
+      'api_keys_transition_scopes_closed_check',
+      sql`${table.transitionScopes} <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb`
+    ),
   })
 );
 

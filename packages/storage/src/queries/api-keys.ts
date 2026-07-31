@@ -13,7 +13,14 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import type { ApiKey } from '@t3x-dev/core';
+import {
+  type ApiKey,
+  type ApiKeyPrincipalKind,
+  isApiKeyPrincipalKind,
+  isTransitionScope,
+  isTransitionWriteScope,
+  type TransitionScope,
+} from '@t3x-dev/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type ApiKeyRecord, apiKeys } from '../schema-trees';
@@ -36,6 +43,10 @@ export interface CreateApiKeyInput {
   projectId?: string;
   /** Owner user ID (undefined = legacy key in AUTH_DISABLED mode) */
   userId?: string;
+  /** Trusted principal represented by the credential. Defaults to human. */
+  principalKind?: ApiKeyPrincipalKind;
+  /** Explicit Transition capabilities. Defaults to none. */
+  transitionScopes?: readonly TransitionScope[];
   /** The raw key value (e.g. "t3xk_...") — caller generates this */
   keyValue: string;
 }
@@ -52,6 +63,19 @@ function generateApiKeyId(): string {
 /** SHA-256 hash a raw key value */
 function hashKeyValue(keyValue: string): string {
   return createHash('sha256').update(keyValue, 'utf8').digest('hex');
+}
+
+function parseStoredTransitionScopes(value: unknown): TransitionScope[] {
+  if (!Array.isArray(value) || !value.every((scope) => typeof scope === 'string')) {
+    throw new TypeError('Stored API key Transition scopes must be a string array');
+  }
+  if (!value.every(isTransitionScope)) {
+    throw new TypeError('Stored API key contains an unknown Transition scope');
+  }
+  if (new Set(value).size !== value.length) {
+    throw new TypeError('Stored API key contains duplicate Transition scopes');
+  }
+  return [...value].sort();
 }
 
 // ============================================================
@@ -71,6 +95,24 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
   const keyHash = hashKeyValue(input.keyValue);
   const keyPrefix = input.keyValue.slice(0, 8);
   const now = new Date();
+  const principalKind = input.principalKind ?? 'human';
+  if (!isApiKeyPrincipalKind(principalKind)) {
+    throw new TypeError(`Unknown API key principal kind: ${principalKind}`);
+  }
+  const transitionScopes = [...new Set(input.transitionScopes ?? [])].sort();
+  if (!transitionScopes.every(isTransitionScope)) {
+    throw new TypeError('API key contains an unknown Transition scope');
+  }
+  if (
+    principalKind !== 'human' &&
+    transitionScopes.some(isTransitionWriteScope) &&
+    input.projectId === undefined
+  ) {
+    throw new TypeError('Agent and service Transition write credentials must be project-scoped');
+  }
+  if (principalKind !== 'human' && input.projectId === undefined && input.userId === undefined) {
+    throw new TypeError('Global agent and service credentials require an owning user');
+  }
 
   const [row] = await db
     .insert(apiKeys)
@@ -81,6 +123,8 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
       name: input.name,
       projectId: input.projectId ?? null,
       userId: input.userId ?? null,
+      principalKind,
+      transitionScopes,
       createdAt: now,
       lastUsedAt: null,
       revokedAt: null,
@@ -211,6 +255,8 @@ function rowToApiKey(row: ApiKeyRecord): ApiKey {
     name: row.name,
     project_id: row.projectId ?? null,
     user_id: row.userId ?? null,
+    principal_kind: isApiKeyPrincipalKind(row.principalKind) ? row.principalKind : 'human',
+    transition_scopes: parseStoredTransitionScopes(row.transitionScopes),
     created_at: row.createdAt.toISOString(),
     last_used_at: row.lastUsedAt?.toISOString() ?? null,
     revoked_at: row.revokedAt?.toISOString() ?? null,

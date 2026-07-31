@@ -1,5 +1,39 @@
-import { index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { check, index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { projects } from './schema';
+
+/** Immutable canonical AcceptancePolicy bytes, addressed by their digest. */
+export const transitionPolicyResources = pgTable('transition_policy_resources', {
+  digest: text('digest').primaryKey(),
+  canonicalJson: text('canonical_json').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Mutable server-selected policy pointer for one project ref. */
+export const transitionPolicyBindings = pgTable(
+  'transition_policy_bindings',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    refName: text('ref_name').notNull(),
+    policyDigest: text('policy_digest')
+      .notNull()
+      .references(() => transitionPolicyResources.digest),
+    policyUri: text('policy_uri').notNull(),
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.refName] }),
+    index('idx_transition_policy_bindings_digest').on(table.policyDigest),
+    check(
+      'transition_policy_bindings_actor_kind_check',
+      sql`${table.actorKind} IN ('human', 'agent', 'service')`
+    ),
+  ]
+);
 
 /** Canonical bytes for all content-addressed Transition protocol objects. */
 export const transitionObjects = pgTable('transition_objects', {
@@ -118,3 +152,5 @@ export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionDecisionAuthorizationRecord =
   typeof transitionDecisionAuthorizations.$inferSelect;
 export type TransitionDecisionLedgerRecord = typeof transitionDecisionLedger.$inferSelect;
+export type TransitionPolicyResourceRecord = typeof transitionPolicyResources.$inferSelect;
+export type TransitionPolicyBindingRecord = typeof transitionPolicyBindings.$inferSelect;

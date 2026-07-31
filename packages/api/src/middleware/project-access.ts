@@ -24,6 +24,21 @@ export async function projectAccessMiddleware(c: Context, next: Next) {
   if (!projectId) return next();
 
   const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (
+    apiKey?.principal_kind !== undefined &&
+    apiKey.principal_kind !== 'human' &&
+    apiKey.project_id !== null
+  ) {
+    if (apiKey.project_id !== projectId) {
+      return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+    }
+    const db = await getDB();
+    const project = await findProjectById(db, projectId);
+    if (!project) {
+      return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
+    }
+    return next();
+  }
   const userId = apiKey?.user_id;
 
   // AUTH_DISABLED mode — no user identity, allow all

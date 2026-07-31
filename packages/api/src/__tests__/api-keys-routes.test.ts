@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
   name TEXT NOT NULL,
   project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
   user_id TEXT,
+  principal_kind TEXT NOT NULL DEFAULT 'human',
+  transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  CHECK (principal_kind IN ('human', 'agent', 'service')),
+  CHECK (jsonb_typeof(transition_scopes) = 'array'),
+  CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ
@@ -93,6 +98,8 @@ describe('API Key Routes', () => {
       expect(data.data.key_prefix).toBeDefined();
       expect(data.data.name).toBe('My Test API Key');
       expect(data.data.project_id).toBeNull();
+      expect(data.data.principal_kind).toBe('human');
+      expect(data.data.transition_scopes).toEqual([]);
       expect(data.data.created_at).toBeDefined();
     });
 
@@ -128,6 +135,65 @@ describe('API Key Routes', () => {
 
       // Verify the key_prefix is the start of the full key
       expect(data.data.key.startsWith(data.data.key_prefix)).toBe(true);
+    });
+
+    it('creates a project-scoped agent credential with explicit scopes', async () => {
+      const res = await app.request('/v1/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Device Agent',
+          project_id: testProjectId,
+          principal_kind: 'agent',
+          transition_scopes: ['transition:propose', 'transition:inspect'],
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const data: ApiResponse = await res.json();
+      expect(data.data).toMatchObject({
+        principal_kind: 'agent',
+        project_id: testProjectId,
+        transition_scopes: ['transition:inspect', 'transition:propose'],
+      });
+    });
+
+    it('rejects a global agent credential with Transition write authority', async () => {
+      const res = await app.request('/v1/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Unsafe Agent',
+          principal_kind: 'agent',
+          transition_scopes: ['transition:ref:advance'],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('INVALID_REQUEST');
+    });
+
+    it('rejects unknown scopes and caller-supplied authority fields', async () => {
+      const unknownScope = await app.request('/v1/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Unknown Scope',
+          transition_scopes: ['transition:admin'],
+        }),
+      });
+      expect(unknownScope.status).toBe(400);
+
+      const suppliedActor = await app.request('/v1/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Spoofed Actor',
+          actor: { kind: 'service', id: 'service:root' },
+        }),
+      });
+      expect(suppliedActor.status).toBe(400);
     });
 
     it('returns 400 for missing name', async () => {
@@ -206,6 +272,30 @@ describe('API Key Routes', () => {
       for (const key of data.data) {
         expect(key.project_id).toBe(testProjectId);
       }
+    });
+
+    it('does not let agent credentials administer API keys', async () => {
+      const agentApp = new Hono();
+      agentApp.use('*', async (c, next) => {
+        c.set('apiKey', {
+          id: 'ak_agent_admin_attempt',
+          key_prefix: 't3xk_age',
+          key_hash: 'hash',
+          name: 'Agent',
+          project_id: testProjectId,
+          user_id: null,
+          principal_kind: 'agent',
+          transition_scopes: ['transition:inspect'],
+          created_at: new Date().toISOString(),
+          last_used_at: null,
+          revoked_at: null,
+        });
+        await next();
+      });
+      agentApp.route('/', apiKeysRoutes);
+
+      const res = await agentApp.request('/v1/api-keys');
+      expect(res.status).toBe(403);
     });
   });
 

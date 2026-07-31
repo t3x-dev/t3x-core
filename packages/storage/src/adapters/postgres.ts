@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 55;
+const SCHEMA_VERSION = 56;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -735,6 +735,32 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add user_id to api_keys (nullable — null = legacy key)
     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+    -- Migration: Explicit principal and closed Transition scopes. Legacy keys
+    -- receive no Transition authority.
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS principal_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_array_check
+        CHECK (jsonb_typeof(transition_scopes) = 'array');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_closed_check
+        CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
 
     -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
     CREATE TABLE IF NOT EXISTS leaf_output_edits (
@@ -1705,6 +1731,52 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         RAISE EXCEPTION 'Cannot migrate a conflicting existing Decision ledger row';
       END IF;
     END $$;
+  `);
+
+  // ── Schema v56: Transition credential authority and policy bindings ──
+  await sql.unsafe(`
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS principal_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_array_check
+        CHECK (jsonb_typeof(transition_scopes) = 'array');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_closed_check
+        CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS transition_policy_resources (
+      digest TEXT PRIMARY KEY,
+      canonical_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS transition_policy_bindings (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      policy_digest TEXT NOT NULL REFERENCES transition_policy_resources(digest),
+      policy_uri TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, ref_name),
+      CHECK (actor_kind IN ('human', 'agent', 'service'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_policy_bindings_digest
+      ON transition_policy_bindings(policy_digest);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

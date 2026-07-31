@@ -525,9 +525,11 @@ export {
   ALL_LEAF_TYPES,
   // Leaf (owns constraints)
   type AnyLeafType,
+  API_KEY_PRINCIPAL_KINDS,
   API_KEY_VALUE_PREFIX,
   // API Key
   type ApiKey,
+  type ApiKeyPrincipalKind,
   // Assertion
   type Assertion,
   // Built Context
@@ -554,8 +556,11 @@ export {
   type ExcludeConstraint,
   // ID Prefixes
   ID_PREFIXES,
+  isApiKeyPrincipalKind,
   isDeployLeaf,
   isGenerationLeaf,
+  isTransitionScope,
+  isTransitionWriteScope,
   LEAF_TYPES,
   type Leaf,
   type LeafConfig,
@@ -576,6 +581,9 @@ export {
   type RequireConstraint,
   // Share Token
   type ShareToken,
+  TRANSITION_SCOPES,
+  TRANSITION_WRITE_SCOPES,
+  type TransitionScope,
   type User,
 } from './types';
 export type {

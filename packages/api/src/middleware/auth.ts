@@ -13,6 +13,7 @@
  * @see packages/api/src/lib/errors.ts for error codes
  */
 
+import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
@@ -146,7 +147,13 @@ export async function authMiddleware(c: Context, next: Next) {
 export async function verifyBearerToken(
   db: AnyDB,
   token: string | null
-): Promise<{ userId: string | null; projectId: string | null; keyId: string } | null> {
+): Promise<{
+  userId: string | null;
+  projectId: string | null;
+  keyId: string;
+  principalKind: ApiKeyPrincipalKind;
+  transitionScopes: readonly TransitionScope[];
+} | null> {
   if (!token) return null;
   const { findApiKeyByValue } = await import('@t3x-dev/storage');
   const apiKey = await findApiKeyByValue(db, token);
@@ -155,5 +162,7 @@ export async function verifyBearerToken(
     userId: apiKey.user_id,
     projectId: apiKey.project_id,
     keyId: apiKey.id,
+    principalKind: apiKey.principal_kind,
+    transitionScopes: apiKey.transition_scopes,
   };
 }
