@@ -1,66 +1,90 @@
-<svg width="720" height="340" viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+<svg width="920" height="500" viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <title>T3X thin-waist architecture</title>
+  <desc>Task surfaces depend on trusted application use cases, native adapters, and a leaf Transition protocol kernel.</desc>
   <defs>
-    <linearGradient id="layer0" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#0f172a"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="1" stop-color="#0b1220"/>
     </linearGradient>
-    <linearGradient id="layer1" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#1e3a5f"/>
-      <stop offset="100%" stop-color="#172554"/>
+    <linearGradient id="kernel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="0.52" stop-color="#7c2d12"/>
+      <stop offset="1" stop-color="#047857"/>
     </linearGradient>
-    <linearGradient id="layer2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#1e3a5f"/>
-      <stop offset="100%" stop-color="#1e40af"/>
-    </linearGradient>
-    <linearGradient id="layer3" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#2563eb"/>
-      <stop offset="100%" stop-color="#3b82f6"/>
-    </linearGradient>
-    <linearGradient id="coreGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#ea580c"/>
-      <stop offset="60%" stop-color="#f97316"/>
-      <stop offset="100%" stop-color="#fb923c"/>
-    </linearGradient>
+    <marker id="down" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <path d="M0 0L10 4L0 8Z" fill="#475569"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
   </defs>
 
-  <!-- Background -->
-  <rect width="720" height="340" rx="16" fill="#020617"/>
+  <rect width="920" height="500" rx="24" fill="url(#bg)"/>
+  <rect x="1" y="1" width="918" height="498" rx="23" fill="none" stroke="#1e293b" stroke-width="2"/>
 
-  <!-- Layer 4: Apps -->
-  <rect x="40" y="28" width="640" height="58" rx="10" fill="url(#layer3)" opacity="0.9"/>
-  <text x="80" y="64" fill="#ffffff" font-size="14" font-weight="600">WebUI</text>
-  <text x="175" y="64" fill="#93c5fd" font-size="14">·</text>
-  <text x="195" y="64" fill="#ffffff" font-size="14" font-weight="600">CLI</text>
-  <text x="255" y="64" fill="#93c5fd" font-size="14">·</text>
-  <text x="275" y="64" fill="#ffffff" font-size="14" font-weight="600">MCP Server</text>
-  <text x="415" y="64" fill="#93c5fd" font-size="14">·</text>
-  <text x="435" y="64" fill="#ffffff" font-size="14" font-weight="600">Runner</text>
+  <text x="48" y="42" fill="#e2e8f0" font-size="18" font-weight="800">Thin waist, explicit ownership</text>
+  <text x="872" y="42" fill="#64748b" font-size="11" font-weight="650" text-anchor="end">dependencies point inward</text>
 
-  <!-- Layer 3: API -->
-  <rect x="40" y="102" width="640" height="58" rx="10" fill="url(#layer2)" opacity="0.9"/>
-  <text x="80" y="138" fill="#ffffff" font-size="14" font-weight="600">API</text>
-  <text x="140" y="138" fill="#94a3b8" font-size="13">OpenAPI service layer</text>
+  <text x="48" y="82" fill="#64748b" font-size="11" font-weight="750" letter-spacing="1.5">TASK SURFACES</text>
+  <g filter="url(#shadow)" fill="#172554" stroke="#3b82f6">
+    <rect x="48" y="96" width="184" height="54" rx="13"/>
+    <rect x="262" y="96" width="184" height="54" rx="13"/>
+    <rect x="476" y="96" width="184" height="54" rx="13"/>
+    <rect x="690" y="96" width="182" height="54" rx="13"/>
+  </g>
+  <g fill="#dbeafe" font-size="15" font-weight="750" text-anchor="middle">
+    <text x="140" y="129">WebUI</text>
+    <text x="354" y="129">API</text>
+    <text x="568" y="129">CLI</text>
+    <text x="781" y="129">MCP</text>
+  </g>
 
-  <!-- Layer 2: Storage -->
-  <rect x="40" y="176" width="640" height="58" rx="10" fill="url(#layer1)" opacity="0.9"/>
-  <text x="80" y="212" fill="#ffffff" font-size="14" font-weight="600">Storage</text>
-  <text x="170" y="212" fill="#94a3b8" font-size="13">Versioned persistence</text>
+  <line x1="460" y1="157" x2="460" y2="178" stroke="#475569" stroke-width="2" marker-end="url(#down)"/>
 
-  <!-- Layer 1: Core Engine -->
-  <rect x="40" y="250" width="640" height="62" rx="10" fill="url(#layer0)" stroke="url(#coreGrad)" stroke-width="1.5" opacity="0.95"/>
-  <text x="80" y="288" fill="#ffffff" font-size="14" font-weight="700">Core Engine</text>
-  <text x="210" y="288" fill="#fdba74" font-size="13">deterministic</text>
+  <text x="48" y="190" fill="#64748b" font-size="11" font-weight="750" letter-spacing="1.5">APPLICATION USE CASES · TRUSTED BOUNDARY</text>
+  <g filter="url(#shadow)" fill="#111827" stroke="#8b5cf6">
+    <rect x="48" y="204" width="184" height="62" rx="13"/>
+    <rect x="262" y="204" width="184" height="62" rx="13"/>
+    <rect x="476" y="204" width="184" height="62" rx="13"/>
+    <rect x="690" y="204" width="182" height="62" rx="13"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="140" y="233" fill="#ede9fe" font-size="15" font-weight="750">Propose</text>
+    <text x="140" y="250" fill="#94a3b8" font-size="9.5">compile + membership</text>
+    <text x="354" y="233" fill="#ede9fe" font-size="15" font-weight="750">Verify</text>
+    <text x="354" y="250" fill="#94a3b8" font-size="9.5">replay + observations</text>
+    <text x="568" y="233" fill="#ede9fe" font-size="15" font-weight="750">Decide</text>
+    <text x="568" y="250" fill="#94a3b8" font-size="9.5">policy + authority</text>
+    <text x="781" y="233" fill="#ede9fe" font-size="15" font-weight="750">Commit</text>
+    <text x="781" y="250" fill="#94a3b8" font-size="9.5">audit + CAS</text>
+  </g>
 
-  <!-- Core capabilities -->
-  <rect x="430" y="268" width="72" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
-  <text x="466" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Extract</text>
+  <line x1="460" y1="273" x2="460" y2="294" stroke="#475569" stroke-width="2" marker-end="url(#down)"/>
 
-  <rect x="510" y="268" width="52" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
-  <text x="536" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Diff</text>
+  <text x="48" y="306" fill="#64748b" font-size="11" font-weight="750" letter-spacing="1.5">NATIVE ADAPTERS + APPLICATION INFRASTRUCTURE</text>
+  <g filter="url(#shadow)">
+    <rect x="48" y="320" width="250" height="66" rx="13" fill="#431407" stroke="#f97316"/>
+    <rect x="335" y="320" width="250" height="66" rx="13" fill="#3b0764" stroke="#c084fc"/>
+    <rect x="622" y="320" width="250" height="66" rx="13" fill="#052e2b" stroke="#10b981"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="173" y="349" fill="#ffedd5" font-size="14" font-weight="750">Mutation</text>
+    <text x="173" y="369" fill="#fdba74" font-size="10">YOps · codecs · drivers</text>
+    <text x="460" y="349" fill="#f3e8ff" font-size="14" font-weight="750">Statements</text>
+    <text x="460" y="369" fill="#d8b4fe" font-size="10">YSchema · Runner · evaluators</text>
+    <text x="747" y="349" fill="#d1fae5" font-size="14" font-weight="750">Repository</text>
+    <text x="747" y="369" fill="#6ee7b7" font-size="10">resolver · storage · refs · policy</text>
+  </g>
 
-  <rect x="570" y="268" width="60" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
-  <text x="600" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Merge</text>
+  <line x1="460" y1="393" x2="460" y2="414" stroke="#475569" stroke-width="2" marker-end="url(#down)"/>
 
-  <rect x="638" y="268" width="30" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
-  <text x="653" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">#</text>
+  <g filter="url(#shadow)">
+    <rect x="48" y="428" width="824" height="48" rx="15" fill="url(#kernel)" stroke="#94a3b8" stroke-opacity="0.65"/>
+  </g>
+  <text x="70" y="457" fill="#ffffff" font-size="13" font-weight="800">TRANSITION KERNEL</text>
+  <text x="253" y="457" fill="#dbeafe" font-size="12" font-weight="700">State</text>
+  <text x="329" y="457" fill="#ffedd5" font-size="12" font-weight="700">Effect</text>
+  <text x="410" y="457" fill="#f3e8ff" font-size="12" font-weight="700">Statement</text>
+  <text x="511" y="457" fill="#d1fae5" font-size="12" font-weight="700">CommitV2</text>
+  <text x="620" y="457" fill="#e2e8f0" font-size="10.5" font-weight="650">Replay · identity · integrity</text>
 </svg>
