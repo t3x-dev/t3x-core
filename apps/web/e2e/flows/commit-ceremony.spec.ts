@@ -5,6 +5,7 @@ import {
   createTestProject,
   createTestTurn,
 } from '../fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from '../fixtures/mock-model';
 import { expect, test } from '../fixtures/test';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
@@ -93,6 +94,8 @@ test.describe('commit ceremony', () => {
           document.documentElement?.classList.add('dark');
         });
       }
+
+      await mockConfiguredExtractionModel(page);
 
       await page.route(EXTRACT_URL, async (route: Route) => {
         await route.fulfill({

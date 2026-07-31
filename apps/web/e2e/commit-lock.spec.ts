@@ -5,6 +5,7 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -103,6 +104,10 @@ test.describe('Commit-lock flow', () => {
   let projectId: string;
   let conversationId: string;
   let userTurnHash: string;
+
+  test.beforeEach(async ({ page }) => {
+    await mockConfiguredExtractionModel(page);
+  });
 
   test.beforeAll(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Commit Lock E2E ${Date.now()}`));

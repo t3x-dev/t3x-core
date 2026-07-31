@@ -5,6 +5,7 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -99,6 +100,10 @@ test.describe('Click-highlight flow', () => {
   let projectId: string;
   let conversationId: string;
   let userTurnHash: string;
+
+  test.beforeEach(async ({ page }) => {
+    await mockConfiguredExtractionModel(page);
+  });
 
   test.beforeAll(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Click Highlight E2E ${Date.now()}`));

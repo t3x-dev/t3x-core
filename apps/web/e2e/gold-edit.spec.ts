@@ -5,6 +5,7 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -28,72 +29,8 @@ import { expect, test } from './fixtures/test';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
 const YOPS_LOG_URL = '**/api/v1/conversations/*/yops';
-const LOCAL_PROVIDER_URL = '**/api/v1/providers/local/*';
-const LLM_MODELS_URL = '**/api/v1/llm/models';
 
 const USER_CONTENT = 'I want to go to Paris with a budget of ten thousand dollars.';
-
-/**
- * Extraction is mocked below, but the product still requires a runtime-usable
- * model before enabling the Extract button. Supply a deterministic catalog and
- * local credential status so this test exercises the UI gate without allowing
- * any external provider call.
- */
-async function mockConfiguredExtractionModel(
-  page: import('@playwright/test').Page
-): Promise<void> {
-  await page.route(LOCAL_PROVIDER_URL, async (route: Route) => {
-    const provider = new URL(route.request().url()).pathname.split('/').pop() ?? 'anthropic';
-    const configured = provider === 'anthropic';
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        data: {
-          provider,
-          configured,
-          default_model: configured ? 'mock-model' : null,
-          last_test_status: configured ? 'ok' : null,
-          last_tested_at: null,
-          last_test_error: null,
-          api_key_source: configured ? 'file' : 'none',
-          api_key_preview: configured ? '…test' : null,
-          env_overrides_stored: false,
-        },
-      }),
-    });
-  });
-
-  await page.route(LLM_MODELS_URL, async (route: Route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        data: {
-          generation_provider_order: ['anthropic'],
-          default_provider: 'anthropic',
-          providers: [
-            {
-              name: 'anthropic',
-              label: 'Mock Anthropic',
-              available: true,
-              models: [
-                {
-                  id: 'mock-model',
-                  label: 'Mock Model',
-                  capabilities: [],
-                  max_output_tokens: 4096,
-                },
-              ],
-            },
-          ],
-        },
-      }),
-    });
-  });
-}
 
 function validOps(turnHash: string) {
   return [

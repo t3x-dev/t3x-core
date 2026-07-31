@@ -5,6 +5,7 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -93,7 +94,8 @@ test.describe('Extraction flow', () => {
     ({ projectId } = await createTestProject(request, `Extraction E2E ${Date.now()}`));
   });
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    await mockConfiguredExtractionModel(page);
     conversationId = await createTestConversation(request, projectId, 'E2E Extraction');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', userContent);
   });
