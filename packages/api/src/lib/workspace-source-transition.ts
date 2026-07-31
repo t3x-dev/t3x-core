@@ -13,6 +13,7 @@ import {
   createYamlSourceResourceDescriptor,
   createYamlSourceState,
   createYOpsState,
+  deriveYamlSourceRevertOperations,
   describeCommitV2,
   describeTransitionObject,
   type EspHomeSourceInputIssue,
@@ -39,6 +40,7 @@ import {
   findWorkspaceDraft,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   type TransitionRefHead,
@@ -242,6 +244,21 @@ export interface DecideWorkspaceSourceTransitionResult
   workspace?: Record<string, unknown>;
 }
 
+export interface ReviewWorkspaceSourceRevertInput {
+  projectId: string;
+  workspaceId: string;
+  commitId: string;
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef & { kind: 'human' };
+}
+
+export interface DecideWorkspaceSourceRevertInput extends ReviewWorkspaceSourceRevertInput {
+  outcome: 'accepted' | 'overridden' | 'rejected';
+  decisionReason?: string;
+  precondition: WorkspaceSourceTransitionPrecondition;
+}
+
 export class WorkspaceSourceArtifactError extends Error {
   readonly code = 'SOURCE_ARTIFACT_INVALID';
 
@@ -260,6 +277,15 @@ export class WorkspaceSourceInputsError extends Error {
   constructor(readonly issues: readonly EspHomeSourceInputIssue[]) {
     super('Exact-source dependencies are incomplete or unsupported');
     this.name = 'WorkspaceSourceInputsError';
+  }
+}
+
+export class WorkspaceSourceRevertUnavailableError extends Error {
+  readonly code = 'SOURCE_REVERT_UNAVAILABLE';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkspaceSourceRevertUnavailableError';
   }
 }
 
@@ -329,6 +355,46 @@ function assertNonEmpty(value: string, field: string): string {
     throw new WorkspaceSourceArtifactError(`${field} must be a non-empty string`);
   }
   return normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sourceArtifactFromWorkspace(
+  workspace: Record<string, unknown>
+): WorkspaceSourceArtifactSelector {
+  const value = workspace.sourceArtifact;
+  if (!isRecord(value) || value.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT) {
+    throw new WorkspaceSourceArtifactError(
+      'The Workspace does not contain an exact-source artifact selector'
+    );
+  }
+  if (typeof value.rootPath !== 'string' || !Array.isArray(value.resources)) {
+    throw new WorkspaceSourceArtifactError('The stored source-artifact selector is malformed');
+  }
+  const resources = value.resources.map((resource, index) => {
+    if (
+      !isRecord(resource) ||
+      typeof resource.path !== 'string' ||
+      typeof resource.materialId !== 'string' ||
+      (resource.contentHash !== undefined && typeof resource.contentHash !== 'string')
+    ) {
+      throw new WorkspaceSourceArtifactError(
+        `The stored source-artifact resource ${index} is malformed`
+      );
+    }
+    return {
+      path: resource.path,
+      materialId: resource.materialId,
+      ...(resource.contentHash === undefined ? {} : { contentHash: resource.contentHash }),
+    };
+  });
+  return {
+    format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+    rootPath: value.rootPath,
+    resources,
+  };
 }
 
 async function resolveSourceArtifact(
@@ -614,9 +680,10 @@ function samePrecondition(
   );
 }
 
-function decisionRationale(
-  input: DecideWorkspaceSourceTransitionInput
-): Parameters<typeof authorizeDecisionForRepository>[0]['rationale'] {
+function decisionRationale(input: {
+  outcome: 'accepted' | 'overridden' | 'rejected';
+  decisionReason?: string;
+}): Parameters<typeof authorizeDecisionForRepository>[0]['rationale'] {
   const reason = input.decisionReason?.trim();
   if (input.outcome === 'overridden' && !reason) {
     throw new TypeError('Override requires an explicit authored Decision reason');
@@ -760,12 +827,104 @@ async function prepareWorkspaceSourceTransition(
   };
 }
 
+function sameObjectDescriptor(
+  left: { kind: string; schema: string; digest: string },
+  right: { kind: string; schema: string; digest: string }
+): boolean {
+  return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
+}
+
+async function prepareWorkspaceSourceRevert(
+  db: AnyDB,
+  input: ReviewWorkspaceSourceRevertInput,
+  capabilities: WorkspaceSourceTransitionCapabilities,
+  expectedPrecondition?: WorkspaceSourceTransitionPrecondition
+): Promise<PreparedWorkspaceSourceTransition> {
+  const draft = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
+  if (!draft?.workspace_state) throw new WorkspaceTransitionNotFoundError(input.workspaceId);
+  if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision) {
+    throw new ConflictError(draft.id, input.expectedRevision);
+  }
+  const workspace = draft.workspace_state;
+  const targetBranch =
+    typeof workspace.targetBranch === 'string' && workspace.targetBranch.trim()
+      ? workspace.targetBranch
+      : 'main';
+  const head = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: targetBranch,
+  });
+  if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
+  if (head.format !== 'transition_v2') {
+    throw new WorkspaceSourceRevertUnavailableError(
+      'A committed exact-source edit is required before revert can be reviewed'
+    );
+  }
+  if (head.head !== input.commitId) throw new WorkspaceTransitionReviewStaleError();
+
+  const graph = await getVerifiedTransitionCommitGraph(db, input.projectId, input.commitId);
+  if (graph === null) {
+    throw new WorkspaceSourceRevertUnavailableError(
+      'The selected committed Transition could not be resolved'
+    );
+  }
+  let operations: YamlSourceReplaceScalarOperation[];
+  try {
+    operations = deriveYamlSourceRevertOperations(graph.effect);
+  } catch (error) {
+    if (error instanceof TransitionProtocolError) {
+      throw new WorkspaceSourceRevertUnavailableError(
+        'Only a verified t3x.dev/yaml-source-edit@1 commit can be reverted'
+      );
+    }
+    throw error;
+  }
+
+  const prepared = await prepareWorkspaceSourceTransition(
+    db,
+    {
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      artifact: sourceArtifactFromWorkspace(workspace),
+      change: { mode: 'edit', operations },
+      why: input.why,
+      expectedRevision: draft.revision,
+      actor: input.actor,
+    },
+    capabilities,
+    expectedPrecondition
+  );
+  if (prepared.head.head !== input.commitId) throw new WorkspaceTransitionReviewStaleError();
+  if (
+    !sameObjectDescriptor(prepared.effect.base, graph.effect.result) ||
+    !sameObjectDescriptor(prepared.effect.result, graph.effect.base)
+  ) {
+    throw new WorkspaceSourceRevertUnavailableError(
+      'The server-derived reverse Effect does not restore the selected commit Base'
+    );
+  }
+  return prepared;
+}
+
 export async function reviewWorkspaceSourceTransition(
   db: AnyDB,
   input: ReviewWorkspaceSourceTransitionInput,
   capabilities: WorkspaceSourceTransitionCapabilities = {}
 ): Promise<ReviewWorkspaceSourceTransitionResult> {
   const prepared = await prepareWorkspaceSourceTransition(db, input, capabilities);
+  return {
+    transition: prepared.transition,
+    precondition: prepared.precondition,
+    runner: prepared.runner,
+  };
+}
+
+export async function reviewWorkspaceSourceRevert(
+  db: AnyDB,
+  input: ReviewWorkspaceSourceRevertInput,
+  capabilities: WorkspaceSourceTransitionCapabilities = {}
+): Promise<ReviewWorkspaceSourceTransitionResult> {
+  const prepared = await prepareWorkspaceSourceRevert(db, input, capabilities);
   return {
     transition: prepared.transition,
     precondition: prepared.precondition,
@@ -789,36 +948,17 @@ function authorityFor(prepared: PreparedWorkspaceSourceTransition): RepositoryDe
 
 type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
 
-export async function decideWorkspaceSourceTransition(
+async function decidePreparedWorkspaceSourceTransition(
   db: AnyDB,
-  input: DecideWorkspaceSourceTransitionInput,
-  capabilities: WorkspaceSourceTransitionCapabilities = {}
+  input: {
+    projectId: string;
+    workspaceId: string;
+    outcome: 'accepted' | 'overridden' | 'rejected';
+    decisionReason?: string;
+    precondition: WorkspaceSourceTransitionPrecondition;
+  },
+  prepared: PreparedWorkspaceSourceTransition
 ): Promise<DecideWorkspaceSourceTransitionResult> {
-  let prepared: PreparedWorkspaceSourceTransition;
-  try {
-    prepared = await prepareWorkspaceSourceTransition(
-      db,
-      {
-        ...input,
-        expectedRevision: input.precondition.workspaceRevision,
-      },
-      capabilities,
-      input.precondition
-    );
-  } catch (error) {
-    if (
-      error instanceof WorkspaceSourceArtifactError ||
-      error instanceof WorkspaceSourceInputsError ||
-      error instanceof TransitionProtocolError
-    ) {
-      throw new WorkspaceTransitionReviewStaleError();
-    }
-    throw error;
-  }
-  if (!samePrecondition(input.precondition, prepared.precondition)) {
-    throw new WorkspaceTransitionReviewStaleError();
-  }
-
   const decidedAt = new Date().toISOString() as CanonicalTimestamp;
   const issued = await authorizeDecisionForRepository({
     projectId: input.projectId,
@@ -925,4 +1065,70 @@ export async function decideWorkspaceSourceTransition(
       revision: committed.draft.revision,
     },
   };
+}
+
+export async function decideWorkspaceSourceTransition(
+  db: AnyDB,
+  input: DecideWorkspaceSourceTransitionInput,
+  capabilities: WorkspaceSourceTransitionCapabilities = {}
+): Promise<DecideWorkspaceSourceTransitionResult> {
+  let prepared: PreparedWorkspaceSourceTransition;
+  try {
+    prepared = await prepareWorkspaceSourceTransition(
+      db,
+      {
+        ...input,
+        expectedRevision: input.precondition.workspaceRevision,
+      },
+      capabilities,
+      input.precondition
+    );
+  } catch (error) {
+    if (
+      error instanceof WorkspaceSourceArtifactError ||
+      error instanceof WorkspaceSourceInputsError ||
+      error instanceof TransitionProtocolError
+    ) {
+      throw new WorkspaceTransitionReviewStaleError();
+    }
+    throw error;
+  }
+  if (!samePrecondition(input.precondition, prepared.precondition)) {
+    throw new WorkspaceTransitionReviewStaleError();
+  }
+  return decidePreparedWorkspaceSourceTransition(db, input, prepared);
+}
+
+export async function decideWorkspaceSourceRevert(
+  db: AnyDB,
+  input: DecideWorkspaceSourceRevertInput,
+  capabilities: WorkspaceSourceTransitionCapabilities = {}
+): Promise<DecideWorkspaceSourceTransitionResult> {
+  let prepared: PreparedWorkspaceSourceTransition;
+  try {
+    prepared = await prepareWorkspaceSourceRevert(
+      db,
+      {
+        ...input,
+        expectedRevision: input.precondition.workspaceRevision,
+      },
+      capabilities,
+      input.precondition
+    );
+  } catch (error) {
+    if (
+      error instanceof ConflictError ||
+      error instanceof WorkspaceSourceArtifactError ||
+      error instanceof WorkspaceSourceInputsError ||
+      error instanceof WorkspaceSourceRevertUnavailableError ||
+      error instanceof TransitionProtocolError
+    ) {
+      throw new WorkspaceTransitionReviewStaleError();
+    }
+    throw error;
+  }
+  if (!samePrecondition(input.precondition, prepared.precondition)) {
+    throw new WorkspaceTransitionReviewStaleError();
+  }
+  return decidePreparedWorkspaceSourceTransition(db, input, prepared);
 }

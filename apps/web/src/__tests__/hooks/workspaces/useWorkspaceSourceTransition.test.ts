@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspaceSourceTransition } from '@/hooks/workspaces/useWorkspaceSourceTransition';
 import { ApiError } from '@/infrastructure/core';
 import {
+  decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
+  reviewWorkspaceSourceRevert,
   reviewWorkspaceSourceTransition,
   saveWorkspaceDraft,
 } from '@/queries/workspaces';
@@ -14,7 +16,9 @@ import { WORKSPACE_SOURCE_ARTIFACT_FORMAT, type WorkspaceCandidate } from '@/typ
 import { cleanupRoots, renderHook } from '../renderHook';
 
 vi.mock('@/queries/workspaces', () => ({
+  decideWorkspaceSourceRevert: vi.fn(),
   decideWorkspaceSourceTransition: vi.fn(),
+  reviewWorkspaceSourceRevert: vi.fn(),
   reviewWorkspaceSourceTransition: vi.fn(),
   saveWorkspaceDraft: vi.fn(),
 }));
@@ -82,6 +86,11 @@ describe('useWorkspaceSourceTransition', () => {
       workspace: { ...candidate, revision: 7 },
     });
     vi.mocked(reviewWorkspaceSourceTransition).mockResolvedValue({
+      transition: transitionView('pending'),
+      precondition,
+      runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
+    });
+    vi.mocked(reviewWorkspaceSourceRevert).mockResolvedValue({
       transition: transitionView('pending'),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
@@ -191,5 +200,68 @@ describe('useWorkspaceSourceTransition', () => {
     expect(saveWorkspaceDraft).not.toHaveBeenCalled();
     expect(reviewWorkspaceSourceTransition).not.toHaveBeenCalled();
     expect(result.current.state.errorCode).toBe('SOURCE_ROOT_REQUIRED');
+  });
+
+  it('saves before revert Review and decides only the commit-bound opaque session', async () => {
+    const commitId = digest('8');
+    vi.mocked(decideWorkspaceSourceRevert).mockResolvedValue({
+      transition: transitionView('committed'),
+      precondition,
+      runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
+      decision_digest: digest('2'),
+      commit: {},
+    });
+    const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
+
+    await act(async () => {
+      await result.current.reviewRevert(commitId, '  Restore the previous configuration.  ');
+    });
+
+    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_esphome', candidate);
+    expect(reviewWorkspaceSourceRevert).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
+      commitId,
+      why: 'Restore the previous configuration.',
+      ifRevision: 7,
+    });
+    expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(reviewWorkspaceSourceRevert).mock.invocationCallOrder[0]!
+    );
+    expect(result.current.state.task).toBe('revert');
+
+    await act(async () => {
+      await result.current.decide('accepted');
+    });
+
+    expect(decideWorkspaceSourceRevert).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
+      commitId,
+      why: 'Restore the previous configuration.',
+      outcome: 'accepted',
+      decisionReason: undefined,
+      precondition,
+    });
+    expect(decideWorkspaceSourceTransition).not.toHaveBeenCalled();
+  });
+
+  it('clears a stale revert Review so it cannot be retried as authority', async () => {
+    vi.mocked(decideWorkspaceSourceRevert).mockRejectedValue(
+      new ApiError('STALE_REVIEW', 'Workspace or ref facts changed; review again.')
+    );
+    const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
+    await act(async () => {
+      await result.current.reviewRevert(digest('8'));
+      await result.current.decide('accepted');
+    });
+    expect(result.current.state).toMatchObject({
+      errorCode: 'STALE_REVIEW',
+      phase: 'idle',
+      task: null,
+      view: null,
+    });
+
+    await act(async () => {
+      await result.current.decide('accepted');
+    });
+    expect(decideWorkspaceSourceRevert).toHaveBeenCalledOnce();
+    expect(result.current.state.errorCode).toBe('REVIEW_REQUIRED');
   });
 });

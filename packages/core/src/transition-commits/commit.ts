@@ -36,6 +36,7 @@ export type {
   ProposalStatement,
   ProtocolObject,
   State,
+  VerifiedCommitIntegrity,
 };
 
 const textDecoder = new TextDecoder('utf-8', { fatal: true });

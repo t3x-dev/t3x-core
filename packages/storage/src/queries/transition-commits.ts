@@ -20,6 +20,7 @@ import {
   type StatementObservation,
   serializeTransitionObject,
   type TransitionViewV1,
+  type VerifiedCommitIntegrity,
   type VerifiedDecisionGraph,
   verifyCommitV2,
   verifyDecisionGraph,
@@ -851,6 +852,26 @@ export async function getTransitionCommit(
     throw new TypeError(`Stored Transition commit ${digest} failed identity verification`);
   }
   return { commit: object, recordedAt: row.createdAt.toISOString() };
+}
+
+export interface VerifiedTransitionCommitGraph extends VerifiedCommitIntegrity {
+  recordedAt: string;
+}
+
+/**
+ * Resolve and verify the complete CommitV2 -> Decision -> Proposal -> Effect
+ * graph from repository-owned bytes. Application commands use this instead of
+ * accepting Effect operations or a target State from a client.
+ */
+export async function getVerifiedTransitionCommitGraph(
+  db: AnyDB,
+  projectId: string,
+  digest: string
+): Promise<VerifiedTransitionCommitGraph | null> {
+  const stored = await getTransitionCommit(db, projectId, digest);
+  if (stored === null) return null;
+  const verified = await verifyCommitV2(stored.commit, new DatabaseTransitionObjectResolver(db));
+  return { ...verified, recordedAt: stored.recordedAt };
 }
 
 export async function listTransitionCommits(

@@ -12,8 +12,11 @@ import {
 } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
 import {
+  createStateImportEffect,
   createYamlSourceEffect,
   createYamlSourceState,
+  createYOpsState,
+  deriveYamlSourceRevertOperations,
   YAML_SOURCE_MUTATION_DRIVER_REF,
   YamlSourcePreconditionFailedError,
   yamlSourceMutationDriver,
@@ -136,6 +139,53 @@ describe('localized YAML source MutationDriver', () => {
       })
     );
     expect(base.value).toBe(source);
+  });
+
+  it('derives a reverse-order source-preserving inverse and refuses other drivers', () => {
+    const base = sourceState(source);
+    const forward = createYamlSourceEffect({
+      base,
+      operations: [
+        loggerOperation,
+        {
+          op: 'replace_scalar',
+          path: ['logger', 'level'],
+          expect: 'INFO',
+          value: 'WARN',
+        },
+      ],
+    });
+
+    const operations = deriveYamlSourceRevertOperations(forward.effect);
+    expect(operations).toEqual([
+      {
+        op: 'replace_scalar',
+        path: ['logger', 'level'],
+        expect: 'WARN',
+        value: 'INFO',
+      },
+      {
+        op: 'replace_scalar',
+        path: ['logger', 'level'],
+        expect: 'INFO',
+        value: 'DEBUG',
+      },
+    ]);
+    const reverted = createYamlSourceEffect({
+      base: forward.result,
+      operations,
+      expectedBase: forward.effect.result,
+    });
+    expect(reverted.result).toEqual(base);
+    expect(reverted.effect.result).toEqual(forward.effect.base);
+
+    const imported = createStateImportEffect({
+      base: createYOpsState({}),
+      imported: base,
+    });
+    expect(() => deriveYamlSourceRevertOperations(imported.effect)).toThrowError(
+      expect.objectContaining({ code: 'UNSUPPORTED_SEMANTICS' })
+    );
   });
 
   it('classifies creation preconditions as stale and verification preconditions as false claims', async () => {

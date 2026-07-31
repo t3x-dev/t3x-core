@@ -3,7 +3,9 @@ import { useCallback, useRef, useState } from 'react';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { ApiError } from '@/infrastructure/core';
 import {
+  decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
+  reviewWorkspaceSourceRevert,
   reviewWorkspaceSourceTransition,
   saveWorkspaceDraft,
   type WorkspaceSourceChange,
@@ -27,21 +29,31 @@ export interface WorkspaceSourceTransitionState {
   errorCode: string | null;
   phase: WorkspaceSourceTransitionPhase;
   runner: WorkspaceSourceTransitionReviewResponse['runner'] | null;
+  task: 'change' | 'revert' | null;
   view: TransitionViewV1 | null;
 }
 
-interface ReviewSession {
-  artifact: WorkspaceSourceArtifact;
-  change: WorkspaceSourceChange;
-  precondition: WorkspaceSourceTransitionPrecondition;
-  why?: string;
-}
+type ReviewSession =
+  | {
+      kind: 'change';
+      artifact: WorkspaceSourceArtifact;
+      change: WorkspaceSourceChange;
+      precondition: WorkspaceSourceTransitionPrecondition;
+      why?: string;
+    }
+  | {
+      kind: 'revert';
+      commitId: string;
+      precondition: WorkspaceSourceTransitionPrecondition;
+      why?: string;
+    };
 
 const INITIAL_STATE: WorkspaceSourceTransitionState = {
   error: null,
   errorCode: null,
   phase: 'idle',
   runner: null,
+  task: null,
   view: null,
 };
 
@@ -91,6 +103,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
         if (generationRef.current !== generation) return false;
 
         sessionRef.current = {
+          kind: 'change',
           artifact: structuredClone(artifact),
           change: structuredClone(change),
           precondition: reviewed.precondition,
@@ -101,13 +114,62 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
           errorCode: null,
           phase: 'reviewed',
           runner: reviewed.runner,
+          task: 'change',
           view: reviewed.transition,
         });
         return true;
       } catch (error) {
         if (generationRef.current !== generation) return false;
         sessionRef.current = null;
-        setState(failedState(error, null, null, 'idle'));
+        setState(failedState(error, null, null, 'idle', null));
+        return false;
+      }
+    },
+    [candidate]
+  );
+
+  const reviewRevert = useCallback(
+    async (commitId: string, whyInput?: string): Promise<boolean> => {
+      const why = optionalText(whyInput);
+      const generation = generationRef.current + 1;
+      generationRef.current = generation;
+      sessionRef.current = null;
+      setState({ ...INITIAL_STATE, phase: 'reviewing', task: 'revert' });
+
+      try {
+        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
+        const revision = saved.workspace.revision;
+        if (revision === undefined) {
+          throw new Error('Saved Workspace did not return a review revision.');
+        }
+        if (generationRef.current !== generation) return false;
+
+        const reviewed = await reviewWorkspaceSourceRevert(candidate.projectId, candidate.id, {
+          commitId,
+          why,
+          ifRevision: revision,
+        });
+        if (generationRef.current !== generation) return false;
+
+        sessionRef.current = {
+          kind: 'revert',
+          commitId,
+          precondition: reviewed.precondition,
+          why,
+        };
+        setState({
+          error: null,
+          errorCode: null,
+          phase: 'reviewed',
+          runner: reviewed.runner,
+          task: 'revert',
+          view: reviewed.transition,
+        });
+        return true;
+      } catch (error) {
+        if (generationRef.current !== generation) return false;
+        sessionRef.current = null;
+        setState(failedState(error, null, null, 'idle', null));
         return false;
       }
     },
@@ -141,14 +203,23 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
 
       setState((current) => ({ ...current, error: null, errorCode: null, phase: 'deciding' }));
       try {
-        const decided = await decideWorkspaceSourceTransition(candidate.projectId, candidate.id, {
-          artifact: session.artifact,
-          change: session.change,
-          why: session.why,
-          outcome,
-          decisionReason,
-          precondition: session.precondition,
-        });
+        const decided =
+          session.kind === 'change'
+            ? await decideWorkspaceSourceTransition(candidate.projectId, candidate.id, {
+                artifact: session.artifact,
+                change: session.change,
+                why: session.why,
+                outcome,
+                decisionReason,
+                precondition: session.precondition,
+              })
+            : await decideWorkspaceSourceRevert(candidate.projectId, candidate.id, {
+                commitId: session.commitId,
+                why: session.why,
+                outcome,
+                decisionReason,
+                precondition: session.precondition,
+              });
         sessionRef.current = null;
         const commitId = committedTransitionId(decided.transition);
         setState({
@@ -156,6 +227,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
           errorCode: null,
           phase: commitId ? 'committed' : 'rejected',
           runner: decided.runner,
+          task: session.kind,
           view: decided.transition,
         });
         if (commitId) {
@@ -174,7 +246,8 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
             error,
             stale ? null : current.view,
             stale ? null : current.runner,
-            stale ? 'idle' : 'reviewed'
+            stale ? 'idle' : 'reviewed',
+            stale ? null : current.task
           )
         );
         return null;
@@ -183,7 +256,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
     [candidate.id, candidate.projectId, candidate.targetBranch]
   );
 
-  return { decide, reset, review, state };
+  return { decide, reset, review, reviewRevert, state };
 }
 
 function committedTransitionId(view: TransitionViewV1): string | null {
@@ -200,7 +273,8 @@ function failedState(
   error: unknown,
   view: TransitionViewV1 | null,
   runner: WorkspaceSourceTransitionState['runner'],
-  phase: WorkspaceSourceTransitionPhase
+  phase: WorkspaceSourceTransitionPhase,
+  task: WorkspaceSourceTransitionState['task']
 ): WorkspaceSourceTransitionState {
   if (error instanceof ApiError) {
     return {
@@ -211,6 +285,7 @@ function failedState(
       errorCode: error.code,
       phase,
       runner,
+      task,
       view,
     };
   }
@@ -219,6 +294,7 @@ function failedState(
     errorCode: null,
     phase,
     runner,
+    task,
     view,
   };
 }

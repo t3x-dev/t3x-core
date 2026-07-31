@@ -470,6 +470,7 @@ export {
   getTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
   listCommitHistory,
   listRepositoryDecisionAudit,
   listTransitionCommits,
@@ -482,6 +483,7 @@ export {
   type TransitionRefHead,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
+  type VerifiedTransitionCommitGraph,
 } from './transition-commits';
 // Tree State (source-of-truth for current trees)
 export {

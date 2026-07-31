@@ -10,11 +10,14 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
+  decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
+  reviewWorkspaceSourceRevert,
   reviewWorkspaceSourceTransition,
   WORKSPACE_SOURCE_ARTIFACT_FORMAT,
   WorkspaceSourceArtifactError,
   WorkspaceSourceInputsError,
+  WorkspaceSourceRevertUnavailableError,
   type WorkspaceSourceTransitionCapabilities,
   type WorkspaceSourceTransitionPrecondition,
 } from '../lib/workspace-source-transition';
@@ -116,6 +119,24 @@ const DecideWorkspaceSourceTransitionRequestSchema = z
   .object({
     artifact: SourceArtifactSelectorSchema,
     change: SourceChangeSchema,
+    why: z.string().trim().min(1).max(2000).optional(),
+    outcome: z.enum(['accepted', 'overridden', 'rejected']),
+    decision_reason: z.string().trim().min(1).max(2000).optional(),
+    precondition: WorkspaceSourceTransitionPreconditionSchema,
+  })
+  .strict();
+
+const ReviewWorkspaceSourceRevertRequestSchema = z
+  .object({
+    commit_id: TransitionDigestSchema,
+    why: z.string().trim().min(1).max(2000).optional(),
+    if_revision: z.number().int().min(1).optional(),
+  })
+  .strict();
+
+const DecideWorkspaceSourceRevertRequestSchema = z
+  .object({
+    commit_id: TransitionDigestSchema,
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
     decision_reason: z.string().trim().min(1).max(2000).optional(),
@@ -251,6 +272,92 @@ const decideRoute = createRoute({
   },
 });
 
+const reviewRevertRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/review',
+  tags: ['Workspaces'],
+  summary: 'Review a server-derived revert of the current exact-source edit',
+  request: {
+    params: WorkspaceSourceTransitionParamsSchema,
+    body: {
+      content: { 'application/json': { schema: ReviewWorkspaceSourceRevertRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Derived exact-source revert review',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceSourceTransitionReviewResponseSchema),
+        },
+      },
+    },
+    400: {
+      description: 'The selected commit is not a reversible exact-source edit',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace, selected commit, or target ref not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Workspace, selected commit, or ref facts changed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Stored Transition integrity verification failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const decideRevertRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/decide',
+  tags: ['Workspaces'],
+  summary: 'Decide and optionally commit a reviewed exact-source revert',
+  request: {
+    params: WorkspaceSourceTransitionParamsSchema,
+    body: {
+      content: { 'application/json': { schema: DecideWorkspaceSourceRevertRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Audited Decision and optional committed revert Transition',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceSourceTransitionDecisionResponseSchema),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid Decision or revert request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace, selected commit, or target ref not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Review facts changed or the requested Decision is not permitted',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Stored Transition integrity verification failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 function actorFromContext(c: Parameters<typeof getUserId>[0]) {
   const userId = getUserId(c);
   return {
@@ -356,6 +463,9 @@ function sourceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0], e
       issues: error.issues,
     });
   }
+  if (error instanceof WorkspaceSourceRevertUnavailableError) {
+    return errorResponse(c, 'INVALID_REQUEST', error.message);
+  }
   if (error instanceof TransitionProtocolError) {
     return errorResponse(c, 'INVALID_REQUEST', error.message, {
       protocol_code: error.code,
@@ -425,6 +535,77 @@ export function createWorkspaceSourceTransitionRoutes(
           workspaceId,
           artifact: artifactFromWire(request.artifact),
           change: changeFromWire(request.change),
+          why: request.why,
+          outcome: request.outcome,
+          decisionReason: request.decision_reason,
+          precondition: preconditionFromWire(request.precondition),
+          actor: actorFromContext(c),
+        },
+        capabilities
+      );
+      return c.json({
+        success: true as const,
+        data: {
+          transition: decided.transition,
+          precondition: preconditionToWire(decided.precondition),
+          runner: decided.runner,
+          decision_digest: decided.decisionDigest,
+          ...(decided.commit === undefined ? {} : { commit: decided.commit }),
+          ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
+        },
+      });
+    } catch (error) {
+      return sourceTransitionErrorResponse(c, error);
+    }
+  });
+
+  routes.openapi(reviewRevertRoute, async (c) => {
+    const { projectId, workspaceId } = c.req.valid('param');
+    const request = c.req.valid('json');
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+
+    try {
+      const reviewed = await reviewWorkspaceSourceRevert(
+        db,
+        {
+          projectId,
+          workspaceId,
+          commitId: request.commit_id,
+          why: request.why,
+          expectedRevision: request.if_revision,
+          actor: actorFromContext(c),
+        },
+        capabilities
+      );
+      return c.json({
+        success: true as const,
+        data: {
+          transition: reviewed.transition,
+          precondition: preconditionToWire(reviewed.precondition),
+          runner: reviewed.runner,
+        },
+      });
+    } catch (error) {
+      return sourceTransitionErrorResponse(c, error);
+    }
+  });
+
+  routes.openapi(decideRevertRoute, async (c) => {
+    const { projectId, workspaceId } = c.req.valid('param');
+    const request = c.req.valid('json');
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+
+    try {
+      const decided = await decideWorkspaceSourceRevert(
+        db,
+        {
+          projectId,
+          workspaceId,
+          commitId: request.commit_id,
           why: request.why,
           outcome: request.outcome,
           decisionReason: request.decision_reason,

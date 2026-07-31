@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import type { TransitionViewV1 } from '@t3x-dev/core';
+import { type TransitionViewV1, YAML_SOURCE_MUTATION_DRIVER_REF } from '@t3x-dev/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
@@ -19,6 +19,7 @@ vi.mock('@/hooks/workspaces/useWorkspaceSourceTransition', () => ({
 
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}` as const;
 const review = vi.fn();
+const reviewRevert = vi.fn();
 const decide = vi.fn();
 const reset = vi.fn();
 
@@ -46,9 +47,7 @@ function transitionView(): Extract<TransitionViewV1, { mode: 'transition' }> {
       base: { kind: 'state', schema: 't3x/state/v1', digest: digest('b') },
       result: { kind: 'state', schema: 't3x/state/v1', digest: digest('c') },
       driver: {
-        protocol: 't3x.dev/yaml-source-edit',
-        protocolVersion: '1',
-        specDigest: digest('d'),
+        ...YAML_SOURCE_MUTATION_DRIVER_REF,
       },
       operations: [
         {
@@ -116,16 +115,21 @@ function transitionView(): Extract<TransitionViewV1, { mode: 'transition' }> {
   };
 }
 
-function mockSourceTransition(view: TransitionViewV1 | null = null) {
+function mockSourceTransition(
+  view: TransitionViewV1 | null = null,
+  task: 'change' | 'revert' | null = view ? 'change' : null
+) {
   vi.mocked(useWorkspaceSourceTransition).mockReturnValue({
     decide,
     reset,
     review,
+    reviewRevert,
     state: {
       error: null,
       errorCode: null,
       phase: view ? 'reviewed' : 'idle',
       runner: view ? { mode: 'statement', statementDigest: digest('1'), outcome: 'failed' } : null,
+      task,
       view,
     },
   });
@@ -135,6 +139,7 @@ describe('SourceTransitionTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     review.mockResolvedValue(true);
+    reviewRevert.mockResolvedValue(true);
     decide.mockResolvedValue(null);
     vi.mocked(useCommitTransitionView).mockReturnValue({
       error: null,
@@ -213,5 +218,116 @@ describe('SourceTransitionTab', () => {
       'overridden',
       'The known environment risk is acceptable for this device.'
     );
+  });
+
+  it('offers revert only for the selected committed source edit and sends only its commit id', async () => {
+    const commitId = digest('9');
+    const committed = transitionView();
+    committed.history = {
+      observation: 'committed',
+      commit: { id: commitId },
+    } as Extract<typeof committed.history, { observation: 'committed' }>;
+    vi.mocked(useCommitTransitionView).mockReturnValue({
+      error: null,
+      loading: false,
+      view: committed,
+    });
+    const onViewChange = vi.fn();
+    render(
+      <SourceTransitionTab
+        active
+        candidate={{ ...candidate, lastCommitHash: commitId }}
+        onViewChange={onViewChange}
+        view="ops"
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Why revert/), {
+      target: { value: 'Restore the previous configuration.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Review revert' }));
+
+    await waitFor(() =>
+      expect(reviewRevert).toHaveBeenCalledWith(commitId, 'Restore the previous configuration.')
+    );
+    expect(review).not.toHaveBeenCalled();
+    expect(onViewChange).toHaveBeenCalledWith('validation');
+  });
+
+  it('does not offer revert for an import or an unknown mutation driver', () => {
+    const commitId = digest('9');
+    const imported = transitionView();
+    imported.history = {
+      observation: 'committed',
+      commit: { id: commitId },
+    } as Extract<typeof imported.history, { observation: 'committed' }>;
+    imported.change = {
+      ...imported.change,
+      driver: {
+        protocol: 't3x.dev/state-import',
+        protocolVersion: '1',
+        specDigest: digest('f'),
+      },
+      operations: [],
+    };
+    vi.mocked(useCommitTransitionView).mockReturnValue({
+      error: null,
+      loading: false,
+      view: imported,
+    });
+
+    render(
+      <SourceTransitionTab
+        active
+        candidate={{ ...candidate, lastCommitHash: commitId }}
+        view="ops"
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Review revert' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer revert when the source driver specification is not the pinned version', () => {
+    const commitId = digest('9');
+    const unknownSpecification = transitionView();
+    unknownSpecification.history = {
+      observation: 'committed',
+      commit: { id: commitId },
+    } as Extract<typeof unknownSpecification.history, { observation: 'committed' }>;
+    unknownSpecification.change.driver = {
+      ...YAML_SOURCE_MUTATION_DRIVER_REF,
+      specDigest: digest('f'),
+    };
+    vi.mocked(useCommitTransitionView).mockReturnValue({
+      error: null,
+      loading: false,
+      view: unknownSpecification,
+    });
+
+    render(
+      <SourceTransitionTab
+        active
+        candidate={{ ...candidate, lastCommitHash: commitId }}
+        view="ops"
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Review revert' })).not.toBeInTheDocument();
+  });
+
+  it('previews the server-derived reverse operation instead of the local edit form', () => {
+    const reverted = transitionView();
+    reverted.change.operations = [
+      {
+        op: 'replace_scalar',
+        path: ['logger', 'level'],
+        expect: 'INFO',
+        value: 'DEBUG',
+      },
+    ];
+    mockSourceTransition(reverted, 'revert');
+    render(<SourceTransitionTab active candidate={candidate} view="preview" />);
+
+    expect(screen.getByText('Source-preserving revert preview')).toBeInTheDocument();
+    expect(screen.getByText('INFO')).toBeInTheDocument();
+    expect(screen.getByText('DEBUG')).toBeInTheDocument();
   });
 });

@@ -47,6 +47,14 @@ export interface YamlSourceReplaceScalarOperation {
   value: string;
 }
 
+function sameMutationDriverRef(left: MutationDriverRef, right: MutationDriverRef): boolean {
+  return (
+    left.protocol === right.protocol &&
+    left.protocolVersion === right.protocolVersion &&
+    left.specDigest === right.specDigest
+  );
+}
+
 const yamlSourceDriverSpec: ProtocolValue = {
   protocol: YAML_SOURCE_DRIVER_PROTOCOL,
   protocolVersion: YAML_SOURCE_DRIVER_PROTOCOL_VERSION,
@@ -318,6 +326,41 @@ export interface CreateYamlSourceEffectInput {
 export interface CreatedYamlSourceEffect {
   effect: Effect;
   result: State;
+}
+
+/**
+ * Derive the only inverse defined by YAML source-edit protocol v1.
+ *
+ * Callers must still replay these operations against the verified current
+ * Result and prove that the derived Result equals the original Base. This
+ * helper only owns the adapter's operation semantics; it does not authorize a
+ * repository revert or accept a caller-supplied target State.
+ */
+export function deriveYamlSourceRevertOperations(
+  effect: Effect
+): YamlSourceReplaceScalarOperation[] {
+  const parsed = parseEffect(effect);
+  if (!sameMutationDriverRef(parsed.driver, YAML_SOURCE_MUTATION_DRIVER_REF)) {
+    throw new UnsupportedSemanticsError(
+      'Only t3x.dev/yaml-source-edit@1 Effects with the pinned driver specification are reversible'
+    );
+  }
+  if (parsed.inputs.length !== 0) {
+    throw new UnsupportedSemanticsError(
+      'YAML source-edit protocol version 1 does not define reversible named inputs'
+    );
+  }
+
+  const operations = parseOperations(parsed.operations);
+  if (operations.length === 0) {
+    throw new UnsupportedSemanticsError('A source-edit Effect must contain an operation to revert');
+  }
+  return [...operations].reverse().map((operation) => ({
+    op: 'replace_scalar',
+    path: [...operation.path],
+    expect: operation.value,
+    value: operation.expect,
+  }));
 }
 
 function descriptorsEqual(left: StateDescriptor, right: StateDescriptor): boolean {
