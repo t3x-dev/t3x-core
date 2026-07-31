@@ -2,6 +2,9 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { ApiKey } from '@t3x-dev/core';
 import {
   ConflictError,
+  DecisionNotAuthorizedError,
+  TransitionCommandConflictError,
+  TransitionCommandIntegrityError,
   TransitionHeadConflictError,
   TransitionMembershipIntegrityError,
   TransitionMembershipNotFoundError,
@@ -28,6 +31,14 @@ import {
   TransitionPredicateNotAllowedError,
   verifyTransition,
 } from '../lib/transition-control-plane';
+import {
+  commitTransition,
+  decideTransition,
+  TransitionAutomatedOverrideDeniedError,
+  TransitionDecisionDeniedError,
+  TransitionDecisionMembershipError,
+  TransitionReviewStaleError,
+} from '../lib/transition-control-plane/lifecycle';
 import {
   WorkspaceSourceArtifactError,
   WorkspaceSourceInputsError,
@@ -154,6 +165,48 @@ const AttachStatementRequestSchema = z
       .max(3),
   })
   .strict();
+const TransitionReviewPreconditionSchema = z
+  .object({
+    workspace_revision: z.number().int().min(1),
+    ref_name: z.string().trim().min(1).max(500),
+    ref_head: DigestSchema.nullable(),
+    effect_digest: DigestSchema,
+    proposal_digest: DigestSchema,
+    statement_digests: z.array(DigestSchema).max(1000),
+    policy_digest: DigestSchema,
+  })
+  .strict();
+const DecideRequestSchema = z
+  .object({
+    request_id: RequestIdSchema,
+    outcome: z.enum(['accepted', 'overridden', 'rejected']),
+    rationale: z.string().trim().min(1).max(2000).optional(),
+    precondition: TransitionReviewPreconditionSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.outcome === 'overridden' && value.rationale === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['rationale'],
+        message: 'An overridden Decision requires an authored rationale',
+      });
+    }
+    if (value.outcome !== 'overridden' && value.rationale !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['rationale'],
+        message: 'Only an overridden Decision accepts a rationale',
+      });
+    }
+  });
+const CommitRequestSchema = z
+  .object({
+    request_id: RequestIdSchema,
+    decision_digest: DigestSchema,
+    expected_head: DigestSchema.nullable(),
+  })
+  .strict();
 const ProjectParamsSchema = z.object({ projectId: z.string().min(1) });
 const TransitionParamsSchema = z.object({
   projectId: z.string().min(1),
@@ -168,6 +221,18 @@ const TransitionEnvelopeSchema = z.object({
 const VerifyEnvelopeSchema = TransitionEnvelopeSchema.extend({
   statements: z.array(z.any()),
   operational_results: z.array(z.any()),
+});
+const DecisionEnvelopeSchema = TransitionEnvelopeSchema.extend({
+  decision_digest: DigestSchema,
+  decision: z.any(),
+});
+const CommitEnvelopeSchema = z.object({
+  transition_id: TransitionIdSchema,
+  reused: z.boolean(),
+  commit_digest: DigestSchema,
+  commit: z.any(),
+  transition: z.any(),
+  workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
 function apiKey(c: Context): ApiKey | undefined {
@@ -188,6 +253,8 @@ function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
       ref_head: view.precondition.refHead,
       effect_digest: view.precondition.effectDigest,
       proposal_digest: view.precondition.proposalDigest,
+      statement_digests: view.precondition.statementDigests,
+      policy_digest: view.precondition.policyDigest,
     },
     transition: view.transition,
     statements: view.statements.map((statement) => ({
@@ -232,10 +299,24 @@ function wireRequest(body: z.infer<typeof ProposeRequestSchema>) {
   return { ...common, kind: body.kind, artifact, operations: body.operations } as const;
 }
 
+function wireReviewPrecondition(precondition: z.infer<typeof TransitionReviewPreconditionSchema>) {
+  return {
+    workspaceRevision: precondition.workspace_revision,
+    refName: precondition.ref_name,
+    refHead: precondition.ref_head,
+    effectDigest: precondition.effect_digest,
+    proposalDigest: precondition.proposal_digest,
+    statementDigests: precondition.statement_digests,
+    policyDigest: precondition.policy_digest,
+  };
+}
+
 function controlPlaneError(c: Context, error: unknown) {
   if (
     error instanceof TransitionScopeDeniedError ||
-    error instanceof TransitionProjectScopeDeniedError
+    error instanceof TransitionProjectScopeDeniedError ||
+    error instanceof TransitionAutomatedOverrideDeniedError ||
+    error instanceof DecisionNotAuthorizedError
   ) {
     return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
   }
@@ -249,7 +330,10 @@ function controlPlaneError(c: Context, error: unknown) {
   if (
     error instanceof TransitionRequestConflictError ||
     error instanceof TransitionStatementConflictError ||
+    error instanceof TransitionCommandConflictError ||
     error instanceof TransitionHeadConflictError ||
+    error instanceof TransitionReviewStaleError ||
+    error instanceof TransitionDecisionDeniedError ||
     error instanceof WorkspaceTransitionReviewStaleError ||
     error instanceof ConflictError
   ) {
@@ -260,6 +344,8 @@ function controlPlaneError(c: Context, error: unknown) {
   if (
     error instanceof TransitionPredicateNotAllowedError ||
     error instanceof TransitionMembershipIntegrityError ||
+    error instanceof TransitionCommandIntegrityError ||
+    error instanceof TransitionDecisionMembershipError ||
     error instanceof TransitionRefHeadIntegrityError ||
     error instanceof TransitionProtocolError ||
     error instanceof WorkspaceTransitionLegacyHeadError ||
@@ -398,6 +484,72 @@ const attachRoute = createRoute({
   },
 });
 
+const decideRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/transitions/{transitionId}/decisions',
+  tags: ['Transition'],
+  summary: 'Create one immutable Decision under the server-selected policy',
+  request: {
+    params: TransitionParamsSchema,
+    body: { content: { 'application/json': { schema: DecideRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Audited Decision',
+      content: { 'application/json': { schema: SuccessResponseSchema(DecisionEnvelopeSchema) } },
+    },
+    400: {
+      description: 'Invalid Decision request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Missing outcome authority or automated override denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Transition not found in project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Review, policy, or idempotency conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const commitRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/transitions/{transitionId}/commits',
+  tags: ['Transition'],
+  summary: 'Create CommitV2 and atomically advance its server-selected ref',
+  request: {
+    params: TransitionParamsSchema,
+    body: { content: { 'application/json': { schema: CommitRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Committed Transition',
+      content: { 'application/json': { schema: SuccessResponseSchema(CommitEnvelopeSchema) } },
+    },
+    400: {
+      description: 'Invalid Commit request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Missing Commit/ref authority or Decision authorization',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Transition or ref not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Expected-head, Workspace, or idempotency conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 export function createTransitionControlPlaneRoutes(options?: TransitionControlPlaneOptions) {
   const routes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -442,12 +594,17 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
       const db = await getDB();
       const access = await assertProjectAccess(c, db, projectId);
       if (access instanceof Response) return access;
-      requireTransitionAuthority({
+      const principal = requireTransitionAuthority({
         apiKey: apiKey(c),
         projectId,
         scope: 'transition:inspect',
       });
-      const view = await inspectTransition({ db, projectId, transitionId });
+      const view = await inspectTransition({
+        db,
+        projectId,
+        transitionId,
+        actor: principal.actor,
+      });
       return c.json(
         {
           success: true as const,
@@ -467,7 +624,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
       const db = await getDB();
       const access = await assertProjectAccess(c, db, projectId);
       if (access instanceof Response) return access;
-      requireTransitionAuthority({
+      const principal = requireTransitionAuthority({
         apiKey: apiKey(c),
         projectId,
         scope: 'transition:verify',
@@ -477,6 +634,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         projectId,
         transitionId,
         requestId: body.request_id,
+        actor: principal.actor,
         options,
       });
       return c.json(
@@ -529,6 +687,97 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
             transition_id: result.view.transitionId,
             reused: result.reused,
             view: wireView(result.view),
+          },
+        },
+        200
+      );
+    } catch (error) {
+      return controlPlaneError(c, error);
+    }
+  });
+
+  routes.openapi(decideRoute, async (c) => {
+    const { projectId, transitionId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    try {
+      const db = await getDB();
+      const access = await assertProjectAccess(c, db, projectId);
+      if (access instanceof Response) return access;
+      const scope =
+        body.outcome === 'accepted'
+          ? 'transition:decide:accept'
+          : body.outcome === 'overridden'
+            ? 'transition:decide:override'
+            : 'transition:decide:reject';
+      const principal = requireTransitionAuthority({
+        apiKey: apiKey(c),
+        projectId,
+        scope,
+      });
+      const result = await decideTransition({
+        db,
+        projectId,
+        transitionId,
+        actor: principal.actor,
+        requestId: body.request_id,
+        outcome: body.outcome,
+        rationale: body.rationale,
+        precondition: wireReviewPrecondition(body.precondition),
+      });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            transition_id: result.view.transitionId,
+            reused: result.reused,
+            decision_digest: result.decisionDigest,
+            decision: result.decision,
+            view: wireView(result.view),
+          },
+        },
+        200
+      );
+    } catch (error) {
+      return controlPlaneError(c, error);
+    }
+  });
+
+  routes.openapi(commitRoute, async (c) => {
+    const { projectId, transitionId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    try {
+      const db = await getDB();
+      const access = await assertProjectAccess(c, db, projectId);
+      if (access instanceof Response) return access;
+      const principal = requireTransitionAuthority({
+        apiKey: apiKey(c),
+        projectId,
+        scope: 'transition:commit:create',
+      });
+      requireTransitionAuthority({
+        apiKey: apiKey(c),
+        projectId,
+        scope: 'transition:ref:advance',
+      });
+      const result = await commitTransition({
+        db,
+        projectId,
+        transitionId,
+        actor: principal.actor,
+        requestId: body.request_id,
+        decisionDigest: body.decision_digest,
+        expectedHead: body.expected_head,
+      });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            transition_id: transitionId,
+            reused: result.reused,
+            commit_digest: result.commitDigest,
+            commit: result.commit,
+            transition: result.view,
+            ...(result.workspace === undefined ? {} : { workspace: result.workspace }),
           },
         },
         200

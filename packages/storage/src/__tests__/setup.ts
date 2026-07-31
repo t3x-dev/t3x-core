@@ -212,6 +212,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_statement_memberships_idempoten
 CREATE INDEX IF NOT EXISTS idx_transition_statement_memberships_transition_created
   ON transition_statement_memberships(transition_id, created_at, statement_digest);
 
+CREATE TABLE IF NOT EXISTS transition_command_receipts (
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (action IN ('decide', 'commit')),
+  actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  result_kind TEXT NOT NULL CHECK (result_kind IN ('decision', 'commit')),
+  result_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, transition_id, actor_kind, actor_id, request_id),
+  CONSTRAINT transition_command_receipts_action_result_check CHECK (
+    (action = 'decide' AND result_kind = 'decision') OR
+    (action = 'commit' AND result_kind = 'commit')
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_transition_command_receipts_result
+  ON transition_command_receipts(project_id, transition_id, result_digest);
+
 -- Agent Drafts (formerly drafts_v2)
 CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,
