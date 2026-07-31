@@ -20,6 +20,7 @@ const runnerArgs = separatorIndex >= 0 ? normalizedArgs.slice(0, separatorIndex)
 const playwrightArgs = separatorIndex >= 0 ? normalizedArgs.slice(separatorIndex + 1) : [];
 const skipBuild = runnerArgs.includes('--skip-build');
 const keepData = runnerArgs.includes('--keep-data') || process.env.T3X_E2E_KEEP_DATA === '1';
+const allowExternal = process.env.T3X_E2E_ALLOW_EXTERNAL === '1';
 const unknownArgs = runnerArgs.filter((arg) => !['--skip-build', '--keep-data'].includes(arg));
 
 if (unknownArgs.length > 0) {
@@ -61,6 +62,17 @@ const runtimeEnv = {
   WEBUI_PORT: webPort,
   WEBUI_URL: webUrl,
 };
+
+if (!allowExternal) {
+  Object.assign(runtimeEnv, {
+    ANTHROPIC_API_KEY: '',
+    GOOGLE_AI_STUDIO_KEY: '',
+    GOOGLE_API_KEY: '',
+    N8N_API_KEY: '',
+    OPENAI_API_KEY: '',
+    RUNNER_BASE_URL: '',
+  });
+}
 
 let testExitCode = 1;
 let status = 'failed';
