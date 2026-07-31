@@ -225,6 +225,32 @@ export interface ReviewWorkspaceSourceTransitionInput {
   actor: ActorRef & { kind: 'human' };
 }
 
+export interface BuildWorkspaceSourceProposalInput {
+  projectId: string;
+  workspaceId: string;
+  artifact: WorkspaceSourceArtifactSelector;
+  change: WorkspaceSourceChange;
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef;
+}
+
+export interface BuiltWorkspaceSourceProposal {
+  actor: ActorRef;
+  base: State;
+  effect: ReturnType<typeof createStateImportEffect>['effect'];
+  proposal: ProposalStatement;
+  refHead: string | null;
+  refName: string;
+  result: State;
+  sourceArtifact: Record<string, unknown>;
+  sourceSelectorDigest: string;
+  workspace: Record<string, unknown>;
+  workspaceId: string;
+  workspaceRevision: number;
+  workspaceUpdatedAt: string;
+}
+
 export interface ReviewWorkspaceSourceTransitionResult {
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
@@ -251,6 +277,15 @@ export interface ReviewWorkspaceSourceRevertInput {
   why?: string;
   expectedRevision?: number;
   actor: ActorRef & { kind: 'human' };
+}
+
+export interface BuildWorkspaceSourceRevertProposalInput {
+  projectId: string;
+  workspaceId: string;
+  commitId: string;
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef;
 }
 
 export interface DecideWorkspaceSourceRevertInput extends ReviewWorkspaceSourceRevertInput {
@@ -303,6 +338,11 @@ interface ResolvedSourceArtifact {
   persistedSelector: Record<string, unknown>;
 }
 
+interface BuiltWorkspaceSourceProposalInternal extends BuiltWorkspaceSourceProposal {
+  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  resolvedSourceArtifact: ResolvedSourceArtifact;
+}
+
 interface BoundSourceInputs {
   ready: ReadyEspHomeSourceInputs | null;
   secretValues: Readonly<Record<string, string>> | null;
@@ -313,7 +353,7 @@ interface BoundSourceInputs {
 }
 
 interface PreparedWorkspaceSourceTransition extends ReviewWorkspaceSourceTransitionResult {
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
   base: State;
   effect: ReturnType<typeof createStateImportEffect>['effect'];
   head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
@@ -399,7 +439,7 @@ function sourceArtifactFromWorkspace(
 
 async function resolveSourceArtifact(
   db: AnyDB,
-  input: ReviewWorkspaceSourceTransitionInput
+  input: BuildWorkspaceSourceProposalInput
 ): Promise<ResolvedSourceArtifact> {
   if (input.artifact.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT) {
     throw new WorkspaceSourceArtifactError('Unsupported source-artifact selector format');
@@ -535,7 +575,7 @@ function exactSecretSet(
 }
 
 async function bindSourceInputs(
-  input: ReviewWorkspaceSourceTransitionInput,
+  input: { projectId: string; workspaceId: string },
   artifact: ResolvedSourceArtifact,
   result: State,
   capabilities: WorkspaceSourceTransitionCapabilities
@@ -691,12 +731,11 @@ function decisionRationale(input: {
   return reason ? { mode: 'authored', value: reason, evidence: [] } : { mode: 'unspecified' };
 }
 
-async function prepareWorkspaceSourceTransition(
+async function buildWorkspaceSourceProposalInternal(
   db: AnyDB,
-  input: ReviewWorkspaceSourceTransitionInput,
-  capabilities: WorkspaceSourceTransitionCapabilities,
+  input: BuildWorkspaceSourceProposalInput,
   expectedPrecondition?: WorkspaceSourceTransitionPrecondition
-): Promise<PreparedWorkspaceSourceTransition> {
+): Promise<BuiltWorkspaceSourceProposalInternal> {
   const draft = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
   if (!draft?.workspace_state) throw new WorkspaceTransitionNotFoundError(input.workspaceId);
   if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision) {
@@ -739,7 +778,52 @@ async function prepareWorkspaceSourceTransition(
     );
   }
 
-  const recordedAt = asCanonicalTimestamp(draft.updated_at);
+  return {
+    actor: input.actor,
+    base,
+    effect,
+    head,
+    proposal: compiled.proposal,
+    refHead: head.head,
+    refName: targetBranch,
+    resolvedSourceArtifact: sourceArtifact,
+    result,
+    sourceArtifact: sourceArtifact.persistedSelector,
+    sourceSelectorDigest: sourceArtifact.selectorDigest,
+    workspace,
+    workspaceId: input.workspaceId,
+    workspaceRevision: draft.revision,
+    workspaceUpdatedAt: draft.updated_at,
+  };
+}
+
+/** Server-side exact-source builder shared by review and control-plane proposals. */
+export async function buildWorkspaceSourceProposal(
+  db: AnyDB,
+  input: BuildWorkspaceSourceProposalInput
+): Promise<BuiltWorkspaceSourceProposal> {
+  const built = await buildWorkspaceSourceProposalInternal(db, input);
+  const { head: _head, resolvedSourceArtifact: _resolved, ...safe } = built;
+  return safe;
+}
+
+async function completeWorkspaceSourceTransition(
+  input: { projectId: string; workspaceId: string },
+  capabilities: WorkspaceSourceTransitionCapabilities,
+  built: BuiltWorkspaceSourceProposalInternal
+): Promise<PreparedWorkspaceSourceTransition> {
+  const {
+    actor,
+    base,
+    effect,
+    head,
+    proposal,
+    resolvedSourceArtifact: sourceArtifact,
+    result,
+    workspace,
+  } = built;
+
+  const recordedAt = asCanonicalTimestamp(built.workspaceUpdatedAt);
   const replayed = await verifyEffect(effect, {
     resolver: new InMemoryTransitionObjectResolver([base, result]),
     drivers: head.format === 'empty' ? stateImportMutationDrivers : yamlSourceMutationDrivers,
@@ -752,7 +836,7 @@ async function prepareWorkspaceSourceTransition(
       result: replayed.resultDescriptor,
       tool: REPLAY_TOOL,
       run: {
-        id: `workspace:${input.workspaceId}:revision:${draft.revision}:source-replay`,
+        id: `workspace:${input.workspaceId}:revision:${built.workspaceRevision}:source-replay`,
         recordedAt,
       },
       environment: UNSPECIFIED_ENVIRONMENT,
@@ -769,7 +853,7 @@ async function prepareWorkspaceSourceTransition(
       sourceInputs: bound.ready,
       actor: RUNNER_ACTOR,
       run: {
-        id: `workspace:${input.workspaceId}:revision:${draft.revision}:esphome`,
+        id: `workspace:${input.workspaceId}:revision:${built.workspaceRevision}:esphome`,
         recordedAt,
       },
       secretValues: bound.secretValues,
@@ -788,43 +872,53 @@ async function prepareWorkspaceSourceTransition(
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort(comparePortable);
   const precondition: WorkspaceSourceTransitionPrecondition = {
-    workspaceRevision: draft.revision,
+    workspaceRevision: built.workspaceRevision,
     refHead: head.head,
     sourceSelectorDigest: sourceArtifact.selectorDigest,
     sourceInputManifestDigest: bound.ready?.manifestResource.digest ?? null,
     effectDigest: describeTransitionObject(effect).digest,
-    proposalDigest: describeTransitionObject(compiled.proposal).digest,
+    proposalDigest: describeTransitionObject(proposal).digest,
     statementDigests,
     policyDigest: WORKSPACE_SOURCE_POLICY.resource.digest,
   };
   const transition = projectTransitionView({
     mode: 'transition',
     effect,
-    proposal: compiled.proposal,
+    proposal,
     observations,
     observationScope: OBSERVATION_SCOPE,
     objectIntegrity: 'verified',
     capabilityContext: {
-      actorContext: { actor: input.actor },
+      actorContext: { actor },
       policy: WORKSPACE_SOURCE_POLICY.policy,
       policyResource: WORKSPACE_SOURCE_POLICY.resource,
     },
   });
   return {
-    actor: input.actor,
+    actor,
     base,
     effect,
     head,
     observations,
     precondition,
-    proposal: compiled.proposal,
+    proposal,
     result,
     runner,
     sourceArtifact: sourceArtifact.persistedSelector,
-    targetBranch,
+    targetBranch: built.refName,
     transition,
     workspace,
   };
+}
+
+async function prepareWorkspaceSourceTransition(
+  db: AnyDB,
+  input: ReviewWorkspaceSourceTransitionInput,
+  capabilities: WorkspaceSourceTransitionCapabilities,
+  expectedPrecondition?: WorkspaceSourceTransitionPrecondition
+): Promise<PreparedWorkspaceSourceTransition> {
+  const built = await buildWorkspaceSourceProposalInternal(db, input, expectedPrecondition);
+  return completeWorkspaceSourceTransition(input, capabilities, built);
 }
 
 function sameObjectDescriptor(
@@ -834,12 +928,11 @@ function sameObjectDescriptor(
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
 }
 
-async function prepareWorkspaceSourceRevert(
+async function buildWorkspaceSourceRevertProposalInternal(
   db: AnyDB,
-  input: ReviewWorkspaceSourceRevertInput,
-  capabilities: WorkspaceSourceTransitionCapabilities,
+  input: BuildWorkspaceSourceRevertProposalInput,
   expectedPrecondition?: WorkspaceSourceTransitionPrecondition
-): Promise<PreparedWorkspaceSourceTransition> {
+): Promise<BuiltWorkspaceSourceProposalInternal> {
   const draft = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
   if (!draft?.workspace_state) throw new WorkspaceTransitionNotFoundError(input.workspaceId);
   if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision) {
@@ -880,7 +973,7 @@ async function prepareWorkspaceSourceRevert(
     throw error;
   }
 
-  const prepared = await prepareWorkspaceSourceTransition(
+  const built = await buildWorkspaceSourceProposalInternal(
     db,
     {
       projectId: input.projectId,
@@ -891,19 +984,38 @@ async function prepareWorkspaceSourceRevert(
       expectedRevision: draft.revision,
       actor: input.actor,
     },
-    capabilities,
     expectedPrecondition
   );
-  if (prepared.head.head !== input.commitId) throw new WorkspaceTransitionReviewStaleError();
+  if (built.head.head !== input.commitId) throw new WorkspaceTransitionReviewStaleError();
   if (
-    !sameObjectDescriptor(prepared.effect.base, graph.effect.result) ||
-    !sameObjectDescriptor(prepared.effect.result, graph.effect.base)
+    !sameObjectDescriptor(built.effect.base, graph.effect.result) ||
+    !sameObjectDescriptor(built.effect.result, graph.effect.base)
   ) {
     throw new WorkspaceSourceRevertUnavailableError(
       'The server-derived reverse Effect does not restore the selected commit Base'
     );
   }
-  return prepared;
+  return built;
+}
+
+/** Derive a reverse exact-source Proposal from the current CommitV2. */
+export async function buildWorkspaceSourceRevertProposal(
+  db: AnyDB,
+  input: BuildWorkspaceSourceRevertProposalInput
+): Promise<BuiltWorkspaceSourceProposal> {
+  const built = await buildWorkspaceSourceRevertProposalInternal(db, input);
+  const { head: _head, resolvedSourceArtifact: _resolved, ...safe } = built;
+  return safe;
+}
+
+async function prepareWorkspaceSourceRevert(
+  db: AnyDB,
+  input: ReviewWorkspaceSourceRevertInput,
+  capabilities: WorkspaceSourceTransitionCapabilities,
+  expectedPrecondition?: WorkspaceSourceTransitionPrecondition
+): Promise<PreparedWorkspaceSourceTransition> {
+  const built = await buildWorkspaceSourceRevertProposalInternal(db, input, expectedPrecondition);
+  return completeWorkspaceSourceTransition(input, capabilities, built);
 }
 
 export async function reviewWorkspaceSourceTransition(

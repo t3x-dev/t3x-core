@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { projects } from './schema';
 
 /** Immutable canonical AcceptancePolicy bytes, addressed by their digest. */
@@ -43,6 +53,102 @@ export const transitionObjects = pgTable('transition_objects', {
   canonicalJson: text('canonical_json').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Append-only project membership for a server-built Proposal graph.
+ *
+ * The request bytes and trusted actor facts are application metadata. They do
+ * not participate in protocol identity and must never be interpreted as a
+ * mutable lifecycle status.
+ */
+export const transitionProposalMemberships = pgTable(
+  'transition_proposal_memberships',
+  {
+    transitionId: text('transition_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull(),
+    workspaceRevision: integer('workspace_revision').notNull(),
+    refName: text('ref_name').notNull(),
+    refHead: text('ref_head'),
+    proposalDigest: text('proposal_digest')
+      .notNull()
+      .references(() => transitionObjects.digest),
+    effectDigest: text('effect_digest')
+      .notNull()
+      .references(() => transitionObjects.digest),
+    requestKind: text('request_kind').notNull(),
+    requestCanonicalJson: text('request_canonical_json').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    requestId: text('request_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_transition_proposal_memberships_idempotency').on(
+      table.projectId,
+      table.actorKind,
+      table.actorId,
+      table.requestId
+    ),
+    index('idx_transition_proposal_memberships_project_created').on(
+      table.projectId,
+      table.createdAt,
+      table.transitionId
+    ),
+    check(
+      'transition_proposal_memberships_actor_kind_check',
+      sql`${table.actorKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'transition_proposal_memberships_request_kind_check',
+      sql`${table.requestKind} IN ('structured_yops', 'exact_source_import', 'exact_source_edit', 'exact_source_revert')`
+    ),
+  ]
+);
+
+/**
+ * Append-only trusted issuer membership for an observed Statement.
+ * Array ordering and derived assurance are deliberately absent from storage.
+ */
+export const transitionStatementMemberships = pgTable(
+  'transition_statement_memberships',
+  {
+    transitionId: text('transition_id')
+      .notNull()
+      .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+    statementDigest: text('statement_digest')
+      .notNull()
+      .references(() => transitionObjects.digest),
+    source: text('source').notNull(),
+    issuerKind: text('issuer_kind').notNull(),
+    issuerId: text('issuer_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.transitionId, table.statementDigest] }),
+    uniqueIndex('idx_transition_statement_memberships_idempotency').on(
+      table.transitionId,
+      table.source,
+      table.issuerKind,
+      table.issuerId,
+      table.requestId
+    ),
+    index('idx_transition_statement_memberships_transition_created').on(
+      table.transitionId,
+      table.createdAt,
+      table.statementDigest
+    ),
+    check(
+      'transition_statement_memberships_issuer_kind_check',
+      sql`${table.issuerKind} IN ('human', 'agent', 'service')`
+    ),
+  ]
+);
 
 /** Project membership for immutable CommitV2 objects. Refs remain separate. */
 export const transitionCommits = pgTable(
@@ -148,6 +254,9 @@ export const transitionDecisionLedger = pgTable(
 );
 
 export type TransitionObjectRecord = typeof transitionObjects.$inferSelect;
+export type TransitionProposalMembershipRecord = typeof transitionProposalMemberships.$inferSelect;
+export type TransitionStatementMembershipRecord =
+  typeof transitionStatementMemberships.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionDecisionAuthorizationRecord =
   typeof transitionDecisionAuthorizations.$inferSelect;

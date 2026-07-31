@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describeTransitionObject } from '@t3x-dev/core';
 import {
   type AnyDB,
   createMaterial,
@@ -17,6 +18,7 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  buildWorkspaceSourceProposal,
   decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
   reviewWorkspaceSourceRevert,
@@ -147,18 +149,29 @@ describe('exact-source Workspace Transition application use case', () => {
     await ensureMainBranch(db, project.projectId);
     const root = await material(db, project.projectId, 'ESPHome root', SECRET_SOURCE);
     const draft = await workspace(db, project.projectId, 'source-import');
-    const review = await reviewWorkspaceSourceTransition(db, {
+    const proposalInput = {
       projectId: project.projectId,
       workspaceId: 'source-import',
       artifact: artifact(),
       change: {
-        mode: 'import',
+        mode: 'import' as const,
         root: { materialId: root.id, contentHash: root.content_hash },
       },
       why: 'Import the existing device configuration without rewriting it.',
       expectedRevision: draft.revision,
       actor: HUMAN,
+    };
+    const built = await buildWorkspaceSourceProposal(db, proposalInput);
+    const review = await reviewWorkspaceSourceTransition(db, {
+      ...proposalInput,
     });
+
+    expect(review.transition.audit.effect?.digest).toBe(
+      describeTransitionObject(built.effect).digest
+    );
+    expect(review.transition.audit.proposal?.digest).toBe(
+      describeTransitionObject(built.proposal).digest
+    );
 
     expect(review.runner).toEqual({
       mode: 'inputs_unavailable',

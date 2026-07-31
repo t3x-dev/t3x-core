@@ -95,7 +95,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(56);
+      expect(schemaVersion?.version).toBe(57);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -111,6 +111,8 @@ describe('workspace and Transition schema migrations', () => {
 
     try {
       await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_statement_memberships;
+        DROP TABLE IF EXISTS transition_proposal_memberships;
         DROP TABLE IF EXISTS transition_decision_ledger;
         DROP TABLE IF EXISTS transition_decision_authorizations;
         DROP TABLE IF EXISTS transition_commits;
@@ -149,7 +151,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(56);
+      expect(schemaVersion?.version).toBe(57);
     } finally {
       await testDb.cleanup();
     }
@@ -185,7 +187,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(56);
+      expect(schemaVersion?.version).toBe(57);
     } finally {
       await testDb.cleanup();
     }
@@ -261,7 +263,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(56);
+      expect(schemaVersion?.version).toBe(57);
     } finally {
       await testDb.cleanup();
     }
@@ -310,7 +312,49 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(56);
+      expect(schemaVersion?.version).toBe(57);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs empty proposal and Statement memberships when upgrading from v56', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_statement_memberships;
+        DROP TABLE IF EXISTS transition_proposal_memberships;
+        UPDATE _schema_version
+        SET version = 56, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [tables] = await testDb.sql<
+        Array<{ proposals: string | null; statements: string | null }>
+      >`
+        SELECT
+          to_regclass('transition_proposal_memberships')::text AS proposals,
+          to_regclass('transition_statement_memberships')::text AS statements
+      `;
+      expect(tables).toEqual({
+        proposals: 'transition_proposal_memberships',
+        statements: 'transition_statement_memberships',
+      });
+      const [counts] = await testDb.sql<Array<{ proposals: number; statements: number }>>`
+        SELECT
+          (SELECT COUNT(*)::int FROM transition_proposal_memberships) AS proposals,
+          (SELECT COUNT(*)::int FROM transition_statement_memberships) AS statements
+      `;
+      expect(counts).toEqual({ proposals: 0, statements: 0 });
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version FROM _schema_version WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(57);
     } finally {
       await testDb.cleanup();
     }
