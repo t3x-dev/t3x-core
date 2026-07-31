@@ -18,6 +18,7 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -614,4 +615,224 @@ export interface ContextResult {
   branch: string;
   trees: ExtractTree[];
   yaml?: string;
+}
+
+// ============================================
+// Transition control plane
+// ============================================
+
+export type TransitionProtocolValue =
+  | null
+  | boolean
+  | number
+  | string
+  | TransitionProtocolValue[]
+  | { [key: string]: TransitionProtocolValue };
+
+export interface TransitionActorRef {
+  kind: 'human' | 'agent' | 'service';
+  id: string;
+}
+
+export interface TransitionObjectDescriptor {
+  kind: 'state' | 'effect' | 'statement' | 'commit';
+  schema: string;
+  digest: string;
+}
+
+export interface TransitionResourceSelector {
+  path: string;
+  material_id: string;
+  content_hash?: string;
+}
+
+export interface TransitionSourceArtifactSelector {
+  format: 't3x.dev/workspace-source-artifact/v1';
+  root_path: string;
+  resources?: TransitionResourceSelector[];
+}
+
+export interface TransitionSourceMaterialSelector {
+  material_id: string;
+  content_hash?: string;
+}
+
+export interface TransitionReplaceScalarOperation {
+  op: 'replace_scalar';
+  path: Array<string | number>;
+  expect: string;
+  value: string;
+}
+
+interface TransitionProposalRequestCommon {
+  request_id: string;
+  workspace_id: string;
+  why?: string;
+  if_revision?: number;
+}
+
+export type ProposeTransitionInput =
+  | (TransitionProposalRequestCommon & {
+      kind: 'structured_yops';
+      operations: TransitionProtocolValue[];
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_import';
+      artifact: TransitionSourceArtifactSelector;
+      root: TransitionSourceMaterialSelector;
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_edit';
+      artifact: TransitionSourceArtifactSelector;
+      operations: TransitionReplaceScalarOperation[];
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_revert';
+      commit_id: string;
+    });
+
+export interface TransitionClaimView {
+  mode: 'stated' | 'inferred' | 'authored' | 'unspecified';
+  origin: 'request_source' | 'inferred' | 'actor_authored' | 'not_provided';
+  value?: string;
+  evidence: Array<{
+    resource: { uri: string; mediaType: string; digest: string };
+    locator: { scheme: string; value: TransitionProtocolValue };
+  }>;
+}
+
+export interface TransitionActionCapabilityView {
+  disposition: 'allowed' | 'denied' | 'not_applicable' | 'not_evaluated';
+  reasons: Array<{ code: string; message: string }>;
+}
+
+export interface TransitionGraphViewV1 {
+  schema: 't3x.dev/transition-view/v1';
+  version: 1;
+  mode: 'transition';
+  change: {
+    effect: TransitionObjectDescriptor;
+    base: TransitionObjectDescriptor;
+    result: TransitionObjectDescriptor;
+    driver: { protocol: string; protocolVersion: string; specDigest: string };
+    operations: TransitionProtocolValue[];
+  };
+  claims: {
+    proposal: TransitionObjectDescriptor;
+    actor: TransitionActorRef;
+    intent: TransitionClaimView;
+    rationale: TransitionClaimView;
+  };
+  checks: {
+    objectIntegrity: 'verified' | 'not_checked';
+    observationScope: { completeness: 'complete' | 'partial'; sources: string[] };
+    replay: TransitionProtocolValue;
+    validation: TransitionProtocolValue;
+    runner: TransitionProtocolValue;
+    humanConfirmation: TransitionProtocolValue;
+  };
+  decision: TransitionProtocolValue;
+  history: TransitionProtocolValue;
+  capabilities: {
+    accept: TransitionActionCapabilityView;
+    override: TransitionActionCapabilityView;
+    reject: TransitionActionCapabilityView;
+    commit: TransitionActionCapabilityView;
+    revert: TransitionActionCapabilityView;
+  };
+  audit: TransitionProtocolValue;
+}
+
+export interface LegacyTransitionViewV1 {
+  schema: 't3x.dev/transition-view/v1';
+  version: 1;
+  mode: 'legacy';
+  change: TransitionProtocolValue;
+  claims: TransitionProtocolValue;
+  checks: TransitionProtocolValue;
+  decision: TransitionProtocolValue;
+  history: TransitionProtocolValue;
+  capabilities: TransitionGraphViewV1['capabilities'];
+  audit: TransitionProtocolValue;
+}
+
+export type TransitionViewV1 = TransitionGraphViewV1 | LegacyTransitionViewV1;
+
+export interface TransitionStatementMembershipView {
+  digest: string;
+  source: string;
+  issuer: TransitionActorRef;
+  request_id: string;
+  created_at: string;
+}
+
+export interface TransitionControlPlaneView {
+  transition_id: string;
+  project_id: string;
+  workspace_id: string;
+  request_kind:
+    | 'structured_yops'
+    | 'exact_source_import'
+    | 'exact_source_edit'
+    | 'exact_source_revert';
+  request_id: string;
+  created_at: string;
+  precondition: {
+    workspace_revision: number;
+    ref_name: string;
+    ref_head: string | null;
+    effect_digest: string;
+    proposal_digest: string;
+  };
+  transition: TransitionViewV1;
+  statements: TransitionStatementMembershipView[];
+}
+
+export interface ProposeTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
+}
+
+export interface InspectTransitionResult {
+  transition_id: string;
+  view: TransitionControlPlaneView;
+}
+
+export interface VerifyTransitionInput {
+  request_id: string;
+}
+
+export interface VerifyTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
+  statements: Array<{
+    transitionId: string;
+    statementDigest: string;
+    source: string;
+    issuer: TransitionActorRef;
+    requestId: string;
+    requestDigest: string;
+    createdAt: string;
+  }>;
+  operational_results: Array<{
+    source: string;
+    outcome: 'no_statement' | 'failed';
+    code: string;
+    message: string;
+  }>;
+}
+
+export interface AttachTransitionStatementInput {
+  request_id: string;
+  predicate_type: string;
+  predicate: TransitionProtocolValue;
+  subjects: Array<'effect' | 'result' | 'proposal'>;
+}
+
+export interface AttachTransitionStatementResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
 }

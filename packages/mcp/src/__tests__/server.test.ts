@@ -79,7 +79,7 @@ vi.mock('@t3x-dev/core', () => ({
   generateLeafOutput: vi.fn(),
 }));
 
-import { createMcpServer } from '../server.js';
+import { createMcpServer, type McpToolset } from '../server.js';
 
 type CallToolHandler = (request: {
   method: 'tools/call';
@@ -88,7 +88,7 @@ type CallToolHandler = (request: {
   params: { name: string; arguments?: Record<string, unknown> };
 }) => Promise<{ content: Array<{ text: string }>; isError?: boolean }>;
 
-function getCallToolHandler(toolsets: Array<'core' | 'advanced'>) {
+function getCallToolHandler(toolsets: McpToolset[]) {
   const { server } = createMcpServer({ toolsets });
   const handler = (
     server as unknown as { _requestHandlers: Map<string, CallToolHandler> }
@@ -162,6 +162,35 @@ describe('createMcpServer', () => {
     expect(names).toContain('t3x_diff');
     expect(names).toContain('t3x_merge');
     expect(names).toContain('t3x_admin');
+  });
+
+  it('transition-only toolset provides exactly four opt-in lifecycle tools', () => {
+    const { tools } = createMcpServer({ toolsets: ['transition'] });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'propose_transition',
+      'inspect_transition',
+      'verify_transition',
+      'attach_statement',
+    ]);
+  });
+
+  it('does not alter the existing eight-tool core and advanced surface', () => {
+    const { tools } = createMcpServer({ toolsets: ['core', 'advanced'] });
+    const names = tools.map((tool) => tool.name);
+
+    expect(tools).toHaveLength(8);
+    expect(names).not.toContain('propose_transition');
+    expect(names).not.toContain('inspect_transition');
+    expect(names).not.toContain('verify_transition');
+    expect(names).not.toContain('attach_statement');
+  });
+
+  it('composes all toolsets without duplicate registrations', () => {
+    const { tools } = createMcpServer({ toolsets: ['core', 'advanced', 'transition'] });
+
+    expect(tools).toHaveLength(12);
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(12);
   });
 
   it('duplicate toolsets do not produce duplicate tools', () => {

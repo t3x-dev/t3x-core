@@ -89,6 +89,15 @@ describe('apps/mcp entrypoint', () => {
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the opt-in transition toolset to the server factory', async () => {
+    process.env.T3X_TOOLSETS = 'transition';
+
+    await import('../index.ts');
+
+    expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['transition'] });
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+  });
+
   it('fails fast for unsupported http transport', async () => {
     process.env.T3X_TRANSPORT = 'http';
 

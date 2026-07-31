@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createMcpServer } from '@t3x-dev/mcp-lib';
+import { createMcpServer, type McpToolset } from '@t3x-dev/mcp-lib';
 
 const toolsetEnv = process.env.T3X_TOOLSETS ?? 'core';
-const toolsets = toolsetEnv.split(',').map((s) => s.trim()) as Array<'core' | 'advanced'>;
+const toolsets = toolsetEnv.split(',').map((s) => s.trim()) as McpToolset[];
 
 const transport = process.env.T3X_TRANSPORT ?? 'stdio';
 

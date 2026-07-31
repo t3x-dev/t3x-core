@@ -188,6 +188,41 @@ describe('apps/mcp stdio subprocess smoke', () => {
     stdioSmokeTimeoutMs
   );
 
+  it(
+    'advertises transition tools while refusing direct-storage authority paths',
+    async () => {
+      const { client } = await connectConfiguredClient({
+        T3X_TOOLSETS: 'transition',
+        T3X_MCP_BACKEND: 'storage',
+      });
+      openClients.push(client);
+
+      const listed = await client.listTools();
+      expect(listed.tools.map((tool) => tool.name)).toEqual([
+        'propose_transition',
+        'inspect_transition',
+        'verify_transition',
+        'attach_statement',
+      ]);
+
+      const result = await client.callTool({
+        name: 'inspect_transition',
+        arguments: {
+          project_id: 'project-1',
+          transition_id: 'sha256:transition-1',
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(parseTextResult(result as Parameters<typeof parseTextResult>[0])).toMatchObject({
+        error: {
+          code: 'API_BACKEND_REQUIRED',
+        },
+      });
+    },
+    stdioSmokeTimeoutMs
+  );
+
   maybeRealE2E(
     'runs create_project -> extract -> commit -> create_leaf -> generate over the real stdio subprocess',
     async () => {

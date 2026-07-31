@@ -20,7 +20,7 @@ The current MCP server exposes three protocol surfaces:
 
 ### Tools
 
-The tool surface is `tools-first` and uses 8 umbrella tools.
+The default tool surface is `tools-first` and uses 8 umbrella tools.
 
 Core:
 
@@ -35,6 +35,17 @@ Advanced:
 - `t3x_diff`
 - `t3x_merge`
 - `t3x_admin`
+
+Transition (opt-in, API backend only):
+
+- `propose_transition`
+- `inspect_transition`
+- `verify_transition`
+- `attach_statement`
+
+The Transition toolset exposes task-oriented transition views. It does not
+accept caller-written actors or other trust-chain metadata. Decision and Commit
+operations are intentionally not part of this milestone.
 
 ### Resources
 
@@ -70,7 +81,8 @@ with the package binary:
       "command": "npx",
       "args": ["@t3x-dev/mcp"],
       "env": {
-        "T3X_TOOLSETS": "core,advanced"
+        "T3X_TOOLSETS": "core,advanced,transition",
+        "T3X_MCP_BACKEND": "api"
       }
     }
   }
@@ -102,6 +114,10 @@ The server supports two backends:
   - talks to the T3X API via `T3X_API_URL`
   - reuses `T3X_API_KEY` or the shared `~/.t3x/config.json` key when present
 
+The opt-in `transition` toolset requires the `api` backend. In `storage` mode,
+all four Transition tools fail closed with `API_BACKEND_REQUIRED`; there is no
+direct-storage fallback for authenticated authority or issuer context.
+
 Local Codex/Cursor development should prefer the `api` backend so MCP and CLI
 see the same data without each process trying to own embedded Postgres.
 
@@ -109,7 +125,7 @@ see the same data without each process trying to own embedded Postgres.
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `T3X_TOOLSETS` | Comma-separated toolsets to enable | `core` |
+| `T3X_TOOLSETS` | Comma-separated toolsets to enable: `core`, `advanced`, `transition` | `core` |
 | `T3X_TRANSPORT` | MCP transport | `stdio` |
 | `T3X_MCP_BACKEND` | Backend mode: `storage` or `api` | `storage` |
 | `T3X_API_URL` | Base API URL for `api` backend | `http://localhost:8000/api` |
@@ -139,6 +155,13 @@ Merge
 3. t3x_query / resources/read merge draft for inspection
 4. t3x_merge({ action: "resolve", ... })
 5. t3x_merge({ action: "execute", ... })                 -> merge commit_hash
+
+Transition (requires `T3X_MCP_BACKEND=api`)
+
+1. propose_transition({ project_id, ... })              -> transition_id + TransitionViewV1
+2. inspect_transition({ project_id, transition_id })    -> current task-oriented view
+3. verify_transition({ project_id, transition_id, ... }) -> replay/validation observations
+4. attach_statement({ project_id, transition_id, ... }) -> updated view
 ```
 
 ## Build
