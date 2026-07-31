@@ -1,6 +1,8 @@
 const SOURCE_DEV_API_BASE = 'http://localhost:8000';
 
-export function resolveApiBase(env: NodeJS.ProcessEnv, nodeEnv = env.NODE_ENV): string {
+type ApiBaseEnv = Pick<NodeJS.ProcessEnv, 'NEXT_PUBLIC_API_URL' | 'NODE_ENV'>;
+
+export function resolveApiBase(env: ApiBaseEnv, nodeEnv = env.NODE_ENV): string {
   if (env.NEXT_PUBLIC_API_URL) {
     return env.NEXT_PUBLIC_API_URL;
   }
@@ -22,4 +24,10 @@ export function resolveWebSocketBase(
   return url.origin;
 }
 
-export const API_BASE = resolveApiBase(process.env);
+// Next.js only inlines public variables when it can see a direct property access.
+// Passing the whole process.env object leaves production client bundles without
+// NEXT_PUBLIC_API_URL and silently falls back to the source-development URL.
+export const API_BASE = resolveApiBase({
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  NODE_ENV: process.env.NODE_ENV,
+});
