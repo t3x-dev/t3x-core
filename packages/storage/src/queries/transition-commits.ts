@@ -289,7 +289,7 @@ function isStoredScopeValid(scope: StoredDecisionFacts['observationScope']): boo
   );
 }
 
-async function persistTransitionObjects(
+export async function persistTransitionObjects(
   db: AnyDB,
   objects: readonly ProtocolObject[]
 ): Promise<void> {

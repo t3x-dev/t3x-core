@@ -19,6 +19,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import type { WorkspaceSourceTransitionCapabilities } from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
@@ -41,6 +42,7 @@ import {
   comparisonsRoutes,
   contextRoutes,
   conversationRoutes,
+  createTransitionControlPlaneRoutes,
   createWorkspaceSourceTransitionRoutes,
   curateRoutes,
   deployAgentRoutes,
@@ -107,6 +109,8 @@ export interface CreateAppOptions {
   routes?: (api: OpenAPIHono) => void;
   /** Server-owned exact-source secret and Runner capabilities. */
   workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
+  /** Server-owned Transition verification providers and external predicate allowlist. */
+  transitionControlPlane?: TransitionControlPlaneOptions;
 }
 
 export interface CreateAppResult {
@@ -197,6 +201,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
   api.route('/', transitionPolicyBindingRoutes);
+  api.route('/', createTransitionControlPlaneRoutes(options?.transitionControlPlane));
   api.route('/', shareRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', comparisonsRoutes);
@@ -287,7 +292,10 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Search', description: 'State and project search' },
       { name: 'State Index', description: 'State graph nodes, edges, and membership' },
       { name: 'Runner', description: 'Grey-box agent evaluation' },
-      { name: 'Transition', description: 'Transition authority and policy administration' },
+      {
+        name: 'Transition',
+        description: 'Transition control plane, authority, and policy administration',
+      },
       { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },

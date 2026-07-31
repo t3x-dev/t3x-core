@@ -139,6 +139,29 @@ export interface ReviewWorkspaceTransitionResult {
   precondition: WorkspaceTransitionPrecondition;
 }
 
+export interface BuildWorkspaceYOpsProposalInput {
+  projectId: string;
+  workspaceId: string;
+  operations: ProtocolValue[];
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef;
+}
+
+export interface BuiltWorkspaceYOpsProposal {
+  actor: ActorRef;
+  base: State;
+  effect: ReturnType<typeof createYOpsEffect>['effect'];
+  proposal: ProposalStatement;
+  refHead: string | null;
+  refName: string;
+  result: State;
+  workspace: Record<string, unknown>;
+  workspaceId: string;
+  workspaceRevision: number;
+  workspaceUpdatedAt: string;
+}
+
 export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitionInput {
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
@@ -215,6 +238,16 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
   targetBranch: string;
   workspace: Record<string, unknown>;
   workspaceId: string;
+}
+
+interface ResolvedWorkspaceTransitionContext {
+  base: State;
+  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  targetBranch: string;
+  workspace: Record<string, unknown>;
+  workspaceId: string;
+  workspaceRevision: number;
+  workspaceUpdatedAt: string;
 }
 
 function asCanonicalTimestamp(value: string): CanonicalTimestamp {
@@ -351,19 +384,15 @@ function decisionRationale(
   return reason ? { mode: 'authored', value: reason, evidence: [] } : { mode: 'unspecified' };
 }
 
-async function prepareWorkspaceTransition(
+async function resolveWorkspaceTransitionContext(
   db: AnyDB,
-  input: ReviewWorkspaceTransitionInput
-): Promise<PreparedWorkspaceTransition> {
+  input: { projectId: string; workspaceId: string; expectedRevision?: number }
+): Promise<ResolvedWorkspaceTransitionContext> {
   const draft = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
   if (!draft?.workspace_state) throw new WorkspaceTransitionNotFoundError(input.workspaceId);
   if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision) {
     throw new ConflictError(draft.id, input.expectedRevision);
   }
-  if (!Array.isArray(input.content.trees) || !Array.isArray(input.content.relations)) {
-    throw new TypeError('Workspace Transition content requires trees and relations arrays');
-  }
-
   const workspace = draft.workspace_state;
   const targetBranch =
     typeof workspace.targetBranch === 'string' && workspace.targetBranch.trim()
@@ -374,18 +403,26 @@ async function prepareWorkspaceTransition(
     refName: targetBranch,
   });
   if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
+  return {
+    base: head.format === 'empty' ? createYOpsState({}) : head.state,
+    head,
+    targetBranch,
+    workspace,
+    workspaceId: input.workspaceId,
+    workspaceRevision: draft.revision,
+    workspaceUpdatedAt: draft.updated_at,
+  };
+}
 
-  const base = head.format === 'empty' ? createYOpsState({}) : head.state;
-  const target = createYOpsState(treesToYValue(input.content.trees));
+function buildWorkspaceYOpsProposalFromContext(
+  context: ResolvedWorkspaceTransitionContext,
+  input: { operations: ProtocolValue[]; why?: string; actor: ActorRef }
+): BuiltWorkspaceYOpsProposal {
   const { effect, result } = createYOpsEffect({
-    base,
-    operations: exactTargetOperations(base, target),
-    expectedBase: describeTransitionObject(base),
+    base: context.base,
+    operations: input.operations,
+    expectedBase: describeTransitionObject(context.base),
   });
-  if (describeTransitionObject(result).digest !== describeTransitionObject(target).digest) {
-    throw new TypeError('Workspace operations did not replay to the exact proposed target');
-  }
-
   const compiled = compileProposalDraft({
     draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
     effect,
@@ -396,17 +433,65 @@ async function prepareWorkspaceTransition(
       `Workspace Proposal compilation failed: ${JSON.stringify(compiled.issues)}`
     );
   }
+  return {
+    actor: input.actor,
+    base: context.base,
+    effect,
+    proposal: compiled.proposal,
+    refHead: context.head.head,
+    refName: context.targetBranch,
+    result,
+    workspace: context.workspace,
+    workspaceId: context.workspaceId,
+    workspaceRevision: context.workspaceRevision,
+    workspaceUpdatedAt: context.workspaceUpdatedAt,
+  };
+}
 
-  const { canonicalName, schema } = resolveWorkspaceSchema(workspace);
-  const recordedAt = asCanonicalTimestamp(draft.updated_at);
+/** Shared, server-side builder for human review and machine proposals. */
+export async function buildWorkspaceYOpsProposal(
+  db: AnyDB,
+  input: BuildWorkspaceYOpsProposalInput
+): Promise<BuiltWorkspaceYOpsProposal> {
+  const context = await resolveWorkspaceTransitionContext(db, input);
+  return buildWorkspaceYOpsProposalFromContext(context, input);
+}
+
+async function prepareWorkspaceTransition(
+  db: AnyDB,
+  input: ReviewWorkspaceTransitionInput
+): Promise<PreparedWorkspaceTransition> {
+  if (!Array.isArray(input.content.trees) || !Array.isArray(input.content.relations)) {
+    throw new TypeError('Workspace Transition content requires trees and relations arrays');
+  }
+  const context = await resolveWorkspaceTransitionContext(db, input);
+  const base = context.base;
+  const target = createYOpsState(treesToYValue(input.content.trees));
+  const built = buildWorkspaceYOpsProposalFromContext(context, {
+    operations: exactTargetOperations(base, target),
+    why: input.why,
+    actor: input.actor,
+  });
+  const { effect, proposal, result } = built;
+  if (describeTransitionObject(result).digest !== describeTransitionObject(target).digest) {
+    throw new TypeError('Workspace operations did not replay to the exact proposed target');
+  }
+
+  const { canonicalName, schema } = resolveWorkspaceSchema(context.workspace);
+  const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,
     schema
   );
   const relations = input.content.relations as YSchemaRelation[];
-  const provenanceByPath = await workspaceProvenance(db, input.projectId, workspace, result);
+  const provenanceByPath = await workspaceProvenance(
+    db,
+    input.projectId,
+    context.workspace,
+    result
+  );
   const contextResource = createYSchemaContextDescriptor(
-    `t3x://projects/${encodeURIComponent(input.projectId)}/workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${draft.revision}/yschema-context`,
+    `t3x://projects/${encodeURIComponent(input.projectId)}/workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/yschema-context`,
     { relations, provenanceByPath }
   );
   const validation = runYSchemaStatementProvider({
@@ -420,7 +505,7 @@ async function prepareWorkspaceTransition(
     actor: VALIDATION_ACTOR,
     tool: VALIDATION_TOOL,
     run: {
-      id: `workspace:${input.workspaceId}:revision:${draft.revision}:yschema`,
+      id: `workspace:${input.workspaceId}:revision:${context.workspaceRevision}:yschema`,
       recordedAt,
     },
   });
@@ -432,7 +517,7 @@ async function prepareWorkspaceTransition(
       result: effect.result,
       tool: REPLAY_TOOL,
       run: {
-        id: `workspace:${input.workspaceId}:revision:${draft.revision}:replay`,
+        id: `workspace:${input.workspaceId}:revision:${context.workspaceRevision}:replay`,
         recordedAt,
       },
       environment: UNSPECIFIED_ENVIRONMENT,
@@ -446,17 +531,17 @@ async function prepareWorkspaceTransition(
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort();
   const precondition: WorkspaceTransitionPrecondition = {
-    workspaceRevision: draft.revision,
-    refHead: head.head,
+    workspaceRevision: context.workspaceRevision,
+    refHead: context.head.head,
     effectDigest: describeTransitionObject(effect).digest,
-    proposalDigest: describeTransitionObject(compiled.proposal).digest,
+    proposalDigest: describeTransitionObject(proposal).digest,
     statementDigests,
     policyDigest: WORKSPACE_POLICY.resource.digest,
   };
   const transition = projectTransitionView({
     mode: 'transition',
     effect,
-    proposal: compiled.proposal,
+    proposal,
     observations,
     observationScope: OBSERVATION_SCOPE,
     objectIntegrity: 'verified',
@@ -471,14 +556,14 @@ async function prepareWorkspaceTransition(
     base,
     content: input.content,
     effect,
-    head,
+    head: context.head,
     observations,
     precondition,
-    proposal: compiled.proposal,
+    proposal,
     result,
-    targetBranch,
+    targetBranch: context.targetBranch,
     transition,
-    workspace,
+    workspace: context.workspace,
     workspaceId: input.workspaceId,
   };
 }

@@ -1,4 +1,4 @@
-import { yvalueToTrees } from '@t3x-dev/core';
+import { describeTransitionObject, yvalueToTrees } from '@t3x-dev/core';
 import {
   type AnyDB,
   ConflictError,
@@ -14,6 +14,7 @@ import {
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  buildWorkspaceYOpsProposal,
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
   WorkspaceTransitionDecisionDeniedError,
@@ -85,6 +86,40 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('Workspace Transition application use case', () => {
+  it('uses the same Proposal identity for human review and machine control-plane preparation', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Workspace Builder Parity' }));
+    await ensureMainBranch(db, project.projectId);
+    await workspace({ db, projectId: project.projectId, workspaceId: 'builder-parity' });
+    const target = content({ feature: { enabled: true } });
+    const operations = [
+      { assert: { path: 'feature', exists: false } },
+      { set: { path: 'feature', value: { enabled: true } } },
+    ];
+    const why = 'Use one builder for review and machine proposal identity.';
+
+    const built = await buildWorkspaceYOpsProposal(db, {
+      projectId: project.projectId,
+      workspaceId: 'builder-parity',
+      operations,
+      why,
+      actor: HUMAN,
+    });
+    const review = await reviewWorkspaceTransition(db, {
+      projectId: project.projectId,
+      workspaceId: 'builder-parity',
+      content: target,
+      why,
+      actor: HUMAN,
+    });
+
+    expect(review.transition.audit.effect?.digest).toBe(
+      describeTransitionObject(built.effect).digest
+    );
+    expect(review.transition.audit.proposal?.digest).toBe(
+      describeTransitionObject(built.proposal).digest
+    );
+  });
+
   it('reviews and commits an accepted Transition from an empty ref', async () => {
     const project = await insertProject(db, testData.project({ name: 'Workspace Accept' }));
     await ensureMainBranch(db, project.projectId);

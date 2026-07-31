@@ -166,6 +166,52 @@ CREATE TABLE IF NOT EXISTS transition_policy_bindings (
 CREATE INDEX IF NOT EXISTS idx_transition_policy_bindings_digest
   ON transition_policy_bindings(policy_digest);
 
+CREATE TABLE IF NOT EXISTS transition_proposal_memberships (
+  transition_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  workspace_revision INTEGER NOT NULL,
+  ref_name TEXT NOT NULL,
+  ref_head TEXT,
+  proposal_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  effect_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  request_kind TEXT NOT NULL
+    CHECK (request_kind IN ('structured_yops', 'exact_source_import', 'exact_source_edit', 'exact_source_revert')),
+  request_canonical_json TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_proposal_memberships_idempotency
+  ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
+CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
+  ON transition_proposal_memberships(project_id, created_at, transition_id);
+
+CREATE TABLE IF NOT EXISTS transition_statement_memberships (
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  statement_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  source TEXT NOT NULL,
+  issuer_kind TEXT NOT NULL CHECK (issuer_kind IN ('human', 'agent', 'service')),
+  issuer_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (transition_id, statement_digest)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_statement_memberships_idempotency
+  ON transition_statement_memberships(
+    transition_id,
+    source,
+    issuer_kind,
+    issuer_id,
+    request_id
+  );
+CREATE INDEX IF NOT EXISTS idx_transition_statement_memberships_transition_created
+  ON transition_statement_memberships(transition_id, created_at, statement_digest);
+
 -- Agent Drafts (formerly drafts_v2)
 CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,

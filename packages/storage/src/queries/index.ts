@@ -485,6 +485,8 @@ export {
   TransitionRefNotFoundError,
   type VerifiedTransitionCommitGraph,
 } from './transition-commits';
+// Transition Proposal and Statement project memberships
+export * from './transition-memberships';
 // Transition AcceptancePolicy bindings
 export {
   type BindTransitionPolicyInput,
