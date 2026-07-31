@@ -1,19 +1,11 @@
 # T3X Documentation
 
-T3X is version control for structured state. Its central idea is **change as a
-verifiable object**: a proposed change binds its exact Base, replayable Effect,
-derived Result, surrounding Statements, Decision, and optional CommitV2.
+T3X is version control for structured state. It helps people and agents review,
+validate, and commit changes without losing their source, checks, decisions, or
+history.
 
-The deterministic State law and governance lifecycle are:
-
-```text
-Result = Replay(Base, DefinitionOf(Effect))
-Propose -> Verify* -> Decide -> Commit?
-```
-
-YOps and YSchema remain independently useful engines. One-way adapters compose
-them with the leaf Transition kernel, storage, external checks, and task-first
-product surfaces.
+YOps and YSchema remain independently useful engines. Their detailed package
+documentation lives next to the code.
 
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source

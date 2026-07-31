@@ -1,90 +1,33 @@
-<svg width="920" height="430" viewBox="0 0 920 430" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-  <title>T3X state and governance planes</title>
-  <desc>A deterministic Base-to-Result replay above an immutable Propose, Verify, Decide, and optional Commit lifecycle.</desc>
+<svg width="760" height="220" viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#020617"/>
-      <stop offset="1" stop-color="#0b1220"/>
-    </linearGradient>
-    <linearGradient id="stateBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#172554"/>
-      <stop offset="1" stop-color="#1e3a8a"/>
-    </linearGradient>
-    <linearGradient id="effectOrange" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#431407"/>
-      <stop offset="1" stop-color="#9a3412"/>
-    </linearGradient>
-    <linearGradient id="stateGreen" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#022c22"/>
-      <stop offset="1" stop-color="#065f46"/>
-    </linearGradient>
-    <marker id="arrow" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="9" markerHeight="7" orient="auto">
-      <path d="M0 0L10 4L0 8Z" fill="#64748b"/>
+    <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#64748b"/>
     </marker>
-    <marker id="arrowGreen" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="9" markerHeight="7" orient="auto">
-      <path d="M0 0L10 4L0 8Z" fill="#34d399"/>
-    </marker>
-    <marker id="arrowRed" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="9" markerHeight="7" orient="auto">
-      <path d="M0 0L10 4L0 8Z" fill="#fb7185"/>
-    </marker>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.32"/>
-    </filter>
   </defs>
 
-  <rect width="920" height="430" rx="24" fill="url(#bg)"/>
-  <rect x="1" y="1" width="918" height="428" rx="23" fill="none" stroke="#1e293b" stroke-width="2"/>
+  <rect width="760" height="220" rx="20" fill="#020617"/>
+  <rect x="18" y="18" width="724" height="184" rx="16" fill="none" stroke="#334155" stroke-width="1.5"/>
 
-  <text x="48" y="41" fill="#94a3b8" font-size="12" font-weight="750" letter-spacing="1.8">STATE PLANE · DETERMINISTIC</text>
+  <!-- Source -->
+  <rect x="50" y="68" width="178" height="84" rx="15" fill="#0f172a" stroke="#475569" stroke-width="1.7"/>
+  <text x="139" y="101" fill="#e2e8f0" font-size="20" font-weight="800" text-anchor="middle">Source</text>
+  <text x="139" y="125" fill="#94a3b8" font-size="11" font-weight="600" text-anchor="middle">chat, doc, spec</text>
 
-  <g filter="url(#shadow)">
-    <rect x="48" y="66" width="188" height="112" rx="18" fill="url(#stateBlue)" stroke="#60a5fa" stroke-width="1.5"/>
-    <text x="142" y="105" fill="#bfdbfe" font-size="13" font-weight="700" text-anchor="middle">BASE</text>
-    <text x="142" y="136" fill="#ffffff" font-size="25" font-weight="800" text-anchor="middle">State S₀</text>
-    <text x="142" y="158" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">content-addressed</text>
+  <line x1="244" y1="110" x2="294" y2="110" stroke="#64748b" stroke-width="2.4" marker-end="url(#arrow)"/>
 
-    <rect x="366" y="58" width="188" height="128" rx="18" fill="url(#effectOrange)" stroke="#fb923c" stroke-width="1.5"/>
-    <text x="460" y="96" fill="#fed7aa" font-size="13" font-weight="700" text-anchor="middle">EFFECT</text>
-    <text x="460" y="127" fill="#ffffff" font-size="23" font-weight="800" text-anchor="middle">ordered ops</text>
-    <text x="460" y="151" fill="#fdba74" font-size="11" font-weight="600" text-anchor="middle">driver + declared inputs</text>
-    <text x="460" y="169" fill="#fdba74" font-size="11" font-weight="600" text-anchor="middle">claimed Result excluded from Replay</text>
+  <!-- YOps -->
+  <rect x="312" y="52" width="190" height="116" rx="16" fill="#1e293b" stroke="#f97316" stroke-width="1.8"/>
+  <text x="407" y="91" fill="#fb923c" font-size="22" font-weight="850" text-anchor="middle">YOps</text>
+  <text x="407" y="118" fill="#fdba74" font-size="11.5" font-weight="700" text-anchor="middle">old YAML + patch</text>
+  <text x="407" y="138" fill="#fdba74" font-size="11.5" font-weight="700" text-anchor="middle">-&gt; new YAML</text>
 
-    <rect x="684" y="66" width="188" height="112" rx="18" fill="url(#stateGreen)" stroke="#34d399" stroke-width="1.5"/>
-    <text x="778" y="105" fill="#a7f3d0" font-size="13" font-weight="700" text-anchor="middle">RESULT</text>
-    <text x="778" y="136" fill="#ffffff" font-size="25" font-weight="800" text-anchor="middle">State S₁</text>
-    <text x="778" y="158" fill="#6ee7b7" font-size="11" font-weight="600" text-anchor="middle">replay-derived</text>
-  </g>
+  <line x1="518" y1="110" x2="568" y2="110" stroke="#64748b" stroke-width="2.4" marker-end="url(#arrow)"/>
 
-  <line x1="250" y1="122" x2="348" y2="122" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="568" y1="122" x2="666" y2="122" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
-  <text x="617" y="108" fill="#6ee7b7" font-size="11" font-weight="700" text-anchor="middle">REPLAY</text>
+  <!-- Commit -->
+  <rect x="586" y="68" width="124" height="84" rx="15" fill="#064e3b" stroke="#10b981" stroke-width="1.7"/>
+  <text x="648" y="101" fill="#6ee7b7" font-size="20" font-weight="800" text-anchor="middle">Commit</text>
+  <text x="648" y="125" fill="#a7f3d0" font-size="11" font-weight="600" text-anchor="middle">diff / merge</text>
+  <text x="648" y="141" fill="#a7f3d0" font-size="10.5" font-weight="600" text-anchor="middle">provenance</text>
 
-  <rect x="250" y="202" width="420" height="38" rx="19" fill="#0f172a" stroke="#334155"/>
-  <text x="460" y="227" fill="#e2e8f0" font-size="14" font-weight="700" text-anchor="middle">Result = Replay(Base, DefinitionOf(Effect))</text>
-
-  <text x="48" y="278" fill="#94a3b8" font-size="12" font-weight="750" letter-spacing="1.8">GOVERNANCE PLANE · IMMUTABLE GRAPH</text>
-
-  <g filter="url(#shadow)">
-    <rect x="48" y="302" width="154" height="78" rx="15" fill="#0f172a" stroke="#60a5fa"/>
-    <text x="125" y="333" fill="#bfdbfe" font-size="18" font-weight="800" text-anchor="middle">Propose</text>
-    <text x="125" y="355" fill="#94a3b8" font-size="10.5" font-weight="600" text-anchor="middle">intent · rationale · source</text>
-
-    <rect x="258" y="302" width="154" height="78" rx="15" fill="#0f172a" stroke="#f59e0b"/>
-    <text x="335" y="333" fill="#fde68a" font-size="18" font-weight="800" text-anchor="middle">Verify*</text>
-    <text x="335" y="355" fill="#94a3b8" font-size="10.5" font-weight="600" text-anchor="middle">Replay + 0..n Statements</text>
-
-    <rect x="468" y="302" width="154" height="78" rx="15" fill="#0f172a" stroke="#c084fc"/>
-    <text x="545" y="333" fill="#e9d5ff" font-size="18" font-weight="800" text-anchor="middle">Decide</text>
-    <text x="545" y="355" fill="#94a3b8" font-size="10.5" font-weight="600" text-anchor="middle">accept · override · reject</text>
-
-    <rect x="678" y="302" width="194" height="78" rx="15" fill="#052e2b" stroke="#34d399"/>
-    <text x="775" y="333" fill="#a7f3d0" font-size="18" font-weight="800" text-anchor="middle">Commit?</text>
-    <text x="775" y="355" fill="#6ee7b7" font-size="10.5" font-weight="600" text-anchor="middle">accepted history only</text>
-  </g>
-
-  <line x1="212" y1="341" x2="242" y2="341" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="422" y1="341" x2="452" y2="341" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="632" y1="331" x2="662" y2="331" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
-  <path d="M622 358 C648 400 708 404 734 385" fill="none" stroke="#fb7185" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrowRed)"/>
-  <text x="671" y="410" fill="#fda4af" font-size="10.5" font-weight="650" text-anchor="middle">rejected · audit only</text>
+  <text x="380" y="194" fill="#cbd5e1" font-size="12" font-weight="700" text-anchor="middle">structured state, versioned like code</text>
 </svg>
