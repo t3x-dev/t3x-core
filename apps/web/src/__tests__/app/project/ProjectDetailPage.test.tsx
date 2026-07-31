@@ -417,7 +417,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('missing')).toHaveLength(2);
+    expect(await screen.findAllByText('missing')).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
