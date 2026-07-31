@@ -109,6 +109,28 @@ describe('T3xClient', () => {
       await expect(client.getProject('proj_123')).rejects.toThrow(T3xApiError);
     });
 
+    it('preserves structured protocol details from API errors', async () => {
+      const fn = mockFetch(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Missing transition:inspect scope',
+            details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+          },
+        },
+        403,
+        false
+      );
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_1')).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+        details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+      });
+    });
+
     it('throws with UNKNOWN code when response is not ok and success is true', async () => {
       // Edge case: HTTP 500 but body says success:true (shouldn't happen, but defensive)
       const fn = mockFetch({ success: true, data: {} }, 500, false);
@@ -630,6 +652,83 @@ describe('T3xClient', () => {
       const result = await client.listChatProviders();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('openai');
+    });
+  });
+
+  // =========================================================================
+  // Transition control plane
+  // =========================================================================
+  describe('Transition control plane', () => {
+    it('proposes a Transition through the project-scoped endpoint', async () => {
+      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'structured_yops' as const,
+        request_id: 'request:proposal:1',
+        workspace_id: 'ws_1',
+        operations: [{ set: { path: 'device/name', value: 'greenhouse' } }],
+        why: 'Rename the device.',
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('inspects one project-scoped Transition', async () => {
+      const data = { transition_id: 'trn_abc', view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.inspectTransition('proj_1', 'trn_abc')).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc'),
+        expect.objectContaining({ method: 'GET', body: undefined })
+      );
+    });
+
+    it('verifies one Transition with an explicit idempotency key', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        view: {},
+        statements: [],
+        operational_results: [],
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.verifyTransition('proj_1', 'trn_abc', { request_id: 'request:verify:1' })
+      ).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/verify'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ request_id: 'request:verify:1' }),
+        })
+      );
+    });
+
+    it('attaches only an external predicate payload and subject roles', async () => {
+      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:statement:1',
+        predicate_type: 'example.dev/review/v1',
+        predicate: { outcome: 'reviewed' },
+        subjects: ['proposal' as const],
+      };
+
+      expect(await client.attachTransitionStatement('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/statements'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
     });
   });
 

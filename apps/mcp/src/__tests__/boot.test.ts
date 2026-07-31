@@ -48,6 +48,18 @@ describe('mcp server boot', () => {
     expect(names).not.toContain('t3x_diff');
     expect(names).not.toContain('t3x_merge');
     expect(names).not.toContain('t3x_admin');
+    expect(names).not.toContain('propose_transition');
+  });
+
+  it('registers the opt-in transition toolset without changing the default surface', () => {
+    const { tools } = createMcpServer({ toolsets: ['transition'] });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'propose_transition',
+      'inspect_transition',
+      'verify_transition',
+      'attach_statement',
+    ]);
   });
 
   it('deduplicates when a toolset is listed twice', () => {

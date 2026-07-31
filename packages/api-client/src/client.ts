@@ -9,6 +9,8 @@ import type {
   ApiResponse,
   ApiSuccessResponse,
   ApplyYOpsResult,
+  AttachTransitionStatementInput,
+  AttachTransitionStatementResult,
   Branch,
   ChatInput,
   ChatProvider,
@@ -43,6 +45,7 @@ import type {
   ImportUrlInput,
   ImportUrlPreviewResult,
   ImportUrlResult,
+  InspectTransitionResult,
   Leaf,
   ListBranchesResponse,
   ListCommitsResponse,
@@ -60,6 +63,8 @@ import type {
   PlatformImportResult,
   Project,
   ProjectWithStats,
+  ProposeTransitionInput,
+  ProposeTransitionResult,
   RenameConversationInput,
   RenameConversationResult,
   ShareToken,
@@ -69,6 +74,8 @@ import type {
   UpdateMergeDraftInput,
   UpdateProjectInput,
   UpdateWebhookInput,
+  VerifyTransitionInput,
+  VerifyTransitionResult,
   Webhook,
 } from './types.js';
 
@@ -82,7 +89,8 @@ export class T3xApiError extends Error {
   constructor(
     public code: string,
     message: string,
-    public status: number
+    public status: number,
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'T3xApiError';
@@ -129,7 +137,7 @@ export class T3xClient {
 
     if (!response.ok || !data.success) {
       const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
-      throw new T3xApiError(error.code, error.message, response.status);
+      throw new T3xApiError(error.code, error.message, response.status, error.details);
     }
 
     return (data as ApiSuccessResponse<T>).data;
@@ -645,6 +653,55 @@ export class T3xClient {
 
   async commitFromDraft(input: CommitFromDraftInput): Promise<CommitFromDraftResult> {
     return this.request<CommitFromDraftResult>('POST', '/v1/commit', input);
+  }
+
+  // ============================================
+  // Transition control plane
+  // ============================================
+
+  async proposeTransition(
+    projectId: string,
+    input: ProposeTransitionInput
+  ): Promise<ProposeTransitionResult> {
+    return this.request<ProposeTransitionResult>(
+      'POST',
+      `/v1/projects/${projectId}/transitions`,
+      input
+    );
+  }
+
+  async inspectTransition(
+    projectId: string,
+    transitionId: string
+  ): Promise<InspectTransitionResult> {
+    return this.request<InspectTransitionResult>(
+      'GET',
+      `/v1/projects/${projectId}/transitions/${transitionId}`
+    );
+  }
+
+  async verifyTransition(
+    projectId: string,
+    transitionId: string,
+    input: VerifyTransitionInput
+  ): Promise<VerifyTransitionResult> {
+    return this.request<VerifyTransitionResult>(
+      'POST',
+      `/v1/projects/${projectId}/transitions/${transitionId}/verify`,
+      input
+    );
+  }
+
+  async attachTransitionStatement(
+    projectId: string,
+    transitionId: string,
+    input: AttachTransitionStatementInput
+  ): Promise<AttachTransitionStatementResult> {
+    return this.request<AttachTransitionStatementResult>(
+      'POST',
+      `/v1/projects/${projectId}/transitions/${transitionId}/statements`,
+      input
+    );
   }
 
   // ============================================
