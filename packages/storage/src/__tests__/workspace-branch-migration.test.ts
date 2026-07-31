@@ -95,7 +95,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -111,6 +111,7 @@ describe('workspace and Transition schema migrations', () => {
 
     try {
       await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_command_receipts;
         DROP TABLE IF EXISTS transition_statement_memberships;
         DROP TABLE IF EXISTS transition_proposal_memberships;
         DROP TABLE IF EXISTS transition_decision_ledger;
@@ -151,7 +152,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
     } finally {
       await testDb.cleanup();
     }
@@ -187,7 +188,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
     } finally {
       await testDb.cleanup();
     }
@@ -263,7 +264,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
     } finally {
       await testDb.cleanup();
     }
@@ -312,7 +313,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
     } finally {
       await testDb.cleanup();
     }
@@ -323,6 +324,7 @@ describe('workspace and Transition schema migrations', () => {
 
     try {
       await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_command_receipts;
         DROP TABLE IF EXISTS transition_statement_memberships;
         DROP TABLE IF EXISTS transition_proposal_memberships;
         UPDATE _schema_version
@@ -354,7 +356,35 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(57);
+      expect(schemaVersion?.version).toBe(58);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs command receipts when upgrading from v57', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_command_receipts;
+        UPDATE _schema_version
+        SET version = 57, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [table] = await testDb.sql<Array<{ receipts: string | null }>>`
+        SELECT to_regclass('transition_command_receipts')::text AS receipts
+      `;
+      expect(table?.receipts).toBe('transition_command_receipts');
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version FROM _schema_version WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(58);
     } finally {
       await testDb.cleanup();
     }

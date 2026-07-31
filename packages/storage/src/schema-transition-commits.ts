@@ -150,6 +150,64 @@ export const transitionStatementMemberships = pgTable(
   ]
 );
 
+/**
+ * Append-only idempotency receipt for trusted Transition commands.
+ *
+ * A receipt binds an authenticated application request to the immutable object
+ * it produced. It is neither protocol identity nor repository authority, and
+ * deliberately carries no mutable lifecycle status.
+ */
+export const transitionCommandReceipts = pgTable(
+  'transition_command_receipts',
+  {
+    transitionId: text('transition_id')
+      .notNull()
+      .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    resultKind: text('result_kind').notNull(),
+    resultDigest: text('result_digest')
+      .notNull()
+      .references(() => transitionObjects.digest),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.projectId,
+        table.transitionId,
+        table.actorKind,
+        table.actorId,
+        table.requestId,
+      ],
+    }),
+    index('idx_transition_command_receipts_result').on(
+      table.projectId,
+      table.transitionId,
+      table.resultDigest
+    ),
+    check('transition_command_receipts_action_check', sql`${table.action} IN ('decide', 'commit')`),
+    check(
+      'transition_command_receipts_actor_kind_check',
+      sql`${table.actorKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'transition_command_receipts_result_kind_check',
+      sql`${table.resultKind} IN ('decision', 'commit')`
+    ),
+    check(
+      'transition_command_receipts_action_result_check',
+      sql`(${table.action} = 'decide' AND ${table.resultKind} = 'decision') OR (${table.action} = 'commit' AND ${table.resultKind} = 'commit')`
+    ),
+  ]
+);
+
 /** Project membership for immutable CommitV2 objects. Refs remain separate. */
 export const transitionCommits = pgTable(
   'transition_commits',
@@ -257,6 +315,7 @@ export type TransitionObjectRecord = typeof transitionObjects.$inferSelect;
 export type TransitionProposalMembershipRecord = typeof transitionProposalMemberships.$inferSelect;
 export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
+export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionDecisionAuthorizationRecord =
   typeof transitionDecisionAuthorizations.$inferSelect;

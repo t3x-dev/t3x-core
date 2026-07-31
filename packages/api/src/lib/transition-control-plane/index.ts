@@ -1,4 +1,4 @@
-import type { ProposalStatement } from '@t3x-dev/core';
+import type { ProjectionCapabilityContext, ProposalStatement } from '@t3x-dev/core';
 import {
   buildReplayVerificationStatement,
   describeTransitionObject,
@@ -15,6 +15,7 @@ import {
   digestTransitionRequestCanonicalJson,
   findTransitionProposalByRequest,
   findTransitionStatementsByRequest,
+  getTransitionPolicyBinding,
   recordTransitionStatementMembership,
   resolveTransitionProposalGraph,
   TransitionRequestConflictError,
@@ -24,6 +25,7 @@ import {
 import {
   CORE_PREDICATE_TYPES,
   canonicalizeProtocolValue,
+  type DecisionStatement,
   type Effect,
   EffectClaimFalseError,
   type MutationDriverRegistry,
@@ -145,6 +147,8 @@ export interface TransitionControlPlaneView {
     refHead: string | null;
     effectDigest: string;
     proposalDigest: string;
+    statementDigests: string[];
+    policyDigest: string | null;
   };
   transition: TransitionViewV1;
   statements: Array<{
@@ -294,6 +298,7 @@ export async function proposeTransition(input: {
         db: input.db,
         projectId: input.projectId,
         transitionId: existing.transitionId,
+        actor: input.actor,
       }),
       reused: true,
     };
@@ -321,6 +326,7 @@ export async function proposeTransition(input: {
       db: input.db,
       projectId: input.projectId,
       transitionId: created.membership.transitionId,
+      actor: input.actor,
     }),
     reused: created.reused,
   };
@@ -330,8 +336,23 @@ export async function inspectTransition(input: {
   db: AnyDB;
   projectId: string;
   transitionId: string;
+  actor?: ActorRef;
+  decision?: DecisionStatement;
 }): Promise<TransitionControlPlaneView> {
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
+  const policyBinding = await getTransitionPolicyBinding(
+    input.db,
+    input.projectId,
+    graph.membership.refName
+  );
+  const capabilityContext: ProjectionCapabilityContext | undefined =
+    input.actor === undefined || policyBinding === null
+      ? undefined
+      : {
+          actorContext: { actor: input.actor },
+          policy: policyBinding.policy,
+          policyResource: policyBinding.resource,
+        };
   const transition = projectTransitionView({
     mode: 'transition',
     effect: graph.effect,
@@ -342,6 +363,8 @@ export async function inspectTransition(input: {
     })),
     observationScope: REPOSITORY_SCOPE,
     objectIntegrity: 'verified',
+    ...(input.decision === undefined ? {} : { decision: input.decision }),
+    ...(capabilityContext === undefined ? {} : { capabilityContext }),
   });
   return {
     transitionId: graph.membership.transitionId,
@@ -356,6 +379,10 @@ export async function inspectTransition(input: {
       refHead: graph.membership.refHead,
       effectDigest: graph.membership.effectDigest,
       proposalDigest: graph.membership.proposalDigest,
+      statementDigests: graph.observations.map(
+        (observation) => observation.membership.statementDigest
+      ),
+      policyDigest: policyBinding?.resource.digest ?? null,
     },
     transition,
     statements: graph.observations.map((observation) => ({
@@ -463,6 +490,7 @@ export async function verifyTransition(input: {
   projectId: string;
   transitionId: string;
   requestId: string;
+  actor?: ActorRef;
   options?: TransitionControlPlaneOptions;
 }): Promise<{
   view: TransitionControlPlaneView;
