@@ -326,6 +326,32 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('repository sources', () => {
+    it('gets project-scoped conversation evidence with pagination', async () => {
+      const source = {
+        availability: { mode: 'available', reasons: [] },
+        source: { type: 'conversation', id: 'conv/1', project_id: 'proj/1' },
+        turns: { items: [], total: 0, limit: 20, offset: 5, completeness: 'complete' },
+        revisions: [],
+        evidence_selection: { mode: 'not_recorded', turn_hashes: [] },
+        referring_commits: [],
+      };
+      const fn = mockFetch(successResponse(source));
+      const client = createTestClient(fn);
+
+      const result = await client.getConversationSourceEvidence('proj/1', 'conv/1', {
+        limit: 20,
+        offset: 5,
+      });
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+
+      expect(result).toEqual(source);
+      expect(url).toContain('/v1/projects/proj%2F1/sources/conversations/conv%2F1');
+      expect(url).toContain('limit=20');
+      expect(url).toContain('offset=5');
+    });
+  });
+
   // =========================================================================
   // Turns
   // =========================================================================

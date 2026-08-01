@@ -409,6 +409,13 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
+// Repository-owned source/evidence read projection
+export {
+  type ConversationSourceCommitReference,
+  type ConversationSourceEvidenceRecord,
+  type GetConversationSourceEvidenceInput,
+  getConversationSourceEvidence,
+} from './source-evidence';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,

@@ -23,6 +23,7 @@ import type {
   ContextParams,
   ContextResult,
   Conversation,
+  ConversationSourceEvidence,
   CreateBranchInput,
   CreateCommitInput,
   CreateConversationInput,
@@ -257,6 +258,28 @@ export class T3xClient {
     input: RenameConversationInput
   ): Promise<RenameConversationResult> {
     return this.request<RenameConversationResult>('PATCH', `/v1/conversations/${id}/rename`, input);
+  }
+
+  // ============================================
+  // Repository Sources
+  // ============================================
+
+  async getConversationSourceEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: PaginationParams
+  ): Promise<ConversationSourceEvidence> {
+    return this.request<ConversationSourceEvidence>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/sources/conversations/${encodeURIComponent(
+        conversationId
+      )}`,
+      undefined,
+      {
+        limit: params?.limit,
+        offset: params?.offset,
+      }
+    );
   }
 
   // ============================================
