@@ -31,6 +31,7 @@ export * from './projects';
 export * from './recipes';
 export * from './relations';
 export * from './runner';
+export * from './sourceEvidence';
 export * from './topics';
 export * from './treeDiff';
 export * from './trees';
