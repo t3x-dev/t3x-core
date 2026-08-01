@@ -50,7 +50,7 @@ test('release surface keeps candidate packages restricted until promoted', () =>
 test('README mirrors the public alpha surface instead of the old broad package list', () => {
   const readme = readText('README.md');
 
-  assert.match(readme, /The current npm release surface is intentionally narrow/);
+  assert.match(readme, /Its published npm surface is intentionally narrow/);
   assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha \|/);
   assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| public alpha \|/);
   assert.match(readme, /\| \[`@t3x-dev\/yschema`\]\(packages\/yschema\/\) \| public alpha \|/);

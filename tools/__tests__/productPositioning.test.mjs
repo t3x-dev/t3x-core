@@ -12,9 +12,10 @@ test('root README presents the product before its internal architecture', () => 
   const readme = readText('README.md');
 
   assert.match(readme, /Version control for structured state\./);
-  assert.match(readme, /Review, validate, and commit changes made by people or agents\./);
+  assert.match(readme, /Review, validate, and commit changes from people and agents\./);
+  assert.match(readme, /control plane for structured state changes/i);
   assert.match(readme, /Review before commit\./);
-  assert.match(readme, /One path for humans and agents\./);
+  assert.match(readme, /One path for people and agents\./);
   assert.match(readme, /remain internal\s+or preview surfaces and may change/);
   assert.doesNotMatch(readme, /## Architecture/);
   assert.doesNotMatch(readme, /## The Transition model/);
