@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Version control for structured state.</strong><br />
-  <sub>Review, validate, and commit changes made by people or agents.</sub>
+  <sub>Review, validate, and commit changes from people and agents.</sub>
 </p>
 
 <p align="center">
@@ -21,9 +21,13 @@
   <img src="https://img.shields.io/badge/Node.js-20%2B-10b981" alt="Node.js 20 or newer" />
 </p>
 
-T3X is a workspace for changing YAML and other structured state. It can render
-that state as a useful artifact—such as a technical PRD—while keeping each
-change, its source, its checks, and its decision together.
+T3X is a control plane for structured state changes. It gives people and agents
+one place to propose, validate, review, and commit changes—with provenance and
+reversible history.
+
+State can be YAML or another machine-readable artifact. T3X can render it into
+a human-facing form, such as a technical PRD, without losing the structured
+source of truth.
 
 <p align="center">
   <img src=".github/assets/t3x-prd-render.png" alt="A technical Agent Release Control PRD rendered from structured state in T3X" width="960" />
@@ -31,8 +35,8 @@ change, its source, its checks, and its decision together.
 
 ## Change as a verifiable object
 
-A transition connects one committed state to the next without losing why it
-happened, where it came from, or what was checked.
+Each transition binds the previous state and proposed change to the resulting
+state, together with its source, rationale, checks, and decision.
 
 <p align="center">
   <img src=".github/assets/t3x-state-transition.png" alt="A transition connecting one version of structured state to the next" width="960" />
@@ -40,8 +44,8 @@ happened, where it came from, or what was checked.
 
 ## Review before history moves
 
-People and agents use the same review path: inspect the diff, read the source,
-run checks, and decide.
+People and agents follow the same review path: propose a change, inspect the
+diff, run checks, and decide whether it advances history.
 
 <p align="center">
   <img src=".github/assets/t3x-release-agent-review.png" alt="Reviewing a structured Release Agent state transition in T3X" width="960" />
@@ -49,21 +53,21 @@ run checks, and decide.
 
 ## Features
 
-- **Review before commit.** See the exact state diff before history moves.
-- **Deterministic changes.** Apply ordered, fail-fast YAML operations with
+- **Review before commit.** Inspect the exact state diff before history moves.
+- **Deterministic transitions.** Apply ordered, fail-fast YAML operations with
   [YOps](packages/yops/).
-- **Validation that stays visible.** Run [YSchema](packages/yschema/) and
-  external checks without hiding failures or overrides.
-- **Traceable decisions.** Keep source, explanation, actor, and evidence with
-  the change they belong to.
-- **Useful history.** Compare, branch, merge, and revert structured state
+- **Checks that stay attached.** Run [YSchema](packages/yschema/) and external
+  checks without hiding failures or overrides.
+- **Decisions with provenance.** Keep source, rationale, actor, and evidence
+  connected to the change they describe.
+- **Reversible history.** Compare, branch, merge, and revert structured state
   without erasing how it changed.
-- **One path for humans and agents.** Agent proposals stay reviewable like
+- **One path for people and agents.** Agent proposals remain as reviewable as
   human changes.
 
 ## Quickstart
 
-Run the local public alpha:
+Run the public alpha locally:
 
 ```bash
 npx -p @t3x-dev/local t3x-local
@@ -91,7 +95,8 @@ npm install @t3x-dev/yops @t3x-dev/yschema
 ```
 
 - **YOps** applies declarative YAML changes.
-- **YSchema** validates structured state and can produce YOps-compatible fixes.
+- **YSchema** validates schema-backed structured state and can produce
+  YOps-compatible fixes.
 
 Both packages can be used without the T3X application.
 
@@ -110,7 +115,7 @@ beyond localhost.
 
 ## Availability
 
-T3X is a public alpha. The current npm release surface is intentionally narrow:
+T3X is in public alpha. Its published npm surface is intentionally narrow:
 
 | Package | Status | Use |
 |:--|:--|:--|
