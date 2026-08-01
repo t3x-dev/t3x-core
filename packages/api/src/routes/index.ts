@@ -48,6 +48,7 @@ export { runsRoutes } from './runs.openapi';
 export { searchRoutes } from './search.openapi';
 export { shareRoutes } from './share.openapi';
 export { skillArtifactRoutes } from './skill-artifacts.openapi';
+export { sourceEvidenceRoutes } from './source-evidence.openapi';
 export { sourceTextRevisionRoutes } from './source-text-revisions.openapi';
 export { statusRoutes } from './status.openapi';
 export { templatesRoutes } from './templates.openapi';

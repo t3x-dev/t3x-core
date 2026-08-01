@@ -77,6 +77,7 @@ import {
   searchRoutes,
   shareRoutes,
   skillArtifactRoutes,
+  sourceEvidenceRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
@@ -206,6 +207,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', createTransitionControlPlaneRoutes(options?.transitionControlPlane));
   api.route('/', shareRoutes);
   api.route('/', sourceTextRevisionRoutes);
+  api.route('/', sourceEvidenceRoutes);
   api.route('/', comparisonsRoutes);
   api.route('/', templatesRoutes);
   api.route('/', webhooksRoutes);
@@ -270,6 +272,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Projects', description: 'Project management' },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
+      { name: 'Sources', description: 'Repository-owned source and evidence reads' },
       { name: 'Workspaces', description: 'Workspace review and YOps handoff workflows' },
       {
         name: 'Workspace Validation',
