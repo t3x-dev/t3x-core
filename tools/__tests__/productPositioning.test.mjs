@@ -8,23 +8,30 @@ function readText(path) {
   return readFileSync(new URL(path, root), 'utf8');
 }
 
-test('root README uses the approved structured-state positioning', () => {
+test('root README presents the product before its internal architecture', () => {
   const readme = readText('README.md');
 
   assert.match(readme, /Version control for structured state\./);
-  assert.match(readme, /T3X records schema-backed YAML changes as deterministic YOps patches/);
-  assert.match(readme, /Source -> YOps -> Commit/);
-  assert.match(readme, /old YAML \+ YOps -> new YAML/);
+  assert.match(readme, /Review, validate, and commit changes from people and agents\./);
+  assert.match(readme, /control plane for structured state changes/i);
+  assert.match(readme, /Review before commit\./);
+  assert.match(readme, /One path for people and agents\./);
+  assert.match(readme, /remain internal\s+or preview surfaces and may change/);
+  assert.doesNotMatch(readme, /## Architecture/);
+  assert.doesNotMatch(readme, /## The Transition model/);
+  assert.doesNotMatch(readme, /State, Effect, Statement, and CommitV2/);
+  assert.doesNotMatch(readme, /Result = Replay\(Base, DefinitionOf\(Effect\)\)/);
   assert.doesNotMatch(readme, /Git for structured AI work/);
   assert.doesNotMatch(readme, /T3X is a standalone engine for YAML-structured context/);
 });
 
-test('docs README starts from the same product frame as the root README', () => {
+test('docs README starts from the same plain product frame as the root README', () => {
   const docsReadme = readText('docs/README.md');
 
-  assert.match(docsReadme, /Structured YAML is easy to change and hard to govern/);
-  assert.match(docsReadme, /deterministic YOps patches/);
-  assert.match(docsReadme, /commits, diffs, merges, provenance, and generated outputs/);
+  assert.match(docsReadme, /version control for structured state/i);
+  assert.match(docsReadme, /review,\s+validate, and commit changes/i);
+  assert.doesNotMatch(docsReadme, /Result = Replay\(Base, DefinitionOf\(Effect\)\)/);
+  assert.doesNotMatch(docsReadme, /Propose -> Verify\* -> Decide -> Commit\?/);
 });
 
 test('public first-impression surfaces avoid the retired meaning-first frame', () => {

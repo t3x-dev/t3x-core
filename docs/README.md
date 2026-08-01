@@ -1,8 +1,11 @@
 # T3X Documentation
 
-Structured YAML is easy to change and hard to govern. T3X records
-schema-backed YAML changes as deterministic YOps patches, then versions the
-result with commits, diffs, merges, provenance, and generated outputs.
+T3X is version control for structured state. It helps people and agents review,
+validate, and commit changes without losing their source, checks, decisions, or
+history.
+
+YOps and YSchema remain independently useful engines. Their detailed package
+documentation lives next to the code.
 
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source
@@ -22,6 +25,7 @@ repository.
 - [Alpha limitations](limitations.md)
 - [Stability summary](stability.md)
 - [Stability policy](release/stability-policy.md)
+- [Transition conformance](../packages/transition/conformance/README.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
 
