@@ -15,11 +15,9 @@ test.describe('Error Scenarios', () => {
   test('ES-01: Invalid project shows error', async ({ page }) => {
     await page.goto('/project/proj_invalid_nonexistent');
 
-    // Should show error message
-    const errorMsg = page
-      .locator('text=Project not found')
-      .or(page.locator('text=/not found|error|404/i'));
-    await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByText('This project is no longer available.', { exact: true })
+    ).toBeVisible({ timeout: 15000 });
   });
 
   // ES-02: Invalid conversation ID shows error
@@ -36,10 +34,9 @@ test.describe('Error Scenarios', () => {
   test('ES-03: Invalid leaf shows error', async ({ page }) => {
     await page.goto('/project/proj_invalid/leaf/leaf_invalid');
 
-    const errorMsg = page
-      .locator('text=/not found|error|404/i')
-      .or(page.locator('text=Project not found'));
-    await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByText('This leaf is no longer available.', { exact: true })
+    ).toBeVisible({ timeout: 15000 });
   });
 
   // ES-04: Invalid merge ID shows error
@@ -69,14 +66,13 @@ test.describe('Error Scenarios', () => {
     // First visit an error page
     await page.goto('/project/proj_nonexistent_recovery');
 
-    const errorMsg = page
-      .locator('text=/not found|error|404/i')
-      .or(page.locator('text=Project not found'));
-    await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByText('This project is no longer available.', { exact: true })
+    ).toBeVisible({ timeout: 15000 });
 
     // Navigate to home — should work normally
     await page.goto('/');
-    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
   });
 

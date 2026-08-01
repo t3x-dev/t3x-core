@@ -5,7 +5,9 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 /**
  * Commit-lock flow e2e — tests that once a conversation is committed the UI
@@ -59,13 +61,6 @@ function validOps(turnHash: string) {
   ];
 }
 
-async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
-  }
-}
-
 /**
  * Click Extract. The workspace may start collapsed on chat routes.
  * If the first click races the activeProjectId backfill, retry once.
@@ -103,6 +98,10 @@ test.describe('Commit-lock flow', () => {
   let projectId: string;
   let conversationId: string;
   let userTurnHash: string;
+
+  test.beforeEach(async ({ page }) => {
+    await mockConfiguredExtractionModel(page);
+  });
 
   test.beforeAll(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Commit Lock E2E ${Date.now()}`));
@@ -218,12 +217,66 @@ test.describe('Commit-lock flow', () => {
 
   // ── LOCK-03: Refresh lock persistence ─────────────────────────────────────
 
-  test.skip(
-    'LOCK-03: refresh after commit → lock state persists across reload',
-    async ({ page: _page }) => {
-      // Requires a real server-side commit, not the mocked commit endpoint
-      // used in LOCK-01. Conversation committed_at hydration is covered by
-      // API and query-level tests.
+  test('LOCK-03: refresh after commit → lock state persists across reload', async ({
+    page,
+    request,
+  }) => {
+    const { projectId: reloadProjectId } = await createTestProject(
+      request,
+      `Commit Lock Reload E2E ${Date.now()}`
+    );
+
+    try {
+      const reloadConversationId = await createTestConversation(
+        request,
+        reloadProjectId,
+        'E2E Commit Lock Reload'
+      );
+      const reloadTurnHash = await createTestTurn(
+        request,
+        reloadProjectId,
+        reloadConversationId,
+        'user',
+        USER_CONTENT
+      );
+
+      await page.route(EXTRACT_URL, async (route: Route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: { kind: 'ok', ops: validOps(reloadTurnHash), warnings: [] },
+          }),
+        });
+      });
+
+      await page.goto(`/chat/${reloadConversationId}`);
+      await expect(page.getByText(USER_CONTENT).first()).toBeVisible({ timeout: 10_000 });
+      await openPanelAndClickExtract(page);
+      await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
+      await applyDraftIfPresent(page);
+
+      await page.getByTestId('workspace-action-commit').click();
+      await expect(page.getByTestId('commit-dialog')).toBeVisible({ timeout: 3_000 });
+      const commitResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' && response.url().endsWith('/api/v1/commits')
+      );
+      await page.getByTestId('commit-dialog-confirm').click();
+      expect((await commitResponsePromise).ok()).toBe(true);
+      await expect(page.getByRole('status', { name: 'Commit sealed' })).toBeVisible({
+        timeout: 5_000,
+      });
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByText(USER_CONTENT).first()).toBeVisible({ timeout: 10_000 });
+      await expandWorkspaceIfCollapsed(page);
+      await expect(page.getByTestId('extract-button')).toBeDisabled({ timeout: 5_000 });
+      await expect(page.getByText('Committed conversations are read-only.')).toBeVisible();
+      await expect(page.getByTestId('workspace-action-commit')).toBeDisabled();
+    } finally {
+      await cleanupProject(request, reloadProjectId).catch(() => {});
     }
-  );
+  });
 });

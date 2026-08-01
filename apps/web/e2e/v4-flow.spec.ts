@@ -1,3 +1,4 @@
+import { API_BASE } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -22,7 +23,7 @@ test.describe('V4 WebUI Flow', () => {
 
   test.beforeAll(async ({ request }) => {
     // Create a test project via API
-    const response = await request.post('http://localhost:8000/api/v1/projects', {
+    const response = await request.post(`${API_BASE}/projects`, {
       data: { name: TEST_PROJECT_NAME },
     });
     const data = await response.json();
@@ -30,7 +31,7 @@ test.describe('V4 WebUI Flow', () => {
     projectId = data.data.project_id;
 
     // Create a frame-based commit via API
-    const commitResponse = await request.post('http://localhost:8000/api/v1/commits', {
+    const commitResponse = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
@@ -123,7 +124,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('3. Create leaf from commit', async ({ request }) => {
     // Create leaf via API
-    const response = await request.post('http://localhost:8000/api/v1/leaves', {
+    const response = await request.post(`${API_BASE}/leaves`, {
       data: {
         commit_hash: commitHash,
         type: 'deploy_agent',
@@ -159,7 +160,7 @@ test.describe('V4 WebUI Flow', () => {
   test('4. Pin/unpin leaf', async ({ request }) => {
     // Pin the leaf via API
     const pinResponse = await request.post(
-      `http://localhost:8000/api/v1/projects/${projectId}/pins`,
+      `${API_BASE}/projects/${projectId}/pins`,
       {
         data: {
           type: 'leaf',
@@ -177,7 +178,7 @@ test.describe('V4 WebUI Flow', () => {
 
     // Verify duplicate pin is rejected
     const duplicateResponse = await request.post(
-      `http://localhost:8000/api/v1/projects/${projectId}/pins`,
+      `${API_BASE}/projects/${projectId}/pins`,
       {
         data: {
           type: 'leaf',
@@ -191,13 +192,13 @@ test.describe('V4 WebUI Flow', () => {
     expect(duplicateData.error.code).toBe('DUPLICATE_PIN');
 
     // Unpin (delete) the pin
-    const unpinResponse = await request.delete(`http://localhost:8000/api/v1/pins/${pinId}`);
+    const unpinResponse = await request.delete(`${API_BASE}/pins/${pinId}`);
     const unpinData = await unpinResponse.json();
     expect(unpinData.success).toBe(true);
     expect(unpinData.data.deleted).toBe(true);
 
     // Re-pin for next tests
-    await request.post(`http://localhost:8000/api/v1/projects/${projectId}/pins`, {
+    await request.post(`${API_BASE}/projects/${projectId}/pins`, {
       data: {
         type: 'leaf',
         ref_id: leafId,
@@ -210,7 +211,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('5. Export context works', async ({ request }) => {
     // Create a conversation for export test
-    const convResponse = await request.post('http://localhost:8000/api/v1/conversations', {
+    const convResponse = await request.post(`${API_BASE}/conversations`, {
       data: {
         project_id: projectId,
         title: 'Export Test Conversation',
@@ -222,7 +223,7 @@ test.describe('V4 WebUI Flow', () => {
 
     // Test JSON export
     const jsonExport = await request.get(
-      `http://localhost:8000/api/v1/conversations/${conversationId}/context-export?format=json`
+      `${API_BASE}/conversations/${conversationId}/context-export?format=json`
     );
 
     expect(jsonExport.ok()).toBe(true);
@@ -239,7 +240,7 @@ test.describe('V4 WebUI Flow', () => {
 
     // Test Markdown export
     const mdExport = await request.get(
-      `http://localhost:8000/api/v1/conversations/${conversationId}/context-export?format=markdown`
+      `${API_BASE}/conversations/${conversationId}/context-export?format=markdown`
     );
 
     expect(mdExport.ok()).toBe(true);
@@ -285,8 +286,11 @@ test.describe('V4 WebUI UI Tests', () => {
     // Wait for page content to load
     await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
-    // Basic navigation test — chat sidebar should be visible
-    const sidebar = page.getByRole('complementary', { name: /chat navigation/i });
-    await expect(sidebar).toBeVisible({ timeout: 10000 });
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
+    await expect(navigation).toBeVisible({ timeout: 10000 });
+    await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/settings'
+    );
   });
 });

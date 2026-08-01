@@ -29,7 +29,7 @@ test.describe('API-WebUI Sync', () => {
   test('AS-01: Create reflects in UI', async ({ page, request }) => {
     // Load the home page first
     await page.goto('/');
-    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     // Create a project via API while page is open
@@ -39,7 +39,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Refresh page to check if project appears
     await page.reload();
-    const projectEntry = page.locator(`text=${projectName}`);
+    const projectEntry = page.locator('article').filter({ hasText: projectName }).first();
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
   });
 
@@ -50,7 +50,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Load page and verify project is visible
     await page.goto('/');
-    const projectEntry = page.locator(`text=${projectName}`);
+    const projectEntry = page.locator('article').filter({ hasText: projectName }).first();
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
 
     // Delete via API
@@ -58,7 +58,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Reload and verify removal
     await page.reload();
-    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
     await expect(projectEntry).toBeHidden({ timeout: 10000 });
   });
@@ -74,11 +74,11 @@ test.describe('API-WebUI Sync', () => {
 
     // Load page and verify all projects appear
     await page.goto('/');
-    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
+    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     for (const name of names) {
-      const entry = page.locator(`text=${name}`);
+      const entry = page.locator('article').filter({ hasText: name }).first();
       await expect(entry).toBeVisible({ timeout: 15000 });
     }
   });

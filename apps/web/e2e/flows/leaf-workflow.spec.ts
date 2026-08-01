@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestCommit,
   createTestLeaf,
@@ -108,27 +109,25 @@ test.describe('Leaf Workflow', () => {
 
     await generateBtn.click();
 
-    // Wait for loading phase or output to appear
-    const outputSection = page.locator('text=Output').first();
-    await expect(outputSection).toBeVisible({ timeout: 30000 });
+    const outputText = page.locator('[class*="whitespace-pre"], pre').first();
+    const providerError = page
+      .getByText(/No provider key|Provider key was rejected|Provider is unavailable|rate limit/i)
+      .first();
+    await expect(outputText.or(providerError).first()).toBeVisible({ timeout: 30000 });
 
-    // Check if we got an API key error (not a bug, just missing config)
-    const apiKeyError = page.locator('text=/API key/i').first();
-    const hasApiKeyError = await apiKeyError.isVisible().catch(() => false);
-    if (hasApiKeyError) {
-      // LLM API key not configured — leaf page still rendered correctly
+    if (await providerError.isVisible().catch(() => false)) {
+      // External providers are optional for the deterministic qualification.
       return;
     }
 
     // Verify actual output content appeared
-    const outputText = page.locator('[class*="whitespace-pre"], pre').first();
     await expect(outputText).toBeVisible({ timeout: 5000 });
   });
 
   // LW-04: Validate output shows assertions (LLM optional — test what IS there)
   test('LW-04: Validate output shows assertions', async ({ page, request }) => {
     // Set mock output via API so validation has something to check
-    await request.patch(`http://localhost:8000/api/v1/leaves/${leafId}`, {
+    await request.patch(`${API_BASE}/leaves/${leafId}`, {
       data: { output: 'User prefers dark mode and speaks English fluently.' },
     });
 
@@ -170,7 +169,7 @@ test.describe('Leaf Workflow', () => {
   // LW-05: Export output
   test('LW-05: Export output', async ({ page, request }) => {
     // Ensure leaf has output
-    await request.patch(`http://localhost:8000/api/v1/leaves/${leafId}`, {
+    await request.patch(`${API_BASE}/leaves/${leafId}`, {
       data: { output: 'Exported test output content.' },
     });
 

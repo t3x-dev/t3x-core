@@ -89,6 +89,7 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Open commit details')).toBeInTheDocument();
     });
+    await flushGuidedClick();
 
     fireEvent.click(screen.getByRole('button', { name: 'Floating Details' }));
     expect(onDone).not.toHaveBeenCalled();

@@ -5,7 +5,9 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 /**
  * Gold-edit flow e2e — tests human editing of extracted YAML.
@@ -93,13 +95,6 @@ function mockYopsAppend(page: import('@playwright/test').Page) {
   });
 }
 
-async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
-  }
-}
-
 /**
  * Click Extract. The workspace may start collapsed on chat routes.
  *
@@ -148,7 +143,8 @@ test.describe('Gold-edit flow', () => {
   // to the real yops log, so reusing the conversation across tests would
   // replay `define trip` twice and halt with ALREADY_EXISTS before the
   // gold edit runs (B-10, audit 2026-04-15).
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    await mockConfiguredExtractionModel(page);
     ({ projectId } = await createTestProject(request, `Gold Edit E2E ${Date.now()}`));
     conversationId = await createTestConversation(request, projectId, 'E2E Gold Edit');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', USER_CONTENT);
@@ -300,15 +296,14 @@ test.describe('Gold-edit flow', () => {
     const tripNodeText = afterPanel.getByText('trip:', { exact: false }).first();
     await tripNodeText.hover();
 
-    // Handle the window.prompt dialog for new child name
-    page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('prompt');
-      await dialog.accept('notes');
-    });
-
     // Click the add-child button (first one visible = trip node row)
     const addChildBtn = page.getByTestId('add-child-button').first();
     await addChildBtn.click();
+
+    const addNodeDialog = page.getByRole('dialog');
+    await expect(addNodeDialog).toContainText('Add Node');
+    await addNodeDialog.getByLabel('Node name').fill('notes');
+    await addNodeDialog.getByRole('button', { name: 'Add Node' }).click();
 
     // Verify the new 'notes' child node appears in the AfterPanel
     await expect(afterPanel).toContainText('notes', { timeout: 5_000 });

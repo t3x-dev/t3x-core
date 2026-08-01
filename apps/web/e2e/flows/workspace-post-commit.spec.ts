@@ -1,11 +1,10 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import {
+  API_BASE,
   cleanupProject,
   createTestProject,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-
-const API_BASE = 'http://localhost:8000/api/v1';
 
 const WORKSPACE_TREE = [
   {

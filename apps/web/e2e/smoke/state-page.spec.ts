@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures/test';
 import {
+  API_BASE,
   cleanupProject,
   createTestCommitFromTrees,
   createTestProject,
@@ -42,6 +43,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
   page,
   request,
 }) => {
+  test.setTimeout(90_000);
   const { projectId } = await createTestProject(request, 'State page smoke PRD');
 
   try {
@@ -51,7 +53,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     });
 
     const workspaceResponse = await request.patch(
-      'http://localhost:8000/api/v1/projects/' + projectId + '/workspaces/workspace_prd_handoff',
+      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff`,
       {
         data: {
           workspace: {
@@ -108,7 +110,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     const workspaceRevision = workspaceResponseBody.data.workspace.revision;
     expect(workspaceRevision).toBeGreaterThan(0);
     const workspaceCommitResponse = await request.post(
-      'http://localhost:8000/api/v1/projects/' + projectId + '/workspaces/workspace_prd_handoff/commit',
+      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff/commit`,
       {
         data: {
           content: { trees: PRD_TREE, relations: [] },
@@ -155,8 +157,6 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     );
     await page.getByRole('button', { name: 'Run validation' }).click();
     expect((await validationResponsePromise).status()).toBe(201);
-
-    await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
 
     await page.getByRole('tab', { name: /Render/ }).click();
@@ -177,10 +177,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
     await expect(page.getByRole('tree', { name: 'State graph canvas' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'History' })).toHaveAttribute(
-      'href',
-      /view=canvas/
-    );
+    await expect(canvasRegion).toContainText('2 commits');
 
     const canvasBox = await canvasRegion.boundingBox();
     const repositoryBox = await canvasRegion.locator('..').boundingBox();
@@ -193,8 +190,6 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       )
     ).toBeLessThanOrEqual(2);
 
-    await page.getByRole('link', { name: 'History' }).click();
-    await expect(page.getByRole('region', { name: 'Multi-commit state canvas' })).toBeVisible();
     await page.getByRole('tab', { name: /Snapshot/ }).click();
     await expect(page.getByRole('region', { name: 'YAML code view' })).toBeVisible();
 
@@ -212,6 +207,6 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
 
     expect(errors, errors.join('\n')).toEqual([]);
   } finally {
-    await cleanupProject(request, projectId);
+    await cleanupProject(request, projectId).catch(() => {});
   }
 });

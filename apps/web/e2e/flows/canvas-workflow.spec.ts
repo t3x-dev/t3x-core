@@ -66,32 +66,18 @@ test.describe('Canvas Workflow', () => {
     await expect(contentCount.first()).toBeVisible({ timeout: 5000 });
   });
 
-  // CW-03: Mode switch (editor/execution) — skip explicitly if unavailable (#3)
-  test('CW-03: Mode switch', async ({ page }) => {
+  // CW-03: Current canvas toolbar remains interactive after fitting the graph.
+  test('CW-03: Fit View keeps the commit graph operational', async ({ page }) => {
     const canvas = new CanvasPage(page);
     await canvas.goto(projectId);
     await canvas.waitForLoad();
 
-    const executionBtn = page.locator('button:has-text("Execution")');
-    const hasToggle = await executionBtn
-      .first()
-      .isVisible()
-      .catch(() => false);
+    const fitView = page.locator('[title="Fit View"]:visible').first();
+    await expect(fitView).toBeVisible();
+    await fitView.click();
 
-    if (!hasToggle) {
-      test.skip(true, 'Editor/Execution mode toggle not present on this page');
-      return;
-    }
-
-    // Switch to Execution mode
-    await executionBtn.first().click();
-    const executionView = page.locator('text=Execution Monitor');
-    await expect(executionView.first()).toBeVisible({ timeout: 10000 });
-
-    // Switch back to Editor mode
-    const editorBtn = page.locator('button:has-text("Editor")');
-    await editorBtn.first().click();
-    await canvas.waitForLoad();
+    await expect(canvas.canvas).toBeVisible();
+    await expect(canvas.getNodeByHash(commitHash).first()).toBeVisible();
   });
 
   // CW-04: Canvas renders without unexpected console errors (#7, #11)

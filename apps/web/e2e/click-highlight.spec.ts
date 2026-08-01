@@ -5,7 +5,9 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 /**
  * Click-highlight e2e — verifies the YAML → chat highlight flow.
@@ -55,13 +57,6 @@ function validOps(turnHash: string) {
   ];
 }
 
-async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
-  }
-}
-
 /**
  * Click Extract. The workspace may start collapsed on chat routes.
  * If the first click races the activeProjectId backfill, retry once.
@@ -99,6 +94,10 @@ test.describe('Click-highlight flow', () => {
   let projectId: string;
   let conversationId: string;
   let userTurnHash: string;
+
+  test.beforeEach(async ({ page }) => {
+    await mockConfiguredExtractionModel(page);
+  });
 
   test.beforeAll(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Click Highlight E2E ${Date.now()}`));

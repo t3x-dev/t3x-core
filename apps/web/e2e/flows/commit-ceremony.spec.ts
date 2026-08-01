@@ -5,7 +5,9 @@ import {
   createTestProject,
   createTestTurn,
 } from '../fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from '../fixtures/mock-model';
 import { expect, test } from '../fixtures/test';
+import { expandWorkspaceIfCollapsed } from '../fixtures/workspace';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
 const COMMITS_URL = '**/api/v1/commits';
@@ -39,10 +41,7 @@ function validOps(turnHash: string) {
 }
 
 async function openPanelAndClickExtract(page: Page): Promise<void> {
-  const collapsedWorkspace = page.getByTestId('yops-panel-collapsed');
-  if (await collapsedWorkspace.isVisible().catch(() => false)) {
-    await collapsedWorkspace.click();
-  }
+  await expandWorkspaceIfCollapsed(page);
 
   const extractButton = page.getByTestId('extract-button');
   await extractButton.waitFor({ state: 'visible' });
@@ -93,6 +92,8 @@ test.describe('commit ceremony', () => {
           document.documentElement?.classList.add('dark');
         });
       }
+
+      await mockConfiguredExtractionModel(page);
 
       await page.route(EXTRACT_URL, async (route: Route) => {
         await route.fulfill({
@@ -153,7 +154,7 @@ test.describe('commit ceremony', () => {
         const ceremony = page.getByRole('status', { name: 'Commit sealed' });
         await expect(ceremony).toBeVisible({ timeout: 1_000 });
         await expect(ceremony).toHaveAttribute('data-motion', 'standard');
-        await expect(page.getByTitle(COMMIT_HASH)).toContainText('1234567890ab');
+        await expect(ceremony.getByTitle(COMMIT_HASH)).toContainText('1234567890ab');
         await testInfo.attach(`commit-ceremony-desktop-${theme}`, {
           body: await page.screenshot({ fullPage: false }),
           contentType: 'image/png',
