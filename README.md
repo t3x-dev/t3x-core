@@ -21,12 +21,30 @@
   <img src="https://img.shields.io/badge/Node.js-20%2B-10b981" alt="Node.js 20 or newer" />
 </p>
 
-T3X is a workspace for changing YAML and other structured state. It keeps the
-change, its source, its checks, and its decision together—so you can inspect
-what happened before committing it and understand it later.
+T3X is a workspace for changing YAML and other structured state. It can render
+that state as a useful artifact—such as a technical PRD—while keeping each
+change, its source, its checks, and its decision together.
+
+<p align="center">
+  <img src=".github/assets/t3x-prd-render.png" alt="A technical Agent Release Control PRD rendered from structured state in T3X" width="960" />
+</p>
+
+## Change as a verifiable object
+
+A transition connects one committed state to the next without losing why it
+happened, where it came from, or what was checked.
 
 <p align="center">
   <img src=".github/assets/t3x-state-transition.png" alt="A transition connecting one version of structured state to the next" width="960" />
+</p>
+
+## Review before history moves
+
+People and agents use the same review path: inspect the diff, read the source,
+run checks, and decide.
+
+<p align="center">
+  <img src=".github/assets/t3x-release-agent-review.png" alt="Reviewing a structured Release Agent state transition in T3X" width="960" />
 </p>
 
 ## Features
@@ -42,10 +60,6 @@ what happened before committing it and understand it later.
   without erasing how it changed.
 - **One path for humans and agents.** Agent proposals stay reviewable like
   human changes.
-
-<p align="center">
-  <img src=".github/assets/t3x-release-agent-review.png" alt="Reviewing a structured Release Agent state transition in T3X" width="960" />
-</p>
 
 ## Quickstart
 
