@@ -72,7 +72,6 @@ interface CanvasWorkspaceProps {
   focusedBranch?: string;
   focusedCommitHash?: string;
   projectName: string;
-  showChatSidebarToggle?: boolean;
   stateHref?: string;
   /** Initial viewport from URL params */
   initialViewport?: { x: number; y: number; zoom: number };
@@ -94,7 +93,6 @@ function CanvasWorkspaceInner({
   focusedBranch,
   focusedCommitHash,
   projectName,
-  showChatSidebarToggle,
   stateHref,
   initialViewport,
   onViewportChange,
@@ -561,7 +559,6 @@ function CanvasWorkspaceInner({
         embedded={embedded}
         focusedBranch={focusedBranch}
         projectName={projectName}
-        showChatSidebarToggle={showChatSidebarToggle}
         stateHref={stateHref}
         onFitView={() =>
           fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })

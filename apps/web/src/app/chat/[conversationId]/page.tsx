@@ -6,6 +6,7 @@ import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import {
   isLegacyRepositorySourceLink,
   legacyRepositorySourceTarget,
@@ -204,7 +205,7 @@ function ConversationWorkbenchRoute({
 
   const continueIntroDemoToCanvas = useCallback(() => {
     if (!resolvedProjectId) return;
-    router.push(`/chat/project/${encodeURIComponent(resolvedProjectId)}/canvas?introDemo=1`);
+    router.push(`${getProjectIdCanvasPath(resolvedProjectId)}&introDemo=1`);
   }, [resolvedProjectId, router]);
 
   useEffect(() => {

@@ -25,6 +25,21 @@ export function getProjectRepoPath(project: { id?: string; name: string }): stri
   return `/${DEFAULT_OWNER_SLUG}/${toRepoSlug(project.name, project.id)}`;
 }
 
+/** Project-id entry points resolve to the canonical owner/repository URL in the route layer. */
+export function getProjectIdRepoPath(projectId: string): string {
+  return `/project/${encodeURIComponent(projectId)}`;
+}
+
+export function getProjectIdCanvasPath(projectId: string): string {
+  return `${getProjectIdRepoPath(projectId)}?view=canvas`;
+}
+
+export function getProjectIdOutputsPath(projectId: string, leafId?: string): string {
+  const params = new URLSearchParams({ tab: 'outputs' });
+  if (leafId) params.set('leaf', leafId);
+  return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;
+}
+
 export function getProjectOutputsPath(
   project: { id?: string; name: string },
   leafId?: string

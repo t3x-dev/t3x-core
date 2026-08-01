@@ -216,7 +216,7 @@ test.describe('DiffDisplayView Integration', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('UI loads project page', async ({ page }) => {
     // Navigate directly to project canvas view
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to appear
     const canvas = page.locator('.react-flow');

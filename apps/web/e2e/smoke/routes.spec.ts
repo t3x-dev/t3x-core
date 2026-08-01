@@ -67,7 +67,7 @@ test('project canvas route renders without console errors', async ({ page }) => 
     errors.push(`console.error: ${text}`);
   });
 
-  const resp = await page.goto(`/chat/project/${projectId}/canvas`, {
+  const resp = await page.goto(`/project/${projectId}?view=canvas`, {
     waitUntil: 'domcontentloaded',
   });
   expect(resp?.status() ?? 200).toBeLessThan(400);
@@ -75,4 +75,17 @@ test('project canvas route renders without console errors', async ({ page }) => 
   await expect(page.locator('body')).toBeVisible();
 
   expect(errors, `errors on project canvas:\n${errors.join('\n')}`).toEqual([]);
+});
+
+test('legacy Canvas and Leaf routes preserve repository identity', async ({ page }) => {
+  await page.goto(`/chat/project/${projectId}/canvas?selected=sha256%3Acommit`);
+  await expect(page).toHaveURL(/\/t3x-dev\/smoke\?view=canvas&selected=sha256%3Acommit$/);
+
+  await page.goto(`/chat/project/${projectId}/leaf?introDemo=1`);
+  await expect(page).toHaveURL(/\/t3x-dev\/smoke\/outputs\?introDemo=1$/);
+
+  await page.goto(`/chat/project/${projectId}/leaf/leaf_legacy?introDemo=1`);
+  await expect(page).toHaveURL(
+    /\/t3x-dev\/smoke\/outputs\?leaf=leaf_legacy&introDemo=1$/
+  );
 });

@@ -57,7 +57,6 @@ export default function ProjectDetailPage() {
 interface ProjectDetailPageContentProps {
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
-  showChatSidebarToggle?: boolean;
   surface?: 'canvas' | 'repository';
 }
 
@@ -158,7 +157,6 @@ function ProjectIdCanonicalRedirect() {
 export function ProjectDetailPageContent({
   initialTabOverride,
   projectIdOverride,
-  showChatSidebarToggle = false,
   surface = 'repository',
 }: ProjectDetailPageContentProps = {}) {
   const params = useParams<{ projectId?: string }>();
@@ -551,7 +549,6 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          showChatSidebarToggle={showChatSidebarToggle}
           stateHref={getProjectRepoPath(project)}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}

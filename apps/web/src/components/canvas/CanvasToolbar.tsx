@@ -3,7 +3,6 @@
 import { ArrowLeft, Maximize, Network } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Button } from '@/components/ui/button';
 import { commitHashLabel } from '@/domain/format/formatters';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -15,7 +14,6 @@ interface CanvasToolbarProps {
   focusedBranch?: string;
   projectName: string;
   onFitView: () => void;
-  showChatSidebarToggle?: boolean;
   stateHref?: string;
 }
 
@@ -24,7 +22,6 @@ export function CanvasToolbar({
   focusedBranch,
   projectName,
   onFitView,
-  showChatSidebarToggle = false,
   stateHref,
 }: CanvasToolbarProps) {
   const nodes = useCanvasStore((state) => state.nodes);
@@ -112,10 +109,7 @@ export function CanvasToolbar({
         glass.highlight
       )}
     >
-      {showChatSidebarToggle && (
-        <ChatSidebarToggleButton className="absolute left-[9px] top-[7px]" />
-      )}
-      <div className={cn('min-w-0 flex-1', showChatSidebarToggle && 'pl-[34px]')}>
+      <div className="min-w-0 flex-1">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">

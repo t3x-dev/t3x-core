@@ -100,7 +100,7 @@ test.describe('Branch Workflow', () => {
 
   // BR-06: Canvas shows branch commits (UI test)
   test('BR-06: Canvas shows branch commits', async ({ page }) => {
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to load
     const canvas = page.locator('.react-flow');
@@ -115,7 +115,7 @@ test.describe('Branch Workflow', () => {
 
   // BR-07: Commit detail shows branch badge (UI test)
   test('BR-07: Commit detail shows branch badge', async ({ page }) => {
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });

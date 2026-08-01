@@ -174,7 +174,7 @@ test.describe('Open-source workbench visual smoke', () => {
         },
         {
           name: 'canvas',
-          path: () => `/chat/project/${projectId}/canvas`,
+          path: () => `/project/${projectId}?view=canvas`,
           ready: async (p) => {
             await expect(p.locator('.react-flow')).toBeVisible({ timeout: 15000 });
             await expect(p.locator('.react-flow__node').first()).toBeVisible({ timeout: 15000 });
