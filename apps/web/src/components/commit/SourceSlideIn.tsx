@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TurnBubble } from '@/components/source-context/TurnBubble';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { useTurnsList } from '@/hooks/shared/useTurnsList';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';
@@ -407,11 +408,20 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
                 {conversationId}
               </span>
               <Link
-                href={`/chat/${encodeURIComponent(conversationId)}`}
+                href={repositoryConversationSourceHref({
+                  projectId,
+                  conversationId,
+                  branch: commit?.branch,
+                  commitId: commit?.hash,
+                  turnHash: slotSource?.turn_hash,
+                  returnTo: commit
+                    ? `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commit.hash)}`
+                    : null,
+                })}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-commit)] transition-colors"
                 onClick={closeSourceViewer}
               >
-                Open full conversation
+                Open source evidence
                 <ExternalLink size={11} />
               </Link>
             </div>

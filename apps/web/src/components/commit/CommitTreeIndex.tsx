@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -302,7 +303,15 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
             {sourceConversations.map((src) => (
               <Link
                 key={src.id}
-                href={`/chat/${src.id}`}
+                href={repositoryConversationSourceHref({
+                  projectId,
+                  conversationId: src.id,
+                  branch: commit?.branch,
+                  commitId: commit?.hash,
+                  returnTo: commit
+                    ? `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commit.hash)}`
+                    : null,
+                })}
                 className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
               >
                 <MessageSquare size={10} className="shrink-0 text-[var(--accent-conversation)]" />

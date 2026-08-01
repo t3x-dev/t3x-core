@@ -11,6 +11,7 @@ import { Copy, FileText, GitCommit, Leaf as LeafIcon, MessageSquare, Sparkles } 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { shortHash } from '@/domain/format/formatters';
+import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import type { ApiCommit } from '@/types/api';
 
 interface CommitOperationsSidebarProps {
@@ -30,8 +31,16 @@ function SourceIcon({ type }: { type: string }) {
   return <FileText size={12} className="shrink-0 text-[var(--text-tertiary)]" />;
 }
 
-function sourceHref(projectId: string, source: SourceRef): string | null {
-  if (source.type === 'conversation') return `/chat/${source.id}`;
+function sourceHref(projectId: string, commit: ApiCommit, source: SourceRef): string | null {
+  if (source.type === 'conversation') {
+    return repositoryConversationSourceHref({
+      projectId,
+      conversationId: source.id,
+      branch: commit.branch,
+      commitId: commit.hash,
+      returnTo: `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commit.hash)}`,
+    });
+  }
   if (source.type === 'leaf') return `/project/${projectId}/leaf/${source.id}`;
   return null;
 }
@@ -70,8 +79,16 @@ function HashPill({ label, hash }: { label: string; hash: string }) {
   );
 }
 
-function SourceRow({ projectId, source }: { projectId: string; source: SourceRef }) {
-  const href = sourceHref(projectId, source);
+function SourceRow({
+  projectId,
+  commit,
+  source,
+}: {
+  projectId: string;
+  commit: ApiCommit;
+  source: SourceRef;
+}) {
+  const href = sourceHref(projectId, commit, source);
   const content = (
     <>
       <SourceIcon type={source.type} />
@@ -133,6 +150,7 @@ export function CommitOperationsSidebar({ projectId, commit }: CommitOperationsS
                 <SourceRow
                   key={`${source.type}-${source.id}`}
                   projectId={projectId}
+                  commit={commit}
                   source={source}
                 />
               ))}

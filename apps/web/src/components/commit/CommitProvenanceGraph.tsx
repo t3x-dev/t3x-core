@@ -11,6 +11,7 @@
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
+import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import type { ApiCommit, Leaf } from '@/types/api';
 import { relativeTime, shortHash } from './CommitDetailHelpers';
 
@@ -159,7 +160,13 @@ export function ProvenanceGraph({
             {sourceConversations.map((src) => (
               <Link
                 key={src.id}
-                href={`/chat/${src.id}`}
+                href={repositoryConversationSourceHref({
+                  projectId,
+                  conversationId: src.id,
+                  branch: commit.branch,
+                  commitId: commit.hash,
+                  returnTo: `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commit.hash)}`,
+                })}
                 className={`provenance-node flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] transition-all duration-500 hover:bg-[var(--hover-bg)] ${
                   isConnected
                     ? 'border-[var(--accent-conversation)]/40 bg-[var(--accent-conversation)]/8 node-pulse-conversation'
