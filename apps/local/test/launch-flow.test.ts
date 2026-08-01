@@ -145,7 +145,7 @@ describe('local launch flow', () => {
     expect(text).toContain('[t3x-local] [4/6] Prepare local data directory: done');
     expect(text).toContain('[t3x-local] [5/6] Start API and WebUI: done');
     expect(text).toContain('[t3x-local] [6/6] Ask to open T3X in your browser: done');
-    expect(text).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
+    expect(text).toContain('T3X is ready: http://localhost:3000/');
     expect(text).not.toContain('http://localhost:8000');
     expect(startedWith).toEqual([
       {
@@ -155,7 +155,7 @@ describe('local launch flow', () => {
         verbose: false,
       },
     ]);
-    expect(openedUrls).toEqual(['http://localhost:3000/chat?introDemo=1']);
+    expect(openedUrls).toEqual(['http://localhost:3000/']);
   });
 
   it('reports setup progress in execution order', async () => {
@@ -245,7 +245,7 @@ describe('local launch flow', () => {
 
     expect(prompts).toEqual(['Run setup now? Y/n ', 'Open WebUI in your browser? Y/n ']);
     expect(openedUrls).toEqual([]);
-    expect(output.join('')).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
+    expect(output.join('')).toContain('T3X is ready: http://localhost:3000/');
   });
 
   it('refuses non-interactive launches unless --yes is provided', async () => {
@@ -316,7 +316,7 @@ describe('local launch flow', () => {
 
     const text = output.join('');
     expect(text).toContain('Could not open WebUI automatically.');
-    expect(text).toContain('http://localhost:3000/chat?introDemo=1');
-    expect(text).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
+    expect(text).toContain('http://localhost:3000/');
+    expect(text).toContain('T3X is ready: http://localhost:3000/');
   });
 });

@@ -164,12 +164,10 @@ test.describe('Open-source workbench visual smoke', () => {
 
       const routes: WorkbenchRoute[] = [
         {
-          name: 'chat-landing',
-          path: () => '/chat',
+          name: 'repository-directory',
+          path: () => '/',
           ready: async (p) => {
-            await expect(
-              p.getByRole('heading', { name: 'What should T3X structure?' })
-            ).toBeVisible();
+            await expect(p.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
           },
         },
         {

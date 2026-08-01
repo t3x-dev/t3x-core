@@ -13,7 +13,7 @@ import { API_BASE } from '../fixtures/api-helpers';
  * never exposed as a WebUI route (see audit A-4).
  */
 
-const STATIC_ROUTES = ['/', '/chat', '/insights', '/deploy'];
+const STATIC_ROUTES = ['/', '/insights', '/deploy'];
 
 /**
  * Console-error allowlist. KEEP TIGHT — only patterns verified safe.
@@ -56,6 +56,13 @@ for (const route of STATIC_ROUTES) {
     expect(errors, `errors on ${route}:\n${errors.join('\n')}`).toEqual([]);
   });
 }
+
+test('legacy Chat landing redirects to the repository directory', async ({ page }) => {
+  await page.goto('/chat', { waitUntil: 'domcontentloaded' });
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+});
 
 test('project canvas route renders without console errors', async ({ page }) => {
   const errors: string[] = [];

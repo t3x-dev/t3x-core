@@ -7,35 +7,33 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT_DIR = 'tmp/screenshots/demo';
-const CHAT_SIDEBAR_COLLAPSED_WIDTH = 64;
 const requireFromWeb = createRequire(path.join(REPO_ROOT, 'apps/web/package.json'));
 
 export function getScreenshotTargets() {
   return [
     {
-      name: 'chat-light',
-      outputPath: `${OUTPUT_DIR}/chat-light.png`,
+      name: 'repository-light',
+      outputPath: `${OUTPUT_DIR}/repository-light.png`,
       viewport: { width: 1440, height: 980 },
       theme: 'light',
       colorScheme: 'light',
       settleMs: 500,
     },
     {
-      name: 'chat-dark',
-      outputPath: `${OUTPUT_DIR}/chat-dark.png`,
+      name: 'repository-dark',
+      outputPath: `${OUTPUT_DIR}/repository-dark.png`,
       viewport: { width: 1440, height: 980 },
       theme: 'dark',
       colorScheme: 'dark',
       settleMs: 500,
     },
     {
-      name: 'chat-mobile',
-      outputPath: `${OUTPUT_DIR}/chat-mobile.png`,
+      name: 'repository-mobile',
+      outputPath: `${OUTPUT_DIR}/repository-mobile.png`,
       viewport: { width: 390, height: 844 },
       theme: 'light',
       colorScheme: 'light',
       settleMs: 500,
-      waitForCollapsedSidebar: true,
     },
   ];
 }
@@ -44,7 +42,7 @@ export function resolveScreenshotConfig(env = process.env) {
   const baseUrl = (env.WEBUI_URL || 'http://localhost:3000').replace(/\/+$/, '');
   return {
     baseUrl,
-    url: `${baseUrl}/chat`,
+    url: `${baseUrl}/`,
     outputDir: OUTPUT_DIR,
   };
 }
@@ -71,21 +69,7 @@ export async function captureDemoScreenshots(env = process.env) {
       await page.evaluate((theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark');
       }, target.theme);
-      await page
-        .getByRole('heading', { name: 'What should T3X structure?' })
-        .waitFor({ timeout: 15_000 });
-      if (target.waitForCollapsedSidebar) {
-        await page.waitForFunction(
-          (collapsedWidth) => {
-            const sidebar = document.querySelector('aside[aria-label="Chat navigation"]');
-            if (!sidebar) return false;
-            const width = Number.parseFloat(window.getComputedStyle(sidebar).width);
-            return width <= collapsedWidth + 1;
-          },
-          CHAT_SIDEBAR_COLLAPSED_WIDTH,
-          { timeout: 5_000 }
-        );
-      }
+      await page.getByRole('heading', { name: 't3x-dev' }).waitFor({ timeout: 15_000 });
       await page.waitForTimeout(target.settleMs);
       await page.screenshot({
         path: path.join(REPO_ROOT, target.outputPath),

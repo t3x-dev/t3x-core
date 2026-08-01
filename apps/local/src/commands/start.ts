@@ -24,7 +24,7 @@ import {
 } from '../runtime/pid.js';
 import { assertPortAvailable } from '../runtime/ports.js';
 import { type SpawnedProcess, spawnNodeScript, terminateProcess } from '../runtime/spawn.js';
-import { buildIntroDemoUrl } from '../runtime/urls.js';
+import { buildRepositoryEntryUrl } from '../runtime/urls.js';
 import { assertVersionLockOrThrow } from '../runtime/version-check.js';
 
 export interface StartCommandOptions {
@@ -192,7 +192,7 @@ export interface StartedRuntimeMessageInput {
 export function formatStartedRuntimeMessages(input: StartedRuntimeMessageInput): string[] {
   const messages = [
     `[t3x-local] Started WebUI at ${input.webUrl}`,
-    `[t3x-local] Demo: ${buildIntroDemoUrl(input.webUrl)}`,
+    `[t3x-local] Open: ${buildRepositoryEntryUrl(input.webUrl)}`,
   ];
 
   if (input.verbose) {
