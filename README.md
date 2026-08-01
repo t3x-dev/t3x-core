@@ -44,7 +44,7 @@ what happened before committing it and understand it later.
   human changes.
 
 <p align="center">
-  <img src=".github/assets/t3x-review-process.png" alt="A proposal moving through comparison, checks, decision, and durable history" width="960" />
+  <img src=".github/assets/t3x-release-agent-review.png" alt="Reviewing a structured Release Agent state transition in T3X" width="960" />
 </p>
 
 ## Quickstart
