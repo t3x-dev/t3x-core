@@ -469,7 +469,9 @@ export * from './transition-command-receipts';
 // CommitV2 repository path and mixed-history projections
 export {
   type CreatedTransitionCommit,
+  type CreateLegacyBridgeTransitionCommitInput,
   type CreateTransitionCommitInput,
+  createLegacyBridgeTransitionCommit,
   createTransitionCommit,
   DecisionAuthorizationConflictError,
   DecisionNotAuthorizedError,

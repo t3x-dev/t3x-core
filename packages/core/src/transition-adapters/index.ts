@@ -14,6 +14,13 @@ export {
   type UnsupportedEspHomeSourceInputs,
 } from './esphomeSourceInputs';
 export {
+  assertLegacyCommitBridgeIntegrity,
+  createLegacyCommitBridgeSubject,
+  LEGACY_COMMIT_EVIDENCE_SCHEME,
+  LEGACY_COMMIT_RESOURCE_MEDIA_TYPE,
+  type LegacyCommitBridgeSubject,
+} from './legacyCommitBridge';
+export {
   createYOpsState,
   YOPS_STATE_CODEC_VERSION,
   YOPS_STATE_MEDIA_TYPE,

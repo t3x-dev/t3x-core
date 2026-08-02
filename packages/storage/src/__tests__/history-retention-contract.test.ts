@@ -63,6 +63,7 @@ describe('mixed-history retention contract', () => {
     expect(ids.sort()).toEqual(
       [
         'committed_source_deletion_lock',
+        'legacy_commit_archive',
         'legacy_commit_sources',
         'legacy_commit_yops_links',
         'legacy_topics',
