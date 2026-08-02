@@ -59,7 +59,7 @@ test.describe('Project Lifecycle', () => {
     projectIdsToCleanup.push(projectId);
     await createTestCommit(request, projectId, [{ id: 'pl_03_node', text: 'Canvas node' }]);
 
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Canvas should load
     const canvas = page.locator('.react-flow');

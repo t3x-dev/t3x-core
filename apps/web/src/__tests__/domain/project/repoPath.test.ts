@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getProjectOutputsPath, getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
+import {
+  getProjectIdCanvasPath,
+  getProjectIdOutputsPath,
+  getProjectIdRepoPath,
+  getProjectOutputsPath,
+  getProjectRepoPath,
+  toRepoSlug,
+} from '@/domain/project/repoPath';
 
 describe('repoPath', () => {
   it('normalizes project names into repository slugs', () => {
@@ -25,5 +32,13 @@ describe('repoPath', () => {
     expect(
       getProjectOutputsPath({ id: 'proj_test', name: 'Test Project' }, 'leaf/audience brief')
     ).toBe('/t3x-dev/test-project/outputs?leaf=leaf%2Faudience%20brief');
+  });
+
+  it('builds project-id entry points that canonicalize in the route layer', () => {
+    expect(getProjectIdRepoPath('proj/test')).toBe('/project/proj%2Ftest');
+    expect(getProjectIdCanvasPath('proj/test')).toBe('/project/proj%2Ftest?view=canvas');
+    expect(getProjectIdOutputsPath('proj/test', 'leaf/audience brief')).toBe(
+      '/project/proj%2Ftest?tab=outputs&leaf=leaf%2Faudience+brief'
+    );
   });
 });

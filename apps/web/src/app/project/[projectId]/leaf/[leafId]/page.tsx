@@ -79,14 +79,12 @@ interface LeafDetailWorkspaceProps {
   embeddedNavigation?: EmbeddedLeafNavigation;
   leafIdOverride?: string;
   projectIdOverride?: string;
-  showChatSidebarToggle?: boolean;
 }
 
 export function LeafDetailWorkspace({
   embeddedNavigation,
   leafIdOverride,
   projectIdOverride,
-  showChatSidebarToggle = false,
 }: LeafDetailWorkspaceProps = {}) {
   const params = useParams();
   const router = useRouter();
@@ -316,7 +314,6 @@ export function LeafDetailWorkspace({
         leaf={leaf}
         projectId={projectId}
         projectName={projectName}
-        showChatSidebarToggle={showChatSidebarToggle}
         onExport={handleExport}
         mode={mode}
         onModeChange={handleModeChange}

@@ -93,7 +93,7 @@ test.describe('API-WebUI Sync', () => {
       message: 'Sync test commit',
     });
 
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });
 

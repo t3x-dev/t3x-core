@@ -11,7 +11,6 @@ import {
   Layers3,
   Plus,
 } from 'lucide-react';
-import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +46,6 @@ interface LeafWorkspaceHeaderProps {
   onExport: (format: ExportFormat) => Promise<void>;
   mode?: WorkspaceMode;
   onModeChange?: (mode: WorkspaceMode) => void;
-  showChatSidebarToggle?: boolean;
   className?: string;
 }
 
@@ -59,7 +57,6 @@ export function LeafWorkspaceHeader({
   onExport,
   mode,
   onModeChange,
-  showChatSidebarToggle = false,
   className,
 }: LeafWorkspaceHeaderProps) {
   const { t } = useTerminology();
@@ -79,13 +76,7 @@ export function LeafWorkspaceHeader({
       )}
       data-intro-target="leaf-header"
     >
-      {showChatSidebarToggle && <ChatSidebarToggleButton className="absolute left-2.5 top-2" />}
-      <div
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-3',
-          showChatSidebarToggle && 'pl-[34px]'
-        )}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         {embeddedNavigation ? (
           <>
             <Button

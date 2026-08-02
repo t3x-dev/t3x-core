@@ -135,7 +135,6 @@ describe('L1-L4 import boundaries', () => {
       s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
     const allowed = [
-      'app/chat/project/[projectId]/leaf/page.tsx:import @/queries/project',
       'app/deploy/compare/page.tsx:import @/infrastructure',
       'app/deploy/eval/[runId]/page.tsx:import @/infrastructure',
       'app/deploy/eval/[runId]/page.tsx:import @/infrastructure/export/report',

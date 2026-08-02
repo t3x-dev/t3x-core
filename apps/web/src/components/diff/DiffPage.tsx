@@ -30,6 +30,7 @@ import {
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -267,7 +268,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
   const project = getProject(projectId);
-  const fallbackCanvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const fallbackCanvasHref = getProjectIdCanvasPath(projectId);
   const returnHref = useMemo(
     () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackCanvasHref),
     [fallbackCanvasHref, searchParams]

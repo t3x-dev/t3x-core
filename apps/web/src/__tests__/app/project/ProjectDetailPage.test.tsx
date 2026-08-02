@@ -251,13 +251,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
-    render(
-      <ProjectDetailPageContent
-        projectIdOverride="proj_test"
-        showChatSidebarToggle
-        surface="canvas"
-      />
-    );
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" surface="canvas" />);
 
     expect(screen.getByTestId('canvas-workspace')).toHaveTextContent('Test Project');
     expect(screen.getByTestId('project-demo-tour')).toHaveAttribute('data-open', 'false');
@@ -270,13 +264,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('refreshes Canvas when a same-window commit event targets this project', async () => {
-    render(
-      <ProjectDetailPageContent
-        projectIdOverride="proj_test"
-        showChatSidebarToggle
-        surface="canvas"
-      />
-    );
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" surface="canvas" />);
 
     await waitFor(() => {
       expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');

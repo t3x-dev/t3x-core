@@ -46,6 +46,7 @@ import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
 import { resolveIntroDemoApiCommitForHash } from '@/hooks/onboarding/introDemoLocalCommit';
@@ -181,10 +182,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const baseCanvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const baseCanvasHref = getProjectIdCanvasPath(projectId);
   const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), baseCanvasHref);
   const currentReturnTo = buildReturnTo(pathname, searchParams.toString());
-  const fallbackIntroDemoReturnTo = `${baseCanvasHref}?introDemo=1&introDemoStage=leaf`;
+  const fallbackIntroDemoReturnTo = `${baseCanvasHref}&introDemo=1&introDemoStage=leaf`;
   const introDemoReturnTo = useMemo(
     () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackIntroDemoReturnTo),
     [fallbackIntroDemoReturnTo, searchParams]

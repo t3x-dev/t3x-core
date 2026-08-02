@@ -31,6 +31,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import { getProjectIdCanvasPath, getProjectIdOutputsPath } from '@/domain/project/repoPath';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
@@ -991,7 +992,9 @@ export function ChatSidebar() {
   }
 
   function handleCanvasClick(projectId: string) {
-    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas${introDemoSuffix}`);
+    router.push(
+      `${getProjectIdCanvasPath(projectId)}${introDemoSuffix ? `&${introDemoSuffix.slice(1)}` : ''}`
+    );
   }
 
   function expandSidebarFromRail() {
@@ -1024,7 +1027,9 @@ export function ChatSidebar() {
   function handleLeafTabClick() {
     expandSidebarFromRail();
     if (!currentProjectId) return;
-    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf${introDemoSuffix}`);
+    router.push(
+      `${getProjectIdOutputsPath(currentProjectId)}${introDemoSuffix ? `&${introDemoSuffix.slice(1)}` : ''}`
+    );
   }
 
   function handleNewTemporaryChatClick() {
@@ -1887,11 +1892,7 @@ export function ChatSidebar() {
                                   key={leaf.id}
                                   type="button"
                                   onClick={() =>
-                                    router.push(
-                                      `/chat/project/${encodeURIComponent(
-                                        currentProjectId
-                                      )}/leaf/${encodeURIComponent(leaf.id)}`
-                                    )
+                                    router.push(getProjectIdOutputsPath(currentProjectId, leaf.id))
                                   }
                                   className={cn(
                                     'grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors',

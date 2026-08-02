@@ -57,7 +57,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('1. V4 commits display in canvas', async ({ page }) => {
     // Navigate to project canvas
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to load
     const canvas = page.locator('.react-flow');
@@ -83,7 +83,7 @@ test.describe('V4 WebUI Flow', () => {
   // Scenario 2: Commit detail shows nodes (not constraints)
   // ─────────────────────────────────────────────────────────────────────────
   test('2. Commit detail shows nodes (not constraints)', async ({ page }) => {
-    await page.goto(`/chat/project/${projectId}/canvas`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas
     const canvas = page.locator('.react-flow');

@@ -10,6 +10,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useMicrocopy } from '@/utils/microcopy';
@@ -31,11 +32,7 @@ export default function MergeWorkspacePage() {
   const { loading, error, reset } = useMergeWorkspaceStore();
   const { load: loadDraft } = useMergeWorkspaceActions();
   const returnHref = useMemo(
-    () =>
-      safeInternalReturnTo(
-        searchParams.get('returnTo'),
-        `/chat/project/${encodeURIComponent(projectId)}/canvas`
-      ),
+    () => safeInternalReturnTo(searchParams.get('returnTo'), getProjectIdCanvasPath(projectId)),
     [projectId, searchParams]
   );
 
