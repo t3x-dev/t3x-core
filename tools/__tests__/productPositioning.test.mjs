@@ -42,7 +42,7 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
     'apps/local/README.md',
     'apps/web/README.md',
     'packages/yops/README.md',
-    'apps/web/src/app/chat/page.tsx',
+    'apps/web/src/app/page.tsx',
     'apps/web/src/components/onboarding/FirstRunDemoOverlay.tsx',
     'apps/web/src/components/chat/ChatWorkspace.tsx',
     'apps/web/src/components/draft/DraftWorkspace.tsx',

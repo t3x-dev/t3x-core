@@ -4,7 +4,7 @@ import readline from 'node:readline/promises';
 import { Chalk } from 'chalk';
 import { resolveStartOptions } from '../runtime/env.js';
 import { getLocalPaths, getMissingStartArtifacts } from '../runtime/paths.js';
-import { buildIntroDemoUrl } from '../runtime/urls.js';
+import { buildRepositoryEntryUrl } from '../runtime/urls.js';
 import { runStartCommand, type StartProgressEvent } from './start.js';
 
 const PRODUCT_TAGLINE = 'Version control for structured state.';
@@ -132,7 +132,7 @@ export async function runLaunchCommand(
   const output = dependencies.output ?? process.stdout;
   const paths = getLocalPaths();
   const options = resolveStartOptions(input, paths, process.env);
-  const webUrl = buildIntroDemoUrl(`http://localhost:${options.webPort}`);
+  const webUrl = buildRepositoryEntryUrl(`http://localhost:${options.webPort}`);
   const runtimeInstalled =
     dependencies.isRuntimeInstalled?.() ?? getMissingStartArtifacts(paths).length === 0;
 
@@ -277,7 +277,7 @@ export async function runLaunchCommand(
     );
   }
 
-  const openWebUrl = buildIntroDemoUrl(runtimeState.webUrl);
+  const openWebUrl = buildRepositoryEntryUrl(runtimeState.webUrl);
 
   if (input.open !== false) {
     writeSetupProgressLine(output, {
