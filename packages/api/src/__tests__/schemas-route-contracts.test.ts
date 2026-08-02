@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ChatRequestBodySchema,
   ChatResponseDataSchema,
+  GenerationProvidersResponseDataSchema,
+  GenerationRequestBodySchema,
+  GenerationResponseDataSchema,
   ProvidersResponseDataSchema,
 } from '../schemas/chat';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -51,9 +54,9 @@ describe('route contract schemas', () => {
     });
   });
 
-  it('parses chat request and response payloads from dedicated schema modules', () => {
+  it('parses Generation payloads and preserves the legacy schema aliases', () => {
     expect(
-      ChatRequestBodySchema.parse({
+      GenerationRequestBodySchema.parse({
         messages: [{ role: 'user', content: 'hello' }],
         provider: 'openai',
         model: 'gpt-4.1',
@@ -64,7 +67,7 @@ describe('route contract schemas', () => {
     });
 
     expect(
-      ChatResponseDataSchema.parse({
+      GenerationResponseDataSchema.parse({
         content: 'hi',
         model: 'gpt-4.1',
         usage: { input_tokens: 1, output_tokens: 2 },
@@ -75,13 +78,17 @@ describe('route contract schemas', () => {
     });
 
     expect(
-      ProvidersResponseDataSchema.parse({
+      GenerationProvidersResponseDataSchema.parse({
         providers: ['claude', 'openai'],
         default: 'openai',
       })
     ).toMatchObject({
       default: 'openai',
     });
+
+    expect(ChatRequestBodySchema).toBe(GenerationRequestBodySchema);
+    expect(ChatResponseDataSchema).toBe(GenerationResponseDataSchema);
+    expect(ProvidersResponseDataSchema).toBe(GenerationProvidersResponseDataSchema);
   });
 
   it('parses provider route payloads from dedicated schema modules', () => {

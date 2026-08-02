@@ -8,7 +8,7 @@ export { authLocalRoutes } from './auth-local.openapi';
 export { authMeRoutes } from './auth-me.openapi';
 export { autopilotRoutes } from './autopilot.openapi';
 export { branchRoutes } from './branches.openapi';
-export { chatRoutes } from './chat.openapi';
+export { chatRoutes, generationRoutes } from './chat.openapi';
 export { checkRoutes } from './check.openapi';
 export { commitFromDraftRoutes } from './commit-from-draft.openapi';
 export { commitRoutes } from './commits.openapi';

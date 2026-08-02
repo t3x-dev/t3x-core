@@ -23,7 +23,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-registry';
-import { chatRoutes } from '../routes/chat.openapi';
+import { chatRoutes, generationRoutes } from '../routes/chat.openapi';
 
 const originalEnv = { ...process.env };
 const envKeys = [
@@ -66,6 +66,10 @@ describe('Chat Routes', () => {
     if (cleanup) {
       await cleanup();
     }
+  });
+
+  it('keeps the legacy Chat export as the same Generation route object', () => {
+    expect(chatRoutes).toBe(generationRoutes);
   });
 
   describe('GET /v1/chat/providers', () => {

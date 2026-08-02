@@ -283,6 +283,19 @@ describe('T3xClient', () => {
   // Conversations
   // =========================================================================
   describe('conversations', () => {
+    it('exposes Source Thread operations through the neutral capability object', async () => {
+      const data = { conversations: [], limit: 20, offset: 0 };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.sourceThreads.list('proj_1')).toEqual(data);
+      expect(Object.isFrozen(client.sourceThreads)).toBe(true);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/conversations?project_id=proj_1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
     it('listConversations adds project_id to query', async () => {
       const fn = mockFetch(successResponse({ conversations: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
@@ -356,6 +369,24 @@ describe('T3xClient', () => {
   // Turns
   // =========================================================================
   describe('turns', () => {
+    it('appends immutable turns through the Source Thread capability', async () => {
+      const turn = { turn_hash: 'sha256:new' };
+      const fn = mockFetch(successResponse(turn));
+      const client = createTestClient(fn);
+      const input = {
+        project_id: 'proj_1',
+        conversation_id: 'conv_1',
+        role: 'user' as const,
+        content: 'Hello',
+      };
+
+      expect(await client.sourceThreads.appendTurn(input)).toEqual(turn);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/turns'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('listTurns adds conversation_id to query', async () => {
       const fn = mockFetch(successResponse({ turns: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
@@ -393,6 +424,7 @@ describe('T3xClient', () => {
       const client = createTestClient(fn);
 
       await client.createTurn({
+        project_id: 'proj_1',
         conversation_id: 'conv_1',
         role: 'user',
         content: 'Hello',
@@ -657,27 +689,73 @@ describe('T3xClient', () => {
   });
 
   // =========================================================================
-  // Chat
+  // Generation
   // =========================================================================
-  describe('chat', () => {
-    it('chat sends POST /v1/chat', async () => {
-      const fn = mockFetch(successResponse({ message: { role: 'assistant', content: 'Hi' } }));
+  describe('generation', () => {
+    it('uses the compatibility route through the neutral Generation capability', async () => {
+      const response = { content: 'Hi', model: 'gpt-5' };
+      const fn = mockFetch(successResponse(response));
       const client = createTestClient(fn);
 
-      await client.chat({ messages: [{ role: 'user', content: 'Hello' }] });
+      expect(
+        await client.generation.complete({ messages: [{ role: 'user', content: 'Hello' }] })
+      ).toEqual(response);
+      expect(Object.isFrozen(client.generation)).toBe(true);
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/chat'),
         expect.objectContaining({ method: 'POST' })
       );
     });
 
-    it('listChatProviders sends GET /v1/chat/providers', async () => {
-      const fn = mockFetch(successResponse([{ id: 'openai', name: 'OpenAI', models: ['gpt-4'] }]));
+    it('preserves chat() as a compatibility alias', async () => {
+      const response = { content: 'Hi', model: 'gpt-5' };
+      const fn = mockFetch(successResponse(response));
       const client = createTestClient(fn);
 
-      const result = await client.listChatProviders();
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('openai');
+      expect(await client.chat({ messages: [{ role: 'user', content: 'Hello' }] })).toEqual(
+        response
+      );
+    });
+
+    it('returns the provider catalog shape implemented by the API', async () => {
+      const catalog = { providers: ['openai'], default: 'openai' };
+      const fn = mockFetch(successResponse(catalog));
+      const client = createTestClient(fn);
+
+      expect(await client.generation.providers()).toEqual(catalog);
+      expect(await client.listChatProviders()).toEqual(catalog);
+    });
+
+    it('streams typed Generation events without exposing the legacy Chat UI', async () => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"token","content":"Hi"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"done","model":"gpt-5"}\n\n'));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+      const fn = vi.fn(() =>
+        Promise.resolve(new Response(body, { status: 200, statusText: 'OK' }))
+      ) as unknown as typeof fetch;
+      const client = createTestClient(fn);
+
+      const events = [];
+      for await (const event of client.generation.stream({
+        messages: [{ role: 'user', content: 'Hello' }],
+      })) {
+        events.push(event);
+      }
+
+      expect(events).toEqual([
+        { type: 'token', content: 'Hi' },
+        { type: 'done', model: 'gpt-5' },
+      ]);
+      expect(fn).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/chat/stream',
+        expect.objectContaining({ method: 'POST' })
+      );
     });
   });
 

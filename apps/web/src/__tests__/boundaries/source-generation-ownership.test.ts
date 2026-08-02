@@ -26,7 +26,15 @@ function sourceFiles(directory: string, files: string[] = []): string[] {
 
 describe('repository Source and Generation ownership', () => {
   it('keeps repository-owned source surfaces independent of legacy Chat UI', () => {
-    const forbiddenImports = ['@/components/chat/', '@/hooks/conversations/useConversationChat'];
+    const forbiddenImports = [
+      '@/components/chat/',
+      '@/hooks/conversations/useConversationChat',
+      '@/infrastructure/chat',
+      '@/infrastructure/conversations',
+      '@/infrastructure/pins',
+      '@/infrastructure/turns',
+      "import * as api from '@/infrastructure'",
+    ];
     const violations: string[] = [];
 
     for (const root of REPOSITORY_SOURCE_ROOTS) {
@@ -43,5 +51,20 @@ describe('repository Source and Generation ownership', () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it('routes the repository generation hook through neutral capabilities', () => {
+    const hook = readFileSync(
+      join(SRC, 'hooks/sourceThreads/useSourceThreadGeneration.ts'),
+      'utf8'
+    );
+
+    expect(hook).toContain("from '@/infrastructure/generation'");
+    expect(hook).toContain("from '@/infrastructure/sourceThreads'");
+    expect(hook).not.toMatch(/\bapi\.(?:chat|chatStream|createConversation|createTurn)\b/);
+
+    const historyHook = readFileSync(join(SRC, 'hooks/conversations/useChatHistory.ts'), 'utf8');
+    expect(historyHook).toContain("from '@/infrastructure/sourceThreads'");
+    expect(historyHook).not.toContain("import * as api from '@/infrastructure'");
   });
 });

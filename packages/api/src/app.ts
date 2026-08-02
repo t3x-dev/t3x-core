@@ -35,7 +35,6 @@ import {
   authMeRoutes,
   autopilotRoutes,
   branchRoutes,
-  chatRoutes,
   checkRoutes,
   commitFromDraftRoutes,
   commitRoutes,
@@ -54,6 +53,7 @@ import {
   extractionFeedbackRoutes,
   extractYopsRoutes,
   gateRoutes,
+  generationRoutes,
   healthRoutes,
   importRoutes,
   ingestRoutes,
@@ -180,7 +180,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', commitRoutes);
   api.route('/', branchRoutes);
   api.route('/', agentDraftRoutes);
-  api.route('/', chatRoutes);
+  api.route('/', generationRoutes);
   api.route('/', curateRoutes);
   api.route('/', diffRoutes);
   api.route('/', exportRoutes);
@@ -290,11 +290,12 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Extract', description: 'LLM-based structured extraction from conversations' },
       { name: 'Extraction', description: 'Extraction workflows and generated YOps plans' },
       { name: 'Extraction Feedback', description: 'Feedback for extraction quality and review' },
+      { name: 'Curation', description: 'Source selection and curation previews' },
       { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
       { name: 'Merge', description: 'Merge operations' },
       { name: 'Pull requests', description: 'Branch review and deterministic merge workflows' },
       { name: 'Export', description: 'Export operations' },
-      { name: 'Chat', description: 'LLM chat operations' },
+      { name: 'Generation', description: 'Model generation and provider discovery' },
       { name: 'Search', description: 'State and project search' },
       { name: 'State Index', description: 'State graph nodes, edges, and membership' },
       { name: 'Runner', description: 'Grey-box agent evaluation' },

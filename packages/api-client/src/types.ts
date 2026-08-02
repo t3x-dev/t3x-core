@@ -92,6 +92,7 @@ export interface Turn {
 }
 
 export interface CreateTurnInput {
+  project_id: string;
   conversation_id: string;
   role: TurnRole;
   content: string;
@@ -461,34 +462,124 @@ export interface StatusResponse {
   };
 }
 
-// Chat types
-export interface ChatMessage {
+// Generation types
+export type GenerationContentBlock =
+  | { type: 'text'; text: string }
+  | {
+      type: 'image';
+      source: {
+        type: 'base64';
+        media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+        data: string;
+      };
+    };
+
+export interface GenerationMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | GenerationContentBlock[];
 }
 
-export interface ChatInput {
-  messages: ChatMessage[];
+export interface GenerationRequest {
+  messages: GenerationMessage[];
   provider?: string;
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  project_id?: string;
+  web_search?: boolean;
+  thinking?: boolean;
 }
 
-export interface ChatResponse {
-  message: ChatMessage;
+export interface GenerationResponse {
+  content: string;
+  model: string;
   usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
+    input_tokens?: number;
+    output_tokens?: number;
   };
+  finish_reason?: string;
 }
 
-export interface ChatProvider {
-  id: string;
-  name: string;
-  models: string[];
+export interface GenerationProviderCatalog {
+  providers: string[];
+  default: string;
 }
+
+export type GenerationStreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'thinking'; content: string }
+  | { type: 'searching'; query?: string }
+  | {
+      type: 'done';
+      content?: string;
+      model?: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      citations?: Array<{ url: string; title: string }>;
+    }
+  | { type: 'error'; message: string };
+
+export interface GenerationStreamOptions {
+  signal?: AbortSignal;
+}
+
+export interface SourceThreadMemory {
+  text: string;
+  token_estimate: number;
+  sources: Array<{
+    type: 'commit' | 'conversation' | 'leaf' | 'import';
+    id: string;
+    title?: string;
+  }>;
+}
+
+export type SourceThread = Conversation;
+export type CreateSourceThreadInput = CreateConversationInput;
+export type ListSourceThreadsResponse = ListConversationsResponse;
+export type RenameSourceThreadInput = RenameConversationInput;
+export type RenameSourceThreadResult = RenameConversationResult;
+export type SourceThreadTurn = Turn;
+export type AppendSourceThreadTurnInput = CreateTurnInput;
+export type ListSourceThreadTurnsResponse = ListTurnsResponse;
+export type SourceThreadEvidence = ConversationSourceEvidence;
+
+export interface GenerationCapability {
+  complete(input: GenerationRequest): Promise<GenerationResponse>;
+  stream(
+    input: GenerationRequest,
+    options?: GenerationStreamOptions
+  ): AsyncGenerator<GenerationStreamEvent, void, unknown>;
+  providers(): Promise<GenerationProviderCatalog>;
+}
+
+export interface SourceThreadCapability {
+  list(projectId: string, params?: PaginationParams): Promise<ListSourceThreadsResponse>;
+  get(id: string): Promise<SourceThread>;
+  create(input: CreateSourceThreadInput): Promise<SourceThread>;
+  remove(id: string): Promise<void>;
+  rename(id: string, input: RenameSourceThreadInput): Promise<RenameSourceThreadResult>;
+  listTurns(
+    sourceThreadId: string,
+    params?: PaginationParams
+  ): Promise<ListSourceThreadTurnsResponse>;
+  getTurn(hash: string): Promise<SourceThreadTurn>;
+  getTurnChain(hash: string): Promise<SourceThreadTurn[]>;
+  appendTurn(input: AppendSourceThreadTurnInput): Promise<SourceThreadTurn>;
+  memory(id: string): Promise<SourceThreadMemory>;
+  evidence(
+    projectId: string,
+    conversationId: string,
+    params?: PaginationParams
+  ): Promise<SourceThreadEvidence>;
+}
+
+/** @deprecated Use GenerationMessage. */
+export type ChatMessage = GenerationMessage;
+/** @deprecated Use GenerationRequest. */
+export type ChatInput = GenerationRequest;
+/** @deprecated Use GenerationResponse. */
+export type ChatResponse = GenerationResponse;
+/** @deprecated Use GenerationProviderCatalog. */
+export type ChatProvider = GenerationProviderCatalog;
 
 // Leaf types
 export interface Leaf {
