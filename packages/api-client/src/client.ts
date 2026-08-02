@@ -484,13 +484,6 @@ export class T3xClient {
   // Agent Drafts
   // ============================================
 
-  async listAgentDrafts(projectId: string, params?: PaginationParams): Promise<ListDraftsResponse> {
-    return this.request<ListDraftsResponse>('GET', '/v1/agent/drafts', undefined, {
-      project_id: projectId,
-      ...params,
-    });
-  }
-
   async getAgentDraft(id: string): Promise<Draft> {
     return this.request<Draft>('GET', `/v1/agent/drafts/${id}`);
   }

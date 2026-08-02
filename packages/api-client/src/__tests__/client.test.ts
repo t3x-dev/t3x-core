@@ -593,15 +593,6 @@ describe('T3xClient', () => {
   // Agent Drafts
   // =========================================================================
   describe('agent drafts', () => {
-    it('listAgentDrafts calls /v1/agent/drafts', async () => {
-      const fn = mockFetch(successResponse({ drafts: [], limit: 20, offset: 0 }));
-      const client = createTestClient(fn);
-
-      await client.listAgentDrafts('proj_1');
-      const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('/v1/agent/drafts');
-    });
-
     it('getAgentDraft calls /v1/agent/drafts/:id', async () => {
       const fn = mockFetch(successResponse({ draft_id: 'ad_1' }));
       const client = createTestClient(fn);

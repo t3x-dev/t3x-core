@@ -12,9 +12,6 @@
     "packages/api/src/routes/source-evidence.openapi.ts",
     "packages/api/src/routes/source-text-revisions.openapi.ts",
     "packages/api/src/routes/topics.openapi.ts",
-    "packages/api/src/routes/tree-answer.openapi.ts",
-    "packages/api/src/routes/tree-compress.openapi.ts",
-    "packages/api/src/routes/tree-extract.openapi.ts",
     "packages/api/src/routes/turns.openapi.ts",
     "packages/api/src/routes/yops-log.openapi.ts"
   ],
@@ -120,7 +117,7 @@
         {
           "kind": "mcp",
           "file": "packages/mcp/src/tools/core/query.ts",
-          "token": "client.listConversations("
+          "token": "client.sourceThreads.list("
         }
       ]
     },
@@ -281,6 +278,11 @@
           "kind": "application",
           "file": "apps/web/src/infrastructure/sourceEvidence.ts",
           "token": "getConversationSourceEvidence"
+        },
+        {
+          "kind": "mcp",
+          "file": "packages/mcp/src/tools/core/query.ts",
+          "token": "client.sourceThreads.evidence("
         }
       ]
     },
@@ -351,51 +353,6 @@
           "kind": "compatibility_adapter",
           "file": "apps/web/src/infrastructure/topics.ts",
           "token": "createTopicApi("
-        }
-      ]
-    },
-    {
-      "id": "legacy-semantic-tree-workflow",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "removal_candidate",
-      "removal_gate": "Remove each route only after its compatibility adapter has zero production callers; keep no route solely because an exported wrapper exists.",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "/v1/extract/trees",
-          "source": "packages/api/src/routes/tree-extract.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/extract/trees/stream",
-          "source": "packages/api/src/routes/tree-extract.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/extract/trees/answer",
-          "source": "packages/api/src/routes/tree-answer.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/conversations/{conversationId}/compress",
-          "source": "packages/api/src/routes/tree-compress.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/trees.ts",
-          "token": "extractNodes("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/extractionStream.ts",
-          "token": "extractionStream("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/trees.ts",
-          "token": "compressNodes("
         }
       ]
     },
@@ -493,7 +450,7 @@
       "id": "legacy-agent-drafts",
       "owner": "legacy_conversation_workflow",
       "compatibility": "compatibility",
-      "removal_gate": "Remove only after MCP query/edit consumers migrate to Workspace and Transition application services.",
+      "removal_gate": "Remove after the remaining typed-client compatibility methods have no verified first-party consumers.",
       "routes": [
         {
           "method": "POST",
@@ -516,11 +473,6 @@
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
           "token": "async getAgentDraft("
-        },
-        {
-          "kind": "mcp",
-          "file": "packages/mcp/src/tools/core/query.ts",
-          "token": "client.getAgentDraft("
         }
       ]
     }
@@ -587,16 +539,27 @@
       "reason": "Realtime subscriptions can be scoped to a source thread."
     }
   ],
-  "known_contract_gaps": [
+  "known_contract_gaps": [],
+  "retired_routes": [
     {
-      "id": "agent-draft-list-client-without-route",
-      "method": "GET",
-      "path": "/v1/agent/drafts",
-      "client_file": "packages/api-client/src/client.ts",
-      "client_token": "async listAgentDrafts(",
-      "live_consumer_file": "packages/mcp/src/tools/core/query.ts",
-      "live_consumer_token": "client.listAgentDrafts(",
-      "resolution_gate": "The Source Thread and MCP migration must either add an authenticated application-service route or remove both the typed-client method and its MCP caller."
+      "method": "POST",
+      "path": "/v1/extract/trees",
+      "reason": "Removed after the executable inventory proved zero production callers; evaluation now invokes the extraction pipeline directly."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract/trees/stream",
+      "reason": "Removed with the unused Web extraction stream adapter."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract/trees/answer",
+      "reason": "Removed after the executable inventory proved zero production callers."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/{conversationId}/compress",
+      "reason": "Removed after the executable inventory proved zero production callers."
     }
   ],
   "deprecated_caller_guards": [
@@ -621,16 +584,6 @@
     { "symbol": "createTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
     { "symbol": "updateTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
     { "symbol": "deleteTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
-    { "symbol": "extractNodes", "allowed_files": ["apps/web/src/infrastructure/trees.ts"] },
-    {
-      "symbol": "extractionStream",
-      "allowed_files": [
-        "apps/web/src/infrastructure/extractionStream.ts",
-        "apps/web/src/infrastructure/index.ts"
-      ]
-    },
-    { "symbol": "answerTreeQuestion", "allowed_files": ["apps/web/src/infrastructure/trees.ts"] },
-    { "symbol": "compressNodes", "allowed_files": ["apps/web/src/infrastructure/trees.ts"] },
     {
       "symbol": "postExtractYops",
       "allowed_files": [

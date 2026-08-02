@@ -9,6 +9,7 @@ const {
   mockFindConversationById,
   mockFindLeafById,
   mockGetMergeDraft,
+  mockApiClient,
 } = vi.hoisted(() => ({
   mockFindProjectById: vi.fn(),
   mockGetCommit: vi.fn(),
@@ -16,11 +17,23 @@ const {
   mockFindConversationById: vi.fn(),
   mockFindLeafById: vi.fn(),
   mockGetMergeDraft: vi.fn(),
+  mockApiClient: {
+    getProject: vi.fn(),
+    getCommit: vi.fn(),
+    getDraft: vi.fn(),
+    getLeaf: vi.fn(),
+    getMergeDraft: vi.fn(),
+    sourceThreads: { get: vi.fn() },
+  },
 }));
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve({})),
   closeDB: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
@@ -95,6 +108,8 @@ vi.mock('@t3x-dev/core', () => ({
 
 import { createMcpServer } from '../server.js';
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 async function connectClientAndServer() {
   const { server } = createMcpServer({ toolsets: ['core'] });
   const client = new Client(
@@ -110,6 +125,11 @@ async function connectClientAndServer() {
 
 afterEach(() => {
   vi.clearAllMocks();
+  if (originalBackend === undefined) {
+    delete process.env.T3X_MCP_BACKEND;
+  } else {
+    process.env.T3X_MCP_BACKEND = originalBackend;
+  }
 });
 
 describe('MCP resources', () => {
@@ -143,7 +163,11 @@ describe('MCP resources', () => {
         uriTemplate: 't3x://workbench-drafts/{draft_id}',
       }),
       expect.objectContaining({
-        name: 'conversation',
+        name: 'source_thread',
+        uriTemplate: 't3x://source-threads/{source_thread_id}',
+      }),
+      expect.objectContaining({
+        name: 'conversation_compatibility',
         uriTemplate: 't3x://conversations/{conversation_id}',
       }),
       expect.objectContaining({
@@ -293,7 +317,7 @@ describe('MCP resources', () => {
     const result = await client.readResource({ uri: 't3x://conversations/conv_123' });
 
     expect(JSON.parse(result.contents[0].text)).toMatchObject({
-      kind: 'conversation',
+      kind: 'source_thread',
       conversation_id: 'conv_123',
       project_id: 'proj_123',
       title: 'Trip planning',
@@ -301,6 +325,58 @@ describe('MCP resources', () => {
       provider: 'anthropic',
       model: 'claude-sonnet-4-20250514',
       metadata: { channel: 'chat' },
+    });
+
+    await client.close();
+  });
+
+  it('reads the canonical source-thread URI through storage compatibility', async () => {
+    mockFindConversationById.mockResolvedValue({
+      conversationId: 'conv_123',
+      projectId: 'proj_123',
+      title: 'Trip planning',
+      alias: null,
+      parentCommitHash: null,
+      positionX: null,
+      positionY: null,
+      createdAt: new Date('2026-04-21T13:00:00.000Z'),
+      metadataJson: null,
+      provider: null,
+      model: null,
+    });
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://source-threads/conv_123' });
+
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'source_thread',
+      conversation_id: 'conv_123',
+      project_id: 'proj_123',
+    });
+
+    await client.close();
+  });
+
+  it('uses the authenticated API boundary for resources in api backend mode', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.sourceThreads.get.mockResolvedValueOnce({
+      conversation_id: 'conv_api',
+      project_id: 'proj_api',
+      title: 'Authenticated source',
+    });
+    const { getDB } = await import('../db.js');
+    const callsBeforeRead = (getDB as ReturnType<typeof vi.fn>).mock.calls.length;
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://source-threads/conv_api' });
+
+    expect(mockApiClient.sourceThreads.get).toHaveBeenCalledWith('conv_api');
+    expect((getDB as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(callsBeforeRead);
+    expect(JSON.parse(result.contents[0].text)).toEqual({
+      kind: 'source_thread',
+      conversation_id: 'conv_api',
+      project_id: 'proj_api',
+      title: 'Authenticated source',
     });
 
     await client.close();

@@ -50,6 +50,12 @@ interface KnownContractGap {
   resolution_gate: string;
 }
 
+interface RetiredRoute {
+  method: string;
+  path: string;
+  reason: string;
+}
+
 interface ContractInventory {
   schema_version: number;
   compatibility_states: Compatibility[];
@@ -57,6 +63,7 @@ interface ContractInventory {
   contracts: ContractEntry[];
   related_modules: RelatedModuleEntry[];
   known_contract_gaps: KnownContractGap[];
+  retired_routes: RetiredRoute[];
   deprecated_caller_guards: CallerGuard[];
 }
 
@@ -192,6 +199,24 @@ describe('conversation-adjacent contract inventory', () => {
       expect(readFileSync(repositoryPath(gap.live_consumer_file), 'utf8'), gap.id).toContain(
         gap.live_consumer_token
       );
+    }
+  });
+
+  it('prevents retired compatibility routes from being reintroduced', () => {
+    const routesDirectory = repositoryPath('packages/api/src/routes');
+    const implemented = new Set(
+      readdirSync(routesDirectory)
+        .filter((file) => file.endsWith('.ts'))
+        .flatMap((file) =>
+          extractRoutes(readFileSync(resolve(routesDirectory, file), 'utf8')).map((route) =>
+            endpointKey(route.method, route.path)
+          )
+        )
+    );
+
+    for (const route of inventory.retired_routes) {
+      expect(route.reason).not.toBe('');
+      expect(implemented.has(endpointKey(route.method, route.path)), route.path).toBe(false);
     }
   });
 
