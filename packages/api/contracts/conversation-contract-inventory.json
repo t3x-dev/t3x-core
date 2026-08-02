@@ -45,12 +45,12 @@
         {
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "api.chat("
+          "token": "generationApi.complete("
         },
         {
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "api.chatStream("
+          "token": "generationApi.stream("
         },
         {
           "kind": "compatibility_adapter",
@@ -60,7 +60,7 @@
         {
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
-          "token": "async chat("
+          "token": "readonly generation: GenerationCapability"
         }
       ]
     },
@@ -105,7 +105,7 @@
         {
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "api.createConversation("
+          "token": "sourceThreadApi.create("
         },
         {
           "kind": "application",
@@ -115,7 +115,7 @@
         {
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
-          "token": "async listConversations("
+          "token": "readonly sourceThreads: SourceThreadCapability"
         },
         {
           "kind": "mcp",
@@ -150,7 +150,7 @@
         {
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "api.getConversationMemory("
+          "token": "sourceThreadApi.memory("
         },
         {
           "kind": "application",
@@ -200,12 +200,12 @@
         {
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "api.createTurn("
+          "token": "sourceThreadApi.appendTurn("
         },
         {
           "kind": "application",
           "file": "apps/web/src/hooks/conversations/useChatHistory.ts",
-          "token": "api.listTurns("
+          "token": "sourceThreadApi.listTurns("
         },
         {
           "kind": "compatibility_adapter",
@@ -215,7 +215,7 @@
         {
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
-          "token": "async createTurn("
+          "token": "appendTurn: (input) => this.appendSourceThreadTurn(input)"
         }
       ]
     },

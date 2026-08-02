@@ -73,13 +73,20 @@ vi.mock('@/store/chatSessionStore', () => ({
   ) => selector({ webSearchEnabled: false, thinkingEnabled: false }),
 }));
 
-vi.mock('@/infrastructure', () => ({
-  createConversation: (...args: unknown[]) => createConversationMock(...args),
-  getConversationMemory: (...args: unknown[]) => getConversationMemoryMock(...args),
-  chat: (...args: unknown[]) => chatMock(...args),
-  chatStream: (...args: unknown[]) => chatStreamMock(...args),
-  createTurn: (...args: unknown[]) => createTurnMock(...args),
-  updateConversation: (...args: unknown[]) => updateConversationMock(...args),
+vi.mock('@/infrastructure/generation', () => ({
+  generationApi: {
+    complete: (...args: unknown[]) => chatMock(...args),
+    stream: (...args: unknown[]) => chatStreamMock(...args),
+  },
+}));
+
+vi.mock('@/infrastructure/sourceThreads', () => ({
+  sourceThreadApi: {
+    create: (...args: unknown[]) => createConversationMock(...args),
+    memory: (...args: unknown[]) => getConversationMemoryMock(...args),
+    appendTurn: (...args: unknown[]) => createTurnMock(...args),
+    update: (...args: unknown[]) => updateConversationMock(...args),
+  },
 }));
 
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';

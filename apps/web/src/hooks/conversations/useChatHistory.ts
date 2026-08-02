@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import * as api from '@/infrastructure';
+import { isSourceThreadRequestAborted, sourceThreadApi } from '@/infrastructure/sourceThreads';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 
 const CHAT_PAGE_SIZE = 100;
@@ -103,10 +103,16 @@ export function useChatHistory(
       setHasMore(false);
       setIsChatLoading(true);
       try {
-        const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, 0, {
-          signal: abortController.signal,
-          order: 'desc',
-        });
+        const response = await sourceThreadApi.listTurns(
+          projectId,
+          currentConversationId,
+          CHAT_PAGE_SIZE,
+          0,
+          {
+            signal: abortController.signal,
+            order: 'desc',
+          }
+        );
         if (abortController.signal.aborted) return;
         const loaded = response.turns
           .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
@@ -122,8 +128,7 @@ export function useChatHistory(
         setHasMore(response.turns.length >= CHAT_PAGE_SIZE);
         setOffset(response.turns.length);
       } catch (err) {
-        const isAbortError =
-          abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
+        const isAbortError = abortController.signal.aborted || isSourceThreadRequestAborted(err);
         if (!isAbortError) {
           // Silently ignore — UI remains on whatever state the page had.
         }
@@ -150,10 +155,16 @@ export function useChatHistory(
 
     setIsLoadingMore(true);
     try {
-      const response = await api.listTurns(projectId, conversationId, CHAT_PAGE_SIZE, offset, {
-        order: 'desc',
-        signal: abortController.signal,
-      });
+      const response = await sourceThreadApi.listTurns(
+        projectId,
+        conversationId,
+        CHAT_PAGE_SIZE,
+        offset,
+        {
+          order: 'desc',
+          signal: abortController.signal,
+        }
+      );
       if (abortController.signal.aborted) return;
       if (response.turns.length === 0) {
         setHasMore(false);
@@ -173,8 +184,7 @@ export function useChatHistory(
       setOffset((prev) => prev + response.turns.length);
       setHasMore(response.turns.length >= CHAT_PAGE_SIZE);
     } catch (err) {
-      const isAbortError =
-        abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
+      const isAbortError = abortController.signal.aborted || isSourceThreadRequestAborted(err);
       if (!isAbortError) {
         // Silently ignore.
       }

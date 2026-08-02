@@ -12,9 +12,6 @@ import type {
   AttachTransitionStatementInput,
   AttachTransitionStatementResult,
   Branch,
-  ChatInput,
-  ChatProvider,
-  ChatResponse,
   CheckInput,
   CheckResult,
   Commit,
@@ -42,6 +39,12 @@ import type {
   ExtractInput,
   ExtractResult,
   GenerateLeafInput,
+  GenerationCapability,
+  GenerationProviderCatalog,
+  GenerationRequest,
+  GenerationResponse,
+  GenerationStreamEvent,
+  GenerationStreamOptions,
   HealthResponse,
   ImportUrlInput,
   ImportUrlPreviewResult,
@@ -69,6 +72,8 @@ import type {
   RenameConversationInput,
   RenameConversationResult,
   ShareToken,
+  SourceThreadCapability,
+  SourceThreadMemory,
   StatusResponse,
   Turn,
   TwoWayDiffInput,
@@ -103,6 +108,11 @@ export class T3xClient {
   private headers: Record<string, string>;
   private fetchFn: typeof fetch;
 
+  /** Neutral model-invocation capability. Compatibility routes remain /v1/chat*. */
+  readonly generation: GenerationCapability;
+  /** Durable source metadata, immutable turns, context, and evidence. */
+  readonly sourceThreads: SourceThreadCapability;
+
   constructor(config: T3xClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.headers = {
@@ -110,6 +120,25 @@ export class T3xClient {
       ...config.headers,
     };
     this.fetchFn = config.fetch ?? fetch;
+    this.generation = Object.freeze<GenerationCapability>({
+      complete: (input) => this.generate(input),
+      stream: (input, options) => this.streamGeneration(input, options),
+      providers: () => this.listGenerationProviders(),
+    });
+    this.sourceThreads = Object.freeze<SourceThreadCapability>({
+      list: (projectId, params) => this.listSourceThreads(projectId, params),
+      get: (id) => this.getSourceThread(id),
+      create: (input) => this.createSourceThread(input),
+      remove: (id) => this.deleteSourceThread(id),
+      rename: (id, input) => this.renameSourceThread(id, input),
+      listTurns: (conversationId, params) => this.listSourceThreadTurns(conversationId, params),
+      getTurn: (hash) => this.getSourceThreadTurn(hash),
+      getTurnChain: (hash) => this.getSourceThreadTurnChain(hash),
+      appendTurn: (input) => this.appendSourceThreadTurn(input),
+      memory: (id) => this.getSourceThreadMemory(id),
+      evidence: (projectId, conversationId, params) =>
+        this.getSourceThreadEvidence(projectId, conversationId, params),
+    });
   }
 
   private async request<T>(
@@ -228,10 +257,10 @@ export class T3xClient {
   }
 
   // ============================================
-  // Conversations
+  // Source Threads
   // ============================================
 
-  async listConversations(
+  async listSourceThreads(
     projectId: string,
     params?: PaginationParams
   ): Promise<ListConversationsResponse> {
@@ -241,30 +270,30 @@ export class T3xClient {
     });
   }
 
-  async getConversation(id: string): Promise<Conversation> {
+  async getSourceThread(id: string): Promise<Conversation> {
     return this.request<Conversation>('GET', `/v1/conversations/${id}`);
   }
 
-  async createConversation(input: CreateConversationInput): Promise<Conversation> {
+  async createSourceThread(input: CreateConversationInput): Promise<Conversation> {
     return this.request<Conversation>('POST', '/v1/conversations', input);
   }
 
-  async deleteConversation(id: string): Promise<void> {
+  async deleteSourceThread(id: string): Promise<void> {
     await this.request<void>('DELETE', `/v1/conversations/${id}`);
   }
 
-  async renameConversation(
+  async renameSourceThread(
     id: string,
     input: RenameConversationInput
   ): Promise<RenameConversationResult> {
     return this.request<RenameConversationResult>('PATCH', `/v1/conversations/${id}/rename`, input);
   }
 
-  // ============================================
-  // Repository Sources
-  // ============================================
+  async getSourceThreadMemory(id: string): Promise<SourceThreadMemory> {
+    return this.request<SourceThreadMemory>('GET', `/v1/conversations/${id}/memory`);
+  }
 
-  async getConversationSourceEvidence(
+  async getSourceThreadEvidence(
     projectId: string,
     conversationId: string,
     params?: PaginationParams
@@ -283,26 +312,89 @@ export class T3xClient {
   }
 
   // ============================================
-  // Turns
+  // Source Thread Turns
   // ============================================
 
-  async listTurns(conversationId: string, params?: PaginationParams): Promise<ListTurnsResponse> {
+  async listSourceThreadTurns(
+    conversationId: string,
+    params?: PaginationParams
+  ): Promise<ListTurnsResponse> {
     return this.request<ListTurnsResponse>('GET', '/v1/turns', undefined, {
       conversation_id: conversationId,
       ...params,
     });
   }
 
-  async getTurn(hash: string): Promise<Turn> {
+  async getSourceThreadTurn(hash: string): Promise<Turn> {
     return this.request<Turn>('GET', `/v1/turns/${hash}`);
   }
 
-  async getTurnChain(hash: string): Promise<Turn[]> {
+  async getSourceThreadTurnChain(hash: string): Promise<Turn[]> {
     return this.request<Turn[]>('GET', `/v1/turns/${hash}/chain`);
   }
 
-  async createTurn(input: CreateTurnInput): Promise<Turn> {
+  async appendSourceThreadTurn(input: CreateTurnInput): Promise<Turn> {
     return this.request<Turn>('POST', '/v1/turns', input);
+  }
+
+  /** @deprecated Use sourceThreads.list() or listSourceThreads(). */
+  async listConversations(
+    projectId: string,
+    params?: PaginationParams
+  ): Promise<ListConversationsResponse> {
+    return this.listSourceThreads(projectId, params);
+  }
+
+  /** @deprecated Use sourceThreads.get() or getSourceThread(). */
+  async getConversation(id: string): Promise<Conversation> {
+    return this.getSourceThread(id);
+  }
+
+  /** @deprecated Use sourceThreads.create() or createSourceThread(). */
+  async createConversation(input: CreateConversationInput): Promise<Conversation> {
+    return this.createSourceThread(input);
+  }
+
+  /** @deprecated Use sourceThreads.remove() or deleteSourceThread(). */
+  async deleteConversation(id: string): Promise<void> {
+    await this.deleteSourceThread(id);
+  }
+
+  /** @deprecated Use sourceThreads.rename() or renameSourceThread(). */
+  async renameConversation(
+    id: string,
+    input: RenameConversationInput
+  ): Promise<RenameConversationResult> {
+    return this.renameSourceThread(id, input);
+  }
+
+  /** @deprecated Use sourceThreads.evidence() or getSourceThreadEvidence(). */
+  async getConversationSourceEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: PaginationParams
+  ): Promise<ConversationSourceEvidence> {
+    return this.getSourceThreadEvidence(projectId, conversationId, params);
+  }
+
+  /** @deprecated Use sourceThreads.listTurns() or listSourceThreadTurns(). */
+  async listTurns(conversationId: string, params?: PaginationParams): Promise<ListTurnsResponse> {
+    return this.listSourceThreadTurns(conversationId, params);
+  }
+
+  /** @deprecated Use sourceThreads.getTurn() or getSourceThreadTurn(). */
+  async getTurn(hash: string): Promise<Turn> {
+    return this.getSourceThreadTurn(hash);
+  }
+
+  /** @deprecated Use sourceThreads.getTurnChain() or getSourceThreadTurnChain(). */
+  async getTurnChain(hash: string): Promise<Turn[]> {
+    return this.getSourceThreadTurnChain(hash);
+  }
+
+  /** @deprecated Use sourceThreads.appendTurn() or appendSourceThreadTurn(). */
+  async createTurn(input: CreateTurnInput): Promise<Turn> {
+    return this.appendSourceThreadTurn(input);
   }
 
   // ============================================
@@ -504,15 +596,83 @@ export class T3xClient {
   }
 
   // ============================================
-  // Chat
+  // Generation
   // ============================================
 
-  async chat(input: ChatInput): Promise<ChatResponse> {
-    return this.request<ChatResponse>('POST', '/v1/chat', input);
+  async generate(input: GenerationRequest): Promise<GenerationResponse> {
+    return this.request<GenerationResponse>('POST', '/v1/chat', input);
   }
 
-  async listChatProviders(): Promise<ChatProvider[]> {
-    return this.request<ChatProvider[]>('GET', '/v1/chat/providers');
+  async listGenerationProviders(): Promise<GenerationProviderCatalog> {
+    return this.request<GenerationProviderCatalog>('GET', '/v1/chat/providers');
+  }
+
+  async *streamGeneration(
+    input: GenerationRequest,
+    options?: GenerationStreamOptions
+  ): AsyncGenerator<GenerationStreamEvent, void, unknown> {
+    const response = await this.fetchFn(`${this.baseUrl}/v1/chat/stream`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+      const error = data?.success === false ? data.error : null;
+      throw new T3xApiError(
+        error?.code ?? 'GENERATION_FAILED',
+        error?.message || response.statusText || 'Generation stream failed',
+        response.status,
+        error?.details
+      );
+    }
+    if (response.body === null) {
+      throw new T3xApiError(
+        'GENERATION_STREAM_UNAVAILABLE',
+        'Generation stream response has no body',
+        response.status
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const records = buffer.split(/\r?\n\r?\n/);
+        buffer = records.pop() ?? '';
+        for (const record of records) {
+          const data = record
+            .split(/\r?\n/)
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trim())
+            .join('\n');
+          if (data.length === 0 || data === '[DONE]') continue;
+          try {
+            yield JSON.parse(data) as GenerationStreamEvent;
+          } catch {
+            // Ignore malformed upstream records. The server owns event validation.
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /** @deprecated Use generation.complete() or generate(). */
+  async chat(input: GenerationRequest): Promise<GenerationResponse> {
+    return this.generate(input);
+  }
+
+  /** @deprecated Use generation.providers() or listGenerationProviders(). */
+  async listChatProviders(): Promise<GenerationProviderCatalog> {
+    return this.listGenerationProviders();
   }
 
   // ============================================

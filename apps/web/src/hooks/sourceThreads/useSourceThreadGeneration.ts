@@ -10,8 +10,14 @@ import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnI
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
-import * as api from '@/infrastructure';
-import type { Citation } from '@/infrastructure/chat';
+import {
+  type GenerationCitation,
+  type GenerationContentBlock,
+  type GenerationMessage,
+  generationApi,
+} from '@/infrastructure/generation';
+import { sourceThreadApi } from '@/infrastructure/sourceThreads';
+import type { Turn } from '@/infrastructure/types';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -59,7 +65,7 @@ export interface UseSourceThreadGenerationReturn {
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
   searchQuery: string | null;
-  citations: Citation[];
+  citations: GenerationCitation[];
   thinkingContent: string;
   isThinking: boolean;
 }
@@ -78,7 +84,7 @@ async function generateConversationTitleFromFirstMessage(
   const fallback = deriveConversationTitleFromMessage(message);
 
   try {
-    const response = await api.chat({
+    const response = await generationApi.complete({
       provider: options.provider,
       model: options.model,
       temperature: 0.2,
@@ -104,7 +110,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function saveTurnWithRetry(createTurn: () => Promise<api.Turn>, retriesLeft = 1) {
+async function saveTurnWithRetry(createTurn: () => Promise<Turn>, retriesLeft = 1) {
   try {
     return await createTurn();
   } catch (err) {
@@ -116,7 +122,7 @@ async function saveTurnWithRetry(createTurn: () => Promise<api.Turn>, retriesLef
 
 function mirrorSavedTurn(
   conversationId: string,
-  turn: api.Turn | undefined,
+  turn: Turn | undefined,
   role: 'user' | 'assistant',
   content: string
 ) {
@@ -130,11 +136,7 @@ function mirrorSavedTurn(
   });
 }
 
-function savedTurnMessage(
-  turn: api.Turn,
-  role: 'user' | 'assistant',
-  content: string
-): ChatMessage {
+function savedTurnMessage(turn: Turn, role: 'user' | 'assistant', content: string): ChatMessage {
   return {
     id: turn.turn_hash,
     ...(turn.project_id ? { projectId: turn.project_id } : {}),
@@ -186,7 +188,7 @@ export function useSourceThreadGeneration({
 
       // Build content for API (may include image blocks)
       const images = options?.images;
-      let apiContent: string | api.ContentBlock[];
+      let apiContent: string | GenerationContentBlock[];
       if (images?.length) {
         apiContent = [
           ...images.map((img) => ({
@@ -253,7 +255,7 @@ export function useSourceThreadGeneration({
           }
 
           try {
-            const updated = await api.updateConversation(targetConversationId, {
+            const updated = await sourceThreadApi.update(targetConversationId, {
               title: generatedTitle,
             });
             if (useChatStore.getState().activeConversationId === targetConversationId) {
@@ -269,7 +271,7 @@ export function useSourceThreadGeneration({
 
       const replaceLocalMessageWithSavedTurn = (
         localMessageId: string,
-        turn: api.Turn | undefined,
+        turn: Turn | undefined,
         role: 'user' | 'assistant',
         content: string
       ) => {
@@ -301,7 +303,7 @@ export function useSourceThreadGeneration({
         if (!projectId || !conversationForSave || content.trim().length === 0) return;
         try {
           const assistantTurn = await saveTurnWithRetry(() =>
-            api.createTurn(projectId, conversationForSave, 'assistant', content)
+            sourceThreadApi.appendTurn(projectId, conversationForSave, 'assistant', content)
           );
           mirrorSavedTurn(conversationForSave, assistantTurn, 'assistant', content);
           if (localMessageId) {
@@ -326,7 +328,7 @@ export function useSourceThreadGeneration({
           onConversationCreated?.(convId);
         } else if (!convId && projectId) {
           const newTitle = title?.trim() ? title : messageTitle;
-          const newConv = await api.createConversation(projectId, newTitle, parentCommitHash);
+          const newConv = await sourceThreadApi.create(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
           initialTitleForGeneratedTitle = newConv.title || newTitle;
@@ -345,7 +347,7 @@ export function useSourceThreadGeneration({
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         } else {
           const userTurn = await saveTurnWithRetry(() =>
-            api.createTurn(projectId, currentConversationId, 'user', userMessage)
+            sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
           );
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
           replaceLocalMessageWithSavedTurn(newUserMessage.id, userTurn, 'user', userMessage);
@@ -357,14 +359,14 @@ export function useSourceThreadGeneration({
         let memoryContext = '';
         if (!isTemporaryMode && !options?.skipMemoryFetch) {
           try {
-            const ctx = await api.getConversationMemory(currentConversationId);
+            const ctx = await sourceThreadApi.memory(currentConversationId);
             if (ctx.text) memoryContext = ctx.text;
           } catch {
             // Memory fetch failed — proceed without context.
           }
         }
 
-        const messages: api.ChatMessage[] = [
+        const messages: GenerationMessage[] = [
           ...(memoryContext ? [{ role: 'system' as const, content: memoryContext }] : []),
           ...previousMessages,
           { role: 'user' as const, content: apiContent },
@@ -408,7 +410,7 @@ export function useSourceThreadGeneration({
         const controller = new AbortController();
         stream.abortControllerRef.current = controller;
 
-        for await (const event of api.chatStream(
+        for await (const event of generationApi.stream(
           { messages, provider, model, web_search: webSearchEnabled, thinking: thinkingEnabled },
           { signal: controller.signal }
         )) {

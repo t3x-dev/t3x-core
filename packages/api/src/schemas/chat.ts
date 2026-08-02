@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-export const ChatRequestBodySchema = z.object({
+export const GenerationRequestBodySchema = z.object({
   messages: z.array(z.unknown()).min(1).max(100),
   provider: z.string().optional(),
   model: z.string().optional(),
@@ -11,7 +11,7 @@ export const ChatRequestBodySchema = z.object({
   thinking: z.boolean().optional(),
 });
 
-export const ChatResponseDataSchema = z.object({
+export const GenerationResponseDataSchema = z.object({
   content: z.string(),
   model: z.string(),
   usage: z
@@ -23,7 +23,14 @@ export const ChatResponseDataSchema = z.object({
   finish_reason: z.string().optional(),
 });
 
-export const ProvidersResponseDataSchema = z.object({
+export const GenerationProvidersResponseDataSchema = z.object({
   providers: z.array(z.string()),
   default: z.string(),
 });
+
+/** @deprecated Compatibility name for the existing /v1/chat wire route. */
+export const ChatRequestBodySchema = GenerationRequestBodySchema;
+/** @deprecated Compatibility name for the existing /v1/chat wire route. */
+export const ChatResponseDataSchema = GenerationResponseDataSchema;
+/** @deprecated Use GenerationProvidersResponseDataSchema. */
+export const ProvidersResponseDataSchema = GenerationProvidersResponseDataSchema;

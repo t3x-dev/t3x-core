@@ -142,7 +142,7 @@ export async function updateConversationContext(
 export interface ContextSource {
   type: 'commit' | 'conversation' | 'leaf' | 'import';
   id: string;
-  label?: string;
+  title?: string;
 }
 
 export interface BuiltContext {

@@ -1,8 +1,11 @@
 /**
- * Chat Routes (OpenAPI)
+ * Generation Routes (OpenAPI)
  *
- * POST /v1/chat         — Non-streaming chat (OpenAPI route)
- * POST /v1/chat/stream  — Streaming SSE (plain Hono handler — OpenAPI can't describe SSE)
+ * The /v1/chat* wire paths remain compatibility contracts while route
+ * ownership and OpenAPI vocabulary describe the neutral Generation capability.
+ *
+ * POST /v1/chat           — Non-streaming generation (OpenAPI route)
+ * POST /v1/chat/stream    — Streaming SSE (plain Hono handler — OpenAPI can't describe SSE)
  * GET  /v1/chat/providers — List available providers (OpenAPI route)
  */
 
@@ -19,9 +22,9 @@ import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provi
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import { pinoLogger } from '../middleware/logger';
 import {
-  ChatRequestBodySchema,
-  ChatResponseDataSchema,
-  ProvidersResponseDataSchema,
+  GenerationProvidersResponseDataSchema,
+  GenerationRequestBodySchema,
+  GenerationResponseDataSchema,
 } from '../schemas/chat';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -505,35 +508,39 @@ async function callClaudeNonStreaming(
 // Routes
 // ============================================================================
 
-export const chatRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+export const generationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+/** @deprecated Compatibility export for callers that still use the old capability name. */
+export const chatRoutes = generationRoutes;
 
 // -----------------------------------------------------------------------
 // OpenAPI route definitions
 // -----------------------------------------------------------------------
 
-const chatRoute = createRoute({
+const generationRoute = createRoute({
   method: 'post',
   path: '/v1/chat',
-  tags: ['Chat'],
-  summary: 'Non-streaming chat',
-  description: 'Send messages to an AI provider and receive a complete response.',
+  tags: ['Generation'],
+  summary: 'Generate a complete response',
+  description: 'Invoke a configured model provider and receive a complete response.',
   request: {
     body: {
-      content: { 'application/json': { schema: ChatRequestBodySchema } },
+      content: { 'application/json': { schema: GenerationRequestBodySchema } },
       required: true,
     },
   },
   responses: {
     200: {
-      description: 'Chat response',
-      content: { 'application/json': { schema: SuccessResponseSchema(ChatResponseDataSchema) } },
+      description: 'Generation response',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(GenerationResponseDataSchema) },
+      },
     },
     400: {
       description: 'Invalid request or provider error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
-      description: 'Chat error',
+      description: 'Generation error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -542,14 +549,16 @@ const chatRoute = createRoute({
 const providersRoute = createRoute({
   method: 'get',
   path: '/v1/chat/providers',
-  tags: ['Chat'],
+  tags: ['Generation'],
   summary: 'List available providers',
   description: 'Returns the list of configured AI providers.',
   responses: {
     200: {
       description: 'Provider list',
       content: {
-        'application/json': { schema: SuccessResponseSchema(ProvidersResponseDataSchema) },
+        'application/json': {
+          schema: SuccessResponseSchema(GenerationProvidersResponseDataSchema),
+        },
       },
     },
   },
@@ -559,7 +568,7 @@ const providersRoute = createRoute({
 // POST /v1/chat — Non-streaming chat (OpenAPI handler)
 // -----------------------------------------------------------------------
 
-chatRoutes.openapi(chatRoute, async (c) => {
+generationRoutes.openapi(generationRoute, async (c) => {
   const body = c.req.valid('json') as {
     messages?: unknown[];
     provider?: string;
@@ -667,7 +676,7 @@ chatRoutes.openapi(chatRoute, async (c) => {
 // OpenAPI cannot describe SSE, so this stays as a plain .post() handler.
 // -----------------------------------------------------------------------
 
-chatRoutes.post('/v1/chat/stream', async (c) => {
+generationRoutes.post('/v1/chat/stream', async (c) => {
   let body: {
     messages?: ChatMessage[];
     provider?: string;
@@ -1220,7 +1229,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 // GET /v1/chat/providers — List available providers (OpenAPI handler)
 // -----------------------------------------------------------------------
 
-chatRoutes.openapi(providersRoute, (c) => {
+generationRoutes.openapi(providersRoute, (c) => {
   return refreshProviderRegistryConfig()
     .then(() => getProviderRegistry())
     .then((registry) => {
