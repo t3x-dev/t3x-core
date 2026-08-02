@@ -13,7 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChatInput } from '@/components/chat/ChatInput';
+import { GenerationComposer } from '@/components/generation/GenerationComposer';
 import {
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
   unsupportedChatMaterialSourceMessage,
@@ -34,17 +34,19 @@ import {
   getPrimarySchemaBinding,
   summarizeSourceBundle,
 } from '@/domain/workspaces/selectors';
-import type { ChatMessage } from '@/hooks/conversations/useConversationChat';
-import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationParentResolver } from '@/hooks/conversations/useConversationParentResolver';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialDetail } from '@/hooks/materials/useMaterialDetail';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
+import {
+  type SourceThreadMessage,
+  useSourceThreadGeneration,
+} from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { usePinsStore } from '@/store/pinsStore';
 import type { MaterialDetail } from '@/types/api';
-import type { AttachedImage } from '@/types/chat';
+import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   SourceConversationTurn,
@@ -1128,7 +1130,7 @@ function SourceChatPanel({
     [candidate.id, candidate.projectId, parentCommitHash]
   );
 
-  const chat = useConversationChat({
+  const chat = useSourceThreadGeneration({
     projectId: candidate.projectId,
     conversationId: sourceConversationId,
     title: `${candidate.title} source chat`,
@@ -1335,8 +1337,7 @@ function SourceChatPanel({
         </section>
         <div className="border-t border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-4 py-3">
           <div className="mx-auto max-w-3xl">
-            <ChatInput
-              conversationId={sourceConversationId ?? null}
+            <GenerationComposer
               draftKey={`workspace-source:${candidate.id}`}
               disabled={chatDisabled}
               isStreaming={chat.isStreaming}
@@ -1425,7 +1426,10 @@ function getSourceChatSourceId(
   return `source_chat:${conversationId ?? candidateId}`;
 }
 
-function chatMessageToSourceTurn(message: ChatMessage, index: number): SourceConversationTurn {
+function chatMessageToSourceTurn(
+  message: SourceThreadMessage,
+  index: number
+): SourceConversationTurn {
   const id = message.id || `source_chat_turn_${index}`;
 
   return {
