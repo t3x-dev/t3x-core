@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "scope": "feature_retirement",
+  "project_erasure": "Project or tenant erasure is a separate lifecycle and may remove the complete project graph.",
+  "commit_policy": {
+    "writable_format": "t3x/commit/v2",
+    "legacy_v1": "read_only_history",
+    "enforcement_issue": "#1305"
+  },
+  "lifecycle_states": ["active", "compatibility", "immutable_history"],
+  "resources": [
+    {
+      "id": "source_thread",
+      "owner": "source_thread",
+      "lifecycle": "active",
+      "storage": [{ "table": "conversations" }],
+      "read_paths": [
+        "packages/storage/src/queries/conversations.ts",
+        "packages/storage/src/queries/source-evidence.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/conversations.ts"],
+      "retention": "A conversation referenced by a commit is durable. An unreferenced conversation may be deleted.",
+      "removal_gate": "Not removable while Source Thread identity or repository Source Evidence is supported."
+    },
+    {
+      "id": "source_turns",
+      "owner": "source_thread",
+      "lifecycle": "active",
+      "storage": [{ "table": "turns" }],
+      "read_paths": [
+        "packages/storage/src/queries/turns.ts",
+        "packages/storage/src/queries/source-evidence.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/turns.ts"],
+      "retention": "Turns are immutable source material and follow their conversation retention.",
+      "removal_gate": "Not removable while a retained conversation can resolve as source evidence."
+    },
+    {
+      "id": "source_text_revisions",
+      "owner": "source_thread",
+      "lifecycle": "active",
+      "storage": [{ "table": "source_text_revisions" }],
+      "read_paths": [
+        "packages/storage/src/queries/source-text-revisions.ts",
+        "packages/storage/src/queries/source-evidence.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/source-text-revisions.ts"],
+      "retention": "Saved edits preserve the effective source text and follow their conversation retention.",
+      "removal_gate": "Not removable while turn-level source edits remain supported evidence."
+    },
+    {
+      "id": "source_context_selection",
+      "owner": "source_thread",
+      "lifecycle": "active",
+      "storage": [{ "table": "conversation_contexts" }],
+      "read_paths": ["packages/storage/src/queries/conversation-contexts.ts"],
+      "write_paths": ["packages/storage/src/queries/conversation-contexts.ts"],
+      "retention": "Context selection follows its conversation. It is not commit evidence unless a Statement binds it explicitly.",
+      "removal_gate": "Not removable while server-owned Generation context uses source-thread selections."
+    },
+    {
+      "id": "legacy_topics",
+      "owner": "legacy_conversation_workflow",
+      "lifecycle": "compatibility",
+      "storage": [{ "table": "topics" }],
+      "read_paths": ["packages/storage/src/queries/topics.ts"],
+      "write_paths": ["packages/storage/src/queries/topics.ts"],
+      "retention": "Retain while compatibility writers or YOps rows can refer to topic identity.",
+      "removal_gate": "Stop writes after #1292, prove zero readers, then remove through an additive and rollback-documented migration."
+    },
+    {
+      "id": "legacy_tree_projection",
+      "owner": "legacy_conversation_workflow",
+      "lifecycle": "compatibility",
+      "storage": [{ "table": "trees" }, { "table": "tree_relations" }],
+      "read_paths": ["packages/storage/src/queries/tree-state.ts"],
+      "write_paths": ["packages/storage/src/queries/tree-state.ts"],
+      "retention": "Mutable draft projection only; commit history reads the immutable commit snapshot instead.",
+      "removal_gate": "Stop writers, prove zero readers, and verify CommitV1 history before any table removal."
+    },
+    {
+      "id": "legacy_yops_history",
+      "owner": "repository_review",
+      "lifecycle": "compatibility",
+      "storage": [{ "table": "yops_log" }],
+      "read_paths": ["packages/storage/src/queries/yops-log.ts"],
+      "write_paths": ["packages/storage/src/queries/yops-log.ts"],
+      "retention": "Rows named by historical commits.yops_log_ids are immutable history. Uncommitted rows may be superseded or deleted; new CommitV2 does not create this linkage.",
+      "removal_gate": "No table removal until every supported CommitV1 projects its operations without this table."
+    },
+    {
+      "id": "legacy_commit_sources",
+      "owner": "repository_review",
+      "lifecycle": "immutable_history",
+      "storage": [{ "table": "commits", "column": "sources" }],
+      "read_paths": ["packages/storage/src/queries/source-evidence.ts"],
+      "write_paths": ["packages/storage/src/queries/commits.ts"],
+      "retention": "Commit source descriptors are immutable provenance and remain readable for every supported CommitV1.",
+      "removal_gate": "New writes are retired by #1305. Historical values are not removable by feature retirement."
+    },
+    {
+      "id": "legacy_commit_yops_links",
+      "owner": "repository_review",
+      "lifecycle": "immutable_history",
+      "storage": [{ "table": "commits", "column": "yops_log_ids" }],
+      "read_paths": [
+        "packages/storage/src/queries/yops-log.ts",
+        "packages/storage/src/queries/commits.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/commits.ts"],
+      "retention": "Historical Commit-to-YOps links are immutable and keep every referenced yops_log row durable. CommitV2 records Effects instead.",
+      "removal_gate": "New writes are retired by #1305. Historical links remain until the read-only CommitV1 archive no longer requires them."
+    },
+    {
+      "id": "committed_source_deletion_lock",
+      "owner": "repository_source",
+      "lifecycle": "immutable_history",
+      "storage": [
+        { "table": "conversations", "column": "committed_as" },
+        { "table": "commits", "column": "sources" }
+      ],
+      "read_paths": [
+        "packages/storage/src/queries/conversations.ts",
+        "packages/storage/src/queries/commits.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/conversations.ts"],
+      "retention": "Ordinary deletion must fail when either committed_as or an immutable commit source references the conversation.",
+      "removal_gate": "Permanent for ordinary feature deletion; project erasure remains separate."
+    }
+  ]
+}

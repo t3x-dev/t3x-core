@@ -9,12 +9,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { createCommit, hasConversationCommitReferences } from '../queries/commits';
 import {
+  ConversationHistoryReferencedError,
   deleteConversation,
   findConversationByAliasOrId,
   findConversationById,
   findConversationsByProject,
   getConversationTurnCount,
   insertConversation,
+  markConversationCommitted,
   renameConversation,
   setAliasIfNull,
   updateConversation,
@@ -384,6 +386,37 @@ describe('Conversations Storage', () => {
       const deleted = await deleteConversation(db, 'conv_nonexistent');
 
       expect(deleted).toBe(false);
+    });
+
+    it('refuses to cascade-delete a conversation marked as committed', async () => {
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Committed Source' })
+      );
+      await markConversationCommitted(db, created.conversationId, `sha256:${'a'.repeat(64)}`);
+
+      await expect(deleteConversation(db, created.conversationId)).rejects.toBeInstanceOf(
+        ConversationHistoryReferencedError
+      );
+      await expect(findConversationById(db, created.conversationId)).resolves.not.toBeNull();
+    });
+
+    it('refuses to cascade-delete a conversation referenced by immutable commit sources', async () => {
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Referenced Source' })
+      );
+      await createCommit(db, {
+        project_id: testProjectId,
+        author: { type: 'human', name: 'Tester' },
+        content: { trees: [], relations: [] },
+        sources: [{ type: 'conversation', id: created.conversationId }],
+      });
+
+      await expect(deleteConversation(db, created.conversationId)).rejects.toBeInstanceOf(
+        ConversationHistoryReferencedError
+      );
+      await expect(findConversationById(db, created.conversationId)).resolves.not.toBeNull();
     });
   });
 
