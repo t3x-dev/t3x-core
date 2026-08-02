@@ -16,6 +16,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { type BuiltContext, getCanonicalModelId } from '@t3x-dev/core';
 import {
+  ConversationHistoryReferencedError,
   deleteConversation,
   findConversationById,
   findConversationsByProject,
@@ -590,6 +591,10 @@ const deleteConversationRoute = createRoute({
       description: 'Not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'Conversation is retained by immutable history',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -629,6 +634,9 @@ conversationRoutes.openapi(deleteConversationRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (err instanceof ConversationHistoryReferencedError) {
+      return errorResponse(c, 'CONFLICT', err.message);
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'DELETE_FAILED', message);
   }

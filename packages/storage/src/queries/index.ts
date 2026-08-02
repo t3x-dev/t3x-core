@@ -103,6 +103,7 @@ export {
 } from './conversation-contexts';
 // Conversations
 export {
+  ConversationHistoryReferencedError,
   type CreateConversationInput,
   deleteConversation,
   findConversationByAliasOrId,

@@ -8,7 +8,17 @@ import { generateConversationId } from '@t3x-dev/core';
 import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
+import { commits } from '../schema-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+
+export class ConversationHistoryReferencedError extends Error {
+  readonly code = 'CONVERSATION_HISTORY_REFERENCED';
+
+  constructor(readonly conversationId: string) {
+    super(`Conversation ${conversationId} is referenced by immutable commit history`);
+    this.name = 'ConversationHistoryReferencedError';
+  }
+}
 
 export interface CreateConversationInput {
   projectId: string;
@@ -331,15 +341,39 @@ export async function updateConversation(
 }
 
 /**
- * Delete a conversation
+ * Delete an uncommitted, unreferenced conversation.
+ *
+ * The guard lives at the storage boundary as well as the HTTP boundary so a
+ * new caller cannot erase source rows through cascading foreign keys. Project
+ * erasure deliberately uses the project lifecycle instead of this function.
  */
 export async function deleteConversation(db: AnyDB, conversationId: string): Promise<boolean> {
+  const sourceRef = JSON.stringify([{ type: 'conversation', id: conversationId }]);
   const result = await db
     .delete(conversations)
-    .where(eq(conversations.conversationId, conversationId))
+    .where(
+      and(
+        eq(conversations.conversationId, conversationId),
+        isNull(conversations.committedAs),
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM ${commits}
+          WHERE ${commits.sources} @> ${sourceRef}::jsonb
+        )`
+      )
+    )
     .returning();
 
-  return result.length > 0;
+  if (result.length > 0) return true;
+
+  const [remaining] = await db
+    .select({ committedAs: conversations.committedAs })
+    .from(conversations)
+    .where(eq(conversations.conversationId, conversationId))
+    .limit(1);
+  if (remaining === undefined) return false;
+
+  throw new ConversationHistoryReferencedError(conversationId);
 }
 
 /**

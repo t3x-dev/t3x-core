@@ -1,7 +1,20 @@
+import { COMMIT_V2_MEDIA_TYPE, serializeTransitionObject } from '@t3x-dev/core';
+import { parseCommitV2 } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
 import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
+import { createCommit } from '../queries/commits';
+import {
+  ConversationHistoryReferencedError,
+  deleteConversation,
+  insertConversation,
+} from '../queries/conversations';
 import { listWorkspaceDrafts } from '../queries/drafts';
 import { insertProject } from '../queries/projects';
+import { getConversationSourceEvidence } from '../queries/source-evidence';
+import { insertSourceTextRevision } from '../queries/source-text-revisions';
+import { listCommitHistory } from '../queries/transition-commits';
+import { insertTurn } from '../queries/turns';
+import { getYOpsForCommit, insertYOpsLogEntry } from '../queries/yops-log';
 import { createTestDB, testData } from './setup';
 
 describe('workspace and Transition schema migrations', () => {
@@ -385,6 +398,134 @@ describe('workspace and Transition schema migrations', () => {
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
       expect(schemaVersion?.version).toBe(58);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('preserves source and YOps history while adding CommitV2 beside CommitV1', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      const project = await insertProject(
+        testDb.db,
+        testData.project({ name: 'Mixed History Migration Test' })
+      );
+      const conversation = await insertConversation(testDb.db, {
+        projectId: project.projectId,
+        title: 'Retained source',
+      });
+      const turn = await insertTurn(testDb.db, {
+        projectId: project.projectId,
+        conversationId: conversation.conversationId,
+        role: 'user',
+        content: 'Keep this source after the storage upgrade.',
+      });
+      const revision = await insertSourceTextRevision(testDb.db, {
+        projectId: project.projectId,
+        conversationId: conversation.conversationId,
+        turnHash: turn.turnHash,
+        turnRole: 'user',
+        action: 'edit',
+        startChar: 0,
+        endChar: 4,
+        selectedText: 'Keep',
+        replacementText: 'Retain',
+        baseContent: turn.content,
+        content: 'Retain this source after the storage upgrade.',
+        spans: [],
+      });
+      const yops = await insertYOpsLogEntry(testDb.db, {
+        projectId: project.projectId,
+        conversationId: conversation.conversationId,
+        source: 'manual',
+        yops: [
+          {
+            define: { path: 'policy' },
+            source: {
+              type: 'human',
+              author: 'migration-test',
+              at: '2026-08-02T00:00:00.000Z',
+            },
+          },
+        ],
+      });
+      const legacy = await createCommit(testDb.db, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'human:migration-test' },
+        content: { trees: [], relations: [] },
+        branch: 'legacy',
+        sources: [{ type: 'conversation', id: conversation.conversationId }],
+        yops_log_ids: [yops.id],
+      });
+
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_command_receipts;
+        DROP TABLE IF EXISTS transition_statement_memberships;
+        DROP TABLE IF EXISTS transition_proposal_memberships;
+        DROP TABLE IF EXISTS transition_decision_ledger;
+        DROP TABLE IF EXISTS transition_decision_authorizations;
+        DROP TABLE IF EXISTS transition_commits;
+        DROP TABLE IF EXISTS transition_objects;
+        UPDATE _schema_version
+        SET version = 52, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      const migratedDb = await createPostgresStorage({
+        connectionString: testDb.connectionString,
+      });
+
+      const evidence = await getConversationSourceEvidence(migratedDb, {
+        projectId: project.projectId,
+        conversationId: conversation.conversationId,
+      });
+      expect(evidence?.turns.map((item) => item.turnHash)).toEqual([turn.turnHash]);
+      expect(evidence?.revisions.map((item) => item.revisionId)).toEqual([revision.revisionId]);
+      expect(evidence?.commitReferences.map((item) => item.commitHash)).toEqual([legacy.hash]);
+      await expect(getYOpsForCommit(migratedDb, legacy.yops_log_ids)).resolves.toEqual([
+        expect.objectContaining({ id: yops.id }),
+      ]);
+      await expect(
+        deleteConversation(migratedDb, conversation.conversationId)
+      ).rejects.toBeInstanceOf(ConversationHistoryReferencedError);
+
+      const transitionCommit = parseCommitV2({
+        schema: 't3x/commit/v2',
+        parents: [],
+        decision: {
+          kind: 'statement',
+          schema: 't3x/statement/v1',
+          digest: `sha256:${'d'.repeat(64)}`,
+        },
+        result: {
+          kind: 'state',
+          schema: 't3x/state/v1',
+          digest: `sha256:${'e'.repeat(64)}`,
+        },
+      });
+      const serialized = serializeTransitionObject(transitionCommit);
+      await testDb.sql`
+        INSERT INTO transition_objects (digest, kind, schema, canonical_json)
+        VALUES (
+          ${serialized.descriptor.digest},
+          ${serialized.descriptor.kind},
+          ${serialized.descriptor.schema},
+          ${serialized.canonicalJson}
+        )
+      `;
+      await testDb.sql`
+        INSERT INTO transition_commits (project_id, digest, media_type)
+        VALUES (${project.projectId}, ${serialized.descriptor.digest}, ${COMMIT_V2_MEDIA_TYPE})
+      `;
+
+      const history = await listCommitHistory(migratedDb, project.projectId);
+      expect(history.map((entry) => entry.format).sort()).toEqual(['legacy_v1', 'transition_v2']);
+      expect(history.find((entry) => entry.format === 'legacy_v1')).toMatchObject({
+        id: legacy.hash,
+        assurance: { mode: 'legacy_unavailable' },
+      });
     } finally {
       await testDb.cleanup();
     }
