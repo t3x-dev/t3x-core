@@ -83,9 +83,6 @@ import {
   templatesRoutes,
   topicsRoutes,
   transitionPolicyBindingRoutes,
-  treeAnswerRoutes,
-  treeCompressRoutes,
-  treeExtractRoutes,
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
@@ -188,9 +185,6 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
-  api.route('/', treeExtractRoutes); // /v1/extract/trees + /v1/extract/trees/stream
-  api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
-  api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate

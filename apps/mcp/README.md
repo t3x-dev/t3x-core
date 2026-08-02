@@ -54,9 +54,12 @@ The server currently exposes these resource templates:
 - `t3x://projects/{project_id}`
 - `t3x://commits/{commit_hash}`
 - `t3x://workbench-drafts/{draft_id}`
-- `t3x://conversations/{conversation_id}`
+- `t3x://source-threads/{source_thread_id}`
 - `t3x://leaves/{leaf_id}`
 - `t3x://merge-drafts/{draft_id}`
+
+`t3x://conversations/{conversation_id}` remains a compatibility alias for the
+source-thread resource.
 
 ### Prompts
 
@@ -118,6 +121,12 @@ The opt-in `transition` toolset requires the `api` backend. In `storage` mode,
 all four Transition tools fail closed with `API_BACKEND_REQUIRED`; there is no
 direct-storage fallback for authenticated authority or issuer context.
 
+API-backed resources and Source evidence reads also pass through the API
+boundary. `source_evidence` is unavailable in storage mode because project
+authorization and observation completeness belong to the Source service.
+Direct storage remains available for the legacy single-user extract/edit/commit
+workflow; it is not a mutation authority for Source or Transition operations.
+
 Local Codex/Cursor development should prefer the `api` backend so MCP and CLI
 see the same data without each process trying to own embedded Postgres.
 
@@ -140,7 +149,7 @@ see the same data without each process trying to own embedded Postgres.
 ## Example Workflow
 
 ```text
-Extract -> Inspect -> Edit -> Commit
+Legacy compatibility: Extract -> Inspect -> Edit -> Commit
 
 1. t3x_admin({ action: "create_project", name })         -> project_id
 2. t3x_extract({ project_id, text })                     -> draft_id

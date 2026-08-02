@@ -75,11 +75,16 @@ const TOOLSET_MAP: Record<McpToolset, readonly ToolEntry[]> = {
 const SERVER_INSTRUCTIONS = `T3X is version control for structured state — like Git, but for
 schema-backed YAML changed through deterministic YOps.
 
-Core workflow:
+Legacy compatibility workflow:
 1. t3x_extract — turn text into structured YAML state (creates a draft)
 2. t3x_query — inspect what was extracted (or any other resource)
 3. t3x_edit — refine the draft with YOps (YAML operations)
 4. t3x_commit — save a snapshot
+
+Source reads:
+- query source_thread or source_threads for durable source metadata
+- query source_evidence with project_id and source-thread id for repository evidence
+- conversation and conversations remain compatibility aliases
 
 Additional capabilities (if advanced toolset enabled):
 5. t3x_diff — compare two commits

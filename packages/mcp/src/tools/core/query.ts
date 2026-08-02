@@ -6,8 +6,6 @@
  */
 
 import {
-  findAgentDraftById,
-  findAgentDraftsByProject,
   findBranchesByProject,
   findConversationById,
   findConversationsByProject,
@@ -32,20 +30,21 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 const SINGULAR_TARGETS = [
   'project',
   'draft',
-  'agent_draft',
   'commit',
   'leaf',
   'pin',
+  'source_thread',
+  'source_evidence',
   'conversation',
 ] as const;
 const PLURAL_TARGETS = [
   'projects',
   'drafts',
-  'agent_drafts',
   'commits',
   'leaves',
   'pins',
   'branches',
+  'source_threads',
   'conversations',
 ] as const;
 const ALL_TARGETS = [...SINGULAR_TARGETS, ...PLURAL_TARGETS] as const;
@@ -60,14 +59,15 @@ export const queryDef: ToolDef = {
     'Read any T3X resource.',
     '',
     'Singular targets (require `id`):',
-    '  project, draft, agent_draft, commit, leaf, pin, conversation',
+    '  project, draft, commit, leaf, pin, source_thread, source_evidence',
     '',
     'Plural targets (require `project_id`, except `projects`):',
-    '  projects, drafts, agent_drafts, commits, leaves, pins, branches, conversations',
+    '  projects, drafts, commits, leaves, pins, branches, source_threads',
     '',
     'Notes:',
     '  draft / drafts = workbench drafts used by extract/edit/commit',
-    '  agent_draft / agent_drafts = agent draft objects',
+    '  source_evidence also requires `project_id` and is available through the API backend',
+    '  conversation / conversations are compatibility aliases for source_thread / source_threads',
     '',
     'Examples:',
     '  { "target": "projects" }',
@@ -144,16 +144,22 @@ export const queryHandler: ToolHandler = async (args) => {
           return ok(await client.getProject(id));
         case 'draft':
           return ok((await client.getDraft(id)) as Record<string, unknown>);
-        case 'agent_draft':
-          return ok((await client.getAgentDraft(id)) as Record<string, unknown>);
         case 'commit':
           return ok(await client.getCommit(id));
         case 'leaf':
           return ok(await client.getLeaf(id));
         case 'pin':
           return ok(await client.getPin(id));
+        case 'source_thread':
         case 'conversation':
-          return ok(await client.getConversation(id));
+          return ok(await client.sourceThreads.get(id));
+        case 'source_evidence':
+          if (!projectId) {
+            return fail(
+              '"project_id" is required for target="source_evidence" so the API can enforce project-scoped access.'
+            );
+          }
+          return ok(await client.sourceThreads.evidence(projectId, id, { limit, offset }));
       }
     }
 
@@ -171,10 +177,6 @@ export const queryHandler: ToolHandler = async (args) => {
         return ok(
           unwrapListPayload(await client.listDrafts(projectId!, { limit, offset }), 'drafts')
         );
-      case 'agent_drafts':
-        return ok(
-          unwrapListPayload(await client.listAgentDrafts(projectId!, { limit, offset }), 'drafts')
-        );
       case 'commits':
         return ok(
           unwrapListPayload(
@@ -190,16 +192,23 @@ export const queryHandler: ToolHandler = async (args) => {
         return ok(
           unwrapListPayload(await client.listBranches(projectId!, { limit, offset }), 'branches')
         );
+      case 'source_threads':
       case 'conversations':
         return ok(
           unwrapListPayload(
-            await client.listConversations(projectId!, { limit, offset }),
+            await client.sourceThreads.list(projectId!, { limit, offset }),
             'conversations'
           )
         );
       default:
         return fail(`Unhandled target: ${target}`);
     }
+  }
+
+  if (target === 'source_evidence') {
+    return fail(
+      'target="source_evidence" requires T3X_MCP_BACKEND=api so authorization and observation completeness are enforced by the Source service.'
+    );
   }
 
   const db = await getDB();
@@ -222,10 +231,6 @@ export const queryHandler: ToolHandler = async (args) => {
         const draft = await findDraftById(db, id);
         return draft ? ok(draft) : fail(`Draft not found: ${id}`);
       }
-      case 'agent_draft': {
-        const draft = await findAgentDraftById(db, id);
-        return draft ? ok(draft) : fail(`Agent draft not found: ${id}`);
-      }
       case 'commit': {
         const commit = await getCommit(db, id);
         return commit ? ok(commit) : fail(`Commit not found: ${id}`);
@@ -238,9 +243,10 @@ export const queryHandler: ToolHandler = async (args) => {
         const pin = await findPinById(db, id);
         return pin ? ok(pin) : fail(`Pin not found: ${id}`);
       }
+      case 'source_thread':
       case 'conversation': {
         const conv = await findConversationById(db, id);
-        return conv ? ok(conv) : fail(`Conversation not found: ${id}`);
+        return conv ? ok(conv) : fail(`Source thread not found: ${id}`);
       }
     }
   }
@@ -261,14 +267,6 @@ export const queryHandler: ToolHandler = async (args) => {
     }
     case 'drafts': {
       const rows = await listDraftsByProject(db, projectId!, {
-        limit,
-        offset,
-      });
-      return ok(rows);
-    }
-    case 'agent_drafts': {
-      const rows = await findAgentDraftsByProject(db, {
-        projectId: projectId!,
         limit,
         offset,
       });
@@ -299,6 +297,7 @@ export const queryHandler: ToolHandler = async (args) => {
       });
       return ok(rows);
     }
+    case 'source_threads':
     case 'conversations': {
       const rows = await findConversationsByProject(db, {
         projectId: projectId!,

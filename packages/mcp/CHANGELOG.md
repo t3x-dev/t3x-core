@@ -1,5 +1,11 @@
 # @t3x-dev/mcp-lib
 
+## Unreleased
+
+- Route API-backed resources and Source queries through authenticated API capabilities.
+- Add canonical `source_thread`, `source_threads`, and `source_evidence` query targets while retaining conversation aliases.
+- Stop advertising legacy Agent Draft query targets whose list contract did not exist.
+
 ## 0.1.13
 
 ### Patch Changes

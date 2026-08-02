@@ -1,8 +1,6 @@
 /**
- * Shared extraction event adapter.
- *
- * This generator preserves the tree-extract JSON/SSE event surface while
- * delegating extraction semantics to the canonical v2 pipeline.
+ * Shared extraction event adapter for internal evaluation and compatibility
+ * services that delegate semantics to the canonical v2 pipeline.
  */
 
 import { createHash } from 'node:crypto';
