@@ -10,7 +10,7 @@ import type { TreeNode } from '@t3x-dev/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-vi.mock('@/queries/commits', () => ({
+vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: vi.fn(),
 }));
 
@@ -24,7 +24,7 @@ vi.mock('@/domain/enrichSourceRefs', () => ({
 
 import { commitRepositoryState } from '@/commands/commits';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';

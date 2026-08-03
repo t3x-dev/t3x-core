@@ -20,7 +20,7 @@ import { useCallback } from 'react';
 import { commitRepositoryState } from '@/commands/commits';
 import { enrichTreesWithSourceRefs } from '@/domain/enrichSourceRefs';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';

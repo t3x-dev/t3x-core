@@ -5,7 +5,6 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { DEMO_WORKSPACE_FIXTURE, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   branches,
-  commits,
   conversations,
   deleteProject,
   ensureMainBranch,
@@ -19,6 +18,7 @@ import {
   putBusinessRules,
   restoreProject,
   seedDemoWorkspace,
+  transitionCommits,
   updateProject,
   verifyHashChain,
 } from '@t3x-dev/storage';
@@ -121,8 +121,8 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(commits)
-        .where(eq(commits.projectId, p.projectId))
+        .from(transitionCommits)
+        .where(eq(transitionCommits.projectId, p.projectId))
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -393,12 +393,12 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
-    // Count commits for this project
+    // Count CommitV2 rows for this project
     const [commitCountRow, outputCountRow] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(commits)
-        .where(eq(commits.projectId, id))
+        .from(transitionCommits)
+        .where(eq(transitionCommits.projectId, id))
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })

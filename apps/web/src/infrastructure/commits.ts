@@ -116,6 +116,15 @@ export async function listCommits(
   return data.commits;
 }
 
+export function fetchCommits(
+  projectId: string,
+  branch?: string,
+  limit = 100,
+  offset = 0
+): Promise<ApiCommit[]> {
+  return listCommits(projectId, branch, limit, offset);
+}
+
 /**
  * Get a commit by hash
  */

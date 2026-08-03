@@ -13,7 +13,7 @@ vi.mock('@/hooks/commits/useCommitActions', () => ({
   useCommitActions: () => ({ init: initCommitStateMock }),
 }));
 
-vi.mock('@/queries/commits', () => ({
+vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: (...args: unknown[]) => fetchCommitsMock(...args),
 }));
 

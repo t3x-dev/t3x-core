@@ -104,7 +104,7 @@ describe('YOpsDraftTab Transition write path', () => {
             success: false,
             error: {
               code: 'LEGACY_HEAD_READ_ONLY',
-              message: 'Legacy CommitV1 heads are read-only until migration is defined',
+              message: 'Non-transition heads are read-only until migration is defined',
             },
           }),
           { status: 409, headers: { 'Content-Type': 'application/json' } }

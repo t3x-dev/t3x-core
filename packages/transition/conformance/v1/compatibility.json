@@ -2,11 +2,11 @@
   "schema": "t3x/transition-compatibility/v1",
   "mappings": [
     {
-      "source": "CommitV1",
+      "source": "ExternalCommit",
       "strategy": "coexist",
       "owner": "#1227",
       "rules": [
-        "Never rewrite or reinterpret a CommitV1 hash as CommitV2",
+        "Never rewrite or reinterpret an external commit hash as CommitV2",
         "Mixed-history projections may expose legacy provenance as unavailable but must not fabricate Statements or Decisions"
       ]
     },

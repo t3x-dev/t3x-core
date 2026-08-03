@@ -22,7 +22,7 @@ vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
 }));
 
-vi.mock('@/queries/commits', () => ({
+vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: vi.fn().mockResolvedValue([]),
   getSemanticContent: vi.fn(),
 }));

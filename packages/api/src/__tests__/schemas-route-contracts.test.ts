@@ -367,6 +367,7 @@ describe('route contract schemas', () => {
     );
 
     const parsed = ExecuteMergeResponseSchema.parse({
+      schema: 't3x/commit/v2',
       hash: 'sha256:merge',
       parents: ['sha256:source', 'sha256:target'],
       author: { type: 'human', name: 'tester' },

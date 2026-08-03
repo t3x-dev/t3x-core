@@ -1,13 +1,14 @@
 import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  deleteConversation,
+  conversations,
   ensureMainBranch,
   insertConversation,
   insertProject,
   insertSourceTextRevision,
   insertTurn,
 } from '@t3x-dev/storage';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -165,7 +166,11 @@ describe('source evidence routes', () => {
       content: 'This source will be removed after its evidence is committed.',
     });
     await commitConversation(project.projectId, conversation.conversationId, 'Record source');
-    await deleteConversation(mockDB, conversation.conversationId);
+    // Bypass the public deletion guard to simulate externally missing source
+    // rows while retaining immutable CommitV2 evidence references.
+    await mockDB
+      .delete(conversations)
+      .where(eq(conversations.conversationId, conversation.conversationId));
 
     const response = await app().request(
       `/v1/projects/${project.projectId}/sources/conversations/${conversation.conversationId}`

@@ -194,7 +194,7 @@ export class WorkspaceTransitionLegacyHeadError extends Error {
   readonly code = 'LEGACY_HEAD_READ_ONLY';
 
   constructor(readonly head: string) {
-    super('Legacy CommitV1 heads are read-only until an explicit migration bridge is defined');
+    super('Non-transition heads are read-only until an explicit migration bridge is defined');
     this.name = 'WorkspaceTransitionLegacyHeadError';
   }
 }

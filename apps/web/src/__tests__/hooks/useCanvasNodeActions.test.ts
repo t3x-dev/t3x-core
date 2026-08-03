@@ -9,7 +9,7 @@ import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-vi.mock('@/queries/commits', () => ({
+vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: vi.fn(),
 }));
 vi.mock('@/domain/commitAnchors', () => ({
@@ -38,7 +38,7 @@ vi.mock('@/commands/drafts', () => ({
 import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
