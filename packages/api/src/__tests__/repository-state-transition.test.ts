@@ -10,7 +10,11 @@ import {
   TransitionHeadConflictError,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  decodeRepositorySemanticContentState,
+} from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
 
 const HUMAN = { kind: 'human' as const, id: 'user:repository-state-test' };
@@ -132,5 +136,18 @@ describe('repository YOps State Transition application service', () => {
       })
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_MEDIA_TYPE' });
     await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+  });
+
+  it('round-trips repository trees and relations through the versioned YOps domain', () => {
+    const content = {
+      trees: [{ key: 'a', slots: { text: 'A' }, children: [] }],
+      relations: [{ from: 'a', to: 'b', type: 'supports' }],
+    };
+    const state = createRepositoryYOpsStateFromSemanticContent(content);
+
+    expect(decodeRepositorySemanticContentState(state)).toEqual(content);
+    expect(() => decodeRepositorySemanticContentState(createYOpsState({ a: true }))).toThrowError(
+      'State is not a t3x.dev/semantic-content version 1 YOps document'
+    );
   });
 });

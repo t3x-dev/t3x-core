@@ -19,7 +19,7 @@ import {
   type State,
   type StatementObservation,
   type TransitionViewV1,
-  treesToYValue,
+  yopsStateCodec,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -43,6 +43,8 @@ const OBSERVATION_SCOPE = Object.freeze({
   completeness: 'complete' as const,
   sources: ['server:repository-state-transition'],
 });
+const REPOSITORY_SEMANTIC_CONTENT_DOMAIN = 't3x.dev/semantic-content' as const;
+const REPOSITORY_SEMANTIC_CONTENT_VERSION = 1 as const;
 
 const REPOSITORY_STATE_POLICY = createAcceptancePolicyResource({
   uri: 't3x://policies/repository-state-transition/v1',
@@ -139,17 +141,52 @@ export class RepositoryStateDecisionDeniedError extends Error {
   }
 }
 
-/** Convert the supported structured product domain into its YOps State codec. */
+/** Losslessly encode structured repository content in the versioned YOps State domain. */
 export function createRepositoryYOpsStateFromSemanticContent(content: SemanticContent): State {
   if (!Array.isArray(content.trees) || !Array.isArray(content.relations)) {
     throw new TypeError('Structured repository state requires trees and relations arrays');
   }
-  if (content.relations.length > 0) {
+  return createYOpsState({
+    domain: REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+    version: REPOSITORY_SEMANTIC_CONTENT_VERSION,
+    content: {
+      trees: content.trees,
+      relations: content.relations,
+    },
+  } as Parameters<typeof createYOpsState>[0]);
+}
+
+/** Decode only the repository SemanticContent domain; never guess another State shape. */
+export function decodeRepositorySemanticContentState(state: State): SemanticContent {
+  if (
+    state.codec.mediaType !== yopsStateCodec.mediaType ||
+    state.codec.version !== yopsStateCodec.version
+  ) {
     throw new RepositoryStateDomainUnsupportedError(
-      'The YOps State codec has no relation semantics; non-empty relations require an explicit domain codec'
+      `Repository SemanticContent requires ${yopsStateCodec.mediaType}@${yopsStateCodec.version}`
     );
   }
-  return createYOpsState(treesToYValue(content.trees));
+  const value = yopsStateCodec.decode(state.value);
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN ||
+    value.version !== REPOSITORY_SEMANTIC_CONTENT_VERSION ||
+    value.content === null ||
+    typeof value.content !== 'object' ||
+    Array.isArray(value.content) ||
+    !Array.isArray(value.content.trees) ||
+    !Array.isArray(value.content.relations)
+  ) {
+    throw new RepositoryStateDomainUnsupportedError(
+      'State is not a t3x.dev/semantic-content version 1 YOps document'
+    );
+  }
+  return {
+    trees: value.content.trees,
+    relations: value.content.relations,
+  } as SemanticContent;
 }
 
 /**
