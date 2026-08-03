@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectIdDiffPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -393,13 +393,22 @@ export function ProjectStateTab({
     `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
     currentStateReturnTo
   );
-  const commitHref = headCommit
-    ? withReturnTo(
-        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}?view=diff`,
-        currentStateReturnTo
-      )
+  const repositoryPath = getProjectRepoPath({ id: projectId, name: projectName });
+  const commitCanvasHref = headCommit
+    ? `${repositoryPath}?${new URLSearchParams({
+        view: 'canvas',
+        branch: branchFocus,
+        commit: headCommit.hash,
+      }).toString()}`
     : null;
-  const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const diffHref =
+    headCommit?.parents?.[0] && headCommit.hash
+      ? withReturnTo(
+          getProjectIdDiffPath(projectId, headCommit.parents[0], headCommit.hash),
+          currentStateReturnTo
+        )
+      : null;
+  const workspaceBasePath = `${repositoryPath}/workspaces`;
   const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;
   const mainHeadCommitHash = branchHeads.main ?? null;
   const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
@@ -534,14 +543,14 @@ export function ProjectStateTab({
               ) : null}
               <StateCommitRow
                 author={headCommit?.author?.name ?? headCommit?.author?.type ?? 'W'}
-                commitHref={commitHref}
+                commitCanvasHref={commitCanvasHref}
                 hash={headCommit?.hash ?? null}
                 relativeTime={formatRelativeTime(headCommit?.committed_at)}
                 title={commitTitle}
                 yopsCount={yopsCount}
               />
               <StateObjectLine
-                commitHref={commitHref}
+                diffHref={diffHref}
                 diffCount={committedDiffChanges.length}
                 headCommit={headCommit}
                 onRunValidation={
@@ -755,14 +764,14 @@ function StateUpdateBanner({
 
 function StateCommitRow({
   author,
-  commitHref,
+  commitCanvasHref,
   hash,
   relativeTime,
   title,
   yopsCount,
 }: {
   author: string;
-  commitHref: string | null;
+  commitCanvasHref: string | null;
   hash: string | null;
   relativeTime: string;
   title: string;
@@ -785,10 +794,10 @@ function StateCommitRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
-        {commitHref && hash ? (
+        {commitCanvasHref && hash ? (
           <Link
             className="font-mono hover:text-[var(--accent-commit)] hover:underline"
-            href={commitHref}
+            href={commitCanvasHref}
           >
             {shortHash(hash)}
           </Link>
@@ -802,7 +811,7 @@ function StateCommitRow({
 }
 
 function StateObjectLine({
-  commitHref,
+  diffHref,
   diffCount,
   headCommit,
   onRunValidation,
@@ -814,7 +823,7 @@ function StateObjectLine({
   validationRunning,
   workspaceHref,
 }: {
-  commitHref: string | null;
+  diffHref: string | null;
   diffCount: number;
   headCommit: ApiCommit | null;
   onRunValidation?: () => Promise<void> | void;
@@ -843,10 +852,10 @@ function StateObjectLine({
               {headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
             </span>
           </span>
-          {diffCount > 0 && commitHref ? (
+          {diffCount > 0 && diffHref ? (
             <Link
               className="font-semibold text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
-              href={commitHref}
+              href={diffHref}
             >
               {diffCount} changed paths
             </Link>

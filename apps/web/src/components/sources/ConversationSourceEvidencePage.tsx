@@ -23,6 +23,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
+import { getProjectIdCanvasCommitPath } from '@/domain/project/repoPath';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { useSourceEvidenceReader } from '@/hooks/sources/useSourceEvidenceReader';
 import type { ConversationSourceEvidence, SourceAvailabilityMode } from '@/types/sourceEvidence';
@@ -218,9 +219,7 @@ export function ConversationSourceEvidencePage({
       }),
     [branch, commitId, conversationId, projectId, returnTo, turnHash]
   );
-  const commitHref = commitId
-    ? `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commitId)}`
-    : null;
+  const commitHref = commitId ? getProjectIdCanvasCommitPath(projectId, commitId) : null;
   const backHref = safeInternalReturnTo(
     returnTo,
     commitHref ?? `/project/${encodeURIComponent(projectId)}`
@@ -311,7 +310,7 @@ export function ConversationSourceEvidencePage({
                   ? [
                       {
                         label: shortDigest(commitId),
-                        href: `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(commitId)}`,
+                        href: getProjectIdCanvasCommitPath(projectId, commitId),
                       },
                     ]
                   : []),
@@ -447,7 +446,7 @@ export function ConversationSourceEvidencePage({
                     <Link
                       key={reference.commit_digest}
                       href={withReturnTo(
-                        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(reference.commit_digest)}`,
+                        getProjectIdCanvasCommitPath(projectId, reference.commit_digest),
                         currentHref
                       )}
                       className="block rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-colors hover:border-[var(--accent-commit)]/35 hover:bg-[var(--hover-bg)]"

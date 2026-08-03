@@ -13,11 +13,11 @@ describe('source evidence navigation', () => {
       branch: 'release/next',
       commitId: 'sha256:abc',
       turnHash: 'sha256:turn',
-      returnTo: '/project/proj%2Fone/commit/sha256%3Aabc?tab=yaml',
+      returnTo: '/project/proj%2Fone?view=canvas&commit=sha256%3Aabc',
     });
 
     expect(href).toBe(
-      '/project/proj%2Fone/sources/conversations/conv%2Fone?branch=release%2Fnext&commit=sha256%3Aabc&turn=sha256%3Aturn&returnTo=%2Fproject%2Fproj%252Fone%2Fcommit%2Fsha256%253Aabc%3Ftab%3Dyaml'
+      '/project/proj%2Fone/sources/conversations/conv%2Fone?branch=release%2Fnext&commit=sha256%3Aabc&turn=sha256%3Aturn&returnTo=%2Fproject%2Fproj%252Fone%3Fview%3Dcanvas%26commit%3Dsha256%253Aabc'
     );
   });
 

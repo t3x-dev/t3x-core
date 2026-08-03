@@ -103,7 +103,10 @@ describe('ConversationSourceEvidencePage', () => {
     render(<ConversationSourceEvidencePage projectId="proj_1" conversationId="conv_1" />);
 
     expect(await screen.findByText('Source is available')).toBeInTheDocument();
-    expect(screen.getByText('Historical policy change')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Historical policy change/ })).toHaveAttribute(
+      'href',
+      '/project/proj_1?view=canvas&commit=sha256%3Ahistorical&returnTo=%2Fproject%2Fproj_1%2Fsources%2Fconversations%2Fconv_1'
+    );
     expect(screen.getByText('1 immutable turn referenced')).toBeInTheDocument();
   });
 

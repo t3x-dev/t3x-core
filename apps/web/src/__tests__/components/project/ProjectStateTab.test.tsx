@@ -542,12 +542,12 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'cb5813f' })).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/t3x-dev/test-project?view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
     );
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '2 changed paths' })).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -756,7 +756,7 @@ describe('ProjectStateTab', () => {
     const changedPaths = await screen.findByRole('link', { name: '2 changed paths' });
     expect(changedPaths).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();

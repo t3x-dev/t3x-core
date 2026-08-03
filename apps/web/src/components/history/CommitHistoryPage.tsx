@@ -28,8 +28,8 @@ import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';
-import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
-import { CommitHistoryRow } from './CommitHistoryRow';
+import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { buildCommitHistoryHref, CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
 // Types
@@ -210,14 +210,18 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleNavOpen = useCallback(
     (hash: string) => {
+      const commit = commits.find((item) => item.commit.hash === hash)?.commit;
       router.push(
-        withReturnTo(
-          `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : '?view=diff'}`,
-          currentReturnTo
-        )
+        buildCommitHistoryHref({
+          hash,
+          introDemo: introDemoRequested,
+          parentHash: commit?.parents?.[0],
+          projectId,
+          returnTo: currentReturnTo,
+        })
       );
     },
-    [currentReturnTo, router, projectId, introDemoRequested]
+    [commits, currentReturnTo, router, projectId, introDemoRequested]
   );
 
   useEffect(() => {
@@ -348,6 +352,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   committedAt={item.commit.committed_at}
                   branch={item.commit.branch}
                   parentCount={(item.commit.parents ?? []).length}
+                  parentHash={item.commit.parents?.[0]}
                   diffStats={item.diffStats}
                   nodeCount={item.nodeCount}
                   isFirst={index === 0}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getProjectIdCanvasCommitPath,
   getProjectIdCanvasPath,
+  getProjectIdDiffPath,
   getProjectIdOutputsPath,
   getProjectIdRepoPath,
   getProjectOutputsPath,
@@ -37,6 +39,12 @@ describe('repoPath', () => {
   it('builds project-id entry points that canonicalize in the route layer', () => {
     expect(getProjectIdRepoPath('proj/test')).toBe('/project/proj%2Ftest');
     expect(getProjectIdCanvasPath('proj/test')).toBe('/project/proj%2Ftest?view=canvas');
+    expect(getProjectIdCanvasCommitPath('proj/test', 'sha256:abc/123')).toBe(
+      '/project/proj%2Ftest?view=canvas&commit=sha256%3Aabc%2F123'
+    );
+    expect(getProjectIdDiffPath('proj/test', 'sha256:base', 'sha256:target')).toBe(
+      '/project/proj%2Ftest/diff?base=sha256%3Abase&target=sha256%3Atarget'
+    );
     expect(getProjectIdOutputsPath('proj/test', 'leaf/audience brief')).toBe(
       '/project/proj%2Ftest?tab=outputs&leaf=leaf%2Faudience+brief'
     );

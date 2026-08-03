@@ -4,12 +4,13 @@
  * CommitHistoryRow — a single row in the commit history timeline.
  *
  * Displays: commit hash, message, author, relative time, diff stats, branch badge.
- * Clickable → navigates to commit detail page.
+ * Clickable → compares with its parent, or focuses a root commit on Canvas.
  */
 
 import { Minus, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
+import { getProjectIdCanvasCommitPath, getProjectIdDiffPath } from '@/domain/project/repoPath';
 import { cn } from '@/utils/cn';
 import { withReturnTo } from '@/utils/navigationReturn';
 
@@ -26,6 +27,8 @@ export interface CommitHistoryRowProps {
   branch: string | null;
   /** Number of parents (0 = root, 1 = normal, 2+ = merge) */
   parentCount: number;
+  /** First parent used by the shared diff route. */
+  parentHash?: string | null;
   /** Diff stats vs parent (if available) */
   diffStats?: {
     addedCount: number;
@@ -58,6 +61,7 @@ export function CommitHistoryRow({
   committedAt,
   branch,
   parentCount,
+  parentHash,
   diffStats,
   nodeCount,
   isFirst,
@@ -66,11 +70,17 @@ export function CommitHistoryRow({
   introDemo = false,
   returnTo,
 }: CommitHistoryRowProps) {
-  const commitHref = `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : '?view=diff'}`;
+  const commitHref = buildCommitHistoryHref({
+    hash,
+    introDemo,
+    parentHash,
+    projectId,
+    returnTo,
+  });
 
   return (
     <Link
-      href={withReturnTo(commitHref, returnTo)}
+      href={commitHref}
       data-commit-hash={hash}
       className={cn(
         'group flex items-stretch hover:bg-[var(--hover-bg)] transition-colors rounded-md -mx-2 px-2',
@@ -161,4 +171,26 @@ export function CommitHistoryRow({
       </div>
     </Link>
   );
+}
+
+export function buildCommitHistoryHref({
+  hash,
+  introDemo = false,
+  parentHash,
+  projectId,
+  returnTo,
+}: {
+  hash: string;
+  introDemo?: boolean;
+  parentHash?: string | null;
+  projectId: string;
+  returnTo: string;
+}): string {
+  const destination = introDemo
+    ? `${getProjectIdCanvasCommitPath(projectId, hash)}&introDemo=1`
+    : parentHash
+      ? getProjectIdDiffPath(projectId, parentHash, hash)
+      : getProjectIdCanvasCommitPath(projectId, hash);
+
+  return withReturnTo(destination, returnTo);
 }

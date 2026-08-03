@@ -19,7 +19,6 @@ import {
   Loader2,
   PanelRight,
 } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
@@ -438,27 +437,19 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
           {/* Commit badges */}
           <div className="flex items-center gap-2 ml-3">
-            <Link
-              href={withReturnTo(
-                `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(baseHash)}`,
-                currentReturnTo
-              )}
+            <span
               title={baseHash}
-              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]"
             >
               base: {shortHash(baseHash)}
-            </Link>
+            </span>
             <span className="text-[var(--text-tertiary)] text-[10px]">vs</span>
-            <Link
-              href={withReturnTo(
-                `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(targetHash)}`,
-                currentReturnTo
-              )}
+            <span
               title={targetHash}
-              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]"
             >
               target: {shortHash(targetHash)}
-            </Link>
+            </span>
           </div>
         </div>
       </header>

@@ -10,7 +10,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
-import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
+import { getProjectIdCanvasCommitPath, getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useMicrocopy } from '@/utils/microcopy';
@@ -67,7 +67,7 @@ export default function MergeWorkspacePage() {
       router.push(returnHref);
       return;
     }
-    router.push(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`);
+    router.push(getProjectIdCanvasCommitPath(projectId, commitHash));
   };
 
   if (loading) {
