@@ -6,7 +6,10 @@ import {
   createMaterial,
   ensureMainBranch,
   findBranchByName,
+  getYOpsForTransitionCommit,
+  insertConversation,
   insertProject,
+  insertYOpsLogEntry,
   listRepositoryDecisionAudit,
   listTransitionCommits,
   upsertWorkspaceDraft,
@@ -125,6 +128,25 @@ describe('Workspace Transition application use case', () => {
     await ensureMainBranch(db, project.projectId);
     const draft = await workspace({ db, projectId: project.projectId, workspaceId: 'accept' });
     const target = content(t3xPrdP0Fixtures.validCandidateTree);
+    const conversation = await insertConversation(db, {
+      projectId: project.projectId,
+      title: 'Workspace accepted Transition source',
+    });
+    const yopsLog = await insertYOpsLogEntry(db, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'workspace_draft',
+      yops: [
+        {
+          set: { path: 'summary/outcome', value: 'Versioned PRD outcome' },
+          source: {
+            type: 'human',
+            author: 'workspace-test',
+            at: '2026-07-03T00:00:00.000Z',
+          },
+        },
+      ],
+    });
 
     const review = await reviewWorkspaceTransition(db, {
       projectId: project.projectId,
@@ -161,6 +183,7 @@ describe('Workspace Transition application use case', () => {
       outcome: 'accepted',
       precondition: review.precondition,
       actor: HUMAN,
+      yopsLogIds: [yopsLog.id],
     });
 
     expect(decided.commit).toMatchObject({ schema: 't3x/commit/v2', parents: [] });
@@ -174,6 +197,13 @@ describe('Workspace Transition application use case', () => {
     expect((await findBranchByName(db, project.projectId, 'main'))?.headCommitHash).toBe(
       decided.transition.audit.commit?.digest
     );
+    await expect(
+      getYOpsForTransitionCommit(
+        db,
+        project.projectId,
+        decided.transition.audit.commit?.digest ?? ''
+      )
+    ).resolves.toEqual([expect.objectContaining({ id: yopsLog.id })]);
 
     const childDraft = await workspace({
       db,

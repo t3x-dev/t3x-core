@@ -167,6 +167,12 @@ export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitio
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceTransitionPrecondition;
+  yopsLogIds?: readonly string[];
+  workspaceCommitOverride?: {
+    kind: 'schema_review';
+    reason: string;
+    blockers: readonly string[];
+  };
 }
 
 export interface DecideWorkspaceTransitionResult extends ReviewWorkspaceTransitionResult {
@@ -634,6 +640,7 @@ export async function decideWorkspaceTransition(
       expectedHead: prepared.precondition.refHead,
       commit,
       objects,
+      yopsLogIds: input.yopsLogIds,
     });
     const committedWorkspace = {
       ...prepared.workspace,
@@ -642,6 +649,15 @@ export async function decideWorkspaceTransition(
       lastCommitHash: created.digest,
       status: 'committed',
       updatedAt: decidedAt,
+      ...(input.workspaceCommitOverride
+        ? {
+            commitOverride: {
+              ...input.workspaceCommitOverride,
+              blockers: [...input.workspaceCommitOverride.blockers],
+              confirmedAt: decidedAt,
+            },
+          }
+        : {}),
     };
     const draft = await upsertWorkspaceDraft(
       tx,

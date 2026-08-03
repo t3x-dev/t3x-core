@@ -9,7 +9,6 @@
   ],
   "legacy_helper_callers": [
     "packages/api/src/routes/merge.openapi.ts",
-    "packages/api/src/routes/workspaces.openapi.ts",
     "packages/storage/src/queries/branches.ts",
     "packages/storage/src/queries/seed-demo-workspace.ts"
   ]

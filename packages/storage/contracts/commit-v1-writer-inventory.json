@@ -6,7 +6,6 @@
     "packages/api/src/ops/merge.ts",
     "packages/api/src/routes/commits.openapi.ts",
     "packages/api/src/routes/merge.openapi.ts",
-    "packages/api/src/routes/workspaces.openapi.ts",
     "packages/mcp/src/tools/advanced/merge.ts",
     "packages/mcp/src/tools/core/commit.ts",
     "packages/storage/src/queries/commits.ts",
