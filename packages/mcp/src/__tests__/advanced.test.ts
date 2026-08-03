@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // -- Mocks --
 
-const mockDB = {};
+const mockDB = {
+  transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(mockDB),
+};
 const mockApiClient = {
   createProject: vi.fn(),
 };
@@ -158,6 +160,23 @@ const MOCK_MERGED_COMMIT = {
   branch: 'release',
 };
 
+const transitionMock = {
+  prepareRepositoryYOpsMerge: vi.fn(async () => JSON.parse(MOCK_MERGE_DRAFT.preparedJson)),
+  commitRepositoryYOpsMerge: vi.fn(async () => ({
+    commit: {
+      schema: 't3x/commit/v2',
+      parents: [
+        { kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:bbb' },
+        { kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:aaa' },
+      ],
+    },
+    commitDigest: 'sha256:merged',
+    recordedAt: '2026-04-13T00:00:00.000Z',
+  })),
+};
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => transitionMock);
+
 // -- Storage mock --
 
 vi.mock('@t3x-dev/storage', () => ({
@@ -172,6 +191,9 @@ vi.mock('@t3x-dev/storage', () => ({
     if (projectId === 'proj_test1' && branch === 'release') return Promise.resolve(MOCK_COMMIT_B);
     return Promise.resolve(null);
   }),
+  getTransitionRefHead: vi.fn(() =>
+    Promise.resolve({ format: 'transition_v2', head: 'sha256:bbb' })
+  ),
   createMergeDraft: vi.fn(() => Promise.resolve(MOCK_MERGE_DRAFT)),
   getMergeDraft: vi.fn((_db: unknown, id: string) => {
     const drafts: Record<string, unknown> = {
@@ -249,6 +271,7 @@ import { mergeHandler } from '../tools/advanced/merge.js';
 const originalBackend = process.env.T3X_MCP_BACKEND;
 
 afterEach(() => {
+  vi.clearAllMocks();
   if (originalBackend === undefined) {
     delete process.env.T3X_MCP_BACKEND;
   } else {
@@ -344,6 +367,8 @@ describe('t3x_merge handler', () => {
       project_id: 'proj_test1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
     });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
@@ -356,16 +381,17 @@ describe('t3x_merge handler', () => {
   });
 
   it('prepare: rejects a commit from another project', async () => {
-    const { getCommit } = await import('@t3x-dev/storage');
-    vi.mocked(getCommit)
-      .mockResolvedValueOnce({ ...MOCK_COMMIT_A, project_id: 'proj_other' } as never)
-      .mockResolvedValueOnce(MOCK_COMMIT_B as never);
+    transitionMock.prepareRepositoryYOpsMerge.mockRejectedValueOnce(
+      new Error('Source commit does not belong to project proj_test1')
+    );
 
     const result = await mergeHandler({
       action: 'prepare',
       project_id: 'proj_test1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
     });
 
     expect(result.isError).toBe(true);
@@ -447,7 +473,6 @@ describe('t3x_merge handler', () => {
   });
 
   it('execute: creates merge commit when all resolved', async () => {
-    const { createCommit } = await import('@t3x-dev/storage');
     const result = await mergeHandler({
       action: 'execute',
       draft_id: 'md_resolved',
@@ -458,20 +483,20 @@ describe('t3x_merge handler', () => {
     expect(data.commit_hash).toBe('sha256:merged');
     expect(data.parents).toEqual(['sha256:bbb', 'sha256:aaa']);
     expect(data.branch).toBe('release');
-    expect(createCommit).toHaveBeenLastCalledWith(
-      mockDB,
+    expect(transitionMock.commitRepositoryYOpsMerge).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        parents: ['sha256:bbb', 'sha256:aaa'],
-        branch: 'release',
-        enforceBranchLinearity: true,
+        projectId: 'proj_test1',
+        refName: 'release',
+        sourceDigest: 'sha256:aaa',
+        targetDigest: 'sha256:bbb',
       })
     );
   });
 
   it('execute: rejects a draft whose target is no longer the branch head', async () => {
-    const { createCommit, getLatestCommit } = await import('@t3x-dev/storage');
-    vi.mocked(getLatestCommit).mockResolvedValueOnce(null);
-    const callsBefore = vi.mocked(createCommit).mock.calls.length;
+    transitionMock.commitRepositoryYOpsMerge.mockRejectedValueOnce(
+      new Error('Target commit is no longer the current head')
+    );
 
     const result = await mergeHandler({
       action: 'execute',
@@ -481,7 +506,6 @@ describe('t3x_merge handler', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('no longer the current head');
-    expect(createCommit).toHaveBeenCalledTimes(callsBefore);
   });
 
   it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {
@@ -498,6 +522,8 @@ describe('t3x_merge handler', () => {
       project_id: 'proj_test1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
     });
     expect(prepared.isError).toBeUndefined();
     expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_test1');

@@ -2,5 +2,5 @@
   "schema_version": 1,
   "issue": "#1308",
   "target": "zero production CommitV1 createCommit() paths",
-  "writers": ["packages/mcp/src/tools/advanced/merge.ts", "packages/storage/src/queries/commits.ts"]
+  "writers": ["packages/storage/src/queries/commits.ts"]
 }

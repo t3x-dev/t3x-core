@@ -546,6 +546,64 @@ vi.mock('@t3x-dev/storage', () => ({
 
 vi.mock('@t3x-dev/api/repository-state-transition', () => ({
   createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  prepareRepositoryYOpsMerge: vi.fn(
+    async (input: { sourceDigest: string; targetDigest: string }) => {
+      const source = mockState.commits.get(input.sourceDigest);
+      const target = mockState.commits.get(input.targetDigest);
+      if (!source || !target) throw new Error('CommitV2 merge input not found');
+      return {
+        autoKept: [],
+        conflicts: [{ path: 'trip', slotConflicts: [] }],
+        onlyInSource: [],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      };
+    }
+  ),
+  commitRepositoryYOpsMerge: vi.fn(
+    async (input: {
+      projectId: string;
+      refName: string;
+      sourceDigest: string;
+      targetDigest: string;
+      message: string;
+    }) => {
+      const source = mockState.commits.get(input.sourceDigest);
+      const target = mockState.commits.get(input.targetDigest);
+      if (!source || !target) throw new Error('CommitV2 merge input not found');
+      const hash = `sha256:commit${mockState.counters.commit++}`;
+      const recordedAt = new Date('2026-04-22T00:00:00.000Z').toISOString();
+      const parents = [input.targetDigest, input.sourceDigest];
+      mockState.commits.set(hash, {
+        hash,
+        schema: 't3x/commit/v2',
+        parents,
+        author: { type: 'human', name: 'mcp' },
+        committed_at: recordedAt,
+        content: source.content,
+        project_id: input.projectId,
+        message: input.message,
+        branch: input.refName,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: [],
+        sources: null,
+      });
+      return {
+        commitDigest: hash,
+        recordedAt,
+        commit: {
+          schema: 't3x/commit/v2',
+          parents: parents.map((digest) => ({
+            kind: 'commit',
+            schema: 't3x/commit/v2',
+            digest,
+          })),
+        },
+      };
+    }
+  ),
   commitRepositoryYOpsState: vi.fn(
     async (input: {
       projectId: string;
@@ -751,6 +809,8 @@ describe('mcp audit scenarios', () => {
         project_id: project.project_id,
         source_hash: firstCommit.commit_hash,
         target_hash: secondCommit.commit_hash,
+        source_branch: 'main',
+        target_branch: 'main',
       })
     );
     expect(prepared.summary.conflicts).toBe(1);
