@@ -1,33 +1,44 @@
 import {
   authorizeDecisionForRepository,
   buildReplayVerificationStatement,
+  COMMIT_V2_MEDIA_TYPE,
   type CommitV2,
   compileProposalDraft,
   createAcceptancePolicyResource,
   createCommitV2,
   createHumanProposalDraft,
+  createRepositorySemanticState,
+  createSemanticMergeEffect,
   createYOpsReplacementEffect,
   createYOpsState,
+  decodeRepositorySemanticState,
   describeCommitV2,
   describeTransitionObject,
+  emptyProposalReview,
+  flattenTrees,
   InMemoryTransitionObjectResolver,
+  type MergeDecision,
+  type MergeResult,
+  type MergeSummaryData,
   type ProposalStatement,
   type ProtocolObject,
   parseAcceptancePolicy,
+  prepareMerge,
   type RepositoryDecisionAuthority,
   type SemanticContent,
   type State,
   type StatementObservation,
   type TransitionViewV1,
-  yopsStateCodec,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
   createTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
+  type VerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
 
 type ActorRef = ProposalStatement['actor'];
@@ -38,14 +49,19 @@ const REPLAY_ACTOR = Object.freeze({
   id: 'service:t3x-repository-yops-replay',
 });
 const REPLAY_TOOL = Object.freeze({ name: '@t3x-dev/core/yops-replay', version: '1' });
+const MERGE_REPLAY_ACTOR = Object.freeze({
+  kind: 'service' as const,
+  id: 'service:t3x-repository-semantic-merge-replay',
+});
+const MERGE_REPLAY_TOOL = Object.freeze({
+  name: '@t3x-dev/core/yops-semantic-merge',
+  version: '1',
+});
 const UNSPECIFIED_ENVIRONMENT = Object.freeze({ mode: 'unspecified' as const });
 const OBSERVATION_SCOPE = Object.freeze({
   completeness: 'complete' as const,
   sources: ['server:repository-state-transition'],
 });
-const REPOSITORY_SEMANTIC_CONTENT_DOMAIN = 't3x.dev/semantic-content' as const;
-const REPOSITORY_SEMANTIC_CONTENT_VERSION = 1 as const;
-
 const REPOSITORY_STATE_POLICY = createAcceptancePolicyResource({
   uri: 't3x://policies/repository-state-transition/v1',
   policy: parseAcceptancePolicy({
@@ -72,6 +88,54 @@ const REPOSITORY_STATE_POLICY = createAcceptancePolicyResource({
       replay: {
         issuers: { mode: 'one_of', values: [REPLAY_ACTOR] },
         tools: { mode: 'one_of', values: [REPLAY_TOOL] },
+        environments: { mode: 'one_of', values: [UNSPECIFIED_ENVIRONMENT] },
+      },
+      validation: {
+        requirement: 'optional',
+        issuers: { mode: 'any' },
+        tools: { mode: 'any' },
+        environments: { mode: 'any' },
+        profiles: { mode: 'any' },
+        schemas: { mode: 'any' },
+        contexts: { mode: 'any' },
+      },
+      humanConfirmation: { issuers: { mode: 'any' } },
+    },
+    override: {
+      allowClaimFailures: false,
+      allowFailedValidation: false,
+      allowMissingHumanConfirmation: false,
+      allowMissingValidation: true,
+    },
+  }),
+});
+
+const REPOSITORY_MERGE_POLICY = createAcceptancePolicyResource({
+  uri: 't3x://policies/repository-semantic-merge/v1',
+  policy: parseAcceptancePolicy({
+    schema: 't3x.dev/acceptance-policy/v1',
+    version: 1,
+    authorization: {
+      decide: { actors: { mode: 'any' } },
+      override: { actors: { mode: 'any' } },
+      allowSelfApproval: true,
+    },
+    claims: {
+      intent: {
+        allowedModes: ['authored'],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required',
+      },
+      rationale: {
+        allowedModes: ['inferred'],
+        minimumEvidence: 1,
+        humanConfirmation: 'not_required',
+      },
+    },
+    checks: {
+      replay: {
+        issuers: { mode: 'one_of', values: [MERGE_REPLAY_ACTOR] },
+        tools: { mode: 'one_of', values: [MERGE_REPLAY_TOOL] },
         environments: { mode: 'one_of', values: [UNSPECIFIED_ENVIRONMENT] },
       },
       validation: {
@@ -143,58 +207,20 @@ export class RepositoryStateDecisionDeniedError extends Error {
 
 /** Losslessly encode structured repository content in the versioned YOps State domain. */
 export function createRepositoryYOpsStateFromSemanticContent(content: SemanticContent): State {
-  if (!Array.isArray(content.trees) || !Array.isArray(content.relations)) {
-    throw new TypeError('Structured repository state requires trees and relations arrays');
-  }
-  return createYOpsState({
-    domain: REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
-    version: REPOSITORY_SEMANTIC_CONTENT_VERSION,
-    content: {
-      trees: content.trees,
-      relations: content.relations,
-    },
-  } as unknown as Parameters<typeof createYOpsState>[0]);
+  return createRepositorySemanticState(content);
 }
 
 /** Decode only the repository SemanticContent domain; never guess another State shape. */
 export function decodeRepositorySemanticContentState(state: State): SemanticContent {
-  if (
-    state.codec.mediaType !== yopsStateCodec.mediaType ||
-    state.codec.version !== yopsStateCodec.version
-  ) {
+  try {
+    return decodeRepositorySemanticState(state);
+  } catch (error) {
     throw new RepositoryStateDomainUnsupportedError(
-      `Repository SemanticContent requires ${yopsStateCodec.mediaType}@${yopsStateCodec.version}`
+      error instanceof Error
+        ? error.message
+        : 'State is not a t3x.dev/semantic-content version 1 YOps document'
     );
   }
-  const decoded = yopsStateCodec.decode(state.value);
-  if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) {
-    throw new RepositoryStateDomainUnsupportedError(
-      'State is not a t3x.dev/semantic-content version 1 YOps document'
-    );
-  }
-  const value = decoded as Record<string, unknown>;
-  const rawContent = value.content;
-  if (
-    value.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN ||
-    value.version !== REPOSITORY_SEMANTIC_CONTENT_VERSION ||
-    rawContent === null ||
-    typeof rawContent !== 'object' ||
-    Array.isArray(rawContent)
-  ) {
-    throw new RepositoryStateDomainUnsupportedError(
-      'State is not a t3x.dev/semantic-content version 1 YOps document'
-    );
-  }
-  const repositoryContent = rawContent as Record<string, unknown>;
-  if (!Array.isArray(repositoryContent.trees) || !Array.isArray(repositoryContent.relations)) {
-    throw new RepositoryStateDomainUnsupportedError(
-      'State is not a t3x.dev/semantic-content version 1 YOps document'
-    );
-  }
-  return {
-    trees: repositoryContent.trees,
-    relations: repositoryContent.relations,
-  } as SemanticContent;
 }
 
 /**
@@ -311,4 +337,283 @@ export async function commitRepositoryYOpsState(
     throw new TypeError('Committed repository Transition could not be resolved');
   }
   return { commit, commitDigest: created.digest, transition };
+}
+
+export class RepositoryMergeCommitNotFoundError extends Error {
+  readonly code = 'NOT_FOUND';
+
+  constructor(readonly digest: string) {
+    super(`CommitV2 not found in project: ${digest}`);
+    this.name = 'RepositoryMergeCommitNotFoundError';
+  }
+}
+
+export class RepositoryMergeInvalidError extends Error {
+  readonly code = 'INVALID_REQUEST';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'RepositoryMergeInvalidError';
+  }
+}
+
+interface CommitDistance {
+  graph: VerifiedTransitionCommitGraph;
+  distance: number;
+}
+
+interface RepositoryMergeContext {
+  source: VerifiedTransitionCommitGraph;
+  target: VerifiedTransitionCommitGraph;
+  mergeBaseState: State;
+  prepared: MergeResult;
+}
+
+async function loadRepositoryMergeContext(input: {
+  db: AnyDB;
+  projectId: string;
+  sourceDigest: string;
+  targetDigest: string;
+}): Promise<RepositoryMergeContext> {
+  if (input.sourceDigest === input.targetDigest) {
+    throw new RepositoryMergeInvalidError('Source and target CommitV2 must be different');
+  }
+  const cache = new Map<string, VerifiedTransitionCommitGraph>();
+  const load = async (digest: string): Promise<VerifiedTransitionCommitGraph> => {
+    const cached = cache.get(digest);
+    if (cached !== undefined) return cached;
+    const graph = await getVerifiedTransitionCommitGraph(input.db, input.projectId, digest);
+    if (graph === null) throw new RepositoryMergeCommitNotFoundError(digest);
+    cache.set(digest, graph);
+    return graph;
+  };
+  const [source, target] = await Promise.all([load(input.sourceDigest), load(input.targetDigest)]);
+
+  const collectAncestors = async (
+    start: VerifiedTransitionCommitGraph
+  ): Promise<Map<string, CommitDistance>> => {
+    const distances = new Map<string, CommitDistance>();
+    const queue: CommitDistance[] = [{ graph: start, distance: 0 }];
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index]!;
+      const digest = describeCommitV2(current.graph.commit).digest;
+      const previous = distances.get(digest);
+      if (previous !== undefined && previous.distance <= current.distance) continue;
+      distances.set(digest, current);
+      for (const parent of current.graph.commit.parents) {
+        queue.push({ graph: await load(parent.digest), distance: current.distance + 1 });
+      }
+    }
+    return distances;
+  };
+
+  const [sourceAncestors, targetAncestors] = await Promise.all([
+    collectAncestors(source),
+    collectAncestors(target),
+  ]);
+  const candidates = [...sourceAncestors.entries()]
+    .filter(([digest]) => targetAncestors.has(digest))
+    .map(([digest, sourceDistance]) => ({
+      digest,
+      graph: sourceDistance.graph,
+      sourceDistance: sourceDistance.distance,
+      targetDistance: targetAncestors.get(digest)!.distance,
+    }))
+    .sort(
+      (left, right) =>
+        left.sourceDistance + left.targetDistance - (right.sourceDistance + right.targetDistance) ||
+        Math.max(left.sourceDistance, left.targetDistance) -
+          Math.max(right.sourceDistance, right.targetDistance) ||
+        left.digest.localeCompare(right.digest)
+    );
+  const mergeBase = candidates[0]?.graph ?? null;
+  const mergeBaseState =
+    mergeBase?.state ?? createRepositorySemanticState({ trees: [], relations: [] });
+  const prepared = prepareMerge(
+    decodeRepositorySemanticState(mergeBaseState),
+    decodeRepositorySemanticState(source.state),
+    decodeRepositorySemanticState(target.state)
+  );
+  return { source, target, mergeBaseState, prepared };
+}
+
+export interface PrepareRepositoryYOpsMergeInput {
+  db: AnyDB;
+  projectId: string;
+  sourceDigest: string;
+  targetDigest: string;
+}
+
+/** Recompute the merge plan only from verified CommitV2 graphs. */
+export async function prepareRepositoryYOpsMerge(
+  input: PrepareRepositoryYOpsMergeInput
+): Promise<MergeResult> {
+  const context = await loadRepositoryMergeContext(input);
+  return context.prepared;
+}
+
+export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMergeInput {
+  refName: string;
+  decisions: MergeDecision;
+  actor: ActorRef;
+  message: string;
+}
+
+export interface CommitRepositoryYOpsMergeResult {
+  commit: CommitV2;
+  commitDigest: string;
+  recordedAt: string;
+  content: SemanticContent;
+  mergeSummary: MergeSummaryData;
+  transition: TransitionViewV1;
+}
+
+/** Commit a deterministic two-parent merge through the complete Transition graph. */
+export async function commitRepositoryYOpsMerge(
+  input: CommitRepositoryYOpsMergeInput
+): Promise<CommitRepositoryYOpsMergeResult> {
+  const head = await getTransitionRefHead(input.db, {
+    projectId: input.projectId,
+    refName: input.refName,
+  });
+  if (head.format !== 'transition_v2' || head.head !== input.targetDigest) {
+    throw new TransitionHeadConflictError(input.targetDigest, head.head);
+  }
+  const context = await loadRepositoryMergeContext(input);
+  if (
+    describeTransitionObject(head.state).digest !==
+    describeTransitionObject(context.target.state).digest
+  ) {
+    throw new TransitionHeadConflictError(input.targetDigest, head.head);
+  }
+  const merged = createSemanticMergeEffect({
+    target: context.target.state,
+    mergeBase: context.mergeBaseState,
+    source: context.source.state,
+    decisions: input.decisions,
+    expectedTarget: context.target.commit.result,
+  });
+  const sourceEvidence = {
+    resource: {
+      uri: `t3x://projects/${input.projectId}/commits/${input.sourceDigest}`,
+      mediaType: COMMIT_V2_MEDIA_TYPE,
+      digest: input.sourceDigest as `sha256:${string}`,
+    },
+    locator: {
+      scheme: 't3x.protocol-object/v1',
+      value: { kind: 'commit', role: 'merge-source' },
+    },
+  };
+  const compiled = compileProposalDraft({
+    draft: {
+      schema: 't3x/proposal-draft',
+      version: 1,
+      intent: { mode: 'authored', value: input.message, evidence: [] },
+      rationale: {
+        mode: 'inferred',
+        value: `Merge CommitV2 ${input.sourceDigest} into ${input.targetDigest} using the pinned semantic merge driver.`,
+        evidence: [sourceEvidence],
+      },
+      review: emptyProposalReview(),
+    },
+    effect: merged.effect,
+    actor: input.actor,
+  });
+  if (!compiled.ok) throw new RepositoryStateProposalError(compiled.issues);
+
+  const recordedAt = new Date().toISOString() as CanonicalTimestamp;
+  const replay = buildReplayVerificationStatement({
+    effect: merged.effect,
+    actor: MERGE_REPLAY_ACTOR,
+    predicate: {
+      outcome: 'verified',
+      result: merged.effect.result,
+      tool: MERGE_REPLAY_TOOL,
+      run: {
+        id: `repository:${input.projectId}:ref:${input.refName}:target:${input.targetDigest}:source:${input.sourceDigest}:merge-replay`,
+        recordedAt,
+      },
+      environment: UNSPECIFIED_ENVIRONMENT,
+    },
+  });
+  const observations: StatementObservation[] = [
+    { statement: replay, issuerContext: { actor: MERGE_REPLAY_ACTOR } },
+  ];
+  const authority: RepositoryDecisionAuthority = {
+    async resolve() {
+      return {
+        actorContext: { actor: input.actor },
+        observationScope: {
+          completeness: 'complete',
+          sources: ['server:repository-semantic-merge'],
+        },
+        policy: REPOSITORY_MERGE_POLICY.policy,
+        policyResource: REPOSITORY_MERGE_POLICY.resource,
+        statements: observations,
+      };
+    },
+  };
+  const issued = await authorizeDecisionForRepository({
+    projectId: input.projectId,
+    refName: input.refName,
+    proposal: compiled.proposal,
+    effect: merged.effect,
+    outcome: 'accepted',
+    rationale: { mode: 'unspecified' },
+    decidedAt: recordedAt,
+    authority,
+  });
+  if (!issued.ok || issued.authorization === null) {
+    throw new RepositoryStateDecisionDeniedError(issued.ok ? [] : issued.failures);
+  }
+
+  await recordRepositoryDecisionAuthorization(input.db, issued.authorization);
+  const objects: ProtocolObject[] = [
+    context.target.state,
+    context.source.state,
+    context.mergeBaseState,
+    merged.result,
+    context.target.commit,
+    context.source.commit,
+    ...issued.authorization.objects,
+  ];
+  const commit = await createCommitV2({
+    parents: [describeCommitV2(context.target.commit), describeCommitV2(context.source.commit)],
+    decision: issued.decision,
+    resolver: new InMemoryTransitionObjectResolver(objects),
+  });
+  const created = await createTransitionCommit(input.db, {
+    projectId: input.projectId,
+    refName: input.refName,
+    expectedHead: input.targetDigest,
+    commit,
+    objects,
+  });
+  const transition = await getTransitionViewForCommit(input.db, {
+    projectId: input.projectId,
+    refName: input.refName,
+    commitId: created.digest,
+  });
+  if (transition === null) throw new TypeError('Committed merge Transition could not be resolved');
+
+  const keptFromSource = new Set(input.decisions.keepFromSource).size;
+  const keptFromTarget = new Set(input.decisions.keepFromTarget).size;
+  return {
+    commit,
+    commitDigest: created.digest,
+    recordedAt,
+    content: merged.content,
+    mergeSummary: {
+      kept_identical: merged.prepared.autoKept.length,
+      resolved_conflicts: merged.prepared.conflicts.length,
+      kept_from_source: keptFromSource,
+      kept_from_target: keptFromTarget,
+      discarded:
+        merged.prepared.onlyInSource.length -
+        keptFromSource +
+        (merged.prepared.onlyInTarget.length - keptFromTarget),
+      total_nodes: flattenTrees(merged.content.trees).length,
+    },
+    transition,
+  };
 }

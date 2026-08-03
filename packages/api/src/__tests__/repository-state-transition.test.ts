@@ -4,6 +4,7 @@ import {
   ensureMainBranch,
   getTransitionRefHead,
   getVerifiedTransitionCommitGraph,
+  insertBranch,
   insertProject,
   listRepositoryDecisionAudit,
   listTransitionCommits,
@@ -11,9 +12,11 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  commitRepositoryYOpsMerge,
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   decodeRepositorySemanticContentState,
+  prepareRepositoryYOpsMerge,
 } from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
 
@@ -150,5 +153,140 @@ describe('repository YOps State Transition application service', () => {
     expect(() => decodeRepositorySemanticContentState(createYOpsState({ a: true }))).toThrowError(
       'State is not a t3x.dev/semantic-content version 1 YOps document'
     );
+  });
+
+  it('recomputes and commits a deterministic two-parent merge with source evidence', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository CommitV2 Merge' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const base = await commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [{ key: 'shared', slots: { value: 'base' }, children: [] }],
+        relations: [],
+      }),
+      actor: HUMAN,
+      intent: 'Create merge base',
+    });
+    await insertBranch(db, {
+      projectId: project.projectId,
+      name: 'feature',
+      parentBranch: 'main',
+    });
+    const source = await commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'feature',
+      expectedHead: base.commitDigest,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [
+          { key: 'shared', slots: { value: 'source' }, children: [] },
+          { key: 'source_only', slots: { enabled: true }, children: [] },
+        ],
+        relations: [],
+      }),
+      actor: HUMAN,
+      intent: 'Change source branch',
+    });
+    const target = await commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: base.commitDigest,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [
+          { key: 'shared', slots: { value: 'target' }, children: [] },
+          { key: 'target_only', slots: { enabled: true }, children: [] },
+        ],
+        relations: [],
+      }),
+      actor: HUMAN,
+      intent: 'Change target branch',
+    });
+
+    const prepared = await prepareRepositoryYOpsMerge({
+      db,
+      projectId: project.projectId,
+      sourceDigest: source.commitDigest,
+      targetDigest: target.commitDigest,
+    });
+    expect(prepared.conflicts.map((conflict) => conflict.path)).toEqual(['shared']);
+
+    const merged = await commitRepositoryYOpsMerge({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      sourceDigest: source.commitDigest,
+      targetDigest: target.commitDigest,
+      decisions: {
+        conflictResolutions: { shared: 'source' },
+        keepFromSource: ['source_only'],
+        keepFromTarget: ['target_only'],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      },
+      actor: HUMAN,
+      message: 'Merge feature into main',
+    });
+
+    const graph = await getVerifiedTransitionCommitGraph(
+      db,
+      project.projectId,
+      merged.commitDigest
+    );
+    expect(graph?.commit.parents.map((parent) => parent.digest)).toEqual([
+      target.commitDigest,
+      source.commitDigest,
+    ]);
+    expect(graph?.effect).toMatchObject({
+      driver: { protocol: 't3x.dev/yops-semantic-merge', protocolVersion: '1' },
+      inputs: [{ role: 'merge-base' }, { role: 'merge-source', object: source.commit.result }],
+    });
+    expect(graph?.proposal.predicate.rationale).toMatchObject({
+      mode: 'inferred',
+      evidence: [
+        {
+          resource: { digest: source.commitDigest },
+          locator: { scheme: 't3x.protocol-object/v1' },
+        },
+      ],
+    });
+    expect(
+      decodeRepositorySemanticContentState(graph!.state).trees.map((tree) => tree.key)
+    ).toEqual(['shared', 'source_only', 'target_only']);
+    expect(merged.mergeSummary).toMatchObject({
+      resolved_conflicts: 1,
+      kept_from_source: 1,
+      kept_from_target: 1,
+      total_nodes: 3,
+    });
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ head: merged.commitDigest, state: graph?.state });
+
+    await expect(
+      commitRepositoryYOpsMerge({
+        db,
+        projectId: project.projectId,
+        refName: 'main',
+        sourceDigest: source.commitDigest,
+        targetDigest: target.commitDigest,
+        decisions: {
+          conflictResolutions: { shared: 'source' },
+          keepFromSource: ['source_only'],
+          keepFromTarget: ['target_only'],
+          keepRelationsFromSource: true,
+          keepRelationsFromTarget: true,
+        },
+        actor: HUMAN,
+        message: 'Retry stale merge',
+      })
+    ).rejects.toBeInstanceOf(TransitionHeadConflictError);
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toHaveLength(4);
   });
 });
