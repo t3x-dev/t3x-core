@@ -40,7 +40,7 @@ const realCompareCandidate = {
   changed_nodes: 1,
   output_impacts: 0,
   source_refs: 0,
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   status: 'ready' as const,
   status_label: 'Available',
   open_pull_request_number: null,

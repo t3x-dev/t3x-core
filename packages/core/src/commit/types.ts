@@ -1,9 +1,9 @@
 /**
  * Shared commit-adjacent metadata types.
  *
- * The CommitV1 object model and hash surface were removed in the CommitV2
+ * The tree-primary commit object model and hash surface were removed in the CommitV2
  * hard cutover. Keep these generic metadata shapes here for fixtures and
- * product projections that do not depend on the old commit object.
+ * product projections that do not depend on that retired object.
  */
 
 export interface Author {

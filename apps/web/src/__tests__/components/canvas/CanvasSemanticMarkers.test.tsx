@@ -158,7 +158,7 @@ function makeNodeData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
       content: { trees: [{ key: 'goal', slots: {}, children: [] }], relations: [] },
       hash: 'sha256:abc123',
       message: 'Canvas marker fixture',
-      schema: 't3x/commit',
+      schema: 't3x/commit/v2',
       sources: null,
     },
     commitHash: 'sha256:abc123',

@@ -283,7 +283,7 @@ describe('CommitV2 graph verification', () => {
     });
 
     it('fails for malformed CommitV2 object', () => {
-      const result = verifyCommitHash({ schema: 't3x/commit' } as never);
+      const result = verifyCommitHash({ schema: 't3x/commit/v2' } as never);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Hash verification failed');
     });

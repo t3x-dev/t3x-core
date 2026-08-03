@@ -177,7 +177,7 @@ const PRD_COMMIT: ApiCommit = {
   parents: ['sha256:base-prd'],
   project_id: 'proj_test',
   provenance: { method: 'workspace' },
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   sources: [{ type: 'conversation', id: 'conv_d4d239f3' }],
   yops_log_ids: ['op_1', 'op_2', 'op_3'],
 };
@@ -1347,7 +1347,7 @@ describe('ProjectStateTab', () => {
     );
   });
 
-  it('clears old commit actions while a newly selected branch is loading', async () => {
+  it('clears stale commit actions while a newly selected branch is loading', async () => {
     const view = renderStateTab();
 
     await screen.findByText('PRD audience handoff committed');

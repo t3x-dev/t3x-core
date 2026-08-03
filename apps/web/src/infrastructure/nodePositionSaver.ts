@@ -59,7 +59,7 @@ export function saveNodePosition(
     // Workbench draft nodes (id = draft_*) are ephemeral canvas entities
     // with no backing persistence column. Skip the save rather than
     // PATCHing /commits/{draft_*}/position, which returns 404
-    // (COMMIT_NOT_FOUND) because the handler looks up the commits table
+    // (COMMIT_NOT_FOUND) because the handler looks up the CommitV2 storage
     // by hash. See docs/audits/2026-04-15/DEEP-WALK-DIAGNOSIS.md Bug 5.
     if (nodeId.startsWith('draft_')) return;
 

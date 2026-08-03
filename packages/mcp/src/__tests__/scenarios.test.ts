@@ -427,7 +427,7 @@ vi.mock('@t3x-dev/storage', () => ({
       const hash = `sha256:commit${mockState.counters.commit++}`;
       const commit = {
         hash,
-        schema: 't3x/commit',
+        schema: 't3x/commit/v2',
         committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
         yops_log_ids: [],
         sources: null,

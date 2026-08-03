@@ -1705,7 +1705,7 @@ describe('WorkspaceWorkbench', () => {
         data: {
           commit: {
             hash: commitHash,
-            schema: 't3x/commit',
+            schema: 't3x/commit/v2',
             parents: [],
             author: { type: 'human' },
             committed_at: '2026-07-23T00:00:00.000Z',

@@ -37,7 +37,7 @@ describe('useWorkspaceYOps', () => {
     vi.clearAllMocks();
     vi.mocked(fetchCommitByHash).mockResolvedValue({
       hash: baseCommitHash,
-      schema: 't3x/commit',
+      schema: 't3x/commit/v2',
       parents: [],
       author: { type: 'human', name: 'api' },
       committed_at: '2026-07-22T00:00:00.000Z',

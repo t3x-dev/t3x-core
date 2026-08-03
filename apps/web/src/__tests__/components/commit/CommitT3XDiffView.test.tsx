@@ -25,7 +25,7 @@ const PARENT_COMMIT: ApiCommit = {
   parents: [],
   project_id: 'proj_test',
   provenance: { method: 'workspace' },
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   sources: [],
 };
 

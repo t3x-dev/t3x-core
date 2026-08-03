@@ -118,7 +118,7 @@ export function useCanvasMergeActions() {
           mustntHave: undefined,
           commit: {
             hash: mergeCommit.hash,
-            schema: 't3x/commit' as const,
+            schema: 't3x/commit/v2' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
             content: { trees: [], relations: [] },

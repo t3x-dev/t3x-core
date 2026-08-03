@@ -82,7 +82,7 @@ export interface ApiCommitOperationsResponse {
 /** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
-  schema: 't3x/commit';
+  schema: 't3x/commit/v2';
   parents: string[];
   author: { type: string; id?: string; name?: string };
   committed_at: string;

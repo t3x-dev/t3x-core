@@ -118,7 +118,7 @@ test.describe('commit ceremony', () => {
             data: {
               commit: {
                 hash: COMMIT_HASH,
-                schema: 't3x/commit',
+                schema: 't3x/commit/v2',
                 parents: [],
                 author: { type: 'human', name: 'E2E Tester' },
                 committed_at: new Date().toISOString(),

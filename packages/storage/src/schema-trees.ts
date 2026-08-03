@@ -145,7 +145,7 @@ export const leaves = pgTable(
      * The commit this leaf uses for knowledge.
      *
      * Fix 14 (no-fk note): No foreign key is declared here intentionally.
-     * Leaves can reference commits from the commits table,
+     * Leaves can reference commits from the CommitV2 storage,
      * so a single FK to one table would be incorrect. Application-level
      * validation (in the leaves query layer) is responsible for confirming that
      * the referenced commit exists before creating or updating a leaf.

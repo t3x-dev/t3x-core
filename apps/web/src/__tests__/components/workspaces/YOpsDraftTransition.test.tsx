@@ -66,7 +66,7 @@ describe('YOpsDraftTab Transition write path', () => {
     vi.restoreAllMocks();
   });
 
-  it('fails closed on a legacy head and never falls back to the legacy commit route', async () => {
+  it('fails closed on a non-transition head and never falls back to a removed commit route', async () => {
     const validate = vi.fn().mockResolvedValue({
       ok: true,
       applied: 1,
