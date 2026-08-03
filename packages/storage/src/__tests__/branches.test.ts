@@ -283,6 +283,5 @@ describe('Branches Storage', () => {
 
       expect(main.branchId).toBe(created.branchId);
     });
-
   });
 });

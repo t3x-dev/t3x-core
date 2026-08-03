@@ -243,16 +243,17 @@ export function createYOpsReplacementEffect(
   }
 
   const operations: ProtocolValue[] = [];
-  const keys = [...new Set([...Object.keys(input.base.value), ...Object.keys(input.target.value)])]
-    .sort();
+  const baseKeys = new Set(Object.keys(input.base.value));
+  const targetKeys = new Set(Object.keys(input.target.value));
+  const keys = [...new Set([...baseKeys, ...targetKeys])].sort();
   for (const key of keys) {
     if (key.length === 0 || key.includes('/')) {
       throw new UnsupportedSemanticsError(
         `YOps replacement cannot address root key ${JSON.stringify(key)}`
       );
     }
-    const inBase = Object.prototype.hasOwnProperty.call(input.base.value, key);
-    const inTarget = Object.prototype.hasOwnProperty.call(input.target.value, key);
+    const inBase = baseKeys.has(key);
+    const inTarget = targetKeys.has(key);
     const before = input.base.value[key];
     const after = input.target.value[key];
     if (inBase && inTarget && sameProtocolValue(before!, after!)) continue;
@@ -271,8 +272,12 @@ export function createYOpsReplacementEffect(
     operations,
     ...(input.expectedBase === undefined ? {} : { expectedBase: input.expectedBase }),
   });
-  if (describeProtocolObject(created.result).digest !== describeProtocolObject(input.target).digest) {
-    throw new IntegrityChainInvalidError('YOps replacement did not replay to the exact target State');
+  if (
+    describeProtocolObject(created.result).digest !== describeProtocolObject(input.target).digest
+  ) {
+    throw new IntegrityChainInvalidError(
+      'YOps replacement did not replay to the exact target State'
+    );
   }
   return created;
 }
