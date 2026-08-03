@@ -14,6 +14,22 @@ export {
   type UnsupportedEspHomeSourceInputs,
 } from './esphomeSourceInputs';
 export {
+  type CreatedSemanticMergeEffect,
+  type CreateSemanticMergeEffectInput,
+  createRepositorySemanticState,
+  createSemanticMergeEffect,
+  decodeRepositorySemanticState,
+  REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+  REPOSITORY_SEMANTIC_CONTENT_VERSION,
+  SEMANTIC_MERGE_DRIVER_PROTOCOL,
+  SEMANTIC_MERGE_DRIVER_PROTOCOL_VERSION,
+  SEMANTIC_MERGE_DRIVER_SPEC_DIGEST,
+  SEMANTIC_MERGE_MUTATION_DRIVER_REF,
+  SEMANTIC_MERGE_OPERATION_SCHEMA,
+  semanticMergeMutationDriver,
+  semanticMergeMutationDrivers,
+} from './semanticMergeDriver';
+export {
   createYOpsState,
   YOPS_STATE_CODEC_VERSION,
   YOPS_STATE_MEDIA_TYPE,

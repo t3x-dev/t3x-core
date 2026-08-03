@@ -68,6 +68,7 @@ describe('repository YOps State Transition application service', () => {
       created.commitDigest
     );
     expect(graph?.effect.result).toEqual(describeTransitionObject(target));
+    expect(graph?.state).toEqual(target);
     await expect(listTransitionCommits(db, project.projectId)).resolves.toHaveLength(1);
     await expect(
       listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })

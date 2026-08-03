@@ -1008,6 +1008,7 @@ export async function getTransitionCommit(
 
 export interface VerifiedTransitionCommitGraph extends VerifiedCommitIntegrity {
   recordedAt: string;
+  state: State;
 }
 
 /**
@@ -1022,11 +1023,13 @@ export async function getVerifiedTransitionCommitGraph(
 ): Promise<VerifiedTransitionCommitGraph | null> {
   const stored = await getTransitionCommit(db, projectId, digest);
   if (stored === null) return null;
-  const verified = await verifyRepositoryCommitClosure(
-    stored.commit,
-    new DatabaseTransitionObjectResolver(db, projectId)
-  );
-  return { ...verified, recordedAt: stored.recordedAt };
+  const resolver = new DatabaseTransitionObjectResolver(db, projectId);
+  const verified = await verifyRepositoryCommitClosure(stored.commit, resolver);
+  const result = await resolveStoredObject(resolver, verified.effect.result);
+  if (result.schema !== 't3x/state/v1') {
+    throw new TransitionCommitGraphIntegrityError(digest);
+  }
+  return { ...verified, state: result, recordedAt: stored.recordedAt };
 }
 
 export async function listTransitionCommits(
