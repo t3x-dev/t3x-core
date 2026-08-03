@@ -108,7 +108,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -165,7 +165,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -201,7 +201,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -277,7 +277,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -326,7 +326,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -369,7 +369,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -397,7 +397,54 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs the YSchema artifact registry when upgrading from v58', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS yschema_composition_snapshots;
+        DROP TABLE IF EXISTS yschema_artifact_capabilities;
+        DROP TABLE IF EXISTS yschema_artifact_versions;
+        DROP TABLE IF EXISTS yschema_artifacts;
+        UPDATE _schema_version
+        SET version = 58, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [tables] = await testDb.sql<
+        Array<{
+          artifacts: string | null;
+          versions: string | null;
+          capabilities: string | null;
+          snapshots: string | null;
+        }>
+      >`
+        SELECT
+          to_regclass('yschema_artifacts')::text AS artifacts,
+          to_regclass('yschema_artifact_versions')::text AS versions,
+          to_regclass('yschema_artifact_capabilities')::text AS capabilities,
+          to_regclass('yschema_composition_snapshots')::text AS snapshots
+      `;
+      expect(tables).toEqual({
+        artifacts: 'yschema_artifacts',
+        versions: 'yschema_artifact_versions',
+        capabilities: 'yschema_artifact_capabilities',
+        snapshots: 'yschema_composition_snapshots',
+      });
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version FROM _schema_version WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }

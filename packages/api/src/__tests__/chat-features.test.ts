@@ -18,6 +18,10 @@ vi.mock('undici', () => ({
 const savedEnv: Record<string, string | undefined> = {};
 const envKeys = [
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
   'OPENAI_API_KEY',
   'HTTPS_PROXY',
   'https_proxy',

@@ -226,7 +226,7 @@ describe('conversation-adjacent contract inventory', () => {
     for (const guard of inventory.deprecated_caller_guards) {
       const observed = files
         .filter((file) => readFileSync(file, 'utf8').includes(guard.symbol))
-        .map((file) => relative(repositoryRoot, file))
+        .map((file) => relative(repositoryRoot, file).replaceAll('\\', '/'))
         .sort();
       expect(observed, guard.symbol).toEqual([...guard.allowed_files].sort());
     }

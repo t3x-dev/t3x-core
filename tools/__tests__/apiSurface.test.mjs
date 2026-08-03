@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   formatApiSnapshot,
   selectApiSurfacePackages,
@@ -98,7 +98,7 @@ test('API snapshot update writes generated reports for selected packages', () =>
   assert.equal(result.updated.length, 1);
   assert.equal(result.updated[0].name, '@t3x-dev/yops');
   assert.equal(
-    readFileSync(join(new URL(rootDir).pathname, 'packages/yops/etc/yops.api.md'), 'utf8'),
+    readFileSync(join(fileURLToPath(rootDir), 'packages/yops/etc/yops.api.md'), 'utf8'),
     formatApiSnapshot({
       packageName: '@t3x-dev/yops',
       declarationText: 'export declare function applyYOps(): void;\n',

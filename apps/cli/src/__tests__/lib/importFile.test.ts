@@ -2,6 +2,7 @@
  * Tests for local file import utilities.
  */
 
+import path from 'node:path';
 import type { T3xClient } from '@t3x-dev/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -169,7 +170,7 @@ describe('importFile', () => {
       conversationId: 'conv_abc123',
       conversationTitle: 'product spec',
       turnCount: 3,
-      filePath: testPath,
+      filePath: path.resolve(testPath),
     });
 
     expect(mockClient.createConversation).toHaveBeenCalledWith({

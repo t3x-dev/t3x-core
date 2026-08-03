@@ -16,7 +16,15 @@ import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-regi
 import { llmRoutes } from '../routes/llm.openapi';
 
 const originalEnv = { ...process.env };
-const envKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_AI_STUDIO_KEY'];
+const envKeys = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'OPENAI_API_KEY',
+  'GOOGLE_AI_STUDIO_KEY',
+];
 
 describe('GET /v1/llm/models', () => {
   let app: Hono;

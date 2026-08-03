@@ -1031,7 +1031,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const extractedWorkspace = isEsphomeDeviceWorkspace(workspace)
     ? buildEsphomeDeviceWorkspace(workspace, projectId, sourceTexts, candidateId)
-    : await buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
+    : await buildGenericExtractedWorkspace(db, workspace, projectId, sourceTexts);
   if (!extractedWorkspace.ok) {
     return errorResponse(c, 'INVALID_REQUEST', extractedWorkspace.message);
   }
@@ -1071,6 +1071,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
 });
 
 async function buildGenericExtractedWorkspace(
+  db: AnyDB,
   workspace: Record<string, unknown>,
   projectId: string,
   sourceTexts: WorkspaceSourceText[]
