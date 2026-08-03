@@ -4,7 +4,7 @@
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
  * hooks. This hook owns the two async flows previously on
  * `commitStore`:
- *   - commit(message)  → @/commands/commits.createCommit, enrich trees with source_ref,
+ *   - commit(message)  → @/commands/commits.commitRepositoryState, enrich trees with source_ref,
  *                        sanitize slot values, write result via setters
  *   - init(projectId, branch) → fetchCommits (HEAD), seed lastCommitHash +
  *                        committedNodeIds/Snapshot for the chat-panel UI
@@ -17,7 +17,7 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { useCallback } from 'react';
-import { createCommit } from '@/commands/commits';
+import { commitRepositoryState } from '@/commands/commits';
 import { enrichTreesWithSourceRefs } from '@/domain/enrichSourceRefs';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchCommits } from '@/queries/commits';
@@ -107,19 +107,17 @@ export function useCommitActions() {
         }
       }
 
-      const result = await createCommit(
+      const result = await commitRepositoryState(
         projectId,
         {
           trees: sanitizedTrees,
           relations: draft.relations,
         },
         {
-          parents: lastCommitHash ? [lastCommitHash] : [],
+          expectedHead: lastCommitHash,
           branch: commitBranch,
           message: message || undefined,
-          sources: sources.length > 0 ? sources : undefined,
-          source_conversation_id: conversationId ?? undefined,
-          provenance: { method: 'llm_extraction' },
+          sourceConversationId: conversationId ?? undefined,
         }
       );
 
@@ -134,13 +132,13 @@ export function useCommitActions() {
       }
 
       useCommitStore.getState().setCommitSuccess({
-        lastCommitHash: result.commit.hash,
+        lastCommitHash: result.commit.digest,
         committedNodeIds: newCommittedIds,
         committedNodeSnapshot: newSnapshot,
       });
 
       return {
-        hash: result.commit.hash,
+        hash: result.commit.digest,
         projectId,
         conversationId,
         branch: commitBranch,

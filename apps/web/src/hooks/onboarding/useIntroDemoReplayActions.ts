@@ -10,7 +10,7 @@ import {
 } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-import { createCommit } from '@/commands/commits';
+import { commitRepositoryState } from '@/commands/commits';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { EXTRACTION_TOAST_ID } from '@/hooks/drafts/extractionToast';
@@ -201,21 +201,13 @@ export function useIntroDemoReplayActions() {
       const content = demoTree();
       const branch = chatState.activeBranch || commitState.commitBranch || 'main';
       const commitMessage = message?.trim() || 'Demo Commit';
-      const result = await createCommit(projectId, content, {
-        parents: commitState.lastCommitHash ? [commitState.lastCommitHash] : [],
+      const result = await commitRepositoryState(projectId, content, {
+        expectedHead: commitState.lastCommitHash,
         branch,
         message: commitMessage,
-        sources: [
-          {
-            type: 'conversation',
-            id: conversationId,
-            title: commitState.conversationTitle ?? chatState.conversationTitle ?? undefined,
-          },
-        ],
-        source_conversation_id: conversationId,
-        provenance: { method: 'llm_extraction', model: 'fixture-replay' },
+        sourceConversationId: conversationId,
       });
-      const hash = result.commit.hash;
+      const hash = result.commit.digest;
       const { committedNodeIds, committedNodeSnapshot } = buildCommittedSnapshot(content);
 
       useCommitStore.getState().setCommitSuccess({

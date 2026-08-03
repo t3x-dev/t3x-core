@@ -144,35 +144,39 @@ export async function getCommitTransitionView(
 }
 
 /**
- * Create a tree-based commit (new model).
- * Sends trees directly as content — no node conversion needed.
+ * Commit exact structured repository state through the server Transition path.
  */
-export async function createCommit(
+export async function commitRepositoryState(
   projectId: string,
   content: { trees: unknown[]; relations: unknown[] },
-  options?: {
+  options: {
     branch?: string;
     message?: string;
-    parents?: string[];
-    author?: { type: string; id?: string; name?: string };
-    sources?: Array<{ type: string; id: string; title?: string }>;
-    source_conversation_id?: string;
-    provenance?: { method: string; model?: string };
+    expectedHead: string | null;
+    sourceConversationId?: string;
   }
-): Promise<{ commit: { hash: string } }> {
+): Promise<{
+  commit: {
+    digest: string;
+    ref_name: string;
+    object: {
+      schema: 't3x/commit/v2';
+      parents: Array<{ kind: 'commit'; schema: 't3x/commit/v2'; digest: string }>;
+      decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+      result: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+    };
+  };
+}> {
   const res = await fetchWithTimeout(`${API_V1}/commits`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       project_id: projectId,
       content,
-      branch: options?.branch ?? 'main',
-      message: options?.message,
-      parents: options?.parents ?? [],
-      author: options?.author ?? { type: 'human', name: 'User' },
-      sources: options?.sources,
-      source_conversation_id: options?.source_conversation_id,
-      provenance: options?.provenance,
+      branch: options.branch ?? 'main',
+      message: options.message,
+      expected_head: options.expectedHead,
+      source_conversation_id: options.sourceConversationId,
     }),
   });
   return handleResponse(res);

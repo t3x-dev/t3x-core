@@ -15,14 +15,14 @@ vi.mock('@/queries/commits', () => ({
 }));
 
 vi.mock('@/commands/commits', () => ({
-  createCommit: vi.fn(),
+  commitRepositoryState: vi.fn(),
 }));
 
 vi.mock('@/domain/enrichSourceRefs', () => ({
   enrichTreesWithSourceRefs: vi.fn((trees: TreeNode[]) => trees),
 }));
 
-import { createCommit } from '@/commands/commits';
+import { commitRepositoryState } from '@/commands/commits';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { fetchCommits } from '@/queries/commits';
 import { useCommitStore } from '@/store/commitStore';
@@ -73,8 +73,8 @@ describe('useCommitActions.commit', () => {
       tree: { trees: [tree('budget')], relations: [] },
       conversationId: 'conv_1',
     });
-    vi.mocked(createCommit).mockResolvedValueOnce({
-      commit: { hash: 'sha256:new' },
+    vi.mocked(commitRepositoryState).mockResolvedValueOnce({
+      commit: { digest: 'sha256:new' },
     } as never);
 
     const { result } = renderHook(() => useCommitActions());
@@ -82,18 +82,14 @@ describe('useCommitActions.commit', () => {
     await waitForHook();
 
     expect(out.hash).toBe('sha256:new');
-    expect(createCommit).toHaveBeenCalledWith(
+    expect(commitRepositoryState).toHaveBeenCalledWith(
       'proj_1',
       expect.objectContaining({ trees: expect.any(Array), relations: [] }),
       expect.objectContaining({
-        parents: [],
+        expectedHead: null,
         branch: 'main',
         message: 'msg',
-        sources: expect.arrayContaining([
-          expect.objectContaining({ type: 'conversation', id: 'conv_1' }),
-        ]),
-        source_conversation_id: 'conv_1',
-        provenance: { method: 'llm_extraction' },
+        sourceConversationId: 'conv_1',
       })
     );
     const state = useCommitStore.getState();
@@ -107,7 +103,7 @@ describe('useCommitActions.commit', () => {
     useWorkspaceStore.setState({
       tree: { trees: [tree('budget')], relations: [] },
     });
-    vi.mocked(createCommit).mockRejectedValueOnce(new Error('500'));
+    vi.mocked(commitRepositoryState).mockRejectedValueOnce(new Error('500'));
 
     const { result } = renderHook(() => useCommitActions());
     await expect(result.current.commit('msg')).rejects.toThrow('500');

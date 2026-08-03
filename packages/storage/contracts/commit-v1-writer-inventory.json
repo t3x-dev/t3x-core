@@ -3,11 +3,6 @@
   "issue": "#1308",
   "target": "zero production CommitV1 createCommit() paths",
   "writers": [
-    "apps/web/src/commands/commits/createCommit.ts",
-    "apps/web/src/hooks/commits/useCommitActions.ts",
-    "apps/web/src/hooks/commits/useCreateMergeCommit.ts",
-    "apps/web/src/hooks/onboarding/useIntroDemoReplayActions.ts",
-    "apps/web/src/infrastructure/commits.ts",
     "packages/api/src/ops/merge.ts",
     "packages/api/src/routes/autopilot.openapi.ts",
     "packages/api/src/routes/commit-from-draft.openapi.ts",
