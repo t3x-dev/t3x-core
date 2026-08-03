@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockState, resetMockState } = vi.hoisted(() => {
+const { mockDB, mockState, resetMockState } = vi.hoisted(() => {
   type Project = {
     projectId: string;
     name: string;
@@ -99,14 +99,19 @@ const { mockState, resetMockState } = vi.hoisted(() => {
     };
   };
 
+  const db: { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> } = {
+    transaction: (fn) => fn(db),
+  };
+
   return {
+    mockDB: db,
     mockState: state,
     resetMockState: reset,
   };
 });
 
 vi.mock('../db.js', () => ({
-  getDB: vi.fn(() => Promise.resolve({})),
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
@@ -293,6 +298,7 @@ vi.mock('../validate/pipeline.js', () => ({
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
+  ensureMainBranch: vi.fn(() => Promise.resolve()),
   findProjects: vi.fn(async () => [...mockState.projects.values()]),
   findProjectById: vi.fn(async (_db: unknown, id: string) => mockState.projects.get(id) ?? null),
   insertProject: vi.fn(async (_db: unknown, { name }: { name: string }) => {
@@ -378,6 +384,14 @@ vi.mock('@t3x-dev/storage', () => ({
     }
   ),
   findDraftById: vi.fn(async (_db: unknown, id: string) => mockState.drafts.get(id) ?? null),
+  getTransitionRefHead: vi.fn(
+    async (_db: unknown, input: { projectId: string; refName: string }) => {
+      const head = [...mockState.commits.values()]
+        .reverse()
+        .find((commit) => commit.project_id === input.projectId && commit.branch === input.refName);
+      return head ? { format: 'transition_v2', head: head.hash } : { format: 'empty', head: null };
+    }
+  ),
   listDraftsByProject: vi.fn(async (_db: unknown, projectId: string) =>
     [...mockState.drafts.values()].filter((draft) => draft.project_id === projectId)
   ),
@@ -526,6 +540,55 @@ vi.mock('@t3x-dev/storage', () => ({
     default_provider: 'openai',
     default_model: 'gpt-5.4',
   })),
+  TransitionHeadConflictError: class TransitionHeadConflictError extends Error {},
+  TransitionRefNotFoundError: class TransitionRefNotFoundError extends Error {},
+}));
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => ({
+  createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  commitRepositoryYOpsState: vi.fn(
+    async (input: {
+      projectId: string;
+      refName: string;
+      expectedHead: string | null;
+      target: {
+        content: {
+          trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+          relations: unknown[];
+        };
+      };
+      intent?: string;
+    }) => {
+      const hash = `sha256:commit${mockState.counters.commit++}`;
+      const parents = input.expectedHead ? [input.expectedHead] : [];
+      mockState.commits.set(hash, {
+        hash,
+        schema: 't3x/commit/v2',
+        parents,
+        author: { type: 'human', name: 'mcp' },
+        committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
+        content: input.target.content,
+        project_id: input.projectId,
+        message: input.intent ?? '',
+        branch: input.refName,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: [],
+        sources: null,
+      });
+      return {
+        commitDigest: hash,
+        commit: {
+          schema: 't3x/commit/v2',
+          parents: parents.map((digest) => ({
+            kind: 'commit',
+            schema: 't3x/commit/v2',
+            digest,
+          })),
+        },
+        transition: {},
+      };
+    }
+  ),
 }));
 
 import { createMcpServer } from '../server.js';
@@ -627,7 +690,7 @@ describe('mcp audit scenarios', () => {
         message: 'Follow-up snapshot',
       })
     );
-    expect(secondCommit.parents).toEqual([]);
+    expect(secondCommit.parents).toEqual([firstCommit.commit_hash]);
 
     const legacyDiff = await callTool('t3x_diff', {
       source: firstCommit.commit_hash,

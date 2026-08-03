@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ──
 
-const mockDB = {};
+const mockDB = {
+  transaction: <T>(fn: (tx: typeof mockDB) => Promise<T>) => fn(mockDB),
+};
 const mockApiClient = {
   commitFromDraft: vi.fn(),
 };
@@ -55,20 +57,20 @@ const MOCK_DRAFT_OTHER_PROJECT = {
   project_id: 'proj_other',
 };
 
-const MOCK_COMMIT = {
-  hash: 'sha256:newcommit',
-  schema: 't3x/commit/v4',
-  parents: ['sha256:parent1'],
-  author: { type: 'human', name: 'mcp' },
-  committed_at: '2026-04-13T00:00:00.000Z',
-  content: { trees: [], relations: [] },
-  project_id: 'proj_test1',
-  message: 'Test commit',
-  branch: 'main',
-  provenance: { method: 'human_curation' },
-  yops_log_ids: [],
-  sources: null,
-};
+const transitionMock = vi.hoisted(() => ({
+  commitRepositoryYOpsState: vi.fn(),
+  createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+}));
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => transitionMock);
+
+const storageMock = vi.hoisted(() => ({
+  commitDraft: vi.fn(() => Promise.resolve(true)),
+  ensureMainBranch: vi.fn(() => Promise.resolve()),
+  getTransitionRefHead: vi.fn(() =>
+    Promise.resolve({ format: 'transition_v2', head: 'sha256:parent1' })
+  ),
+}));
 
 vi.mock('@t3x-dev/storage', () => ({
   findDraftById: vi.fn((_db: unknown, id: string) => {
@@ -81,8 +83,11 @@ vi.mock('@t3x-dev/storage', () => ({
     };
     return Promise.resolve(drafts[id] ?? null);
   }),
-  createCommit: vi.fn(() => Promise.resolve(MOCK_COMMIT)),
-  commitDraft: vi.fn(() => Promise.resolve(true)),
+  commitDraft: storageMock.commitDraft,
+  ensureMainBranch: storageMock.ensureMainBranch,
+  getTransitionRefHead: storageMock.getTransitionRefHead,
+  TransitionHeadConflictError: class TransitionHeadConflictError extends Error {},
+  TransitionRefNotFoundError: class TransitionRefNotFoundError extends Error {},
 }));
 
 // ── Import handler after mocks ──
@@ -94,6 +99,38 @@ import { commitHandler } from '../tools/core/commit.js';
 const originalBackend = process.env.T3X_MCP_BACKEND;
 
 describe('t3x_commit handler', () => {
+  beforeEach(() => {
+    storageMock.commitDraft.mockClear();
+    storageMock.ensureMainBranch.mockClear();
+    storageMock.getTransitionRefHead.mockReset();
+    storageMock.getTransitionRefHead.mockResolvedValue({
+      format: 'transition_v2',
+      head: 'sha256:parent1',
+    });
+    transitionMock.createRepositoryYOpsStateFromSemanticContent.mockClear();
+    transitionMock.commitRepositoryYOpsState.mockReset();
+    transitionMock.commitRepositoryYOpsState.mockImplementation(
+      (input: { expectedHead: string | null }) =>
+        Promise.resolve({
+          commitDigest: 'sha256:newcommit',
+          commit: {
+            schema: 't3x/commit/v2',
+            parents:
+              input.expectedHead === null
+                ? []
+                : [
+                    {
+                      kind: 'commit',
+                      schema: 't3x/commit/v2',
+                      digest: input.expectedHead,
+                    },
+                  ],
+          },
+          transition: {},
+        })
+    );
+  });
+
   afterEach(() => {
     if (originalBackend === undefined) {
       delete process.env.T3X_MCP_BACKEND;
@@ -214,13 +251,14 @@ describe('t3x_commit handler', () => {
     expect(data.commit_hash).toBe('sha256:newcommit');
     expect(data.branch).toBe('main');
     expect(data.parents).toEqual(['sha256:parent1']);
-    expect(data.committed_at).toBe('2026-04-13T00:00:00.000Z');
+    expect(data.schema).toBe('t3x/commit/v2');
     expect(data.tree_count).toBe(2);
     expect(data.next_steps).toBeDefined();
     expect(Array.isArray(data.next_steps)).toBe(true);
   });
 
   it('creates a root commit when draft has no parent commit hash', async () => {
+    storageMock.getTransitionRefHead.mockResolvedValueOnce({ format: 'empty', head: null });
     const result = await commitHandler({
       project_id: 'proj_test1',
       draft_id: 'draft_root',
@@ -232,11 +270,25 @@ describe('t3x_commit handler', () => {
     expect(data.parents).toEqual([]);
   });
 
-  it('passes correct arguments to createCommit', async () => {
-    const { createCommit } = await import('@t3x-dev/storage');
-    const mock = createCommit as ReturnType<typeof vi.fn>;
-    mock.mockClear();
+  it('rejects a stale draft parent instead of silently rebasing it', async () => {
+    storageMock.getTransitionRefHead.mockResolvedValueOnce({
+      format: 'transition_v2',
+      head: 'sha256:newer-head',
+    });
 
+    const result = await commitHandler({
+      project_id: 'proj_test1',
+      draft_id: 'draft_abc',
+      message: 'Stale snapshot',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('does not match the target ref head');
+    expect(transitionMock.commitRepositoryYOpsState).not.toHaveBeenCalled();
+    expect(storageMock.commitDraft).not.toHaveBeenCalled();
+  });
+
+  it('passes exact state transition arguments to the shared application service', async () => {
     await commitHandler({
       project_id: 'proj_test1',
       draft_id: 'draft_abc',
@@ -244,43 +296,37 @@ describe('t3x_commit handler', () => {
       branch: 'feature-x',
     });
 
-    expect(mock).toHaveBeenCalledWith(
-      mockDB,
+    expect(transitionMock.commitRepositoryYOpsState).toHaveBeenCalledWith(
       expect.objectContaining({
-        parents: ['sha256:parent1'],
-        author: { type: 'human', name: 'mcp' },
-        project_id: 'proj_test1',
-        message: 'My commit',
-        branch: 'feature-x',
+        db: mockDB,
+        projectId: 'proj_test1',
+        refName: 'feature-x',
+        expectedHead: 'sha256:parent1',
+        actor: { kind: 'human', id: 'human:mcp-local' },
+        intent: 'My commit',
       })
     );
   });
 
   it('marks draft as committed after creating commit', async () => {
-    const { commitDraft } = await import('@t3x-dev/storage');
-    const mock = commitDraft as ReturnType<typeof vi.fn>;
-    mock.mockClear();
-
     await commitHandler({
       project_id: 'proj_test1',
       draft_id: 'draft_abc',
       message: 'msg',
     });
 
-    expect(mock).toHaveBeenCalledWith(mockDB, 'draft_abc', 'sha256:newcommit');
+    expect(storageMock.commitDraft).toHaveBeenCalledWith(mockDB, 'draft_abc', 'sha256:newcommit');
   });
 
   it('defaults branch to "main" when not provided', async () => {
-    const { createCommit } = await import('@t3x-dev/storage');
-    const mock = createCommit as ReturnType<typeof vi.fn>;
-    mock.mockClear();
-
     await commitHandler({
       project_id: 'proj_test1',
       draft_id: 'draft_abc',
       message: 'msg',
     });
 
-    expect(mock).toHaveBeenCalledWith(mockDB, expect.objectContaining({ branch: 'main' }));
+    expect(transitionMock.commitRepositoryYOpsState).toHaveBeenCalledWith(
+      expect.objectContaining({ refName: 'main' })
+    );
   });
 });

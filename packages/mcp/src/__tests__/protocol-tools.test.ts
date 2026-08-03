@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { state, resetState } = vi.hoisted(() => {
+const { mockDB, state, resetState } = vi.hoisted(() => {
   type Project = {
     projectId: string;
     name: string;
@@ -109,11 +109,15 @@ const { state, resetState } = vi.hoisted(() => {
     };
   };
 
-  return { state: shared, resetState: reset };
+  const db: { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> } = {
+    transaction: (fn) => fn(db),
+  };
+
+  return { mockDB: db, state: shared, resetState: reset };
 });
 
 vi.mock('../db.js', () => ({
-  getDB: vi.fn(() => Promise.resolve({})),
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
@@ -234,6 +238,7 @@ vi.mock('@t3x-dev/core', () => ({
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
+  ensureMainBranch: vi.fn(() => Promise.resolve()),
   findProjects: vi.fn(async () => [...state.projects.values()]),
   findProjectById: vi.fn(async (_db: unknown, id: string) => state.projects.get(id) ?? null),
   insertProject: vi.fn(async (_db: unknown, { name }: { name: string }) => {
@@ -326,6 +331,14 @@ vi.mock('@t3x-dev/storage', () => ({
     }
   ),
   findDraftById: vi.fn(async (_db: unknown, id: string) => state.drafts.get(id) ?? null),
+  getTransitionRefHead: vi.fn(
+    async (_db: unknown, input: { projectId: string; refName: string }) => {
+      const head = [...state.commits.values()]
+        .reverse()
+        .find((commit) => commit.project_id === input.projectId && commit.branch === input.refName);
+      return head ? { format: 'transition_v2', head: head.hash } : { format: 'empty', head: null };
+    }
+  ),
   listDraftsByProject: vi.fn(async (_db: unknown, projectId: string) =>
     [...state.drafts.values()].filter((draft) => draft.project_id === projectId)
   ),
@@ -463,6 +476,55 @@ vi.mock('@t3x-dev/storage', () => ({
     default_provider: 'openai',
     default_model: 'gpt-5.4',
   })),
+  TransitionHeadConflictError: class TransitionHeadConflictError extends Error {},
+  TransitionRefNotFoundError: class TransitionRefNotFoundError extends Error {},
+}));
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => ({
+  createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  commitRepositoryYOpsState: vi.fn(
+    async (input: {
+      projectId: string;
+      refName: string;
+      expectedHead: string | null;
+      target: {
+        content: {
+          trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+          relations: unknown[];
+        };
+      };
+      intent?: string;
+    }) => {
+      const hash = `sha256:commit${state.counters.commit++}`;
+      const parents = input.expectedHead ? [input.expectedHead] : [];
+      state.commits.set(hash, {
+        hash,
+        schema: 't3x/commit/v2',
+        parents,
+        author: { type: 'human', name: 'mcp' },
+        committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
+        content: input.target.content,
+        project_id: input.projectId,
+        message: input.intent ?? '',
+        branch: input.refName,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: [],
+        sources: null,
+      });
+      return {
+        commitDigest: hash,
+        commit: {
+          schema: 't3x/commit/v2',
+          parents: parents.map((digest) => ({
+            kind: 'commit',
+            schema: 't3x/commit/v2',
+            digest,
+          })),
+        },
+        transition: {},
+      };
+    }
+  ),
 }));
 
 import { createMcpServer } from '../server.js';
@@ -571,7 +633,7 @@ describe('MCP protocol tool flows', () => {
         },
       })
     );
-    expect(secondCommit.parents).toEqual([]);
+    expect(secondCommit.parents).toEqual([firstCommit.commit_hash]);
 
     const legacyDiff = await client.callTool({
       name: 't3x_diff',

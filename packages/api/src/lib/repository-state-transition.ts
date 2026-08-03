@@ -11,9 +11,9 @@ import {
   describeCommitV2,
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
-  parseAcceptancePolicy,
   type ProposalStatement,
   type ProtocolObject,
+  parseAcceptancePolicy,
   type RepositoryDecisionAuthority,
   type SemanticContent,
   type State,
@@ -153,7 +153,7 @@ export function createRepositoryYOpsStateFromSemanticContent(content: SemanticCo
       trees: content.trees,
       relations: content.relations,
     },
-  } as Parameters<typeof createYOpsState>[0]);
+  } as unknown as Parameters<typeof createYOpsState>[0]);
 }
 
 /** Decode only the repository SemanticContent domain; never guess another State shape. */
@@ -166,26 +166,34 @@ export function decodeRepositorySemanticContentState(state: State): SemanticCont
       `Repository SemanticContent requires ${yopsStateCodec.mediaType}@${yopsStateCodec.version}`
     );
   }
-  const value = yopsStateCodec.decode(state.value);
+  const decoded = yopsStateCodec.decode(state.value);
+  if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) {
+    throw new RepositoryStateDomainUnsupportedError(
+      'State is not a t3x.dev/semantic-content version 1 YOps document'
+    );
+  }
+  const value = decoded as Record<string, unknown>;
+  const rawContent = value.content;
   if (
-    value === null ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
     value.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN ||
     value.version !== REPOSITORY_SEMANTIC_CONTENT_VERSION ||
-    value.content === null ||
-    typeof value.content !== 'object' ||
-    Array.isArray(value.content) ||
-    !Array.isArray(value.content.trees) ||
-    !Array.isArray(value.content.relations)
+    rawContent === null ||
+    typeof rawContent !== 'object' ||
+    Array.isArray(rawContent)
   ) {
     throw new RepositoryStateDomainUnsupportedError(
       'State is not a t3x.dev/semantic-content version 1 YOps document'
     );
   }
+  const repositoryContent = rawContent as Record<string, unknown>;
+  if (!Array.isArray(repositoryContent.trees) || !Array.isArray(repositoryContent.relations)) {
+    throw new RepositoryStateDomainUnsupportedError(
+      'State is not a t3x.dev/semantic-content version 1 YOps document'
+    );
+  }
   return {
-    trees: value.content.trees,
-    relations: value.content.relations,
+    trees: repositoryContent.trees,
+    relations: repositoryContent.relations,
   } as SemanticContent;
 }
 
