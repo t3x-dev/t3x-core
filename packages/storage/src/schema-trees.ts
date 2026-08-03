@@ -993,10 +993,9 @@ export const yopsLog = pgTable(
      * `supersedeYOpsLogEntryForRepair` on a Repair flow. The WebUI
      * staged-Extract Apply path no longer triggers supersede — it
      * appends. Never set on committed entries — once an id appears
-     * in CommitV1 `yops_log_ids` or a CommitV2 application consumption
-     * record it is part of the immutable baseline and must stay
-     * `superseded_at = NULL` forever. Both commit paths reject rows
-     * whose `superseded_at IS NOT NULL` at insert time.
+     * in a CommitV2 application consumption record it is part of the
+     * immutable baseline and must stay `superseded_at = NULL` forever.
+     * The CommitV2 insert path rejects rows whose `superseded_at IS NOT NULL`.
      */
     supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },

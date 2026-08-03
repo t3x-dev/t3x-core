@@ -57,27 +57,6 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commit Rewrites (append-only rewrite log)
-export {
-  getSupersededHashes,
-  type InsertRewriteInput,
-  insertRewrite,
-  isCommitSuperseded,
-  listRewrites,
-} from './commit-rewrites';
-// Commits (tree-based)
-export {
-  collectYOpsForCommitRange,
-  deleteCommit,
-  getCommit,
-  getCommitsByHashes,
-  getLatestCommit,
-  hasConversationCommitReferences,
-  type ListCommitsOptions,
-  listCommits,
-  updateCommitMessage,
-  updateCommitPosition,
-} from './commits';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,

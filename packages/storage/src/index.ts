@@ -80,8 +80,6 @@ export { getTimedOutRuns, markRunAsTimeout } from './queries/runs';
 // Schema (table definitions and types)
 // (events outbox is already re-exported via schema.ts; do not add a duplicate line here)
 export * from './schema';
-// Commits Schema (commits, tree_lineage — tree-based commits)
-export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
 // Observable Metrics Schema (event tracking)
