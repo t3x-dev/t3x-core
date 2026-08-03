@@ -284,12 +284,18 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([loadDiff(baseHash, targetHash), loadCommit(targetHash), loadCommit(baseHash)])
+    Promise.all([
+      loadDiff(baseHash, targetHash),
+      loadCommit(targetHash, projectId),
+      loadCommit(baseHash, projectId),
+    ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
+        const diffBaseHash = diffResp.base.hash ?? diffResp.base.digest;
+        const diffTargetHash = diffResp.target.hash ?? diffResp.target.digest;
         if (
-          diffResp.base.hash !== baseHash ||
-          diffResp.target.hash !== targetHash ||
+          diffBaseHash !== baseHash ||
+          diffTargetHash !== targetHash ||
           tgtCommit.hash !== targetHash ||
           baseCommitData.hash !== baseHash ||
           tgtCommit.project_id !== projectId ||

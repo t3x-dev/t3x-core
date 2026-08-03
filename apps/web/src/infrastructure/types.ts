@@ -233,9 +233,24 @@ export interface Draft {
 
 // Raw diff response from backend
 export interface DiffResultRaw {
-  baseId: string;
-  targetId: string;
-  segmentDiffs: Array<{
+  base?: {
+    hash?: string;
+    digest?: string;
+    rationale?: string | null;
+    actor?: unknown;
+    recorded_at?: string;
+  };
+  target?: {
+    hash?: string;
+    digest?: string;
+    rationale?: string | null;
+    actor?: unknown;
+    recorded_at?: string;
+  };
+  diff?: unknown;
+  baseId?: string;
+  targetId?: string;
+  segmentDiffs?: Array<{
     segmentId: string;
     text: string;
     diffType: 'same' | 'added' | 'removed' | 'modified';
