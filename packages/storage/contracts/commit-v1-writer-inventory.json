@@ -7,7 +7,6 @@
     "packages/api/src/routes/commits.openapi.ts",
     "packages/api/src/routes/merge.openapi.ts",
     "packages/mcp/src/tools/advanced/merge.ts",
-    "packages/storage/src/queries/commits.ts",
-    "packages/storage/src/queries/seed-demo-workspace.ts"
+    "packages/storage/src/queries/commits.ts"
   ]
 }
