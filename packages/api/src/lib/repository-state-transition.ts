@@ -497,7 +497,8 @@ async function loadRepositoryMergeContext(input: {
     cache.set(digest, graph);
     return graph;
   };
-  const [source, target] = await Promise.all([load(input.sourceDigest), load(input.targetDigest)]);
+  const source = await load(input.sourceDigest);
+  const target = await load(input.targetDigest);
 
   const collectAncestors = async (
     start: VerifiedTransitionCommitGraph
@@ -517,10 +518,8 @@ async function loadRepositoryMergeContext(input: {
     return distances;
   };
 
-  const [sourceAncestors, targetAncestors] = await Promise.all([
-    collectAncestors(source),
-    collectAncestors(target),
-  ]);
+  const sourceAncestors = await collectAncestors(source);
+  const targetAncestors = await collectAncestors(target);
   const candidates = [...sourceAncestors.entries()]
     .filter(([digest]) => targetAncestors.has(digest))
     .map(([digest, sourceDistance]) => ({

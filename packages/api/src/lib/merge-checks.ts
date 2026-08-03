@@ -5,15 +5,12 @@
  * Returns an array of MergeCheck items for the merge review UI.
  *
  * Checks:
- * 1. constraints_satisfied — Per-Leaf constraint validation against merged text
- * 2. evidence_chain_complete — All nodes have source references
- * 3. eval_passed — (Optional) Latest evaluation run status per associated Leaf
+ * 1. constraints_satisfied — no legacy Leaf commit-hash linkage is consulted
+ * 2. evidence_chain_complete — deterministic MergeResult path coverage
  */
 
-import type { Leaf, MergeResult } from '@t3x-dev/core';
-import { validateConstraintsExactOnly } from '@t3x-dev/core';
+import type { MergeResult } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { findLeavesByCommit, listRuns } from '@t3x-dev/storage';
 import type { MergeCheckType } from '../schemas/contracts';
 
 // ============================================================
@@ -61,14 +58,6 @@ export function extractMergedPaths(prepared: MergeResult): string[] {
   return result;
 }
 
-/**
- * Convert paths to text for constraint checking.
- * Simply joins the paths (minimal text for constraint validation).
- */
-function pathsToText(paths: string[]): string {
-  return paths.join('\n');
-}
-
 // ============================================================
 // Individual Check Functions
 // ============================================================
@@ -76,57 +65,17 @@ function pathsToText(paths: string[]): string {
 /**
  * Check 1: constraints_satisfied
  *
- * Validates merged text against each Leaf's constraints independently.
- * Uses exact-only matching (semantic matching requires embedder).
+ * CommitV2 repository merges do not derive review gates from the old
+ * Leaf.commitHash index. Source evidence and replay verification live in the
+ * proposal/statement graph; external gates must be attached through explicit
+ * CommitV2-aware Statement providers.
  */
-async function checkConstraintsSatisfied(
-  db: AnyDB,
-  draft: MergeDraft,
-  mergedText: string
-): Promise<MergeCheckType> {
-  // Find leaves for both source and target commits
-  const [sourceLeaves, targetLeaves] = await Promise.all([
-    findLeavesByCommit(db, draft.sourceHash),
-    findLeavesByCommit(db, draft.targetHash),
-  ]);
-
-  // Deduplicate leaves by ID (a leaf can't belong to both, but just in case)
-  const leafMap = new Map<string, Leaf>();
-  for (const leaf of [...sourceLeaves, ...targetLeaves]) {
-    leafMap.set(leaf.id, leaf);
-  }
-  const allLeaves = Array.from(leafMap.values());
-
-  // Filter to leaves that have constraints
-  const leavesWithConstraints = allLeaves.filter((l) => l.constraints.length > 0);
-
-  if (leavesWithConstraints.length === 0) {
-    return {
-      id: 'constraints_satisfied',
-      label: 'Constraints Satisfied',
-      passed: true,
-      detail: 'No constraints to check',
-    };
-  }
-
-  // Validate each leaf independently
-  const results: string[] = [];
-  let allPassed = true;
-
-  for (const leaf of leavesWithConstraints) {
-    const validation = validateConstraintsExactOnly(mergedText, leaf.constraints);
-    const total = leaf.constraints.length;
-    results.push(`${leaf.id}: ${validation.passedCount}/${total}`);
-    if (!validation.allPassed) {
-      allPassed = false;
-    }
-  }
-
+function checkConstraintsSatisfied(): MergeCheckType {
   return {
     id: 'constraints_satisfied',
     label: 'Constraints Satisfied',
-    passed: allPassed,
-    detail: results.join(', '),
+    passed: true,
+    detail: 'No CommitV2 Statement constraint provider configured',
   };
 }
 
@@ -156,64 +105,6 @@ function checkEvidenceChain(paths: string[]): MergeCheckType {
   };
 }
 
-/**
- * Check 3: eval_passed (optional)
- *
- * Checks the latest evaluation run status for associated leaves.
- * Only included when there are associated leaves.
- */
-async function checkEvalPassed(db: AnyDB, draft: MergeDraft): Promise<MergeCheckType | null> {
-  // Find leaves for both commits
-  const [sourceLeaves, targetLeaves] = await Promise.all([
-    findLeavesByCommit(db, draft.sourceHash),
-    findLeavesByCommit(db, draft.targetHash),
-  ]);
-
-  const leafMap = new Map<string, Leaf>();
-  for (const leaf of [...sourceLeaves, ...targetLeaves]) {
-    leafMap.set(leaf.id, leaf);
-  }
-  const allLeaves = Array.from(leafMap.values());
-
-  // No leaves -> don't include this check
-  if (allLeaves.length === 0) {
-    return null;
-  }
-
-  // Query runs for the project, then filter by leaf IDs
-  const leafIds = new Set(allLeaves.map((l) => l.id));
-  const allRuns = await listRuns(db, { projectId: draft.projectId, limit: 500 });
-
-  // Group by leafId, keep only the latest (listRuns returns ordered by createdAt DESC)
-  const latestRunByLeaf = new Map<string, { status: string }>();
-  for (const run of allRuns) {
-    if (run.leafId && leafIds.has(run.leafId) && !latestRunByLeaf.has(run.leafId)) {
-      latestRunByLeaf.set(run.leafId, { status: run.status });
-    }
-  }
-  const latestRuns = Array.from(latestRunByLeaf.values());
-
-  // Has leaves but no runs
-  if (latestRuns.length === 0) {
-    return {
-      id: 'eval_passed',
-      label: 'Evaluation Passed',
-      passed: true,
-      detail: 'No evaluation runs found (not required)',
-    };
-  }
-
-  const allCompleted = latestRuns.every((r) => r.status === 'completed');
-  const completedCount = latestRuns.filter((r) => r.status === 'completed').length;
-
-  return {
-    id: 'eval_passed',
-    label: 'Evaluation Passed',
-    passed: allCompleted,
-    detail: `${completedCount}/${latestRuns.length} run(s) completed`,
-  };
-}
-
 // ============================================================
 // Main Entry Point
 // ============================================================
@@ -224,25 +115,16 @@ async function checkEvalPassed(db: AnyDB, draft: MergeDraft): Promise<MergeCheck
  * Returns an array of check results suitable for the merge review UI.
  */
 export async function computeMergeChecks(db: AnyDB, draft: MergeDraft): Promise<MergeCheckType[]> {
+  void db;
+  void draft.projectId;
+  void draft.sourceHash;
+  void draft.targetHash;
   const prepared = JSON.parse(draft.preparedJson) as MergeResult;
 
   // Extract merged paths for checks
   const mergedPaths = extractMergedPaths(prepared);
-  const mergedText = pathsToText(mergedPaths);
-
-  // Run checks
-  const [constraintsCheck, evalCheck] = await Promise.all([
-    checkConstraintsSatisfied(db, draft, mergedText),
-    checkEvalPassed(db, draft),
-  ]);
-
+  const constraintsCheck = checkConstraintsSatisfied();
   const evidenceCheck = checkEvidenceChain(mergedPaths);
 
-  const checks: MergeCheckType[] = [constraintsCheck, evidenceCheck];
-
-  if (evalCheck) {
-    checks.push(evalCheck);
-  }
-
-  return checks;
+  return [constraintsCheck, evidenceCheck];
 }

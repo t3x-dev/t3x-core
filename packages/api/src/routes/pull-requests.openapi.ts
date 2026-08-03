@@ -1,11 +1,11 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  type Commit,
   collectResult,
   diffCommits,
   type MergeDecision,
   type MergeResult,
   runOperation,
+  type SemanticContent,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -21,8 +21,8 @@ import {
   findBranchesByProject,
   findPendingMergeDraft,
   findPullRequestByNumber,
-  getCommit,
   getMergeDraft,
+  getYOpsForTransitionCommit,
   listPullRequestActivity,
   listPullRequestChecks,
   listPullRequestsByProject,
@@ -38,6 +38,7 @@ import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { buildPipelineContext } from '../ops/context';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -256,7 +257,36 @@ async function requireProject(c: Parameters<typeof assertProjectAccess>[0], proj
   return { access, db };
 }
 
-function summarizeCommitChanges(source: Commit, target: Commit) {
+interface RepositoryCommitView {
+  hash: string;
+  project_id: string;
+  parents: string[];
+  content: SemanticContent;
+  schema: string;
+  yops_log_ids: string[];
+  sources: unknown[];
+}
+
+async function loadRepositoryCommit(
+  db: AnyDB,
+  projectId: string,
+  digest: string
+): Promise<RepositoryCommitView | null> {
+  const commit = await getRepositorySemanticCommit(db, digest, projectId);
+  if (commit === null) return null;
+  const yopsRows = await getYOpsForTransitionCommit(db, projectId, digest);
+  return {
+    hash: commit.digest,
+    project_id: commit.projectId,
+    parents: commit.parents,
+    content: commit.semanticContent,
+    schema: commit.schema,
+    yops_log_ids: yopsRows.map((row) => row.id),
+    sources: [...commit.evidence],
+  };
+}
+
+function summarizeCommitChanges(source: RepositoryCommitView, target: RepositoryCommitView) {
   const diff = diffCommits(target.content, source.content);
   const changedNodes = diff.modified.length + diff.onlyInSource.length + diff.onlyInTarget.length;
   const changedRelations = diff.relationsAdded.length + diff.relationsRemoved.length;
@@ -269,8 +299,8 @@ async function collectAncestorDistances(db: AnyDB, projectId: string, startHash:
   while (queue.length > 0) {
     const current = queue.shift();
     if (!current || distances.has(current.hash)) continue;
-    const commit = await getCommit(db, current.hash);
-    if (!commit || commit.project_id !== projectId) continue;
+    const commit = await loadRepositoryCommit(db, projectId, current.hash);
+    if (!commit) continue;
     distances.set(current.hash, current.distance);
     for (const parent of commit.parents) {
       queue.push({ hash: parent, distance: current.distance + 1 });
@@ -310,9 +340,9 @@ async function buildCompareCandidates(
   activePullRequests: StoredPullRequest[]
 ): Promise<PullRequestCompareCandidate[]> {
   const targetCommit = baseBranch.headCommitHash
-    ? await getCommit(db, baseBranch.headCommitHash)
+    ? await loadRepositoryCommit(db, projectId, baseBranch.headCommitHash)
     : null;
-  if (baseBranch.headCommitHash && (!targetCommit || targetCommit.project_id !== projectId)) {
+  if (baseBranch.headCommitHash && !targetCommit) {
     return [];
   }
 
@@ -327,8 +357,12 @@ async function buildCompareCandidates(
     branches
       .filter((branch) => branch.name !== baseBranch.name && branch.headCommitHash)
       .map(async (branch): Promise<PullRequestCompareCandidate | null> => {
-        const sourceCommit = await getCommit(db, branch.headCommitHash as string);
-        if (!sourceCommit || sourceCommit.project_id !== projectId) return null;
+        const sourceCommit = await loadRepositoryCommit(
+          db,
+          projectId,
+          branch.headCommitHash as string
+        );
+        if (!sourceCommit) return null;
         const distances = targetCommit
           ? await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash)
           : {
@@ -617,15 +651,10 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     );
   }
   const [sourceCommit, targetCommit] = await Promise.all([
-    getCommit(db, sourceBranch.headCommitHash),
-    getCommit(db, targetBranch.headCommitHash),
+    loadRepositoryCommit(db, projectId, sourceBranch.headCommitHash),
+    loadRepositoryCommit(db, projectId, targetBranch.headCommitHash),
   ]);
-  if (
-    !sourceCommit ||
-    sourceCommit.project_id !== projectId ||
-    !targetCommit ||
-    targetCommit.project_id !== projectId
-  ) {
+  if (!sourceCommit || !targetCommit) {
     return c.json(
       errorBody(
         'PULL_REQUEST_COMMIT_NOT_FOUND',
@@ -812,10 +841,8 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         );
       }
 
-      const [sourceBranch, targetBranch] = await Promise.all([
-        findBranchByName(tx, projectId, pullRequest.sourceBranch),
-        findBranchByName(tx, projectId, pullRequest.targetBranch),
-      ]);
+      const sourceBranch = await findBranchByName(tx, projectId, pullRequest.sourceBranch);
+      const targetBranch = await findBranchByName(tx, projectId, pullRequest.targetBranch);
       if (!sourceBranch?.headCommitHash || !targetBranch?.headCommitHash) {
         throw new MergeError(
           'PULL_REQUEST_REVIEW_INPUT_NOT_FOUND',
@@ -823,10 +850,8 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         );
       }
 
-      const [sourceCommit, targetCommit] = await Promise.all([
-        getCommit(tx, sourceBranch.headCommitHash),
-        getCommit(tx, targetBranch.headCommitHash),
-      ]);
+      const sourceCommit = await loadRepositoryCommit(tx, projectId, sourceBranch.headCommitHash);
+      const targetCommit = await loadRepositoryCommit(tx, projectId, targetBranch.headCommitHash);
       if (!sourceCommit || !targetCommit) {
         throw new MergeError(
           'PULL_REQUEST_REVIEW_INPUT_NOT_FOUND',
@@ -866,6 +891,7 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
           runOperation(
             mergePrepareOp,
             {
+              project_id: projectId,
               source_hash: pullRequest.sourceCommitHash,
               target_hash: pullRequest.targetBaseCommitHash,
             },
@@ -926,19 +952,20 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         const serverChecksPassed = serverChecks.every((check) => check.passed);
         const nextStatus: PullRequestStatus =
           unresolvedConflicts.length === 0 && serverChecksPassed ? 'ready' : 'blocked';
+        const diffSummary = {
+          changed_nodes:
+            prepared.autoKept.length +
+            prepared.conflicts.length +
+            prepared.onlyInSource.length +
+            prepared.onlyInTarget.length,
+          yops_operations: sourceCommit.yops_log_ids.length,
+          output_impacts: pullRequest.diffSummary.output_impacts ?? 0,
+          source_refs: sourceCommit.sources?.length ?? 0,
+        };
         const preparedPullRequest = await updatePullRequest(tx, pullRequest.pullRequestId, {
           status: nextStatus,
           mergeDraftId: draft.draftId,
-          diffSummary: {
-            changed_nodes:
-              prepared.autoKept.length +
-              prepared.conflicts.length +
-              prepared.onlyInSource.length +
-              prepared.onlyInTarget.length,
-            yops_operations: sourceCommit.yops_log_ids.length,
-            output_impacts: pullRequest.diffSummary.output_impacts,
-            source_refs: sourceCommit.sources?.length ?? 0,
-          },
+          diffSummary,
         });
         if (!preparedPullRequest)
           throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
@@ -1229,11 +1256,9 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         );
       }
 
-      const [sourceBranch, targetBranch, draft] = await Promise.all([
-        findBranchByName(tx, projectId, pullRequest.sourceBranch),
-        findBranchByName(tx, projectId, pullRequest.targetBranch),
-        getMergeDraft(tx, pullRequest.mergeDraftId),
-      ]);
+      const sourceBranch = await findBranchByName(tx, projectId, pullRequest.sourceBranch);
+      const targetBranch = await findBranchByName(tx, projectId, pullRequest.targetBranch);
+      const draft = await getMergeDraft(tx, pullRequest.mergeDraftId);
       if (!sourceBranch || !targetBranch || !draft) {
         throw new MergeError(
           'PULL_REQUEST_MERGE_NOT_PREPARED',
@@ -1328,6 +1353,7 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         runOperation(
           mergeExecuteOp,
           {
+            project_id: projectId,
             source_hash: pullRequest.sourceCommitHash,
             target_hash: pullRequest.targetBaseCommitHash,
             prepared: preparedWithDecisions,
