@@ -152,6 +152,7 @@ describe('MCP prompts', () => {
     const result = await client.getPrompt({
       name: 'prepare_resolve_merge',
       arguments: {
+        project_id: 'proj_123',
         source_hash: 'sha256:source',
         target_hash: 'sha256:target',
       },
@@ -159,8 +160,12 @@ describe('MCP prompts', () => {
 
     expect(result.messages[0].content.text).toContain('t3x_diff');
     expect(result.messages[0].content.text).toContain('t3x_merge');
-    expect(result.messages[0].content.text).toContain('t3x://commits/sha256:source');
-    expect(result.messages[0].content.text).toContain('t3x://commits/sha256:target');
+    expect(result.messages[0].content.text).toContain(
+      't3x://projects/proj_123/commits/sha256:source'
+    );
+    expect(result.messages[0].content.text).toContain(
+      't3x://projects/proj_123/commits/sha256:target'
+    );
 
     await client.close();
   });

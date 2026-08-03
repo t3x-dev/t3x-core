@@ -21,6 +21,7 @@ import type { ApiPipelineContext } from './context';
 export interface DiffInput {
   base_commit_hash: string;
   target_commit_hash: string;
+  project_id?: string;
 }
 
 interface CommitMeta {
@@ -48,14 +49,14 @@ function commitMeta(commit: RepositorySemanticCommitProjection): CommitMeta {
 export const diffOp: Operation<DiffInput, DiffOutput> = {
   name: 'diff',
   async *run(input: DiffInput, ctx): AsyncGenerator<PipelineEvent, DiffOutput> {
-    const { base_commit_hash, target_commit_hash } = input;
+    const { base_commit_hash, target_commit_hash, project_id: projectId } = input;
     const { db } = ctx as ApiPipelineContext;
 
     // load: fetch both commits
     yield { type: 'step_start', step: 'load' };
     const [baseCommit, targetCommit] = await Promise.all([
-      getRepositorySemanticCommit(db as any, base_commit_hash),
-      getRepositorySemanticCommit(db as any, target_commit_hash),
+      getRepositorySemanticCommit(db as any, base_commit_hash, projectId),
+      getRepositorySemanticCommit(db as any, target_commit_hash, projectId),
     ]);
 
     if (!baseCommit) {

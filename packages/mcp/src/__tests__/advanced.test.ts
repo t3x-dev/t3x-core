@@ -180,12 +180,18 @@ vi.mock('@t3x-dev/api/repository-state-transition', () => transitionMock);
 // -- Storage mock --
 
 vi.mock('@t3x-dev/storage', () => ({
-  getCommit: vi.fn((_db: unknown, hash: string) => {
+  getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) => {
     const commits: Record<string, unknown> = {
       'sha256:aaa': MOCK_COMMIT_A,
       'sha256:bbb': MOCK_COMMIT_B,
     };
-    return Promise.resolve(commits[hash] ?? null);
+    const commit = commits[hash] as typeof MOCK_COMMIT_A | undefined;
+    if (!commit || commit.project_id !== projectId) return Promise.resolve(null);
+    return Promise.resolve({
+      recordedAt: '2026-04-13T00:00:00.000Z',
+      state: { content: commit.content },
+      commit: { schema: 't3x/commit/v2', parents: [] },
+    });
   }),
   getLatestCommit: vi.fn((_db: unknown, projectId: string, branch: string) => {
     if (projectId === 'proj_test1' && branch === 'release') return Promise.resolve(MOCK_COMMIT_B);
@@ -239,6 +245,9 @@ vi.mock('@t3x-dev/core', () => ({
     relationsAdded: [],
     relationsRemoved: [],
   })),
+  decodeRepositorySemanticState: vi.fn(
+    (state: { content: typeof MOCK_COMMIT_A.content }) => state.content
+  ),
   prepareMerge: vi.fn(() => ({
     autoKept: [],
     conflicts: [
@@ -306,19 +315,31 @@ describe('t3x_diff handler', () => {
   });
 
   it('returns error when base commit not found', async () => {
-    const result = await diffHandler({ base: 'sha256:missing', target: 'sha256:bbb' });
+    const result = await diffHandler({
+      base: 'sha256:missing',
+      target: 'sha256:bbb',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Base commit not found');
   });
 
   it('returns error when target commit not found', async () => {
-    const result = await diffHandler({ base: 'sha256:aaa', target: 'sha256:missing' });
+    const result = await diffHandler({
+      base: 'sha256:aaa',
+      target: 'sha256:missing',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Target commit not found');
   });
 
   it('returns structured diff on success', async () => {
-    const result = await diffHandler({ base: 'sha256:aaa', target: 'sha256:bbb' });
+    const result = await diffHandler({
+      base: 'sha256:aaa',
+      target: 'sha256:bbb',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.base).toBe('sha256:aaa');

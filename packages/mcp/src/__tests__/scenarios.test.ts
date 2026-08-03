@@ -126,6 +126,10 @@ vi.mock('@t3x-dev/core', () => ({
     'slack',
     'deploy_agent',
   ],
+  decodeRepositorySemanticState: vi.fn(
+    (repositoryState: { content: { trees: unknown[]; relations: unknown[] } }) =>
+      repositoryState.content
+  ),
   createDefaultProviderRegistry: vi.fn(() => ({
     getById: vi.fn((providerId: string) => ({ id: providerId })),
     getEntry: vi.fn((providerId: string) =>
@@ -444,17 +448,37 @@ vi.mock('@t3x-dev/storage', () => ({
     }
     return true;
   }),
-  getCommit: vi.fn(async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null),
-  getCommitUnified: vi.fn(
-    async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null
-  ),
+  getVerifiedTransitionCommitGraph: vi.fn(async (_db: unknown, projectId: string, hash: string) => {
+    const commit = mockState.commits.get(hash);
+    if (!commit || commit.project_id !== projectId) return null;
+    return {
+      recordedAt: commit.committed_at,
+      state: { content: commit.content },
+      commit: {
+        schema: 't3x/commit/v2',
+        parents: commit.parents.map((digest) => ({
+          kind: 'commit',
+          schema: 't3x/commit/v2',
+          digest,
+        })),
+      },
+    };
+  }),
   getLatestCommit: vi.fn(async (_db: unknown, projectId: string, branch: string) =>
     [...mockState.commits.values()]
       .reverse()
       .find((commit) => commit.project_id === projectId && commit.branch === branch)
   ),
-  listCommits: vi.fn(async (_db: unknown, { projectId }: { projectId: string }) =>
-    [...mockState.commits.values()].filter((commit) => commit.project_id === projectId)
+  listCommitHistory: vi.fn(
+    async (_db: unknown, projectId: string, { limit = 50, offset = 0 } = {}) =>
+      [...mockState.commits.values()]
+        .filter((commit) => commit.project_id === projectId)
+        .slice(offset, offset + limit)
+        .map((commit) => ({
+          digest: commit.hash,
+          recordedAt: commit.committed_at,
+          parents: commit.parents,
+        }))
   ),
   createMergeDraft: vi.fn(
     async (
@@ -761,6 +785,7 @@ describe('mcp audit scenarios', () => {
       await callTool('t3x_diff', {
         base: firstCommit.commit_hash,
         target: secondCommit.commit_hash,
+        project_id: project.project_id,
       })
     );
     expect(diff.base).toBe(firstCommit.commit_hash);

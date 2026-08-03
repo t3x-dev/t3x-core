@@ -440,35 +440,36 @@ describe('T3xClient', () => {
   // Commits
   // =========================================================================
   describe('commits', () => {
-    it('listCommits sends GET /v1/projects/:id/commits with branch query', async () => {
+    it('listCommits sends GET /v1/projects/:id/commits with pagination', async () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
-      await client.listCommits('proj_1', 'main');
+      await client.listCommits('proj_1', { limit: 10, offset: 5 });
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
-      expect(url).toContain('branch=main');
+      expect(url).toContain('limit=10');
+      expect(url).toContain('offset=5');
     });
 
-    it('listCommits omits undefined branch', async () => {
+    it('listCommits works without pagination', async () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
       await client.listCommits('proj_1');
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
-      expect(url).not.toContain('branch=');
+      expect(url).not.toContain('limit=');
+      expect(url).not.toContain('offset=');
     });
 
-    it('getCommit sends GET /v1/commits/:hash', async () => {
-      const fn = mockFetch(successResponse({ commit_hash: 'sha256:abc' }));
+    it('getCommit sends a project-scoped GET /v1/commits/:digest', async () => {
+      const fn = mockFetch(successResponse({ digest: 'sha256:abc' }));
       const client = createTestClient(fn);
 
-      await client.getCommit('sha256:abc');
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/commits/sha256:abc'),
-        expect.any(Object)
-      );
+      await client.getCommit('proj_1', 'sha256:abc');
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/commits/sha256%3Aabc');
+      expect(url).toContain('project_id=proj_1');
     });
 
     it('commitRepositoryState sends a CommitV2 POST', async () => {
@@ -865,12 +866,11 @@ describe('T3xClient', () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
-      await client.listCommits('proj_1', undefined, { limit: 10 });
+      await client.listCommits('proj_1', { limit: 10 });
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
       expect(url).toContain('limit=10');
-      // branch should not appear since it's undefined
-      expect(url).not.toContain('branch');
+      expect(url).not.toContain('offset');
     });
   });
 });

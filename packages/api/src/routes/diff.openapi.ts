@@ -27,6 +27,7 @@ const TwoWayBodySchema = z.object({
   // Mode 1: commit hash
   base_commit_hash: z.string().optional(),
   target_commit_hash: z.string().optional(),
+  project_id: z.string().optional(),
   // Mode 2: turn hash
   baseTurnHash: z.string().optional(),
   targetTurnHash: z.string().optional(),
@@ -248,8 +249,16 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
   // Mode 1: commit_hash mode (unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
     const db = await getDB();
-    const baseCommit = await getRepositorySemanticCommit(db, body.base_commit_hash);
-    const targetCommit = await getRepositorySemanticCommit(db, body.target_commit_hash);
+    const baseCommit = await getRepositorySemanticCommit(
+      db,
+      body.base_commit_hash,
+      body.project_id
+    );
+    const targetCommit = await getRepositorySemanticCommit(
+      db,
+      body.target_commit_hash,
+      body.project_id
+    );
 
     if (baseCommit && targetCommit) {
       const diff: TreeDiff = diffCommits(baseCommit.semanticContent, targetCommit.semanticContent);

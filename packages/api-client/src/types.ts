@@ -191,22 +191,6 @@ export interface ConversationSourceEvidence {
   referring_commits: SourceCommitReference[];
 }
 
-// Commit types
-export interface Commit {
-  commit_hash: string;
-  parent_hashes: string[];
-  project_id: string;
-  branch: string;
-  message: string;
-  turn_window: {
-    start_turn_hash: string;
-    end_turn_hash: string;
-  };
-  facet_snapshot: unknown[];
-  pipeline_config: Record<string, unknown> | null;
-  created_at: string;
-}
-
 export interface CommitDescriptorV2 {
   kind: 'commit';
   schema: 't3x/commit/v2';
@@ -226,6 +210,28 @@ export interface CreatedRepositoryCommit {
   object: RepositoryCommitV2;
 }
 
+export interface StoredRepositoryCommit {
+  digest: string;
+  recorded_at: string;
+  object: RepositoryCommitV2;
+}
+
+export interface CommitHistoryProjectionV2 {
+  format: 'transition_v2';
+  id: string;
+  schema: 't3x/commit/v2';
+  parents: string[];
+  recordedAt: string;
+  result: {
+    mode: 'state_descriptor';
+    descriptor: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+  };
+  assurance: {
+    mode: 'decision_bound';
+    decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  };
+}
+
 export interface CommitRepositoryStateInput {
   project_id: string;
   content: {
@@ -239,9 +245,7 @@ export interface CommitRepositoryStateInput {
 }
 
 export interface ListCommitsResponse {
-  commits: Commit[];
-  limit: number;
-  offset: number;
+  commits: CommitHistoryProjectionV2[];
 }
 
 // Branch types

@@ -14,7 +14,6 @@ import type {
   Branch,
   CheckInput,
   CheckResult,
-  Commit,
   CommitFromDraftInput,
   CommitFromDraftResult,
   CommitRepositoryStateInput,
@@ -76,6 +75,7 @@ import type {
   SourceThreadCapability,
   SourceThreadMemory,
   StatusResponse,
+  StoredRepositoryCommit,
   Turn,
   TwoWayDiffInput,
   UpdateMergeDraftInput,
@@ -402,21 +402,22 @@ export class T3xClient {
   // Commits
   // ============================================
 
-  async listCommits(
-    projectId: string,
-    branch?: string,
-    params?: PaginationParams
-  ): Promise<ListCommitsResponse> {
+  async listCommits(projectId: string, params?: PaginationParams): Promise<ListCommitsResponse> {
     return this.request<ListCommitsResponse>(
       'GET',
       `/v1/projects/${projectId}/commits`,
       undefined,
-      { branch, ...params }
+      { ...params }
     );
   }
 
-  async getCommit(hash: string): Promise<Commit> {
-    return this.request<Commit>('GET', `/v1/commits/${hash}`);
+  async getCommit(projectId: string, digest: string): Promise<StoredRepositoryCommit> {
+    return this.request<StoredRepositoryCommit>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}`,
+      undefined,
+      { project_id: projectId }
+    );
   }
 
   async commitRepositoryState(input: CommitRepositoryStateInput): Promise<CreatedRepositoryCommit> {
