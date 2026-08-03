@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 58;
+const SCHEMA_VERSION = 59;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1850,6 +1850,24 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_transition_command_receipts_result
       ON transition_command_receipts(project_id, transition_id, result_digest);
+  `);
+
+  // ── Schema v59: application-owned YOps consumption for CommitV2 ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      yops_log_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, yops_log_id, commit_digest),
+      CONSTRAINT transition_yops_log_consumptions_commit_fk
+        FOREIGN KEY (project_id, commit_digest)
+        REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_commit
+      ON transition_yops_log_consumptions(project_id, commit_digest);
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
+      ON transition_yops_log_consumptions(project_id, yops_log_id);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

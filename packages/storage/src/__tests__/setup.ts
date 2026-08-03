@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS transition_commits (
 CREATE INDEX IF NOT EXISTS idx_transition_commits_project_created
   ON transition_commits(project_id, created_at);
 
+CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  yops_log_id TEXT NOT NULL,
+  commit_digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, yops_log_id, commit_digest),
+  CONSTRAINT transition_yops_log_consumptions_commit_fk
+    FOREIGN KEY (project_id, commit_digest)
+    REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_commit
+  ON transition_yops_log_consumptions(project_id, commit_digest);
+CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
+  ON transition_yops_log_consumptions(project_id, yops_log_id);
+
 CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   ref_name TEXT NOT NULL,

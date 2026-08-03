@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -228,6 +229,38 @@ export const transitionCommits = pgTable(
 );
 
 /**
+ * Application-owned provenance/consumption link for durable YOps rows.
+ *
+ * This deliberately stays outside CommitV2 identity. It preserves the
+ * operational invariant that a YOps row used by committed history cannot be
+ * superseded while letting the immutable Effect carry only replay semantics.
+ */
+export const transitionYOpsLogConsumptions = pgTable(
+  'transition_yops_log_consumptions',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    yopsLogId: text('yops_log_id').notNull(),
+    commitDigest: text('commit_digest').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.yopsLogId, table.commitDigest] }),
+    foreignKey({
+      columns: [table.projectId, table.commitDigest],
+      foreignColumns: [transitionCommits.projectId, transitionCommits.digest],
+      name: 'transition_yops_log_consumptions_commit_fk',
+    }).onDelete('cascade'),
+    index('idx_transition_yops_log_consumptions_commit').on(
+      table.projectId,
+      table.commitDigest
+    ),
+    index('idx_transition_yops_log_consumptions_log').on(table.projectId, table.yopsLogId),
+  ]
+);
+
+/**
  * Server-side authority fact. This record is intentionally outside Decision
  * and Commit identity and is written only from a trusted issued capability.
  */
@@ -317,6 +350,8 @@ export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
+export type TransitionYOpsLogConsumptionRecord =
+  typeof transitionYOpsLogConsumptions.$inferSelect;
 export type TransitionDecisionAuthorizationRecord =
   typeof transitionDecisionAuthorizations.$inferSelect;
 export type TransitionDecisionLedgerRecord = typeof transitionDecisionLedger.$inferSelect;

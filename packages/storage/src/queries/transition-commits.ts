@@ -25,7 +25,7 @@ import {
   verifyCommitV2,
   verifyDecisionGraph,
 } from '@t3x-dev/core';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { branches } from '../schema';
 import {
@@ -33,8 +33,11 @@ import {
   transitionDecisionAuthorizations,
   transitionDecisionLedger,
   transitionObjects,
+  transitionYOpsLogConsumptions,
 } from '../schema-transition-commits';
-import { getCommit, listCommits } from './commits';
+import { yopsLog } from '../schema-trees';
+import { getCommit, listCommits, SupersededYOpsLogIdsError } from './commits';
+import { acquireProjectSupersedeLock } from './yops-log';
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
@@ -74,6 +77,15 @@ export class DecisionRecordIntegrityError extends Error {
   }
 }
 
+export class TransitionYOpsLogMembershipError extends Error {
+  readonly code = 'YOPS_LOG_MEMBERSHIP_INVALID';
+
+  constructor(readonly yopsLogIds: readonly string[]) {
+    super(`YOps log entries do not belong to this project: ${yopsLogIds.join(', ')}`);
+    this.name = 'TransitionYOpsLogMembershipError';
+  }
+}
+
 export class TransitionHeadConflictError extends Error {
   readonly code = 'STALE_BASE';
 
@@ -97,6 +109,24 @@ export class TransitionParentHeadMismatchError extends Error {
       `CommitV2 first parent ${firstParent ?? '<none>'} does not match expected ref head ${expectedHead ?? '<empty>'}`
     );
     this.name = 'TransitionParentHeadMismatchError';
+  }
+}
+
+export class TransitionParentProjectMembershipError extends Error {
+  readonly code = 'INTEGRITY_CHAIN_INVALID';
+
+  constructor(readonly parentDigests: readonly string[]) {
+    super(`CommitV2 parents do not belong to this project: ${parentDigests.join(', ')}`);
+    this.name = 'TransitionParentProjectMembershipError';
+  }
+}
+
+export class TransitionCommitGraphIntegrityError extends Error {
+  readonly code = 'INTEGRITY_CHAIN_INVALID';
+
+  constructor(readonly commitDigest: string) {
+    super(`CommitV2 parent cycle detected at ${commitDigest}`);
+    this.name = 'TransitionCommitGraphIntegrityError';
   }
 }
 
@@ -137,16 +167,61 @@ export class TransitionProjectionAuthorizationInvalidError extends Error {
 class DatabaseTransitionObjectResolver implements ObjectResolver {
   private readonly encoder = new TextEncoder();
 
-  constructor(private readonly db: AnyDB) {}
+  constructor(
+    private readonly db: AnyDB,
+    private readonly projectId?: string
+  ) {}
 
   async get(descriptor: ObjectDescriptor): Promise<Uint8Array | undefined> {
-    const [row] = await this.db
-      .select({ canonicalJson: transitionObjects.canonicalJson })
-      .from(transitionObjects)
-      .where(eq(transitionObjects.digest, descriptor.digest))
-      .limit(1);
+    const [row] =
+      descriptor.kind === 'commit' && this.projectId !== undefined
+        ? await this.db
+            .select({ canonicalJson: transitionObjects.canonicalJson })
+            .from(transitionCommits)
+            .innerJoin(transitionObjects, eq(transitionCommits.digest, transitionObjects.digest))
+            .where(
+              and(
+                eq(transitionCommits.projectId, this.projectId),
+                eq(transitionCommits.digest, descriptor.digest)
+              )
+            )
+            .limit(1)
+        : await this.db
+            .select({ canonicalJson: transitionObjects.canonicalJson })
+            .from(transitionObjects)
+            .where(eq(transitionObjects.digest, descriptor.digest))
+            .limit(1);
     return row === undefined ? undefined : this.encoder.encode(row.canonicalJson);
   }
+}
+
+async function verifyRepositoryCommitClosure(
+  commit: CommitV2,
+  resolver: ObjectResolver
+): Promise<VerifiedCommitIntegrity> {
+  const verified = new Map<string, VerifiedCommitIntegrity>();
+  const visiting = new Set<string>();
+
+  const visit = async (current: CommitV2): Promise<VerifiedCommitIntegrity> => {
+    const digest = describeCommitV2(current).digest;
+    const existing = verified.get(digest);
+    if (existing !== undefined) return existing;
+    if (visiting.has(digest)) {
+      throw new TransitionCommitGraphIntegrityError(digest);
+    }
+
+    visiting.add(digest);
+    try {
+      const graph = await verifyCommitV2(current, resolver);
+      for (const parent of graph.parents) await visit(parent);
+      verified.set(digest, graph);
+      return graph;
+    } finally {
+      visiting.delete(digest);
+    }
+  };
+
+  return visit(commit);
 }
 
 function sameScope(
@@ -456,7 +531,7 @@ async function resolveDecisionAuditRow(
     throw new DecisionRecordIntegrityError(decisionDigest);
   }
 
-  const resolver = new DatabaseTransitionObjectResolver(db);
+  const resolver = new DatabaseTransitionObjectResolver(db, row.projectId);
   const decisionObject = await resolveStoredObject(resolver, {
     kind: 'statement',
     schema: 't3x/statement/v1',
@@ -589,7 +664,7 @@ export async function getTransitionViewForCommit(
       : null;
   }
 
-  const resolver = new DatabaseTransitionObjectResolver(db);
+  const resolver = new DatabaseTransitionObjectResolver(db, input.projectId);
   const verified = await verifyCommitV2(transition.commit, resolver);
   const decisionDigest = transition.commit.decision.digest;
   const [authorization] = await db
@@ -670,6 +745,8 @@ export interface CreateTransitionCommitInput {
   commit: CommitV2;
   /** Graph objects not already present in the repository object store. */
   objects: readonly ProtocolObject[];
+  /** Application provenance rows consumed by this Transition, outside CommitV2 identity. */
+  yopsLogIds?: readonly string[];
 }
 
 export interface CreatedTransitionCommit {
@@ -730,7 +807,7 @@ export async function getTransitionRefHead(
     return { format: 'legacy_v1', refName: input.refName, head: ref.head };
   }
 
-  const resolver = new DatabaseTransitionObjectResolver(db);
+  const resolver = new DatabaseTransitionObjectResolver(db, input.projectId);
   const verified = await verifyCommitV2(transition.commit, resolver);
   const result = await resolveStoredObject(resolver, verified.effect.result);
   if (result.schema !== 't3x/state/v1') {
@@ -761,10 +838,47 @@ export async function createTransitionCommit(
 
   const result = await (db as unknown as TxRunner).transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
+    const parentDigests = [...new Set(input.commit.parents.map((parent) => parent.digest))].sort();
+    if (parentDigests.length > 0) {
+      const rows = await tx
+        .select({ digest: transitionCommits.digest })
+        .from(transitionCommits)
+        .where(
+          and(
+            eq(transitionCommits.projectId, input.projectId),
+            inArray(transitionCommits.digest, parentDigests)
+          )
+        );
+      const projectParents = new Set(rows.map((row) => row.digest));
+      const missingParents = parentDigests.filter((digest) => !projectParents.has(digest));
+      if (missingParents.length > 0) {
+        throw new TransitionParentProjectMembershipError(missingParents);
+      }
+    }
+
+    const yopsLogIds = [...new Set(input.yopsLogIds ?? [])].sort();
+    if (yopsLogIds.length > 0) {
+      await acquireProjectSupersedeLock(tx, input.projectId);
+      const rows = await tx
+        .select({ id: yopsLog.id, projectId: yopsLog.projectId })
+        .from(yopsLog)
+        .where(inArray(yopsLog.id, yopsLogIds));
+      const byId = new Map(rows.map((row) => [row.id, row.projectId]));
+      const invalid = yopsLogIds.filter((id) => byId.get(id) !== input.projectId);
+      if (invalid.length > 0) throw new TransitionYOpsLogMembershipError(invalid);
+
+      const superseded = await tx
+        .select({ id: yopsLog.id })
+        .from(yopsLog)
+        .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
+      if (superseded.length > 0) {
+        throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
+      }
+    }
     // Resolve and re-hash inside the same transaction that advances the ref so
     // no mutable storage read can create a verification/CAS time-of-check gap.
     const resolver = overlayTransitionObjects(
-      new DatabaseTransitionObjectResolver(tx),
+      new DatabaseTransitionObjectResolver(tx, input.projectId),
       input.objects
     );
     const verified = await verifyCommitV2(input.commit, resolver);
@@ -793,6 +907,18 @@ export async function createTransitionCommit(
         mediaType: COMMIT_V2_MEDIA_TYPE,
       })
       .onConflictDoNothing();
+    if (yopsLogIds.length > 0) {
+      await tx
+        .insert(transitionYOpsLogConsumptions)
+        .values(
+          yopsLogIds.map((yopsLogId) => ({
+            projectId: input.projectId,
+            yopsLogId,
+            commitDigest: descriptor.digest,
+          }))
+        )
+        .onConflictDoNothing();
+    }
 
     const headCondition =
       input.expectedHead === null
@@ -870,7 +996,10 @@ export async function getVerifiedTransitionCommitGraph(
 ): Promise<VerifiedTransitionCommitGraph | null> {
   const stored = await getTransitionCommit(db, projectId, digest);
   if (stored === null) return null;
-  const verified = await verifyCommitV2(stored.commit, new DatabaseTransitionObjectResolver(db));
+  const verified = await verifyRepositoryCommitClosure(
+    stored.commit,
+    new DatabaseTransitionObjectResolver(db, projectId)
+  );
   return { ...verified, recordedAt: stored.recordedAt };
 }
 

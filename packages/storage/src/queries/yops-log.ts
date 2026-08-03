@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { transitionYOpsLogConsumptions } from '../schema-transition-commits';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
 
 // ============================================================
@@ -90,8 +91,25 @@ export async function deleteYOpsLogEntry(
   db: AnyDB,
   id: string
 ): Promise<YOpsLogRecord | undefined> {
-  const [result] = await db.delete(yopsLog).where(eq(yopsLog.id, id)).returning();
-  return result;
+  return (await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    const [entry] = await tx.select().from(yopsLog).where(eq(yopsLog.id, id)).limit(1);
+    if (entry === undefined) return undefined;
+    await acquireProjectSupersedeLock(tx, entry.projectId);
+    const [consumption] = await tx
+      .select({ id: transitionYOpsLogConsumptions.yopsLogId })
+      .from(transitionYOpsLogConsumptions)
+      .where(
+        and(
+          eq(transitionYOpsLogConsumptions.projectId, entry.projectId),
+          eq(transitionYOpsLogConsumptions.yopsLogId, id)
+        )
+      )
+      .limit(1);
+    if (consumption !== undefined) return undefined;
+    const [deleted] = await tx.delete(yopsLog).where(eq(yopsLog.id, id)).returning();
+    return deleted;
+  })) as YOpsLogRecord | undefined;
 }
 
 /**
@@ -147,15 +165,25 @@ export async function findCommitHashesByYOpsLogIds(
     sql` OR `
   );
   const result = await db.execute<{ yops_log_id: string; commit_hash: string }>(sql`
-    SELECT DISTINCT refs.yops_log_id, c.hash AS commit_hash, c.committed_at
-    FROM commits c
-    CROSS JOIN LATERAL jsonb_array_elements_text(
-      COALESCE(c.yops_log_ids, '[]'::jsonb)
-    ) AS refs(yops_log_id)
-    WHERE c.project_id = ${projectId}
-      AND (${containsAnyId})
-      AND refs.yops_log_id IN (${idList})
-    ORDER BY c.committed_at ASC, c.hash ASC
+    SELECT DISTINCT linked.yops_log_id, linked.commit_hash, linked.recorded_at
+    FROM (
+      SELECT refs.yops_log_id, c.hash AS commit_hash, c.committed_at AS recorded_at
+      FROM commits c
+      CROSS JOIN LATERAL jsonb_array_elements_text(
+        COALESCE(c.yops_log_ids, '[]'::jsonb)
+      ) AS refs(yops_log_id)
+      WHERE c.project_id = ${projectId}
+        AND (${containsAnyId})
+        AND refs.yops_log_id IN (${idList})
+      UNION ALL
+      SELECT consumption.yops_log_id,
+             consumption.commit_digest AS commit_hash,
+             consumption.created_at AS recorded_at
+      FROM ${transitionYOpsLogConsumptions} consumption
+      WHERE consumption.project_id = ${projectId}
+        AND consumption.yops_log_id IN (${idList})
+    ) linked
+    ORDER BY linked.recorded_at ASC, linked.commit_hash ASC
   `);
 
   const rows: Array<{ yops_log_id: string; commit_hash: string }> = Array.isArray(result)
@@ -171,6 +199,41 @@ export async function findCommitHashesByYOpsLogIds(
   }
 
   return committedBy;
+}
+
+/** Return durable YOps rows directly consumed by one CommitV2 application transition. */
+export async function getYOpsForTransitionCommit(
+  db: AnyDB,
+  projectId: string,
+  commitDigest: string
+): Promise<YOpsLogRecord[]> {
+  return db
+    .select({
+      id: yopsLog.id,
+      conversationId: yopsLog.conversationId,
+      projectId: yopsLog.projectId,
+      source: yopsLog.source,
+      turnHash: yopsLog.turnHash,
+      yops: yopsLog.yops,
+      model: yopsLog.model,
+      version: yopsLog.version,
+      pipelineState: yopsLog.pipelineState,
+      gateResultJson: yopsLog.gateResultJson,
+      metadata: yopsLog.metadata,
+      topicId: yopsLog.topicId,
+      supersededAt: yopsLog.supersededAt,
+      createdAt: yopsLog.createdAt,
+    })
+    .from(transitionYOpsLogConsumptions)
+    .innerJoin(yopsLog, eq(transitionYOpsLogConsumptions.yopsLogId, yopsLog.id))
+    .where(
+      and(
+        eq(transitionYOpsLogConsumptions.projectId, projectId),
+        eq(transitionYOpsLogConsumptions.commitDigest, commitDigest),
+        eq(yopsLog.projectId, projectId)
+      )
+    )
+    .orderBy(asc(yopsLog.createdAt), asc(yopsLog.id));
 }
 
 /**
@@ -315,6 +378,12 @@ export async function supersedeActiveLLMSuggestions(
             WHERE conv.conversation_id = ${conversationId}
               AND c.yops_log_ids @> jsonb_build_array(yl.id)
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM ${transitionYOpsLogConsumptions} consumption
+            WHERE consumption.project_id = ${projectId}
+              AND consumption.yops_log_id = yl.id
+          )
       )
       RETURNING ${yopsLog.id}
     `);
@@ -335,7 +404,7 @@ export async function supersedeActiveLLMSuggestions(
  * Unlike `supersedeActiveLLMSuggestions`, this intentionally supersedes
  * manual and mixed rows too because the user is editing the full active
  * script as the new source of truth. Committed rows are immutable and are
- * excluded by the same commits.yops_log_ids guard used elsewhere.
+ * excluded by the CommitV1 and CommitV2 consumption guards used elsewhere.
  */
 export async function supersedeActiveUncommittedYOpsLogEntries(
   db: AnyDB,
@@ -363,6 +432,12 @@ export async function supersedeActiveUncommittedYOpsLogEntries(
           FROM commits c
           WHERE c.project_id = ${projectId}
             AND c.yops_log_ids @> jsonb_build_array(${yopsLog.id})
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${transitionYOpsLogConsumptions} consumption
+          WHERE consumption.project_id = ${projectId}
+            AND consumption.yops_log_id = ${yopsLog.id}
         )
       RETURNING ${yopsLog.id}
     `);
@@ -424,12 +499,24 @@ export async function supersedeYOpsLogEntryForRepair(
               WHERE c.project_id = ${projectId}
                 AND c.yops_log_ids @> jsonb_build_array(target.id)
             )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ${transitionYOpsLogConsumptions} consumption
+              WHERE consumption.project_id = ${projectId}
+                AND consumption.yops_log_id = target.id
+            )
         )
         AND NOT EXISTS (
           SELECT 1
           FROM commits c
           WHERE c.project_id = ${projectId}
             AND c.yops_log_ids @> jsonb_build_array(${yopsLog.id})
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${transitionYOpsLogConsumptions} consumption
+          WHERE consumption.project_id = ${projectId}
+            AND consumption.yops_log_id = ${yopsLog.id}
         )
       RETURNING ${yopsLog.id}
     `);

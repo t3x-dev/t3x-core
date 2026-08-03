@@ -210,6 +210,31 @@ describe('pure protocol integrity-chain verification', () => {
     await expect(verifyCommitIntegrity(declaredInput, fixture.resolver)).resolves.toBeDefined();
   });
 
+  it('requires every declared Effect input object to resolve', async () => {
+    const fixture = integrityFixture();
+    const unavailableInput = state('unavailable-input');
+    const effect: Effect = {
+      ...fixture.effect,
+      inputs: [{ role: 'source', object: describeProtocolObject(unavailableInput) }],
+    };
+    const proposal: ProposalStatement = {
+      ...fixture.proposal,
+      subjects: [fixture.resolver.put(effect)],
+    };
+    const decision: DecisionStatement = {
+      ...fixture.decision,
+      subjects: [fixture.resolver.put(proposal)],
+    };
+    const commit = {
+      ...fixture.commit,
+      decision: fixture.resolver.put(decision),
+    };
+
+    await expect(verifyCommitIntegrity(commit, fixture.resolver)).rejects.toMatchObject({
+      code: 'OBJECT_NOT_FOUND',
+    });
+  });
+
   it('attaches external Statements without rewriting subject identity', async () => {
     const fixture = integrityFixture();
     const proposalBefore = describeProtocolObject(fixture.proposal);

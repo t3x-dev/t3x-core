@@ -108,7 +108,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -129,6 +129,7 @@ describe('workspace and Transition schema migrations', () => {
         DROP TABLE IF EXISTS transition_proposal_memberships;
         DROP TABLE IF EXISTS transition_decision_ledger;
         DROP TABLE IF EXISTS transition_decision_authorizations;
+        DROP TABLE IF EXISTS transition_yops_log_consumptions;
         DROP TABLE IF EXISTS transition_commits;
         DROP TABLE IF EXISTS transition_objects;
         UPDATE _schema_version
@@ -165,7 +166,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -201,7 +202,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -277,7 +278,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -326,7 +327,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -369,7 +370,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -397,7 +398,35 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(58);
+      expect(schemaVersion?.version).toBe(59);
+    } finally {
+      await testDb.cleanup();
+    }
+  });
+
+  it('installs CommitV2 YOps consumption when upgrading from v58', async () => {
+    const testDb = await createTestDB();
+
+    try {
+      await testDb.sql.unsafe(`
+        DROP TABLE IF EXISTS transition_yops_log_consumptions;
+        UPDATE _schema_version
+        SET version = 58, applied_at = NOW()
+        WHERE singleton = TRUE;
+      `);
+
+      await closePostgresStorage();
+      await createPostgresStorage({ connectionString: testDb.connectionString });
+
+      const [table] = await testDb.sql<Array<{ consumptions: string | null }>>`
+        SELECT to_regclass('transition_yops_log_consumptions')::text AS consumptions
+      `;
+      expect(table?.consumptions).toBe('transition_yops_log_consumptions');
+
+      const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
+        SELECT version FROM _schema_version WHERE singleton = TRUE
+      `;
+      expect(schemaVersion?.version).toBe(59);
     } finally {
       await testDb.cleanup();
     }
@@ -465,6 +494,7 @@ describe('workspace and Transition schema migrations', () => {
         DROP TABLE IF EXISTS transition_proposal_memberships;
         DROP TABLE IF EXISTS transition_decision_ledger;
         DROP TABLE IF EXISTS transition_decision_authorizations;
+        DROP TABLE IF EXISTS transition_yops_log_consumptions;
         DROP TABLE IF EXISTS transition_commits;
         DROP TABLE IF EXISTS transition_objects;
         UPDATE _schema_version

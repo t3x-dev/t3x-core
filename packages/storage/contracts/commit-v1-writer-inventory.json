@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "issue": "#1308",
+  "target": "zero production CommitV1 createCommit() paths",
+  "writers": [
+    "apps/web/src/commands/commits/createCommit.ts",
+    "apps/web/src/hooks/commits/useCommitActions.ts",
+    "apps/web/src/hooks/commits/useCreateMergeCommit.ts",
+    "apps/web/src/hooks/onboarding/useIntroDemoReplayActions.ts",
+    "apps/web/src/infrastructure/commits.ts",
+    "packages/api-client/src/client.ts",
+    "packages/api/src/ops/commit.ts",
+    "packages/api/src/ops/merge.ts",
+    "packages/api/src/routes/autopilot.openapi.ts",
+    "packages/api/src/routes/commit-from-draft.openapi.ts",
+    "packages/api/src/routes/commits.openapi.ts",
+    "packages/api/src/routes/drafts-workflows.openapi.ts",
+    "packages/api/src/routes/merge.openapi.ts",
+    "packages/api/src/routes/workspaces.openapi.ts",
+    "packages/mcp/src/tools/advanced/merge.ts",
+    "packages/mcp/src/tools/core/commit.ts",
+    "packages/storage/src/queries/commits.ts",
+    "packages/storage/src/queries/seed-demo-workspace.ts"
+  ]
+}
