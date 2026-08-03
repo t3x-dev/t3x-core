@@ -21,13 +21,17 @@ import {
   findLeavesByCommit,
   findLeavesByProject,
   insertLeafOutputEdit,
+  listTransitionCommitProjectIds,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
+import {
+  getRepositorySemanticCommit,
+  RepositoryStateDomainUnsupportedError,
+} from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -396,9 +400,17 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const commit = await getRepositorySemanticCommit(db, decodedHash);
-    if (commit) {
-      const accessResult = await assertProjectAccess(c, db, commit.projectId);
+    let commitProjectId: string | null = null;
+    try {
+      const commit = await getRepositorySemanticCommit(db, decodedHash);
+      commitProjectId = commit?.projectId ?? null;
+    } catch (error) {
+      if (!(error instanceof RepositoryStateDomainUnsupportedError)) throw error;
+      const projectIds = await listTransitionCommitProjectIds(db, decodedHash);
+      commitProjectId = projectIds.length === 1 ? projectIds[0] : null;
+    }
+    if (commitProjectId) {
+      const accessResult = await assertProjectAccess(c, db, commitProjectId);
       if (accessResult instanceof Response) return accessResult;
     }
 

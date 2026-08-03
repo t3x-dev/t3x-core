@@ -10,11 +10,13 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
-import { validateTree } from '@t3x-dev/core';
+import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
   ensureMainBranch,
+  findBranchesByProject,
   findConversationById,
   getCommitHistoryEntry,
+  getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
   getYOpsForTransitionCommit,
@@ -29,7 +31,9 @@ import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
+  decodeRepositorySemanticContentState,
   getRepositoryConversationEvidence,
+  getRepositorySemanticCommit,
   RepositoryStateDomainUnsupportedError,
 } from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -125,6 +129,46 @@ const CommitHistoryProjectionSchema = z.object({
     }),
   }),
 });
+
+type VerifiedCommitGraph = NonNullable<
+  Awaited<ReturnType<typeof getVerifiedTransitionCommitGraph>>
+>;
+type CommitHistoryEntry = NonNullable<Awaited<ReturnType<typeof getCommitHistoryEntry>>>;
+type RepositoryDB = Parameters<typeof getRepositorySemanticCommit>[0];
+
+function proposalMessage(graph: VerifiedCommitGraph): string | null {
+  const intent = graph.proposal.predicate.intent;
+  if (intent.mode !== 'unspecified') return intent.value;
+  const rationale = graph.proposal.predicate.rationale;
+  return rationale.mode === 'unspecified' ? null : rationale.value;
+}
+
+function semanticContentFromTransitionState(state: VerifiedCommitGraph['state']): SemanticContent {
+  try {
+    return decodeRepositorySemanticContentState(state);
+  } catch (error) {
+    if (
+      error instanceof RepositoryStateDomainUnsupportedError &&
+      state.codec.mediaType === YOPS_STATE_MEDIA_TYPE
+    ) {
+      return { trees: yvalueToTrees(state.value), relations: [] };
+    }
+    throw error;
+  }
+}
+
+async function getRepositorySemanticCommitIfSupported(
+  db: RepositoryDB,
+  digest: string,
+  projectId: string
+) {
+  try {
+    return await getRepositorySemanticCommit(db, digest, projectId);
+  } catch (error) {
+    if (error instanceof RepositoryStateDomainUnsupportedError) return null;
+    throw error;
+  }
+}
 
 // ============================================================
 // POST /v1/commits — Commit an exact structured State through Transition
@@ -260,6 +304,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
         data: {
           commit: {
             digest: created.commitDigest,
+            hash: created.commitDigest,
             ref_name: targetBranch,
             object: created.commit,
           },
@@ -332,11 +377,28 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
     if (!graph) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
+    const semanticCommit = await getRepositorySemanticCommitIfSupported(db, hash, projectId);
+    const content =
+      semanticCommit?.semanticContent ?? semanticContentFromTransitionState(graph.state);
     return c.json(
       {
         success: true as const,
         data: {
-          commit: { digest: hash, recorded_at: graph.recordedAt, object: graph.commit },
+          commit: {
+            digest: hash,
+            recorded_at: graph.recordedAt,
+            object: graph.commit,
+            hash,
+            schema: graph.commit.schema,
+            parents: graph.commit.parents.map((parent) => parent.digest),
+            committed_at: graph.recordedAt,
+            content,
+            project_id: projectId,
+            message: semanticCommit?.intent ?? proposalMessage(graph),
+            branch: 'main',
+            sources: null,
+            provenance: { method: 'transition_v2' },
+          },
         },
       },
       200
@@ -346,6 +408,71 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
     return errorResponse(c, 'GET_FAILED', message);
   }
 });
+
+async function withSemanticCommitFields(
+  db: RepositoryDB,
+  projectId: string,
+  branch: string,
+  entry: CommitHistoryEntry
+) {
+  const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
+  const graph = semanticCommit
+    ? null
+    : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
+  return {
+    ...entry,
+    branch,
+    content:
+      semanticCommit?.semanticContent ??
+      (graph ? semanticContentFromTransitionState(graph.state) : undefined),
+    message: semanticCommit?.intent ?? (graph ? proposalMessage(graph) : null),
+    project_id: projectId,
+  };
+}
+
+async function listCommitHistoryForRef(
+  db: RepositoryDB,
+  projectId: string,
+  refName: string,
+  options: { limit: number; offset: number }
+) {
+  const head = await getTransitionRefHead(db, { projectId, refName });
+  if (head.format === 'empty') return [];
+  const commits = [];
+  const seen = new Set<string>();
+  const stack = [head.head];
+  while (stack.length > 0 && commits.length < options.limit + options.offset) {
+    const digest = stack.shift()!;
+    if (seen.has(digest)) continue;
+    seen.add(digest);
+    const entry = await getCommitHistoryEntry(db, projectId, digest);
+    if (!entry) continue;
+    commits.push(await withSemanticCommitFields(db, projectId, refName, entry));
+    stack.push(...entry.parents);
+  }
+  return commits.slice(options.offset, options.offset + options.limit);
+}
+
+async function listCommitHistoryForAllRefs(
+  db: RepositoryDB,
+  projectId: string,
+  options: { limit: number; offset: number }
+) {
+  const branches = await findBranchesByProject(db, { projectId, limit: 1000, offset: 0 });
+  const byDigest = new Map<string, Awaited<ReturnType<typeof withSemanticCommitFields>>>();
+  for (const branch of branches) {
+    const entries = await listCommitHistoryForRef(db, projectId, branch.name, {
+      limit: options.limit + options.offset,
+      offset: 0,
+    });
+    for (const entry of entries) {
+      if (!byDigest.has(entry.id)) byDigest.set(entry.id, entry);
+    }
+  }
+  return Array.from(byDigest.values())
+    .sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt))
+    .slice(options.offset, options.offset + options.limit);
+}
 
 // ============================================================
 // GET /v1/projects/:projectId/commits — List commits for a project
@@ -360,7 +487,7 @@ const listCommitsRoute = createRoute({
     params: z.object({
       projectId: z.string().min(1),
     }),
-    query: PaginationQuerySchema,
+    query: PaginationQuerySchema.extend({ branch: z.string().trim().min(1).optional() }),
   },
   responses: {
     200: {
@@ -382,14 +509,16 @@ const listCommitsRoute = createRoute({
 
 commitRoutes.openapi(listCommitsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { limit, offset } = c.req.valid('query');
+  const { branch, limit, offset } = c.req.valid('query');
   const db = await getDB();
 
   try {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const commits = await listCommitHistory(db, projectId, { limit, offset });
+    const commits = branch
+      ? await listCommitHistoryForRef(db, projectId, branch, { limit, offset })
+      : await listCommitHistoryForAllRefs(db, projectId, { limit, offset });
 
     return c.json({ success: true as const, data: { commits } }, 200);
   } catch (err) {
