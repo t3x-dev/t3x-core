@@ -531,7 +531,7 @@ describe('ProjectStateTab', () => {
       PRD_COMMIT.parents[0]
     );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
@@ -1243,7 +1243,7 @@ describe('ProjectStateTab', () => {
 
     expect(await screen.findByText('Actual branch tip')).toBeInTheDocument();
     expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash);
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
   });
 
   it('rejects commit rows that do not belong to the selected project', async () => {
@@ -1311,7 +1311,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash);
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash, 'proj_test');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
 

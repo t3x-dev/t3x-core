@@ -212,7 +212,7 @@ export function ProjectStateTab({
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
-          headCommit = await loadCommit(branchHeadHash);
+          headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
@@ -234,7 +234,7 @@ export function ProjectStateTab({
 
         if (headCommit) {
           try {
-            operations = (await loadOperations(headCommit.hash)).operations;
+            operations = (await loadOperations(headCommit.hash, projectId)).operations;
           } catch {
             auxiliaryErrors.push('YOps log unavailable.');
           }
@@ -243,7 +243,7 @@ export function ProjectStateTab({
           if (parentHash) {
             try {
               parentCommit = commits.find((commit) => commit.hash === parentHash) ?? null;
-              if (!parentCommit) parentCommit = await loadCommit(parentHash);
+              if (!parentCommit) parentCommit = await loadCommit(parentHash, projectId);
               if (parentCommit.project_id !== projectId || parentCommit.hash !== parentHash) {
                 throw new Error('Parent commit response does not match the selected project.');
               }

@@ -101,6 +101,97 @@ export interface ApiCommit {
   position_y?: number;
 }
 
+interface CommitHistoryProjection {
+  assurance?: { decision?: { digest?: string } };
+  branch?: string;
+  content?: SemanticContent;
+  format: 'transition_v2';
+  id: string;
+  message?: string | null;
+  parents: string[];
+  project_id?: string;
+  recordedAt: string;
+  result?: { descriptor?: { digest?: string; schema?: string } };
+  schema: 't3x/commit/v2';
+}
+
+interface StoredCommitV2Response {
+  digest: string;
+  hash?: string;
+  recorded_at?: string;
+  committed_at?: string;
+  object?: {
+    schema: 't3x/commit/v2';
+    parents?: Array<{ digest: string }>;
+  };
+  parents?: string[];
+  content?: SemanticContent;
+  project_id?: string;
+  message?: string | null;
+  branch?: string;
+  sources?: ApiCommit['sources'];
+  provenance?: ApiCommit['provenance'];
+}
+
+function emptySemanticContent(): SemanticContent {
+  return { trees: [], relations: [] };
+}
+
+function normalizeApiCommit(
+  raw: ApiCommit | CommitHistoryProjection | StoredCommitV2Response,
+  context: {
+    branch?: string;
+    projectId?: string;
+  } = {}
+): ApiCommit {
+  if ('hash' in raw && raw.hash) {
+    return {
+      ...raw,
+      branch: raw.branch || context.branch || 'main',
+      content: raw.content ?? emptySemanticContent(),
+      project_id: raw.project_id || context.projectId || '',
+    } as ApiCommit;
+  }
+
+  if ('format' in raw && raw.format === 'transition_v2') {
+    return {
+      hash: raw.id,
+      schema: raw.schema,
+      parents: raw.parents,
+      author: { type: 'system', name: 'Transition' },
+      committed_at: raw.recordedAt,
+      content: raw.content ?? emptySemanticContent(),
+      project_id: raw.project_id || context.projectId || '',
+      message: raw.message ?? null,
+      branch: raw.branch || context.branch || 'main',
+      sources: null,
+      provenance: {
+        method: 'transition_v2',
+        schema_ref: {
+          name: raw.result?.descriptor?.schema ?? 't3x/state/v1',
+          hash: raw.result?.descriptor?.digest,
+        },
+      },
+    };
+  }
+
+  const stored = raw as StoredCommitV2Response;
+  const parents = stored.parents ?? stored.object?.parents?.map((parent) => parent.digest) ?? [];
+  return {
+    hash: stored.hash ?? stored.digest,
+    schema: stored.object?.schema ?? 't3x/commit/v2',
+    parents,
+    author: { type: 'system', name: 'Transition' },
+    committed_at: stored.committed_at ?? stored.recorded_at ?? new Date(0).toISOString(),
+    content: stored.content ?? emptySemanticContent(),
+    project_id: stored.project_id || context.projectId || '',
+    message: stored.message ?? null,
+    branch: stored.branch || context.branch || 'main',
+    sources: stored.sources ?? null,
+    provenance: stored.provenance ?? { method: 'transition_v2' },
+  };
+}
+
 /**
  * List commits by project
  */
@@ -112,8 +203,8 @@ export async function listCommits(
 ): Promise<ApiCommit[]> {
   const query = buildQueryString({ branch, limit, offset });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
-  const data = await handleResponse<{ commits: ApiCommit[] }>(res);
-  return data.commits;
+  const data = await handleResponse<{ commits: Array<ApiCommit | CommitHistoryProjection> }>(res);
+  return data.commits.map((commit) => normalizeApiCommit(commit, { branch, projectId }));
 }
 
 export function fetchCommits(
@@ -128,10 +219,13 @@ export function fetchCommits(
 /**
  * Get a commit by hash
  */
-export async function getApiCommit(commitHash: string): Promise<ApiCommit> {
-  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
-  const data = await handleResponse<{ commit: ApiCommit }>(res);
-  return data.commit;
+export async function getApiCommit(commitHash: string, projectId?: string): Promise<ApiCommit> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}${query ? `?${query}` : ''}`
+  );
+  const data = await handleResponse<{ commit: ApiCommit | StoredCommitV2Response }>(res);
+  return normalizeApiCommit(data.commit, { projectId });
 }
 
 /** Read the server-derived Transition product projection for one commit/ref. */
@@ -167,6 +261,7 @@ export async function commitRepositoryState(
 ): Promise<{
   commit: {
     digest: string;
+    hash?: string;
     ref_name: string;
     object: {
       schema: 't3x/commit/v2';
@@ -229,10 +324,12 @@ export async function updateCommitMessage(commitHash: string, message: string): 
  * Get committed YOps log entries for a commit.
  */
 export async function getApiCommitOperations(
-  commitHash: string
+  commitHash: string,
+  projectId?: string
 ): Promise<ApiCommitOperationsResponse> {
+  const query = buildQueryString({ project_id: projectId });
   const res = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(commitHash)}/operations`
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/operations${query ? `?${query}` : ''}`
   );
   return handleResponse<ApiCommitOperationsResponse>(res);
 }
@@ -245,8 +342,11 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
   const res = await fetchWithTimeout(
     `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
   );
-  const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
-  return data.commits;
+  const data = await handleResponse<{
+    commits: Array<ApiCommit | CommitHistoryProjection>;
+    truncated: boolean;
+  }>(res);
+  return data.commits.map((commit) => normalizeApiCommit(commit));
 }
 
 // ============================================================================

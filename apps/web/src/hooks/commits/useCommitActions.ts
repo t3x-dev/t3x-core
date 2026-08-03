@@ -131,14 +131,16 @@ export function useCommitActions() {
         newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
+      const commitHash = result.commit.hash ?? result.commit.digest;
+
       useCommitStore.getState().setCommitSuccess({
-        lastCommitHash: result.commit.digest,
+        lastCommitHash: commitHash,
         committedNodeIds: newCommittedIds,
         committedNodeSnapshot: newSnapshot,
       });
 
       return {
-        hash: result.commit.digest,
+        hash: commitHash,
         projectId,
         conversationId,
         branch: commitBranch,

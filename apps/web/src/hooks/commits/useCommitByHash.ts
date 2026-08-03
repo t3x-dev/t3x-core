@@ -9,6 +9,9 @@ import { useCallback } from 'react';
 import { fetchCommitByHash } from '@/queries/commitByHash';
 
 export function useCommitByHash() {
-  const loadCommit = useCallback(async (hash: string) => fetchCommitByHash(hash), []);
+  const loadCommit = useCallback(
+    async (hash: string, projectId?: string) => fetchCommitByHash(hash, projectId),
+    []
+  );
   return { loadCommit };
 }

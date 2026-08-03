@@ -73,7 +73,7 @@ describe('useWorkspaceYOps', () => {
       await result.current.validate();
     });
 
-    expect(fetchCommitByHash).toHaveBeenCalledWith(baseCommitHash);
+    expect(fetchCommitByHash).toHaveBeenCalledWith(baseCommitHash, 'proj_1');
     expect(validateWorkspaceYOps).toHaveBeenCalledWith(candidate, {
       trees: [{ key: 'prd', slots: { title: 'Inherited PRD' }, children: [] }],
       relations: [{ from: 'prd/summary', to: 'prd/requirements', type: 'depends_on' }],

@@ -211,7 +211,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           ? resolveIntroDemoApiCommitForHash(projectId, commitHash)
           : null;
         const [commitData, leavesData, projectData] = await Promise.all([
-          introDemoCommit ? Promise.resolve(introDemoCommit) : loadCommit(commitHash),
+          introDemoCommit ? Promise.resolve(introDemoCommit) : loadCommit(commitHash, projectId),
           introDemoCommit ? Promise.resolve([] as Leaf[]) : loadLeaves(commitHash).catch(() => []),
           loadProject(projectId).catch(() => null),
         ]);
@@ -227,7 +227,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         let parentCommit: ApiCommit | null = null;
         if (!introDemoCommit && commitData.parents.length > 0) {
           try {
-            const candidate = await loadCommit(commitData.parents[0]);
+            const candidate = await loadCommit(commitData.parents[0], projectId);
             if (
               candidate.hash === commitData.parents[0] &&
               candidate.project_id === projectId &&

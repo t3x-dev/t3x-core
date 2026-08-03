@@ -1690,7 +1690,7 @@ describe('WorkspaceWorkbench', () => {
 
   it('loads the frozen committed preview after the workspace is reopened', async () => {
     const commitHash = `sha256:${'a'.repeat(64)}`;
-    const commitUrl = `http://localhost:8000/api/v1/commits/${encodeURIComponent(commitHash)}`;
+    const commitUrl = `http://localhost:8000/api/v1/commits/${encodeURIComponent(commitHash)}?project_id=proj_1`;
     const committedCandidate: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       status: 'committed',
