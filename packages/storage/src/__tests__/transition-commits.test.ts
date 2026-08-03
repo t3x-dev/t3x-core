@@ -39,8 +39,9 @@ import {
   TransitionHeadConflictError,
   TransitionParentProjectMembershipError,
   TransitionProjectionAuthorizationInvalidError,
-  TransitionYOpsLogMembershipError,
   TransitionRefHeadIntegrityError,
+  TransitionYOpsLogAlreadyConsumedError,
+  TransitionYOpsLogMembershipError,
 } from '../queries/transition-commits';
 import {
   deleteYOpsLogEntry,
@@ -52,9 +53,9 @@ import {
 } from '../queries/yops-log';
 import { branches } from '../schema';
 import {
+  transitionCommits,
   transitionDecisionAuthorizations,
   transitionDecisionLedger,
-  transitionCommits,
   transitionObjects,
 } from '../schema-transition-commits';
 import { createTestDB, testData } from './setup';
@@ -672,9 +673,31 @@ describe('CommitV2 repository', () => {
 
     const commitByYOpsId = await findCommitHashesByYOpsLogIds(db, project.projectId, [yops.id]);
     expect(commitByYOpsId.get(yops.id)).toEqual([created.digest]);
-    await expect(getYOpsForTransitionCommit(db, project.projectId, created.digest)).resolves.toEqual([
-      expect.objectContaining({ id: yops.id, supersededAt: null }),
-    ]);
+    await expect(
+      getYOpsForTransitionCommit(db, project.projectId, created.digest)
+    ).resolves.toEqual([expect.objectContaining({ id: yops.id, supersededAt: null })]);
+    const child = await prepare(
+      project.projectId,
+      'main',
+      prepared.subject.result,
+      state({ device: 'updated' }),
+      'duplicate-yops-consumption',
+      [describeCommitV2(prepared.commit)]
+    );
+    await recordRepositoryDecisionAuthorization(db, child.issued.authorization);
+    await expect(
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: created.digest,
+        commit: child.commit,
+        objects: child.objects,
+        yopsLogIds: [yops.id],
+      })
+    ).rejects.toBeInstanceOf(TransitionYOpsLogAlreadyConsumedError);
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ format: 'transition_v2', head: created.digest });
     await expect(
       supersedeActiveUncommittedYOpsLogEntries(db, conversation.conversationId)
     ).resolves.toEqual([]);
@@ -828,7 +851,9 @@ describe('CommitV2 repository', () => {
 
     await db
       .delete(transitionObjects)
-      .where(eq(transitionObjects.digest, describeTransitionObject(parent.subject.proposal).digest));
+      .where(
+        eq(transitionObjects.digest, describeTransitionObject(parent.subject.proposal).digest)
+      );
 
     await expect(
       getVerifiedTransitionCommitGraph(db, project.projectId, childCreated.digest)

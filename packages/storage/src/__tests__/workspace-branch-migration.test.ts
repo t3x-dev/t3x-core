@@ -108,7 +108,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
 
       const [index] = await testDb.sql<Array<{ index_name: string | null }>>`
         SELECT to_regclass('idx_drafts_open_workspace_branch')::text AS index_name
@@ -166,7 +166,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -202,7 +202,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -278,7 +278,7 @@ describe('workspace and Transition schema migrations', () => {
         FROM _schema_version
         WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -327,7 +327,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -370,7 +370,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -398,7 +398,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }
@@ -426,7 +426,7 @@ describe('workspace and Transition schema migrations', () => {
       const [schemaVersion] = await testDb.sql<Array<{ version: number }>>`
         SELECT version FROM _schema_version WHERE singleton = TRUE
       `;
-      expect(schemaVersion?.version).toBe(59);
+      expect(schemaVersion?.version).toBe(60);
     } finally {
       await testDb.cleanup();
     }

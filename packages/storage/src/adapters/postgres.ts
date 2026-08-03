@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 59;
+const SCHEMA_VERSION = 60;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1868,6 +1868,27 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON transition_yops_log_consumptions(project_id, commit_digest);
     CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
       ON transition_yops_log_consumptions(project_id, yops_log_id);
+  `);
+
+  // ── Schema v60: one durable YOps row may be consumed by only one commit ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_yops_log_consumptions
+        GROUP BY project_id, yops_log_id
+        HAVING COUNT(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate multiply-consumed YOps log rows';
+      END IF;
+    END $$;
+
+    ALTER TABLE transition_yops_log_consumptions
+      DROP CONSTRAINT IF EXISTS transition_yops_log_consumptions_pkey;
+    ALTER TABLE transition_yops_log_consumptions
+      ADD CONSTRAINT transition_yops_log_consumptions_pkey
+      PRIMARY KEY (project_id, yops_log_id);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

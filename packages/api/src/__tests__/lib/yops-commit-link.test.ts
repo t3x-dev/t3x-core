@@ -1,12 +1,17 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
+  ensureMainBranch,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
   supersedeActiveLLMSuggestions,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../../lib/repository-state-transition';
 import { findUncommittedYOpsIds } from '../../lib/yops-commit-link';
 import { setupTestDB, testData } from '../setup';
 
@@ -129,5 +134,39 @@ describe('findUncommittedYOpsIds (post supersede integration)', () => {
     const ids = await findUncommittedYOpsIds(mockDB, convId, projectId);
 
     expect(ids).toEqual([draftEntry.id]);
+  });
+
+  it('excludes entries already consumed by CommitV2', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'commit-link CommitV2 consumption' })
+    );
+    await ensureMainBranch(mockDB, project.projectId);
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'CommitV2 consumed YOps' })
+    );
+    const consumed = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: [humanOp('committed_v2')],
+    });
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [{ key: 'committed_v2', slots: {}, children: [] }],
+        relations: [],
+      }),
+      actor: { kind: 'human', id: 'human:yops-link-test' },
+      yopsLogIds: [consumed.id],
+    });
+
+    await expect(
+      findUncommittedYOpsIds(mockDB, conversation.conversationId, project.projectId)
+    ).resolves.toEqual([]);
   });
 });

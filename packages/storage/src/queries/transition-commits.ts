@@ -86,6 +86,19 @@ export class TransitionYOpsLogMembershipError extends Error {
   }
 }
 
+export class TransitionYOpsLogAlreadyConsumedError extends Error {
+  readonly code = 'YOPS_LOG_ALREADY_CONSUMED';
+
+  constructor(readonly consumptions: readonly { yopsLogId: string; commitDigest: string }[]) {
+    super(
+      `YOps log entries were already consumed: ${consumptions
+        .map((entry) => `${entry.yopsLogId} by ${entry.commitDigest}`)
+        .join(', ')}`
+    );
+    this.name = 'TransitionYOpsLogAlreadyConsumedError';
+  }
+}
+
 export class TransitionHeadConflictError extends Error {
   readonly code = 'STALE_BASE';
 
@@ -874,6 +887,22 @@ export async function createTransitionCommit(
       if (superseded.length > 0) {
         throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
       }
+
+      const consumptions = await tx
+        .select({
+          yopsLogId: transitionYOpsLogConsumptions.yopsLogId,
+          commitDigest: transitionYOpsLogConsumptions.commitDigest,
+        })
+        .from(transitionYOpsLogConsumptions)
+        .where(
+          and(
+            eq(transitionYOpsLogConsumptions.projectId, input.projectId),
+            inArray(transitionYOpsLogConsumptions.yopsLogId, yopsLogIds)
+          )
+        );
+      if (consumptions.length > 0) {
+        throw new TransitionYOpsLogAlreadyConsumedError(consumptions);
+      }
     }
     // Resolve and re-hash inside the same transaction that advances the ref so
     // no mutable storage read can create a verification/CAS time-of-check gap.
@@ -908,16 +937,13 @@ export async function createTransitionCommit(
       })
       .onConflictDoNothing();
     if (yopsLogIds.length > 0) {
-      await tx
-        .insert(transitionYOpsLogConsumptions)
-        .values(
-          yopsLogIds.map((yopsLogId) => ({
-            projectId: input.projectId,
-            yopsLogId,
-            commitDigest: descriptor.digest,
-          }))
-        )
-        .onConflictDoNothing();
+      await tx.insert(transitionYOpsLogConsumptions).values(
+        yopsLogIds.map((yopsLogId) => ({
+          projectId: input.projectId,
+          yopsLogId,
+          commitDigest: descriptor.digest,
+        }))
+      );
     }
 
     const headCondition =

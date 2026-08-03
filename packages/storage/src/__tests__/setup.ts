@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
   yops_log_id TEXT NOT NULL,
   commit_digest TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (project_id, yops_log_id, commit_digest),
+  PRIMARY KEY (project_id, yops_log_id),
   CONSTRAINT transition_yops_log_consumptions_commit_fk
     FOREIGN KEY (project_id, commit_digest)
     REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE

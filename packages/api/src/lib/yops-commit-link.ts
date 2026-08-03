@@ -7,9 +7,10 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  findCommitHashesByYOpsLogIds,
   listActiveYOpsLogByConversation,
-  listCommits,
   SupersededYOpsLogIdsError,
+  TransitionYOpsLogAlreadyConsumedError,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { errorJson } from './errors';
@@ -28,10 +29,9 @@ import { errorJson } from './errors';
  * permanent baseline.
  *
  * Concurrency note: this read is point-in-time. A re-extract landing
- * between this call and the eventual `createCommit` could supersede
- * an id we returned. `createCommit` defends against this directly by
- * rejecting any `yops_log_ids` whose `superseded_at IS NOT NULL`
- * at insert time.
+ * between this call and the eventual commit could supersede or consume
+ * an id we returned. Both CommitV1 and CommitV2 writers defend against
+ * those races inside their write transactions.
  */
 export async function findUncommittedYOpsIds(
   db: AnyDB,
@@ -39,9 +39,9 @@ export async function findUncommittedYOpsIds(
   projectId: string
 ): Promise<string[]> {
   const activeYops = await listActiveYOpsLogByConversation(db, conversationId);
-  const allCommits = await listCommits(db, { projectId });
-  const usedIds = new Set(allCommits.flatMap((c) => c.yops_log_ids));
-  return activeYops.filter((y) => !usedIds.has(y.id)).map((y) => y.id);
+  const activeIds = activeYops.map((entry) => entry.id);
+  const committedBy = await findCommitHashesByYOpsLogIds(db, projectId, activeIds);
+  return activeIds.filter((id) => !committedBy.has(id));
 }
 
 /**
@@ -59,6 +59,11 @@ export function mapSupersededError(c: Context, err: unknown): ReturnType<typeof 
   if (err instanceof SupersededYOpsLogIdsError) {
     return errorJson(c, 'YOPS_LOG_SUPERSEDED', err.message, 409, {
       superseded_ids: err.supersededIds,
+    });
+  }
+  if (err instanceof TransitionYOpsLogAlreadyConsumedError) {
+    return errorJson(c, 'YOPS_LOG_ALREADY_COMMITTED', err.message, 409, {
+      consumptions: err.consumptions,
     });
   }
   return null;

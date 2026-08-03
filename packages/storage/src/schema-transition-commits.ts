@@ -246,16 +246,13 @@ export const transitionYOpsLogConsumptions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.projectId, table.yopsLogId, table.commitDigest] }),
+    primaryKey({ columns: [table.projectId, table.yopsLogId] }),
     foreignKey({
       columns: [table.projectId, table.commitDigest],
       foreignColumns: [transitionCommits.projectId, transitionCommits.digest],
       name: 'transition_yops_log_consumptions_commit_fk',
     }).onDelete('cascade'),
-    index('idx_transition_yops_log_consumptions_commit').on(
-      table.projectId,
-      table.commitDigest
-    ),
+    index('idx_transition_yops_log_consumptions_commit').on(table.projectId, table.commitDigest),
     index('idx_transition_yops_log_consumptions_log').on(table.projectId, table.yopsLogId),
   ]
 );
@@ -350,8 +347,7 @@ export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
-export type TransitionYOpsLogConsumptionRecord =
-  typeof transitionYOpsLogConsumptions.$inferSelect;
+export type TransitionYOpsLogConsumptionRecord = typeof transitionYOpsLogConsumptions.$inferSelect;
 export type TransitionDecisionAuthorizationRecord =
   typeof transitionDecisionAuthorizations.$inferSelect;
 export type TransitionDecisionLedgerRecord = typeof transitionDecisionLedger.$inferSelect;
