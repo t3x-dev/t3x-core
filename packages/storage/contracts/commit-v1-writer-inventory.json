@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "purpose": "Freeze every production CommitV1 writer while CommitV2 becomes the only writable repository commit model.",
+  "target": {
+    "writable_format": "t3x/commit/v2",
+    "legacy_v1": "read_only_history",
+    "tracking_issue": "#1305"
+  },
+  "dispositions": ["migrate_to_transition", "retire", "restrict_to_archive_reader"],
+  "writers": [
+    {
+      "file": "apps/web/src/commands/commits/createCommit.ts",
+      "owner": "web_command",
+      "disposition": "retire",
+      "replacement": "Use the Transition control-plane client command."
+    },
+    {
+      "file": "apps/web/src/hooks/commits/useCommitActions.ts",
+      "owner": "web_workspace",
+      "disposition": "migrate_to_transition",
+      "replacement": "Issue a Proposal and Decision, then commit the authorized Transition."
+    },
+    {
+      "file": "apps/web/src/hooks/commits/useCreateMergeCommit.ts",
+      "owner": "web_merge",
+      "disposition": "migrate_to_transition",
+      "replacement": "Use the versioned merge MutationDriver and authorized CommitV2 flow."
+    },
+    {
+      "file": "apps/web/src/hooks/onboarding/useIntroDemoReplayActions.ts",
+      "owner": "web_demo",
+      "disposition": "migrate_to_transition",
+      "replacement": "Seed and replay the demo through the Transition control plane."
+    },
+    {
+      "file": "apps/web/src/infrastructure/commits.ts",
+      "owner": "web_infrastructure",
+      "disposition": "retire",
+      "replacement": "Remove the CommitV1 HTTP client after callers migrate."
+    },
+    {
+      "file": "packages/api-client/src/client.ts",
+      "owner": "typed_client",
+      "disposition": "retire",
+      "replacement": "Expose Proposal, Decision, CommitV2, and mixed-history read capabilities."
+    },
+    {
+      "file": "packages/api/src/ops/commit.ts",
+      "owner": "api_operation",
+      "disposition": "migrate_to_transition",
+      "replacement": "Build and authorize CommitV2 through the shared Transition application service."
+    },
+    {
+      "file": "packages/api/src/ops/merge.ts",
+      "owner": "api_merge",
+      "disposition": "migrate_to_transition",
+      "replacement": "Use the versioned merge MutationDriver and authorized CommitV2 flow."
+    },
+    {
+      "file": "packages/api/src/routes/autopilot.openapi.ts",
+      "owner": "api_automation",
+      "disposition": "migrate_to_transition",
+      "replacement": "Model auto-commit as a policy-authorized Decision, never a writer bypass."
+    },
+    {
+      "file": "packages/api/src/routes/commit-from-draft.openapi.ts",
+      "owner": "api_draft",
+      "disposition": "migrate_to_transition",
+      "replacement": "Compile the draft into a Proposal and use the Transition control plane."
+    },
+    {
+      "file": "packages/api/src/routes/commits.openapi.ts",
+      "owner": "api_commit_routes",
+      "disposition": "retire",
+      "replacement": "Retire squash and CommitV1 mutation routes; retain explicit archive reads only."
+    },
+    {
+      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "owner": "api_draft_workflow",
+      "disposition": "migrate_to_transition",
+      "replacement": "Compile draft workflow output into an authorized Transition."
+    },
+    {
+      "file": "packages/api/src/routes/merge.openapi.ts",
+      "owner": "api_merge_routes",
+      "disposition": "migrate_to_transition",
+      "replacement": "Use the versioned merge MutationDriver and authorized CommitV2 flow."
+    },
+    {
+      "file": "packages/api/src/routes/workspaces.openapi.ts",
+      "owner": "api_workspace",
+      "disposition": "migrate_to_transition",
+      "replacement": "Use the shared persisted Transition lifecycle for workspace commits."
+    },
+    {
+      "file": "packages/mcp/src/tools/advanced/merge.ts",
+      "owner": "mcp_merge",
+      "disposition": "migrate_to_transition",
+      "replacement": "Use propose_transition, decide_transition, and commit_transition with merge semantics."
+    },
+    {
+      "file": "packages/mcp/src/tools/core/commit.ts",
+      "owner": "mcp_commit",
+      "disposition": "retire",
+      "replacement": "Use commit_transition; no direct CommitV1 tool remains."
+    },
+    {
+      "file": "packages/storage/src/queries/commits.ts",
+      "owner": "storage_legacy_archive",
+      "disposition": "restrict_to_archive_reader",
+      "replacement": "Remove the exported writer after all callers migrate; retain immutable CommitV1 reads."
+    },
+    {
+      "file": "packages/storage/src/queries/seed-demo-workspace.ts",
+      "owner": "storage_demo_seed",
+      "disposition": "migrate_to_transition",
+      "replacement": "Seed the demo with an authorized CommitV2 graph."
+    }
+  ]
+}

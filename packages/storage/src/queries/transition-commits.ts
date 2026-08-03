@@ -1,4 +1,5 @@
 import {
+  assertLegacyCommitBridgeIntegrity,
   COMMIT_V2_MEDIA_TYPE,
   type CommitHistoryProjection,
   type CommitV2,
@@ -672,6 +673,17 @@ export interface CreateTransitionCommitInput {
   objects: readonly ProtocolObject[];
 }
 
+export interface CreateLegacyBridgeTransitionCommitInput {
+  projectId: string;
+  refName: string;
+  /** Exact CommitV1 head observed before building the bridge. */
+  expectedLegacyHead: string;
+  /** Parentless CommitV2 whose Effect imports the exact legacy tree projection. */
+  commit: CommitV2;
+  /** Graph objects not already present in the repository object store. */
+  objects: readonly ProtocolObject[];
+}
+
 export interface CreatedTransitionCommit {
   commit: CommitV2;
   digest: string;
@@ -697,6 +709,71 @@ export type TransitionRefHead =
       recordedAt: string;
       state: State;
     };
+
+async function persistVerifiedTransitionCommit(
+  tx: AnyDB,
+  input: {
+    projectId: string;
+    refName: string;
+    expectedHead: string | null;
+    objects: readonly ProtocolObject[];
+    verified: VerifiedCommitIntegrity;
+  }
+): Promise<CreatedTransitionCommit> {
+  const descriptor = describeCommitV2(input.verified.commit);
+  const [authorization] = await tx
+    .select({ decisionDigest: transitionDecisionAuthorizations.decisionDigest })
+    .from(transitionDecisionAuthorizations)
+    .where(
+      and(
+        eq(transitionDecisionAuthorizations.projectId, input.projectId),
+        eq(transitionDecisionAuthorizations.refName, input.refName),
+        eq(transitionDecisionAuthorizations.decisionDigest, input.verified.commit.decision.digest)
+      )
+    )
+    .limit(1);
+  if (authorization === undefined) {
+    throw new DecisionNotAuthorizedError(input.verified.commit.decision.digest);
+  }
+
+  await persistTransitionObjects(tx, [...input.objects, input.verified.commit]);
+  await tx
+    .insert(transitionCommits)
+    .values({
+      projectId: input.projectId,
+      digest: descriptor.digest,
+      mediaType: COMMIT_V2_MEDIA_TYPE,
+    })
+    .onConflictDoNothing();
+
+  const headCondition =
+    input.expectedHead === null
+      ? isNull(branches.headCommitHash)
+      : eq(branches.headCommitHash, input.expectedHead);
+  const [updated] = await tx
+    .update(branches)
+    .set({ headCommitHash: descriptor.digest, updatedAt: new Date() })
+    .where(
+      and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName), headCondition)
+    )
+    .returning({ head: branches.headCommitHash });
+  if (updated === undefined) {
+    const [actual] = await tx
+      .select({ head: branches.headCommitHash })
+      .from(branches)
+      .where(and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName)))
+      .limit(1);
+    if (actual === undefined) {
+      throw new TransitionRefNotFoundError(input.projectId, input.refName);
+    }
+    throw new TransitionHeadConflictError(input.expectedHead, actual.head);
+  }
+  return {
+    commit: input.verified.commit,
+    digest: descriptor.digest,
+    mediaType: COMMIT_V2_MEDIA_TYPE,
+  };
+}
 
 /**
  * Resolve a repository ref into a verified Transition base.
@@ -768,59 +845,54 @@ export async function createTransitionCommit(
       input.objects
     );
     const verified = await verifyCommitV2(input.commit, resolver);
-    const descriptor = describeCommitV2(verified.commit);
-    const [authorization] = await tx
-      .select({ decisionDigest: transitionDecisionAuthorizations.decisionDigest })
-      .from(transitionDecisionAuthorizations)
-      .where(
-        and(
-          eq(transitionDecisionAuthorizations.projectId, input.projectId),
-          eq(transitionDecisionAuthorizations.refName, input.refName),
-          eq(transitionDecisionAuthorizations.decisionDigest, verified.commit.decision.digest)
-        )
-      )
-      .limit(1);
-    if (authorization === undefined) {
-      throw new DecisionNotAuthorizedError(verified.commit.decision.digest);
+    return persistVerifiedTransitionCommit(tx, { ...input, verified });
+  });
+  return result as CreatedTransitionCommit;
+}
+
+/**
+ * Replace one exact CommitV1 ref head with a replay-verified, authorized,
+ * parentless CommitV2 State import. This deliberately is not an option on the
+ * normal writer: callers cannot weaken parent continuity with an allowLegacy
+ * flag, and the immutable CommitV1 remains available as archive evidence.
+ */
+export async function createLegacyBridgeTransitionCommit(
+  db: AnyDB,
+  input: CreateLegacyBridgeTransitionCommitInput
+): Promise<CreatedTransitionCommit> {
+  if (input.commit.parents.length !== 0) {
+    throw new TransitionParentHeadMismatchError(
+      input.expectedLegacyHead,
+      input.commit.parents[0]!.digest
+    );
+  }
+
+  const result = await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    const legacy = await getCommit(tx, input.expectedLegacyHead);
+    if (legacy?.project_id !== input.projectId) {
+      throw new TransitionRefHeadIntegrityError(
+        input.projectId,
+        input.refName,
+        input.expectedLegacyHead
+      );
     }
 
-    await persistTransitionObjects(tx, [...input.objects, verified.commit]);
-    await tx
-      .insert(transitionCommits)
-      .values({
-        projectId: input.projectId,
-        digest: descriptor.digest,
-        mediaType: COMMIT_V2_MEDIA_TYPE,
-      })
-      .onConflictDoNothing();
-
-    const headCondition =
-      input.expectedHead === null
-        ? isNull(branches.headCommitHash)
-        : eq(branches.headCommitHash, input.expectedHead);
-    const [updated] = await tx
-      .update(branches)
-      .set({ headCommitHash: descriptor.digest, updatedAt: new Date() })
-      .where(
-        and(
-          eq(branches.projectId, input.projectId),
-          eq(branches.name, input.refName),
-          headCondition
-        )
-      )
-      .returning({ head: branches.headCommitHash });
-    if (updated === undefined) {
-      const [actual] = await tx
-        .select({ head: branches.headCommitHash })
-        .from(branches)
-        .where(and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName)))
-        .limit(1);
-      if (actual === undefined) {
-        throw new TransitionRefNotFoundError(input.projectId, input.refName);
-      }
-      throw new TransitionHeadConflictError(input.expectedHead, actual.head);
-    }
-    return { commit: verified.commit, digest: descriptor.digest, mediaType: COMMIT_V2_MEDIA_TYPE };
+    const resolver = overlayTransitionObjects(
+      new DatabaseTransitionObjectResolver(tx),
+      input.objects
+    );
+    const verified = await verifyCommitV2(input.commit, resolver);
+    assertLegacyCommitBridgeIntegrity({
+      projectId: input.projectId,
+      legacyCommit: legacy,
+      verified,
+    });
+    return persistVerifiedTransitionCommit(tx, {
+      ...input,
+      expectedHead: input.expectedLegacyHead,
+      verified,
+    });
   });
   return result as CreatedTransitionCommit;
 }

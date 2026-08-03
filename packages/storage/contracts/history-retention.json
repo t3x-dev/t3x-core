@@ -89,6 +89,19 @@
       "removal_gate": "No table removal until every supported CommitV1 projects its operations without this table."
     },
     {
+      "id": "legacy_commit_archive",
+      "owner": "repository_review",
+      "lifecycle": "immutable_history",
+      "storage": [{ "table": "commits" }],
+      "read_paths": [
+        "packages/storage/src/queries/commits.ts",
+        "packages/storage/src/queries/transition-commits.ts"
+      ],
+      "write_paths": ["packages/storage/src/queries/commits.ts"],
+      "retention": "CommitV1 rows are immutable archive history and evidence for an explicit CommitV2 State-import bridge. They are never promoted into synthetic CommitV2 parents.",
+      "removal_gate": "Retire every inventoried CommitV1 writer under #1305. Historical rows remain read-only and resolvable; project erasure remains separate."
+    },
+    {
       "id": "legacy_commit_sources",
       "owner": "repository_review",
       "lifecycle": "immutable_history",

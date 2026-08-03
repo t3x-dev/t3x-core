@@ -4,6 +4,9 @@ import {
   type CommitDescriptor,
   createAcceptancePolicyResource,
   createCommitV2,
+  createLegacyCommitBridgeSubject,
+  createStateImportEffect,
+  createYOpsState,
   describeCommitV2,
   describeTransitionObject,
   type Effect,
@@ -21,6 +24,7 @@ import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/bra
 import { createCommit } from '../queries/commits';
 import { deleteProject, insertProject, permanentDeleteProject } from '../queries/projects';
 import {
+  createLegacyBridgeTransitionCommit,
   createTransitionCommit,
   DecisionNotAuthorizedError,
   DecisionRecordConflictError,
@@ -35,6 +39,7 @@ import {
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
+  TransitionParentHeadMismatchError,
   TransitionProjectionAuthorizationInvalidError,
   TransitionRefHeadIntegrityError,
 } from '../queries/transition-commits';
@@ -190,6 +195,70 @@ async function prepare(
   return { subject, issued, commit, objects };
 }
 
+async function prepareLegacyBridge(
+  projectId: string,
+  refName: string,
+  legacy: Awaited<ReturnType<typeof createCommit>>,
+  options: { includeEvidence?: boolean; imported?: State } = {}
+) {
+  const bridge = createLegacyCommitBridgeSubject({ projectId, commit: legacy });
+  const imported = options.imported ?? bridge.imported;
+  const effect =
+    options.imported === undefined
+      ? bridge.effect
+      : createStateImportEffect({ base: bridge.base, imported }).effect;
+  const proposal: ProposalStatement = {
+    schema: 't3x/statement/v1',
+    subjects: [describeTransitionObject(effect)],
+    actor: { kind: 'service', id: 'service:legacy-bridge' },
+    predicateType: 't3x.proposal/v1',
+    predicate: {
+      intent: {
+        mode: 'inferred',
+        value: 'Preserve the legacy branch state as a CommitV2 starting point',
+        evidence: options.includeEvidence === false ? [] : [bridge.evidence],
+      },
+      rationale: {
+        mode: 'authored',
+        value: 'Bridge immutable CommitV1 history without fabricating a parent',
+        evidence: [],
+      },
+    },
+  };
+  const replay = buildReplayVerificationStatement({
+    effect,
+    actor: { kind: 'service', id: 'service:replay' },
+    predicate: {
+      outcome: 'verified',
+      result: effect.result,
+      tool: { name: 'state-import-replay', version: '1' },
+      run: { id: `legacy-bridge:${legacy.hash}`, recordedAt: DECIDED_AT },
+      environment: { mode: 'unspecified' },
+    },
+  });
+  const subject = { base: bridge.base, result: imported, effect, proposal, replay };
+  const issued = await authorizeDecisionForRepository({
+    projectId,
+    refName,
+    proposal,
+    effect,
+    outcome: 'accepted',
+    rationale: { mode: 'unspecified' },
+    decidedAt: DECIDED_AT,
+    authority: authority(subject),
+  });
+  if (!issued.ok || issued.authorization === null) {
+    throw new Error('Fixture legacy bridge authorization failed');
+  }
+  const objects = [bridge.base, imported, ...issued.authorization.objects];
+  const commit = await createCommitV2({
+    parents: [],
+    decision: issued.decision,
+    resolver: new InMemoryTransitionObjectResolver(objects),
+  });
+  return { bridge, imported, issued, commit, objects };
+}
+
 let db: AnyDB;
 let cleanup: () => Promise<void>;
 
@@ -221,6 +290,127 @@ describe('CommitV2 repository', () => {
     await expect(
       getTransitionRefHead(db, { projectId: legacyProject.projectId, refName: 'main' })
     ).resolves.toEqual({ format: 'legacy_v1', refName: 'main', head: legacy.hash });
+  });
+
+  it('bridges one exact CommitV1 head into an authorized parentless CommitV2 import', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Legacy Bridge Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const legacy = await createCommit(db, {
+      project_id: project.projectId,
+      content: {
+        trees: [{ key: 'service', slots: { replicas: 3 }, children: [] }],
+        relations: [{ from: 'service', to: 'database', type: 'depends_on' }],
+      },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const prepared = await prepareLegacyBridge(project.projectId, 'main', legacy);
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+
+    await expect(
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: legacy.hash,
+        commit: prepared.commit,
+        objects: prepared.objects,
+      })
+    ).rejects.toBeInstanceOf(TransitionParentHeadMismatchError);
+
+    const created = await createLegacyBridgeTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedLegacyHead: legacy.hash,
+      commit: prepared.commit,
+      objects: prepared.objects,
+    });
+
+    expect(created.commit.parents).toEqual([]);
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({
+      format: 'transition_v2',
+      head: created.digest,
+      state: prepared.bridge.imported,
+    });
+    expect(
+      (await listCommitHistory(db, project.projectId)).map((entry) => entry.format).sort()
+    ).toEqual(['legacy_v1', 'transition_v2']);
+  });
+
+  it('rejects a legacy bridge that changes the imported State or omits archive evidence', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Strict Bridge Project' }));
+    await ensureMainBranch(db, project.projectId);
+    const legacy = await createCommit(db, {
+      project_id: project.projectId,
+      content: { trees: [{ key: 'version', slots: { value: 1 }, children: [] }], relations: [] },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+
+    for (const prepared of [
+      await prepareLegacyBridge(project.projectId, 'main', legacy, {
+        imported: createYOpsState({ version: { value: 2 } }),
+      }),
+      await prepareLegacyBridge(project.projectId, 'main', legacy, { includeEvidence: false }),
+    ]) {
+      await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+      await expect(
+        createLegacyBridgeTransitionCommit(db, {
+          projectId: project.projectId,
+          refName: 'main',
+          expectedLegacyHead: legacy.hash,
+          commit: prepared.commit,
+          objects: prepared.objects,
+        })
+      ).rejects.toMatchObject({ code: 'INTEGRITY_CHAIN_INVALID' });
+    }
+    expect((await findBranchByName(db, project.projectId, 'main'))?.headCommitHash).toBe(
+      legacy.hash
+    );
+    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
+  });
+
+  it('fails the legacy bridge CAS when the CommitV1 head moved', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Legacy Bridge Race' }));
+    await ensureMainBranch(db, project.projectId);
+    const observed = await createCommit(db, {
+      project_id: project.projectId,
+      content: { trees: [{ key: 'version', slots: { value: 1 }, children: [] }], relations: [] },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const prepared = await prepareLegacyBridge(project.projectId, 'main', observed);
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const moved = await createCommit(db, {
+      project_id: project.projectId,
+      parents: [observed.hash],
+      content: { trees: [{ key: 'version', slots: { value: 2 }, children: [] }], relations: [] },
+      author: { type: 'human', id: 'human:legacy' },
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+
+    await expect(
+      createLegacyBridgeTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedLegacyHead: observed.hash,
+        commit: prepared.commit,
+        objects: prepared.objects,
+      })
+    ).rejects.toMatchObject({
+      code: 'STALE_BASE',
+      expectedHead: observed.hash,
+      actualHead: moved.hash,
+    });
+    expect((await findBranchByName(db, project.projectId, 'main'))?.headCommitHash).toBe(
+      moved.hash
+    );
+    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
   });
 
   it('returns only a verified CommitV2 result State as a ref base', async () => {
