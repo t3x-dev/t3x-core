@@ -17,21 +17,21 @@ import { errorJson } from './errors';
 
 /**
  * Find yops_log entry IDs that should land in the next commit:
- * **active** (non-superseded) entries that aren't already referenced
- * by an existing commit.
+ * **active** (non-superseded) entries that aren't already consumed
+ * by a CommitV2 application transition.
  *
  * Reads from the active slice — never the full log. Without this
  * filter a re-extract that produced a fresh suggestion (and marked
  * the prior LLM batch superseded) would still see the prior batch
- * as a commit candidate. The commit would freeze those replaced
- * entries into `commits.yops_log_ids`, and on the next extract
+ * as a commit candidate. The transition would freeze those replaced
+ * entries into consumption records, and on the next extract
  * `replayCommittedBaseline` would resurrect the replaced facts as
  * permanent baseline.
  *
  * Concurrency note: this read is point-in-time. A re-extract landing
- * between this call and the eventual commit could supersede or consume
- * an id we returned. Both CommitV1 and CommitV2 writers defend against
- * those races inside their write transactions.
+ * between this call and the eventual CommitV2 transition could supersede
+ * or consume an id we returned. The write transaction defends against
+ * those races before advancing the ref.
  */
 export async function findUncommittedYOpsIds(
   db: AnyDB,
@@ -45,8 +45,8 @@ export async function findUncommittedYOpsIds(
 }
 
 /**
- * Map `SupersededYOpsLogIdsError` (thrown by `createCommit` when a
- * concurrent re-extract superseded one of the input ids) to a 409
+ * Map `SupersededYOpsLogIdsError` (thrown when a concurrent re-extract
+ * superseded one of the input ids) to a 409
  * `YOPS_LOG_SUPERSEDED` response with the offending ids in `details`.
  * Returns `null` for any other error so the caller can keep its
  * existing fallback (typically `COMMIT_FAILED` → 500).

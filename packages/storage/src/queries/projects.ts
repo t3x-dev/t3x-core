@@ -16,7 +16,7 @@ import {
   projects,
   turns,
 } from '../schema';
-import { commits } from '../schema-commits';
+import { transitionCommits } from '../schema-transition-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
@@ -277,8 +277,8 @@ export async function findProjectWithStats(
 
   const [commitCount] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
+    .from(transitionCommits)
+    .where(eq(transitionCommits.projectId, projectId));
 
   const [branchCount] = await db
     .select({ count: sql<number>`count(*)::int` })

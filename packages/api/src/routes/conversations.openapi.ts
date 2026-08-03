@@ -22,7 +22,6 @@ import {
   findConversationsByProject,
   getConversationContext,
   getConversationTurnCount,
-  hasConversationCommitReferences,
   insertConversation,
   renameConversation,
   setConversationContext,
@@ -614,14 +613,6 @@ conversationRoutes.openapi(deleteConversationRoute, async (c) => {
 
     const accessResult = await assertProjectAccess(c, db, conversation.projectId);
     if (accessResult instanceof Response) return accessResult;
-
-    if (conversation.committedAs || (await hasConversationCommitReferences(db, conversationId))) {
-      return errorResponse(
-        c,
-        'CONFLICT',
-        `Conversation ${conversationId} is referenced by a commit`
-      );
-    }
 
     const deleted = await deleteConversation(db, conversationId);
 

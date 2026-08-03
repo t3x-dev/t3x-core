@@ -35,7 +35,6 @@ import {
   transitionYOpsLogConsumptions,
 } from '../schema-transition-commits';
 import { yopsLog } from '../schema-trees';
-import { SupersededYOpsLogIdsError } from './commits';
 import { acquireProjectSupersedeLock } from './yops-log';
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
@@ -95,6 +94,19 @@ export class TransitionYOpsLogAlreadyConsumedError extends Error {
         .join(', ')}`
     );
     this.name = 'TransitionYOpsLogAlreadyConsumedError';
+  }
+}
+
+/**
+ * Thrown when a CommitV2 application transition consumes one or more
+ * `yops_log_ids` whose `superseded_at IS NOT NULL` at insert time.
+ */
+export class SupersededYOpsLogIdsError extends Error {
+  constructor(public readonly supersededIds: string[]) {
+    super(
+      `Cannot commit superseded yops_log entries (re-extract landed during commit): ${supersededIds.join(', ')}`
+    );
+    this.name = 'SupersededYOpsLogIdsError';
   }
 }
 

@@ -1,11 +1,12 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { deleteConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
 import { seedDemoWorkspace } from '../queries/seed-demo-workspace';
 import { getConversationSourceEvidence } from '../queries/source-evidence';
 import { insertSourceTextRevision } from '../queries/source-text-revisions';
 import { insertTurn } from '../queries/turns';
+import { conversations } from '../schema';
 import { createTestDB, testData } from './setup';
 
 describe('conversation source evidence', () => {
@@ -85,7 +86,7 @@ describe('conversation source evidence', () => {
     const seeded = await seedDemoWorkspace(db, { ownerId: null });
     const project = seeded.project!;
     const conversationId = seeded.conversation!.conversationId;
-    expect(await deleteConversation(db, conversationId)).toBe(true);
+    await db.delete(conversations).where(eq(conversations.conversationId, conversationId));
 
     const record = await getConversationSourceEvidence(db, {
       projectId: project.projectId,

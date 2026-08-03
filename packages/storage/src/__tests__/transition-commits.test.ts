@@ -18,7 +18,6 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
-import { SupersededYOpsLogIdsError } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { deleteProject, insertProject, permanentDeleteProject } from '../queries/projects';
 import {
@@ -36,6 +35,7 @@ import {
   listTransitionCommits,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
+  SupersededYOpsLogIdsError,
   TransitionHeadConflictError,
   TransitionParentProjectMembershipError,
   TransitionProjectionAuthorizationInvalidError,

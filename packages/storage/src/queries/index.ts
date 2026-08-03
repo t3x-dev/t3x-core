@@ -75,7 +75,6 @@ export {
   hasConversationCommitReferences,
   type ListCommitsOptions,
   listCommits,
-  SupersededYOpsLogIdsError,
   updateCommitMessage,
   updateCommitPosition,
 } from './commits';
@@ -405,11 +404,15 @@ export {
 } from './share-tokens';
 // Repository-owned source/evidence read projection
 export {
-  type ConversationSourceCommitReference,
   type ConversationSourceEvidenceRecord,
   type GetConversationSourceEvidenceInput,
   getConversationSourceEvidence,
 } from './source-evidence';
+export {
+  type ConversationSourceCommitReference,
+  hasConversationSourceCommitReferences,
+  listConversationCommitReferences,
+} from './source-evidence-references';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,
@@ -482,6 +485,7 @@ export {
   type RepositoryDecisionAuditEntry,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
+  SupersededYOpsLogIdsError,
   TransitionCommitGraphIntegrityError,
   TransitionHeadConflictError,
   TransitionParentHeadMismatchError,
