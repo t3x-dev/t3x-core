@@ -1012,3 +1012,85 @@ export interface AttachTransitionStatementResult {
   reused: boolean;
   view: TransitionControlPlaneView;
 }
+
+// ============================================
+// YSchema Composition Registry
+// ============================================
+
+export interface YSchemaArtifactManifest {
+  apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v1';
+  canonicalName: string;
+  version: string;
+  family: 'prd' | 'prompt' | 'skill';
+  title: string;
+  description: string;
+  status: 'active' | 'deprecated' | 'draft';
+  source: 'community' | 'official' | 'team';
+  artifactHash?: string;
+  visibility?: 'community' | 'official' | 'private' | 'team';
+  ownerProjectId?: string | null;
+  [key: string]: unknown;
+}
+
+export interface YSchemaArtifactRegistryPage {
+  items: YSchemaArtifactManifest[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface ListYSchemaArtifactsParams {
+  projectId?: string;
+  family?: 'prd' | 'prompt' | 'skill';
+  kind?: 'core' | 'module';
+  visibility?: 'community' | 'official' | 'private' | 'team';
+  search?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface YSchemaCompositionDraft {
+  apiVersion: 't3x.dev/yschema-composition/v1';
+  id: string;
+  revision: number;
+  family: 'prd' | 'prompt' | 'skill';
+  status: 'draft';
+  core: { canonicalName: string; version: string; hash?: string };
+  modules: Array<{
+    canonicalName: string;
+    version: string;
+    order: number;
+    slot?: string;
+    hash?: string;
+  }>;
+}
+
+export interface YSchemaCompositionPreview {
+  schema: Record<string, unknown>;
+  renderPlan: Array<{
+    artifact: string;
+    version: string;
+    order: number;
+    slot: string;
+    nodePaths: string[];
+  }>;
+  originsByPath: Record<string, { artifact: string; version: string; kind: 'core' | 'module' }>;
+  report: {
+    valid: boolean;
+    issues: Array<{
+      code: string;
+      message: string;
+      blocking: boolean;
+      module?: string;
+      path?: string;
+    }>;
+  };
+  compiledSchemaHash: string;
+  compositionHash: string;
+}
+
+export interface WorkspaceYSchemaCompositionResult {
+  composition: YSchemaCompositionDraft | null;
+  workspaceRevision: number;
+  preview?: YSchemaCompositionPreview;
+  binding?: Record<string, unknown>;
+}

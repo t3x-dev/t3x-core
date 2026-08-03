@@ -1,5 +1,9 @@
 import type { YValue } from '@t3x-dev/yops';
 import type {
+  YSchemaCompositionPathOrigin,
+  YSchemaCompositionRenderEntry,
+} from '../composition/types';
+import type {
   NodeSchema,
   ValidationResult,
   YSchema,
@@ -13,6 +17,13 @@ export interface RenderYSchemaMarkdownInput {
   tree: YValue;
   relations?: YSchemaRelation[];
   validation?: ValidationResult;
+}
+
+export interface RenderComposedYSchemaMarkdownInput extends RenderYSchemaMarkdownInput {
+  renderPlan: YSchemaCompositionRenderEntry[];
+  originsByPath: Record<string, YSchemaCompositionPathOrigin>;
+  artifactTitles?: Record<string, string>;
+  showOrigins?: boolean;
 }
 
 function isRecord(value: YValue | undefined): value is Record<string, YValue> {
@@ -253,4 +264,69 @@ export function renderYSchemaMarkdown(input: RenderYSchemaMarkdownInput): string
   }
 
   return `${lines.join('\n').trimEnd()}\n`;
+}
+
+/** Render a compiled Composition in human-controlled Core/Module section order. */
+export function renderComposedYSchemaMarkdown(input: RenderComposedYSchemaMarkdownInput): string {
+  const lines: string[] = [`# ${input.schema.name}`];
+  const renderedPaths = new Set<string>();
+
+  if (input.schema.description !== undefined) {
+    lines.push('', input.schema.description);
+  }
+
+  for (const entry of [...input.renderPlan].sort((left, right) => left.order - right.order)) {
+    const nodePaths = entry.nodePaths.filter(
+      (path) => input.schema.nodes[path] !== undefined && !renderedPaths.has(path)
+    );
+    if (nodePaths.length === 0) continue;
+    lines.push('', `## ${artifactTitle(entry.artifact, input.artifactTitles)}`);
+    if (input.showOrigins) {
+      lines.push('', `> Origin: \`${entry.artifact}@${entry.version}\` · slot \`${entry.slot}\``);
+    }
+    for (const nodePath of nodePaths) {
+      renderedPaths.add(nodePath);
+      lines.push('');
+      renderNode(lines, nodePath, input.schema.nodes[nodePath], resolvePath(input.tree, nodePath), {
+        headingLevel: 3,
+      });
+    }
+  }
+
+  const unplannedPaths = Object.keys(input.schema.nodes).filter((path) => !renderedPaths.has(path));
+  if (unplannedPaths.length > 0) {
+    lines.push('', '## Additional Structure');
+    for (const nodePath of unplannedPaths) {
+      lines.push('');
+      renderNode(lines, nodePath, input.schema.nodes[nodePath], resolvePath(input.tree, nodePath), {
+        headingLevel: 3,
+      });
+    }
+  }
+
+  if (input.relations?.length) lines.push('', ...renderTailRelations(input));
+  if (input.validation) lines.push('', ...renderTailValidation(input.validation));
+  return `${lines.join('\n').trimEnd()}\n`;
+}
+
+function artifactTitle(artifact: string, titles?: Record<string, string>): string {
+  if (titles?.[artifact]) return titles[artifact];
+  return humanizeKey(
+    artifact
+      .split('/')
+      .at(-1)
+      ?.replace(/^prd[-_]?/, '') || artifact
+  );
+}
+
+function renderTailRelations(input: RenderComposedYSchemaMarkdownInput): string[] {
+  const lines: string[] = [];
+  renderRelations(lines, input.tree, input.relations ?? []);
+  return lines;
+}
+
+function renderTailValidation(validation: ValidationResult): string[] {
+  const lines: string[] = [];
+  renderValidation(lines, validation);
+  return lines;
 }

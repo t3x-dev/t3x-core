@@ -1,6 +1,32 @@
 // @t3x-dev/yschema — P0 schema contract validation
 
 export type {
+  CompiledYSchemaComposition,
+  CompileYSchemaCompositionInput,
+  YSchemaArtifactFamily,
+  YSchemaArtifactReference,
+  YSchemaArtifactSource,
+  YSchemaArtifactStatus,
+  YSchemaCompositionDraft,
+  YSchemaCompositionIssue,
+  YSchemaCompositionIssueCode,
+  YSchemaCompositionModuleReference,
+  YSchemaCompositionPathOrigin,
+  YSchemaCompositionRenderEntry,
+  YSchemaCompositionVerificationReport,
+  YSchemaCoreArtifact,
+  YSchemaModuleKind,
+  YSchemaModuleManifest,
+} from './composition';
+export {
+  builtInPrdCoreArtifact,
+  builtInPrdModules,
+  canonicalizeCompositionValue,
+  compileYSchemaComposition,
+  defaultPrdCompositionModuleOrder,
+  sha256CompositionValue,
+} from './composition';
+export type {
   ContentKind,
   DiffValidationResultsInput,
   FixProposal,
@@ -14,6 +40,7 @@ export type {
   RelateYOp,
   RelationEndpointPattern,
   RelationTypeSchema,
+  RenderComposedYSchemaMarkdownInput,
   RenderYSchemaMarkdownInput,
   ReservedRuleSchema,
   SlotSchema,
@@ -39,6 +66,7 @@ export {
   generatePromptContract,
   normalizeYSchemaObject,
   parseYSchema,
+  renderComposedYSchemaMarkdown,
   renderYSchemaMarkdown,
   t3xPrdP0Fixtures,
   t3xPromptP0Fixtures,

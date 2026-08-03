@@ -1,0 +1,234 @@
+// @vitest-environment jsdom
+
+import '@testing-library/jest-dom';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SchemaModuleRegistry } from '@/components/schemas';
+import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
+
+const TEST_REGISTRY = [PRD_CORE_ARTIFACT, ...PRD_MODULE_ARTIFACTS];
+
+describe('SchemaModuleRegistry', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows Core, Module details, and an ordered Composition draft', () => {
+    render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
+
+    expect(screen.getByRole('region', { name: 'Schema Module Registry' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('complementary', { name: 'Composition workbench' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Pinned foundation')).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'PRD Core details' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Drag System Architecture to reorder' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compile preview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No Workspace' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply unavailable' })).toBeDisabled();
+  });
+
+  it('inspects Module rules and adds or removes Modules explicitly', () => {
+    render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Database Design' }));
+    expect(screen.getByRole('tablist', { name: 'Database Design details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
+    expect(screen.getByText('prd-database-design.dependencies')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Database Design from composition' })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Drag Database Design to reorder' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Database Design to composition' }));
+    expect(
+      screen.getByRole('button', { name: 'Drag Database Design to reorder' })
+    ).toBeInTheDocument();
+  });
+
+  it('offers reliable arrow controls alongside pointer and keyboard sorting', () => {
+    render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
+    const workbench = screen.getByRole('complementary', { name: 'Composition workbench' });
+    const moduleTitles = () =>
+      within(workbench)
+        .getAllByRole('listitem')
+        .map((item) => within(item).getByText(/Design|Architecture|Stack|Contract/).textContent);
+
+    expect(moduleTitles().slice(0, 2)).toEqual(['System Architecture', 'Technology Stack']);
+    fireEvent.click(screen.getByRole('button', { name: 'Move Technology Stack earlier' }));
+    expect(moduleTitles().slice(0, 2)).toEqual(['Technology Stack', 'System Architecture']);
+  });
+
+  it('restores and saves a versioned Workspace Composition draft', async () => {
+    const onSaved = vi.fn();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            composition: { ...request.composition, revision: 3 },
+            workspaceRevision: 9,
+            preview: {
+              report: {
+                valid: false,
+                issues: [
+                  {
+                    code: 'PROVIDER_AFTER_CONSUMER',
+                    blocking: true,
+                    message: 'Technology Stack requires system boundaries from a later provider.',
+                  },
+                ],
+              },
+              compiledSchemaHash: `sha256:${'1'.repeat(64)}`,
+              compositionHash: `sha256:${'2'.repeat(64)}`,
+              renderPlan: [],
+            },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <SchemaModuleRegistry
+        registryArtifacts={TEST_REGISTRY}
+        workspace={{
+          projectId: 'proj_modules',
+          workspaceId: 'workspace_modules',
+          workspaceTitle: 'Module Workspace',
+          workspaceRevision: 8,
+          composition: {
+            apiVersion: 't3x.dev/yschema-composition/v1',
+            id: 'composition:workspace_modules',
+            revision: 2,
+            family: 'prd',
+            status: 'draft',
+            core: { canonicalName: 't3x/prd-core', version: '1.1.0' },
+            modules: [
+              {
+                canonicalName: 't3x/prd-system-architecture',
+                version: '1.0.0',
+                order: 10,
+              },
+              {
+                canonicalName: 't3x/prd-technology-stack',
+                version: '1.0.0',
+                order: 20,
+              },
+            ],
+          },
+          onSaved,
+        }}
+      />
+    );
+
+    expect(screen.getByText('saved r2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Technology Stack earlier' }));
+    expect(screen.getByText('unsaved')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(request.if_revision).toBe(8);
+    expect(request.composition.revision).toBe(2);
+    expect(request.composition.modules[0]).toMatchObject({
+      canonicalName: 't3x/prd-technology-stack',
+      order: 10,
+    });
+    expect(screen.getByText('saved r3')).toBeInTheDocument();
+    expect(screen.getByText(/No Commit was created/)).toBeInTheDocument();
+  });
+
+  it('previews and applies a saved Composition without creating a Commit', async () => {
+    const onApplied = vi.fn();
+    const compositionHash = `sha256:${'2'.repeat(64)}`;
+    const compiledSchemaHash = `sha256:${'1'.repeat(64)}`;
+    const preview = {
+      report: { valid: true, issues: [] },
+      compiledSchemaHash,
+      compositionHash,
+      renderPlan: [],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const request = JSON.parse(String(init?.body));
+      const data = url.endsWith('/schema-composition/apply')
+        ? {
+            composition: persistedComposition,
+            workspaceRevision: 9,
+            preview,
+            binding: {
+              canonicalName: 't3x/prd',
+              schemaName: 'PRD Composition',
+              version: '1.1.0',
+              mode: 'draft_override',
+              schemaHash: compiledSchemaHash,
+              compositionId: persistedComposition.id,
+              compositionRevision: 2,
+              compositionHash,
+            },
+          }
+        : preview;
+      if (url.endsWith('/schema-composition/apply')) {
+        expect(request).toEqual({
+          if_revision: 8,
+          composition_revision: 2,
+          composition_hash: compositionHash,
+        });
+      }
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <SchemaModuleRegistry
+        registryArtifacts={TEST_REGISTRY}
+        workspace={{
+          projectId: 'proj_modules',
+          workspaceId: 'workspace_modules',
+          workspaceTitle: 'Module Workspace',
+          workspaceRevision: 8,
+          composition: persistedComposition,
+          onApplied,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to Workspace' }));
+
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Applied revision 2' })).toBeDisabled();
+    expect(screen.getByText(/Candidate and YOps proposals are now stale/)).toBeInTheDocument();
+  });
+});
+
+const persistedComposition = {
+  apiVersion: 't3x.dev/yschema-composition/v1' as const,
+  id: 'composition:workspace_modules',
+  revision: 2,
+  family: 'prd' as const,
+  status: 'draft' as const,
+  core: { canonicalName: 't3x/prd-core', version: '1.1.0' },
+  modules: [
+    {
+      canonicalName: 't3x/prd-system-architecture',
+      version: '1.0.0',
+      order: 10,
+    },
+    {
+      canonicalName: 't3x/prd-technology-stack',
+      version: '1.0.0',
+      order: 20,
+    },
+  ],
+};

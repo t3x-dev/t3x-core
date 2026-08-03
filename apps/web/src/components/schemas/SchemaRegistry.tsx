@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, useState } from 'react';
+import { SchemaModuleRegistry } from '@/components/schemas/modules/SchemaModuleRegistry';
 import {
   SchemaBindingActions,
   type SchemaBindingActionsState,
@@ -13,15 +14,23 @@ import {
 import { SchemaReleaseList } from '@/components/schemas/SchemaReleaseList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { SchemaCompositionWorkspaceContext } from '@/types/schemaModules';
 import type { SchemaFamilyPreview, SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaRegistryProps {
   bindingActions?: SchemaBindingActionsState;
+  compositionWorkspace?: SchemaCompositionWorkspaceContext;
   defaultFamilyId: string;
   families: SchemaFamilyPreview[];
 }
 
-export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: SchemaRegistryProps) {
+export function SchemaRegistry({
+  bindingActions,
+  compositionWorkspace,
+  defaultFamilyId,
+  families,
+}: SchemaRegistryProps) {
+  const [registryView, setRegistryView] = useState<'modules' | 'versions'>('versions');
   const initialFamily =
     families.find((family) => family.id === defaultFamilyId) ?? families[0] ?? null;
   const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? '');
@@ -67,43 +76,49 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
         >
           <SchemaRegistryHeader
             onOpenCanonicalYaml={handleOpenCanonicalYaml}
+            onViewChange={setRegistryView}
+            registryView={registryView}
             selectedRelease={selectedRelease}
           />
 
-          {selectedFamily ? (
-            <SchemaFamilyTabs
-              activeFamilyId={selectedFamily.id}
-              families={families}
-              onSelectFamily={handleSelectFamily}
-            />
-          ) : null}
-
-          {selectedFamily && selectedRelease ? (
+          {registryView === 'versions' ? (
             <>
-              <SchemaRegistryFacts
-                currentRelease={currentRelease}
-                family={selectedFamily}
-                familyCount={families.length}
-                selectedRelease={selectedRelease}
-              />
-              {bindingActions ? (
-                <SchemaBindingActions
-                  actions={bindingActions}
-                  currentRelease={currentRelease}
-                  selectedRelease={selectedRelease}
+              {selectedFamily ? (
+                <SchemaFamilyTabs
+                  activeFamilyId={selectedFamily.id}
+                  families={families}
+                  onSelectFamily={handleSelectFamily}
                 />
               ) : null}
+
+              {selectedFamily && selectedRelease ? (
+                <>
+                  <SchemaRegistryFacts
+                    currentRelease={currentRelease}
+                    family={selectedFamily}
+                    familyCount={families.length}
+                    selectedRelease={selectedRelease}
+                  />
+                  {bindingActions ? (
+                    <SchemaBindingActions
+                      actions={bindingActions}
+                      currentRelease={currentRelease}
+                      selectedRelease={selectedRelease}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
+                  {selectedFamily
+                    ? `No versions are available for ${selectedFamily.name}.`
+                    : 'No schema families are available for this project.'}
+                </div>
+              )}
             </>
-          ) : (
-            <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
-              {selectedFamily
-                ? `No versions are available for ${selectedFamily.name}.`
-                : 'No schema families are available for this project.'}
-            </div>
-          )}
+          ) : null}
         </section>
 
-        {selectedFamily && selectedRelease ? (
+        {registryView === 'versions' && selectedFamily && selectedRelease ? (
           <section
             aria-label="Schema version browser"
             className="mt-4 grid min-h-[650px] gap-4 min-[961px]:grid-cols-[280px_minmax(0,1fr)]"
@@ -122,6 +137,10 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
               release={selectedRelease}
             />
           </section>
+        ) : null}
+
+        {registryView === 'modules' ? (
+          <SchemaModuleRegistry workspace={compositionWorkspace} />
         ) : null}
 
         <p className="mx-0.5 mt-[14px] text-[11px] text-[var(--text-tertiary)]">
@@ -143,9 +162,13 @@ function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePre
 
 function SchemaRegistryHeader({
   onOpenCanonicalYaml,
+  onViewChange,
+  registryView,
   selectedRelease,
 }: {
   onOpenCanonicalYaml: () => void;
+  onViewChange: (view: 'modules' | 'versions') => void;
+  registryView: 'modules' | 'versions';
   selectedRelease: SchemaReleasePreview | null;
 }) {
   return (
@@ -165,20 +188,42 @@ function SchemaRegistryHeader({
           current contract, deterministic rules, typed relations, and canonical YAML.
         </p>
       </div>
-      <Button
-        aria-label={
-          selectedRelease
-            ? `Open ${selectedRelease.name} ${selectedRelease.version} canonical YAML`
-            : 'Open canonical YAML'
-        }
-        className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
-        disabled={!selectedRelease}
-        onClick={onOpenCanonicalYaml}
-        type="button"
-        variant="canvas-outline"
-      >
-        Open canonical YAML
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          aria-label="Schema registry view"
+          className="flex rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-1"
+          role="tablist"
+        >
+          {(['versions', 'modules'] as const).map((view) => (
+            <button
+              aria-selected={registryView === view}
+              className={`h-7 rounded-md px-3 text-[12px] font-semibold capitalize transition-colors ${registryView === view ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+              key={view}
+              onClick={() => onViewChange(view)}
+              role="tab"
+              type="button"
+            >
+              {view}
+            </button>
+          ))}
+        </div>
+        {registryView === 'versions' ? (
+          <Button
+            aria-label={
+              selectedRelease
+                ? `Open ${selectedRelease.name} ${selectedRelease.version} canonical YAML`
+                : 'Open canonical YAML'
+            }
+            className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
+            disabled={!selectedRelease}
+            onClick={onOpenCanonicalYaml}
+            type="button"
+            variant="canvas-outline"
+          >
+            Open canonical YAML
+          </Button>
+        ) : null}
+      </div>
     </header>
   );
 }

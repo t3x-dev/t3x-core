@@ -39,11 +39,7 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
-import {
-  canonicalSchemaNameFromBinding,
-  resolveBuiltInYSchema,
-  schemaVersionFromBinding,
-} from './yschema-registry';
+import { resolveWorkspaceYSchema } from './workspace-yschema';
 
 type ActorRef = ProposalStatement['actor'];
 type CanonicalTimestamp = Parameters<typeof authorizeDecisionForRepository>[0]['decidedAt'];
@@ -294,15 +290,21 @@ function exactTargetOperations(base: State, target: State): ProtocolValue[] {
   return operations;
 }
 
-function resolveWorkspaceSchema(workspace: Record<string, unknown>): {
+async function resolveWorkspaceSchema(
+  workspace: Record<string, unknown>,
+  db: AnyDB,
+  projectId: string
+): Promise<{
   canonicalName: string;
   schema: YSchema;
-} {
+}> {
   const bindings = Array.isArray(workspace.schemaBindings) ? workspace.schemaBindings : [];
   if (bindings.length !== 1) throw new WorkspaceTransitionSchemaUnavailableError(null);
-  const canonicalName = canonicalSchemaNameFromBinding(bindings[0]);
-  const version = schemaVersionFromBinding(bindings[0]);
-  const schema = canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null;
+  const { canonicalName, schema, version } = await resolveWorkspaceYSchema(
+    workspace,
+    db,
+    projectId
+  );
   if (canonicalName === null || schema === null) {
     throw new WorkspaceTransitionSchemaUnavailableError(canonicalName, version);
   }
@@ -477,7 +479,11 @@ async function prepareWorkspaceTransition(
     throw new TypeError('Workspace operations did not replay to the exact proposed target');
   }
 
-  const { canonicalName, schema } = resolveWorkspaceSchema(context.workspace);
+  const { canonicalName, schema } = await resolveWorkspaceSchema(
+    context.workspace,
+    db,
+    input.projectId
+  );
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,

@@ -1,3 +1,4 @@
+import type { SchemaCompositionDraft } from './schemaModules';
 import type { WorkspaceYOpsValue } from './workspaceYops';
 
 export type WorkspaceStatus = 'draft' | 'ready_for_yops' | 'schema_review' | 'committed';
@@ -62,6 +63,9 @@ export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';
 export interface WorkspaceSchemaBinding {
   canonicalName?: string;
   schemaHash?: string;
+  compositionId?: string;
+  compositionRevision?: number;
+  compositionHash?: string;
   schemaName: string;
   version: string;
   mode: SchemaBindingMode;
@@ -79,6 +83,7 @@ export interface WorkspaceCandidate {
   targetBranch: string;
   sourceBundle: SourceBundleItem[];
   schemaBindings: WorkspaceSchemaBinding[];
+  schemaComposition?: SchemaCompositionDraft;
   schemaCandidate: WorkspaceSchemaCandidate;
   schemaReview: WorkspaceSchemaReview;
   yopsDraft: WorkspaceYOpsDraft;

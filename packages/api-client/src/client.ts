@@ -59,6 +59,7 @@ import type {
   ListPinsResponse,
   ListProjectsResponse,
   ListTurnsResponse,
+  ListYSchemaArtifactsParams,
   MergeDraft,
   MergeDraftCommitInput,
   MergeDraftCommitResult,
@@ -83,6 +84,10 @@ import type {
   VerifyTransitionInput,
   VerifyTransitionResult,
   Webhook,
+  WorkspaceYSchemaCompositionResult,
+  YSchemaArtifactRegistryPage,
+  YSchemaCompositionDraft,
+  YSchemaCompositionPreview,
 } from './types.js';
 
 export interface T3xClientConfig {
@@ -877,6 +882,80 @@ export class T3xClient {
       'POST',
       `/v1/projects/${projectId}/transitions/${transitionId}/statements`,
       input
+    );
+  }
+
+  // ============================================
+  // YSchema Composition Registry
+  // ============================================
+
+  async listYSchemaArtifacts(
+    params: ListYSchemaArtifactsParams = {}
+  ): Promise<YSchemaArtifactRegistryPage> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
+      : '/v1/yschema/artifacts';
+    return this.request<YSchemaArtifactRegistryPage>(
+      'GET',
+      path,
+      undefined,
+      query as Record<string, string | number | undefined>
+    );
+  }
+
+  async previewYSchemaComposition(
+    composition: YSchemaCompositionDraft,
+    projectId?: string
+  ): Promise<YSchemaCompositionPreview> {
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/compositions/preview`
+      : '/v1/yschema/compositions/preview';
+    return this.request<YSchemaCompositionPreview>('POST', path, composition);
+  }
+
+  async getWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition`
+    );
+  }
+
+  async saveWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    composition: YSchemaCompositionDraft,
+    workspaceRevision: number
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'PUT',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition`,
+      { composition, if_revision: workspaceRevision }
+    );
+  }
+
+  async applyWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    input: { workspaceRevision: number; compositionRevision: number; compositionHash: string }
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition/apply`,
+      {
+        if_revision: input.workspaceRevision,
+        composition_revision: input.compositionRevision,
+        composition_hash: input.compositionHash,
+      }
     );
   }
 

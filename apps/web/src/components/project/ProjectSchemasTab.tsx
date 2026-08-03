@@ -142,6 +142,33 @@ export function ProjectSchemasTab({
     <SchemaRegistry
       key={projectId}
       {...registry}
+      compositionWorkspace={
+        workspaceTarget?.revision
+          ? {
+              projectId,
+              workspaceId: workspaceTarget.id,
+              workspaceTitle: workspaceTarget.title,
+              workspaceRevision: workspaceTarget.revision,
+              composition: workspaceTarget.schemaComposition,
+              appliedCompositionRevision: workspaceBinding?.compositionRevision,
+              appliedSchemaHash: workspaceBinding?.schemaHash,
+              onSaved: async () => {
+                await projectWorkspaces.refresh();
+              },
+              onApplied: async (result) => {
+                if (result.binding) {
+                  bindSchema({
+                    binding: result.binding,
+                    projectId,
+                    scope: 'current_workspace',
+                    workspaceId: workspaceTarget.id,
+                  });
+                }
+                await projectWorkspaces.refresh();
+              },
+            }
+          : undefined
+      }
       bindingActions={{
         defaultBinding,
         feedback,

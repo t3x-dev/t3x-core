@@ -85,6 +85,9 @@ export function workspaceSchemaBindingsEqual(
   return (
     left.canonicalName === right.canonicalName &&
     left.schemaHash === right.schemaHash &&
+    left.compositionId === right.compositionId &&
+    left.compositionRevision === right.compositionRevision &&
+    left.compositionHash === right.compositionHash &&
     left.schemaName === right.schemaName &&
     left.version === right.version
   );

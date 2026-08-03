@@ -45,12 +45,8 @@ import {
   buildEsphomeDeviceWorkspace,
   isEsphomeDeviceWorkspace,
 } from '../lib/workspace-validation/esphome-workspace-profile';
-import {
-  canonicalSchemaNameFromBinding,
-  resolveBuiltInYSchema,
-  schemaRootKeyFromBinding,
-  schemaVersionFromBinding,
-} from '../lib/yschema-registry';
+import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
+import { canonicalSchemaNameFromBinding, schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -1035,7 +1031,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const extractedWorkspace = isEsphomeDeviceWorkspace(workspace)
     ? buildEsphomeDeviceWorkspace(workspace, projectId, sourceTexts, candidateId)
-    : buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
+    : await buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
   if (!extractedWorkspace.ok) {
     return errorResponse(c, 'INVALID_REQUEST', extractedWorkspace.message);
   }
@@ -1074,12 +1070,12 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   });
 });
 
-function buildGenericExtractedWorkspace(
+async function buildGenericExtractedWorkspace(
   workspace: Record<string, unknown>,
   projectId: string,
   sourceTexts: WorkspaceSourceText[]
-): { ok: true; workspace: Record<string, unknown> } | { ok: false; message: string } {
-  const schemaResolution = resolveWorkspaceYSchema(workspace);
+): Promise<{ ok: true; workspace: Record<string, unknown> } | { ok: false; message: string }> {
+  const schemaResolution = await resolveWorkspaceYSchema(workspace, db, projectId);
   if (schemaResolution.canonicalName && !schemaResolution.schema) {
     const releaseLabel = schemaResolution.version
       ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
@@ -1505,22 +1501,6 @@ function buildExtractedWorkspace(
   };
 }
 
-function resolveWorkspaceYSchema(workspace: Record<string, unknown>): {
-  canonicalName: string | null;
-  schema: YSchema | null;
-  version?: string;
-} {
-  const bindings = workspace.schemaBindings as unknown[] | undefined;
-  const binding = bindings?.[0];
-  const canonicalName = canonicalSchemaNameFromBinding(binding);
-  const version = schemaVersionFromBinding(binding);
-  return {
-    canonicalName,
-    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
-    ...(version ? { version } : {}),
-  };
-}
-
 function buildCandidateFieldsFromYSchema(
   schema: YSchema,
   sources: WorkspaceSourceText[]
@@ -1828,12 +1808,25 @@ function schemaPathToYOpsPath(workspace: Record<string, unknown>, path: string) 
 
 function workspaceSchemaRef(workspace: Record<string, unknown>) {
   const binding = (workspace.schemaBindings as unknown[] | undefined)?.[0];
-  const name = canonicalSchemaNameFromBinding(binding);
-  if (!name || !binding || typeof binding !== 'object' || Array.isArray(binding)) return null;
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return null;
   const record = binding as Record<string, unknown>;
+  const compositionId =
+    typeof record.compositionId === 'string' && record.compositionId.trim()
+      ? record.compositionId.trim()
+      : null;
+  const compositionRevision =
+    typeof record.compositionRevision === 'number' && Number.isInteger(record.compositionRevision)
+      ? record.compositionRevision
+      : null;
+  const name = compositionId ?? canonicalSchemaNameFromBinding(binding);
+  if (!name) return null;
   return {
     name,
-    ...(typeof record.version === 'string' ? { version: record.version } : {}),
+    ...(compositionId && compositionRevision !== null
+      ? { version: `r${compositionRevision}` }
+      : typeof record.version === 'string'
+        ? { version: record.version }
+        : {}),
     ...(typeof record.schemaHash === 'string' ? { hash: record.schemaHash } : {}),
   };
 }

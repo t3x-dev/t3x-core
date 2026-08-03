@@ -9,12 +9,20 @@ import {
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createYSchemaValidationRun,
+  findYSchemaCompositionSnapshot,
   getCommit,
   getLatestCommit,
   getYOpsForCommit,
   type YSchemaValidationRunOutput,
 } from '@t3x-dev/storage';
-import { type ProvenanceIndex, validateTree, type YSchemaRelation } from '@t3x-dev/yschema';
+import {
+  normalizeYSchemaObject,
+  type ProvenanceIndex,
+  sha256CompositionValue,
+  validateTree,
+  type YSchema,
+  type YSchemaRelation,
+} from '@t3x-dev/yschema';
 import { resolveBuiltInYSchema } from './yschema-registry';
 
 export const YSCHEMA_VALIDATOR_VERSION = 'yschema-p0@0.1';
@@ -61,7 +69,13 @@ export async function runYSchemaValidationForCommit(
   const schemaName = input.schemaName ?? commitSchemaRef?.name ?? 't3x/prd';
   const schemaVersion =
     input.schemaVersion ?? (input.schemaName === undefined ? commitSchemaRef?.version : undefined);
-  const schema = resolveBuiltInYSchema(schemaName, schemaVersion);
+  const schema = await resolveValidationSchema(
+    db,
+    input.projectId,
+    schemaName,
+    schemaVersion,
+    commitSchemaRef?.name === schemaName ? commitSchemaRef.hash : undefined
+  );
   if (!schema) {
     throw new YSchemaValidationError(
       'SCHEMA_NOT_SUPPORTED',
@@ -104,9 +118,9 @@ export async function runYSchemaValidationForCommit(
   const run = await createYSchemaValidationRun(db, {
     project_id: input.projectId,
     commit_hash: commit.hash,
-    schema_name: schema.name,
-    schema_version: schema.version,
-    schema_hash: stableHash(schema),
+    schema_name: schemaName,
+    schema_version: schemaVersion ?? schema.version,
+    schema_hash: commitSchemaRef?.hash ?? stableHash(schema),
     validator_version: YSCHEMA_VALIDATOR_VERSION,
     status,
     valid: validation.valid,
@@ -118,6 +132,29 @@ export async function runYSchemaValidationForCommit(
   });
 
   return toValidationRunView(run);
+}
+
+export async function resolveValidationSchema(
+  db: AnyDB,
+  projectId: string,
+  schemaName: string,
+  schemaVersion?: string,
+  schemaHash?: string
+): Promise<YSchema | null> {
+  const builtIn = resolveBuiltInYSchema(schemaName, schemaVersion);
+  if (builtIn) return builtIn;
+
+  const revisionMatch = /^r([1-9]\d*)$/.exec(schemaVersion ?? '');
+  if (!revisionMatch || !schemaHash) return null;
+  const snapshot = await findYSchemaCompositionSnapshot(db, {
+    project_id: projectId,
+    composition_id: schemaName,
+    composition_revision: Number(revisionMatch[1]),
+    compiled_schema_hash: schemaHash,
+  });
+  if (!snapshot) return null;
+  const schema = normalizeYSchemaObject(snapshot.schemaJson);
+  return (await sha256CompositionValue(schema)) === schemaHash ? schema : null;
 }
 
 export function toValidationRunView(run: YSchemaValidationRunOutput): YSchemaValidationRunView {

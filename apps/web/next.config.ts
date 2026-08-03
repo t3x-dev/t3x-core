@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
   // Output standalone for Docker deployment
   output: 'standalone',
   // Transpile workspace packages
-  transpilePackages: ['@t3x-dev/core', '@t3x-dev/storage'],
+  transpilePackages: ['@t3x-dev/core', '@t3x-dev/storage', '@t3x-dev/transition'],
   // Externalize packages with binary/WASM files that bundler cannot handle
   // - postgres: has binary data files (for Docker/production)
   serverExternalPackages: ['postgres'],
