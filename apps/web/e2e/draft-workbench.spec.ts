@@ -49,10 +49,11 @@ test.describe('Draft Workbench', () => {
         author: { type: 'human', name: 'E2E Tester' },
         branch: 'main',
         message: 'Initial knowledge commit',
+        expected_head: null,
       },
     });
     const commitData = await commitResp.json();
-    commitHash = commitData.data.commit.hash;
+    commitHash = commitData.data.commit.digest;
 
     // Create draft WITH goal
     const draftResp1 = await request.post(`${API_BASE}/drafts`, {

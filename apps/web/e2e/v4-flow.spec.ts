@@ -36,6 +36,7 @@ test.describe('V4 WebUI Flow', () => {
         project_id: projectId,
         branch: 'main',
         message: 'E2E test commit',
+        expected_head: null,
         content: {
           trees: [
             { key: 't_001', type: 'legacy_sentence', slots: { text: 'User prefers dark mode' }, children: [] },
@@ -49,7 +50,7 @@ test.describe('V4 WebUI Flow', () => {
     });
     const commitData = await commitResponse.json();
     expect(commitData.success).toBe(true);
-    commitHash = commitData.data.commit.hash;
+    commitHash = commitData.data.commit.digest;
   });
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -86,6 +86,7 @@ test.describe('DiffDisplayView Full E2E', () => {
         branch: 'main',
         message: 'Initial requirements',
         parents: [],
+        expected_head: null,
         content: {
           trees: [
             {
@@ -115,7 +116,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    commit1Hash = commit1Data.data.commit.hash;
+    commit1Hash = commit1Data.data.commit.digest;
 
     // 7. Create second commit with modified frames
     const commit2Res = await request.post(`${API_BASE}/commits`, {
@@ -124,6 +125,7 @@ test.describe('DiffDisplayView Full E2E', () => {
         branch: 'main',
         message: 'Updated requirements',
         parents: [commit1Hash],
+        expected_head: commit1Hash,
         content: {
           trees: [
             {
@@ -154,14 +156,14 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    commit2Hash = commit2Data.data.commit.hash;
+    commit2Hash = commit2Data.data.commit.digest;
   });
 
   test('API data is correct', async ({ request }) => {
     // Verify commits have correct data
     const [res1, res2] = await Promise.all([
-      request.get(`${API_BASE}/commits/${commit1Hash}`),
-      request.get(`${API_BASE}/commits/${commit2Hash}`),
+      request.get(`${API_BASE}/commits/${commit1Hash}?project_id=${projectId}`),
+      request.get(`${API_BASE}/commits/${commit2Hash}?project_id=${projectId}`),
     ]);
 
     const data1 = await res1.json();
