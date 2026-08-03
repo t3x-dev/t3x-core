@@ -584,6 +584,22 @@ describe('ProjectStateTab', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
+    navigationMocks.search = 'view=canvas&branch=main';
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+
+    renderStateTab();
+
+    expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
+      'data-focused-branch',
+      'main'
+    );
+    expect(screen.queryByText('main has no HEAD commit.')).not.toBeInTheDocument();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    expect(hookMocks.loadOperations).not.toHaveBeenCalled();
+  });
+
   it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
     hookMocks.loadCommits.mockResolvedValue([MUST_CONDITIONS_COMMIT]);
     renderStateTab();

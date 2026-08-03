@@ -32,6 +32,17 @@ describe('formatUserFacingError', () => {
     );
   });
 
+  it('explains how to recover from an unverifiable local CommitV2 ref', () => {
+    expect(
+      formatUserFacingError({
+        code: 'REF_HEAD_INTEGRITY_INVALID',
+        message: 'Ref main points to an unverifiable commit',
+      })
+    ).toBe(
+      "This repository's branch head cannot be verified as CommitV2. For a pre-cut local database, use a fresh database or reset local development data."
+    );
+  });
+
   it('maps provider key setup errors to actionable copy', () => {
     expect(
       formatUserFacingError({

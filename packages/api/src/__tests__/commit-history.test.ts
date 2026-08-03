@@ -1,5 +1,6 @@
 import type { AnyDB } from '@t3x-dev/storage';
-import { ensureMainBranch, insertProject } from '@t3x-dev/storage';
+import { branches, ensureMainBranch, insertProject } from '@t3x-dev/storage';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -75,6 +76,37 @@ describe('CommitV2 read routes', () => {
         expect.objectContaining({ format: 'transition_v2', schema: 't3x/commit/v2' }),
       ])
     );
+  });
+
+  it('returns a stable non-retryable conflict when a ref head is unverifiable', async () => {
+    const corruptProject = await insertProject(
+      mockDB,
+      testData.project({ name: 'CommitV2 Invalid Ref Head API' })
+    );
+    await ensureMainBranch(mockDB, corruptProject.projectId);
+    const invalidHead = `sha256:${'f'.repeat(64)}`;
+    await mockDB
+      .update(branches)
+      .set({ headCommitHash: invalidHead })
+      .where(and(eq(branches.projectId, corruptProject.projectId), eq(branches.name, 'main')));
+
+    const response = await app.request(
+      `/v1/projects/${corruptProject.projectId}/commits?branch=main`
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: {
+        code: 'REF_HEAD_INTEGRITY_INVALID',
+        message: `Ref main in project ${corruptProject.projectId} points to an unverifiable commit ${invalidHead}`,
+        details: {
+          project_id: corruptProject.projectId,
+          ref: 'main',
+          head: invalidHead,
+        },
+      },
+    });
   });
 
   it('resolves one verified CommitV2 object with explicit project membership', async () => {

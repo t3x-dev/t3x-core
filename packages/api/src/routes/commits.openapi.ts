@@ -24,6 +24,7 @@ import {
   markConversationCommitted,
   TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
+  TransitionRefHeadIntegrityError,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -500,6 +501,10 @@ const listCommitsRoute = createRoute({
         },
       },
     },
+    409: {
+      description: 'The requested ref points to an unverifiable CommitV2 head',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Internal server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -522,6 +527,13 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
 
     return c.json({ success: true as const, data: { commits } }, 200);
   } catch (err) {
+    if (err instanceof TransitionRefHeadIntegrityError) {
+      return errorResponse(c, 'REF_HEAD_INTEGRITY_INVALID', err.message, {
+        project_id: err.projectId,
+        ref: err.refName,
+        head: err.head,
+      });
+    }
     const message = err instanceof Error ? err.message : 'Failed to list commits';
     return errorResponse(c, 'LIST_FAILED', message);
   }

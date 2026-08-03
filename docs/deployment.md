@@ -51,6 +51,23 @@ Source development defaults to opening directly into the app on localhost. To
 exercise the login flow locally, set `AUTH_DISABLED=false` before starting both
 dev processes.
 
+### CommitV2 developer database reset
+
+Developer databases created before the CommitV2 hard cutover are not supported
+by the current source runtime. There is no CommitV1 compatibility bridge. Stop
+the API with `Ctrl-C`, preserve the old database under a backup name, and then
+restart it:
+
+```bash
+mv .t3x/pg-data .t3x/pg-data.commitv1-backup
+pnpm dev:api
+```
+
+The restart creates a fresh CommitV2 database at `.t3x/pg-data`. The renamed
+directory remains available for rollback or data recovery with a compatible
+pre-cut checkout; delete it yourself only after confirming it is no longer
+needed.
+
 ## Environment
 
 At least one provider key is required for live extraction or chat:

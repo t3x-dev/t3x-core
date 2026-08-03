@@ -18,6 +18,7 @@ import {
   type ProjectTabId,
   parseProjectTab,
 } from '@/components/project/projectTabModel';
+import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import {
@@ -227,6 +228,7 @@ export function ProjectDetailPageContent({
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
   const canvasError = useCanvasStore((state) => state.loadError);
+  const canvasAutoRefreshBlocked = isRefHeadIntegrityInvalid(canvasError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
   const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
   const closeNodeModal = useCanvasStore((state) => state.closeNodeModal);
@@ -405,7 +407,7 @@ export function ProjectDetailPageContent({
   // This ensures canvas stays up-to-date when commits are created from Chat.
   const lastRefreshRef = useRef(0);
   useEffect(() => {
-    if (!isCanvasActive || !projectId) return;
+    if (!isCanvasActive || !projectId || canvasAutoRefreshBlocked) return;
 
     const refreshIfStale = () => {
       const now = Date.now();
@@ -455,7 +457,7 @@ export function ProjectDetailPageContent({
       clearInterval(interval);
       channel?.close();
     };
-  }, [isCanvasActive, projectId, loadCanvas]);
+  }, [canvasAutoRefreshBlocked, isCanvasActive, projectId, loadCanvas]);
 
   // Initialize pins store for the project
   useEffect(() => {

@@ -119,6 +119,7 @@ export function ProjectStateTab({
   routeQueryRef.current = routeQuery;
   const routeView = parseStateView(searchParams.get('view'), initialView);
   const [activeView, setActiveView] = useState<ProjectStateView>(routeView);
+  const snapshotEnabled = activeView !== 'canvas';
   const [lastSnapshotView, setLastSnapshotView] = useState<ProjectSnapshotView>(
     routeView === 'canvas' ? 'structure' : routeView
   );
@@ -135,6 +136,7 @@ export function ProjectStateTab({
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
     create: createBranch,
+    loading: branchesLoading,
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -193,6 +195,8 @@ export function ProjectStateTab({
   );
 
   useEffect(() => {
+    if (!snapshotEnabled) return;
+
     let cancelled = false;
     const load = async () => {
       setSnapshot({
@@ -293,6 +297,7 @@ export function ProjectStateTab({
     loadCommits,
     loadOperations,
     projectId,
+    snapshotEnabled,
     snapshotRefreshVersion,
   ]);
 
@@ -627,11 +632,11 @@ export function ProjectStateTab({
           ) : (
             <StateCanvasView
               branch={branchFocus || 'main'}
-              branchHeadHash={headCommit?.hash ?? null}
+              branchHeadHash={branchHeads[branchFocus] ?? null}
               focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}
-              snapshotLoading={snapshot.loading}
+              snapshotLoading={branchesLoading}
             />
           )}
         </main>

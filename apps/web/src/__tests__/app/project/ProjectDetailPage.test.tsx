@@ -313,6 +313,43 @@ describe('ProjectDetailPage — project-first shell states', () => {
     });
   });
 
+  it('stops automatic Canvas reloads for an unverifiable CommitV2 ref but keeps manual retry', async () => {
+    searchParamsValue = new URLSearchParams('view=canvas&branch=main');
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    useCanvasStore.setState({
+      nodes: [],
+      edges: [],
+      loading: false,
+      loadError: Object.assign(new Error('Ref main points to an unverifiable commit'), {
+        code: 'REF_HEAD_INTEGRITY_INVALID',
+      }),
+      projectId: 'proj_test',
+    });
+
+    renderProjectContent();
+
+    expect(
+      await screen.findByText(
+        "This repository's branch head cannot be verified as CommitV2. For a pre-cut local database, use a fresh database or reset local development data."
+      )
+    ).toBeInTheDocument();
+    await waitFor(() => expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test'));
+    canvasSurfaceMocks.loadCanvas.mockClear();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
+    expect(intervalSpy.mock.calls.some(([, delay]) => delay === 30_000)).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
+    intervalSpy.mockRestore();
+  });
+
   it('renders a verified YSchema badge from the latest validation run', async () => {
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
