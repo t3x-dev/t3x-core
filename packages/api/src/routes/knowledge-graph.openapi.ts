@@ -15,7 +15,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 
-import type { Commit, Relation, SlotValue, TreeNode } from '@t3x-dev/core';
+import type { Relation, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import {
   type AnyDB,
   deleteKnowledgeGraphByProject,
@@ -26,11 +26,12 @@ import {
   insertKnowledgeEdges,
   insertKnowledgeNodes,
   insertNodeMembers,
-  listCommits,
+  listCommitHistory,
   searchKnowledgeNodes,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const knowledgeGraphRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -152,6 +153,23 @@ interface GraphBuildEdge {
   }>;
 }
 
+interface GraphBuildCommit {
+  hash: string;
+  content: SemanticContent;
+}
+
+type FetchGraphCommitHistory = (
+  db: AnyDB,
+  projectId: string,
+  options: { limit?: number; offset?: number }
+) => Promise<Array<{ id: string }>>;
+
+type ResolveGraphCommit = (
+  db: AnyDB,
+  digest: string,
+  projectId: string
+) => Promise<{ digest: string; semanticContent: SemanticContent } | null>;
+
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
 async function rebuildKnowledgeGraph(
@@ -254,21 +272,21 @@ export async function listProjectGraphCommits(
   db: AnyDB,
   projectId: string,
   pageSize = GRAPH_BUILD_COMMIT_PAGE_SIZE,
-  fetchCommits: typeof listCommits = listCommits
-): Promise<Commit[]> {
-  const allCommits: Commit[] = [];
+  fetchHistory: FetchGraphCommitHistory = listCommitHistory,
+  resolveCommit: ResolveGraphCommit = getRepositorySemanticCommit
+): Promise<GraphBuildCommit[]> {
+  const allCommits: GraphBuildCommit[] = [];
   const limit = Math.max(1, pageSize);
   let offset = 0;
 
   while (true) {
-    const page = await fetchCommits(db, {
-      projectId,
-      includeSuperseded: true,
-      limit,
-      offset,
-    });
+    const page = await fetchHistory(db, projectId, { limit, offset });
 
-    allCommits.push(...page);
+    const resolved = await Promise.all(page.map((entry) => resolveCommit(db, entry.id, projectId)));
+    for (const commit of resolved) {
+      if (commit === null) continue;
+      allCommits.push({ hash: commit.digest, content: commit.semanticContent });
+    }
 
     if (page.length < limit) {
       return allCommits;
