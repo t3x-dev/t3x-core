@@ -20,12 +20,12 @@
  * usable both by the API and by MCP.
  */
 
+import { getRepositorySemanticCommit } from '@t3x-dev/api/repository-state-transition';
 import { collectLessonsFromAssertions, generateLeafOutput } from '@t3x-dev/core';
 import {
   findLeafById,
   findLeavesByCommit,
   findProjectById,
-  getCommitUnified,
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
@@ -113,13 +113,13 @@ export const generateHandler: ToolHandler = async (args) => {
   }
 
   // ── Step 2: Fetch the linked commit ──
-  const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+  const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
   if (!unifiedCommit) {
     return fail(
       `Source commit not found for leaf ${leafId}.\n` + `Commit hash: ${leaf.commit_hash}`
     );
   }
-  const knowledge = unifiedCommit.content;
+  const knowledge = unifiedCommit.semanticContent;
 
   const project = await findProjectById(db, leaf.project_id);
   if (!project) {

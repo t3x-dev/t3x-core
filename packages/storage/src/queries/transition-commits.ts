@@ -12,7 +12,6 @@ import {
   type ProtocolObject,
   parseSerializedTransitionObject,
   projectCommitV2,
-  projectLegacyCommit,
   projectTransitionView,
   type RepositoryDecisionAuthorization,
   type RepositoryDecisionRecord,
@@ -36,7 +35,7 @@ import {
   transitionYOpsLogConsumptions,
 } from '../schema-transition-commits';
 import { yopsLog } from '../schema-trees';
-import { getCommit, listCommits, SupersededYOpsLogIdsError } from './commits';
+import { SupersededYOpsLogIdsError } from './commits';
 import { acquireProjectSupersedeLock } from './yops-log';
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
@@ -670,12 +669,7 @@ export async function getTransitionViewForCommit(
   input: { projectId: string; refName: string; commitId: string }
 ): Promise<TransitionViewV1 | null> {
   const transition = await getTransitionCommit(db, input.projectId, input.commitId);
-  if (transition === null) {
-    const legacy = await getCommit(db, input.commitId);
-    return legacy?.project_id === input.projectId && legacy.branch === input.refName
-      ? projectTransitionView({ mode: 'legacy', commit: legacy })
-      : null;
-  }
+  if (transition === null) return null;
 
   const resolver = new DatabaseTransitionObjectResolver(db, input.projectId);
   const verified = await verifyCommitV2(transition.commit, resolver);
@@ -997,6 +991,15 @@ export async function getTransitionCommit(
   return { commit: object, recordedAt: row.createdAt.toISOString() };
 }
 
+export async function listTransitionCommitProjectIds(db: AnyDB, digest: string): Promise<string[]> {
+  const rows = await db
+    .select({ projectId: transitionCommits.projectId })
+    .from(transitionCommits)
+    .where(eq(transitionCommits.digest, digest))
+    .orderBy(transitionCommits.projectId);
+  return rows.map((row) => row.projectId);
+}
+
 export interface VerifiedTransitionCommitGraph extends VerifiedCommitIntegrity {
   recordedAt: string;
   state: State;
@@ -1049,9 +1052,7 @@ export async function getCommitHistoryEntry(
   id: string
 ): Promise<CommitHistoryProjection | null> {
   const transition = await getTransitionCommit(db, projectId, id);
-  if (transition !== null) return projectCommitV2(transition.commit, transition.recordedAt);
-  const legacy = await getCommit(db, id);
-  return legacy?.project_id === projectId ? projectLegacyCommit(legacy) : null;
+  return transition === null ? null : projectCommitV2(transition.commit, transition.recordedAt);
 }
 
 export async function listCommitHistory(
@@ -1061,25 +1062,6 @@ export async function listCommitHistory(
 ): Promise<CommitHistoryProjection[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
-  const fetch = limit + offset;
-  const [legacy, transition] = await Promise.all([
-    listCommits(db, { projectId, limit: fetch, offset: 0 }),
-    listTransitionCommits(db, projectId, { limit: fetch, offset: 0 }),
-  ]);
-  return [
-    ...legacy.map(projectLegacyCommit),
-    ...transition.map((entry) => projectCommitV2(entry.commit, entry.recordedAt)),
-  ]
-    .sort((left, right) =>
-      left.recordedAt > right.recordedAt
-        ? -1
-        : left.recordedAt < right.recordedAt
-          ? 1
-          : left.id < right.id
-            ? -1
-            : left.id > right.id
-              ? 1
-              : 0
-    )
-    .slice(offset, offset + limit);
+  const transition = await listTransitionCommits(db, projectId, { limit, offset });
+  return transition.map((entry) => projectCommitV2(entry.commit, entry.recordedAt));
 }

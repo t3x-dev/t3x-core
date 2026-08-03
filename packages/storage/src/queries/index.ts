@@ -79,8 +79,6 @@ export {
   updateCommitMessage,
   updateCommitPosition,
 } from './commits';
-// Commits Unified (transition adapter)
-export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
@@ -478,6 +476,7 @@ export {
   getVerifiedTransitionCommitGraph,
   listCommitHistory,
   listRepositoryDecisionAudit,
+  listTransitionCommitProjectIds,
   listTransitionCommits,
   type RepositoryDecisionAuditEntry,
   recordRepositoryDecision,

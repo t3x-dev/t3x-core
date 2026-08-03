@@ -36,10 +36,12 @@ import {
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
+  listTransitionCommitProjectIds,
   recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
   type VerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
+import type { EvidenceRef } from '@t3x-dev/transition';
 
 type ActorRef = ProposalStatement['actor'];
 type CanonicalTimestamp = Parameters<typeof authorizeDecisionForRepository>[0]['decidedAt'];
@@ -187,6 +189,18 @@ export class RepositoryStateDomainUnsupportedError extends Error {
   }
 }
 
+export class RepositoryCommitMembershipAmbiguousError extends Error {
+  readonly code = 'COMMIT_MEMBERSHIP_AMBIGUOUS';
+
+  constructor(
+    readonly digest: string,
+    readonly projectIds: readonly string[]
+  ) {
+    super(`Commit ${digest} belongs to multiple projects; an explicit project is required`);
+    this.name = 'RepositoryCommitMembershipAmbiguousError';
+  }
+}
+
 export class RepositoryStateProposalError extends Error {
   readonly code = 'PROPOSAL_INVALID';
 
@@ -221,6 +235,61 @@ export function decodeRepositorySemanticContentState(state: State): SemanticCont
         : 'State is not a t3x.dev/semantic-content version 1 YOps document'
     );
   }
+}
+
+export interface RepositorySemanticCommitProjection {
+  digest: string;
+  projectId: string;
+  schema: CommitV2['schema'];
+  parents: string[];
+  actor: ActorRef;
+  recordedAt: string;
+  intent: string | null;
+  rationale: string | null;
+  evidence: EvidenceRef[];
+  semanticContent: SemanticContent;
+}
+
+function claimValue(claim: ProposalStatement['predicate']['intent']): string | null {
+  return claim.mode === 'unspecified' ? null : claim.value;
+}
+
+function claimEvidence(claim: ProposalStatement['predicate']['intent']): EvidenceRef[] {
+  return claim.mode === 'unspecified' ? [] : structuredClone(claim.evidence);
+}
+
+/** Resolve one verified CommitV2 through the explicit repository semantic State codec. */
+export async function getRepositorySemanticCommit(
+  db: AnyDB,
+  digest: string,
+  projectId?: string
+): Promise<RepositorySemanticCommitProjection | null> {
+  let resolvedProjectId = projectId;
+  if (resolvedProjectId === undefined) {
+    const projectIds = await listTransitionCommitProjectIds(db, digest);
+    if (projectIds.length === 0) return null;
+    if (projectIds.length !== 1) {
+      throw new RepositoryCommitMembershipAmbiguousError(digest, projectIds);
+    }
+    resolvedProjectId = projectIds[0];
+  }
+  const graph = await getVerifiedTransitionCommitGraph(db, resolvedProjectId, digest);
+  if (graph === null) return null;
+  return {
+    digest,
+    projectId: resolvedProjectId,
+    schema: graph.commit.schema,
+    parents: graph.commit.parents.map((parent) => parent.digest),
+    actor: { ...graph.proposal.actor },
+    recordedAt: graph.recordedAt,
+    intent: claimValue(graph.proposal.predicate.intent),
+    rationale: claimValue(graph.proposal.predicate.rationale),
+    evidence: [
+      ...claimEvidence(graph.proposal.predicate.intent),
+      ...claimEvidence(graph.proposal.predicate.rationale),
+    ],
+    semanticContent: decodeRepositorySemanticContentState(graph.state),
+  };
 }
 
 /**

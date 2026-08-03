@@ -12,7 +12,10 @@
 
 import type { Operation, PipelineEvent, TreeDiff } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
-import { getCommitUnified } from '@t3x-dev/storage';
+import {
+  getRepositorySemanticCommit,
+  type RepositorySemanticCommitProjection,
+} from '../lib/repository-state-transition';
 import type { ApiPipelineContext } from './context';
 
 export interface DiffInput {
@@ -21,11 +24,10 @@ export interface DiffInput {
 }
 
 interface CommitMeta {
-  hash: string;
-  message: string | null;
-  author: unknown;
-  committed_at: string;
-  branch: string;
+  digest: string;
+  rationale: string | null;
+  actor: unknown;
+  recorded_at: string;
 }
 
 export interface DiffOutput {
@@ -34,19 +36,12 @@ export interface DiffOutput {
   target: CommitMeta;
 }
 
-function commitMeta(commit: {
-  hash: string;
-  message?: string | null;
-  author: unknown;
-  committed_at: string;
-  branch: string;
-}): CommitMeta {
+function commitMeta(commit: RepositorySemanticCommitProjection): CommitMeta {
   return {
-    hash: commit.hash,
-    message: commit.message ?? null,
-    author: commit.author,
-    committed_at: commit.committed_at,
-    branch: commit.branch,
+    digest: commit.digest,
+    rationale: commit.rationale,
+    actor: commit.actor,
+    recorded_at: commit.recordedAt,
   };
 }
 
@@ -59,8 +54,8 @@ export const diffOp: Operation<DiffInput, DiffOutput> = {
     // load: fetch both commits
     yield { type: 'step_start', step: 'load' };
     const [baseCommit, targetCommit] = await Promise.all([
-      getCommitUnified(db as any, base_commit_hash),
-      getCommitUnified(db as any, target_commit_hash),
+      getRepositorySemanticCommit(db as any, base_commit_hash),
+      getRepositorySemanticCommit(db as any, target_commit_hash),
     ]);
 
     if (!baseCommit) {
@@ -73,7 +68,7 @@ export const diffOp: Operation<DiffInput, DiffOutput> = {
 
     // transform: compute diff
     yield { type: 'step_start', step: 'transform' };
-    const diff: TreeDiff = diffCommits(baseCommit.content, targetCommit.content);
+    const diff: TreeDiff = diffCommits(baseCommit.semanticContent, targetCommit.semanticContent);
     yield { type: 'step_done', step: 'transform' };
 
     return {

@@ -16,6 +16,7 @@ import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   decodeRepositorySemanticContentState,
+  getRepositorySemanticCommit,
   prepareRepositoryYOpsMerge,
 } from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
@@ -153,6 +154,45 @@ describe('repository YOps State Transition application service', () => {
     expect(() => decodeRepositorySemanticContentState(createYOpsState({ a: true }))).toThrowError(
       'State is not a t3x.dev/semantic-content version 1 YOps document'
     );
+  });
+
+  it('projects only a verified semantic CommitV2 graph for tree consumers', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository Semantic Read Projection' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const semanticContent = {
+      trees: [{ key: 'read-model', slots: { enabled: true }, children: [] }],
+      relations: [],
+    };
+    const created = await commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createRepositoryYOpsStateFromSemanticContent(semanticContent),
+      actor: HUMAN,
+      intent: 'Create a semantic read model',
+      rationale: 'Tree consumers require the explicit semantic State codec.',
+    });
+
+    await expect(
+      getRepositorySemanticCommit(db, created.commitDigest, project.projectId)
+    ).resolves.toMatchObject({
+      digest: created.commitDigest,
+      projectId: project.projectId,
+      schema: 't3x/commit/v2',
+      parents: [],
+      actor: HUMAN,
+      intent: 'Create a semantic read model',
+      rationale: 'Tree consumers require the explicit semantic State codec.',
+      semanticContent,
+    });
+    await expect(getRepositorySemanticCommit(db, created.commitDigest)).resolves.toMatchObject({
+      digest: created.commitDigest,
+      projectId: project.projectId,
+    });
   });
 
   it('recomputes and commits a deterministic two-parent merge with source evidence', async () => {

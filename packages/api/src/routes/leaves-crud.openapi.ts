@@ -20,7 +20,6 @@ import {
   findLeafById,
   findLeavesByCommit,
   findLeavesByProject,
-  getCommitUnified,
   insertLeafOutputEdit,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
@@ -28,6 +27,7 @@ import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -322,22 +322,14 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, body.project_id);
     if (accessResult instanceof Response) return accessResult;
 
-    const commit = await getCommitUnified(db, body.commit_hash);
+    const commit = await getRepositorySemanticCommit(db, body.commit_hash, body.project_id);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${body.commit_hash}`);
     }
-    if (commit.project_id !== body.project_id) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Commit ${body.commit_hash} does not belong to project ${body.project_id}`
-      );
-    }
-
-    // Auto-generate title from commit message if not provided
+    // Auto-generate title from the immutable Proposal rationale if not provided.
     let title = body.title;
     if (!title) {
-      const msg = commit.message || body.commit_hash.slice(0, 16);
+      const msg = commit.rationale || body.commit_hash.slice(0, 16);
       title = `${msg} — ${body.type}`;
     }
 
@@ -404,9 +396,9 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const commit = await getCommitUnified(db, decodedHash);
-    if (commit?.project_id) {
-      const accessResult = await assertProjectAccess(c, db, commit.project_id);
+    const commit = await getRepositorySemanticCommit(db, decodedHash);
+    if (commit) {
+      const accessResult = await assertProjectAccess(c, db, commit.projectId);
       if (accessResult instanceof Response) return accessResult;
     }
 

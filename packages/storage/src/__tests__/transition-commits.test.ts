@@ -18,7 +18,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
-import { createCommit, SupersededYOpsLogIdsError } from '../queries/commits';
+import { SupersededYOpsLogIdsError } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { deleteProject, insertProject, permanentDeleteProject } from '../queries/projects';
 import {
@@ -223,22 +223,23 @@ describe('CommitV2 repository', () => {
       getTransitionRefHead(db, { projectId: emptyProject.projectId, refName: 'main' })
     ).resolves.toEqual({ format: 'empty', refName: 'main', head: null });
 
-    const legacyProject = await insertProject(db, testData.project({ name: 'Legacy Ref Project' }));
-    await ensureMainBranch(db, legacyProject.projectId);
-    const legacy = await createCommit(db, {
-      project_id: legacyProject.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
+    const corruptProject = await insertProject(
+      db,
+      testData.project({ name: 'Corrupt Ref Project' })
+    );
+    await ensureMainBranch(db, corruptProject.projectId);
+    const unknownDigest = `sha256:${'9'.repeat(64)}`;
+    await db
+      .update(branches)
+      .set({ headCommitHash: unknownDigest })
+      .where(and(eq(branches.projectId, corruptProject.projectId), eq(branches.name, 'main')));
     await expect(
-      getTransitionRefHead(db, { projectId: legacyProject.projectId, refName: 'main' })
+      getTransitionRefHead(db, { projectId: corruptProject.projectId, refName: 'main' })
     ).rejects.toMatchObject({
       name: 'TransitionRefHeadIntegrityError',
-      projectId: legacyProject.projectId,
+      projectId: corruptProject.projectId,
       refName: 'main',
-      head: legacy.hash,
+      head: unknownDigest,
     });
   });
 
@@ -275,16 +276,26 @@ describe('CommitV2 repository', () => {
   it('fails closed when a ref points to a commit outside its project', async () => {
     const owner = await insertProject(db, testData.project({ name: 'Head Owner Project' }));
     await ensureMainBranch(db, owner.projectId);
-    const legacy = await createCommit(db, {
-      project_id: owner.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:owner' },
+    const prepared = await prepare(
+      owner.projectId,
+      'main',
+      state({}),
+      state({ owner: true }),
+      'owner-head'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const ownerCommit = await createTransitionCommit(db, {
+      projectId: owner.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
     });
     const other = await insertProject(db, testData.project({ name: 'Cross Project Head' }));
     await ensureMainBranch(db, other.projectId);
     await db
       .update(branches)
-      .set({ headCommitHash: legacy.hash })
+      .set({ headCommitHash: ownerCommit.digest })
       .where(and(eq(branches.projectId, other.projectId), eq(branches.name, 'main')));
 
     await expect(
@@ -1071,15 +1082,9 @@ describe('CommitV2 repository', () => {
     }
   });
 
-  it('lists CommitV1 and CommitV2 together without promoting legacy assurance', async () => {
-    const project = await insertProject(db, testData.project({ name: 'Mixed History Project' }));
+  it('lists and resolves only verified CommitV2 history', async () => {
+    const project = await insertProject(db, testData.project({ name: 'CommitV2 History Project' }));
     await ensureMainBranch(db, project.projectId);
-    const legacy = await createCommit(db, {
-      project_id: project.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'legacy',
-    });
     const prepared = await prepare(
       project.projectId,
       'main',
@@ -1088,7 +1093,7 @@ describe('CommitV2 repository', () => {
       'mixed'
     );
     await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
-    await createTransitionCommit(db, {
+    const created = await createTransitionCommit(db, {
       projectId: project.projectId,
       refName: 'main',
       expectedHead: null,
@@ -1097,30 +1102,29 @@ describe('CommitV2 repository', () => {
     });
 
     const history = await listCommitHistory(db, project.projectId);
-    const legacyEntry = history.find((entry) => entry.format === 'legacy_v1');
-    expect(history.map((entry) => entry.format).sort()).toEqual(['legacy_v1', 'transition_v2']);
-    expect(legacyEntry).toMatchObject({
-      id: legacy.hash,
-      assurance: { mode: 'legacy_unavailable' },
-    });
-    expect(legacyEntry).not.toHaveProperty('decision');
+    expect(history).toEqual([
+      expect.objectContaining({
+        format: 'transition_v2',
+        id: created.digest,
+        assurance: expect.objectContaining({ mode: 'decision_bound' }),
+      }),
+    ]);
 
-    const legacyView = await getTransitionViewForCommit(db, {
+    const transitionView = await getTransitionViewForCommit(db, {
       projectId: project.projectId,
-      refName: 'legacy',
-      commitId: legacy.hash,
+      refName: 'main',
+      commitId: created.digest,
     });
-    expect(legacyView).toMatchObject({
+    expect(transitionView).toMatchObject({
       schema: 't3x.dev/transition-view/v1',
-      mode: 'legacy',
-      claims: { observation: 'unavailable', reason: 'legacy_v1' },
-      checks: { observation: 'unavailable', reason: 'legacy_v1' },
+      mode: 'transition',
+      history: { observation: 'committed', commit: { id: created.digest } },
     });
     await expect(
       getTransitionViewForCommit(db, {
         projectId: project.projectId,
         refName: 'main',
-        commitId: legacy.hash,
+        commitId: `sha256:${'0'.repeat(64)}`,
       })
     ).resolves.toBeNull();
   });

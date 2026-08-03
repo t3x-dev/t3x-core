@@ -8,9 +8,9 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { collectResult, diffCommits, runOperation, type TreeDiff } from '@t3x-dev/core';
-import { getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { buildPipelineContext } from '../ops/context';
 import { diffOp } from '../ops/diff';
 
@@ -248,18 +248,17 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
   // Mode 1: commit_hash mode (unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
     const db = await getDB();
-    const baseCommit = await getCommitUnified(db, body.base_commit_hash);
-    const targetCommit = await getCommitUnified(db, body.target_commit_hash);
+    const baseCommit = await getRepositorySemanticCommit(db, body.base_commit_hash);
+    const targetCommit = await getRepositorySemanticCommit(db, body.target_commit_hash);
 
     if (baseCommit && targetCommit) {
-      const diff: TreeDiff = diffCommits(baseCommit.content, targetCommit.content);
+      const diff: TreeDiff = diffCommits(baseCommit.semanticContent, targetCommit.semanticContent);
 
       const commitMeta = (commit: typeof baseCommit) => ({
-        hash: commit.hash,
-        message: commit.message ?? null,
-        author: commit.author,
-        committed_at: commit.committed_at,
-        branch: commit.branch,
+        digest: commit.digest,
+        rationale: commit.rationale,
+        actor: commit.actor,
+        recorded_at: commit.recordedAt,
       });
 
       return c.json(

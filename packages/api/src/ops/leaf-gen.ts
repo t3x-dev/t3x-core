@@ -15,11 +15,11 @@ import {
   createLeafHistory,
   findLeafById,
   findLeavesByCommit,
-  getCommitUnified,
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
 import { createModelBoundProvider, resolveProviderAndModel } from '../lib/provider-resolver';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import type { ApiPipelineContext } from './context';
@@ -78,11 +78,11 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
       throw new Error(`Leaf not found: ${leafId}`);
     }
 
-    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+    const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
       throw new Error(`Source commit not found: ${leaf.commit_hash}`);
     }
-    const knowledge = unifiedCommit.content;
+    const knowledge = unifiedCommit.semanticContent;
 
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
 

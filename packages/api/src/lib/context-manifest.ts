@@ -1,7 +1,6 @@
 import {
   type BuiltContext,
   buildConversationContext,
-  type Commit,
   type ConversationContext,
   type ConversationData,
   estimateTokens,
@@ -20,10 +19,13 @@ import {
   findPinsByProject,
   findTurnByHash,
   findTurnsByConversation,
-  getCommitUnified,
   getConversationContext,
   getLeavesByIds,
 } from '@t3x-dev/storage';
+import {
+  getRepositorySemanticCommit,
+  type RepositorySemanticCommitProjection,
+} from './repository-state-transition';
 
 const MAX_MATERIAL_CONTEXT_CHARS = 20_000;
 
@@ -158,7 +160,7 @@ export async function buildConversationContextManifest(
   });
 
   const baselineText = baselineContent
-    ? `## Parent Baseline\n\n${serializeForPrompt(baselineContent.content)}`
+    ? `## Parent Baseline\n\n${serializeForPrompt(baselineContent.semanticContent)}`
     : '';
   const chat_context_text = [baselineText, builtPinContext.text].filter(Boolean).join('\n\n');
   const feedback = buildFeedback(contextPins, leaves, activePinIds);
@@ -232,16 +234,15 @@ async function loadBaselineContent(
   db: AnyDB,
   parentCommitHash: string | null,
   projectId: string
-): Promise<Commit | null> {
+): Promise<RepositorySemanticCommitProjection | null> {
   if (!parentCommitHash) return null;
 
-  const commit = await getCommitUnified(db, parentCommitHash);
-  if (!commit || commit.project_id !== projectId) return null;
-
-  return commit;
+  return getRepositorySemanticCommit(db, parentCommitHash, projectId);
 }
 
-function toBaseline(baselineContent: Commit | null): ContextManifestBaseline {
+function toBaseline(
+  baselineContent: RepositorySemanticCommitProjection | null
+): ContextManifestBaseline {
   if (!baselineContent) {
     return {
       commit_hash: null,
@@ -255,19 +256,19 @@ function toBaseline(baselineContent: Commit | null): ContextManifestBaseline {
     };
   }
 
-  const sourceConversation = baselineContent.sources?.find(
-    (source) => source.type === 'conversation'
-  );
+  const sourceConversationId = baselineContent.evidence
+    .map((evidence) => evidence.resource.uri.match(/\/conversations\/([^/]+)(?:\/|$)/)?.[1] ?? null)
+    .find((id): id is string => id !== null);
 
   return {
-    commit_hash: baselineContent.hash,
-    branch: baselineContent.branch,
-    message: baselineContent.message,
-    content: baselineContent.content,
+    commit_hash: baselineContent.digest,
+    branch: null,
+    message: baselineContent.rationale,
+    content: baselineContent.semanticContent,
     source: 'parent_commit',
-    source_conversation_id: sourceConversation?.id ?? null,
-    node_count: flattenTrees(baselineContent.content.trees).length,
-    relation_count: baselineContent.content.relations.length,
+    source_conversation_id: sourceConversationId ?? null,
+    node_count: flattenTrees(baselineContent.semanticContent.trees).length,
+    relation_count: baselineContent.semanticContent.relations.length,
   };
 }
 

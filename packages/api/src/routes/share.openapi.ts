@@ -15,7 +15,6 @@ import {
   findShareTokenById,
   findShareTokenByToken,
   findShareTokensByEntity,
-  getCommitUnified,
   getComparison,
   getRun,
   revokeShareToken,
@@ -23,6 +22,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -102,11 +102,11 @@ shareRoutes.openapi(createShareRoute, async (c) => {
       }
       projectId = comparison.projectId || undefined;
     } else if (body.entity_type === 'commit') {
-      const commit = await getCommitUnified(db, body.entity_id);
+      const commit = await getRepositorySemanticCommit(db, body.entity_id);
       if (!commit) {
         return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Commit not found: ${body.entity_id}`);
       }
-      projectId = commit.project_id ?? undefined;
+      projectId = commit.projectId;
     }
 
     if (!projectId) {
@@ -191,7 +191,7 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
     } else if (entityType === 'comparison') {
       entity = await getComparison(db, shareToken.entity_id);
     } else if (entityType === 'commit') {
-      entity = await getCommitUnified(db, shareToken.entity_id);
+      entity = await getRepositorySemanticCommit(db, shareToken.entity_id, shareToken.project_id);
     } else {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Unsupported entity type');
     }
