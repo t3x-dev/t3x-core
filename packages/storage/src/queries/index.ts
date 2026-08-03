@@ -50,7 +50,6 @@ export {
   insertBranch,
   type ListBranchesOptions,
   switchBranch,
-  updateBranchHead,
 } from './branches';
 // Business Rules
 export {
@@ -68,11 +67,7 @@ export {
 } from './commit-rewrites';
 // Commits (tree-based)
 export {
-  BranchLinearityError,
-  CommitParentIntegrityError,
-  type CreateCommitInput,
   collectYOpsForCommitRange,
-  createCommit,
   deleteCommit,
   getCommit,
   getCommitsByHashes,

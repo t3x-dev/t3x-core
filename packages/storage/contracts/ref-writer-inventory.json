@@ -2,10 +2,6 @@
   "schema_version": 1,
   "issue": "#1308",
   "target": "only authorized CommitV2 expected-head CAS may advance an existing ref",
-  "direct_mutators": [
-    "packages/storage/src/queries/branches.ts",
-    "packages/storage/src/queries/commits.ts",
-    "packages/storage/src/queries/transition-commits.ts"
-  ],
-  "legacy_helper_callers": ["packages/storage/src/queries/branches.ts"]
+  "direct_mutators": ["packages/storage/src/queries/transition-commits.ts"],
+  "legacy_helper_callers": []
 }

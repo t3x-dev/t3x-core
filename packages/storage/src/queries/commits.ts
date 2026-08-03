@@ -8,21 +8,18 @@
  */
 
 import type { Author, Commit, CommitSchemaTag, Provenance, SemanticContent } from '@t3x-dev/core';
-import { COMMIT_SCHEMA, computeCommitHash, generateBranchId } from '@t3x-dev/core';
+import { COMMIT_SCHEMA } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { branches } from '../schema';
 import { type CommitRecord, commits } from '../schema-commits';
-import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
-import { acquireProjectSupersedeLock } from './yops-log';
 
 /**
- * Thrown by `createCommit` when the caller passes one or more
- * `yops_log_ids` whose `superseded_at IS NOT NULL` at insert time.
+ * Thrown when a Transition consumes one or more `yops_log_ids` whose
+ * `superseded_at IS NOT NULL` at insert time.
  * Indicates a re-extract landed between the caller's
  * `findUncommittedYOpsIds()` snapshot and the commit's insert,
  * marking entries that the caller still believed were active. The
@@ -37,55 +34,9 @@ export class SupersededYOpsLogIdsError extends Error {
   }
 }
 
-export class BranchLinearityError extends Error {
-  constructor(
-    public readonly code: 'BRANCH_ROOT_EXISTS' | 'BRANCH_NOT_HEAD',
-    message: string
-  ) {
-    super(message);
-    this.name = 'BranchLinearityError';
-  }
-}
-
-export { BranchLinearityError as MainBranchLinearityError };
-
-export class CommitParentIntegrityError extends Error {
-  constructor(
-    public readonly code: 'PARENT_NOT_FOUND' | 'PARENT_PROJECT_MISMATCH',
-    public readonly parentHash: string,
-    public readonly projectId: string
-  ) {
-    super(
-      code === 'PARENT_NOT_FOUND'
-        ? `Parent commit "${parentHash}" does not exist`
-        : `Parent commit "${parentHash}" does not belong to project "${projectId}"`
-    );
-    this.name = 'CommitParentIntegrityError';
-  }
-}
-
-// Drizzle's tx vs db types vary by adapter; the runtime contract
-// (transaction(fn)) is uniform and callers narrow tx to AnyDB.
-type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
-
 // ============================================================
 // Types
 // ============================================================
-
-export interface CreateCommitInput {
-  parents?: string[];
-  author: Author;
-  content: SemanticContent;
-  project_id: string;
-  message?: string;
-  branch?: string;
-  provenance?: Provenance;
-  yops_log_ids?: string[];
-  sources?: Array<{ type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }>;
-  enforceBranchLinearity?: boolean;
-  /** @deprecated Use enforceBranchLinearity. */
-  enforceMainLinearity?: boolean;
-}
 
 export interface ListCommitsOptions {
   projectId: string;
@@ -98,188 +49,6 @@ export interface ListCommitsOptions {
 // ============================================================
 // Query Functions
 // ============================================================
-
-/**
- * Create a new frame-based commit.
- *
- * Computes the hash from first-class fields, inserts into commits table,
- * and returns the full Commit object.
- */
-export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise<Commit> {
-  const parents = input.parents ?? [];
-  const now = new Date().toISOString();
-  const branch = input.branch ?? 'main';
-  const yopsLogIds = input.yops_log_ids ?? [];
-  const enforceLinearity = input.enforceBranchLinearity ?? input.enforceMainLinearity ?? false;
-
-  // Compute hash up front (deterministic; no DB needed).
-  const hash = computeCommitHash({
-    schema: COMMIT_SCHEMA,
-    parents,
-    author: input.author,
-    committed_at: now,
-    content: input.content,
-  });
-
-  const insertCommit = async (txOrDb: AnyDB): Promise<CommitRecord> => {
-    const [row] = await txOrDb
-      .insert(commits)
-      .values({
-        hash,
-        schema: COMMIT_SCHEMA,
-        parents,
-        author: input.author,
-        committedAt: new Date(now),
-        content: input.content,
-        projectId: input.project_id,
-        message: input.message ?? null,
-        branch,
-        provenance: input.provenance ?? null,
-        yopsLogIds,
-        sources: input.sources ?? null,
-      })
-      .returning();
-    return row;
-  };
-
-  const insertWithBranchLinearityGuard = async (txOrDb: AnyDB): Promise<CommitRecord> => {
-    if (enforceLinearity) {
-      await assertCommitParentIntegrity(txOrDb, input.project_id, parents);
-      await assertBranchLinearity(txOrDb, input.project_id, branch, parents);
-    }
-    const row = await insertCommit(txOrDb);
-    if (enforceLinearity) {
-      await advanceBranchHead(txOrDb, input.project_id, branch, parents[0] ?? null, hash);
-    }
-    return row;
-  };
-
-  // Fast path: nothing to lock. Skip the transaction entirely.
-  if (yopsLogIds.length === 0 && !enforceLinearity) {
-    const row = await insertWithBranchLinearityGuard(db);
-    return rowToCommit(row);
-  }
-
-  // Race-closing path: per-project advisory transaction lock shared
-  // with `supersedeActiveLLMSuggestions`. Acquired inside the
-  // transaction (so it auto-releases at COMMIT/ROLLBACK), it
-  // serialises both extract-side supersede checks and branch-head
-  // validation+insert. Reusing one lock keeps commits with and without
-  // YOps log references from racing each other.
-  //
-  // Why advisory (and not row-level locking): under PG READ
-  // COMMITTED, a waiting UPDATE re-evaluates the WHERE predicate
-  // only against the locked row — its subqueries over OTHER tables
-  // (here, `commits`) keep using the original statement snapshot.
-  // So even a `FOR UPDATE` / `FOR SHARE` on yops_log rows would not
-  // have caused the supersede's `NOT EXISTS (... commits ...)` to
-  // see our newly-inserted commit row, and the row could be marked
-  // superseded after we committed referencing it. Advisory lock
-  // takes that ambiguity off the table by serialising the two paths
-  // outright.
-  //
-  // Sequence inside the transaction:
-  //   1. pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, hashtext(projectId)) —
-  //      blocks any concurrent supersede on this project.
-  //   2. SELECT for already-superseded ids. If any, throw —
-  //      caller raced *before* we acquired the lock; their snapshot
-  //      is stale, they should retry.
-  //   3. INSERT commit. After this, the rows are referenced by
-  //      `commits.yops_log_ids`. The next supersede (which has been
-  //      waiting on the advisory lock) wakes up, sees the new commits
-  //      row in its NOT EXISTS subquery, and excludes them.
-  const insertWithSupersedeGuard = async (txOrDb: AnyDB): Promise<CommitRecord> => {
-    await acquireProjectSupersedeLock(txOrDb, input.project_id);
-
-    const superseded = await txOrDb
-      .select({ id: yopsLog.id })
-      .from(yopsLog)
-      .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
-    if (superseded.length > 0) {
-      throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
-    }
-
-    return insertWithBranchLinearityGuard(txOrDb);
-  };
-
-  const insertWithGuards = async (txOrDb: AnyDB): Promise<CommitRecord> => {
-    if (yopsLogIds.length > 0) {
-      return insertWithSupersedeGuard(txOrDb);
-    }
-    if (enforceLinearity) {
-      await acquireProjectSupersedeLock(txOrDb, input.project_id);
-    }
-    return insertWithBranchLinearityGuard(txOrDb);
-  };
-
-  const runner = db as unknown as Partial<TxRunner>;
-  const result =
-    typeof runner.transaction === 'function'
-      ? await runner.transaction(async (tx) => insertWithGuards(tx as AnyDB))
-      : await insertWithGuards(db);
-
-  return rowToCommit(result as CommitRecord);
-}
-
-/**
- * Keep the registered branch pointer in the same transaction as the commit.
- *
- * Some callers create a branch implicitly by committing to a new branch name.
- * In that case, infer its parent branch from the first parent commit and register
- * the branch before publishing its new head.
- */
-async function advanceBranchHead(
-  db: AnyDB,
-  projectId: string,
-  branchName: string,
-  firstParentHash: string | null,
-  headCommitHash: string
-): Promise<void> {
-  const [existingBranch] = await db
-    .select({ branchId: branches.branchId })
-    .from(branches)
-    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
-    .limit(1);
-
-  const now = new Date();
-  if (existingBranch) {
-    await db
-      .update(branches)
-      .set({ headCommitHash, updatedAt: now })
-      .where(eq(branches.branchId, existingBranch.branchId));
-    return;
-  }
-
-  const [anyProjectBranch] = await db
-    .select({ branchId: branches.branchId })
-    .from(branches)
-    .where(eq(branches.projectId, projectId))
-    .limit(1);
-
-  let parentBranch: string | null = null;
-  if (firstParentHash) {
-    const [parentCommit] = await db
-      .select({ branch: commits.branch })
-      .from(commits)
-      .where(and(eq(commits.hash, firstParentHash), eq(commits.projectId, projectId)))
-      .limit(1);
-    if (parentCommit && parentCommit.branch !== branchName) {
-      parentBranch = parentCommit.branch;
-    }
-  }
-
-  await db.insert(branches).values({
-    branchId: generateBranchId(),
-    projectId,
-    name: branchName,
-    parentBranch,
-    headCommitHash,
-    description: null,
-    isCurrent: anyProjectBranch ? 0 : 1,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
 
 /**
  * Get a single commit by hash.
@@ -474,59 +243,6 @@ export async function updateCommitMessage(
     .returning();
 
   return updated ? rowToCommit(updated) : null;
-}
-
-// ============================================================
-// Helpers
-// ============================================================
-
-async function assertCommitParentIntegrity(
-  db: AnyDB,
-  projectId: string,
-  parents: string[]
-): Promise<void> {
-  if (parents.length === 0) return;
-
-  const parentRows = await db
-    .select({ hash: commits.hash, projectId: commits.projectId })
-    .from(commits)
-    .where(inArray(commits.hash, parents));
-  const parentsByHash = new Map(parentRows.map((parent) => [parent.hash, parent]));
-
-  for (const parentHash of parents) {
-    const parent = parentsByHash.get(parentHash);
-    if (!parent) {
-      throw new CommitParentIntegrityError('PARENT_NOT_FOUND', parentHash, projectId);
-    }
-    if (parent.projectId !== projectId) {
-      throw new CommitParentIntegrityError('PARENT_PROJECT_MISMATCH', parentHash, projectId);
-    }
-  }
-}
-
-async function assertBranchLinearity(
-  db: AnyDB,
-  projectId: string,
-  branch: string,
-  parents: string[]
-): Promise<void> {
-  const currentHead = await getLatestCommit(db, projectId, branch);
-  if (parents.length === 0) {
-    if (currentHead) {
-      throw new BranchLinearityError(
-        'BRANCH_ROOT_EXISTS',
-        `A root commit on branch "${branch}" already exists`
-      );
-    }
-    return;
-  }
-
-  if (currentHead && parents[0] !== currentHead.hash) {
-    throw new BranchLinearityError(
-      'BRANCH_NOT_HEAD',
-      `Branch "${branch}" commits must use the current branch head as first parent`
-    );
-  }
 }
 
 /**

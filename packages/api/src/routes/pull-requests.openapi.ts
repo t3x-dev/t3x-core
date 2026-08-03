@@ -35,7 +35,6 @@ import {
   updatePullRequest,
 } from '@t3x-dev/storage';
 import { getAuthorFromContext } from '../lib/auth';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -1375,8 +1374,6 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
       200
     );
   } catch (error) {
-    const linearity = mapBranchLinearityError(c, error);
-    if (linearity) return linearity;
     if (error instanceof MergeError) {
       if (error.code === 'PULL_REQUEST_NOT_FOUND') {
         return c.json(errorBody(error.code, error.message), 404);
