@@ -19,6 +19,7 @@
  * setServerChecks*).
  */
 
+import type { MergeDecision } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import {
   commitMergeDraft,
@@ -91,33 +92,37 @@ export function useMergeWorkspaceActions() {
     }
   }, []);
 
-  const commit = useCallback(async (branch?: string): Promise<{ hash: string }> => {
-    const { draftId, message, projectId, targetBranch } = useMergeWorkspaceStore.getState();
-    if (!draftId) throw new Error('No draft to commit');
+  const commit = useCallback(
+    async (branch?: string, decisions?: MergeDecision): Promise<{ hash: string }> => {
+      const { draftId, message, projectId, targetBranch } = useMergeWorkspaceStore.getState();
+      if (!draftId) throw new Error('No draft to commit');
 
-    useMergeWorkspaceStore.getState().clearError();
+      useMergeWorkspaceStore.getState().clearError();
 
-    try {
-      const commitBranch = branch || targetBranch || 'main';
-      const commitResult = await commitMergeDraft(draftId, {
-        message,
-        branch: commitBranch,
-      });
-      useMergeWorkspaceStore.getState().setCommitted();
-      if (projectId) {
-        dispatchCommitCreated({
-          projectId,
-          hash: commitResult.hash,
+      try {
+        const commitBranch = branch || targetBranch || 'main';
+        const commitResult = await commitMergeDraft(draftId, {
+          message,
           branch: commitBranch,
+          decisions,
         });
+        useMergeWorkspaceStore.getState().setCommitted();
+        if (projectId) {
+          dispatchCommitCreated({
+            projectId,
+            hash: commitResult.hash,
+            branch: commitBranch,
+          });
+        }
+        return commitResult;
+      } catch (err) {
+        const errorMsg = formatUserFacingError(err, 'Failed to commit.');
+        useMergeWorkspaceStore.getState().setCommitFailed(errorMsg);
+        throw err;
       }
-      return commitResult;
-    } catch (err) {
-      const errorMsg = formatUserFacingError(err, 'Failed to commit.');
-      useMergeWorkspaceStore.getState().setCommitFailed(errorMsg);
-      throw err;
-    }
-  }, []);
+    },
+    []
+  );
 
   const cancel = useCallback(async (): Promise<void> => {
     const { draftId } = useMergeWorkspaceStore.getState();

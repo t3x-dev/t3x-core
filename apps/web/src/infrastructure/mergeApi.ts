@@ -4,7 +4,7 @@
  * CRUD operations for merge drafts, plus prepare/execute for canvas-based merges.
  */
 
-import type { MergeResult } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
 
 // ============================================================================
@@ -99,7 +99,7 @@ export async function deleteMergeDraft(draftId: string): Promise<void> {
  */
 export async function commitMergeDraft(
   draftId: string,
-  params: { message: string; branch: string }
+  params: { message: string; branch: string; decisions?: MergeDecision }
 ): Promise<{ hash: string }> {
   const res = await fetchWithTimeout(
     `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}/commit`,
