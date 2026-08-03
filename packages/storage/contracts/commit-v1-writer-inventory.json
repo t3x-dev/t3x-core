@@ -4,7 +4,6 @@
   "target": "zero production CommitV1 createCommit() paths",
   "writers": [
     "packages/api/src/ops/merge.ts",
-    "packages/api/src/routes/autopilot.openapi.ts",
     "packages/api/src/routes/commits.openapi.ts",
     "packages/api/src/routes/drafts-workflows.openapi.ts",
     "packages/api/src/routes/merge.openapi.ts",
