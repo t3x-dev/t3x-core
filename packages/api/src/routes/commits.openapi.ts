@@ -29,6 +29,7 @@ import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
   RepositoryStateDomainUnsupportedError,
 } from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -225,6 +226,9 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
     let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
     await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as typeof db;
+      const evidence = sourceConversationId
+        ? await getRepositoryConversationEvidence(tx, body.project_id, sourceConversationId)
+        : [];
       created = await commitRepositoryYOpsState({
         db: tx,
         projectId: body.project_id,
@@ -236,6 +240,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
           id: userId ? `user:${userId}` : 'human:local-user',
         },
         ...(body.message?.trim() ? { intent: body.message.trim() } : {}),
+        ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
       if (sourceConversationId) {

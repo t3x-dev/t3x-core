@@ -57,19 +57,10 @@ const modePresentation: Record<
     className:
       'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
   },
-  legacy: {
-    label: 'Legacy reference',
-    title: 'Legacy source reference',
-    description:
-      'Earlier commits identify this source, but do not record a turn-level evidence selection.',
-    className:
-      'border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/8 text-[var(--accent-branch)]',
-  },
   unavailable: {
     label: 'Unavailable',
     title: 'Source is unavailable',
-    description:
-      'The commit reference remains, but the repository cannot resolve the source record.',
+    description: 'Evidence remains, but the repository cannot resolve the source record.',
     className:
       'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]',
   },
@@ -110,13 +101,7 @@ function mergePage(
     ? next.availability.reasons.filter((reason) => reason !== 'TURN_PAGE_INCOMPLETE')
     : next.availability.reasons;
   const mode: SourceAvailabilityMode =
-    next.source === null
-      ? 'unavailable'
-      : !complete
-        ? 'partial'
-        : next.referring_commits.length > 0
-          ? 'legacy'
-          : 'available';
+    next.source === null ? 'unavailable' : !complete ? 'partial' : 'available';
 
   return {
     ...next,
@@ -439,10 +424,12 @@ export function ConversationSourceEvidencePage({
                 <ShieldQuestion className="h-3.5 w-3.5 text-[var(--accent-commit)]" /> Evidence
                 selection
               </h2>
-              <p className="mt-3 text-sm font-medium text-[var(--text-secondary)]">Not recorded</p>
+              <p className="mt-3 text-sm font-medium text-[var(--text-secondary)]">
+                {data.evidence_selection.turn_hashes.length} immutable turn
+                {data.evidence_selection.turn_hashes.length === 1 ? '' : 's'} referenced
+              </p>
               <p className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
-                This history identifies the conversation source, but does not claim which turns were
-                selected as evidence.
+                Proposal and verification evidence is resolved from the committed Transition graph.
               </p>
             </section>
 
@@ -458,23 +445,23 @@ export function ConversationSourceEvidencePage({
                 ) : (
                   data.referring_commits.map((reference) => (
                     <Link
-                      key={`${reference.branch}:${reference.commit_id}`}
+                      key={reference.commit_digest}
                       href={withReturnTo(
-                        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(reference.commit_id)}`,
+                        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(reference.commit_digest)}`,
                         currentHref
                       )}
                       className="block rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-colors hover:border-[var(--accent-commit)]/35 hover:bg-[var(--hover-bg)]"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-xs font-medium text-[var(--text-primary)]">
-                          {reference.message || 'Commit'}
+                          {reference.intent || 'Repository change'}
                         </span>
                         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
                       </div>
                       <div className="mt-1.5 flex items-center gap-2 font-mono text-[10px] text-[var(--text-tertiary)]">
-                        <span>{shortDigest(reference.commit_id)}</span>
+                        <span>{shortDigest(reference.commit_digest)}</span>
                         <span>·</span>
-                        <span>{reference.branch}</span>
+                        <span>{reference.evidence_refs.length} evidence ref(s)</span>
                       </div>
                     </Link>
                   ))

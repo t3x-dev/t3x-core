@@ -570,6 +570,7 @@ vi.mock('@t3x-dev/storage', () => ({
 
 vi.mock('@t3x-dev/api/repository-state-transition', () => ({
   createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  getRepositoryConversationEvidence: vi.fn(() => Promise.resolve([])),
   prepareRepositoryYOpsMerge: vi.fn(
     async (input: { sourceDigest: string; targetDigest: string }) => {
       const source = mockState.commits.get(input.sourceDigest);

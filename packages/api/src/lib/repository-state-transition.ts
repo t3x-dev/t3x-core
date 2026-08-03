@@ -28,11 +28,14 @@ import {
   type SemanticContent,
   type State,
   type StatementObservation,
+  sha256,
   type TransitionViewV1,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
   createTransitionCommit,
+  findConversationById,
+  findTurnsByConversation,
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
@@ -81,7 +84,7 @@ const REPOSITORY_STATE_POLICY = createAcceptancePolicyResource({
         humanConfirmation: 'not_required',
       },
       rationale: {
-        allowedModes: ['authored', 'unspecified'],
+        allowedModes: ['authored', 'inferred', 'unspecified'],
         minimumEvidence: 0,
         humanConfirmation: 'not_required',
       },
@@ -171,6 +174,8 @@ export interface CommitRepositoryYOpsStateInput {
   actor: ActorRef;
   intent?: string;
   rationale?: string;
+  /** Server-resolved immutable source provenance for the Proposal claims. */
+  evidence?: readonly EvidenceRef[];
   yopsLogIds?: readonly string[];
 }
 
@@ -222,6 +227,33 @@ export class RepositoryStateDecisionDeniedError extends Error {
 /** Losslessly encode structured repository content in the versioned YOps State domain. */
 export function createRepositoryYOpsStateFromSemanticContent(content: SemanticContent): State {
   return createRepositorySemanticState(content);
+}
+
+/** Resolve one conversation into immutable turn-level Proposal EvidenceRefs. */
+export async function getRepositoryConversationEvidence(
+  db: AnyDB,
+  projectId: string,
+  conversationId: string
+): Promise<EvidenceRef[]> {
+  const conversation = await findConversationById(db, conversationId);
+  if (conversation === null || conversation.projectId !== projectId) return [];
+  const turns = await findTurnsByConversation(db, {
+    conversationId,
+    order: 'asc',
+    limit: 10_000,
+    offset: 0,
+  });
+  return turns.map((turn) => ({
+    resource: {
+      uri: `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turn.turnHash)}`,
+      mediaType: 'text/plain;charset=utf-8',
+      digest: `sha256:${sha256(turn.content)}` as `sha256:${string}`,
+    },
+    locator: {
+      scheme: 't3x.text-quote/v1',
+      value: { quote: turn.content },
+    },
+  }));
 }
 
 /** Decode only the repository SemanticContent domain; never guess another State shape. */
@@ -318,11 +350,23 @@ export async function commitRepositoryYOpsState(
     target: input.target,
     expectedBase: describeTransitionObject(base),
   });
+  const proposalDraft = createHumanProposalDraft({
+    ...(input.intent?.trim() ? { intent: input.intent.trim() } : {}),
+    ...(input.rationale?.trim() ? { why: input.rationale.trim() } : {}),
+  });
+  const evidence: EvidenceRef[] = structuredClone([...(input.evidence ?? [])]);
+  if (evidence.length > 0) {
+    proposalDraft.rationale =
+      proposalDraft.rationale.mode === 'unspecified'
+        ? {
+            mode: 'inferred',
+            value: 'Repository state was derived from immutable source evidence.',
+            evidence,
+          }
+        : { ...proposalDraft.rationale, evidence };
+  }
   const compiled = compileProposalDraft({
-    draft: createHumanProposalDraft({
-      ...(input.intent?.trim() ? { intent: input.intent.trim() } : {}),
-      ...(input.rationale?.trim() ? { why: input.rationale.trim() } : {}),
-    }),
+    draft: proposalDraft,
     effect,
     actor: input.actor,
   });

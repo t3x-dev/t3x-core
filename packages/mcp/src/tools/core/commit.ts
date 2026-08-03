@@ -151,8 +151,11 @@ export const commitHandler: ToolHandler = async (args) => {
 
     // Load the shared application use case only for the storage backend. The
     // API backend already executes the same use case behind commitFromDraft.
-    const { commitRepositoryYOpsState, createRepositoryYOpsStateFromSemanticContent } =
-      await import('@t3x-dev/api/repository-state-transition');
+    const {
+      commitRepositoryYOpsState,
+      createRepositoryYOpsStateFromSemanticContent,
+      getRepositoryConversationEvidence,
+    } = await import('@t3x-dev/api/repository-state-transition');
     const target = createRepositoryYOpsStateFromSemanticContent({
       trees: commitTrees,
       relations: [],
@@ -162,6 +165,10 @@ export const commitHandler: ToolHandler = async (args) => {
       transaction: <T>(fn: (tx: AnyDB) => Promise<T>) => Promise<T>;
     };
     await runner.transaction(async (tx) => {
+      const conversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+      const evidence = conversationId
+        ? await getRepositoryConversationEvidence(tx, projectId, conversationId)
+        : [];
       created = await commitRepositoryYOpsState({
         db: tx,
         projectId,
@@ -170,6 +177,7 @@ export const commitHandler: ToolHandler = async (args) => {
         target,
         actor: { kind: 'human', id: 'human:mcp-local' },
         intent: message,
+        ...(evidence.length === 0 ? {} : { evidence }),
       });
       if (!(await commitDraft(tx, draftId, created.commitDigest))) {
         throw new Error(`Draft ${draftId} was already committed by another request.`);

@@ -107,11 +107,8 @@ export interface ListTurnsResponse {
 }
 
 // Repository source/evidence types
-export type SourceAvailabilityMode = 'available' | 'partial' | 'legacy' | 'unavailable';
-export type SourceAvailabilityReason =
-  | 'SOURCE_RECORD_MISSING'
-  | 'TURN_PAGE_INCOMPLETE'
-  | 'LEGACY_COMMIT_SOURCE_REFERENCE';
+export type SourceAvailabilityMode = 'available' | 'partial' | 'unavailable';
+export type SourceAvailabilityReason = 'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE';
 
 export interface ConversationSource {
   type: 'conversation';
@@ -162,12 +159,13 @@ export interface SourceEvidenceRevision {
 }
 
 export interface SourceCommitReference {
-  format: 'legacy_v1';
-  commit_id: string;
-  branch: string;
-  message: string | null;
+  commit_digest: string;
   recorded_at: string;
-  source_title: string | null;
+  intent: string | null;
+  evidence_refs: Array<{
+    resource: { uri: string; mediaType: string; digest: string };
+    locator: { scheme: string; value: unknown };
+  }>;
 }
 
 export interface ConversationSourceEvidence {
@@ -185,7 +183,7 @@ export interface ConversationSourceEvidence {
   };
   revisions: SourceEvidenceRevision[];
   evidence_selection: {
-    mode: 'not_recorded';
+    mode: 'immutable_refs';
     turn_hashes: string[];
   };
   referring_commits: SourceCommitReference[];
@@ -932,20 +930,7 @@ export interface TransitionGraphViewV1 {
   audit: TransitionProtocolValue;
 }
 
-export interface LegacyTransitionViewV1 {
-  schema: 't3x.dev/transition-view/v1';
-  version: 1;
-  mode: 'legacy';
-  change: TransitionProtocolValue;
-  claims: TransitionProtocolValue;
-  checks: TransitionProtocolValue;
-  decision: TransitionProtocolValue;
-  history: TransitionProtocolValue;
-  capabilities: TransitionGraphViewV1['capabilities'];
-  audit: TransitionProtocolValue;
-}
-
-export type TransitionViewV1 = TransitionGraphViewV1 | LegacyTransitionViewV1;
+export type TransitionViewV1 = TransitionGraphViewV1;
 
 export interface TransitionStatementMembershipView {
   digest: string;

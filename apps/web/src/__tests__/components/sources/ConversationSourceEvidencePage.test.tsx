@@ -47,7 +47,7 @@ const baseEvidence: ConversationSourceEvidence = {
     completeness: 'complete',
   },
   revisions: [],
-  evidence_selection: { mode: 'not_recorded', turn_hashes: [] },
+  evidence_selection: { mode: 'immutable_refs', turn_hashes: [] },
   referring_commits: [],
 };
 
@@ -73,34 +73,38 @@ describe('ConversationSourceEvidencePage', () => {
     expect(screen.getByText('Source is available')).toBeInTheDocument();
     expect(screen.getByText('Raise the rollout to 20%.')).toBeInTheDocument();
     expect(screen.getByText('Referenced turn')).toBeInTheDocument();
-    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+    expect(screen.getByText('0 immutable turns referenced')).toBeInTheDocument();
     expect(screen.queryByText('Send message')).not.toBeInTheDocument();
   });
 
-  it('renders legacy evidence as explicit rather than verified', async () => {
+  it('renders CommitV2 evidence references explicitly', async () => {
     readerMock.mockResolvedValue({
       ...baseEvidence,
-      availability: {
-        mode: 'legacy',
-        reasons: ['LEGACY_COMMIT_SOURCE_REFERENCE'],
-      },
+      evidence_selection: { mode: 'immutable_refs', turn_hashes: ['sha256:turn-1'] },
       referring_commits: [
         {
-          format: 'legacy_v1',
-          commit_id: 'sha256:historical',
-          branch: 'main',
-          message: 'Historical policy change',
+          commit_digest: 'sha256:historical',
+          intent: 'Historical policy change',
           recorded_at: '2026-07-01T00:00:00.000Z',
-          source_title: 'Release review',
+          evidence_refs: [
+            {
+              resource: {
+                uri: 't3x://projects/proj_1/conversations/conv_1/turns/sha256%3Aturn-1',
+                mediaType: 'text/plain;charset=utf-8',
+                digest: 'sha256:evidence',
+              },
+              locator: { scheme: 't3x.text-quote/v1', value: { quote: 'Raise rollout' } },
+            },
+          ],
         },
       ],
     });
 
     render(<ConversationSourceEvidencePage projectId="proj_1" conversationId="conv_1" />);
 
-    expect(await screen.findByText('Legacy source reference')).toBeInTheDocument();
+    expect(await screen.findByText('Source is available')).toBeInTheDocument();
     expect(screen.getByText('Historical policy change')).toBeInTheDocument();
-    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+    expect(screen.getByText('1 immutable turn referenced')).toBeInTheDocument();
   });
 
   it('keeps a missing source visibly unavailable while retaining commit references', async () => {
@@ -111,12 +115,10 @@ describe('ConversationSourceEvidencePage', () => {
       turns: { ...baseEvidence.turns, items: [], total: 0 },
       referring_commits: [
         {
-          format: 'legacy_v1',
-          commit_id: 'sha256:still-recorded',
-          branch: 'archive',
-          message: 'Recorded reference',
+          commit_digest: 'sha256:still-recorded',
+          intent: 'Recorded reference',
           recorded_at: '2026-06-01T00:00:00.000Z',
-          source_title: null,
+          evidence_refs: [],
         },
       ],
     });

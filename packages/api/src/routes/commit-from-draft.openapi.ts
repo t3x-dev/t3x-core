@@ -27,6 +27,7 @@ import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
 } from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -187,6 +188,9 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     let commitDigest: string | undefined;
     await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
+      const evidence = conversationId
+        ? await getRepositoryConversationEvidence(tx, project_id, conversationId)
+        : [];
       const created = await commitRepositoryYOpsState({
         db: tx,
         projectId: project_id,
@@ -198,6 +202,7 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
           id: userId ? `user:${userId}` : 'human:local-user',
         },
         intent: message ?? `Draft: ${draft.title}`,
+        ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
       const claimed = await commitDraft(tx, draft_id, created.commitDigest);

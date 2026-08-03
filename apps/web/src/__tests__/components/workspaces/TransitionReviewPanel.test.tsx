@@ -151,50 +151,6 @@ describe('TransitionReviewPanel', () => {
     ).toBeInTheDocument();
   });
 
-  it('does not fabricate assurance for legacy CommitV1 history', () => {
-    const commitId = digest('4');
-    const view: Extract<TransitionViewV1, { mode: 'legacy' }> = {
-      schema: 't3x.dev/transition-view/v1',
-      version: 1,
-      mode: 'legacy',
-      change: { mode: 'legacy_content', commitId, content: { trees: [], relations: [] } },
-      claims: { observation: 'unavailable', reason: 'legacy_v1' },
-      checks: { observation: 'unavailable', reason: 'legacy_v1' },
-      decision: { observation: 'unavailable', reason: 'legacy_v1' },
-      history: {
-        observation: 'committed',
-        commit: {
-          format: 'legacy_v1',
-          id: commitId,
-          schema: 't3x/commit',
-          parents: [],
-          recordedAt: '2026-07-30T00:00:00.000Z',
-          result: { mode: 'legacy_content', content: { trees: [], relations: [] } },
-          assurance: {
-            mode: 'legacy_unavailable',
-            unavailable: ['proposal', 'evidence', 'replay', 'validation', 'decision'],
-          },
-        },
-      },
-      capabilities: {
-        accept: { disposition: 'not_applicable', reasons: [] },
-        override: { disposition: 'not_applicable', reasons: [] },
-        reject: { disposition: 'not_applicable', reasons: [] },
-        commit: { disposition: 'not_applicable', reasons: [] },
-        revert: { disposition: 'not_evaluated', reasons: [] },
-      },
-      audit: { format: 'legacy_v1', commitId, schema: 't3x/commit' },
-    };
-
-    render(<TransitionReviewPanel error={null} loading={false} view={view} />);
-
-    expect(screen.getByText('Legacy history')).toBeInTheDocument();
-    expect(
-      screen.getByText(/purpose, checks, and approval evidence were not captured/i)
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Approved and saved')).not.toBeInTheDocument();
-  });
-
   it('does not present an observed failed validation as successful', () => {
     const view = transitionView();
     view.checks.validation = {

@@ -470,6 +470,7 @@ export {
   DecisionRecordIntegrityError,
   getCommitHistoryEntry,
   getRepositoryDecisionAudit,
+  getRepositoryDecisionAuditByDigest,
   getTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,

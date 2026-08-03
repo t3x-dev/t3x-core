@@ -15,12 +15,8 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const sourceEvidenceRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
-const SourceAvailabilityModeSchema = z.enum(['available', 'partial', 'legacy', 'unavailable']);
-const SourceAvailabilityReasonSchema = z.enum([
-  'SOURCE_RECORD_MISSING',
-  'TURN_PAGE_INCOMPLETE',
-  'LEGACY_COMMIT_SOURCE_REFERENCE',
-]);
+const SourceAvailabilityModeSchema = z.enum(['available', 'partial', 'unavailable']);
+const SourceAvailabilityReasonSchema = z.enum(['SOURCE_RECORD_MISSING', 'TURN_PAGE_INCOMPLETE']);
 
 const SourceConversationSchema = z.object({
   type: z.literal('conversation'),
@@ -73,12 +69,22 @@ const SourceRevisionSchema = z.object({
 });
 
 const SourceCommitReferenceSchema = z.object({
-  format: z.literal('legacy_v1'),
-  commit_id: z.string(),
-  branch: z.string(),
-  message: z.string().nullable(),
+  commit_digest: z.string(),
   recorded_at: z.string(),
-  source_title: z.string().nullable(),
+  intent: z.string().nullable(),
+  evidence_refs: z.array(
+    z.object({
+      resource: z.object({
+        uri: z.string(),
+        mediaType: z.string(),
+        digest: z.string(),
+      }),
+      locator: z.object({
+        scheme: z.string(),
+        value: z.unknown(),
+      }),
+    })
+  ),
 });
 
 const SourceEvidenceResponseSchema = z.object({
@@ -96,7 +102,7 @@ const SourceEvidenceResponseSchema = z.object({
   }),
   revisions: z.array(SourceRevisionSchema),
   evidence_selection: z.object({
-    mode: z.literal('not_recorded'),
+    mode: z.literal('immutable_refs'),
     turn_hashes: z.array(z.string()),
   }),
   referring_commits: z.array(SourceCommitReferenceSchema),
@@ -108,7 +114,7 @@ const getConversationSourceEvidenceRoute = createRoute({
   tags: ['Sources'],
   summary: 'Read one repository conversation source and its evidence',
   description:
-    'Returns a project-scoped, read-only projection over conversation, immutable turns, controlled source revisions, and legacy commit source references.',
+    'Returns a project-scoped, read-only projection over conversation, immutable turns, controlled source revisions, and CommitV2 Proposal/Statement evidence references.',
   request: {
     params: z.object({
       projectId: z.string().min(1),
@@ -178,21 +184,26 @@ sourceEvidenceRoutes.openapi(getConversationSourceEvidenceRoute, async (c) => {
     }
 
     const turnPageIncomplete = record.turnCount !== record.turns.length;
-    const reasons: Array<
-      'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE' | 'LEGACY_COMMIT_SOURCE_REFERENCE'
-    > = [];
+    const reasons: Array<'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE'> = [];
     if (record.conversation === null) reasons.push('SOURCE_RECORD_MISSING');
     if (turnPageIncomplete) reasons.push('TURN_PAGE_INCOMPLETE');
-    if (record.commitReferences.length > 0) reasons.push('LEGACY_COMMIT_SOURCE_REFERENCE');
 
     const mode =
-      record.conversation === null
-        ? 'unavailable'
-        : turnPageIncomplete
-          ? 'partial'
-          : record.commitReferences.length > 0
-            ? 'legacy'
-            : 'available';
+      record.conversation === null ? 'unavailable' : turnPageIncomplete ? 'partial' : 'available';
+
+    const turnHashes = [
+      ...new Set(
+        record.commitReferences.flatMap((reference) =>
+          reference.evidence.flatMap((evidence) => {
+            const marker = '/turns/';
+            const markerIndex = evidence.resource.uri.indexOf(marker);
+            if (markerIndex < 0) return [];
+            const encoded = evidence.resource.uri.slice(markerIndex + marker.length).split('/')[0];
+            return encoded ? [decodeURIComponent(encoded)] : [];
+          })
+        )
+      ),
+    ].sort();
 
     return c.json(
       {
@@ -260,16 +271,14 @@ sourceEvidenceRoutes.openapi(getConversationSourceEvidenceRoute, async (c) => {
             updated_at: revision.updatedAt.toISOString(),
           })),
           evidence_selection: {
-            mode: 'not_recorded' as const,
-            turn_hashes: [],
+            mode: 'immutable_refs' as const,
+            turn_hashes: turnHashes,
           },
           referring_commits: record.commitReferences.map((reference) => ({
-            format: 'legacy_v1' as const,
-            commit_id: reference.commitHash,
-            branch: reference.branch,
-            message: reference.message,
+            commit_digest: reference.commitDigest,
             recorded_at: reference.recordedAt.toISOString(),
-            source_title: reference.sourceTitle,
+            intent: reference.intent,
+            evidence_refs: reference.evidence,
           })),
         },
       },

@@ -635,6 +635,25 @@ export async function getRepositoryDecisionAudit(
   return row === undefined ? null : resolveDecisionAuditRow(db, row);
 }
 
+/** Resolve Decision audit facts by immutable digest inside one project. */
+export async function getRepositoryDecisionAuditByDigest(
+  db: AnyDB,
+  projectId: string,
+  decisionDigest: string
+): Promise<RepositoryDecisionAuditEntry | null> {
+  const [row] = await db
+    .select()
+    .from(transitionDecisionLedger)
+    .where(
+      and(
+        eq(transitionDecisionLedger.projectId, projectId),
+        eq(transitionDecisionLedger.decisionDigest, decisionDigest)
+      )
+    )
+    .limit(1);
+  return row === undefined ? null : resolveDecisionAuditRow(db, row);
+}
+
 export async function listRepositoryDecisionAudit(
   db: AnyDB,
   input: { projectId: string; refName: string; limit?: number; offset?: number }

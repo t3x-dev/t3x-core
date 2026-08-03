@@ -508,6 +508,7 @@ vi.mock('@t3x-dev/storage', () => ({
 
 vi.mock('@t3x-dev/api/repository-state-transition', () => ({
   createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  getRepositoryConversationEvidence: vi.fn(() => Promise.resolve([])),
   commitRepositoryYOpsState: vi.fn(
     async (input: {
       projectId: string;

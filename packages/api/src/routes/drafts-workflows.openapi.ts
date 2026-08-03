@@ -43,6 +43,7 @@ import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
 } from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -641,11 +642,12 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 6. Persist CommitV2, optional Leaf, and draft claim atomically.
     const written = (await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
-      const draftConversationId = draft.goal?.startsWith('auto:')
-        ? draft.goal.slice(5)
-        : undefined;
+      const draftConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
       const yopsLogIds = draftConversationId
         ? await findUncommittedYOpsIds(tx, draftConversationId, draft.project_id)
+        : [];
+      const evidence = draftConversationId
+        ? await getRepositoryConversationEvidence(tx, draft.project_id, draftConversationId)
         : [];
       const created = await commitRepositoryYOpsState({
         db: tx,
@@ -658,6 +660,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           id: userId ? `user:${userId}` : 'human:local-user',
         },
         intent,
+        ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
       let leaf: Awaited<ReturnType<typeof createLeaf>> | null = null;

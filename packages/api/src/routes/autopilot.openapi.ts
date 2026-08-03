@@ -21,9 +21,9 @@ import {
   commitDraft,
   ensureMainBranch,
   findDraftById,
-  getTransitionRefHead,
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
+  getTransitionRefHead,
   TransitionHeadConflictError,
   TransitionRefNotFoundError,
   updateAutopilotConfig,
@@ -33,6 +33,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
 } from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -420,6 +421,9 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       const yopsLogIds = autoConversationId
         ? await findUncommittedYOpsIds(tx, autoConversationId, draft.project_id)
         : [];
+      const evidence = autoConversationId
+        ? await getRepositoryConversationEvidence(tx, draft.project_id, autoConversationId)
+        : [];
       const created = await commitRepositoryYOpsState({
         db: tx,
         projectId: draft.project_id,
@@ -428,6 +432,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
         target,
         actor: { kind: 'agent', id: 'agent:autopilot' },
         intent: `Auto-commit: ${qualifyingSPs.length} node(s)`,
+        ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
       const claimed = await commitDraft(tx, draftId, created.commitDigest);

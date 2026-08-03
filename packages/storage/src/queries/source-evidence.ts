@@ -2,10 +2,13 @@
  * Repository-owned source evidence reads.
  *
  * This projection deliberately reuses durable conversation, turn, revision,
- * and commit-source records. It does not create a second source truth.
+ * and immutable Transition EvidenceRefs. It does not create a second source
+ * truth or scan deprecated commit metadata.
  */
 
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { describeCommitV2, describeTransitionObject } from '@t3x-dev/core';
+import type { EvidenceRef } from '@t3x-dev/transition';
+import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type Conversation,
@@ -14,16 +17,19 @@ import {
   sourceTextRevisions,
   type Turn,
 } from '../schema';
-import { commits } from '../schema-commits';
 import { getConversationTurnCount } from './conversations';
+import {
+  getRepositoryDecisionAuditByDigest,
+  getVerifiedTransitionCommitGraph,
+  listTransitionCommits,
+} from './transition-commits';
 import { findTurnsByConversation } from './turns';
 
 export interface ConversationSourceCommitReference {
-  commitHash: string;
-  branch: string;
-  message: string | null;
+  commitDigest: string;
   recordedAt: Date;
-  sourceTitle: string | null;
+  intent: string | null;
+  evidence: EvidenceRef[];
 }
 
 export interface ConversationSourceEvidenceRecord {
@@ -43,50 +49,107 @@ export interface GetConversationSourceEvidenceInput {
   offset?: number;
 }
 
-type StoredCommitSource = {
-  type: 'conversation' | 'import' | 'leaf';
-  id: string;
-  title?: string;
-};
+function claimEvidence(claim: { mode: string; evidence?: readonly EvidenceRef[] }): EvidenceRef[] {
+  return claim.mode === 'unspecified' ? [] : [...(claim.evidence ?? [])];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isEvidenceRef(value: unknown): value is EvidenceRef {
+  if (!isRecord(value) || !isRecord(value.resource) || !isRecord(value.locator)) return false;
+  return (
+    typeof value.resource.uri === 'string' &&
+    typeof value.resource.mediaType === 'string' &&
+    typeof value.resource.digest === 'string' &&
+    typeof value.locator.scheme === 'string' &&
+    'value' in value.locator
+  );
+}
+
+function collectStatementEvidence(value: unknown, found: EvidenceRef[] = []): EvidenceRef[] {
+  if (isEvidenceRef(value)) {
+    found.push(value);
+    return found;
+  }
+  if (Array.isArray(value)) {
+    for (const member of value) collectStatementEvidence(member, found);
+  } else if (isRecord(value)) {
+    for (const member of Object.values(value)) collectStatementEvidence(member, found);
+  }
+  return found;
+}
+
+function conversationEvidencePrefix(projectId: string, conversationId: string): string {
+  return `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}`;
+}
+
+function uniqueEvidence(refs: readonly EvidenceRef[]): EvidenceRef[] {
+  const seen = new Set<string>();
+  return refs.filter((reference) => {
+    const identity = JSON.stringify(reference);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
 
 async function listConversationCommitReferences(
   db: AnyDB,
   projectId: string,
   conversationId: string
 ): Promise<ConversationSourceCommitReference[]> {
-  const sourceRef = JSON.stringify([{ type: 'conversation', id: conversationId }]);
-  const rows = await db
-    .select({
-      commitHash: commits.hash,
-      branch: commits.branch,
-      message: commits.message,
-      recordedAt: commits.committedAt,
-      sources: commits.sources,
-    })
-    .from(commits)
-    .where(and(eq(commits.projectId, projectId), sql`${commits.sources} @> ${sourceRef}::jsonb`))
-    .orderBy(desc(commits.committedAt), desc(commits.hash));
-
-  return rows.map((row) => {
-    const source = ((row.sources ?? []) as StoredCommitSource[]).find(
-      (candidate) => candidate.type === 'conversation' && candidate.id === conversationId
-    );
-    return {
-      commitHash: row.commitHash,
-      branch: row.branch ?? 'main',
-      message: row.message ?? null,
-      recordedAt: row.recordedAt,
-      sourceTitle: source?.title ?? null,
-    };
-  });
+  const prefix = conversationEvidencePrefix(projectId, conversationId);
+  const references: ConversationSourceCommitReference[] = [];
+  const pageSize = 200;
+  for (let offset = 0; ; offset += pageSize) {
+    const commits = await listTransitionCommits(db, projectId, { limit: pageSize, offset });
+    for (const stored of commits) {
+      const digest = describeCommitV2(stored.commit).digest;
+      const graph = await getVerifiedTransitionCommitGraph(db, projectId, digest);
+      if (graph === null) continue;
+      const audit = await getRepositoryDecisionAuditByDigest(
+        db,
+        projectId,
+        describeTransitionObject(graph.decision).digest
+      );
+      const evidence = uniqueEvidence([
+        ...claimEvidence(graph.proposal.predicate.intent),
+        ...claimEvidence(graph.proposal.predicate.rationale),
+        ...(audit?.observations.flatMap((observation) =>
+          collectStatementEvidence(observation.statement.predicate)
+        ) ?? []),
+      ]).filter(
+        (reference) =>
+          reference.resource.uri === prefix || reference.resource.uri.startsWith(`${prefix}/`)
+      );
+      if (evidence.length === 0) continue;
+      references.push({
+        commitDigest: digest,
+        recordedAt: new Date(stored.recordedAt),
+        intent:
+          graph.proposal.predicate.intent.mode === 'unspecified'
+            ? null
+            : graph.proposal.predicate.intent.value,
+        evidence,
+      });
+    }
+    if (commits.length < pageSize) break;
+  }
+  return references.sort(
+    (left, right) =>
+      right.recordedAt.getTime() - left.recordedAt.getTime() ||
+      right.commitDigest.localeCompare(left.commitDigest)
+  );
 }
 
 /**
  * Resolve a conversation source inside one project.
  *
- * A missing conversation can still produce a record when legacy commit JSON
- * references its ID. That is an explicit unavailable source, not a 404 and
- * never a fabricated conversation.
+ * A missing conversation can still produce a record when an immutable
+ * EvidenceRef references its ID. That is an explicit unavailable source, not
+ * a 404 and never a fabricated conversation.
  */
 export async function getConversationSourceEvidence(
   db: AnyDB,

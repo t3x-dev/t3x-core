@@ -60,6 +60,7 @@ const MOCK_DRAFT_OTHER_PROJECT = {
 const transitionMock = vi.hoisted(() => ({
   commitRepositoryYOpsState: vi.fn(),
   createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  getRepositoryConversationEvidence: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('@t3x-dev/api/repository-state-transition', () => transitionMock);
