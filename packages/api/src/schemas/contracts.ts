@@ -791,9 +791,20 @@ export const CommitDraftRequest = z.object({
   branch: z.string().optional(),
 });
 
+export const RepositoryCommitProjectionV2 = z.object({
+  hash: z.string(),
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(z.string()),
+  committed_at: z.string(),
+  content: OapiSemanticContentSchema,
+  project_id: z.string(),
+  message: z.string().nullable(),
+  branch: z.string(),
+});
+
 export const CommitDraftResponse = SuccessResponse(
   z.object({
-    commit: CommitResponse,
+    commit: RepositoryCommitProjectionV2,
     leaf: LeafResponse.nullable(),
     draft_status: z.literal('committed'),
   })

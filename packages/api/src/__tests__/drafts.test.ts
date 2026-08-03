@@ -688,8 +688,12 @@ describe('Drafts Routes', () => {
       expect(res.status).toBe(201);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.commit.provenance.method).toBe('fixture_replay');
+      expect(data.data.commit.schema).toBe('t3x/commit/v2');
+      expect(data.data.commit).not.toHaveProperty('provenance');
       expect(data.data.commit.content.trees).toEqual(DEMO_WORKSPACE_FIXTURE.replay.trees);
+      expect(data.data.commit.content.relations).toEqual(
+        DEMO_WORKSPACE_FIXTURE.replay.relations
+      );
       expect(data.data.leaf.output).toBe(DEMO_WORKSPACE_FIXTURE.leaf.output);
       expect(data.data.leaf.assertions).toEqual(DEMO_WORKSPACE_FIXTURE.leaf.assertions);
       expect(mockGenerateLeafOutput).not.toHaveBeenCalled();
