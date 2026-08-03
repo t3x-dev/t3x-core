@@ -1,16 +1,11 @@
 /**
- * Frame-Based Commits Routes with OpenAPI
- *
- * REST API endpoints for frame-based commits with OpenAPI documentation.
- * Frame-based commits store state content as frames + relations.
+ * CommitV2 repository routes with OpenAPI.
  *
  * Endpoints:
  * - POST   /v1/commits               - Create a new commit
  * - GET    /v1/commits/:hash         - Get commit by hash
  * - GET    /v1/projects/:projectId/commits - List commits by project
- * - GET    /v1/projects/:projectId/commit-history - List V1/V2 history projections
- *
- * @see packages/core/src/commit/types.ts
+ * - GET    /v1/projects/:projectId/commit-history - List CommitV2 history projections
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -19,16 +14,14 @@ import { validateTree } from '@t3x-dev/core';
 import {
   ensureMainBranch,
   findConversationById,
-  getCommit,
+  getCommitHistoryEntry,
   getTransitionViewForCommit,
-  getYOpsForCommit,
+  getVerifiedTransitionCommitGraph,
+  getYOpsForTransitionCommit,
   listCommitHistory,
-  listCommits,
   markConversationCommitted,
   TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
-  updateCommitMessage,
-  updateCommitPosition,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -54,31 +47,6 @@ export const commitRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================
 
-const AuthorSchema = z.object({
-  type: z.enum(['human', 'agent', 'system']),
-  id: z.string().optional(),
-  name: z.string().optional(),
-});
-
-const _SourceSchema = z.object({
-  type: z.enum(['conversation', 'import', 'leaf']),
-  id: z.string(),
-  title: z.string().optional(),
-});
-
-const ProvenanceSchema = z.object({
-  method: z.enum(['llm_extraction', 'human_curation', 'import', 'merge']),
-  model: z.string().optional(),
-  extracted_at: z.string().optional(),
-  schema_ref: z
-    .object({
-      name: z.string().min(1),
-      version: z.string().optional(),
-      hash: z.string().optional(),
-    })
-    .optional(),
-});
-
 const CreateCommitRequestSchema = z.object({
   project_id: z.string().min(1),
   source_conversation_id: z.string().optional(),
@@ -99,19 +67,6 @@ class SourceConversationAlreadyCommittedError extends Error {
     this.name = 'SourceConversationAlreadyCommittedError';
   }
 }
-
-const CommitResponseSchema = z.object({
-  hash: z.string(),
-  schema: z.string(),
-  parents: z.array(z.string()),
-  author: AuthorSchema,
-  committed_at: z.string(),
-  content: z.any(),
-  project_id: z.string(),
-  message: z.string().nullable(),
-  branch: z.string(),
-  provenance: ProvenanceSchema.nullable(),
-});
 
 const DigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const CommitDescriptorSchema = z.object({
@@ -138,46 +93,37 @@ const CreatedCommitV2ResponseSchema = z.object({
   ref_name: z.string(),
   object: CommitV2ObjectSchema,
 });
+const StoredCommitV2ResponseSchema = z.object({
+  digest: DigestSchema,
+  recorded_at: z.string(),
+  object: CommitV2ObjectSchema,
+});
 
 const DescriptorBaseSchema = z.object({
   digest: z.string(),
 });
 
-const CommitHistoryProjectionSchema = z.discriminatedUnion('format', [
-  z.object({
-    format: z.literal('legacy_v1'),
-    id: z.string(),
-    schema: z.enum(['t3x/commit', 't3x/commit/1']),
-    parents: z.array(z.string()),
-    recordedAt: z.string(),
-    result: z.object({ mode: z.literal('legacy_content'), content: z.any() }),
-    assurance: z.object({
-      mode: z.literal('legacy_unavailable'),
-      unavailable: z.array(z.enum(['proposal', 'evidence', 'replay', 'validation', 'decision'])),
+const CommitHistoryProjectionSchema = z.object({
+  format: z.literal('transition_v2'),
+  id: z.string(),
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(z.string()),
+  recordedAt: z.string(),
+  result: z.object({
+    mode: z.literal('state_descriptor'),
+    descriptor: DescriptorBaseSchema.extend({
+      kind: z.literal('state'),
+      schema: z.literal('t3x/state/v1'),
     }),
   }),
-  z.object({
-    format: z.literal('transition_v2'),
-    id: z.string(),
-    schema: z.literal('t3x/commit/v2'),
-    parents: z.array(z.string()),
-    recordedAt: z.string(),
-    result: z.object({
-      mode: z.literal('state_descriptor'),
-      descriptor: DescriptorBaseSchema.extend({
-        kind: z.literal('state'),
-        schema: z.literal('t3x/state/v1'),
-      }),
-    }),
-    assurance: z.object({
-      mode: z.literal('decision_bound'),
-      decision: DescriptorBaseSchema.extend({
-        kind: z.literal('statement'),
-        schema: z.literal('t3x/statement/v1'),
-      }),
+  assurance: z.object({
+    mode: z.literal('decision_bound'),
+    decision: DescriptorBaseSchema.extend({
+      kind: z.literal('statement'),
+      schema: z.literal('t3x/statement/v1'),
     }),
   }),
-]);
+});
 
 // ============================================================
 // POST /v1/commits — Commit an exact structured State through Transition
@@ -347,13 +293,14 @@ const getCommitRoute = createRoute({
   summary: 'Get a commit by hash',
   request: {
     params: HashParamSchema,
+    query: z.object({ project_id: z.string().min(1) }),
   },
   responses: {
     200: {
       description: 'Commit found',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commit: CommitResponseSchema })),
+          schema: SuccessResponseSchema(z.object({ commit: StoredCommitV2ResponseSchema })),
         },
       },
     },
@@ -370,18 +317,25 @@ const getCommitRoute = createRoute({
 
 commitRoutes.openapi(getCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { project_id: projectId } = c.req.valid('query');
   const db = await getDB();
 
   try {
-    const commit = await getCommit(db, hash);
-    if (!commit) {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
+    if (!graph) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
-    if (commit.project_id) {
-      const accessResult = await assertProjectAccess(c, db, commit.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
-    return c.json({ success: true as const, data: { commit } }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: { digest: hash, recorded_at: graph.recordedAt, object: graph.commit },
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get commit';
     return errorResponse(c, 'GET_FAILED', message);
@@ -401,16 +355,16 @@ const listCommitsRoute = createRoute({
     params: z.object({
       projectId: z.string().min(1),
     }),
-    query: PaginationQuerySchema.extend({
-      branch: z.string().optional(),
-    }),
+    query: PaginationQuerySchema,
   },
   responses: {
     200: {
       description: 'Commits listed successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commits: z.array(CommitResponseSchema) })),
+          schema: SuccessResponseSchema(
+            z.object({ commits: z.array(CommitHistoryProjectionSchema) })
+          ),
         },
       },
     },
@@ -423,19 +377,14 @@ const listCommitsRoute = createRoute({
 
 commitRoutes.openapi(listCommitsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { branch, limit, offset } = c.req.valid('query');
+  const { limit, offset } = c.req.valid('query');
   const db = await getDB();
 
   try {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const commits = await listCommits(db, {
-      projectId,
-      branch,
-      limit,
-      offset,
-    });
+    const commits = await listCommitHistory(db, projectId, { limit, offset });
 
     return c.json({ success: true as const, data: { commits } }, 200);
   } catch (err) {
@@ -445,21 +394,21 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
 });
 
 // ============================================================
-// GET /v1/projects/:projectId/commit-history — Mixed V1/V2 read projection
+// GET /v1/projects/:projectId/commit-history — CommitV2 read projection
 // ============================================================
 
 const listCommitHistoryRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/commit-history',
   tags: ['Commits'],
-  summary: 'List discriminated CommitV1 and CommitV2 history projections',
+  summary: 'List CommitV2 history projections',
   request: {
     params: z.object({ projectId: z.string().min(1) }),
     query: PaginationQuerySchema,
   },
   responses: {
     200: {
-      description: 'Mixed commit history listed successfully',
+      description: 'CommitV2 history listed successfully',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
@@ -570,101 +519,6 @@ commitRoutes.openapi(getTransitionViewRoute, async (c) => {
 });
 
 // ============================================================
-// PATCH /v1/commits/:hash/position — Update canvas position
-// ============================================================
-
-const updatePositionRoute = createRoute({
-  method: 'patch',
-  path: '/v1/commits/{hash}/position',
-  request: {
-    params: HashParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            position_x: z.number(),
-            position_y: z.number(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
-      description: 'Position updated',
-    },
-    404: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Commit not found',
-    },
-  },
-});
-
-commitRoutes.openapi(updatePositionRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { position_x, position_y } = c.req.valid('json') as any;
-  const db = await getDB();
-  const decodedHash = decodeURIComponent(hash);
-
-  const updated = await updateCommitPosition(db, decodedHash, position_x, position_y);
-  if (!updated) {
-    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
-  }
-
-  return c.json({ success: true as const, data: updated }, 200);
-});
-
-// ============================================================
-// PATCH /v1/commits/:hash/message — Update commit message
-// ============================================================
-
-const updateMessageRoute = createRoute({
-  method: 'patch',
-  path: '/v1/commits/{hash}/message',
-  request: {
-    params: HashParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            message: z.string().min(1).max(200),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
-      description: 'Message updated',
-    },
-    404: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Commit not found',
-    },
-  },
-});
-
-commitRoutes.openapi(updateMessageRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { message } = c.req.valid('json') as any;
-  const db = await getDB();
-  const decodedHash = decodeURIComponent(hash);
-
-  const updated = await updateCommitMessage(db, decodedHash, message);
-  if (!updated) {
-    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
-  }
-
-  return c.json({ success: true as const, data: updated }, 200);
-});
-
-// ============================================================
 // GET /v1/commits/:hash/history — Get commit ancestor chain
 // ============================================================
 
@@ -673,7 +527,10 @@ const getHistoryRoute = createRoute({
   path: '/v1/commits/{hash}/history',
   request: {
     params: HashParamSchema,
-    query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(500).default(50),
+    }),
   },
   responses: {
     200: {
@@ -688,12 +545,12 @@ const getHistoryRoute = createRoute({
 });
 
 commitRoutes.openapi(getHistoryRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { limit } = c.req.valid('query') as any;
+  const { hash } = c.req.valid('param');
+  const { project_id: projectId, limit } = c.req.valid('query');
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
 
   const visited = new Set<string>();
   const queue = [decodedHash];
@@ -705,7 +562,7 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     if (visited.has(currentHash)) continue;
     visited.add(currentHash);
 
-    const commit = await getCommit(db, currentHash);
+    const commit = await getCommitHistoryEntry(db, projectId, currentHash);
     if (!commit) continue;
     commits.push(commit);
 
@@ -735,6 +592,7 @@ const getCommitOperationsRoute = createRoute({
   summary: 'Get operations that produced a commit',
   request: {
     params: HashParamSchema,
+    query: z.object({ project_id: z.string().min(1) }),
   },
   responses: {
     200: {
@@ -743,7 +601,7 @@ const getCommitOperationsRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(
             z.object({
-              commit_hash: z.string(),
+              commit_digest: z.string(),
               operations: z.array(
                 z.object({
                   id: z.string(),
@@ -772,22 +630,25 @@ const getCommitOperationsRoute = createRoute({
 
 commitRoutes.openapi(getCommitOperationsRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { project_id: projectId } = c.req.valid('query');
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
 
   try {
-    const commit = await getCommit(db, decodedHash);
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const commit = await getVerifiedTransitionCommitGraph(db, projectId, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
-    const operations = await getYOpsForCommit(db, commit.yops_log_ids);
+    const operations = await getYOpsForTransitionCommit(db, projectId, decodedHash);
 
     return c.json(
       {
         success: true as const,
         data: {
-          commit_hash: commit.hash,
+          commit_digest: decodedHash,
           operations: operations.map((op) => ({
             id: op.id,
             source: op.source,
