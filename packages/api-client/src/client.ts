@@ -17,15 +17,15 @@ import type {
   Commit,
   CommitFromDraftInput,
   CommitFromDraftResult,
+  CommitRepositoryStateInput,
   ContextParams,
   ContextResult,
   Conversation,
   ConversationSourceEvidence,
   CreateBranchInput,
-  CreatedRepositoryCommit,
-  CommitRepositoryStateInput,
   CreateConversationInput,
   CreateDraftInput,
+  CreatedRepositoryCommit,
   CreateLeafInput,
   CreateMergeDraftInput,
   CreatePinInput,
@@ -419,9 +419,7 @@ export class T3xClient {
     return this.request<Commit>('GET', `/v1/commits/${hash}`);
   }
 
-  async commitRepositoryState(
-    input: CommitRepositoryStateInput
-  ): Promise<CreatedRepositoryCommit> {
+  async commitRepositoryState(input: CommitRepositoryStateInput): Promise<CreatedRepositoryCommit> {
     return this.request<CreatedRepositoryCommit>('POST', '/v1/commits', input);
   }
 
@@ -499,17 +497,22 @@ export class T3xClient {
   // Merge
   // ============================================
 
-  async prepareMerge(input: { source_hash: string; target_hash: string }): Promise<unknown> {
+  async prepareMerge(input: {
+    project_id: string;
+    source_hash: string;
+    target_hash: string;
+  }): Promise<unknown> {
     return this.request<unknown>('POST', '/v1/merge/prepare', input);
   }
 
   async executeMerge(input: {
+    project_id: string;
     source_hash: string;
     target_hash: string;
     prepared: unknown;
     decisions: unknown;
     message: string;
-    branch?: string;
+    branch: string;
   }): Promise<unknown> {
     return this.request<unknown>('POST', '/v1/merge/execute', input);
   }

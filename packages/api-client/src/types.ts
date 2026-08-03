@@ -331,7 +331,7 @@ export interface CreateMergeDraftInput {
   source_hash: string;
   target_hash: string;
   source_branch?: string;
-  target_branch?: string;
+  target_branch: string;
 }
 
 export interface MergeDraftPrepared {

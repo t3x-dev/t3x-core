@@ -7,8 +7,5 @@
     "packages/storage/src/queries/commits.ts",
     "packages/storage/src/queries/transition-commits.ts"
   ],
-  "legacy_helper_callers": [
-    "packages/api/src/routes/merge.openapi.ts",
-    "packages/storage/src/queries/branches.ts"
-  ]
+  "legacy_helper_callers": ["packages/storage/src/queries/branches.ts"]
 }

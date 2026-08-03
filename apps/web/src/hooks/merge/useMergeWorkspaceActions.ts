@@ -51,8 +51,8 @@ export function useMergeWorkspaceActions() {
       projectId: string,
       sourceHash: string,
       targetHash: string,
-      sourceBranch?: string,
-      targetBranch?: string
+      sourceBranch: string | undefined,
+      targetBranch: string
     ): Promise<string> => {
       useMergeWorkspaceStore.getState().setLoading();
       try {
