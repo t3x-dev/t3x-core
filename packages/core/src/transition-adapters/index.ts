@@ -53,7 +53,9 @@ export {
 export {
   type CreatedYOpsEffect,
   type CreateYOpsEffectInput,
+  type CreateYOpsReplacementEffectInput,
   createYOpsEffect,
+  createYOpsReplacementEffect,
   YOPS_DRIVER_PROTOCOL,
   YOPS_DRIVER_PROTOCOL_VERSION,
   YOPS_MUTATION_DRIVER_REF,

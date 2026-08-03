@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { createYOpsState } from '../stateCodec';
 import {
   createYOpsEffect,
+  createYOpsReplacementEffect,
   YOPS_MUTATION_DRIVER_REF,
   YOPS_SPEC_DIGEST,
   YOpsExecutionError,
@@ -66,6 +67,36 @@ describe('YOps MutationDriver adapter', () => {
     expect(digestProtocolObject(oneThenTwo.effect)).not.toBe(
       digestProtocolObject(twoThenOne.effect)
     );
+  });
+
+  it('builds an exact base-sensitive replacement from two YOps States', () => {
+    const base = createYOpsState({ keep: { enabled: true }, remove: 1, update: 'before' });
+    const target = createYOpsState({ add: 2, keep: { enabled: true }, update: 'after' });
+
+    const created = createYOpsReplacementEffect({
+      base,
+      target,
+      expectedBase: describeProtocolObject(base),
+    });
+
+    expect(created.result).toEqual(target);
+    expect(created.effect.operations).toEqual([
+      { assert: { path: 'add', exists: false } },
+      { set: { path: 'add', value: 2 } },
+      { assert: { path: 'remove', equals: 1 } },
+      { unset: { path: 'remove' } },
+      { assert: { path: 'update', equals: 'before' } },
+      { set: { path: 'update', value: 'after' } },
+    ]);
+  });
+
+  it('rejects replacement targets that the versioned YOps path syntax cannot address', () => {
+    expect(() =>
+      createYOpsReplacementEffect({
+        base: createYOpsState({}),
+        target: createYOpsState({ 'invalid/root': true }),
+      })
+    ).toThrowError(expect.objectContaining({ code: 'UNSUPPORTED_SEMANTICS' }));
   });
 
   it('maps explicit YOps assertions and expected Base checks to STALE_BASE', () => {

@@ -168,6 +168,13 @@ export interface CreatedYOpsEffect {
   result: State;
 }
 
+export interface CreateYOpsReplacementEffectInput {
+  base: State;
+  target: State;
+  /** Optional optimistic concurrency check against the caller's observed Base. */
+  expectedBase?: StateDescriptor;
+}
+
 function descriptorsEqual(left: StateDescriptor, right: StateDescriptor): boolean {
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
 }
@@ -208,4 +215,64 @@ export function createYOpsEffect(input: CreateYOpsEffectInput): CreatedYOpsEffec
     result: describeProtocolObject(result),
   });
   return { effect, result };
+}
+
+function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sameProtocolValue(left: ProtocolValue, right: ProtocolValue): boolean {
+  return canonicalizeProtocolValue(left) === canonicalizeProtocolValue(right);
+}
+
+/**
+ * Build a deterministic, base-sensitive top-level replacement Effect.
+ *
+ * This is the application adapter for callers that hold an exact target YOps
+ * State rather than a user-authored operation list. Assertions bind every
+ * changed root to the observed Base, so replay cannot silently apply the
+ * replacement to a different State.
+ */
+export function createYOpsReplacementEffect(
+  input: CreateYOpsReplacementEffectInput
+): CreatedYOpsEffect {
+  assertYOpsState(input.base);
+  assertYOpsState(input.target);
+  if (!isMapping(input.base.value) || !isMapping(input.target.value)) {
+    throw new UnsupportedSemanticsError('YOps replacement requires top-level mapping States');
+  }
+
+  const operations: ProtocolValue[] = [];
+  const keys = [...new Set([...Object.keys(input.base.value), ...Object.keys(input.target.value)])]
+    .sort();
+  for (const key of keys) {
+    if (key.length === 0 || key.includes('/')) {
+      throw new UnsupportedSemanticsError(
+        `YOps replacement cannot address root key ${JSON.stringify(key)}`
+      );
+    }
+    const inBase = Object.prototype.hasOwnProperty.call(input.base.value, key);
+    const inTarget = Object.prototype.hasOwnProperty.call(input.target.value, key);
+    const before = input.base.value[key];
+    const after = input.target.value[key];
+    if (inBase && inTarget && sameProtocolValue(before!, after!)) continue;
+    operations.push(
+      inBase
+        ? { assert: { path: key, equals: before as ProtocolValue } }
+        : { assert: { path: key, exists: false } }
+    );
+    operations.push(
+      inTarget ? { set: { path: key, value: after as ProtocolValue } } : { unset: { path: key } }
+    );
+  }
+
+  const created = createYOpsEffect({
+    base: input.base,
+    operations,
+    ...(input.expectedBase === undefined ? {} : { expectedBase: input.expectedBase }),
+  });
+  if (describeProtocolObject(created.result).digest !== describeProtocolObject(input.target).digest) {
+    throw new IntegrityChainInvalidError('YOps replacement did not replay to the exact target State');
+  }
+  return created;
 }

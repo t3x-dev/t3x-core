@@ -7,6 +7,7 @@ import {
   createCommitV2,
   createHumanProposalDraft,
   createYOpsEffect,
+  createYOpsReplacementEffect,
   createYOpsState,
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
@@ -258,42 +259,6 @@ function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue>
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function sameProtocolValue(left: ProtocolValue, right: ProtocolValue): boolean {
-  // YOps States have already passed through the RFC 8785-normalizing codec,
-  // so their parsed key order and number representation are stable here.
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-/** Build an exact, base-sensitive top-level replacement without trusting client YOps. */
-function exactTargetOperations(base: State, target: State): ProtocolValue[] {
-  if (!isMapping(base.value) || !isMapping(target.value)) {
-    throw new TypeError('Workspace Transition state must be a top-level mapping');
-  }
-  const operations: ProtocolValue[] = [];
-  const keys = [...new Set([...Object.keys(base.value), ...Object.keys(target.value)])].sort();
-  for (const key of keys) {
-    if (key.length === 0 || key.includes('/')) {
-      throw new TypeError(
-        `Workspace root key ${JSON.stringify(key)} cannot be addressed by YOps v1`
-      );
-    }
-    const inBase = Object.hasOwn(base.value, key);
-    const inTarget = Object.hasOwn(target.value, key);
-    const before = base.value[key];
-    const after = target.value[key];
-    if (inBase && inTarget && sameProtocolValue(before!, after!)) continue;
-    operations.push(
-      inBase
-        ? { assert: { path: key, equals: before as ProtocolValue } }
-        : { assert: { path: key, exists: false } }
-    );
-    operations.push(
-      inTarget ? { set: { path: key, value: after as ProtocolValue } } : { unset: { path: key } }
-    );
-  }
-  return operations;
-}
-
 function resolveWorkspaceSchema(workspace: Record<string, unknown>): {
   canonicalName: string;
   schema: YSchema;
@@ -467,15 +432,22 @@ async function prepareWorkspaceTransition(
   const context = await resolveWorkspaceTransitionContext(db, input);
   const base = context.base;
   const target = createYOpsState(treesToYValue(input.content.trees));
-  const built = buildWorkspaceYOpsProposalFromContext(context, {
-    operations: exactTargetOperations(base, target),
-    why: input.why,
+  const { effect, result } = createYOpsReplacementEffect({
+    base,
+    target,
+    expectedBase: describeTransitionObject(base),
+  });
+  const compiled = compileProposalDraft({
+    draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
+    effect,
     actor: input.actor,
   });
-  const { effect, proposal, result } = built;
-  if (describeTransitionObject(result).digest !== describeTransitionObject(target).digest) {
-    throw new TypeError('Workspace operations did not replay to the exact proposed target');
+  if (!compiled.ok) {
+    throw new TypeError(
+      `Workspace Proposal compilation failed: ${JSON.stringify(compiled.issues)}`
+    );
   }
+  const proposal = compiled.proposal;
 
   const { canonicalName, schema } = resolveWorkspaceSchema(context.workspace);
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
