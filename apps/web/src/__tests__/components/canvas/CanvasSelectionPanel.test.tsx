@@ -66,19 +66,17 @@ describe('CanvasSelectionPanel', () => {
     expect(screen.getByText('Trip Plan1')).toBeInTheDocument();
     expect(screen.getByText('1 tree · 0 relations')).toBeInTheDocument();
     expect(screen.getByText('food_ideas')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open Details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View Diff' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Merge Into Main' })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Details and history stay on the canvas/i).length).toBeGreaterThan(
-      0
-    );
+    expect(screen.getAllByText(/Version context stays on the canvas/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Action Logic')).toBeInTheDocument();
   });
 
-  it('explains that branch-head details stay on the canvas', () => {
+  it('explains that branch-head context stays on the canvas', () => {
     const node = makeNode({
       branchName: 'branch 1',
       branchType: 'branch',
@@ -105,6 +103,6 @@ describe('CanvasSelectionPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
     ).toBeInTheDocument();
-    expect(screen.getByText(/Details stay on the canvas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Version context stays on the canvas/i)).toBeInTheDocument();
   });
 });

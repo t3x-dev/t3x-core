@@ -1,14 +1,12 @@
 'use client';
 
-import { ArrowRight, GitCompare, Minus, Pencil, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Minus, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTerminology } from '@/hooks/shared/useTerminology';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 
 export interface PendingSuccessPageProps {
   commitHash: string;
-  parentHash: string | null;
   diffStats:
     | {
         addedCount: number;
@@ -17,9 +15,8 @@ export interface PendingSuccessPageProps {
         sameCount: number;
       }
     | undefined;
-  projectId: string;
   onClose: () => void;
-  onViewDetails: () => void;
+  onBackToCanvas: () => void;
   onCreateOutput: () => void;
 }
 
@@ -27,11 +24,9 @@ export function PendingSuccessPage({
   commitHash,
   diffStats,
   onClose,
-  onViewDetails,
+  onBackToCanvas,
   onCreateOutput,
 }: PendingSuccessPageProps) {
-  const { t } = useTerminology();
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-[8px]"
@@ -101,9 +96,9 @@ export function PendingSuccessPage({
 
           {/* Action buttons */}
           <div className="w-full flex flex-col gap-2 mt-2">
-            <Button onClick={onViewDetails} variant="outline" className="w-full gap-2">
-              <GitCompare size={16} />
-              <span>View {t('commit')} Details</span>
+            <Button onClick={onBackToCanvas} variant="outline" className="w-full gap-2">
+              <ArrowLeft size={16} />
+              <span>Back to Canvas</span>
             </Button>
             <Button variant="leaf" onClick={onCreateOutput} className="w-full gap-2">
               <span>Create Output</span>

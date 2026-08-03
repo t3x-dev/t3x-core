@@ -592,6 +592,32 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
   });
 
+  it('does not revive commit details from a retired selected-node deep link', async () => {
+    searchParamsValue = new URLSearchParams('view=canvas&selected=sha256%3Aabc123');
+    useCanvasStore.setState({
+      nodes: [
+        {
+          id: 'sha256:abc123',
+          type: 'unit',
+          position: { x: 0, y: 0 },
+          data: { kind: 'unit', commitStatus: 'committed' },
+        },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+      openNodeId: null,
+      modalViewMode: null,
+    });
+
+    renderProjectContent();
+
+    expect(await screen.findByTestId('canvas-workspace')).toBeInTheDocument();
+    expect(useCanvasStore.getState().openNodeId).toBeNull();
+    expect(useCanvasStore.getState().modalViewMode).toBeNull();
+  });
+
   it('waits for matching project data before rendering Canvas', () => {
     useCanvasStore.setState({
       nodes: [],

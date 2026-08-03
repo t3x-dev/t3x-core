@@ -81,43 +81,27 @@ test.describe('V4 WebUI Flow', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 2: Commit detail shows nodes (not constraints)
+  // Scenario 2: Commit selection stays on Canvas
   // ─────────────────────────────────────────────────────────────────────────
-  test('2. Commit detail shows nodes (not constraints)', async ({ page }) => {
+  test('2. Commit selection does not open the retired details UI', async ({ page }) => {
     await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });
 
-    // Click on commit node to open detail panel
+    // Click the commit node to select this version.
     const commitNode = page
       .locator(`[data-id="${commitHash}"]`)
       .or(page.locator('text=E2E test commit'));
 
     await commitNode.first().click();
 
-    // Wait for detail panel to appear
-    const detailPanel = page.locator('aside, [role="dialog"]').first();
-    await expect(detailPanel).toBeVisible({ timeout: 10000 });
-
-    // Check for nodes display
-    const nodeTexts = [
-      'User prefers dark mode',
-      'User speaks English',
-      'User timezone is UTC+8',
-    ];
-
-    for (const text of nodeTexts) {
-      const node = page.locator(`text=${text}`);
-      // Soft check - nodes may be in expandable sections
-      await node.isVisible();
-    }
-
-    // Verify NO constraints section at commit level (V4 feature)
-    const constraintsHeading = page.locator('text=Constraints').first();
-    // In V4, commit detail should NOT show constraints (they're in Leaves)
-    await constraintsHeading.isVisible();
+    await expect(page.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+    await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
   // ─────────────────────────────────────────────────────────────────────────

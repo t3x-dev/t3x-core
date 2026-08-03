@@ -290,22 +290,25 @@ describe('Canvas node semantic markers', () => {
     expect(screen.queryByTitle('Rename commit')).not.toBeInTheDocument();
   });
 
-  it('opens commit details from the committed hash inside the node', () => {
+  it('renders the committed hash without an old commit-detail action', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
-
-    expect(openNodeModalMock).toHaveBeenCalledWith('unit_canvas', 'commit');
+    expect(screen.getByText('hash:abc123')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open commit hash:abc123' })
+    ).not.toBeInTheDocument();
+    expect(openNodeModalMock).not.toHaveBeenCalled();
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('keeps intro-demo commit inspection inside the canvas', () => {
+  it('does not restore the old commit-detail action during the intro demo', () => {
     navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
-
-    expect(openNodeModalMock).toHaveBeenCalledWith('unit_canvas', 'commit');
+    expect(
+      screen.queryByRole('button', { name: 'Open commit hash:abc123' })
+    ).not.toBeInTheDocument();
+    expect(openNodeModalMock).not.toHaveBeenCalled();
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 

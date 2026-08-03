@@ -66,16 +66,16 @@ function getActionNote(node: CanvasUnitNode, hasParent: boolean, canMerge: boole
   const hasLeaf = (node.data.leaves?.length ?? 0) > 0;
   if (!hasParent) {
     return hasLeaf
-      ? 'Details and history stay on the canvas. Open Leaf keeps existing output one click away; New Leaf creates another output from this exact version.'
-      : 'Details and history stay on the canvas. New Leaf creates output from this exact version.';
+      ? 'Version context stays on the canvas. Open Leaf keeps existing output one click away; New Leaf creates another output from this exact version.'
+      : 'Version context stays on the canvas. New Leaf creates output from this exact version.';
   }
   if (node.data.branchType === 'branch' && canMerge) {
-    return 'Details stay on the canvas. New Leaf targets this exact branch version.';
+    return 'Version context stays on the canvas. New Leaf targets this exact branch version.';
   }
   if (node.data.branchType === 'branch') {
-    return 'Details and history stay on the canvas. Use Pull requests for branch review and merge.';
+    return 'Version context stays on the canvas. Use Pull requests for branch review and merge.';
   }
-  return 'Details and history stay on the canvas. New Leaf targets this exact version.';
+  return 'Version context stays on the canvas. New Leaf targets this exact version.';
 }
 
 function actionButtonClass(action: CommitAction): string {
@@ -102,7 +102,6 @@ function panelActionClass(action: CommitAction): string {
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
-  if (action.label === 'Details') return 'canvas-action-details';
   if (action.label === 'View Diff') return 'canvas-action-diff';
   if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
   if (action.label === 'New Leaf') return 'canvas-action-new-leaf';

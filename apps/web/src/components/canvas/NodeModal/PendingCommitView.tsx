@@ -59,11 +59,9 @@ export function PendingCommitView({
     return (
       <PendingSuccessPage
         commitHash={state.commitSuccess.commitHash}
-        parentHash={state.commitSuccess.parentHash}
         diffStats={state.commitSuccess.diffStats ?? undefined}
-        projectId={projectId}
         onClose={state.handleSuccessClose}
-        onViewDetails={state.handleViewCommitDetails}
+        onBackToCanvas={state.handleBackToCanvas}
         onCreateOutput={state.handleCreateOutput}
       />
     );

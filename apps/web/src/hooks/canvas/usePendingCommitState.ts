@@ -78,7 +78,7 @@ export interface UsePendingCommitStateReturn {
   handleCommit: () => Promise<void>;
   handleReExtract: () => Promise<void>;
   handleSuccessClose: () => void;
-  handleViewCommitDetails: () => void;
+  handleBackToCanvas: () => void;
   handleCreateOutput: () => void;
   handleOpenAsDraft: () => Promise<void>;
 
@@ -347,7 +347,7 @@ export function usePendingCommitState({
     handleCommit,
     handleReExtract,
     handleSuccessClose: postCommit.handleSuccessClose,
-    handleViewCommitDetails: postCommit.handleViewCommitDetails,
+    handleBackToCanvas: postCommit.handleBackToCanvas,
     handleCreateOutput: postCommit.handleCreateOutput,
     handleOpenAsDraft: postCommit.handleOpenAsDraft,
 

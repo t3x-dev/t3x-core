@@ -244,17 +244,8 @@ export function ProjectDetailPageContent({
     return undefined;
   }, []); // intentionally empty — only read once on mount
 
-  // Open selected node from URL on first load
-  const selectedFromUrl = useRef(showIntroDemo ? null : searchParams.get('selected'));
-  useEffect(() => {
-    if (isCanvasActive && selectedFromUrl.current && !canvasLoading && !canvasError) {
-      useCanvasStore.getState().openNodeModal(selectedFromUrl.current, 'commit');
-      selectedFromUrl.current = null;
-    }
-  }, [canvasLoading, canvasError, isCanvasActive]);
   useEffect(() => {
     if (!isCanvasActive || !showIntroDemo) return;
-    selectedFromUrl.current = null;
     closeNodeModal();
   }, [closeNodeModal, isCanvasActive, showIntroDemo]);
 

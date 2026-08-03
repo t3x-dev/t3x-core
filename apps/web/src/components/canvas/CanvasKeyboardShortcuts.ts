@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react';
 import { useEffect } from 'react';
+import type { CanvasNodeData } from '@/types/nodes';
 
 interface CanvasKeyboardShortcutsOptions {
   selectAllNodes: () => void;
@@ -92,7 +93,8 @@ export function useCanvasKeyboardShortcuts({
       if (event.key === 'Enter') {
         const currentNodes = getNodes();
         const selectedNode = currentNodes.find((n) => n.selected);
-        if (selectedNode) {
+        const selectedData = selectedNode?.data as Partial<CanvasNodeData> | undefined;
+        if (selectedNode && selectedData?.commitStatus !== 'committed') {
           event.preventDefault();
           openNodeModal(selectedNode.id, 'commit');
         }
