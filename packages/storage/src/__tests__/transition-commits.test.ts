@@ -216,7 +216,7 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('CommitV2 repository', () => {
-  it('classifies empty and legacy ref heads without fabricating Transition assurance', async () => {
+  it('accepts empty refs and rejects non-CommitV2 heads after the hard cutover', async () => {
     const emptyProject = await insertProject(db, testData.project({ name: 'Empty Ref Project' }));
     await ensureMainBranch(db, emptyProject.projectId);
     await expect(
@@ -234,7 +234,12 @@ describe('CommitV2 repository', () => {
     });
     await expect(
       getTransitionRefHead(db, { projectId: legacyProject.projectId, refName: 'main' })
-    ).resolves.toEqual({ format: 'legacy_v1', refName: 'main', head: legacy.hash });
+    ).rejects.toMatchObject({
+      name: 'TransitionRefHeadIntegrityError',
+      projectId: legacyProject.projectId,
+      refName: 'main',
+      head: legacy.hash,
+    });
   });
 
   it('returns only a verified CommitV2 result State as a ref base', async () => {

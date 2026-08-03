@@ -238,7 +238,7 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
   base: State;
   content: SemanticContent;
   effect: ReturnType<typeof createYOpsEffect>['effect'];
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   observations: StatementObservation[];
   proposal: Extract<ReturnType<typeof compileProposalDraft>, { ok: true }>['proposal'];
   result: State;
@@ -249,7 +249,7 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
 
 interface ResolvedWorkspaceTransitionContext {
   base: State;
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   targetBranch: string;
   workspace: Record<string, unknown>;
   workspaceId: string;
@@ -373,7 +373,6 @@ async function resolveWorkspaceTransitionContext(
     projectId: input.projectId,
     refName: targetBranch,
   });
-  if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
   return {
     base: head.format === 'empty' ? createYOpsState({}) : head.state,
     head,

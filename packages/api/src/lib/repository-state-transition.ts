@@ -242,9 +242,6 @@ export async function commitRepositoryYOpsState(
   if (head.head !== input.expectedHead) {
     throw new TransitionHeadConflictError(input.expectedHead, head.head);
   }
-  if (head.format === 'legacy_v1') {
-    throw new TransitionHeadConflictError(input.expectedHead, head.head);
-  }
 
   const base = head.format === 'empty' ? createYOpsState({}) : head.state;
   const { effect, result } = createYOpsReplacementEffect({

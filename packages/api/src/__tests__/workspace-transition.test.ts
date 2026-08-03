@@ -12,6 +12,7 @@ import {
   insertYOpsLogEntry,
   listRepositoryDecisionAudit,
   listTransitionCommits,
+  TransitionRefHeadIntegrityError,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
@@ -21,7 +22,6 @@ import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
   WorkspaceTransitionDecisionDeniedError,
-  WorkspaceTransitionLegacyHeadError,
   WorkspaceTransitionReviewStaleError,
 } from '../lib/workspace-transition';
 import { setupTestDB, testData } from './setup';
@@ -486,6 +486,6 @@ describe('Workspace Transition application use case', () => {
         content: content(t3xPrdP0Fixtures.validCandidateTree),
         actor: HUMAN,
       })
-    ).rejects.toBeInstanceOf(WorkspaceTransitionLegacyHeadError);
+    ).rejects.toBeInstanceOf(TransitionRefHeadIntegrityError);
   });
 });

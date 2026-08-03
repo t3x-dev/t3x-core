@@ -49,7 +49,6 @@ import {
 import { type ProtocolValue, TransitionProtocolError, verifyEffect } from '@t3x-dev/transition';
 import {
   WorkspaceTransitionDecisionDeniedError,
-  WorkspaceTransitionLegacyHeadError,
   WorkspaceTransitionNotFoundError,
   WorkspaceTransitionReviewStaleError,
 } from './workspace-transition';
@@ -339,7 +338,7 @@ interface ResolvedSourceArtifact {
 }
 
 interface BuiltWorkspaceSourceProposalInternal extends BuiltWorkspaceSourceProposal {
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   resolvedSourceArtifact: ResolvedSourceArtifact;
 }
 
@@ -356,7 +355,7 @@ interface PreparedWorkspaceSourceTransition extends ReviewWorkspaceSourceTransit
   actor: ActorRef;
   base: State;
   effect: ReturnType<typeof createStateImportEffect>['effect'];
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   observations: StatementObservation[];
   proposal: Extract<ReturnType<typeof compileProposalDraft>, { ok: true }>['proposal'];
   result: State;
@@ -642,7 +641,7 @@ async function bindSourceInputs(
 }
 
 function buildEffect(input: {
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   change: WorkspaceSourceChange;
   artifact: ResolvedSourceArtifact;
 }): {
@@ -750,7 +749,6 @@ async function buildWorkspaceSourceProposalInternal(
     projectId: input.projectId,
     refName: targetBranch,
   });
-  if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
   if (expectedPrecondition !== undefined && head.head !== expectedPrecondition.refHead) {
     throw new WorkspaceTransitionReviewStaleError();
   }
@@ -947,7 +945,6 @@ async function buildWorkspaceSourceRevertProposalInternal(
     projectId: input.projectId,
     refName: targetBranch,
   });
-  if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
   if (head.format !== 'transition_v2') {
     throw new WorkspaceSourceRevertUnavailableError(
       'A committed exact-source edit is required before revert can be reviewed'

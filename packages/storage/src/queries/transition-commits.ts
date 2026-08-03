@@ -775,11 +775,6 @@ export type TransitionRefHead =
       head: null;
     }
   | {
-      format: 'legacy_v1';
-      refName: string;
-      head: string;
-    }
-  | {
       format: 'transition_v2';
       refName: string;
       head: string;
@@ -791,9 +786,9 @@ export type TransitionRefHead =
 /**
  * Resolve a repository ref into a verified Transition base.
  *
- * Legacy CommitV1 heads are reported explicitly and never promoted into a
- * synthetic CommitV2 parent. CommitV2 heads and their Result State are
- * re-hashed and integrity-verified before callers may use them as a Base.
+ * CommitV2 heads and their Result State are re-hashed and integrity-verified
+ * before callers may use them as a Base. Any non-CommitV2 head is an integrity
+ * failure after the #1308 hard cutover.
  */
 export async function getTransitionRefHead(
   db: AnyDB,
@@ -813,11 +808,7 @@ export async function getTransitionRefHead(
 
   const transition = await getTransitionCommit(db, input.projectId, ref.head);
   if (transition === null) {
-    const legacy = await getCommit(db, ref.head);
-    if (legacy?.project_id !== input.projectId) {
-      throw new TransitionRefHeadIntegrityError(input.projectId, input.refName, ref.head);
-    }
-    return { format: 'legacy_v1', refName: input.refName, head: ref.head };
+    throw new TransitionRefHeadIntegrityError(input.projectId, input.refName, ref.head);
   }
 
   const resolver = new DatabaseTransitionObjectResolver(db, input.projectId);
