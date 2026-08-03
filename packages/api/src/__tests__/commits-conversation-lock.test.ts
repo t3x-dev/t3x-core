@@ -3,7 +3,12 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertConversation, insertProject } from '@t3x-dev/storage';
+import {
+  ensureMainBranch,
+  getTransitionRefHead,
+  insertConversation,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -40,6 +45,7 @@ describe('Commit source conversation lock', () => {
       testData.project({ name: 'Commit Conversation Lock Test' })
     );
     projectId = project.projectId;
+    await ensureMainBranch(mockDB, projectId);
   });
 
   afterAll(async () => {
@@ -47,6 +53,7 @@ describe('Commit source conversation lock', () => {
   });
 
   async function postCommit(sourceConversationId: string): Promise<Response> {
+    const observed = await getTransitionRefHead(mockDB, { projectId, refName: 'main' });
     return app.request('/v1/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,10 +64,9 @@ describe('Commit source conversation lock', () => {
           relations: [],
         },
         branch: 'main',
+        expected_head: observed.head,
         message: 'Commit conversation',
         source_conversation_id: sourceConversationId,
-        sources: [{ type: 'conversation', id: sourceConversationId, title: 'Trip chat' }],
-        provenance: { method: 'llm_extraction' },
       }),
     });
   }
@@ -74,7 +80,7 @@ describe('Commit source conversation lock', () => {
     const first = await postCommit(conversation.conversationId);
     const firstBody: ApiResponse = await first.json();
     expect(first.status, JSON.stringify(firstBody)).toBe(200);
-    const commitHash = firstBody.data.commit.hash;
+    const commitHash = firstBody.data.commit.digest;
     expect(commitHash).toMatch(/^sha256:/);
 
     const getConversation = await app.request(`/v1/conversations/${conversation.conversationId}`);
@@ -115,26 +121,21 @@ describe('Commit source conversation lock', () => {
     expect(turnBody.error.code).toBe('ALREADY_COMMITTED');
   });
 
-  it('uses source conversation parent_commit_hash as the default commit parent', async () => {
-    const parentCommit = await createCommit(mockDB, {
-      project_id: projectId,
-      author: { type: 'human', name: 'test' },
-      message: 'Parent commit',
-      content: {
-        trees: [{ key: 'baseline', slots: {}, children: [] }],
-        relations: [],
-      },
-    });
+  it('requires source conversation parent_commit_hash to match the CommitV2 ref head', async () => {
+    const parent = await getTransitionRefHead(mockDB, { projectId, refName: 'main' });
+    if (parent.head === null) throw new Error('Expected prior CommitV2 head');
     const child = await insertConversation(mockDB, {
       projectId,
       title: 'Child chat',
-      parentCommitHash: parentCommit.hash,
+      parentCommitHash: parent.head,
     });
 
     const res = await postCommit(child.conversationId);
     const body: ApiResponse = await res.json();
 
     expect(res.status, JSON.stringify(body)).toBe(200);
-    expect(body.data.commit.parents).toEqual([parentCommit.hash]);
+    expect(body.data.commit.object.parents.map((item: { digest: string }) => item.digest)).toEqual([
+      parent.head,
+    ]);
   });
 });

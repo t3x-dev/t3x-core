@@ -207,26 +207,35 @@ export interface Commit {
   created_at: string;
 }
 
-export interface CreateCommitInput {
+export interface CommitDescriptorV2 {
+  kind: 'commit';
+  schema: 't3x/commit/v2';
+  digest: string;
+}
+
+export interface RepositoryCommitV2 {
+  schema: 't3x/commit/v2';
+  parents: CommitDescriptorV2[];
+  decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  result: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+}
+
+export interface CreatedRepositoryCommit {
+  digest: string;
+  ref_name: string;
+  object: RepositoryCommitV2;
+}
+
+export interface CommitRepositoryStateInput {
   project_id: string;
   content: {
     trees: unknown[];
     relations?: unknown[];
   };
   branch?: string;
-  parents?: string[];
+  expected_head: string | null;
   message?: string;
   source_conversation_id?: string;
-  author?: {
-    type: 'human' | 'agent' | 'system';
-    id?: string;
-    name?: string;
-  };
-  provenance?: {
-    method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
-    model?: string;
-    extracted_at?: string;
-  };
 }
 
 export interface ListCommitsResponse {

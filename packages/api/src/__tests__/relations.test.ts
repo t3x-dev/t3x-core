@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -39,29 +39,23 @@ describe('Relations Routes', () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Relations Test' }));
     testProjectId = project.projectId;
 
-    // Create a commit with inline relations
-    const res = await app.request('/v1/commits', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        parents: [],
-        author: { type: 'human', name: 'Relation Tester' },
-        content: {
-          trees: [
-            { key: 'f_001', slots: { text: 'Tokyo in spring' }, children: [] },
-            { key: 'f_002', slots: { text: 'Cherry blossoms' }, children: [] },
-          ],
-          relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
-        },
-        project_id: testProjectId,
-        message: 'Relations test commit',
-        branch: 'main',
-      }),
+    // Seed the legacy read fixture directly. The Transition write endpoint
+    // intentionally rejects relations until they have an explicit codec.
+    const commit = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Relation Tester' },
+      content: {
+        trees: [
+          { key: 'f_001', slots: { text: 'Tokyo in spring' }, children: [] },
+          { key: 'f_002', slots: { text: 'Cherry blossoms' }, children: [] },
+        ],
+        relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
+      },
+      project_id: testProjectId,
+      message: 'Relations test commit',
+      branch: 'main',
     });
-
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    testCommitHash = data.data.commit.hash;
+    testCommitHash = commit.hash;
   });
 
   afterAll(async () => {

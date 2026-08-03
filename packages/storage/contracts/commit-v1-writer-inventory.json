@@ -8,8 +8,6 @@
     "apps/web/src/hooks/commits/useCreateMergeCommit.ts",
     "apps/web/src/hooks/onboarding/useIntroDemoReplayActions.ts",
     "apps/web/src/infrastructure/commits.ts",
-    "packages/api-client/src/client.ts",
-    "packages/api/src/ops/commit.ts",
     "packages/api/src/ops/merge.ts",
     "packages/api/src/routes/autopilot.openapi.ts",
     "packages/api/src/routes/commit-from-draft.openapi.ts",

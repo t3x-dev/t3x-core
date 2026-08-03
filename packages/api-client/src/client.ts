@@ -22,7 +22,8 @@ import type {
   Conversation,
   ConversationSourceEvidence,
   CreateBranchInput,
-  CreateCommitInput,
+  CreatedRepositoryCommit,
+  CommitRepositoryStateInput,
   CreateConversationInput,
   CreateDraftInput,
   CreateLeafInput,
@@ -418,8 +419,10 @@ export class T3xClient {
     return this.request<Commit>('GET', `/v1/commits/${hash}`);
   }
 
-  async createCommit(input: CreateCommitInput): Promise<Commit> {
-    return this.request<Commit>('POST', '/v1/commits', input);
+  async commitRepositoryState(
+    input: CommitRepositoryStateInput
+  ): Promise<CreatedRepositoryCommit> {
+    return this.request<CreatedRepositoryCommit>('POST', '/v1/commits', input);
   }
 
   // ============================================

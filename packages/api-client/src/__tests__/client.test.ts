@@ -471,14 +471,34 @@ describe('T3xClient', () => {
       );
     });
 
-    it('createCommit sends POST', async () => {
-      const fn = mockFetch(successResponse({ commit_hash: 'sha256:new' }));
+    it('commitRepositoryState sends a CommitV2 POST', async () => {
+      const fn = mockFetch(
+        successResponse({
+          digest: `sha256:${'a'.repeat(64)}`,
+          ref_name: 'main',
+          object: {
+            schema: 't3x/commit/v2',
+            parents: [],
+            decision: {
+              kind: 'statement',
+              schema: 't3x/statement/v1',
+              digest: `sha256:${'b'.repeat(64)}`,
+            },
+            result: {
+              kind: 'state',
+              schema: 't3x/state/v1',
+              digest: `sha256:${'c'.repeat(64)}`,
+            },
+          },
+        })
+      );
       const client = createTestClient(fn);
 
-      await client.createCommit({
+      await client.commitRepositoryState({
         project_id: 'proj_1',
         content: { trees: [{ key: 'test', slots: { text: 'hello' }, children: [] }] },
         branch: 'main',
+        expected_head: null,
         message: 'Initial',
       });
       expect(fn).toHaveBeenCalledWith(

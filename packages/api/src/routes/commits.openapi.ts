@@ -15,10 +15,11 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Commit, SemanticContent, YOp } from '@t3x-dev/core';
-import { collectResult, extractOpsFromEntries, runOperation, verifyReplay } from '@t3x-dev/core';
+import { extractOpsFromEntries, validateTree, verifyReplay } from '@t3x-dev/core';
 import {
   collectYOpsForCommitRange,
   createCommit,
+  ensureMainBranch,
   findConversationById,
   getCommit,
   getTransitionViewForCommit,
@@ -28,18 +29,20 @@ import {
   listCommitHistory,
   listCommits,
   markConversationCommitted,
+  TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
   updateCommitMessage,
   updateCommitPosition,
 } from '@t3x-dev/storage';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
-import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  RepositoryStateDomainUnsupportedError,
+} from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
-import { commitOp } from '../ops/commit';
-import { buildPipelineContext } from '../ops/context';
 import {
   ErrorResponseSchema,
   HashParamSchema,
@@ -88,20 +91,8 @@ const CreateCommitRequestSchema = z.object({
     relations: z.any().optional(),
   }),
   branch: z.string().optional(),
-  parents: z.array(z.string()).optional(),
+  expected_head: z.string().nullable(),
   message: z.string().optional(),
-  author: AuthorSchema.optional(),
-  provenance: ProvenanceSchema.optional(),
-  yops_log_ids: z.array(z.string()).optional(),
-  sources: z
-    .array(
-      z.object({
-        type: z.enum(['conversation', 'import', 'leaf']),
-        id: z.string(),
-        title: z.string().optional(),
-      })
-    )
-    .optional(),
 });
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
@@ -124,6 +115,32 @@ const CommitResponseSchema = z.object({
   message: z.string().nullable(),
   branch: z.string(),
   provenance: ProvenanceSchema.nullable(),
+});
+
+const DigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+const CommitDescriptorSchema = z.object({
+  kind: z.literal('commit'),
+  schema: z.literal('t3x/commit/v2'),
+  digest: DigestSchema,
+});
+const CommitV2ObjectSchema = z.object({
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(CommitDescriptorSchema),
+  decision: z.object({
+    kind: z.literal('statement'),
+    schema: z.literal('t3x/statement/v1'),
+    digest: DigestSchema,
+  }),
+  result: z.object({
+    kind: z.literal('state'),
+    schema: z.literal('t3x/state/v1'),
+    digest: DigestSchema,
+  }),
+});
+const CreatedCommitV2ResponseSchema = z.object({
+  digest: DigestSchema,
+  ref_name: z.string(),
+  object: CommitV2ObjectSchema,
 });
 
 const DescriptorBaseSchema = z.object({
@@ -167,14 +184,14 @@ const CommitHistoryProjectionSchema = z.discriminatedUnion('format', [
 ]);
 
 // ============================================================
-// POST /v1/commits — Create a new frame-based commit
+// POST /v1/commits — Commit an exact structured State through Transition
 // ============================================================
 
 const createCommitRoute = createRoute({
   method: 'post',
   path: '/v1/commits',
   tags: ['Commits'],
-  summary: 'Create a new frame-based commit',
+  summary: 'Commit structured repository state',
   request: {
     body: {
       content: {
@@ -186,10 +203,10 @@ const createCommitRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Commit created successfully',
+      description: 'CommitV2 created successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commit: CommitResponseSchema })),
+          schema: SuccessResponseSchema(z.object({ commit: CreatedCommitV2ResponseSchema })),
         },
       },
     },
@@ -208,13 +225,14 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
   const body = c.req.valid('json');
 
   try {
-    const ctx = await buildPipelineContext(c, body.project_id);
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, body.project_id);
+    if (access instanceof Response) return access;
     const sourceConversationId = body.source_conversation_id;
-
-    let yopsLogIds = body.yops_log_ids;
-    let inheritedParentHash: string | undefined;
+    let yopsLogIds: string[] = [];
+    let inheritedParentHash: string | null = null;
     if (sourceConversationId) {
-      const sourceConversation = await findConversationById(ctx.db, sourceConversationId);
+      const sourceConversation = await findConversationById(db, sourceConversationId);
       if (!sourceConversation) {
         return errorResponse(c, 'NOT_FOUND', `Conversation ${sourceConversationId} not found`);
       }
@@ -232,66 +250,87 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
           `Conversation ${sourceConversationId} has already been committed`
         );
       }
-      inheritedParentHash = sourceConversation.parentCommitHash ?? undefined;
-      yopsLogIds ??= await findUncommittedYOpsIds(ctx.db, sourceConversationId, body.project_id);
+      inheritedParentHash = sourceConversation.parentCommitHash;
+      yopsLogIds = await findUncommittedYOpsIds(db, sourceConversationId, body.project_id);
     }
     const targetBranch = body.branch ?? 'main';
-    const parents =
-      body.parents !== undefined
-        ? body.parents
-        : await resolveDefaultCommitParents(
-            ctx.db,
-            body.project_id,
-            targetBranch,
-            inheritedParentHash
-          );
-
-    const commitInput = {
-      project_id: body.project_id,
-      // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
-      content: body.content as any,
-      branch: targetBranch,
-      parents,
-      message: body.message,
-      author: body.author,
-      provenance: body.provenance,
-      yops_log_ids: yopsLogIds,
-      sources: body.sources,
-    };
-
-    if (sourceConversationId) {
-      let commit: Commit | undefined;
-      await (ctx.db as unknown as TxRunner).transaction(async (tx) => {
-        const txCtx = { ...ctx, db: tx as typeof ctx.db };
-        commit = await collectResult(runOperation(commitOp, commitInput, txCtx));
-        const marked = await markConversationCommitted(
-          tx as typeof ctx.db,
-          sourceConversationId,
-          commit.hash
-        );
-        if (!marked) {
-          throw new SourceConversationAlreadyCommittedError(sourceConversationId);
-        }
-      });
-      if (!commit) throw new Error('Commit transaction did not return a commit');
-
-      return c.json({ success: true as const, data: { commit } }, 200);
+    if (targetBranch === 'main') await ensureMainBranch(db, body.project_id);
+    const expectedHead = body.expected_head;
+    if (inheritedParentHash !== null && inheritedParentHash !== expectedHead) {
+      return errorResponse(
+        c,
+        'BRANCH_NOT_HEAD',
+        'The source conversation parent does not match the target ref head'
+      );
     }
+    const content = {
+      trees: Array.isArray(body.content.trees) ? body.content.trees : [],
+      relations: Array.isArray(body.content.relations) ? body.content.relations : [],
+    } as SemanticContent;
+    const validation = validateTree(content);
+    if (!validation.valid) {
+      return errorResponse(
+        c,
+        'VALIDATION_FAILED',
+        validation.warnings
+          .filter((warning) => warning.severity === 'error')
+          .map((warning) => `${warning.rule}: ${warning.message}`)
+          .join('; ')
+      );
+    }
+    const target = createRepositoryYOpsStateFromSemanticContent(content);
+    const userId = getUserId(c);
+    let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
+    await (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as typeof db;
+      created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId: body.project_id,
+        refName: targetBranch,
+        expectedHead,
+        target,
+        actor: {
+          kind: 'human',
+          id: userId ? `user:${userId}` : 'human:local-user',
+        },
+        ...(body.message?.trim() ? { intent: body.message.trim() } : {}),
+        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
+      });
+      if (sourceConversationId) {
+        const marked = await markConversationCommitted(tx, sourceConversationId, created.commitDigest);
+        if (!marked) throw new SourceConversationAlreadyCommittedError(sourceConversationId);
+      }
+    });
+    if (created === undefined) throw new Error('CommitV2 transaction did not return a commit');
 
-    const commit = await collectResult(runOperation(commitOp, commitInput, ctx));
-
-    return c.json({ success: true as const, data: { commit } }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: {
+            digest: created.commitDigest,
+            ref_name: targetBranch,
+            object: created.commit,
+          },
+        },
+      },
+      200
+    );
   } catch (err) {
     if (err instanceof SourceConversationAlreadyCommittedError) {
       return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
+    if (err instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
+    }
+    if (err instanceof RepositoryStateDomainUnsupportedError) {
+      return errorResponse(c, 'SEMANTIC_NOT_SUPPORTED', err.message);
     }
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500. Same boundary as the
     // draft / autopilot / drafts-workflow commit routes.
     const conflict = mapSupersededError(c, err);
     if (conflict) return conflict;
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
     const message = err instanceof Error ? err.message : 'Failed to create commit';
     return errorResponse(c, 'CREATE_FAILED', message);
   }
