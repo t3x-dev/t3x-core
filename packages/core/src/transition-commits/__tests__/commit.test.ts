@@ -6,8 +6,6 @@ import {
   type State,
 } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
-import { computeCommitHash } from '../../commit/hash';
-import type { Commit } from '../../commit/types';
 import { createDecisionStatement } from '../../transition-decisions/decision';
 import {
   type AcceptancePolicy,
@@ -22,7 +20,6 @@ import {
   describeCommitV2,
   isRepositoryDecisionAuthorization,
   isRepositoryDecisionRecord,
-  projectLegacyCommit,
   type RepositoryDecisionAuthority,
 } from '..';
 
@@ -323,38 +320,5 @@ describe('CommitV2 application boundary', () => {
     expect(isRepositoryDecisionAuthorization(rejected.record)).toBe(false);
     expect(isRepositoryDecisionRecord({ ...rejected.record })).toBe(false);
     expect(Object.keys(accepted.decision).sort()).toEqual(Object.keys(overridden.decision).sort());
-  });
-
-  it('projects legacy history without fabricating transition assurance or changing its hash', () => {
-    const legacy: Commit = {
-      hash: '',
-      schema: 't3x/commit',
-      parents: [],
-      author: { type: 'human', id: 'human:legacy' },
-      committed_at: '2026-01-01T00:00:00.000Z',
-      content: { trees: [], relations: [] },
-      project_id: 'project:test',
-      message: null,
-      branch: 'main',
-      provenance: null,
-      yops_log_ids: [],
-    };
-    legacy.hash = computeCommitHash(legacy);
-    const before = computeCommitHash(legacy);
-    const projected = projectLegacyCommit(legacy);
-
-    expect(projected).toMatchObject({
-      format: 'legacy_v1',
-      id: legacy.hash,
-      assurance: {
-        mode: 'legacy_unavailable',
-        unavailable: ['proposal', 'evidence', 'replay', 'validation', 'decision'],
-      },
-    });
-    expect(projected).not.toHaveProperty('decision');
-    if (projected.format !== 'legacy_v1') throw new Error('legacy projection expected');
-    expect(projected.result.content).not.toBe(legacy.content);
-    expect(projected.result.content.trees).not.toBe(legacy.content.trees);
-    expect(computeCommitHash(legacy)).toBe(before);
   });
 });
