@@ -1,6 +1,5 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
   createLeaf,
   createPin,
   deleteProviderCredential,
@@ -14,6 +13,7 @@ import {
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
+import { commitSemanticFixture } from './transition-fixture';
 
 let mockDB: AnyDB;
 const { extractAndApply } = vi.hoisted(() => ({
@@ -117,9 +117,8 @@ describe('POST /v1/extract-yops (v2)', () => {
       mockDB,
       testData.project({ name: 'ExtractYopsV2 Empty Pin Override Test' })
     );
-    const parentCommit = await createCommit(mockDB, {
-      project_id: project.projectId,
-      author: { type: 'human', id: 'user_test', name: 'Test User' },
+    const parentCommit = await commitSemanticFixture(mockDB, {
+      projectId: project.projectId,
       content: {
         trees: [{ key: 'context_seed', slots: { goal: 'prove pin override' }, children: [] }],
         relations: [],
@@ -128,11 +127,11 @@ describe('POST /v1/extract-yops (v2)', () => {
     const conversation = await insertConversation(mockDB, {
       projectId: project.projectId,
       title: 'Extract with configured feedback',
-      parentCommitHash: parentCommit.hash,
+      parentCommitHash: parentCommit.commitDigest,
     });
     const leaf = await createLeaf(mockDB, {
       project_id: project.projectId,
-      commit_hash: parentCommit.hash,
+      commit_hash: parentCommit.commitDigest,
       type: 'article',
       title: 'Configured Feedback Leaf',
     });
@@ -232,9 +231,8 @@ describe('POST /v1/extract-yops (v2)', () => {
       mockDB,
       testData.project({ name: 'ExtractYopsV2 Manifest Guidance Test' })
     );
-    const parentCommit = await createCommit(mockDB, {
-      project_id: project.projectId,
-      author: { type: 'human', id: 'user_test', name: 'Test User' },
+    const parentCommit = await commitSemanticFixture(mockDB, {
+      projectId: project.projectId,
       content: {
         trees: [{ key: 'launch', slots: { goal: 'ship carefully' }, children: [] }],
         relations: [],
@@ -243,11 +241,11 @@ describe('POST /v1/extract-yops (v2)', () => {
     const conversation = await insertConversation(mockDB, {
       projectId: project.projectId,
       title: 'Extract with selected feedback',
-      parentCommitHash: parentCommit.hash,
+      parentCommitHash: parentCommit.commitDigest,
     });
     const leaf = await createLeaf(mockDB, {
       project_id: project.projectId,
-      commit_hash: parentCommit.hash,
+      commit_hash: parentCommit.commitDigest,
       type: 'article',
       title: 'Feedback Leaf',
     });
@@ -599,15 +597,14 @@ describe('POST /v1/extract-yops (v2)', () => {
       });
       // Promote the entry into a real commit. The active-baseline route
       // should still include committed rows exactly once.
-      await createCommit(mockDB, {
-        author: { type: 'human', name: 'test' },
+      await commitSemanticFixture(mockDB, {
+        projectId: testProjectId,
         content: {
           trees: [{ key: 'committed_root', slots: {}, children: [] }],
           relations: [],
         },
-        project_id: testProjectId,
-        message: 'baseline commit',
-        yops_log_ids: [committed.id],
+        intent: 'baseline commit',
+        yopsLogIds: [committed.id],
       });
 
       await upsertProviderCredential(mockDB, {
@@ -642,25 +639,27 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
 
     it('uses parent commit content as the incremental baseline for child conversations', async () => {
-      const parentCommit = await createCommit(mockDB, {
-        author: { type: 'human', name: 'test' },
+      const parentContent = {
+        trees: [
+          {
+            key: 'parent_trip',
+            slots: { destination: 'Dali' },
+            children: [],
+          },
+        ],
+        relations: [],
+      };
+      const parentCommit = await commitSemanticFixture(mockDB, {
+        projectId: testProjectId,
         content: {
-          trees: [
-            {
-              key: 'parent_trip',
-              slots: { destination: 'Dali' },
-              children: [],
-            },
-          ],
-          relations: [],
+          ...parentContent,
         },
-        project_id: testProjectId,
-        message: 'parent commit',
+        intent: 'parent commit',
       });
       const child = await insertConversation(mockDB, {
         projectId: testProjectId,
         title: `Child ${Date.now()}`,
-        parentCommitHash: parentCommit.hash,
+        parentCommitHash: parentCommit.commitDigest,
       });
 
       await upsertProviderCredential(mockDB, {
@@ -689,7 +688,7 @@ describe('POST /v1/extract-yops (v2)', () => {
       expect(res.status).toBe(200);
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
       expect(callArgs?.mode).toBe('incremental');
-      expect(callArgs?.snapshot).toEqual(parentCommit.content);
+      expect(callArgs?.snapshot).toEqual(parentContent);
     });
   });
 

@@ -1,6 +1,5 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
   ensureMainBranch,
   insertConversation,
   insertProject,
@@ -14,12 +13,13 @@ import {
 } from '../../lib/repository-state-transition';
 import { findUncommittedYOpsIds } from '../../lib/yops-commit-link';
 import { setupTestDB, testData } from '../setup';
+import { commitSemanticFixture } from '../transition-fixture';
 
 /**
  * P1 from the review on PR #890: `findUncommittedYOpsIds` previously
  * read the full yops_log, which meant superseded LLM suggestions could
  * still be picked up as commit candidates. Once committed, those
- * stale entries land in `commits.yops_log_ids` and `replayCommittedBaseline`
+ * stale entries gain CommitV2 consumption records and `replayCommittedBaseline`
  * resurrects the replaced facts on every subsequent re-extract — a
  * silent, permanent contamination of the immutable baseline.
  *
@@ -123,12 +123,11 @@ describe('findUncommittedYOpsIds (post supersede integration)', () => {
       source: 'manual',
       yops: [humanOp('draft_only')],
     });
-    await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
+    await commitSemanticFixture(mockDB, {
+      projectId,
       content: { trees: [], relations: [] },
-      project_id: projectId,
-      message: 'baseline',
-      yops_log_ids: [committedEntry.id],
+      intent: 'baseline',
+      yopsLogIds: [committedEntry.id],
     });
 
     const ids = await findUncommittedYOpsIds(mockDB, convId, projectId);

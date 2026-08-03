@@ -2,10 +2,14 @@
 
 import { yamlToTree } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import { deleteProject, ensureMainBranch, findProjects, insertProject } from '@t3x-dev/storage';
 import { t3xSkillP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
@@ -55,16 +59,20 @@ describe('Skill artifact routes', () => {
           to: 'workflows/review_changes',
         },
       ]);
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'YX' },
-      content: {
+    await ensureMainBranch(mockDB, project.projectId);
+    const commit = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      actor: { kind: 'human', id: 'user:yx' },
+      target: createRepositoryYOpsStateFromSemanticContent({
         trees: Object.entries(candidate).map(([key, value]) => yamlToTree(key, value)),
         relations,
-      },
-      message: 'Skill bundle',
-      project_id: project.projectId,
+      }),
+      intent: 'Skill bundle',
     });
-    const path = `/v1/projects/${project.projectId}/commits/${commit.hash}/artifacts/skill`;
+    const path = `/v1/projects/${project.projectId}/commits/${commit.commitDigest}/artifacts/skill`;
 
     const first = (await (await app.request(path)).json()) as any;
     const second = (await (await app.request(path)).json()) as any;
