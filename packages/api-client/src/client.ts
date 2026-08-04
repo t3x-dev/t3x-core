@@ -909,7 +909,7 @@ export class T3xClient {
 
   async listProjectYSchemaVersions(
     projectId: string,
-    family?: 'prd' | 'prompt' | 'skill'
+    family?: 'esphome-device' | 'prd' | 'prompt' | 'skill'
   ): Promise<ProjectYSchemaVersionHistory> {
     return this.request<ProjectYSchemaVersionHistory>(
       'GET',

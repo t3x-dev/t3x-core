@@ -46,7 +46,7 @@ describe('published Schema version projections', () => {
     expect(isSchemaReleaseBindable(release)).toBe(true);
   });
 
-  it('places published versions into PRD history without changing its current pointer', () => {
+  it('places published versions into their Family history without changing current pointers', () => {
     const registry = {
       defaultFamilyId: 'prd',
       families: [
@@ -58,15 +58,35 @@ describe('published Schema version projections', () => {
           currentReleaseId: 'official-current',
           releases: [],
         },
+        {
+          id: 'prompt',
+          name: 'Prompt',
+          canonicalName: 't3x/prompt',
+          description: 'Prompt contracts',
+          currentReleaseId: 'prompt-current',
+          releases: [],
+        },
       ],
     };
 
-    const merged = mergePublishedSchemaVersions(registry, [manifest], 'proj_test');
+    const promptManifest: PublishedSchemaVersionManifest = {
+      ...manifest,
+      canonicalName: 'projects/proj_test/prompt',
+      family: 'prompt',
+      title: 'Project Prompt',
+    };
+
+    const merged = mergePublishedSchemaVersions(registry, [manifest, promptManifest], 'proj_test');
 
     expect(merged.families[0]?.currentReleaseId).toBe('official-current');
     expect(merged.families[0]?.releases[0]).toMatchObject({
       canonicalName: manifest.canonicalName,
       version: manifest.version,
+    });
+    expect(merged.families[1]?.currentReleaseId).toBe('prompt-current');
+    expect(merged.families[1]?.releases[0]).toMatchObject({
+      canonicalName: promptManifest.canonicalName,
+      version: promptManifest.version,
     });
   });
 });

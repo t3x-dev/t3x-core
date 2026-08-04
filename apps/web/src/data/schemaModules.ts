@@ -3,6 +3,7 @@ import type { SchemaArtifactPreview } from '@/types/schemaModules';
 export const PRD_CORE_ARTIFACT: SchemaArtifactPreview = {
   canonicalName: 't3x/prd-core',
   version: '1.1.0',
+  family: 'prd',
   kind: 'core',
   title: 'PRD Core',
   description: 'Product problem, audience, outcomes, requirements, acceptance, and milestones.',
@@ -13,6 +14,7 @@ export const PRD_CORE_ARTIFACT: SchemaArtifactPreview = {
   requires: [],
   placement: 'core',
   nodePaths: ['summary', 'requirements', 'milestones'],
+  renderers: ['markdown', 'yaml'],
   rules: [
     {
       id: 'core.path_ownership',
@@ -32,8 +34,11 @@ export const PRD_CORE_ARTIFACT: SchemaArtifactPreview = {
   updatedAt: 'Jul 25, 2026',
   usageCount: 2841,
   starCount: 164,
+  sortOrder: 0,
   icon: 'file',
 };
+
+let nextPrdModuleSortOrder = 0;
 
 export const PRD_MODULE_ARTIFACTS: SchemaArtifactPreview[] = [
   moduleArtifact({
@@ -125,12 +130,21 @@ export const PRD_MODULE_ARTIFACTS: SchemaArtifactPreview[] = [
 function moduleArtifact(
   input: Omit<
     SchemaArtifactPreview,
-    'kind' | 'rules' | 'source' | 'status' | 'version' | 'versions'
+    | 'family'
+    | 'kind'
+    | 'renderers'
+    | 'rules'
+    | 'source'
+    | 'sortOrder'
+    | 'status'
+    | 'version'
+    | 'versions'
   >
 ): SchemaArtifactPreview {
   return {
     ...input,
     version: '1.0.0',
+    family: 'prd',
     kind: 'module',
     source: 'official',
     status: 'active',
@@ -150,5 +164,7 @@ function moduleArtifact(
       { version: '1.0.0', status: 'current', updatedAt: input.updatedAt },
       { version: '0.9.0', status: 'historical', updatedAt: 'Jun 30, 2026' },
     ],
+    renderers: ['markdown', 'yaml'],
+    sortOrder: ++nextPrdModuleSortOrder,
   };
 }

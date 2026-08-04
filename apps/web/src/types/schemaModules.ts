@@ -1,5 +1,6 @@
 export type SchemaArtifactKind = 'core' | 'module';
 export type SchemaArtifactDetailView = 'overview' | 'render' | 'rules' | 'versions';
+export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
 
 export interface SchemaModuleRulePreview {
   id: string;
@@ -10,6 +11,7 @@ export interface SchemaModuleRulePreview {
 export interface SchemaArtifactPreview {
   canonicalName: string;
   version: string;
+  family: YSchemaArtifactFamily;
   kind: SchemaArtifactKind;
   title: string;
   description: string;
@@ -20,11 +22,13 @@ export interface SchemaArtifactPreview {
   requires: string[];
   placement: string;
   nodePaths: string[];
+  renderers: string[];
   rules: SchemaModuleRulePreview[];
   versions: Array<{ version: string; status: string; updatedAt: string }>;
   updatedAt: string;
   usageCount: number;
   starCount: number;
+  sortOrder: number;
   icon: 'blocks' | 'braces' | 'cpu' | 'database' | 'file' | 'monitor' | 'server';
 }
 
@@ -53,7 +57,7 @@ export interface SchemaCompositionDraft {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
-  family: 'prd';
+  family: YSchemaArtifactFamily;
   status: 'draft';
   core: { canonicalName: string; version: string; hash?: string };
   modules: Array<{
@@ -108,7 +112,7 @@ export interface PublishedSchemaVersionManifest extends Record<string, unknown> 
   apiVersion: 't3x.dev/yschema-core/v1';
   canonicalName: string;
   version: string;
-  family: 'prd' | 'prompt' | 'skill';
+  family: YSchemaArtifactFamily;
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';

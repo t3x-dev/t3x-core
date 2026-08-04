@@ -9,8 +9,7 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
-  builtInPrdCoreArtifact,
-  builtInPrdModules,
+  builtInYSchemaModules,
   compileYSchemaComposition,
   type NodeSchema,
   normalizeYSchemaObject,
@@ -39,12 +38,14 @@ const CompositionModuleReferenceSchema = ArtifactReferenceSchema.extend({
   slot: z.string().min(1).optional(),
 });
 
+const YSchemaFamilySchema = z.enum(['esphome-device', 'prd', 'prompt', 'skill']);
+
 export const YSchemaCompositionPreviewRequestSchema = z
   .object({
     apiVersion: z.literal('t3x.dev/yschema-composition/v1'),
     id: z.string().min(1),
     revision: z.number().int().nonnegative(),
-    family: z.enum(['prd', 'prompt', 'skill']),
+    family: YSchemaFamilySchema,
     status: z.literal('draft'),
     core: ArtifactReferenceSchema,
     modules: z.array(CompositionModuleReferenceSchema),
@@ -79,7 +80,7 @@ const WorkspaceCompositionParamsSchema = z.object({
 });
 
 const ArtifactRegistryQuerySchema = z.object({
-  family: z.enum(['prd', 'prompt', 'skill']).optional(),
+  family: YSchemaFamilySchema.optional(),
   kind: z.enum(['core', 'module']).optional(),
   visibility: z.enum(['official', 'team', 'community', 'private']).optional(),
   search: z.string().max(120).optional(),
@@ -228,7 +229,7 @@ const listProjectVersionsRoute = createRoute({
   summary: 'List immutable YSchema versions published by a project',
   request: {
     params: z.object({ projectId: z.string().min(1) }),
-    query: z.object({ family: z.enum(['prd', 'prompt', 'skill']).optional() }),
+    query: z.object({ family: YSchemaFamilySchema.optional() }),
   },
   responses: {
     200: {
@@ -692,6 +693,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     source: 'team',
     provides,
     extensionSlots: artifacts.core.extensionSlots,
+    render: artifacts.core.render,
     schema,
     registry: {
       origin: 'composition',
@@ -797,9 +799,9 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
   }
 
   const binding = {
-    canonicalName: 't3x/prd',
-    schemaName: 'PRD Composition',
-    version: builtInPrdCoreArtifact.schema.version,
+    canonicalName: `t3x/${persisted.composition.family}`,
+    schemaName: `${artifacts.core.title} Composition`,
+    version: preview.schema.version ?? artifacts.core.version,
     mode: 'draft_override',
     schemaHash: preview.compiledSchemaHash,
     compositionId: persisted.composition.id,
@@ -898,7 +900,7 @@ function parsePersistedComposition(
 function normalizeComposition(
   composition: YSchemaCompositionDraft,
   revision: number,
-  availableModules = builtInPrdModules
+  availableModules = builtInYSchemaModules
 ): YSchemaCompositionDraft {
   const moduleByKey = new Map(
     availableModules.map((module) => [`${module.canonicalName}@${module.version}`, module])

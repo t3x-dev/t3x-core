@@ -7,6 +7,27 @@ import { SchemaModuleRegistry } from '@/components/schemas';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
 
 const TEST_REGISTRY = [PRD_CORE_ARTIFACT, ...PRD_MODULE_ARTIFACTS];
+const PROMPT_CORE = {
+  ...PRD_CORE_ARTIFACT,
+  canonicalName: 't3x/prompt-core',
+  version: '1.0.0',
+  family: 'prompt' as const,
+  title: 'Prompt Core',
+  domain: 'Foundation',
+  renderers: ['prompt-text', 'markdown', 'yaml'],
+};
+const PROMPT_MODULE = {
+  ...PRD_MODULE_ARTIFACTS[0],
+  canonicalName: 't3x/prompt-few-shot-examples',
+  family: 'prompt' as const,
+  title: 'Few-shot Examples',
+  domain: 'Examples',
+  placement: 'examples',
+  provides: ['few-shot-examples'],
+  requires: ['message-contract'],
+  nodePaths: ['examples'],
+  renderers: ['prompt-text', 'markdown', 'yaml'],
+};
 
 describe('SchemaModuleRegistry', () => {
   afterEach(() => {
@@ -28,6 +49,28 @@ describe('SchemaModuleRegistry', () => {
     expect(screen.getByRole('button', { name: 'Compile preview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No Workspace' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Publish unavailable' })).toBeDisabled();
+  });
+
+  it('scopes Core, Modules, Domains, and Render to the selected family', () => {
+    render(
+      <SchemaModuleRegistry
+        family="prompt"
+        registryArtifacts={[...TEST_REGISTRY, PROMPT_CORE, PROMPT_MODULE]}
+      />
+    );
+
+    expect(screen.getAllByText('Prompt Core').length).toBeGreaterThan(0);
+    expect(screen.getByText('Prompt Modules')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inspect Few-shot Examples' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Inspect Database Design' })
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText('Examples').length).toBeGreaterThan(0);
+    expect(screen.getByText('Prompt composition')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Render' }));
+    expect(screen.getByText('Prompt Text')).toBeInTheDocument();
+    expect(screen.getByText(/compiles ordered messages and typed variables/)).toBeInTheDocument();
   });
 
   it('inspects Module rules and adds or removes Modules explicitly', () => {

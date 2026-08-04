@@ -1,8 +1,8 @@
 import type { AnyDB, YSchemaArtifactVersionView } from '@t3x-dev/storage';
 import { findYSchemaArtifactVersion, upsertYSchemaArtifactVersion } from '@t3x-dev/storage';
 import {
-  builtInPrdCoreArtifact,
-  builtInPrdModules,
+  builtInYSchemaCores,
+  builtInYSchemaModules,
   type NodeSchema,
   sha256CompositionValue,
   type YSchemaCompositionDraft,
@@ -12,8 +12,8 @@ import {
 
 export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
   const artifacts: Array<YSchemaCoreArtifact | YSchemaModuleManifest> = [
-    builtInPrdCoreArtifact,
-    ...builtInPrdModules,
+    ...builtInYSchemaCores,
+    ...builtInYSchemaModules,
   ];
   for (const artifact of artifacts) {
     const artifactHash = await sha256CompositionValue(artifact);
@@ -60,8 +60,12 @@ export async function resolveCompositionArtifacts(
       })
     ),
   ]);
+  const fallbackCore =
+    builtInYSchemaCores.find((artifact) => artifact.family === composition.family) ??
+    builtInYSchemaCores[0];
+  if (!fallbackCore) throw new Error('No built-in YSchema Core artifacts are registered.');
   return {
-    core: (coreView?.manifest ?? builtInPrdCoreArtifact) as unknown as YSchemaCoreArtifact,
+    core: (coreView?.manifest ?? fallbackCore) as unknown as YSchemaCoreArtifact,
     modules: moduleViews.flatMap((item) =>
       item?.kind === 'module' ? [item.manifest as unknown as YSchemaModuleManifest] : []
     ),

@@ -1,7 +1,18 @@
 export {
+  builtInEsphomeDeviceCoreArtifact,
+  builtInEsphomeDeviceModules,
   builtInPrdCoreArtifact,
   builtInPrdModules,
+  builtInPromptCoreArtifact,
+  builtInPromptModules,
+  builtInSkillCoreArtifact,
+  builtInSkillModules,
+  builtInYSchemaCores,
+  builtInYSchemaModules,
+  defaultEsphomeDeviceCompositionModuleOrder,
   defaultPrdCompositionModuleOrder,
+  defaultPromptCompositionModuleOrder,
+  defaultSkillCompositionModuleOrder,
 } from './builtins';
 export { canonicalizeCompositionValue, sha256CompositionValue } from './canonical';
 export { compileYSchemaComposition } from './compiler';

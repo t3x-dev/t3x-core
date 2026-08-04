@@ -1,6 +1,6 @@
 import type { NodeSchema, RelationTypeSchema, ReservedRuleSchema, YSchema } from '../p0/types';
 
-export type YSchemaArtifactFamily = 'prd' | 'prompt' | 'skill';
+export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
 export type YSchemaModuleKind = 'policy' | 'render' | 'structure' | 'workflow';
 export type YSchemaArtifactStatus = 'active' | 'deprecated' | 'draft';
 export type YSchemaArtifactSource = 'community' | 'official' | 'team';
@@ -16,6 +16,10 @@ export interface YSchemaCoreArtifact {
   source: YSchemaArtifactSource;
   provides: string[];
   extensionSlots: string[];
+  render?: {
+    defaultRenderer: string;
+    availableRenderers: string[];
+  };
   schema: YSchema;
 }
 

@@ -5,6 +5,7 @@ import type {
   SchemaCompositionDraft,
   SchemaCompositionPreviewResult,
   WorkspaceSchemaCompositionResult,
+  YSchemaArtifactFamily,
   YSchemaArtifactRegistryPage,
 } from '@/types/schemaModules';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
@@ -25,20 +26,25 @@ export async function previewYSchemaComposition(
 }
 
 export async function loadYSchemaArtifactRegistry(
-  projectId?: string
+  projectId?: string,
+  family: YSchemaArtifactFamily = 'prd'
 ): Promise<YSchemaArtifactRegistryPage> {
   const path = projectId
     ? `/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
     : '/yschema/artifacts';
-  const response = await fetchWithTimeout(`${API_V1}${path}?family=prd&limit=100`);
+  const response = await fetchWithTimeout(
+    `${API_V1}${path}?family=${encodeURIComponent(family)}&limit=100`
+  );
   return handleResponse(response);
 }
 
 export async function loadProjectYSchemaVersions(
-  projectId: string
+  projectId: string,
+  family?: YSchemaArtifactFamily
 ): Promise<ProjectSchemaVersionHistory> {
+  const query = family ? `?family=${encodeURIComponent(family)}` : '';
   const response = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/versions?family=prd`
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/versions${query}`
   );
   return handleResponse(response);
 }

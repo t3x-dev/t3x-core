@@ -19,11 +19,22 @@ export type {
   YSchemaModuleManifest,
 } from './composition';
 export {
+  builtInEsphomeDeviceCoreArtifact,
+  builtInEsphomeDeviceModules,
   builtInPrdCoreArtifact,
   builtInPrdModules,
+  builtInPromptCoreArtifact,
+  builtInPromptModules,
+  builtInSkillCoreArtifact,
+  builtInSkillModules,
+  builtInYSchemaCores,
+  builtInYSchemaModules,
   canonicalizeCompositionValue,
   compileYSchemaComposition,
+  defaultEsphomeDeviceCompositionModuleOrder,
   defaultPrdCompositionModuleOrder,
+  defaultPromptCompositionModuleOrder,
+  defaultSkillCompositionModuleOrder,
   sha256CompositionValue,
 } from './composition';
 export type {

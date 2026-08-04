@@ -1,6 +1,11 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route assertions inspect JSON response envelopes */
 
-import { builtInPrdCoreArtifact, defaultPrdCompositionModuleOrder } from '@t3x-dev/yschema';
+import {
+  builtInPrdCoreArtifact,
+  builtInYSchemaCores,
+  builtInYSchemaModules,
+  defaultPrdCompositionModuleOrder,
+} from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi';
@@ -32,19 +37,34 @@ describe('YSchema Composition routes', () => {
     const response = await app.request('/v1/yschema/artifacts');
     expect(response.status).toBe(200);
     const body: any = await response.json();
-    const core = body.data.items.find((item: any) => item.apiVersion === 't3x.dev/yschema-core/v1');
+    const cores = body.data.items.filter(
+      (item: any) => item.apiVersion === 't3x.dev/yschema-core/v1'
+    );
     const modules = body.data.items.filter(
       (item: any) => item.apiVersion === 't3x.dev/yschema-module/v1'
     );
-    expect(core).toMatchObject({
-      canonicalName: 't3x/prd-core',
-      version: '1.1.0',
-    });
-    expect(modules).toHaveLength(6);
+    expect(cores.map((core: any) => core.canonicalName).sort()).toEqual(
+      builtInYSchemaCores.map((core) => core.canonicalName).sort()
+    );
+    expect(modules).toHaveLength(builtInYSchemaModules.length);
     expect(modules.map((module: any) => module.canonicalName).sort()).toEqual(
-      [...defaultPrdCompositionModuleOrder].sort()
+      builtInYSchemaModules.map((module) => module.canonicalName).sort()
     );
     expect(body.data).toMatchObject({ has_more: false, next_cursor: null });
+  });
+
+  it('filters Registry artifacts to one compatible Schema family', async () => {
+    const response = await app.request('/v1/yschema/artifacts?family=esphome-device');
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+
+    expect(body.data.items).toHaveLength(4);
+    expect(new Set(body.data.items.map((item: any) => item.family))).toEqual(
+      new Set(['esphome-device'])
+    );
+    expect(body.data.items.map((item: any) => item.canonicalName)).toContain(
+      't3x/esphome-device-core'
+    );
   });
 
   it('returns a stable valid compilation preview', async () => {

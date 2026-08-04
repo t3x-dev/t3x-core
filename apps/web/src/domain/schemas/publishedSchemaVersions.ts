@@ -14,12 +14,20 @@ export function mergePublishedSchemaVersions(
   projectId: string
 ): SchemaRegistryPreview {
   if (manifests.length === 0) return registry;
-  const published = manifests.map((manifest) => publishedManifestToRelease(manifest, projectId));
+  const published = manifests.map((manifest) => ({
+    family: manifest.family,
+    release: publishedManifestToRelease(manifest, projectId),
+  }));
   return {
     ...registry,
-    families: registry.families.map((family) =>
-      family.id === 'prd' ? { ...family, releases: [...published, ...family.releases] } : family
-    ),
+    families: registry.families.map((family) => {
+      const familyPublished = published
+        .filter((item) => item.family === family.id)
+        .map((item) => item.release);
+      return familyPublished.length > 0
+        ? { ...family, releases: [...familyPublished, ...family.releases] }
+        : family;
+    }),
   };
 }
 
@@ -52,10 +60,10 @@ export function publishedManifestToRelease(
     usedByWorkspaceCount: 0,
     breakingChangeLevel: 'none',
     source: manifest.source,
-    category: 'Composed PRD',
+    category: `Composed ${familyLabel(manifest.family)}`,
     rootKey: Object.keys(nodes)[0] ?? 'document',
     requiredFields,
-    compatibleWith: ['YSchema review', 'YOps apply', 'Leaf document'],
+    compatibleWith: compatibleSurfaces(manifest.family),
     migrationSummary: releaseNotes || 'Published from a verified Core + Module Composition draft.',
     canonicalName: manifest.canonicalName,
     schemaHash: stringValue(registry.schemaHash),
@@ -67,6 +75,20 @@ export function publishedManifestToRelease(
     changesBaseReleaseId: '',
     changes: [],
   };
+}
+
+function familyLabel(family: PublishedSchemaVersionManifest['family']): string {
+  if (family === 'esphome-device') return 'ESPHome device';
+  return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
+}
+
+function compatibleSurfaces(family: PublishedSchemaVersionManifest['family']): string[] {
+  if (family === 'skill') return ['YSchema validation', 'SKILL.md adapter', 'Skill package'];
+  if (family === 'prompt') return ['YSchema validation', 'Prompt compiler', 'Prompt text'];
+  if (family === 'esphome-device') {
+    return ['YSchema validation', 'ESPHome YAML', 'ESPHome config check'];
+  }
+  return ['YSchema review', 'YOps apply', 'Leaf document'];
 }
 
 function flattenNodes(

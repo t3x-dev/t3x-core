@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  builtInEsphomeDeviceCoreArtifact,
+  builtInEsphomeDeviceModules,
   builtInPrdCoreArtifact,
   builtInPrdModules,
+  builtInPromptCoreArtifact,
+  builtInPromptModules,
+  builtInSkillCoreArtifact,
+  builtInSkillModules,
   compileYSchemaComposition,
   defaultPrdCompositionModuleOrder,
   type YSchemaCompositionDraft,
@@ -125,5 +131,36 @@ describe('compileYSchemaComposition', () => {
       expect.objectContaining({ code: 'PATH_OWNERSHIP_CONFLICT', path: 'summary' })
     );
     expect(result.schema.nodes.summary).toEqual(builtInPrdCoreArtifact.schema.nodes.summary);
+  });
+
+  it('compiles each official Core with only compatible Family Modules', async () => {
+    const families = [
+      { core: builtInSkillCoreArtifact, modules: builtInSkillModules },
+      { core: builtInPromptCoreArtifact, modules: builtInPromptModules },
+      { core: builtInEsphomeDeviceCoreArtifact, modules: builtInEsphomeDeviceModules },
+    ];
+
+    for (const { core, modules } of families) {
+      const composition: YSchemaCompositionDraft = {
+        apiVersion: 't3x.dev/yschema-composition/v1',
+        id: `${core.family}-official`,
+        revision: 1,
+        family: core.family,
+        status: 'draft',
+        core: { canonicalName: core.canonicalName, version: core.version },
+        modules: modules.map((module, index) => ({
+          canonicalName: module.canonicalName,
+          version: module.version,
+          order: index + 1,
+        })),
+      };
+      const result = await compileYSchemaComposition({ composition, core, modules });
+
+      expect(result.report, core.family).toEqual({ valid: true, issues: [] });
+      expect(result.renderPlan[0]?.artifact).toBe(core.canonicalName);
+      expect(result.renderPlan.slice(1).map((entry) => entry.artifact)).toEqual(
+        modules.map((module) => module.canonicalName)
+      );
+    }
   });
 });

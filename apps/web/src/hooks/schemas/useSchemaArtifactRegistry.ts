@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { loadYSchemaArtifactRegistry } from '@/infrastructure/schemaComposition';
-import type { SchemaArtifactPreview } from '@/types/schemaModules';
+import type { SchemaArtifactPreview, YSchemaArtifactFamily } from '@/types/schemaModules';
 
-export function useSchemaArtifactRegistry(projectId?: string, enabled = true) {
+export function useSchemaArtifactRegistry(
+  projectId?: string,
+  family: YSchemaArtifactFamily = 'prd',
+  enabled = true
+) {
   const [artifacts, setArtifacts] = useState<SchemaArtifactPreview[]>([]);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(true);
@@ -17,7 +21,7 @@ export function useSchemaArtifactRegistry(projectId?: string, enabled = true) {
     let active = true;
     setPending(true);
     setError(undefined);
-    void loadYSchemaArtifactRegistry(projectId)
+    void loadYSchemaArtifactRegistry(projectId, family)
       .then((page) => {
         if (active) setArtifacts(page.items.map(artifactToPreview));
       })
@@ -33,7 +37,7 @@ export function useSchemaArtifactRegistry(projectId?: string, enabled = true) {
     return () => {
       active = false;
     };
-  }, [enabled, projectId]);
+  }, [enabled, family, projectId]);
 
   return { artifacts, error, pending };
 }
@@ -63,6 +67,8 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
   const source = manifest.source;
   const icon = registry.icon;
   const canonicalName = String(manifest.canonicalName ?? '');
+  const family = schemaFamily(manifest.family);
+  const render = recordValue(manifest.render);
   const rules = module
     ? mergeRules(declaredRules, [
         {
@@ -96,6 +102,7 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
     : [];
   return {
     canonicalName,
+    family,
     version: String(manifest.version ?? ''),
     kind: module ? 'module' : 'core',
     title: String(manifest.title ?? manifest.canonicalName ?? 'YSchema Artifact'),
@@ -110,6 +117,10 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
       ? String(recordValue(manifest.defaultPlacement).slot ?? 'technical-design')
       : 'core',
     nodePaths: Object.keys(nodes),
+    renderers:
+      stringArray(render.availableRenderers).length > 0
+        ? stringArray(render.availableRenderers)
+        : defaultRenderers(family),
     rules,
     versions:
       manifestVersions.length > 0
@@ -124,8 +135,42 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
     updatedAt: String(registry.updatedAt ?? ''),
     usageCount: numberValue(registry.usageCount),
     starCount: numberValue(registry.starCount),
+    sortOrder: numberValue(registry.sortOrder) || recommendedSortOrder(canonicalName),
     icon: isIcon(icon) ? icon : module ? 'blocks' : 'file',
   };
+}
+
+function schemaFamily(value: unknown): YSchemaArtifactFamily {
+  return value === 'skill' || value === 'prompt' || value === 'esphome-device' ? value : 'prd';
+}
+
+function defaultRenderers(family: YSchemaArtifactFamily): string[] {
+  if (family === 'skill') return ['skill-package', 'markdown', 'yaml'];
+  if (family === 'prompt') return ['prompt-text', 'markdown', 'yaml'];
+  if (family === 'esphome-device') return ['esphome-yaml', 'markdown'];
+  return ['markdown', 'yaml'];
+}
+
+const RECOMMENDED_MODULE_ORDER: Record<string, number> = {
+  't3x/prd-system-architecture': 10,
+  't3x/prd-technology-stack': 20,
+  't3x/prd-frontend-design': 30,
+  't3x/prd-backend-design': 40,
+  't3x/prd-database-design': 50,
+  't3x/prd-api-contract': 60,
+  't3x/skill-tool-policy': 10,
+  't3x/skill-safety-gates': 20,
+  't3x/skill-delivery-targets': 30,
+  't3x/prompt-few-shot-examples': 10,
+  't3x/prompt-guardrails': 20,
+  't3x/prompt-observability': 30,
+  't3x/esphome-sensors': 10,
+  't3x/esphome-actuators': 20,
+  't3x/esphome-automations': 30,
+};
+
+function recommendedSortOrder(canonicalName: string): number {
+  return RECOMMENDED_MODULE_ORDER[canonicalName] ?? 1000;
 }
 
 function mergeRules(

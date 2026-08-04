@@ -25,6 +25,7 @@ export function SchemaArtifactDetail({ artifact }: { artifact: SchemaArtifactPre
               {artifact.title}
             </h3>
             <Badge variant={artifact.kind === 'core' ? 'commit' : 'outline'}>{artifact.kind}</Badge>
+            <Badge variant="outline">{familyLabel(artifact.family)}</Badge>
             <Badge variant="success">{artifact.status}</Badge>
           </div>
           <p className="mt-1 font-mono text-[11px] text-[var(--text-tertiary)]">
@@ -108,10 +109,22 @@ function ArtifactRules({ artifact }: { artifact: SchemaArtifactPreview }) {
 }
 
 function ArtifactRender({ artifact }: { artifact: SchemaArtifactPreview }) {
+  const [defaultRenderer, ...alternateRenderers] = artifact.renderers;
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4">
       <p className="text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-tertiary)]">
-        Markdown outline
+        Default renderer
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Badge variant="commit">{rendererLabel(defaultRenderer ?? 'markdown')}</Badge>
+        {alternateRenderers.map((renderer) => (
+          <Badge key={renderer} variant="outline">
+            {rendererLabel(renderer)}
+          </Badge>
+        ))}
+      </div>
+      <p className="mt-3 text-[12px] leading-5 text-[var(--text-secondary)]">
+        {rendererDescription(artifact.family)}
       </p>
       <div className="mt-3 space-y-3 border-l-2 border-[var(--accent-commit)] pl-4">
         {artifact.nodePaths.map((path) => (
@@ -182,4 +195,26 @@ function DetailBlock({
 
 function humanize(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function familyLabel(family: SchemaArtifactPreview['family']): string {
+  if (family === 'esphome-device') return 'ESPHome Device';
+  return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
+}
+
+function rendererLabel(renderer: string): string {
+  return renderer.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function rendererDescription(family: SchemaArtifactPreview['family']): string {
+  if (family === 'skill') {
+    return 'The primary renderer emits a Skill package with SKILL.md plus declared resources, scripts, and assets.';
+  }
+  if (family === 'prompt') {
+    return 'The primary renderer compiles ordered messages and typed variables into portable prompt text.';
+  }
+  if (family === 'esphome-device') {
+    return 'The primary renderer emits ESPHome YAML for local config validation and device compilation.';
+  }
+  return 'The primary renderer produces a human-readable Markdown contract with canonical YAML available for tooling.';
 }

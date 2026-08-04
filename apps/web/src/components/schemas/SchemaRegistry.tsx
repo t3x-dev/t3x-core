@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Blocks, FilePlus2 } from 'lucide-react';
+import { ArrowLeft, FilePlus2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { SchemaModuleRegistry } from '@/components/schemas/modules/SchemaModuleRegistry';
 import {
@@ -19,6 +19,7 @@ import { publishedSchemaReleaseId } from '@/domain/schemas/publishedSchemaVersio
 import type {
   PublishedSchemaVersionManifest,
   SchemaCompositionWorkspaceContext,
+  YSchemaArtifactFamily,
 } from '@/types/schemaModules';
 import type { SchemaFamilyPreview, SchemaReleasePreview } from '@/types/schemas';
 
@@ -121,7 +122,6 @@ export function SchemaRegistry({
                       selectedRelease={selectedRelease}
                     />
                   ) : null}
-                  <ComposeVersionCallout onCompose={() => setRegistryView('compose')} />
                 </>
               ) : (
                 <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
@@ -157,6 +157,7 @@ export function SchemaRegistry({
 
         {registryView === 'compose' ? (
           <SchemaModuleRegistry
+            family={schemaArtifactFamily(selectedFamily?.id)}
             nextVersion={suggestNextVersion(selectedFamily?.releases ?? [])}
             workspace={
               compositionWorkspace
@@ -173,6 +174,10 @@ export function SchemaRegistry({
       </div>
     </section>
   );
+}
+
+function schemaArtifactFamily(value?: string): YSchemaArtifactFamily {
+  return value === 'skill' || value === 'prompt' || value === 'esphome-device' ? value : 'prd';
 }
 
 function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePreview | null {
@@ -224,7 +229,7 @@ function SchemaRegistryHeader({
           ) : (
             <ArrowLeft aria-hidden="true" className="size-3.5" />
           )}
-          {registryView === 'versions' ? 'Compose new version' : 'Back to version history'}
+          {registryView === 'versions' ? 'Compose with modules' : 'Back to version history'}
         </Button>
         {registryView === 'versions' ? (
           <Button
@@ -244,35 +249,6 @@ function SchemaRegistryHeader({
         ) : null}
       </div>
     </header>
-  );
-}
-
-function ComposeVersionCallout({ onCompose }: { onCompose: () => void }) {
-  return (
-    <div className="flex flex-col gap-3 border-t border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--accent-commit)_5%,var(--surface-panel))] px-4 py-3 min-[721px]:flex-row min-[721px]:items-center min-[721px]:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--accent-commit)_12%,transparent)] text-[var(--accent-commit)]">
-          <Blocks aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <p className="text-[12px] font-semibold text-[var(--text-primary)]">
-            Need a different contract?
-          </p>
-          <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
-            Select and reorder Modules, compile the contract, then publish it into this version
-            history.
-          </p>
-        </div>
-      </div>
-      <Button
-        className="h-8 flex-none text-xs"
-        onClick={onCompose}
-        type="button"
-        variant="canvas-outline"
-      >
-        Compose a version
-      </Button>
-    </div>
   );
 }
 

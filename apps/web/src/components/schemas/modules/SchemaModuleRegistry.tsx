@@ -11,6 +11,7 @@ import type {
   SchemaCompositionDraft,
   SchemaCompositionWorkspaceContext,
   WorkspaceSchemaCompositionResult,
+  YSchemaArtifactFamily,
 } from '@/types/schemaModules';
 import { SchemaArtifactDetail } from './SchemaArtifactDetail';
 import { SchemaArtifactIcon } from './SchemaArtifactIcon';
@@ -18,20 +19,30 @@ import { SchemaCompositionWorkbench } from './SchemaCompositionWorkbench';
 
 export function SchemaModuleRegistry({
   nextVersion,
+  family = 'prd',
   workspace,
   registryArtifacts,
 }: {
   nextVersion?: string;
+  family?: YSchemaArtifactFamily;
   workspace?: SchemaCompositionWorkspaceContext;
   registryArtifacts?: SchemaArtifactPreview[];
 }) {
-  const registry = useSchemaArtifactRegistry(workspace?.projectId, registryArtifacts === undefined);
-  const artifacts = registryArtifacts ?? registry.artifacts;
-  const core =
-    artifacts.find(
-      (artifact) => artifact.kind === 'core' && artifact.canonicalName === 't3x/prd-core'
-    ) ?? artifacts.find((artifact) => artifact.kind === 'core');
-  const availableModules = artifacts.filter((artifact) => artifact.kind === 'module');
+  const registry = useSchemaArtifactRegistry(
+    workspace?.projectId,
+    family,
+    registryArtifacts === undefined
+  );
+  const artifacts = (registryArtifacts ?? registry.artifacts).filter(
+    (artifact) => artifact.family === family
+  );
+  const core = artifacts.find((artifact) => artifact.kind === 'core');
+  const availableModules = artifacts
+    .filter((artifact) => artifact.kind === 'module')
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder || left.canonicalName.localeCompare(right.canonicalName)
+    );
   const { publish, save } = useSchemaCompositionDraft();
   const [query, setQuery] = useState('');
   const [domain, setDomain] = useState('All');
@@ -39,6 +50,8 @@ export function SchemaModuleRegistry({
   const selectedArtifact =
     artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ?? core;
   const [compositionModules, setCompositionModules] = useState<SchemaArtifactPreview[]>([]);
+  const activeComposition =
+    workspace?.composition?.family === family ? workspace.composition : undefined;
   const [compositionRevision, setCompositionRevision] = useState(
     workspace?.composition?.revision ?? 0
   );
@@ -47,13 +60,13 @@ export function SchemaModuleRegistry({
   const artifactSignature = artifacts
     .map((artifact) => `${artifact.canonicalName}@${artifact.version}`)
     .join('|');
-  const persistedCompositionSignature = workspace?.composition
-    ? compositionSignature(modulesFromComposition(workspace.composition, availableModules))
+  const persistedCompositionSignature = activeComposition
+    ? compositionSignature(modulesFromComposition(activeComposition, availableModules))
     : undefined;
 
   useEffect(() => {
     if (!core) return;
-    const persistedModules = modulesFromComposition(workspace?.composition, availableModules);
+    const persistedModules = modulesFromComposition(activeComposition, availableModules);
     setCompositionModules(persistedModules);
     setCompositionRevision(workspace?.composition?.revision ?? 0);
     setWorkspaceRevision(workspace?.workspaceRevision);
@@ -65,6 +78,7 @@ export function SchemaModuleRegistry({
     );
   }, [
     artifactSignature,
+    family,
     persistedCompositionSignature,
     workspace?.composition?.revision,
     workspace?.workspaceId,
@@ -161,7 +175,7 @@ export function SchemaModuleRegistry({
           <SchemaArtifactIcon artifact={core} />
           <span className="min-w-0">
             <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
-              PRD Core
+              {core.title}
             </span>
             <span className="block text-[10px] text-[var(--text-tertiary)]">Pinned foundation</span>
           </span>
@@ -187,9 +201,11 @@ export function SchemaModuleRegistry({
           ))}
         </div>
         <div className="mt-5 rounded-[var(--radius-md)] bg-[var(--surface-panel)] p-3 text-[11px] leading-5 text-[var(--text-secondary)]">
-          <strong className="text-[var(--text-primary)]">Core + Modules</strong>
+          <strong className="text-[var(--text-primary)]">
+            {familyLabel(family)} Core + Modules
+          </strong>
           <br />
-          Core owns invariants. Modules add domain structure through declared extension slots.
+          {familyDescription(family)}
         </div>
       </aside>
 
@@ -197,7 +213,7 @@ export function SchemaModuleRegistry({
         <div className="flex flex-col gap-3 min-[641px]:flex-row min-[641px]:items-center min-[641px]:justify-between">
           <div>
             <h2 className="text-[16px] font-semibold text-[var(--text-primary)]">
-              PRD Modules{' '}
+              {familyLabel(family)} Modules{' '}
               <span className="font-normal text-[var(--text-tertiary)]">
                 {visibleModules.length}
               </span>
@@ -275,21 +291,25 @@ export function SchemaModuleRegistry({
         </div>
         {visibleModules.length === 0 ? (
           <div className="mt-3 rounded-[var(--radius-md)] border border-dashed border-[var(--stroke-strong)] p-10 text-center text-[12px] text-[var(--text-secondary)]">
-            No Modules match this filter.
+            {availableModules.length === 0
+              ? `No official ${familyLabel(family)} Modules are available yet.`
+              : 'No Modules match this filter.'}
           </div>
         ) : null}
         <SchemaArtifactDetail key={selectedArtifact.canonicalName} artifact={selectedArtifact} />
       </main>
 
       <SchemaCompositionWorkbench
+        key={family}
         compositionId={
-          workspace?.composition?.id ??
-          (workspace ? `composition:${workspace.workspaceId}` : 'webui-prd-composition')
+          activeComposition?.id ??
+          (workspace ? `composition:${workspace.workspaceId}` : `webui-${family}-composition`)
         }
         compositionRevision={compositionRevision}
         core={core}
         dirty={savedSignature !== compositionSignature(compositionModules)}
         modules={compositionModules}
+        family={family}
         onModulesChange={setCompositionModules}
         onPublish={workspaceRevision === undefined ? undefined : publishComposition}
         onSave={workspaceRevision === undefined ? undefined : saveComposition}
@@ -299,6 +319,24 @@ export function SchemaModuleRegistry({
       />
     </section>
   );
+}
+
+function familyLabel(family: YSchemaArtifactFamily): string {
+  if (family === 'esphome-device') return 'ESPHome Device';
+  return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
+}
+
+function familyDescription(family: YSchemaArtifactFamily): string {
+  if (family === 'skill') {
+    return 'Core owns executable workflow invariants. Modules extend tooling, safety, and delivery.';
+  }
+  if (family === 'prompt') {
+    return 'Core owns messages and output contracts. Modules extend examples, guardrails, and runtime signals.';
+  }
+  if (family === 'esphome-device') {
+    return 'Core owns device identity and platform. Modules add entities and local automations.';
+  }
+  return 'Core owns product invariants. Modules add focused engineering structure through declared slots.';
 }
 
 function modulesFromComposition(

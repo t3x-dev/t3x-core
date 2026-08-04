@@ -1021,7 +1021,7 @@ export interface YSchemaArtifactManifest {
   apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v1';
   canonicalName: string;
   version: string;
-  family: 'prd' | 'prompt' | 'skill';
+  family: 'esphome-device' | 'prd' | 'prompt' | 'skill';
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';
@@ -1044,7 +1044,7 @@ export interface ProjectYSchemaVersionHistory {
 
 export interface ListYSchemaArtifactsParams {
   projectId?: string;
-  family?: 'prd' | 'prompt' | 'skill';
+  family?: 'esphome-device' | 'prd' | 'prompt' | 'skill';
   kind?: 'core' | 'module';
   visibility?: 'community' | 'official' | 'private' | 'team';
   search?: string;
@@ -1056,7 +1056,7 @@ export interface YSchemaCompositionDraft {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
-  family: 'prd' | 'prompt' | 'skill';
+  family: 'esphome-device' | 'prd' | 'prompt' | 'skill';
   status: 'draft';
   core: { canonicalName: string; version: string; hash?: string };
   modules: Array<{

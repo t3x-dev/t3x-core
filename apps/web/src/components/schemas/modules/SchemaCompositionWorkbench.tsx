@@ -49,6 +49,7 @@ import type {
   SchemaArtifactPreview,
   SchemaCompositionDraft,
   WorkspaceSchemaCompositionResult,
+  YSchemaArtifactFamily,
 } from '@/types/schemaModules';
 
 interface SchemaCompositionWorkbenchProps {
@@ -56,6 +57,7 @@ interface SchemaCompositionWorkbenchProps {
   compositionRevision: number;
   core: SchemaArtifactPreview;
   dirty: boolean;
+  family: YSchemaArtifactFamily;
   modules: SchemaArtifactPreview[];
   nextVersion?: string;
   onModulesChange: (modules: SchemaArtifactPreview[]) => void;
@@ -70,6 +72,7 @@ export function SchemaCompositionWorkbench({
   compositionRevision,
   core,
   dirty,
+  family,
   modules,
   nextVersion = '1.0.0',
   onModulesChange,
@@ -86,8 +89,12 @@ export function SchemaCompositionWorkbench({
   const [publishError, setPublishError] = useState<string>();
   const [publishFeedback, setPublishFeedback] = useState<string>();
   const [publishOpen, setPublishOpen] = useState(false);
-  const [publishTitle, setPublishTitle] = useState(`${workspaceTitle ?? 'Project'} PRD`);
-  const [publishCanonicalName, setPublishCanonicalName] = useState(defaultCanonicalName(projectId));
+  const [publishTitle, setPublishTitle] = useState(
+    `${workspaceTitle ?? 'Project'} ${familyLabel(family)}`
+  );
+  const [publishCanonicalName, setPublishCanonicalName] = useState(
+    defaultCanonicalName(projectId, family)
+  );
   const [publishVersion, setPublishVersion] = useState(nextVersion);
   const [publishDescription, setPublishDescription] = useState('');
   const [releaseNotes, setReleaseNotes] = useState('');
@@ -128,7 +135,7 @@ export function SchemaCompositionWorkbench({
       apiVersion: 't3x.dev/yschema-composition/v1',
       id: compositionId,
       revision: compositionRevision,
-      family: 'prd',
+      family,
       status: 'draft',
       core: { canonicalName: core.canonicalName, version: core.version },
       modules: modules.map((module, index) => ({
@@ -207,7 +214,7 @@ export function SchemaCompositionWorkbench({
               Composition draft
             </p>
             <h3 className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">
-              PRD full-stack contract
+              {familyLabel(family)} composition
             </h3>
           </div>
           <Badge variant={dirty ? 'pending' : 'success'}>
@@ -447,12 +454,20 @@ function PublishField({ children, id, label }: { children: ReactNode; id: string
   );
 }
 
-function defaultCanonicalName(projectId?: string): string {
+function defaultCanonicalName(
+  projectId: string | undefined,
+  family: YSchemaArtifactFamily
+): string {
   const projectKey = (projectId ?? 'project')
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `projects/${projectKey || 'project'}/prd`;
+  return `projects/${projectKey || 'project'}/${family}`;
+}
+
+function familyLabel(family: YSchemaArtifactFamily): string {
+  if (family === 'esphome-device') return 'ESPHome Device';
+  return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
 }
 
 function SortableModuleRow({
