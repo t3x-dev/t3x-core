@@ -1,5 +1,16 @@
 # @t3x-dev/yschema
 
+## 1.0.0
+
+### Major Changes
+
+- [#1256](https://github.com/t3x-dev/t3x-core/pull/1256) [`9cd8d53`](https://github.com/t3x-dev/t3x-core/commit/9cd8d534840f679d5bff4face8cdd35db6566f80) Thanks [@etht3x](https://github.com/etht3x)! - Add the published ESPHome reference schema example for the T3X 1.0.0 public release train.
+
+### Patch Changes
+
+- Updated dependencies [[`8496a99`](https://github.com/t3x-dev/t3x-core/commit/8496a992ce524be79297d7fa76b0abba479a3833)]:
+  - @t3x-dev/yops@1.0.0
+
 ## 0.6.0
 
 ### Minor Changes
