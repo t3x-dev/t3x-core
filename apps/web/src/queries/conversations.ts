@@ -5,8 +5,8 @@
  * per v2 §2.4.
  */
 
-import { listConversations } from '@/infrastructure/conversations';
-import type { ConversationListData } from '@/infrastructure/types';
+import { getConversation, listConversations } from '@/infrastructure/conversations';
+import type { Conversation, ConversationListData } from '@/infrastructure/types';
 
 export function fetchConversations(
   projectId: string,
@@ -14,4 +14,8 @@ export function fetchConversations(
   offset = 0
 ): Promise<ConversationListData> {
   return listConversations(projectId, limit, offset);
+}
+
+export function fetchConversationForSourceRedirect(conversationId: string): Promise<Conversation> {
+  return getConversation(conversationId);
 }

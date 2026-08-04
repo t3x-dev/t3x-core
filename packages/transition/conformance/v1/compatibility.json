@@ -1,0 +1,41 @@
+{
+  "schema": "t3x/transition-compatibility/v1",
+  "mappings": [
+    {
+      "source": "ExternalCommit",
+      "strategy": "coexist",
+      "owner": "#1227",
+      "rules": [
+        "Never rewrite or reinterpret an external commit hash as CommitV2",
+        "Mixed-history projections may expose legacy provenance as unavailable but must not fabricate Statements or Decisions"
+      ]
+    },
+    {
+      "source": "SourcedYOp",
+      "strategy": "compile",
+      "owner": "#1225 and #1166",
+      "rules": [
+        "Operation payloads compile into Effect.operations through the YOps adapter",
+        "Source spans compile into Proposal Claim evidence only when immutable resource bytes and locators are available"
+      ]
+    },
+    {
+      "source": "ExtractionDraft",
+      "strategy": "compile",
+      "owner": "#1166",
+      "rules": [
+        "Provider output is untrusted application input, not a protocol object",
+        "Inferred, authored, stated, and unspecified Claim modes remain explicit during compilation"
+      ]
+    },
+    {
+      "source": "WorkspaceDraft",
+      "strategy": "project",
+      "owner": "#1228 and #1235",
+      "rules": [
+        "Draft status and review questions remain application projection state",
+        "Answering a question creates a Statement or a new Proposal when Effect, intent, or rationale changes"
+      ]
+    }
+  ]
+}

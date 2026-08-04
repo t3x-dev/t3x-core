@@ -7,6 +7,9 @@
  *
  * Advanced toolset (3 additional tools):
  *   t3x_diff, t3x_merge, t3x_admin
+ *
+ * Transition toolset (4 opt-in, API-only tools):
+ *   propose_transition, inspect_transition, verify_transition, attach_statement
  */
 
 import { createRequire } from 'node:module';
@@ -32,6 +35,7 @@ import { editDef, editHandler } from './tools/core/edit.js';
 import { extractDef, extractHandler } from './tools/core/extract.js';
 import { generateDef, generateHandler } from './tools/core/generate.js';
 import { queryDef, queryHandler } from './tools/core/query.js';
+import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
 
 const require = createRequire(import.meta.url);
@@ -58,9 +62,12 @@ const ADVANCED_TOOLS: ToolEntry[] = [
   { def: adminDef, handler: adminHandler },
 ];
 
-const TOOLSET_MAP: Record<'core' | 'advanced', ToolEntry[]> = {
+export type McpToolset = 'core' | 'advanced' | 'transition';
+
+const TOOLSET_MAP: Record<McpToolset, readonly ToolEntry[]> = {
   core: CORE_TOOLS,
   advanced: ADVANCED_TOOLS,
+  transition: TRANSITION_TOOLS,
 };
 
 // ── Server instructions ──
@@ -68,23 +75,34 @@ const TOOLSET_MAP: Record<'core' | 'advanced', ToolEntry[]> = {
 const SERVER_INSTRUCTIONS = `T3X is version control for structured state — like Git, but for
 schema-backed YAML changed through deterministic YOps.
 
-Core workflow:
+Legacy compatibility workflow:
 1. t3x_extract — turn text into structured YAML state (creates a draft)
 2. t3x_query — inspect what was extracted (or any other resource)
 3. t3x_edit — refine the draft with YOps (YAML operations)
 4. t3x_commit — save a snapshot
+
+Source reads:
+- query source_thread or source_threads for durable source metadata
+- query source_evidence with project_id and source-thread id for repository evidence
+- conversation and conversations remain compatibility aliases
 
 Additional capabilities (if advanced toolset enabled):
 5. t3x_diff — compare two commits
 6. t3x_merge — branch and merge structured state
 7. t3x_admin — manage projects, branches, pins
 
+Transition lifecycle (only if the opt-in transition toolset and API backend are enabled):
+8. propose_transition — prepare a replayable change without deciding or committing
+9. inspect_transition — inspect task state, assurance, and immutable preconditions
+10. verify_transition — run mandatory Replay plus configured external checks
+11. attach_statement — attach an allowlisted claim through authenticated API authority
+
 t3x_generate creates validated outputs from committed state.`;
 
 // ── Factory ──
 
 export interface McpServerOptions {
-  toolsets: Array<'core' | 'advanced'>;
+  toolsets: McpToolset[];
 }
 
 export function createMcpServer(options: McpServerOptions) {

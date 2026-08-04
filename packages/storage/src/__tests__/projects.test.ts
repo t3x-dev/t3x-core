@@ -8,9 +8,6 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertAgentDraft } from '../queries/agent-drafts';
-import { insertBranch } from '../queries/branches';
-import { createCommit } from '../queries/commits';
-import { insertConversation } from '../queries/conversations';
 import {
   deleteProject,
   findProjectById,
@@ -22,7 +19,7 @@ import {
   restoreProject,
   updateProject,
 } from '../queries/projects';
-import { insertTurn } from '../queries/turns';
+import { seedDemoWorkspace } from '../queries/seed-demo-workspace';
 import { projects } from '../schema';
 import { createTestDB, testData } from './setup';
 
@@ -305,74 +302,24 @@ describe('Projects Storage', () => {
     });
 
     it('returns correct counts for all related entities', async () => {
-      // Create project with related entities
-      const project = await insertProject(db, testData.project({ name: 'With Stats' }));
-      const projectId = project.projectId;
+      const seeded = await seedDemoWorkspace(db, { ownerId: 'project-stats' });
+      const projectId = seeded.project!.projectId;
+      const conversation = seeded.conversation!;
 
-      // Create 2 conversations
-      const conv1 = await insertConversation(db, { projectId, title: 'Conv 1' });
-      const conv2 = await insertConversation(db, { projectId, title: 'Conv 2' });
-
-      // Create 3 turns
-      await insertTurn(db, {
-        projectId,
-        conversationId: conv1.conversationId,
-        role: 'user',
-        content: 'Hello 1',
-      });
-      await insertTurn(db, {
-        projectId,
-        conversationId: conv1.conversationId,
-        role: 'assistant',
-        content: 'Hi 1',
-      });
-      await insertTurn(db, {
-        projectId,
-        conversationId: conv2.conversationId,
-        role: 'user',
-        content: 'Hello 2',
-      });
-
-      // Create 1 branch
-      await insertBranch(db, { projectId, name: 'main' });
-
-      // Create 1 draft
       await insertAgentDraft(db, {
         projectId,
-        conversationId: conv1.conversationId,
+        conversationId: conversation.conversationId,
         bridgeId: 'test',
         bridgePayload: {},
         llmConfig: { provider: 'test', model: 'test' },
         text: 'Draft text',
       });
 
-      // Create 1 commit (frame-based)
-      await createCommit(
-        db,
-        {
-          author: { type: 'human', name: 'Test User' },
-          content: {
-            trees: [
-              {
-                key: 'test_knowledge',
-                slots: { text: 'Test sentence' },
-                children: [],
-              },
-            ],
-            relations: [],
-          },
-          project_id: projectId,
-          branch: 'main',
-          message: 'Initial',
-        } as Parameters<typeof createCommit>[1],
-        { strictParents: false }
-      );
-
       const result = await findProjectWithStats(db, projectId);
 
       expect(result).toBeDefined();
-      expect(result!.stats.conversationsCount).toBe(2);
-      expect(result!.stats.turnsCount).toBe(3);
+      expect(result!.stats.conversationsCount).toBe(1);
+      expect(result!.stats.turnsCount).toBe(1);
       expect(result!.stats.branchesCount).toBe(1);
       expect(result!.stats.draftsCount).toBe(1);
       expect(result!.stats.commitsCount).toBe(1);

@@ -1,0 +1,75 @@
+[
+  {
+    "id": "object-key-order",
+    "value": { "z": 1, "a": 2, "nested": { "b": true, "a": false } },
+    "canonical": "{\"a\":2,\"nested\":{\"a\":false,\"b\":true},\"z\":1}"
+  },
+  {
+    "id": "array-order-preserved",
+    "value": [3, 1, 2, { "b": 1, "a": 2 }],
+    "canonical": "[3,1,2,{\"a\":2,\"b\":1}]"
+  },
+  {
+    "id": "negative-zero",
+    "value": -0,
+    "canonical": "0"
+  },
+  {
+    "id": "number-rounding",
+    "value": 333333333.33333329,
+    "canonical": "333333333.3333333"
+  },
+  {
+    "id": "number-fixed-upper-bound",
+    "value": 1e20,
+    "canonical": "100000000000000000000"
+  },
+  {
+    "id": "number-exponent-upper-bound",
+    "value": 1e21,
+    "canonical": "1e+21"
+  },
+  {
+    "id": "number-fixed-lower-bound",
+    "value": 0.000001,
+    "canonical": "0.000001"
+  },
+  {
+    "id": "number-exponent-lower-bound",
+    "value": 1e-7,
+    "canonical": "1e-7"
+  },
+  {
+    "id": "number-min-positive-subnormal",
+    "value": 5e-324,
+    "canonical": "5e-324"
+  },
+  {
+    "id": "number-max-finite-double",
+    "value": 1.7976931348623157e308,
+    "canonical": "1.7976931348623157e+308"
+  },
+  {
+    "id": "number-two-to-the-fifty-three",
+    "value": 9007199254740992,
+    "canonical": "9007199254740992"
+  },
+  {
+    "id": "unicode-utf16-key-order",
+    "value": {
+      "€": "Euro Sign",
+      "\r": "Carriage Return",
+      "דּ": "Hebrew Letter Dalet With Dagesh",
+      "1": "One",
+      "😀": "Emoji",
+      "": "Control",
+      "ö": "Latin Small Letter O With Diaeresis"
+    },
+    "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+  },
+  {
+    "id": "explicit-null",
+    "value": { "value": null },
+    "canonical": "{\"value\":null}"
+  }
+]

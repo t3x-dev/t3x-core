@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestCommit,
   createTestProject,
@@ -20,7 +21,7 @@ test.describe('Inherited baseline workspace state', () => {
       { message: 'Parent food preferences' }
     );
 
-    const childResponse = await request.post('http://localhost:8000/api/v1/conversations', {
+    const childResponse = await request.post(`${API_BASE}/conversations`, {
       data: {
         project_id: projectId,
         title: 'Child with parent only',
@@ -60,9 +61,12 @@ test.describe('Inherited baseline workspace state', () => {
 
     const afterPanel = page.getByTestId('after-panel');
     await expect(afterPanel).toBeVisible({ timeout: 10_000 });
-    await expect(afterPanel).toContainText('Inherited baseline', { timeout: 10_000 });
-    await expect(afterPanel).toContainText('Parent');
-    await expect(page.locator('text=Inherited baseline').first()).toBeVisible();
+    await expect(page.getByText('Inherited baseline').first()).toBeVisible({ timeout: 10_000 });
+
+    const sourcesButton = page.getByRole('button', { name: 'Open sources' });
+    await expect(sourcesButton).toContainText('Baseline');
+    await expect(afterPanel).toContainText('No knowledge extracted yet');
+    await expect(afterPanel).not.toContainText('desired_food');
     await expect(page.getByTestId('commit-button')).not.toBeVisible();
   });
 });

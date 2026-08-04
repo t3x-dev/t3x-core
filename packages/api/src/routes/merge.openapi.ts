@@ -14,34 +14,28 @@
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: merge route adapts dynamic draft payloads pending stricter merge DTOs */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { MergeSummaryData } from '@t3x-dev/core';
-import {
-  collectResult,
-  executeMerge,
-  flattenTrees,
-  type MergeDecision,
-  type MergeResult,
-  prepareMerge,
-  runOperation,
-  type SemanticContent,
-} from '@t3x-dev/core';
+import { collectResult, type MergeDecision, type MergeResult, runOperation } from '@t3x-dev/core';
 import {
   commitMergeDraft,
-  createCommit,
   createMergeDraft,
   deleteMergeDraft,
   findPendingMergeDraft,
-  getCommitUnified,
   getMergeDraft,
-  updateBranchHead,
+  TransitionHeadConflictError,
   updateMergeDraft,
 } from '@t3x-dev/storage';
 import { getAuthorFromContext } from '../lib/auth';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
+import { errorResponse } from '../lib/errors';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
+import {
+  commitRepositoryYOpsMerge,
+  prepareRepositoryYOpsMerge,
+  RepositoryMergeCommitNotFoundError,
+  RepositoryMergeInvalidError,
+} from '../lib/repository-state-transition';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
@@ -96,6 +90,10 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
         },
       },
     },
+    400: {
+      description: 'Source and target commits must belong to the same project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Source or target commit not found',
       content: {
@@ -103,6 +101,10 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
           schema: ErrorResponseSchema,
         },
       },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -117,20 +119,16 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
 
 // @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(prepareMergeRoute, async (c) => {
-  const { source_hash, target_hash } = c.req.valid('json');
+  const { project_id, source_hash, target_hash } = c.req.valid('json');
 
   try {
-    // Project access check still needs the raw commit for project_id
     const db = await getDB();
-    const sourceCommit = await getCommitUnified(db, source_hash);
-    if (sourceCommit?.project_id) {
-      const accessResult = await assertProjectAccess(c, db, sourceCommit.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
 
-    const ctx = await buildPipelineContext(c, sourceCommit?.project_id ?? '');
+    const ctx = await buildPipelineContext(c, project_id);
     const { prepared } = await collectResult(
-      runOperation(mergePrepareOp, { source_hash, target_hash }, ctx)
+      runOperation(mergePrepareOp, { project_id, source_hash, target_hash }, ctx)
     );
 
     return c.json({ success: true as const, data: prepared }, 200);
@@ -139,6 +137,12 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       return c.json(
         { success: false as const, error: { code: 'NOT_FOUND', message: error.message } },
         404
+      );
+    }
+    if (error instanceof MergeError && error.code === 'INVALID_REQUEST') {
+      return c.json(
+        { success: false as const, error: { code: error.code, message: error.message } },
+        400
       );
     }
     return c.json(
@@ -172,7 +176,7 @@ Executes a frame merge after the user has made all resolution decisions.
 - \`decisions\`: MergeDecision with conflict resolutions and keep lists
 
 **Result:**
-- Creates a new merge commit with 2 parents: [source_hash, target_hash]
+- Creates a new merge commit with 2 parents: [target_hash, source_hash]
 - Merged content is SemanticContent (frames + relations)
 - Optionally updates the branch pointer if \`branch\` is specified
 
@@ -206,6 +210,14 @@ Executes a frame merge after the user has made all resolution decisions.
         },
       },
     },
+    404: {
+      description: 'Source or target commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Merge commit does not extend the target branch head',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -219,16 +231,21 @@ Executes a frame merge after the user has made all resolution decisions.
 
 // @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(executeMergeRoute, async (c) => {
-  const { source_hash, target_hash, prepared, decisions, message, branch } = c.req.valid('json');
+  const { project_id, source_hash, target_hash, prepared, decisions, message, branch } =
+    c.req.valid('json');
 
   const author = await getAuthorFromContext(c);
 
   try {
-    const ctx = await buildPipelineContext(c, '');
+    const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
+    const ctx = await buildPipelineContext(c, project_id);
     const { commit: savedCommit, merge_summary: mergeSummary } = await collectResult(
       runOperation(
         mergeExecuteOp,
         {
+          project_id,
           source_hash,
           target_hash,
           prepared: prepared as unknown as MergeResult,
@@ -251,7 +268,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
         project_id: projectId,
         source_hash,
         target_hash,
-        branch: branch || null,
+        branch: savedCommit.branch,
       },
       projectId
     );
@@ -260,7 +277,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     pushNotification({
       type: 'merge.completed',
       title: 'Merge Completed',
-      message: `Merge completed on ${branch || 'main'}`,
+      message: `Merge completed on ${savedCommit.branch}`,
       project_id: projectId,
       ref_id: savedCommit.hash,
     });
@@ -269,19 +286,30 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       {
         success: true as const,
         data: {
+          schema: savedCommit.schema,
           hash: savedCommit.hash,
-          parents: [source_hash, target_hash],
+          parents: savedCommit.parents,
           author,
           committed_at: savedCommit.committed_at,
           content: savedCommit.content,
           message,
-          branch: branch || undefined,
+          branch: savedCommit.branch,
           merge_summary: mergeSummary,
         },
       },
       201
     );
   } catch (error) {
+    if (error instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'CONFLICT', error.message);
+    }
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'UNSUPPORTED_SEMANTICS'
+    ) {
+      return errorResponse(c, 'INVALID_REQUEST', error.message);
+    }
     if (error instanceof MergeError) {
       if (error.code === 'UNRESOLVED_CONFLICTS') {
         return c.json(
@@ -324,8 +352,8 @@ const CreateDraftRequestSchema = z.object({
   project_id: z.string().min(1),
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
-  source_branch: z.string().optional(),
-  target_branch: z.string().optional(),
+  source_branch: z.string().trim().min(1).optional(),
+  target_branch: z.string().trim().min(1),
 });
 
 const UpdateDraftRequestSchema = z.object({
@@ -335,7 +363,7 @@ const UpdateDraftRequestSchema = z.object({
 
 const CommitDraftRequestSchema = z.object({
   message: z.string().min(1),
-  branch: z.string().optional(),
+  branch: z.string().trim().min(1).optional(),
   decisions: z
     .object({
       conflictResolutions: z.record(z.string(), z.any()).default({}),
@@ -377,8 +405,12 @@ const createDraftRoute = createRoute({
       description: 'New draft created',
       content: { 'application/json': { schema: z.any() } },
     },
+    400: {
+      description: 'Source and target commits must belong to the requested project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
-      description: 'Source or target commit not found',
+      description: 'Source commit, target commit, or project not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -388,9 +420,19 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
   const { project_id, source_hash, target_hash, source_branch, target_branch } =
     c.req.valid('json');
   const db = await getDB();
+  const accessResult = await assertProjectAccess(c, db, project_id);
+  if (accessResult instanceof Response) return accessResult;
 
-  // Check if pending draft already exists
-  const existingDraft = await findPendingMergeDraft(db, project_id, source_hash, target_hash);
+  const effectiveSourceBranch = source_branch;
+  const effectiveTargetBranch = target_branch;
+  const existingDraft = await findPendingMergeDraft(
+    db,
+    project_id,
+    source_hash,
+    target_hash,
+    effectiveSourceBranch,
+    effectiveTargetBranch
+  );
   if (existingDraft) {
     return c.json(
       {
@@ -405,40 +447,31 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Load commits (unified, auto-upgrades V4)
-  const sourceCommit = await getCommitUnified(db, source_hash);
-  if (!sourceCommit) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Source commit not found: ${source_hash}` },
-      },
-      404
-    );
+  let prepared: MergeResult;
+  try {
+    prepared = await prepareRepositoryYOpsMerge({
+      db,
+      projectId: project_id,
+      sourceDigest: source_hash,
+      targetDigest: target_hash,
+    });
+  } catch (error) {
+    if (error instanceof RepositoryMergeCommitNotFoundError) {
+      return errorResponse(c, 'NOT_FOUND', error.message);
+    }
+    if (error instanceof RepositoryMergeInvalidError) {
+      return errorResponse(c, 'INVALID_REQUEST', error.message);
+    }
+    throw error;
   }
-
-  const targetCommit = await getCommitUnified(db, target_hash);
-  if (!targetCommit) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Target commit not found: ${target_hash}` },
-      },
-      404
-    );
-  }
-
-  // Prepare frame-level merge (empty base = two-way mode)
-  const baseContent: SemanticContent = { trees: [], relations: [] };
-  const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
 
   // Create draft
   const draft = await createMergeDraft(db, {
     projectId: project_id,
     sourceHash: source_hash,
     targetHash: target_hash,
-    sourceBranch: source_branch,
-    targetBranch: target_branch,
+    sourceBranch: effectiveSourceBranch,
+    targetBranch: effectiveTargetBranch,
     prepared,
   });
 
@@ -618,7 +651,11 @@ const commitDraftRoute = createRoute({
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
-      description: 'Draft not found',
+      description: 'Draft, source commit, target commit, or target branch not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Target commit is no longer the target branch head',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -651,6 +688,20 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         },
       },
       400
+    );
+  }
+
+  const accessResult = await assertProjectAccess(c, db, draft.projectId);
+  if (accessResult instanceof Response) return accessResult;
+  const targetBranch = draft.targetBranch;
+  if (targetBranch === null) {
+    return errorResponse(c, 'INVALID_REQUEST', 'Merge draft has no explicit target ref');
+  }
+  if (branch !== undefined && branch !== targetBranch) {
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      `Commit branch ${branch} does not match merge target branch ${targetBranch}`
     );
   }
 
@@ -688,97 +739,79 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   }
 
   try {
-    // Execute merge - returns SemanticContent directly
-    const sourceCommitForDraft = await getCommitUnified(db, draft.sourceHash);
-    const targetCommitForDraft = await getCommitUnified(db, draft.targetHash);
-    const emptyContent: SemanticContent = { trees: [], relations: [] };
-    const mergedContent = executeMerge(
-      emptyContent,
-      sourceCommitForDraft?.content ?? emptyContent,
-      targetCommitForDraft?.content ?? emptyContent,
-      prepared,
-      mergeDecisions
-    );
-
-    const targetBranch = branch || draft.targetBranch || 'main';
-
-    // Compute merge summary
-    const keptFromSource = mergeDecisions.keepFromSource?.length ?? 0;
-    const keptFromTarget = mergeDecisions.keepFromTarget?.length ?? 0;
-    const discardedSource = prepared.onlyInSource.length - keptFromSource;
-    const discardedTarget = prepared.onlyInTarget.length - keptFromTarget;
-    const draftMergeSummary: MergeSummaryData = {
-      kept_identical: prepared.autoKept.length,
-      resolved_conflicts: prepared.conflicts.length,
-      kept_from_source: keptFromSource,
-      kept_from_target: keptFromTarget,
-      discarded: discardedSource + discardedTarget,
-      total_nodes: flattenTrees(mergedContent.trees).length,
-    };
-
-    // Save commit + update branch head + mark draft committed atomically
-    let savedDraftCommitHash = '';
+    const actorKind = author.type === 'system' ? ('service' as const) : author.type;
+    let merged!: Awaited<ReturnType<typeof commitRepositoryYOpsMerge>>;
     await (db as any).transaction(async (tx: typeof db) => {
-      const saved = await createCommit(tx, {
-        parents: [draft.sourceHash, draft.targetHash],
-        author: {
-          type: author.type as 'human' | 'agent' | 'system',
-          name: author.name,
-          id: author.id,
+      merged = await commitRepositoryYOpsMerge({
+        db: tx,
+        projectId: draft.projectId,
+        refName: targetBranch,
+        sourceDigest: draft.sourceHash,
+        targetDigest: draft.targetHash,
+        decisions: mergeDecisions,
+        actor: {
+          kind: actorKind,
+          id: author.id ?? `${actorKind}:merge:${author.name?.trim() || 'anonymous'}`,
         },
-        content: mergedContent,
-        project_id: draft.projectId,
         message,
-        branch: targetBranch,
-        provenance: { method: 'merge' },
-        yops_log_ids: [],
-        enforceBranchLinearity: true,
       });
-      savedDraftCommitHash = saved.hash;
-      await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
       await commitMergeDraft(tx, id);
     });
 
-    // Fire webhook + notification (fire-and-forget)
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: savedDraftCommitHash,
+        commit_hash: merged.commitDigest,
         project_id: draft.projectId,
         branch: targetBranch,
         source_hash: draft.sourceHash,
         target_hash: draft.targetHash,
-        frame_count: flattenTrees(mergedContent.trees).length,
+        frame_count: merged.mergeSummary.total_nodes,
       },
       draft.projectId
     );
     pushNotification({
       type: 'merge.completed',
       title: 'Merge Completed',
-      message: `Merged into ${targetBranch} with ${flattenTrees(mergedContent.trees).length} frame${flattenTrees(mergedContent.trees).length === 1 ? '' : 's'}`,
+      message: `Merged into ${targetBranch} with ${merged.mergeSummary.total_nodes} frame${merged.mergeSummary.total_nodes === 1 ? '' : 's'}`,
       project_id: draft.projectId,
-      ref_id: savedDraftCommitHash,
+      ref_id: merged.commitDigest,
     });
 
     return c.json(
       {
         success: true as const,
         data: {
-          hash: savedDraftCommitHash,
-          parents: [draft.sourceHash, draft.targetHash],
+          schema: merged.commit.schema,
+          hash: merged.commitDigest,
+          parents: merged.commit.parents.map((parent) => parent.digest),
           author,
-          committed_at: new Date().toISOString(),
-          content: mergedContent,
+          committed_at: merged.recordedAt,
+          content: merged.content,
           message,
           branch: targetBranch,
-          merge_summary: draftMergeSummary,
+          merge_summary: merged.mergeSummary,
         },
       },
       201
     );
   } catch (error) {
-    const linearity = mapBranchLinearityError(c, error);
-    if (linearity) return linearity;
+    if (error instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'CONFLICT', error.message);
+    }
+    if (error instanceof RepositoryMergeCommitNotFoundError) {
+      return errorResponse(c, 'NOT_FOUND', error.message);
+    }
+    if (error instanceof RepositoryMergeInvalidError) {
+      return errorResponse(c, 'INVALID_REQUEST', error.message);
+    }
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'UNSUPPORTED_SEMANTICS'
+    ) {
+      return errorResponse(c, 'INVALID_REQUEST', error.message);
+    }
     return c.json(
       {
         success: false as const,

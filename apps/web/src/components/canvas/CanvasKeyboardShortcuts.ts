@@ -11,8 +11,6 @@ interface CanvasKeyboardShortcutsOptions {
   openNodeModal: (nodeId: string, viewMode?: 'conversation' | 'commit') => void;
   openNodeId: string | null;
   showShortcuts: boolean;
-  router: { push: (url: string) => void };
-  projectId: string | null;
   setIsPanMode: (value: boolean | ((prev: boolean) => boolean)) => void;
   setShowShortcuts: (value: boolean | ((prev: boolean) => boolean)) => void;
 }
@@ -26,8 +24,6 @@ export function useCanvasKeyboardShortcuts({
   openNodeModal,
   openNodeId,
   showShortcuts,
-  router,
-  projectId,
   setIsPanMode,
   setShowShortcuts,
 }: CanvasKeyboardShortcutsOptions) {
@@ -93,18 +89,14 @@ export function useCanvasKeyboardShortcuts({
         return;
       }
 
-      // Enter: open selected node (committed -> full page, others -> modal)
+      // Enter: open the selected node inline on the canvas.
       if (event.key === 'Enter') {
         const currentNodes = getNodes();
         const selectedNode = currentNodes.find((n) => n.selected);
-        if (selectedNode) {
+        const selectedData = selectedNode?.data as Partial<CanvasNodeData> | undefined;
+        if (selectedNode && selectedData?.commitStatus !== 'committed') {
           event.preventDefault();
-          const nodeData = selectedNode.data as CanvasNodeData;
-          if (nodeData.commitStatus === 'committed' && nodeData.commitHash && projectId) {
-            router.push(`/project/${projectId}/commit/${encodeURIComponent(nodeData.commitHash)}`);
-          } else {
-            openNodeModal(selectedNode.id, 'commit');
-          }
+          openNodeModal(selectedNode.id, 'commit');
         }
         return;
       }
@@ -156,8 +148,6 @@ export function useCanvasKeyboardShortcuts({
     openNodeModal,
     openNodeId,
     showShortcuts,
-    router,
-    projectId,
     setIsPanMode,
   ]);
 

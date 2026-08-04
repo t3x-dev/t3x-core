@@ -5,7 +5,14 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { getCommit, insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
+import {
+  ensureMainBranch,
+  getTransitionRefHead,
+  insertBranch,
+  insertDraft,
+  insertProject,
+  updateDraft,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -49,6 +56,7 @@ describe('Commit-from-Draft Routes', () => {
       testData.project({ name: 'Commit-from-Draft Test Project' })
     );
     testProjectId = project.projectId;
+    await ensureMainBranch(mockDB, testProjectId);
   });
 
   afterAll(async () => {
@@ -143,6 +151,10 @@ describe('Commit-from-Draft Routes', () => {
     });
 
     it('uses the current branch head as parent when draft has no parent', async () => {
+      await insertBranch(mockDB, {
+        projectId: testProjectId,
+        name: 'feature/parent-fallback',
+      });
       const firstDraftId = await createDraftWithTrees(testProjectId, [
         { key: 's_parent', slots: { text: 'Parent node.' }, children: [] },
       ]);
@@ -173,11 +185,20 @@ describe('Commit-from-Draft Routes', () => {
 
       expect(secondRes.status).toBe(201);
       const secondData: ApiResponse = await secondRes.json();
-      const secondCommit = await getCommit(mockDB, secondData.data.commit_hash);
-      expect(secondCommit?.parents).toEqual([firstData.data.commit_hash]);
+      const secondHead = await getTransitionRefHead(mockDB, {
+        projectId: testProjectId,
+        refName: 'feature/parent-fallback',
+      });
+      expect(secondHead.format).toBe('transition_v2');
+      if (secondHead.format !== 'transition_v2') throw new Error('Expected CommitV2 head');
+      expect(secondHead.commit.parents.map((parent) => parent.digest)).toEqual([
+        firstData.data.commit_hash,
+      ]);
+      expect(secondHead.head).toBe(secondData.data.commit_hash);
     });
 
     it('uses specified branch (defaults to main)', async () => {
+      await insertBranch(mockDB, { projectId: testProjectId, name: 'feature/test' });
       const draftId = await createDraftWithTrees(testProjectId, [
         { key: 's_020', slots: { text: 'Feature branch node.' }, children: [] },
       ]);

@@ -31,16 +31,13 @@ describe('ProjectDemoTourOverlay', () => {
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
 
-  it('moves from the commit card to Details in the default canvas stage', async () => {
+  it('finishes the default canvas stage after the commit card is selected', async () => {
     const onDone = vi.fn();
 
     render(
       <>
         <button type="button" data-intro-target="canvas-commit-node">
           Commit card
-        </button>
-        <button type="button" data-intro-target="canvas-floating-action-details">
-          Details
         </button>
         <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
       </>
@@ -51,53 +48,9 @@ describe('ProjectDemoTourOverlay', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Open commit details')).toBeInTheDocument();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument();
-    expect(screen.queryByText('Create a Leaf from this version')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
-
-    await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);
     });
-  });
-
-  it('prefers the selection panel Details target before the floating Details fallback', async () => {
-    const onDone = vi.fn();
-
-    render(
-      <>
-        <button type="button" data-intro-target="canvas-commit-node">
-          Commit card
-        </button>
-        <button type="button" data-intro-target="canvas-action-details">
-          Panel Details
-        </button>
-        <button type="button" data-intro-target="canvas-floating-action-details">
-          Floating Details
-        </button>
-        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
-      </>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Open commit details')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Floating Details' }));
-    expect(onDone).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Panel Details' }));
-
-    await waitFor(() => {
-      expect(onDone).toHaveBeenCalledTimes(1);
-    });
+    expect(screen.queryByText('Open commit details')).not.toBeInTheDocument();
   });
 
   it('moves from the commit card to the Create Leaf action in the leaf stage', async () => {
@@ -192,6 +145,7 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Create a Leaf from this version')).toBeInTheDocument();
     });
+    await flushGuidedClick();
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
     expect(screen.getByText('Create a Leaf from this version')).toBeInTheDocument();

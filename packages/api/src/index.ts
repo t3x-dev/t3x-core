@@ -7,12 +7,10 @@
 
 export type { CreateAppOptions } from './app';
 export { createApp } from './app';
-
 // Database
 export { closeDB, getDB } from './lib/db';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
-
 // Background tasks
 export {
   defaultFetchEventById,
@@ -20,6 +18,11 @@ export {
   stopRealtimeListener,
 } from './lib/realtime-listener';
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
+export type {
+  TransitionControlPlaneOptions,
+  TransitionExternalProviderResult,
+  TransitionExternalStatementProvider,
+} from './lib/transition-control-plane';
 // Logger
 export { pinoLogger } from './middleware/logger';
 

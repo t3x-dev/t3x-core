@@ -9,7 +9,7 @@ import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './co
 // Pins (V4 - source selection for commits and context)
 // ============================================================================
 
-export type PinType = 'conversation' | 'leaf' | 'import';
+export type PinType = 'conversation' | 'conversation_turn' | 'leaf' | 'import';
 
 /** API response format for Pin (uses null for absent values) */
 interface ApiPin {
@@ -142,7 +142,7 @@ export async function updateConversationContext(
 export interface ContextSource {
   type: 'commit' | 'conversation' | 'leaf' | 'import';
   id: string;
-  label?: string;
+  title?: string;
 }
 
 export interface BuiltContext {

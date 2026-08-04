@@ -9,14 +9,13 @@ import {
   GitBranch,
   GitCommit,
   Globe,
-  Hash,
   MessageSquare,
   MessageSquarePlus,
   PenSquare,
   Plus,
 } from 'lucide-react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { memo, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -30,7 +29,7 @@ import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
+import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { nodeEnter, reducedMotion } from '@/utils/motion';
 import { glass, toneAccent, toneGlow } from '@/utils/theme';
@@ -132,11 +131,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const params = useParams();
-  const projectId = params?.projectId as string | undefined;
-  const introDemoActive = searchParams.get('introDemo') === '1';
+  const routeProjectId = params?.projectId as string | undefined;
+  const canvasProjectId = useCanvasStore((state) => state.projectId);
+  const projectId = routeProjectId || canvasProjectId || undefined;
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
@@ -152,6 +150,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const { load: loadProjectData } = useCanvasNodeActions();
   const notify = useProjectStore((state) => state.notifyCallback);
+  const projectName = useProjectStore((state) =>
+    projectId ? state.getProject(projectId)?.name : undefined
+  );
 
   // Pin store
   const { isPinned } = usePinsStore();
@@ -227,22 +228,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
       .catch(() => {}); // Silently fail on clipboard permission denial
   };
 
-  const handleOpenCommitDetails = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!projectId || !commitHash) return;
-      const href = `/project/${projectId}/commit/${encodeURIComponent(commitHash)}`;
-      router.push(introDemoActive ? `${href}?introDemo=1` : href);
-    },
-    [commitHash, introDemoActive, projectId, router]
-  );
-
-  // Navigate to leaf detail page
-  const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !leaf.id) return undefined;
-    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
-  };
-
   // B-4: Next Step button logic
   const nextStep = getNextStep({
     isDraft,
@@ -255,9 +240,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
     t,
     icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
     actions: {
-      navigateToDraft: (pId, dId) => router.push(`/project/${pId}/draft/${dId}`),
-      navigateToConversation: (conversationId) =>
-        router.push(`/chat/${encodeURIComponent(conversationId)}`),
+      navigateToDraft: () => openNodeModal(id, 'commit'),
+      navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
       openLeafPanel,
     },
@@ -457,18 +441,14 @@ const UnitNode = memo(function UnitNode(props: Props) {
             )}
           </div>
 
-          {/* Row 2: Commit detail entry (committed only) */}
+          {/* Row 2: Commit identity (committed only, intentionally non-interactive) */}
           {isCommitted && commitHash && (
-            <button
-              type="button"
-              className="nodrag mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/35 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
-              onClick={handleOpenCommitDetails}
-              title={`Open commit ${hashDisplay}`}
-              aria-label={`Open commit ${hashDisplay}`}
+            <span
+              className="nodrag mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)]"
+              title={`Commit ${hashDisplay}`}
             >
-              <Hash size={10} aria-hidden="true" className="shrink-0" />
               <span className="truncate font-mono">{hashDisplay}</span>
-            </button>
+            </span>
           )}
 
           {/* B-8: Stats line (always visible in collapsed view) */}
@@ -596,6 +576,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             isDetail={isDetail}
             prefersReducedMotion={prefersReducedMotion}
             projectId={projectId}
+            projectName={projectName}
             nodeId={id}
             onCreateLeaf={() => openLeafPanel(id)}
             leafContextMenuHandler={leafContextMenuHandler}

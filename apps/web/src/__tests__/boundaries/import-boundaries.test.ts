@@ -135,7 +135,6 @@ describe('L1-L4 import boundaries', () => {
       s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
     const allowed = [
-      'app/chat/project/[projectId]/leaf/page.tsx:import @/queries/project',
       'app/deploy/compare/page.tsx:import @/infrastructure',
       'app/deploy/eval/[runId]/page.tsx:import @/infrastructure',
       'app/deploy/eval/[runId]/page.tsx:import @/infrastructure/export/report',
@@ -145,6 +144,7 @@ describe('L1-L4 import boundaries', () => {
       'app/insights/page.tsx:import @/infrastructure',
       'app/insights/page.tsx:import @/infrastructure/commits',
       'app/project/[projectId]/page.tsx:import @/queries/project',
+      'app/project/[projectId]/page.tsx:import @/queries/yschemaValidation',
       'app/project/[projectId]/settings/page.tsx:import @/queries/providers',
       'app/share/[token]/page.tsx:import @/infrastructure',
     ];

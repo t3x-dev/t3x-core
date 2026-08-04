@@ -22,7 +22,7 @@ import * as api from '@/infrastructure';
 
 const makeCommit = (hash: string) => ({
   hash,
-  schema: 't3x/commit' as const,
+  schema: 't3x/commit/v2' as const,
   parents: [],
   author: { type: 'human', id: 'u1', name: 'Test' },
   committed_at: '2026-01-01T00:00:00Z',

@@ -7,7 +7,9 @@ import {
   findLeavesByProject,
   findProjects,
   getGlobalSetting,
-  listCommits,
+  getTransitionRefHead,
+  getVerifiedTransitionCommitGraph,
+  listTransitionCommits,
 } from '../queries';
 import {
   type DemoWorkspaceSeedMarker,
@@ -49,17 +51,45 @@ describe('seedDemoWorkspace', () => {
     expect(conversations).toHaveLength(1);
     expect(conversations[0]?.title).toBe(DEMO_WORKSPACE_FIXTURE.source.title);
 
-    const commits = await listCommits(db, { projectId: projects[0]!.projectId });
+    const commits = await listTransitionCommits(db, projects[0]!.projectId);
     expect(commits).toHaveLength(1);
-    expect(commits[0]?.message).toBe(DEMO_WORKSPACE_FIXTURE.commit.message);
-    expect(commits[0]?.provenance?.method).toBe('fixture_replay');
-    expect(commits[0]?.content.trees[0]?.key).toBe('support_escalation_review');
+    expect(commits[0]?.commit.schema).toBe('t3x/commit/v2');
+    const digest = result.commit?.digest;
+    expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const graph = await getVerifiedTransitionCommitGraph(db, projects[0]!.projectId, digest ?? '');
+    expect(graph?.proposal.predicate.intent).toMatchObject({
+      mode: 'authored',
+      value: DEMO_WORKSPACE_FIXTURE.commit.message,
+    });
+    expect(graph?.proposal.predicate.rationale).toMatchObject({
+      mode: 'inferred',
+      evidence: [
+        expect.objectContaining({
+          resource: expect.objectContaining({ mediaType: 'text/plain;charset=utf-8' }),
+        }),
+      ],
+    });
+    const head = await getTransitionRefHead(db, {
+      projectId: projects[0]!.projectId,
+      refName: 'main',
+    });
+    expect(head.format).toBe('transition_v2');
+    if (head.format !== 'transition_v2') throw new Error('Expected CommitV2 demo head');
+    expect(head.state.value).toMatchObject({
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        trees: [expect.objectContaining({ key: 'support_escalation_review' })],
+        relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
+      },
+    });
 
     const leaves = await findLeavesByProject(db, projects[0]!.projectId);
     expect(leaves).toHaveLength(1);
     expect(leaves[0]?.title).toBe(DEMO_WORKSPACE_FIXTURE.leaf.title);
     expect(leaves[0]?.output).toContain('Refunds above $100');
     expect(leaves[0]?.assertions?.every((assertion) => assertion.passed)).toBe(true);
+    expect(leaves[0]?.commit_hash).toBe(digest);
 
     const marker = await getGlobalSetting<DemoWorkspaceSeedMarker>(
       db,
@@ -81,7 +111,7 @@ describe('seedDemoWorkspace', () => {
     expect(
       await findConversationsByProject(db, { projectId: projects[0]!.projectId })
     ).toHaveLength(1);
-    expect(await listCommits(db, { projectId: projects[0]!.projectId })).toHaveLength(1);
+    expect(await listTransitionCommits(db, projects[0]!.projectId)).toHaveLength(1);
     expect(await findLeavesByProject(db, projects[0]!.projectId)).toHaveLength(1);
   });
 

@@ -26,6 +26,7 @@ export interface Project {
   turns_count?: number;
   commits_count?: number;
   branches_count?: number;
+  outputs_count?: number;
   drafts_count?: number;
   default_provider?: string | null;
   default_model?: string | null;
@@ -89,9 +90,9 @@ export interface Branch {
   branch_id: string;
   name: string;
   project_id?: string;
-  parent_branch?: string;
-  head_commit_hash?: string;
-  description?: string;
+  parent_branch?: string | null;
+  head_commit_hash?: string | null;
+  description?: string | null;
   is_current: boolean;
   created_at: string;
   updated_at: string;
@@ -232,9 +233,24 @@ export interface Draft {
 
 // Raw diff response from backend
 export interface DiffResultRaw {
-  baseId: string;
-  targetId: string;
-  segmentDiffs: Array<{
+  base?: {
+    hash?: string;
+    digest?: string;
+    rationale?: string | null;
+    actor?: unknown;
+    recorded_at?: string;
+  };
+  target?: {
+    hash?: string;
+    digest?: string;
+    rationale?: string | null;
+    actor?: unknown;
+    recorded_at?: string;
+  };
+  diff?: unknown;
+  baseId?: string;
+  targetId?: string;
+  segmentDiffs?: Array<{
     segmentId: string;
     text: string;
     diffType: 'same' | 'added' | 'removed' | 'modified';

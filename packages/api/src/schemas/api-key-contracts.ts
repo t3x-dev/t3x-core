@@ -5,6 +5,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { API_KEY_PRINCIPAL_KINDS, TRANSITION_SCOPES } from '@t3x-dev/core';
 
 // ============================================================
 // Request Schemas
@@ -17,7 +18,10 @@ export const CreateApiKeyRequest = z
       .string()
       .optional()
       .openapi({ description: 'Scope key to a specific project (optional, null = global)' }),
+    principal_kind: z.enum(API_KEY_PRINCIPAL_KINDS).optional().default('human'),
+    transition_scopes: z.array(z.enum(TRANSITION_SCOPES)).optional().default([]),
   })
+  .strict()
   .openapi('CreateApiKeyRequest');
 
 // ============================================================
@@ -34,6 +38,8 @@ export const ApiKeyCreatedResponse = z
     key_prefix: z.string(),
     name: z.string(),
     project_id: z.string().nullable(),
+    principal_kind: z.enum(API_KEY_PRINCIPAL_KINDS),
+    transition_scopes: z.array(z.enum(TRANSITION_SCOPES)),
     created_at: z.string(),
   })
   .openapi('ApiKeyCreatedResponse');
@@ -45,6 +51,8 @@ export const ApiKeyResponse = z
     key_prefix: z.string(),
     name: z.string(),
     project_id: z.string().nullable(),
+    principal_kind: z.enum(API_KEY_PRINCIPAL_KINDS),
+    transition_scopes: z.array(z.enum(TRANSITION_SCOPES)),
     created_at: z.string(),
     last_used_at: z.string().nullable(),
     revoked_at: z.string().nullable(),

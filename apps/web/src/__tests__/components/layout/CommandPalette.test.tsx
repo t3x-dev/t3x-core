@@ -24,7 +24,7 @@ describe('CommandPalette', () => {
   });
 
   it('opens with executable commands and no placeholder actions', () => {
-    render(<CommandPalette projectId="proj_1" />);
+    render(<CommandPalette repositoryPath="/t3x-dev/example-project" />);
 
     fireEvent.keyDown(document, { key: 'k', metaKey: true });
 
@@ -35,11 +35,11 @@ describe('CommandPalette', () => {
   });
 
   it('runs a selected command and closes the palette', () => {
-    render(<CommandPalette projectId="proj_1" />);
+    render(<CommandPalette repositoryPath="/t3x-dev/example-project" />);
 
     fireEvent.keyDown(document, { key: 'k', metaKey: true });
     fireEvent.click(screen.getByText('Go to Project Canvas'));
 
-    expect(pushMock).toHaveBeenCalledWith('/project/proj_1');
+    expect(pushMock).toHaveBeenCalledWith('/t3x-dev/example-project');
   });
 });

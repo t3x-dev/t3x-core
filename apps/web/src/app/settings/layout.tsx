@@ -14,10 +14,11 @@ import {
   Webhook,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
+import { RETURN_TO_PARAM, safeInternalReturnTo } from '@/utils/navigationReturn';
 
 interface SettingsNavItem {
   href: string;
@@ -35,7 +36,7 @@ interface SettingsNavGroup {
 const NAV_GROUPS: SettingsNavGroup[] = [
   {
     label: 'OVERVIEW',
-    items: [{ href: '/settings', label: 'Health', icon: Activity, exact: true }],
+    items: [{ href: '/settings', label: 'Overview', icon: Activity, exact: true }],
   },
   {
     label: 'LOCAL',
@@ -70,6 +71,25 @@ interface SettingsLayoutProps {
   children: React.ReactNode;
 }
 
+function SettingsBackLink() {
+  const searchParams = useSearchParams();
+  const backHref = safeInternalReturnTo(searchParams.get(RETURN_TO_PARAM), '/');
+
+  return (
+    <Link
+      href={backHref}
+      className={cn(
+        'inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium',
+        'text-[var(--text-secondary)] transition-colors duration-150',
+        'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+      )}
+    >
+      <ArrowLeft className="h-4 w-4 shrink-0" />
+      <span>Back</span>
+    </Link>
+  );
+}
+
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
   const pathname = usePathname();
   const currentPath = pathname ?? '';
@@ -84,17 +104,9 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     <div className="flex h-full bg-[var(--surface-app)]">
       <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--stroke-divider)] px-3 py-5">
         <div className="mb-3 px-1">
-          <Link
-            href="/chat"
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium',
-              'text-[var(--text-secondary)] transition-colors duration-150',
-              'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-            )}
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0" />
-            <span>Back to workspace</span>
-          </Link>
+          <Suspense fallback={null}>
+            <SettingsBackLink />
+          </Suspense>
         </div>
         <div className="mb-5 flex items-center gap-2 px-3">
           <Settings className="h-5 w-5 text-[var(--text-primary)]" />

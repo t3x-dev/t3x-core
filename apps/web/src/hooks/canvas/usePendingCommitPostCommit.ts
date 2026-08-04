@@ -25,7 +25,7 @@ interface UsePendingCommitPostCommitProps {
 export interface UsePendingCommitPostCommitReturn {
   openingAsDraft: boolean;
   handleSuccessClose: () => void;
-  handleViewCommitDetails: () => void;
+  handleBackToCanvas: () => void;
   handleCreateOutput: () => void;
   handleOpenAsDraft: () => Promise<void>;
 }
@@ -46,10 +46,14 @@ export function usePendingCommitPostCommit({
     onClose();
   }, [projectId, onClose, loadCanvas]);
 
-  const handleViewCommitDetails = useCallback(() => {
+  const handleBackToCanvas = useCallback(() => {
     void loadCanvas(projectId);
-    onConvertDraft?.();
-  }, [projectId, onConvertDraft, loadCanvas]);
+    if (onConvertDraft) {
+      onConvertDraft();
+    } else {
+      onClose();
+    }
+  }, [projectId, onConvertDraft, onClose, loadCanvas]);
 
   const handleCreateOutput = useCallback(() => {
     void loadCanvas(projectId);
@@ -72,19 +76,22 @@ export function usePendingCommitPostCommit({
           data.pendingBranch === 'branch' ? data.pendingBranchName || 'branch' : 'main',
       });
 
-      const routeProject = data.projectId || projectId;
-      window.location.href = `/project/${routeProject}/draft/${newDraft.id}`;
+      await loadCanvas(projectId);
+      onClose();
+      queueMicrotask(() => {
+        useCanvasStore.getState().openNodeModal(newDraft.id, 'commit');
+      });
     } catch (err) {
       toast.error(formatUserFacingError(err, 'Failed to create draft.'));
     } finally {
       setOpeningAsDraft(false);
     }
-  }, [projectId, data]);
+  }, [projectId, data, loadCanvas, onClose]);
 
   return {
     openingAsDraft,
     handleSuccessClose,
-    handleViewCommitDetails,
+    handleBackToCanvas,
     handleCreateOutput,
     handleOpenAsDraft,
   };

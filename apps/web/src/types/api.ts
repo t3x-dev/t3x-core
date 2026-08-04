@@ -14,7 +14,11 @@ export type {
   AutopilotConfig,
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
-export type { ApiCommit } from '@/infrastructure/commits';
+export type {
+  ApiCommit,
+  ApiCommitOperation,
+  ApiCommitOperationsResponse,
+} from '@/infrastructure/commits';
 export type {
   ContextManifestBaseline,
   ContextManifestFeedback,
@@ -86,7 +90,18 @@ export type {
 // instanceof / numeric comparison; hook-化 applies to functions only).
 export { STREAMING_IMPORT_THRESHOLD } from '@/infrastructure/misc';
 export type { ConversationContext } from '@/infrastructure/pins';
-export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
+export type {
+  CreateYSchemaValidationRunPayload,
+  LatestYSchemaValidationRunOptions,
+  QuickVerifyResult,
+  SkillArtifact,
+  SkillArtifactCheck,
+  SkillArtifactFile,
+  SkillArtifactIssue,
+  VerifyResult,
+  YSchemaValidationRun,
+  YSchemaValidationRunStatus,
+} from '@/infrastructure/projects';
 export type {
   CreateRecipeInput,
   Recipe,

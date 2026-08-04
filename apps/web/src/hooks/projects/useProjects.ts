@@ -36,7 +36,7 @@ export interface UseProjectsResult {
 
 export function useProjects(limit = 50): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {

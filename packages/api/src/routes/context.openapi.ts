@@ -10,9 +10,10 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { serializeForPrompt } from '@t3x-dev/core';
-import { getLatestCommit } from '@t3x-dev/storage';
+import { getTransitionRefHead } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { decodeRepositorySemanticContentState } from '../lib/repository-state-transition';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { ContextQuery, ContextResponse } from '../schemas/integration-contracts';
 
@@ -77,10 +78,10 @@ contextRoutes.openapi(getContextRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const commit = await getLatestCommit(db, projectId, branch);
+    const head = await getTransitionRefHead(db, { projectId, refName: branch });
 
     // No commits on this branch — return empty context
-    if (!commit) {
+    if (head.format === 'empty') {
       const emptyResult: z.infer<typeof ContextResponse> = {
         commit_hash: null,
         branch,
@@ -93,16 +94,17 @@ contextRoutes.openapi(getContextRoute, async (c) => {
     }
 
     // Return trees directly from the commit
-    const trees = commit.content.trees ?? [];
+    const content = decodeRepositorySemanticContentState(head.state);
+    const trees = content.trees;
 
     const result: z.infer<typeof ContextResponse> = {
-      commit_hash: commit.hash,
+      commit_hash: head.head,
       branch,
       trees,
     };
 
     if (format === 'yaml') {
-      result.yaml = serializeForPrompt(commit.content);
+      result.yaml = serializeForPrompt(content);
     }
 
     return c.json({ success: true as const, data: result }, 200);

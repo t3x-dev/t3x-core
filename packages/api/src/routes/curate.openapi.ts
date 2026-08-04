@@ -586,7 +586,7 @@ export const curateRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 const curatePreviewRoute = createRoute({
   method: 'post',
   path: '/v1/curate/preview',
-  tags: ['Chat'],
+  tags: ['Curation'],
   summary: 'Get curated preview',
   description:
     'Calculate which text chunks to select based on cosine similarity to intent. Supports Ring3 segments from conversation turns or fallback regex splitting.',

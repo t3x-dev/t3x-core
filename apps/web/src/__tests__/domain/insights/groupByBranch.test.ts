@@ -18,7 +18,7 @@ function commit(overrides: Partial<ApiCommit> & { hash: string; project_id: stri
     parents: [],
     project_id: overrides.project_id,
     provenance: null,
-    schema: 't3x/commit',
+    schema: 't3x/commit/v2',
     sources: null,
     ...overrides,
   };

@@ -18,6 +18,7 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -91,6 +92,7 @@ export interface Turn {
 }
 
 export interface CreateTurnInput {
+  project_id: string;
   conversation_id: string;
   role: TurnRole;
   content: string;
@@ -104,48 +106,144 @@ export interface ListTurnsResponse {
   offset: number;
 }
 
-// Commit types
-export interface Commit {
-  commit_hash: string;
-  parent_hashes: string[];
+// Repository source/evidence types
+export type SourceAvailabilityMode = 'available' | 'partial' | 'unavailable';
+export type SourceAvailabilityReason = 'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE';
+
+export interface ConversationSource {
+  type: 'conversation';
+  id: string;
   project_id: string;
-  branch: string;
-  message: string;
-  turn_window: {
-    start_turn_hash: string;
-    end_turn_hash: string;
-  };
-  facet_snapshot: unknown[];
-  pipeline_config: Record<string, unknown> | null;
+  title: string | null;
+  alias: string | null;
+  parent_commit_hash: string | null;
+  committed_as: string | null;
+  committed_at: string | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+  provider: string | null;
+  model: string | null;
+}
+
+export interface SourceEvidenceTurn {
+  turn_hash: string;
+  parent_turn_hash: string | null;
+  role: TurnRole;
+  content: string;
+  language: string | null;
+  rings: unknown | null;
+  content_blocks: unknown[] | null;
   created_at: string;
 }
 
-export interface CreateCommitInput {
+export interface SourceEvidenceRevision {
+  revision_id: string;
+  turn_hash: string;
+  turn_role: TurnRole;
+  action: 'add' | 'edit' | 'delete';
+  selected_text: string;
+  replacement_text: string;
+  content: string;
+  spans: Array<{
+    id: string;
+    action: 'add' | 'edit' | 'delete';
+    start: number;
+    end: number;
+    text: string;
+    original_text: string;
+  }>;
+  base_content_hash: string;
+  status: 'saved' | 'patched' | 'no_patch' | 'patch_failed' | 'synced' | 'discarded';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceCommitReference {
+  commit_digest: string;
+  recorded_at: string;
+  intent: string | null;
+  evidence_refs: Array<{
+    resource: { uri: string; mediaType: string; digest: string };
+    locator: { scheme: string; value: unknown };
+  }>;
+}
+
+export interface ConversationSourceEvidence {
+  availability: {
+    mode: SourceAvailabilityMode;
+    reasons: SourceAvailabilityReason[];
+  };
+  source: ConversationSource | null;
+  turns: {
+    items: SourceEvidenceTurn[];
+    total: number;
+    limit: number;
+    offset: number;
+    completeness: 'complete' | 'partial';
+  };
+  revisions: SourceEvidenceRevision[];
+  evidence_selection: {
+    mode: 'immutable_refs';
+    turn_hashes: string[];
+  };
+  referring_commits: SourceCommitReference[];
+}
+
+export interface CommitDescriptorV2 {
+  kind: 'commit';
+  schema: 't3x/commit/v2';
+  digest: string;
+}
+
+export interface RepositoryCommitV2 {
+  schema: 't3x/commit/v2';
+  parents: CommitDescriptorV2[];
+  decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  result: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+}
+
+export interface CreatedRepositoryCommit {
+  digest: string;
+  ref_name: string;
+  object: RepositoryCommitV2;
+}
+
+export interface StoredRepositoryCommit {
+  digest: string;
+  recorded_at: string;
+  object: RepositoryCommitV2;
+}
+
+export interface CommitHistoryProjectionV2 {
+  format: 'transition_v2';
+  id: string;
+  schema: 't3x/commit/v2';
+  parents: string[];
+  recordedAt: string;
+  result: {
+    mode: 'state_descriptor';
+    descriptor: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+  };
+  assurance: {
+    mode: 'decision_bound';
+    decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  };
+}
+
+export interface CommitRepositoryStateInput {
   project_id: string;
   content: {
     trees: unknown[];
     relations?: unknown[];
   };
   branch?: string;
-  parents?: string[];
+  expected_head: string | null;
   message?: string;
   source_conversation_id?: string;
-  author?: {
-    type: 'human' | 'agent' | 'system';
-    id?: string;
-    name?: string;
-  };
-  provenance?: {
-    method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
-    model?: string;
-    extracted_at?: string;
-  };
 }
 
 export interface ListCommitsResponse {
-  commits: Commit[];
-  limit: number;
-  offset: number;
+  commits: CommitHistoryProjectionV2[];
 }
 
 // Branch types
@@ -235,7 +333,7 @@ export interface CreateMergeDraftInput {
   source_hash: string;
   target_hash: string;
   source_branch?: string;
-  target_branch?: string;
+  target_branch: string;
 }
 
 export interface MergeDraftPrepared {
@@ -329,14 +427,14 @@ export interface RenameConversationResult {
 export interface Pin {
   id: string;
   project_id: string;
-  type: 'conversation' | 'leaf' | 'import';
+  type: 'conversation' | 'conversation_turn' | 'leaf' | 'import';
   ref_id: string;
   selected_assertion_ids: string[];
   pinned_at: string;
 }
 
 export interface CreatePinInput {
-  type: 'conversation' | 'leaf' | 'import';
+  type: 'conversation' | 'conversation_turn' | 'leaf' | 'import';
   ref_id: string;
   selected_assertion_ids?: string[];
 }
@@ -375,34 +473,124 @@ export interface StatusResponse {
   };
 }
 
-// Chat types
-export interface ChatMessage {
+// Generation types
+export type GenerationContentBlock =
+  | { type: 'text'; text: string }
+  | {
+      type: 'image';
+      source: {
+        type: 'base64';
+        media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+        data: string;
+      };
+    };
+
+export interface GenerationMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | GenerationContentBlock[];
 }
 
-export interface ChatInput {
-  messages: ChatMessage[];
+export interface GenerationRequest {
+  messages: GenerationMessage[];
   provider?: string;
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  project_id?: string;
+  web_search?: boolean;
+  thinking?: boolean;
 }
 
-export interface ChatResponse {
-  message: ChatMessage;
+export interface GenerationResponse {
+  content: string;
+  model: string;
   usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
+    input_tokens?: number;
+    output_tokens?: number;
   };
+  finish_reason?: string;
 }
 
-export interface ChatProvider {
-  id: string;
-  name: string;
-  models: string[];
+export interface GenerationProviderCatalog {
+  providers: string[];
+  default: string;
 }
+
+export type GenerationStreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'thinking'; content: string }
+  | { type: 'searching'; query?: string }
+  | {
+      type: 'done';
+      content?: string;
+      model?: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      citations?: Array<{ url: string; title: string }>;
+    }
+  | { type: 'error'; message: string };
+
+export interface GenerationStreamOptions {
+  signal?: AbortSignal;
+}
+
+export interface SourceThreadMemory {
+  text: string;
+  token_estimate: number;
+  sources: Array<{
+    type: 'commit' | 'conversation' | 'leaf' | 'import';
+    id: string;
+    title?: string;
+  }>;
+}
+
+export type SourceThread = Conversation;
+export type CreateSourceThreadInput = CreateConversationInput;
+export type ListSourceThreadsResponse = ListConversationsResponse;
+export type RenameSourceThreadInput = RenameConversationInput;
+export type RenameSourceThreadResult = RenameConversationResult;
+export type SourceThreadTurn = Turn;
+export type AppendSourceThreadTurnInput = CreateTurnInput;
+export type ListSourceThreadTurnsResponse = ListTurnsResponse;
+export type SourceThreadEvidence = ConversationSourceEvidence;
+
+export interface GenerationCapability {
+  complete(input: GenerationRequest): Promise<GenerationResponse>;
+  stream(
+    input: GenerationRequest,
+    options?: GenerationStreamOptions
+  ): AsyncGenerator<GenerationStreamEvent, void, unknown>;
+  providers(): Promise<GenerationProviderCatalog>;
+}
+
+export interface SourceThreadCapability {
+  list(projectId: string, params?: PaginationParams): Promise<ListSourceThreadsResponse>;
+  get(id: string): Promise<SourceThread>;
+  create(input: CreateSourceThreadInput): Promise<SourceThread>;
+  remove(id: string): Promise<void>;
+  rename(id: string, input: RenameSourceThreadInput): Promise<RenameSourceThreadResult>;
+  listTurns(
+    sourceThreadId: string,
+    params?: PaginationParams
+  ): Promise<ListSourceThreadTurnsResponse>;
+  getTurn(hash: string): Promise<SourceThreadTurn>;
+  getTurnChain(hash: string): Promise<SourceThreadTurn[]>;
+  appendTurn(input: AppendSourceThreadTurnInput): Promise<SourceThreadTurn>;
+  memory(id: string): Promise<SourceThreadMemory>;
+  evidence(
+    projectId: string,
+    conversationId: string,
+    params?: PaginationParams
+  ): Promise<SourceThreadEvidence>;
+}
+
+/** @deprecated Use GenerationMessage. */
+export type ChatMessage = GenerationMessage;
+/** @deprecated Use GenerationRequest. */
+export type ChatInput = GenerationRequest;
+/** @deprecated Use GenerationResponse. */
+export type ChatResponse = GenerationResponse;
+/** @deprecated Use GenerationProviderCatalog. */
+export type ChatProvider = GenerationProviderCatalog;
 
 // Leaf types
 export interface Leaf {
@@ -614,4 +802,211 @@ export interface ContextResult {
   branch: string;
   trees: ExtractTree[];
   yaml?: string;
+}
+
+// ============================================
+// Transition control plane
+// ============================================
+
+export type TransitionProtocolValue =
+  | null
+  | boolean
+  | number
+  | string
+  | TransitionProtocolValue[]
+  | { [key: string]: TransitionProtocolValue };
+
+export interface TransitionActorRef {
+  kind: 'human' | 'agent' | 'service';
+  id: string;
+}
+
+export interface TransitionObjectDescriptor {
+  kind: 'state' | 'effect' | 'statement' | 'commit';
+  schema: string;
+  digest: string;
+}
+
+export interface TransitionResourceSelector {
+  path: string;
+  material_id: string;
+  content_hash?: string;
+}
+
+export interface TransitionSourceArtifactSelector {
+  format: 't3x.dev/workspace-source-artifact/v1';
+  root_path: string;
+  resources?: TransitionResourceSelector[];
+}
+
+export interface TransitionSourceMaterialSelector {
+  material_id: string;
+  content_hash?: string;
+}
+
+export interface TransitionReplaceScalarOperation {
+  op: 'replace_scalar';
+  path: Array<string | number>;
+  expect: string;
+  value: string;
+}
+
+interface TransitionProposalRequestCommon {
+  request_id: string;
+  workspace_id: string;
+  why?: string;
+  if_revision?: number;
+}
+
+export type ProposeTransitionInput =
+  | (TransitionProposalRequestCommon & {
+      kind: 'structured_yops';
+      operations: TransitionProtocolValue[];
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_import';
+      artifact: TransitionSourceArtifactSelector;
+      root: TransitionSourceMaterialSelector;
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_edit';
+      artifact: TransitionSourceArtifactSelector;
+      operations: TransitionReplaceScalarOperation[];
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'exact_source_revert';
+      commit_id: string;
+    });
+
+export interface TransitionClaimView {
+  mode: 'stated' | 'inferred' | 'authored' | 'unspecified';
+  origin: 'request_source' | 'inferred' | 'actor_authored' | 'not_provided';
+  value?: string;
+  evidence: Array<{
+    resource: { uri: string; mediaType: string; digest: string };
+    locator: { scheme: string; value: TransitionProtocolValue };
+  }>;
+}
+
+export interface TransitionActionCapabilityView {
+  disposition: 'allowed' | 'denied' | 'not_applicable' | 'not_evaluated';
+  reasons: Array<{ code: string; message: string }>;
+}
+
+export interface TransitionGraphViewV1 {
+  schema: 't3x.dev/transition-view/v1';
+  version: 1;
+  mode: 'transition';
+  change: {
+    effect: TransitionObjectDescriptor;
+    base: TransitionObjectDescriptor;
+    result: TransitionObjectDescriptor;
+    driver: { protocol: string; protocolVersion: string; specDigest: string };
+    operations: TransitionProtocolValue[];
+  };
+  claims: {
+    proposal: TransitionObjectDescriptor;
+    actor: TransitionActorRef;
+    intent: TransitionClaimView;
+    rationale: TransitionClaimView;
+  };
+  checks: {
+    objectIntegrity: 'verified' | 'not_checked';
+    observationScope: { completeness: 'complete' | 'partial'; sources: string[] };
+    replay: TransitionProtocolValue;
+    validation: TransitionProtocolValue;
+    runner: TransitionProtocolValue;
+    humanConfirmation: TransitionProtocolValue;
+  };
+  decision: TransitionProtocolValue;
+  history: TransitionProtocolValue;
+  capabilities: {
+    accept: TransitionActionCapabilityView;
+    override: TransitionActionCapabilityView;
+    reject: TransitionActionCapabilityView;
+    commit: TransitionActionCapabilityView;
+    revert: TransitionActionCapabilityView;
+  };
+  audit: TransitionProtocolValue;
+}
+
+export type TransitionViewV1 = TransitionGraphViewV1;
+
+export interface TransitionStatementMembershipView {
+  digest: string;
+  source: string;
+  issuer: TransitionActorRef;
+  request_id: string;
+  created_at: string;
+}
+
+export interface TransitionControlPlaneView {
+  transition_id: string;
+  project_id: string;
+  workspace_id: string;
+  request_kind:
+    | 'structured_yops'
+    | 'exact_source_import'
+    | 'exact_source_edit'
+    | 'exact_source_revert';
+  request_id: string;
+  created_at: string;
+  precondition: {
+    workspace_revision: number;
+    ref_name: string;
+    ref_head: string | null;
+    effect_digest: string;
+    proposal_digest: string;
+  };
+  transition: TransitionViewV1;
+  statements: TransitionStatementMembershipView[];
+}
+
+export interface ProposeTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
+}
+
+export interface InspectTransitionResult {
+  transition_id: string;
+  view: TransitionControlPlaneView;
+}
+
+export interface VerifyTransitionInput {
+  request_id: string;
+}
+
+export interface VerifyTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
+  statements: Array<{
+    transitionId: string;
+    statementDigest: string;
+    source: string;
+    issuer: TransitionActorRef;
+    requestId: string;
+    requestDigest: string;
+    createdAt: string;
+  }>;
+  operational_results: Array<{
+    source: string;
+    outcome: 'no_statement' | 'failed';
+    code: string;
+    message: string;
+  }>;
+}
+
+export interface AttachTransitionStatementInput {
+  request_id: string;
+  predicate_type: string;
+  predicate: TransitionProtocolValue;
+  subjects: Array<'effect' | 'result' | 'proposal'>;
+}
+
+export interface AttachTransitionStatementResult {
+  transition_id: string;
+  reused: boolean;
+  view: TransitionControlPlaneView;
 }

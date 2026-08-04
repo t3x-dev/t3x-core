@@ -290,25 +290,25 @@ export interface LeafConfig {
  * This allows viewing and restoring previous outputs.
  */
 export interface LeafHistory {
-  /** Unique ID, format: "lhist_" + nanoid(12) (历史记录唯一标识) */
+  /** Unique ID, format: "lhist_" + nanoid(12) */
   id: string;
 
-  /** The leaf this history belongs to (关联的 Leaf ID) */
+  /** The leaf this history belongs to */
   leaf_id: string;
 
-  /** Generated output content (生成的输出内容) */
+  /** Generated output content */
   output: string;
 
-  /** Configuration used for this generation (生成时使用的配置) */
+  /** Configuration used for this generation */
   config: LeafConfig;
 
-  /** LLM model used for generation (使用的 LLM 模型) */
+  /** LLM model used for generation */
   model: string;
 
-  /** When this output was generated, ISO8601 (生成时间) */
+  /** When this output was generated, ISO8601 */
   generated_at: string;
 
-  /** Who triggered this generation (触发生成的用户/系统) */
+  /** Who triggered this generation */
   created_by?: string;
 }
 
@@ -339,7 +339,7 @@ export interface CreateLeafHistoryInput {
 /**
  * What can be pinned.
  */
-export type PinType = 'conversation' | 'leaf' | 'import';
+export type PinType = 'conversation' | 'conversation_turn' | 'leaf' | 'import';
 
 /**
  * A Pin marks an item as selected for:
@@ -358,7 +358,7 @@ export interface Pin {
   /** Type of pinned item */
   type: PinType;
 
-  /** ID of the pinned item (conversation_id, leaf_id, or material/import id) */
+  /** ID of the pinned item (conversation_id, turn_hash, leaf_id, or material/import id) */
   ref_id: string;
 
   /**
@@ -599,6 +599,42 @@ export interface Account {
 // API Key (Authentication)
 // ═══════════════════════════════════════════════════════════════════════════
 
+export const API_KEY_PRINCIPAL_KINDS = ['human', 'agent', 'service'] as const;
+export type ApiKeyPrincipalKind = (typeof API_KEY_PRINCIPAL_KINDS)[number];
+
+/** Closed application-level capabilities for the Transition control plane. */
+export const TRANSITION_SCOPES = [
+  'transition:propose',
+  'transition:inspect',
+  'transition:verify',
+  'transition:statement:issue',
+  'transition:decide:accept',
+  'transition:decide:override',
+  'transition:decide:reject',
+  'transition:commit:create',
+  'transition:ref:advance',
+] as const;
+export type TransitionScope = (typeof TRANSITION_SCOPES)[number];
+
+/** Inspect is the only Transition scope that cannot create a durable fact or move a ref. */
+export const TRANSITION_WRITE_SCOPES = TRANSITION_SCOPES.filter(
+  (scope): scope is Exclude<TransitionScope, 'transition:inspect'> => scope !== 'transition:inspect'
+);
+
+export function isApiKeyPrincipalKind(value: string): value is ApiKeyPrincipalKind {
+  return (API_KEY_PRINCIPAL_KINDS as readonly string[]).includes(value);
+}
+
+export function isTransitionScope(value: string): value is TransitionScope {
+  return (TRANSITION_SCOPES as readonly string[]).includes(value);
+}
+
+export function isTransitionWriteScope(
+  scope: TransitionScope
+): scope is Exclude<TransitionScope, 'transition:inspect'> {
+  return scope !== 'transition:inspect';
+}
+
 /**
  * An API key grants access to the T3X API.
  *
@@ -623,6 +659,12 @@ export interface ApiKey {
 
   /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
   user_id: string | null;
+
+  /** Trusted principal represented by this credential. */
+  principal_kind: ApiKeyPrincipalKind;
+
+  /** Explicit Transition capabilities. Existing and unspecified keys receive none. */
+  transition_scopes: TransitionScope[];
 
   /** When the key was created, ISO8601 */
   created_at: string;
@@ -752,6 +794,12 @@ export interface Draft {
   /** Target branch for commit */
   target_branch?: string;
 
+  /** Stable Workspace ID when a draft backs the Project Workspaces flow */
+  workspace_id?: string;
+
+  /** Current Workspace staged state for the Project Workspaces flow */
+  workspace_state?: Record<string, unknown>;
+
   /** Optimistic lock revision counter */
   revision: number;
 
@@ -781,6 +829,8 @@ export interface CreateDraftInput {
   parent_commit_hash?: string;
   target_branch?: string;
   preview_type?: string;
+  workspace_id?: string;
+  workspace_state?: Record<string, unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -9,6 +9,16 @@ import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+import { hasConversationSourceCommitReferences } from './source-evidence-references';
+
+export class ConversationHistoryReferencedError extends Error {
+  readonly code = 'CONVERSATION_HISTORY_REFERENCED';
+
+  constructor(readonly conversationId: string) {
+    super(`Conversation ${conversationId} is referenced by immutable commit history`);
+    this.name = 'ConversationHistoryReferencedError';
+  }
+}
 
 export interface CreateConversationInput {
   projectId: string;
@@ -331,15 +341,33 @@ export async function updateConversation(
 }
 
 /**
- * Delete a conversation
+ * Delete an uncommitted, unreferenced conversation.
+ *
+ * The guard lives at the storage boundary as well as the HTTP boundary so a
+ * new caller cannot erase source rows through cascading foreign keys. Project
+ * erasure deliberately uses the project lifecycle instead of this function.
  */
 export async function deleteConversation(db: AnyDB, conversationId: string): Promise<boolean> {
+  const [existing] = await db
+    .select({ projectId: conversations.projectId, committedAs: conversations.committedAs })
+    .from(conversations)
+    .where(eq(conversations.conversationId, conversationId))
+    .limit(1);
+  if (existing === undefined) return false;
+  if (
+    existing.committedAs ||
+    (await hasConversationSourceCommitReferences(db, existing.projectId, conversationId))
+  ) {
+    throw new ConversationHistoryReferencedError(conversationId);
+  }
+
   const result = await db
     .delete(conversations)
-    .where(eq(conversations.conversationId, conversationId))
+    .where(and(eq(conversations.conversationId, conversationId), isNull(conversations.committedAs)))
     .returning();
 
-  return result.length > 0;
+  if (result.length > 0) return true;
+  throw new ConversationHistoryReferencedError(conversationId);
 }
 
 /**

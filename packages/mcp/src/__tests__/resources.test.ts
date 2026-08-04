@@ -4,23 +4,36 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockFindProjectById,
-  mockGetCommit,
+  mockGetVerifiedTransitionCommitGraph,
   mockFindDraftById,
   mockFindConversationById,
   mockFindLeafById,
   mockGetMergeDraft,
+  mockApiClient,
 } = vi.hoisted(() => ({
   mockFindProjectById: vi.fn(),
-  mockGetCommit: vi.fn(),
+  mockGetVerifiedTransitionCommitGraph: vi.fn(),
   mockFindDraftById: vi.fn(),
   mockFindConversationById: vi.fn(),
   mockFindLeafById: vi.fn(),
   mockGetMergeDraft: vi.fn(),
+  mockApiClient: {
+    getProject: vi.fn(),
+    getCommit: vi.fn(),
+    getDraft: vi.fn(),
+    getLeaf: vi.fn(),
+    getMergeDraft: vi.fn(),
+    sourceThreads: { get: vi.fn() },
+  },
 }));
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve({})),
   closeDB: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
@@ -37,7 +50,7 @@ vi.mock('@t3x-dev/storage', () => ({
   findLeavesByProject: vi.fn(),
   findPinById: vi.fn(),
   findPinsByProject: vi.fn(),
-  getCommit: mockGetCommit,
+  getVerifiedTransitionCommitGraph: mockGetVerifiedTransitionCommitGraph,
   getMergeDraft: mockGetMergeDraft,
   listCommits: vi.fn(),
   insertProject: vi.fn(),
@@ -95,6 +108,8 @@ vi.mock('@t3x-dev/core', () => ({
 
 import { createMcpServer } from '../server.js';
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 async function connectClientAndServer() {
   const { server } = createMcpServer({ toolsets: ['core'] });
   const client = new Client(
@@ -110,6 +125,11 @@ async function connectClientAndServer() {
 
 afterEach(() => {
   vi.clearAllMocks();
+  if (originalBackend === undefined) {
+    delete process.env.T3X_MCP_BACKEND;
+  } else {
+    process.env.T3X_MCP_BACKEND = originalBackend;
+  }
 });
 
 describe('MCP resources', () => {
@@ -136,14 +156,18 @@ describe('MCP resources', () => {
       }),
       expect.objectContaining({
         name: 'commit',
-        uriTemplate: 't3x://commits/{commit_hash}',
+        uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
       }),
       expect.objectContaining({
         name: 'workbench_draft',
         uriTemplate: 't3x://workbench-drafts/{draft_id}',
       }),
       expect.objectContaining({
-        name: 'conversation',
+        name: 'source_thread',
+        uriTemplate: 't3x://source-threads/{source_thread_id}',
+      }),
+      expect.objectContaining({
+        name: 'conversation_compatibility',
         uriTemplate: 't3x://conversations/{conversation_id}',
       }),
       expect.objectContaining({
@@ -196,35 +220,25 @@ describe('MCP resources', () => {
   });
 
   it('reads a commit resource from a stable URI', async () => {
-    mockGetCommit.mockResolvedValue({
-      hash: 'sha256:commit123',
-      schema: 't3x/commit',
-      parents: ['sha256:parent'],
-      author: { type: 'human', name: 'Test' },
-      committed_at: '2026-04-21T11:00:00.000Z',
-      content: {
-        trees: [{ key: 'budget', slots: { amount: '5000' }, children: [] }],
-        relations: [],
+    mockGetVerifiedTransitionCommitGraph.mockResolvedValue({
+      recordedAt: '2026-04-21T11:00:00.000Z',
+      commit: {
+        schema: 't3x/commit/v2',
+        parents: [{ kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:parent' }],
+        decision: { kind: 'decision', schema: 't3x/decision/v1', digest: 'sha256:decision' },
+        result: { kind: 'state', schema: 't3x/state/v1', digest: 'sha256:state' },
       },
-      project_id: 'proj_123',
-      message: 'Initial structured-state commit',
-      branch: 'main',
-      provenance: { method: 'llm_extraction' },
-      yops_log_ids: ['yl_1'],
-      sources: [{ type: 'conversation', id: 'conv_1', title: 'Trip plan' }],
     });
     const { client } = await connectClientAndServer();
 
-    const result = await client.readResource({ uri: 't3x://commits/sha256:commit123' });
+    const result = await client.readResource({
+      uri: 't3x://projects/proj_123/commits/sha256%3Acommit123',
+    });
 
     expect(JSON.parse(result.contents[0].text)).toMatchObject({
-      kind: 'commit',
-      hash: 'sha256:commit123',
-      project_id: 'proj_123',
-      branch: 'main',
-      message: 'Initial structured-state commit',
-      tree_count: 1,
-      relation_count: 0,
+      digest: 'sha256:commit123',
+      recorded_at: '2026-04-21T11:00:00.000Z',
+      object: { schema: 't3x/commit/v2' },
     });
 
     await client.close();
@@ -293,7 +307,7 @@ describe('MCP resources', () => {
     const result = await client.readResource({ uri: 't3x://conversations/conv_123' });
 
     expect(JSON.parse(result.contents[0].text)).toMatchObject({
-      kind: 'conversation',
+      kind: 'source_thread',
       conversation_id: 'conv_123',
       project_id: 'proj_123',
       title: 'Trip planning',
@@ -301,6 +315,58 @@ describe('MCP resources', () => {
       provider: 'anthropic',
       model: 'claude-sonnet-4-20250514',
       metadata: { channel: 'chat' },
+    });
+
+    await client.close();
+  });
+
+  it('reads the canonical source-thread URI through storage compatibility', async () => {
+    mockFindConversationById.mockResolvedValue({
+      conversationId: 'conv_123',
+      projectId: 'proj_123',
+      title: 'Trip planning',
+      alias: null,
+      parentCommitHash: null,
+      positionX: null,
+      positionY: null,
+      createdAt: new Date('2026-04-21T13:00:00.000Z'),
+      metadataJson: null,
+      provider: null,
+      model: null,
+    });
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://source-threads/conv_123' });
+
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'source_thread',
+      conversation_id: 'conv_123',
+      project_id: 'proj_123',
+    });
+
+    await client.close();
+  });
+
+  it('uses the authenticated API boundary for resources in api backend mode', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.sourceThreads.get.mockResolvedValueOnce({
+      conversation_id: 'conv_api',
+      project_id: 'proj_api',
+      title: 'Authenticated source',
+    });
+    const { getDB } = await import('../db.js');
+    const callsBeforeRead = (getDB as ReturnType<typeof vi.fn>).mock.calls.length;
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://source-threads/conv_api' });
+
+    expect(mockApiClient.sourceThreads.get).toHaveBeenCalledWith('conv_api');
+    expect((getDB as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(callsBeforeRead);
+    expect(JSON.parse(result.contents[0].text)).toEqual({
+      kind: 'source_thread',
+      conversation_id: 'conv_api',
+      project_id: 'proj_api',
+      title: 'Authenticated source',
     });
 
     await client.close();

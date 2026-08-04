@@ -19,7 +19,6 @@ import {
   Loader2,
   PanelRight,
 } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
@@ -30,6 +29,7 @@ import {
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -267,7 +267,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
   const project = getProject(projectId);
-  const fallbackCanvasHref = `/chat/project/${projectId}/canvas`;
+  const fallbackCanvasHref = getProjectIdCanvasPath(projectId);
   const returnHref = useMemo(
     () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackCanvasHref),
     [fallbackCanvasHref, searchParams]
@@ -283,9 +283,25 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([loadDiff(baseHash, targetHash), loadCommit(targetHash), loadCommit(baseHash)])
+    Promise.all([
+      loadDiff(baseHash, targetHash),
+      loadCommit(targetHash, projectId),
+      loadCommit(baseHash, projectId),
+    ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
+        const diffBaseHash = diffResp.base.hash ?? diffResp.base.digest;
+        const diffTargetHash = diffResp.target.hash ?? diffResp.target.digest;
+        if (
+          diffBaseHash !== baseHash ||
+          diffTargetHash !== targetHash ||
+          tgtCommit.hash !== targetHash ||
+          baseCommitData.hash !== baseHash ||
+          tgtCommit.project_id !== projectId ||
+          baseCommitData.project_id !== projectId
+        ) {
+          throw new Error('Diff commits do not match the requested project and range.');
+        }
         setDiffResponse(diffResp);
         setTargetCommit(tgtCommit);
         setBaseCommit(baseCommitData);
@@ -301,7 +317,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [baseHash, targetHash, loadCommit, loadDiff]);
+  }, [baseHash, targetHash, loadCommit, loadDiff, projectId]);
 
   useEffect(() => {
     if (introDemoRequested) setTourOpen(true);
@@ -309,7 +325,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
   // Handlers
   const handleBack = useCallback(() => {
-    router.push(returnHref);
+    router.replace(returnHref);
   }, [router, returnHref]);
 
   const handleSelectNode = useCallback((id: string) => {
@@ -380,7 +396,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
               onClick={handleBack}
               className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--stroke-default)] text-[var(--text-primary)] rounded-md hover:bg-[var(--hover-bg)] text-sm"
             >
-              Back to canvas
+              Back
             </button>
           </div>
         </div>
@@ -402,6 +418,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         <div className="flex items-center gap-3">
           {/* Back button */}
           <button
+            aria-label="Back"
             type="button"
             onClick={handleBack}
             className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
@@ -420,21 +437,19 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
           {/* Commit badges */}
           <div className="flex items-center gap-2 ml-3">
-            <Link
-              href={`/project/${projectId}/commit/${encodeURIComponent(baseHash)}`}
+            <span
               title={baseHash}
-              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]"
             >
               base: {shortHash(baseHash)}
-            </Link>
+            </span>
             <span className="text-[var(--text-tertiary)] text-[10px]">vs</span>
-            <Link
-              href={`/project/${projectId}/commit/${encodeURIComponent(targetHash)}`}
+            <span
               title={targetHash}
-              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]"
             >
               target: {shortHash(targetHash)}
-            </Link>
+            </span>
           </div>
         </div>
       </header>

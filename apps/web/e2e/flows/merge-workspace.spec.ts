@@ -180,7 +180,7 @@ test.describe('Merge Workspace', () => {
     await expect(page.getByTestId('merge-voice-tension')).toContainText('Sydney and Tasmania');
     await expect(page.getByRole('button', { name: 'Use feature' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Use main' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Keep both voices' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Keep both voices' })).toHaveCount(0);
 
     await testInfo.attach('merge-voices-desktop', {
       body: await page.screenshot({ fullPage: false }),

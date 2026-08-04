@@ -4,7 +4,7 @@
  * CRUD operations for merge drafts, plus prepare/execute for canvas-based merges.
  */
 
-import type { MergeResult } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
 
 // ============================================================================
@@ -51,7 +51,7 @@ export async function createMergeDraft(params: {
   source_hash: string;
   target_hash: string;
   source_branch?: string;
-  target_branch?: string;
+  target_branch: string;
 }): Promise<MergeDraftResponse> {
   const res = await fetchWithTimeout(`${API_V1}/merge/drafts`, {
     method: 'POST',
@@ -99,7 +99,7 @@ export async function deleteMergeDraft(draftId: string): Promise<void> {
  */
 export async function commitMergeDraft(
   draftId: string,
-  params: { message: string; branch: string }
+  params: { message: string; branch: string; decisions?: MergeDecision }
 ): Promise<{ hash: string }> {
   const res = await fetchWithTimeout(
     `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}/commit`,
@@ -130,13 +130,18 @@ export async function getMergeDraftChecks(draftId: string): Promise<ApiMergeChec
  * Prepare a merge between two commits (canvas workflow).
  */
 export async function prepareMergeApi(
+  projectId: string,
   sourceHash: string,
   targetHash: string
 ): Promise<MergeResult> {
   const res = await fetchWithTimeout(`${API_V1}/merge/prepare`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
+    body: JSON.stringify({
+      project_id: projectId,
+      source_hash: sourceHash,
+      target_hash: targetHash,
+    }),
   });
   return handleResponse<MergeResult>(res);
 }
@@ -145,6 +150,7 @@ export async function prepareMergeApi(
  * Execute a prepared merge (canvas workflow).
  */
 export async function executeMergeApi(params: {
+  project_id: string;
   source_hash: string;
   target_hash: string;
   prepared: MergeResult;

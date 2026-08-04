@@ -64,7 +64,7 @@ test.describe('DiffDisplayView Real UI Test', () => {
     await expect(nodes.first()).toBeVisible({ timeout: 15000 });
   });
 
-  test('Can open commit modal and see Compare section', async ({ page }) => {
+  test('Commit selection stays on Canvas without the retired modal', async ({ page }) => {
     // Navigate directly to project canvas view
     await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
@@ -79,34 +79,13 @@ test.describe('DiffDisplayView Real UI Test', () => {
     // Click first node
     await nodes.first().click();
 
-    // Wait for sidebar to appear after clicking
-    const sidebar = page.locator('aside').first();
-    await sidebar.waitFor({ state: 'visible', timeout: 10000 });
+    await expect(page.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+    await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    // Take screenshot of modal
-    await page.screenshot({ path: 'test-results/commit-modal.png' });
-
-    // Scroll sidebar to bottom to reveal Compare section
-    await sidebar.evaluate((el) => (el.scrollTop = el.scrollHeight));
-
-    // Look for Compare section
-    const compareText = page.locator('text=Compare').first();
-    const hasCompare = await compareText.isVisible();
-
-    await page.screenshot({ path: 'test-results/modal-scrolled.png' });
-
-    // If not found, check if this is a V4 commit (no compare) or staging commit
-    if (!hasCompare) {
-      // Try another node
-      await page.keyboard.press('Escape');
-
-      if (nodeCount > 1) {
-        await nodes.nth(1).waitFor({ state: 'visible', timeout: 5000 });
-        await nodes.nth(1).click();
-        await sidebar.waitFor({ state: 'visible', timeout: 10000 });
-        await page.screenshot({ path: 'test-results/second-commit-modal.png' });
-      }
-    }
+    await page.screenshot({ path: 'test-results/canvas-selection.png' });
   });
 
   test('Can run diff comparison', async ({ page }) => {

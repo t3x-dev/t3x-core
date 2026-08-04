@@ -9,14 +9,12 @@
  *   abort          -- cancel the merge draft
  */
 
-import type { SemanticContent } from '@t3x-dev/core';
-import { executeMerge, type MergeDecision, type MergeResult, prepareMerge } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult } from '@t3x-dev/core';
 import {
   cancelMergeDraft,
-  createCommit,
   createMergeDraft,
-  getCommit,
   getMergeDraft,
+  getTransitionRefHead,
   updateMergeDraft,
 } from '@t3x-dev/storage';
 
@@ -35,14 +33,14 @@ export const mergeDef: ToolDef = {
     'Merge two commits via a 5-step workflow.',
     '',
     'Actions:',
-    '  prepare        -- Analyze source + target, create merge draft with conflicts.',
+    '  prepare        -- Analyze source + target CommitV2 graphs for an explicit target ref.',
     '  show_conflict  -- Show a specific conflict by index from the prepared merge.',
     '  resolve        -- Record a resolution for a conflict (reasoning is REQUIRED).',
     '  execute        -- Commit the resolved merge.',
     '  abort          -- Cancel the merge draft.',
     '',
     'Typical flow:',
-    '  1. prepare({ project_id, source_hash, target_hash })',
+    '  1. prepare({ project_id, source_hash, target_hash, source_branch, target_branch })',
     '  2. show_conflict({ draft_id, index: 0 })',
     '  3. resolve({ draft_id, index: 0, resolution: "source", reasoning: "..." })',
     '  4. execute({ draft_id, message: "Merge feature into main" })',
@@ -69,6 +67,14 @@ export const mergeDef: ToolDef = {
       target_hash: {
         type: 'string',
         description: 'Target commit hash (required for prepare).',
+      },
+      source_branch: {
+        type: 'string',
+        description: 'Source ref name (required for prepare).',
+      },
+      target_branch: {
+        type: 'string',
+        description: 'Target ref name (required for prepare and checked with CAS on execute).',
       },
       draft_id: {
         type: 'string',
@@ -135,31 +141,39 @@ async function handlePrepare(args: Record<string, unknown>) {
   const projectId = args.project_id as string | undefined;
   const sourceHash = args.source_hash as string | undefined;
   const targetHash = args.target_hash as string | undefined;
+  const sourceBranch = args.source_branch as string | undefined;
+  const targetBranch = args.target_branch as string | undefined;
 
   if (!projectId) return fail('"project_id" is required for prepare.');
   if (!sourceHash) return fail('"source_hash" is required for prepare.');
   if (!targetHash) return fail('"target_hash" is required for prepare.');
+  if (!sourceBranch) return fail('"source_branch" is required for prepare.');
+  if (!targetBranch) return fail('"target_branch" is required for prepare.');
 
   const db = await getDB();
-
-  const [sourceCommit, targetCommit] = await Promise.all([
-    getCommit(db, sourceHash),
-    getCommit(db, targetHash),
-  ]);
-
-  if (!sourceCommit) return fail(`Source commit not found: ${sourceHash}`);
-  if (!targetCommit) return fail(`Target commit not found: ${targetHash}`);
-
-  const sourceContent = sourceCommit.content as SemanticContent;
-  const targetContent = targetCommit.content as SemanticContent;
-
-  // Use target as base for two-way merge (no common ancestor)
-  const prepared = prepareMerge(targetContent, sourceContent, targetContent);
+  const targetHead = await getTransitionRefHead(db, { projectId, refName: targetBranch });
+  if (targetHead.format !== 'transition_v2' || targetHead.head !== targetHash) {
+    return fail(`Target commit ${targetHash} is not the current head of branch ${targetBranch}.`);
+  }
+  const { prepareRepositoryYOpsMerge } = await import('@t3x-dev/api/repository-state-transition');
+  let prepared: MergeResult;
+  try {
+    prepared = await prepareRepositoryYOpsMerge({
+      db,
+      projectId,
+      sourceDigest: sourceHash,
+      targetDigest: targetHash,
+    });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Failed to prepare CommitV2 merge.');
+  }
 
   const draft = await createMergeDraft(db, {
     projectId,
     sourceHash,
     targetHash,
+    sourceBranch,
+    targetBranch,
     prepared,
   });
 
@@ -315,17 +329,8 @@ async function handleExecute(args: Record<string, unknown>) {
     );
   }
 
-  // Fetch commits to get content for merge execution
-  const [sourceCommit, targetCommit] = await Promise.all([
-    getCommit(db, draft.sourceHash),
-    getCommit(db, draft.targetHash),
-  ]);
-
-  if (!sourceCommit) return fail(`Source commit no longer found: ${draft.sourceHash}`);
-  if (!targetCommit) return fail(`Target commit no longer found: ${draft.targetHash}`);
-
-  const sourceContent = sourceCommit.content as SemanticContent;
-  const targetContent = targetCommit.content as SemanticContent;
+  const targetBranch = draft.targetBranch;
+  if (!targetBranch) return fail('Merge draft has no explicit target ref.');
 
   // Build MergeDecision from stored resolutions
   const conflictResolutions: Record<string, 'source' | 'target' | 'both'> = {};
@@ -341,33 +346,33 @@ async function handleExecute(args: Record<string, unknown>) {
     keepRelationsFromTarget: true,
   };
 
-  const mergedContent = executeMerge(
-    targetContent,
-    sourceContent,
-    targetContent,
-    prepared,
-    decisions
-  );
-
-  const commit = await createCommit(db, {
-    parents: [draft.sourceHash, draft.targetHash],
-    author: { type: 'human' as const, name: 'mcp' },
-    content: mergedContent,
-    project_id: draft.projectId,
-    message,
-    branch: draft.targetBranch ?? 'main',
-    provenance: { method: 'human_curation' },
-    enforceBranchLinearity: true,
-  });
-
-  // Mark draft as committed
-  await updateMergeDraft(db, draftId, { status: 'committed' });
+  const { commitRepositoryYOpsMerge } = await import('@t3x-dev/api/repository-state-transition');
+  let created: Awaited<ReturnType<typeof commitRepositoryYOpsMerge>> | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      created = await commitRepositoryYOpsMerge({
+        db: tx,
+        projectId: draft.projectId,
+        refName: targetBranch,
+        sourceDigest: draft.sourceHash,
+        targetDigest: draft.targetHash,
+        decisions,
+        actor: { kind: 'agent', id: 'agent:mcp-merge' },
+        message,
+      });
+      await updateMergeDraft(tx, draftId, { status: 'committed' });
+    });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Failed to commit CommitV2 merge.');
+  }
+  if (created === undefined) return fail('CommitV2 merge did not return a result.');
 
   return ok({
-    commit_hash: commit.hash,
-    branch: commit.branch ?? 'main',
-    parents: [draft.sourceHash, draft.targetHash],
-    committed_at: commit.committed_at,
+    schema: created.commit.schema,
+    commit_hash: created.commitDigest,
+    branch: targetBranch,
+    parents: created.commit.parents.map((parent) => parent.digest),
+    committed_at: created.recordedAt,
     message,
   });
 }

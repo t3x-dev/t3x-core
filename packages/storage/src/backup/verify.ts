@@ -1,17 +1,12 @@
 /**
- * Hash Chain Verification (Upgrade #6)
+ * CommitV2 Graph Verification
  *
- * Three-layer verification strategy:
- * - L1: Incremental — verify parent hashes during commit creation (in commits.ts)
- * - L2: On-demand — full project verification via API
- * - L3: Chain — BFS DAG traversal from leaf commits to roots
- *
- * This module implements L2/L3 verification.
+ * On-demand verification for all CommitV2 objects in one repository project.
  */
 
-import { type Commit, computeCommitHash } from '@t3x-dev/core';
+import { type CommitV2, describeCommitV2 } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
-import { listCommits } from '../queries';
+import { getVerifiedTransitionCommitGraph, listTransitionCommits } from '../queries';
 
 /**
  * Legacy verify result (kept for backward compatibility)
@@ -52,19 +47,13 @@ export interface VerifyChainResult {
 const VERIFY_LIMIT = 100_000;
 
 /**
- * Verify the hash chain integrity for all commits in a project.
- *
- * Enhanced chain verification (Upgrade #6):
- * 1. Recompute each commit's hash and compare with stored value
- * 2. Verify all parents[] entries exist in the commit set
- * 3. BFS traversal from leaf commits (no children) to roots
- * 4. Report unreachable commits (exist but not traversed from any leaf)
+ * Verify graph integrity for all CommitV2 objects in a project.
  *
  * Fix 17: Detects when the VERIFY_LIMIT is hit and sets truncated=true,
  * also appending a warning to errors.other so callers know results are partial.
  */
 export async function verifyHashChain(db: AnyDB, projectId: string): Promise<VerifyChainResult> {
-  const commits = await listCommits(db, { projectId, limit: VERIFY_LIMIT });
+  const commits = await listTransitionCommits(db, projectId, { limit: VERIFY_LIMIT });
   const hashMismatch: string[] = [];
   const parentNotFound: string[] = [];
   const other: string[] = [];
@@ -73,7 +62,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
   if (truncated) {
     other.push(
       `WARNING: Verification limit of ${VERIFY_LIMIT.toLocaleString()} commits reached. ` +
-        `Only the first ${VERIFY_LIMIT.toLocaleString()} commits (ordered by committed_at) ` +
+        `Only the first ${VERIFY_LIMIT.toLocaleString()} CommitV2 objects ` +
         `were checked. Results may be incomplete.`
     );
   }
@@ -92,56 +81,49 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     };
   }
 
-  // Index all commits by hash for O(1) lookup
-  const commitMap = new Map<string, Commit>();
-  for (const commit of commits) {
-    commitMap.set(commit.hash, commit);
+  // Index all commits by digest for O(1) lookup.
+  const commitMap = new Map<string, CommitV2>();
+  for (const stored of commits) {
+    commitMap.set(describeCommitV2(stored.commit).digest, stored.commit);
   }
 
-  // Step 1: Verify each commit's hash integrity
-  for (const commit of commits) {
+  // Step 1: Verify each committed graph and canonical digest.
+  for (const stored of commits) {
+    const digest = describeCommitV2(stored.commit).digest;
     try {
-      const recomputed = computeCommitHash({
-        schema: commit.schema,
-        parents: commit.parents,
-        author: commit.author,
-        committed_at: commit.committed_at,
-        content: commit.content,
-      });
-
-      if (recomputed !== commit.hash) {
-        hashMismatch.push(
-          `Commit ${commit.hash.slice(0, 16)}: hash mismatch (expected ${recomputed.slice(0, 16)})`
-        );
-      }
+      await getVerifiedTransitionCommitGraph(db, projectId, digest);
     } catch (err) {
       other.push(
-        `Commit ${commit.hash.slice(0, 16)}: hash recomputation failed: ${err instanceof Error ? err.message : String(err)}`
+        `CommitV2 ${digest.slice(0, 16)}: graph verification failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
 
   // Step 2: Verify parent references exist
-  for (const commit of commits) {
-    for (const parentHash of commit.parents) {
-      if (!commitMap.has(parentHash)) {
+  for (const stored of commits) {
+    const digest = describeCommitV2(stored.commit).digest;
+    for (const parent of stored.commit.parents) {
+      if (!commitMap.has(parent.digest)) {
         parentNotFound.push(
-          `Commit ${commit.hash.slice(0, 16)}: parent ${parentHash.slice(0, 16)} not found`
+          `CommitV2 ${digest.slice(0, 16)}: parent ${parent.digest.slice(0, 16)} not found`
         );
       }
     }
   }
 
-  // Step 3: BFS from leaf commits to find reachable depth + unreachable commits
+  // Step 3: BFS from leaf commits to find reachable depth + unreachable commits.
   const childrenOf = new Set<string>();
-  for (const commit of commits) {
-    for (const parentHash of commit.parents) {
-      childrenOf.add(parentHash);
+  for (const stored of commits) {
+    for (const parent of stored.commit.parents) {
+      childrenOf.add(parent.digest);
     }
   }
 
   // Leaf commits = commits that are not a parent of any other commit
-  const leafCommits = commits.filter((c) => !childrenOf.has(c.hash));
+  const leafCommits = commits.filter((stored) => {
+    const digest = describeCommitV2(stored.commit).digest;
+    return !childrenOf.has(digest);
+  });
   const entryPoints = leafCommits.length;
 
   // BFS traversal
@@ -150,7 +132,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
   let maxDepth = 0;
 
   for (const leaf of leafCommits) {
-    queue.push({ hash: leaf.hash, depth: 0 });
+    queue.push({ hash: describeCommitV2(leaf.commit).digest, depth: 0 });
   }
 
   while (queue.length > 0) {
@@ -163,18 +145,22 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     const commit = commitMap.get(hash);
     if (!commit) continue;
 
-    for (const parentHash of commit.parents) {
-      if (!visited.has(parentHash) && commitMap.has(parentHash)) {
-        queue.push({ hash: parentHash, depth: depth + 1 });
+    for (const parent of commit.parents) {
+      if (!visited.has(parent.digest) && commitMap.has(parent.digest)) {
+        queue.push({ hash: parent.digest, depth: depth + 1 });
       }
     }
   }
 
   // Check for unreachable commits (exist in DB but not reachable from any leaf)
-  const unreachable = commits.filter((c) => !visited.has(c.hash));
+  const unreachable = commits.filter(
+    (stored) => !visited.has(describeCommitV2(stored.commit).digest)
+  );
   if (unreachable.length > 0) {
     other.push(
-      `${unreachable.length} commit(s) unreachable from any leaf: ${unreachable.map((c) => c.hash.slice(0, 16)).join(', ')}`
+      `${unreachable.length} CommitV2 object(s) unreachable from any leaf: ${unreachable
+        .map((stored) => describeCommitV2(stored.commit).digest.slice(0, 16))
+        .join(', ')}`
     );
   }
 
@@ -201,27 +187,11 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
 }
 
 /**
- * Verify a single commit's hash integrity.
- *
- * Used by L1 incremental verification during commit creation
- * to validate parent commits are untampered.
+ * Verify a single CommitV2 descriptor against its canonical digest.
  */
-export function verifyCommitHash(commit: Commit): { valid: boolean; error?: string } {
+export function verifyCommitHash(commit: CommitV2): { valid: boolean; error?: string } {
   try {
-    const recomputed = computeCommitHash({
-      schema: commit.schema,
-      parents: commit.parents,
-      author: commit.author,
-      committed_at: commit.committed_at,
-      content: commit.content,
-    });
-
-    if (recomputed !== commit.hash) {
-      return {
-        valid: false,
-        error: `Hash mismatch for commit ${commit.hash.slice(0, 16)}: expected ${recomputed.slice(0, 16)}`,
-      };
-    }
+    describeCommitV2(commit);
 
     return { valid: true };
   } catch (err) {

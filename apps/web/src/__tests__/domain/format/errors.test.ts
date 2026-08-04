@@ -32,6 +32,17 @@ describe('formatUserFacingError', () => {
     );
   });
 
+  it('explains how to recover from an unverifiable local CommitV2 ref', () => {
+    expect(
+      formatUserFacingError({
+        code: 'REF_HEAD_INTEGRITY_INVALID',
+        message: 'Ref main points to an unverifiable commit',
+      })
+    ).toBe(
+      "This repository's branch head cannot be verified as CommitV2. For a pre-cut local database, use a fresh database or reset local development data."
+    );
+  });
+
   it('maps provider key setup errors to actionable copy', () => {
     expect(
       formatUserFacingError({
@@ -45,6 +56,18 @@ describe('formatUserFacingError', () => {
 
   it('maps provider auth errors to key replacement guidance', () => {
     expect(formatUserFacingError({ code: 'AUTH_ERROR', message: 'Unauthorized' })).toBe(
+      'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.'
+    );
+  });
+
+  it('maps raw provider invalid x-api-key errors to key replacement guidance', () => {
+    expect(
+      formatUserFacingError(
+        new Error(
+          'Provider generation failed: [claude] API request failed: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'
+        )
+      )
+    ).toBe(
       'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.'
     );
   });

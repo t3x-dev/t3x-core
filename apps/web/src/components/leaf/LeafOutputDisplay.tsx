@@ -1,8 +1,7 @@
 'use client';
 
-import { CheckCircle2, Loader2, Play } from 'lucide-react';
+import { CheckCircle2, FileOutput } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
 import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import type { NodeWithSource } from '@/types/sourceContext';
@@ -13,10 +12,6 @@ interface LeafOutputDisplayProps {
   generatedAt: string | null;
   assertions: Assertion[] | null;
   constraints: Constraint[];
-  onGenerate: () => void;
-  isGenerating: boolean;
-  generatePhase: number;
-  generateProgressMessages: string[];
   generateSuccessBanner: string | null;
   // Display Mode props
   mode?: WorkspaceMode;
@@ -271,10 +266,6 @@ export function LeafOutputDisplay({
   generatedAt,
   assertions,
   constraints,
-  onGenerate,
-  isGenerating,
-  generatePhase,
-  generateProgressMessages,
   generateSuccessBanner,
   mode = 'generate',
   nodeCoverage,
@@ -366,8 +357,8 @@ export function LeafOutputDisplay({
             <span
               key={segmentKey}
               className={cn(
-                'cursor-pointer rounded-sm underline decoration-[var(--source)] decoration-2 underline-offset-[3px] transition-colors',
-                hoveredNodeId === seg.nodeId && 'bg-[var(--source-dim)]'
+                'cursor-pointer rounded-sm underline decoration-[var(--accent-commit)] decoration-2 underline-offset-[3px] transition-colors',
+                hoveredNodeId === seg.nodeId && 'bg-[var(--accent-commit-soft)]'
               )}
               onMouseEnter={() => handleSegmentHover(seg.nodeId!)}
               onMouseLeave={() => handleSegmentHover(null)}
@@ -385,27 +376,14 @@ export function LeafOutputDisplay({
   if (!output) {
     return (
       <div className="flex min-h-full flex-1 flex-col items-center justify-center text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--hover-bg)]">
-          <Play className="h-6 w-6 text-[var(--text-tertiary)]" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-md border border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)]">
+          <FileOutput className="size-5 text-[var(--accent-commit)]" />
         </div>
-        <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">No output yet</p>
-        <p className="text-xs text-[var(--text-tertiary)] mb-5 max-w-[280px] leading-relaxed">
-          Configure your constraints on the left, write instructions below, then generate AI output
-          from your committed state.
+        <p className="mb-1 text-sm font-semibold text-[var(--text-primary)]">No output yet</p>
+        <p className="max-w-[340px] text-xs leading-5 text-[var(--text-tertiary)]">
+          Review source nodes on the left, add constraints on the right, then describe the output
+          below.
         </p>
-        <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              {generateProgressMessages[generatePhase]}
-            </>
-          ) : (
-            <>
-              <Play className="mr-1.5 h-3.5 w-3.5" />
-              Generate & Verify
-            </>
-          )}
-        </Button>
       </div>
     );
   }
@@ -434,7 +412,7 @@ export function LeafOutputDisplay({
       {/* Output text card */}
       <div
         className={cn(
-          'relative min-h-[200px] rounded-2xl border border-[var(--stroke-strong)] bg-[var(--surface-card)] px-6 py-7 text-[15px] leading-8 text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] md:px-8',
+          'relative min-h-[200px] rounded-md border border-[var(--stroke-strong)] bg-[var(--surface-card)] px-6 py-7 text-[15px] leading-8 text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] md:px-8',
           'transition-all duration-300',
           allPassed && 'ring-1 ring-[var(--status-success)]/20'
         )}
@@ -444,7 +422,7 @@ export function LeafOutputDisplay({
           {outputBlocks.map((block, blockIndex) => (
             <section key={`${block.kind}-${blockIndex}`} className="relative pl-9">
               {block.markerNumber !== null && (
-                <span className="absolute left-[-4px] top-[0.35rem] flex h-4 w-4 items-center justify-center rounded-full bg-[var(--source)] text-[9px] font-bold leading-none text-[var(--on-accent)]">
+                <span className="absolute left-[-4px] top-[0.35rem] flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-commit)] text-[9px] font-bold leading-none text-[var(--on-accent)]">
                   {block.markerNumber}
                 </span>
               )}

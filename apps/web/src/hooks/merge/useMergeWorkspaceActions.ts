@@ -19,6 +19,7 @@
  * setServerChecks*).
  */
 
+import type { MergeDecision } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import {
   commitMergeDraft,
@@ -27,6 +28,7 @@ import {
   saveMergeDraft,
 } from '@/commands/merge';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -50,8 +52,8 @@ export function useMergeWorkspaceActions() {
       projectId: string,
       sourceHash: string,
       targetHash: string,
-      sourceBranch?: string,
-      targetBranch?: string
+      sourceBranch: string | undefined,
+      targetBranch: string
     ): Promise<string> => {
       useMergeWorkspaceStore.getState().setLoading();
       try {
@@ -90,25 +92,37 @@ export function useMergeWorkspaceActions() {
     }
   }, []);
 
-  const commit = useCallback(async (branch?: string): Promise<{ hash: string }> => {
-    const { draftId, message, targetBranch } = useMergeWorkspaceStore.getState();
-    if (!draftId) throw new Error('No draft to commit');
+  const commit = useCallback(
+    async (branch?: string, decisions?: MergeDecision): Promise<{ hash: string }> => {
+      const { draftId, message, projectId, targetBranch } = useMergeWorkspaceStore.getState();
+      if (!draftId) throw new Error('No draft to commit');
 
-    useMergeWorkspaceStore.getState().clearError();
+      useMergeWorkspaceStore.getState().clearError();
 
-    try {
-      const commitResult = await commitMergeDraft(draftId, {
-        message,
-        branch: branch || targetBranch || 'main',
-      });
-      useMergeWorkspaceStore.getState().setCommitted();
-      return commitResult;
-    } catch (err) {
-      const errorMsg = formatUserFacingError(err, 'Failed to commit.');
-      useMergeWorkspaceStore.getState().setCommitFailed(errorMsg);
-      throw err;
-    }
-  }, []);
+      try {
+        const commitBranch = branch || targetBranch || 'main';
+        const commitResult = await commitMergeDraft(draftId, {
+          message,
+          branch: commitBranch,
+          decisions,
+        });
+        useMergeWorkspaceStore.getState().setCommitted();
+        if (projectId) {
+          dispatchCommitCreated({
+            projectId,
+            hash: commitResult.hash,
+            branch: commitBranch,
+          });
+        }
+        return commitResult;
+      } catch (err) {
+        const errorMsg = formatUserFacingError(err, 'Failed to commit.');
+        useMergeWorkspaceStore.getState().setCommitFailed(errorMsg);
+        throw err;
+      }
+    },
+    []
+  );
 
   const cancel = useCallback(async (): Promise<void> => {
     const { draftId } = useMergeWorkspaceStore.getState();

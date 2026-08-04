@@ -50,7 +50,6 @@ export {
   insertBranch,
   type ListBranchesOptions,
   switchBranch,
-  updateBranchHead,
 } from './branches';
 // Business Rules
 export {
@@ -58,33 +57,6 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commit Rewrites (append-only rewrite log)
-export {
-  getSupersededHashes,
-  type InsertRewriteInput,
-  insertRewrite,
-  isCommitSuperseded,
-  listRewrites,
-} from './commit-rewrites';
-// Commits (tree-based)
-export {
-  BranchLinearityError,
-  type CreateCommitInput,
-  collectYOpsForCommitRange,
-  createCommit,
-  deleteCommit,
-  getCommit,
-  getCommitsByHashes,
-  getLatestCommit,
-  hasConversationCommitReferences,
-  type ListCommitsOptions,
-  listCommits,
-  SupersededYOpsLogIdsError,
-  updateCommitMessage,
-  updateCommitPosition,
-} from './commits';
-// Commits Unified (transition adapter)
-export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
@@ -102,6 +74,7 @@ export {
 } from './conversation-contexts';
 // Conversations
 export {
+  ConversationHistoryReferencedError,
   type CreateConversationInput,
   deleteConversation,
   findConversationByAliasOrId,
@@ -136,16 +109,20 @@ export {
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
+  findWorkspaceDraft,
   forkDraft,
   insertAutoDraft,
   insertDraft,
   type ListDraftOptions,
   listDraftsByProject,
+  listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,
+  upsertWorkspaceDraft,
+  type WorkspaceDraftInput,
 } from './drafts';
 // Extraction Feedback (Anchoring L4)
 export {
@@ -318,6 +295,28 @@ export {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from './provider-credentials';
+// Pull Requests
+export {
+  type AddPullRequestActivityInput,
+  acquirePullRequestLock,
+  addPullRequestActivity,
+  type CreatePullRequestInput,
+  createPullRequest,
+  findActivePullRequestByBranches,
+  findPullRequestByNumber,
+  listPullRequestActivity,
+  listPullRequestChecks,
+  listPullRequestsByProject,
+  type PullRequestActivityType,
+  type PullRequestCheckKind,
+  type PullRequestCheckStatus,
+  type PullRequestDiffSummary,
+  type PullRequestStatus,
+  type ReplacePullRequestCheckInput,
+  replacePullRequestChecks,
+  type UpdatePullRequestInput,
+  updatePullRequest,
+} from './pull-requests';
 // Recipes (workflow automation)
 export {
   type CreateRecipeInput,
@@ -382,6 +381,17 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
+// Repository-owned source/evidence read projection
+export {
+  type ConversationSourceEvidenceRecord,
+  type GetConversationSourceEvidenceInput,
+  getConversationSourceEvidence,
+} from './source-evidence';
+export {
+  type ConversationSourceCommitReference,
+  hasConversationSourceCommitReferences,
+  listConversationCommitReferences,
+} from './source-evidence-references';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,
@@ -429,6 +439,56 @@ export {
   listTopicsByConversation,
   updateTopic,
 } from './topics';
+// Transition Decision/Commit command idempotency receipts
+export * from './transition-command-receipts';
+// CommitV2 repository path
+export {
+  type CreatedTransitionCommit,
+  type CreateTransitionCommitInput,
+  createTransitionCommit,
+  DecisionAuthorizationConflictError,
+  DecisionNotAuthorizedError,
+  DecisionRecordConflictError,
+  DecisionRecordIntegrityError,
+  getCommitHistoryEntry,
+  getRepositoryDecisionAudit,
+  getRepositoryDecisionAuditByDigest,
+  getTransitionCommit,
+  getTransitionRefHead,
+  getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
+  listCommitHistory,
+  listRepositoryDecisionAudit,
+  listTransitionCommitProjectIds,
+  listTransitionCommits,
+  type RepositoryDecisionAuditEntry,
+  recordRepositoryDecision,
+  recordRepositoryDecisionAuthorization,
+  SupersededYOpsLogIdsError,
+  TransitionCommitGraphIntegrityError,
+  TransitionHeadConflictError,
+  TransitionParentHeadMismatchError,
+  TransitionParentProjectMembershipError,
+  TransitionProjectionAuthorizationInvalidError,
+  type TransitionRefHead,
+  TransitionRefHeadIntegrityError,
+  TransitionRefNotFoundError,
+  TransitionYOpsLogAlreadyConsumedError,
+  TransitionYOpsLogMembershipError,
+  type VerifiedTransitionCommitGraph,
+} from './transition-commits';
+// Transition Proposal and Statement project memberships
+export * from './transition-memberships';
+// Transition AcceptancePolicy bindings
+export {
+  type BindTransitionPolicyInput,
+  bindTransitionPolicy,
+  getTransitionPolicyBinding,
+  type TransitionPolicyBinding,
+  TransitionPolicyBindingIntegrityError,
+  TransitionPolicyResourceConflictError,
+  unbindTransitionPolicy,
+} from './transition-policy-bindings';
 // Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,
@@ -474,6 +534,25 @@ export {
   findUserByUsername,
   updateUser,
 } from './users';
+// Workspace Validation Runs
+export {
+  type CreateValidationFindingInput,
+  type CreateValidationRunInput,
+  type CreateValidationStepRunInput,
+  createValidationFinding,
+  createValidationRun,
+  createValidationStepRun,
+  findLatestValidationRunByWorkspace,
+  findValidationRunDetailsById,
+  type ValidationFindingOutput,
+  type ValidationFindingSeverity,
+  type ValidationGateStatus,
+  type ValidationRunDetailsOutput,
+  type ValidationRunOutput,
+  type ValidationRunStatus,
+  type ValidationStepRunOutput,
+  type ValidationStepRunStatus,
+} from './validation-runs';
 // Webhooks (event subscriptions)
 export {
   type CreateWebhookInput as CreateWebhookStorageInput,
@@ -492,6 +571,7 @@ export {
   deleteYOpsLogEntry,
   findCommitHashesByYOpsLogIds,
   getYOpsForCommit,
+  getYOpsForTransitionCommit,
   getYOpsLogEntry,
   type InsertYOpsLogInput,
   insertYOpsLogEntry,
@@ -502,3 +582,12 @@ export {
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+// YSchema Validation Runs
+export {
+  type CreateYSchemaValidationRunInput,
+  createYSchemaValidationRun,
+  findLatestYSchemaValidationRun,
+  findYSchemaValidationRunById,
+  type YSchemaValidationRunOutput,
+  type YSchemaValidationRunStatus,
+} from './yschema-validation-runs';

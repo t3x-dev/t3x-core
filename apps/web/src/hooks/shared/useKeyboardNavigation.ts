@@ -12,7 +12,7 @@ interface UseKeyboardNavigationOptions {
   /**
    * Controlled active ID. When provided the hook reads this value instead of
    * managing its own internal state. Useful when the parent already owns the
-   * active-item state (e.g. CommitDetailPage where clicks also set it).
+   * active-item state (for example, when clicks also update the selection).
    */
   activeId?: string | null;
 }

@@ -1,4 +1,5 @@
 import {
+  API_BASE,
   cleanupProject,
   createTestBranch,
   createTestCommit,
@@ -9,6 +10,10 @@ import {
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 import { generateNodes } from '../fixtures/test-data-factory';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Branch Workflow E2E Tests
@@ -115,9 +120,10 @@ test.describe('Branch Workflow', () => {
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });
 
-    // Try to find branch name text on the canvas (badge or node card)
-    const branchBadge = page.getByText(featureBranchName);
-    await expect(branchBadge.first()).toBeVisible({ timeout: 15000 });
+    const branchCommit = canvas.getByRole('treeitem', {
+      name: new RegExp(`Committed on branch ${escapeRegExp(featureBranchName)}`),
+    });
+    await expect(branchCommit.first()).toBeVisible({ timeout: 15000 });
   });
 
   // BR-08: Switch back to main
@@ -135,7 +141,7 @@ test.describe('Branch Workflow', () => {
   test.fixme('BR-09: Delete feature branch', async ({ request }) => {
     // The branch API may not have a DELETE endpoint — check the response
     const response = await request.delete(
-      `http://localhost:8000/api/v1/branches/${featureBranchId}`,
+      `${API_BASE}/branches/${featureBranchId}`,
       {
         data: { project_id: projectId },
       }
@@ -155,7 +161,7 @@ test.describe('Branch Workflow', () => {
     const current = await getCurrentBranch(request, projectId);
 
     const response = await request.delete(
-      `http://localhost:8000/api/v1/branches/${current.branch_id}`,
+      `${API_BASE}/branches/${current.branch_id}`,
       {
         data: { project_id: projectId },
       }

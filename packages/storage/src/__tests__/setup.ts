@@ -95,6 +95,159 @@ CREATE TABLE IF NOT EXISTS branches (
   UNIQUE(project_id, name)
 );
 
+-- Transition protocol objects and CommitV2 repository records
+CREATE TABLE IF NOT EXISTS transition_objects (
+  digest TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  schema TEXT NOT NULL,
+  canonical_json TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS transition_commits (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  media_type TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, digest)
+);
+CREATE INDEX IF NOT EXISTS idx_transition_commits_project_created
+  ON transition_commits(project_id, created_at);
+
+CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  yops_log_id TEXT NOT NULL,
+  commit_digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, yops_log_id),
+  CONSTRAINT transition_yops_log_consumptions_commit_fk
+    FOREIGN KEY (project_id, commit_digest)
+    REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_commit
+  ON transition_yops_log_consumptions(project_id, commit_digest);
+CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
+  ON transition_yops_log_consumptions(project_id, yops_log_id);
+
+CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  ref_name TEXT NOT NULL,
+  decision_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  policy_uri TEXT NOT NULL,
+  policy_digest TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  observation_scope JSONB NOT NULL,
+  statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb,
+  authorized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, ref_name, decision_digest)
+);
+CREATE INDEX IF NOT EXISTS idx_transition_decision_authorizations_decision
+  ON transition_decision_authorizations(decision_digest);
+
+CREATE TABLE IF NOT EXISTS transition_decision_ledger (
+  decision_digest TEXT PRIMARY KEY REFERENCES transition_objects(digest),
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  ref_name TEXT NOT NULL,
+  policy_uri TEXT NOT NULL,
+  policy_digest TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  observation_scope JSONB NOT NULL,
+  statement_issuers JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_transition_decision_ledger_project_ref_recorded
+  ON transition_decision_ledger(project_id, ref_name, recorded_at, decision_digest);
+
+CREATE TABLE IF NOT EXISTS transition_policy_resources (
+  digest TEXT PRIMARY KEY,
+  canonical_json TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS transition_policy_bindings (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  ref_name TEXT NOT NULL,
+  policy_digest TEXT NOT NULL REFERENCES transition_policy_resources(digest),
+  policy_uri TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, ref_name)
+);
+CREATE INDEX IF NOT EXISTS idx_transition_policy_bindings_digest
+  ON transition_policy_bindings(policy_digest);
+
+CREATE TABLE IF NOT EXISTS transition_proposal_memberships (
+  transition_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  workspace_revision INTEGER NOT NULL,
+  ref_name TEXT NOT NULL,
+  ref_head TEXT,
+  proposal_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  effect_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  request_kind TEXT NOT NULL
+    CHECK (request_kind IN ('structured_yops', 'exact_source_import', 'exact_source_edit', 'exact_source_revert')),
+  request_canonical_json TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_proposal_memberships_idempotency
+  ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
+CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
+  ON transition_proposal_memberships(project_id, created_at, transition_id);
+
+CREATE TABLE IF NOT EXISTS transition_statement_memberships (
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  statement_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  source TEXT NOT NULL,
+  issuer_kind TEXT NOT NULL CHECK (issuer_kind IN ('human', 'agent', 'service')),
+  issuer_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (transition_id, statement_digest)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_statement_memberships_idempotency
+  ON transition_statement_memberships(
+    transition_id,
+    source,
+    issuer_kind,
+    issuer_id,
+    request_id
+  );
+CREATE INDEX IF NOT EXISTS idx_transition_statement_memberships_transition_created
+  ON transition_statement_memberships(transition_id, created_at, statement_digest);
+
+CREATE TABLE IF NOT EXISTS transition_command_receipts (
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (action IN ('decide', 'commit')),
+  actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  result_kind TEXT NOT NULL CHECK (result_kind IN ('decision', 'commit')),
+  result_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, transition_id, actor_kind, actor_id, request_id),
+  CONSTRAINT transition_command_receipts_action_result_check CHECK (
+    (action = 'decide' AND result_kind = 'decision') OR
+    (action = 'commit' AND result_kind = 'commit')
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_transition_command_receipts_result
+  ON transition_command_receipts(project_id, transition_id, result_digest);
+
 -- Agent Drafts (formerly drafts_v2)
 CREATE TABLE IF NOT EXISTS agent_drafts (
   draft_id TEXT PRIMARY KEY,
@@ -259,6 +412,64 @@ CREATE TABLE IF NOT EXISTS merge_drafts (
 CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
+-- Pull Requests
+CREATE TABLE IF NOT EXISTS pull_requests (
+  pull_request_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  source_branch TEXT NOT NULL,
+  target_branch TEXT NOT NULL,
+  source_commit_hash TEXT NOT NULL,
+  target_base_commit_hash TEXT NOT NULL,
+  merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+  merge_commit_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+  author_id TEXT NOT NULL,
+  review_owner_id TEXT,
+  linked_work TEXT,
+  diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  merged_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ,
+  UNIQUE(project_id, number),
+  CONSTRAINT pull_requests_merged_commit_required
+    CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+  ON pull_requests(project_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+  ON pull_requests(project_id, source_branch, target_branch)
+  WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+CREATE TABLE IF NOT EXISTS pull_request_checks (
+  check_id TEXT PRIMARY KEY,
+  pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL
+    CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+  title TEXT NOT NULL,
+  message TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+  ON pull_request_checks(pull_request_id);
+
+CREATE TABLE IF NOT EXISTS pull_request_activity (
+  activity_id TEXT PRIMARY KEY,
+  pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+  ON pull_request_activity(pull_request_id, created_at);
+
 -- Deploy Agents
 CREATE TABLE IF NOT EXISTS deploy_agents (
   deploy_agent_id TEXT PRIMARY KEY,
@@ -330,6 +541,104 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
 
+-- YSchema validation runs
+CREATE TABLE IF NOT EXISTS yschema_validation_runs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  commit_hash TEXT NOT NULL,
+  schema_name TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  schema_hash TEXT NOT NULL,
+  validator_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  valid BOOLEAN NOT NULL,
+  ready BOOLEAN NOT NULL,
+  error_count INTEGER NOT NULL,
+  gap_count INTEGER NOT NULL,
+  fix_count INTEGER NOT NULL,
+  result_json JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_project
+  ON yschema_validation_runs(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_commit
+  ON yschema_validation_runs(project_id, commit_hash);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
+  ON yschema_validation_runs(schema_name, schema_hash);
+
+-- Workspace validation runs
+CREATE TABLE IF NOT EXISTS validation_runs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_hash TEXT NOT NULL,
+  workflow_name TEXT NOT NULL,
+  workflow_hash TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  validator_hash TEXT NOT NULL,
+  environment_hash TEXT,
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL,
+  gate_status TEXT NOT NULL,
+  summary TEXT,
+  result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_workspace_created
+  ON validation_runs(project_id, workspace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_subject
+  ON validation_runs(project_id, workspace_id, subject_type, subject_hash);
+CREATE INDEX IF NOT EXISTS idx_validation_runs_workflow
+  ON validation_runs(workflow_name, workflow_hash);
+
+CREATE TABLE IF NOT EXISTS validation_step_runs (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+  step_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  summary TEXT,
+  error_code TEXT,
+  exit_code INTEGER,
+  duration_ms INTEGER,
+  command_json JSONB,
+  log_excerpt TEXT,
+  log_truncated BOOLEAN NOT NULL DEFAULT FALSE,
+  log_artifact_id TEXT,
+  result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run
+  ON validation_step_runs(run_id);
+CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run_step
+  ON validation_step_runs(run_id, step_id);
+
+CREATE TABLE IF NOT EXISTS validation_findings (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+  step_run_id TEXT REFERENCES validation_step_runs(id) ON DELETE CASCADE,
+  severity TEXT NOT NULL,
+  file TEXT,
+  line INTEGER,
+  state_path TEXT,
+  code TEXT NOT NULL,
+  message TEXT NOT NULL,
+  log_excerpt TEXT,
+  evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_validation_findings_run
+  ON validation_findings(run_id);
+CREATE INDEX IF NOT EXISTS idx_validation_findings_step
+  ON validation_findings(step_run_id);
+
 -- Templates
 CREATE TABLE IF NOT EXISTS templates (
   template_id TEXT PRIMARY KEY,
@@ -367,7 +676,9 @@ CREATE TABLE IF NOT EXISTS drafts (
   status TEXT NOT NULL DEFAULT 'editing',
   committed_as TEXT,
   committed_leaf_id TEXT,
-  target_branch TEXT DEFAULT 'main',
+  target_branch TEXT NOT NULL DEFAULT 'main',
+  workspace_id TEXT,
+  workspace_state_json JSONB,
   revision INTEGER NOT NULL DEFAULT 1,
   extraction_mode TEXT,
   semantic_points_json JSONB,
@@ -377,6 +688,14 @@ CREATE TABLE IF NOT EXISTS drafts (
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+  ON drafts(project_id, workspace_id)
+  WHERE workspace_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
+  ON drafts(project_id, target_branch)
+  WHERE workspace_id IS NOT NULL
+    AND status <> 'abandoned'
+    AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (
@@ -573,6 +892,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
   name TEXT NOT NULL,
   project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
   user_id TEXT,
+  principal_kind TEXT NOT NULL DEFAULT 'human',
+  transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  CHECK (principal_kind IN ('human', 'agent', 'service')),
+  CHECK (jsonb_typeof(transition_scopes) = 'array'),
+  CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ
@@ -687,6 +1011,7 @@ function ignoreNotice(_notice: postgres.Notice): void {}
  */
 export async function createTestDB(): Promise<{
   db: AnyDB;
+  connectionString: string;
   /** Raw postgres.js Sql for direct SQL execution in tests */
   sql: postgres.Sql;
   cleanup: () => Promise<void>;
@@ -737,7 +1062,7 @@ export async function createTestDB(): Promise<{
     }
   };
 
-  return { db, sql: rawSql, cleanup };
+  return { db, connectionString, sql: rawSql, cleanup };
 }
 
 /**

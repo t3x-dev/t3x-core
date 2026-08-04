@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Eye,
   Map as MapIcon,
   Play,
   Plus,
@@ -15,7 +14,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'openDetails' | 'createLeaf' | 'chooseLeafType';
+type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
 type ProjectTourStage = 'details' | 'leaf';
 type ProjectTourTarget = string | string[] | null;
 
@@ -47,16 +46,6 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       description: 'Select this version.',
       target: ['canvas-commit-node', 'canvas-commit-node-with-leaf'],
       icon: MapIcon,
-      tone: 'commit',
-      advanceOnTargetClick: true,
-    },
-    {
-      id: 'openDetails',
-      label: 'Details',
-      title: 'Open commit details',
-      description: 'Open commit details.',
-      target: ['canvas-action-details', 'canvas-floating-action-details'],
-      icon: Eye,
       tone: 'commit',
       advanceOnTargetClick: true,
     },

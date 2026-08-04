@@ -3,12 +3,12 @@ import {
   findDraftById,
   findLeafById,
   findProjectById,
-  getCommit,
   getMergeDraft,
+  getVerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
+import { getApiClient, isApiBackend } from '../backend.js';
 import { getDB } from '../db.js';
 import {
-  toCommitReadModel,
   toConversationReadModel,
   toLeafReadModel,
   toMergeDraftReadModel,
@@ -20,13 +20,14 @@ type ResourceKind =
   | 'project'
   | 'commit'
   | 'workbench_draft'
-  | 'conversation'
+  | 'source_thread'
   | 'leaf'
   | 'merge_draft';
 
 interface ParsedResourceUri {
   kind: ResourceKind;
   id: string;
+  projectId?: string;
 }
 
 export const RESOURCE_TEMPLATES = [
@@ -38,8 +39,8 @@ export const RESOURCE_TEMPLATES = [
   },
   {
     name: 'commit',
-    uriTemplate: 't3x://commits/{commit_hash}',
-    description: 'Read a structured-state commit by hash.',
+    uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
+    description: 'Read a verified CommitV2 by project membership and digest.',
     mimeType: 'application/json',
   },
   {
@@ -49,9 +50,15 @@ export const RESOURCE_TEMPLATES = [
     mimeType: 'application/json',
   },
   {
-    name: 'conversation',
+    name: 'source_thread',
+    uriTemplate: 't3x://source-threads/{source_thread_id}',
+    description: 'Read durable source-thread metadata by source_thread_id.',
+    mimeType: 'application/json',
+  },
+  {
+    name: 'conversation_compatibility',
     uriTemplate: 't3x://conversations/{conversation_id}',
-    description: 'Read a conversation by conversation_id.',
+    description: 'Compatibility alias for a source-thread resource.',
     mimeType: 'application/json',
   },
   {
@@ -81,20 +88,25 @@ function parseResourceUri(uri: string): ParsedResourceUri {
   }
 
   const resourceType = parsed.hostname;
-  const id = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  const path = parsed.pathname.replace(/^\/+/, '');
+  const id = decodeURIComponent(path);
   if (!id) {
     throw new Error(`Resource URI is missing an identifier: ${uri}`);
   }
 
   switch (resourceType) {
-    case 'projects':
+    case 'projects': {
+      const segments = path.split('/').map(decodeURIComponent);
+      if (segments.length === 3 && segments[1] === 'commits') {
+        return { kind: 'commit', projectId: segments[0], id: segments[2] };
+      }
       return { kind: 'project', id };
-    case 'commits':
-      return { kind: 'commit', id };
+    }
     case 'workbench-drafts':
       return { kind: 'workbench_draft', id };
+    case 'source-threads':
     case 'conversations':
-      return { kind: 'conversation', id };
+      return { kind: 'source_thread', id };
     case 'leaves':
       return { kind: 'leaf', id };
     case 'merge-drafts':
@@ -118,6 +130,48 @@ function jsonTextContent(uri: string, data: unknown) {
 
 export async function readResource(uri: string) {
   const parsed = parseResourceUri(uri);
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    switch (parsed.kind) {
+      case 'project':
+        return jsonTextContent(uri, {
+          kind: 'project',
+          ...(await client.getProject(parsed.id)),
+        });
+      case 'commit':
+        if (!parsed.projectId) throw new Error(`Commit resource is missing project scope: ${uri}`);
+        return jsonTextContent(uri, {
+          kind: 'commit',
+          ...(await client.getCommit(parsed.projectId, parsed.id)),
+        });
+      case 'workbench_draft':
+        return jsonTextContent(uri, {
+          kind: 'workbench_draft',
+          ...(await client.getDraft(parsed.id)),
+        });
+      case 'source_thread':
+        return jsonTextContent(uri, {
+          kind: 'source_thread',
+          ...(await client.sourceThreads.get(parsed.id)),
+        });
+      case 'leaf':
+        return jsonTextContent(uri, {
+          kind: 'leaf',
+          ...(await client.getLeaf(parsed.id)),
+        });
+      case 'merge_draft':
+        return jsonTextContent(uri, {
+          kind: 'merge_draft',
+          ...(await client.getMergeDraft(parsed.id)),
+        });
+      default: {
+        const exhaustiveCheck: never = parsed.kind;
+        throw new Error(`Unhandled resource kind: ${String(exhaustiveCheck)}`);
+      }
+    }
+  }
+
   const db = await getDB();
 
   switch (parsed.kind) {
@@ -129,11 +183,16 @@ export async function readResource(uri: string) {
       return jsonTextContent(uri, toProjectReadModel(project));
     }
     case 'commit': {
-      const commit = await getCommit(db, parsed.id);
+      if (!parsed.projectId) throw new Error(`Commit resource is missing project scope: ${uri}`);
+      const commit = await getVerifiedTransitionCommitGraph(db, parsed.projectId, parsed.id);
       if (!commit) {
         throw new Error(`Commit not found: ${parsed.id}`);
       }
-      return jsonTextContent(uri, toCommitReadModel(commit));
+      return jsonTextContent(uri, {
+        digest: parsed.id,
+        recorded_at: commit.recordedAt,
+        object: commit.commit,
+      });
     }
     case 'workbench_draft': {
       const draft = await findDraftById(db, parsed.id);
@@ -142,12 +201,15 @@ export async function readResource(uri: string) {
       }
       return jsonTextContent(uri, toWorkbenchDraftReadModel(draft));
     }
-    case 'conversation': {
+    case 'source_thread': {
       const conversation = await findConversationById(db, parsed.id);
       if (!conversation) {
-        throw new Error(`Conversation not found: ${parsed.id}`);
+        throw new Error(`Source thread not found: ${parsed.id}`);
       }
-      return jsonTextContent(uri, toConversationReadModel(conversation));
+      return jsonTextContent(uri, {
+        ...toConversationReadModel(conversation),
+        kind: 'source_thread',
+      });
     }
     case 'leaf': {
       const leaf = await findLeafById(db, parsed.id);

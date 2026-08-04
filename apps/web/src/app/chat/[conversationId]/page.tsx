@@ -5,9 +5,16 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
+import {
+  isLegacyRepositorySourceLink,
+  legacyRepositorySourceTarget,
+} from '@/domain/sourceEvidenceNavigation';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
+import { useLegacySourceRedirectResolver } from '@/hooks/sources/useLegacySourceRedirectResolver';
 import { useChatStore } from '@/store/chatStore';
 import { isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
@@ -30,8 +37,73 @@ export default function ConversationPage() {
 
 function ConversationRoute() {
   const { conversationId } = useParams<{ conversationId: string }>();
-  const router = useRouter();
   const searchParams = useSearchParams();
+
+  if (isLegacyRepositorySourceLink(searchParams)) {
+    return (
+      <LegacyRepositorySourceRedirect conversationId={conversationId} searchParams={searchParams} />
+    );
+  }
+
+  return <ConversationWorkbenchRoute conversationId={conversationId} searchParams={searchParams} />;
+}
+
+function LegacyRepositorySourceRedirect({
+  conversationId,
+  searchParams,
+}: {
+  conversationId: string;
+  searchParams: URLSearchParams;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<Error | null>(null);
+  const resolveConversation = useLegacySourceRedirectResolver();
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectId = searchParams.get('projectId');
+
+    const redirectToSource = (resolvedProjectId: string) => {
+      if (cancelled) return;
+      router.replace(legacyRepositorySourceTarget(resolvedProjectId, conversationId, searchParams));
+    };
+
+    if (projectId) {
+      redirectToSource(projectId);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void resolveConversation(conversationId)
+      .then((conversation) => redirectToSource(conversation.project_id))
+      .catch((caught) => {
+        if (cancelled) return;
+        setError(
+          caught instanceof Error ? caught : new Error('Failed to resolve source evidence.')
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, resolveConversation, router, searchParams]);
+
+  if (error) {
+    return <ErrorMessage error={error} />;
+  }
+
+  return <LoadingSpinner className="h-full" message={`Opening source ${conversationId}...`} />;
+}
+
+function ConversationWorkbenchRoute({
+  conversationId,
+  searchParams,
+}: {
+  conversationId: string;
+  searchParams: URLSearchParams;
+}) {
+  const router = useRouter();
   const firstMessage = searchParams.get('firstMessage');
   const initialProvider = searchParams.get('provider');
   const initialModel = searchParams.get('model');
@@ -133,7 +205,7 @@ function ConversationRoute() {
 
   const continueIntroDemoToCanvas = useCallback(() => {
     if (!resolvedProjectId) return;
-    router.push(`/chat/project/${encodeURIComponent(resolvedProjectId)}/canvas?introDemo=1`);
+    router.push(`${getProjectIdCanvasPath(resolvedProjectId)}&introDemo=1`);
   }, [resolvedProjectId, router]);
 
   useEffect(() => {

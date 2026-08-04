@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -29,7 +30,7 @@ import { LEAF_TYPES } from './CanvasNodes';
 
 const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';
 
-export function LeafPanel() {
+export function LeafPanel({ projectName }: { projectName: string }) {
   const router = useRouter();
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
@@ -61,10 +62,8 @@ export function LeafPanel() {
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
     if (leafId && projectId) {
-      const params = introDemoRequested ? '?introDemo=1' : '';
-      router.push(
-        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}${params}`
-      );
+      const href = getProjectOutputsPath({ id: projectId, name: projectName }, leafId);
+      router.push(introDemoRequested ? `${href}&introDemo=1` : href);
     }
   };
 
@@ -72,12 +71,10 @@ export function LeafPanel() {
     async (template: Template) => {
       const leafId = await addLeafFromTemplate(template);
       if (leafId && projectId) {
-        router.push(
-          `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}`
-        );
+        router.push(getProjectOutputsPath({ id: projectId, name: projectName }, leafId));
       }
     },
-    [addLeafFromTemplate, projectId, router]
+    [addLeafFromTemplate, projectId, projectName, router]
   );
 
   const filteredTemplates = templateSearch

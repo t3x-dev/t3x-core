@@ -22,6 +22,7 @@ import {
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
   unsupportedChatMaterialSourceMessage,
 } from '@/components/import/documentAcceptTypes';
+import { getProjectOutputsPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import type {
   ContextManifestSourceItem,
   ConversationContextManifest,
@@ -62,6 +63,7 @@ export interface ContextManifestSourcePicker {
 interface ContextManifestPanelProps {
   id: string;
   manifest: ConversationContextManifest | null;
+  projectName?: string;
   disabled?: boolean;
   sourcePicker?: ContextManifestSourcePicker;
   onReferenceToggle: (pinId: string, included: boolean) => void | Promise<void>;
@@ -94,7 +96,7 @@ function sourceItemLabel(item: ContextManifestSourceItem): string {
 }
 
 function isMaterialSourceItem(item: ContextManifestSourceItem): boolean {
-  return item.role === 'evidence' && item.pinned;
+  return item.role === 'evidence' && item.pinned && item.kind !== 'conversation_turn';
 }
 
 function isLessonSourceItem(item: ContextManifestSourceItem): boolean {
@@ -113,6 +115,7 @@ function sourceItemPassed(item: ContextManifestSourceItem): boolean | undefined 
 function sourceKindLabel(kind: ContextManifestSourceItem['kind']): string {
   if (kind === 'baseline') return 'baseline';
   if (kind === 'conversation') return 'conversation';
+  if (kind === 'conversation_turn') return 'chat turn';
   if (kind === 'leaf') return 'leaf';
   if (kind === 'commit') return 'commit';
   if (kind === 'import') return 'import';
@@ -122,12 +125,16 @@ function sourceKindLabel(kind: ContextManifestSourceItem['kind']): string {
   return 'lesson';
 }
 
-function sourceItemOpenHref(item: ContextManifestSourceItem, projectId: string | undefined) {
-  if (item.kind === 'conversation') return `/chat/${encodeURIComponent(item.id)}`;
-  if (item.kind === 'leaf' && projectId)
-    return `/project/${projectId}/leaf/${encodeURIComponent(item.id)}`;
-  if ((item.kind === 'commit' || item.kind === 'baseline') && projectId) {
-    return `/project/${projectId}/commit/${encodeURIComponent(item.id)}`;
+function sourceItemOpenHref(
+  item: ContextManifestSourceItem,
+  projectId: string | undefined,
+  projectName: string | undefined
+) {
+  if (!projectId || !projectName) return null;
+  const project = { id: projectId, name: projectName };
+  if (item.kind === 'leaf') return getProjectOutputsPath(project, item.id);
+  if (item.kind === 'commit' || item.kind === 'baseline') {
+    return `${getProjectRepoPath(project)}?view=canvas&commit=${encodeURIComponent(item.id)}`;
   }
   return null;
 }
@@ -136,7 +143,7 @@ function SourceItemIcon({ kind }: { kind: ContextManifestSourceItem['kind'] }) {
   if (kind === 'leaf') {
     return <LeafIcon size={13} className="text-[var(--accent-leaf)]" />;
   }
-  if (kind === 'conversation') {
+  if (kind === 'conversation' || kind === 'conversation_turn') {
     return <MessageSquare size={13} className="text-[var(--accent-conversation)]" />;
   }
   if (kind === 'lesson') {
@@ -206,6 +213,7 @@ function BaselineIncludedRow({
 function SourceItemRow({
   item,
   projectId,
+  projectName,
   parentTitle,
   selected,
   disabled,
@@ -214,6 +222,7 @@ function SourceItemRow({
 }: {
   item: ContextManifestSourceItem;
   projectId: string | undefined;
+  projectName?: string;
   parentTitle?: string;
   selected: boolean;
   disabled?: boolean;
@@ -226,7 +235,7 @@ function SourceItemRow({
   const canToggle = canToggleLesson;
   const checked = isLesson ? sourceItemSelected(item) : item.included;
   const passed = sourceItemPassed(item);
-  const openHref = sourceItemOpenHref(item, projectId);
+  const openHref = sourceItemOpenHref(item, projectId, projectName);
   const openLabel =
     item.kind === 'conversation'
       ? 'Open conversation'
@@ -523,7 +532,9 @@ function PreviewPanel({
               ? 'Baseline YAML is inherited from the parent commit. It is automatically included and does not require pinning the parent conversation.'
               : item.role === 'guidance'
                 ? 'Lessons are not evidence sources. They summarize prior output or result feedback and affect extraction context when selected.'
-                : 'Pinned materials are available in the project library and can be added to or removed from the current conversation context.'}
+                : item.kind === 'conversation_turn'
+                  ? 'This chat turn is selected as source evidence for extraction and later diff review.'
+                  : 'Pinned materials are available in the project library and can be added to or removed from the current conversation context.'}
           </p>
           <dl className="grid grid-cols-2 gap-2 text-[10px]">
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
@@ -588,30 +599,29 @@ function PreviewPanel({
 
 function BaselineActions({
   manifest,
+  projectName,
   sourcePicker,
 }: {
   manifest: ConversationContextManifest | null;
+  projectName?: string;
   sourcePicker?: ContextManifestSourcePicker;
 }) {
   const commitHash = manifest?.baseline.commit_hash ?? sourcePicker?.baseline?.commitHash ?? null;
   const commitHref =
-    manifest?.project_id && commitHash
-      ? `/project/${manifest.project_id}/commit/${encodeURIComponent(commitHash)}`
+    manifest?.project_id && projectName && commitHash
+      ? `${getProjectRepoPath({ id: manifest.project_id, name: projectName })}?view=canvas&commit=${encodeURIComponent(commitHash)}`
       : null;
   const sourceConversationId =
     manifest?.baseline.source_conversation_id ??
     sourcePicker?.baseline?.parentConversationId ??
     null;
-  const sourceConversationHref = sourceConversationId
-    ? `/chat/${encodeURIComponent(sourceConversationId)}`
-    : null;
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       <OpenSourceLink href={commitHref} label="View commit" />
       <OpenSourceLink
-        href={sourceConversationHref}
-        label={sourceConversationHref ? 'View source conversation' : 'No source conversation'}
+        href={null}
+        label={sourceConversationId ? 'Source conversation attached' : 'No source conversation'}
       />
     </div>
   );
@@ -620,6 +630,7 @@ function BaselineActions({
 export function ContextManifestPanel({
   id,
   manifest,
+  projectName,
   disabled,
   sourcePicker,
   onReferenceToggle,
@@ -782,6 +793,7 @@ export function ContextManifestPanel({
                           key={key}
                           item={item}
                           projectId={manifest?.project_id}
+                          projectName={projectName}
                           parentTitle={
                             item.parent_source_id
                               ? sourceTitlesById.get(item.parent_source_id)
@@ -855,7 +867,11 @@ export function ContextManifestPanel({
                     </dd>
                   </div>
                 </dl>
-                <BaselineActions manifest={manifest} sourcePicker={sourcePicker} />
+                <BaselineActions
+                  manifest={manifest}
+                  projectName={projectName}
+                  sourcePicker={sourcePicker}
+                />
               </aside>
             </div>
           </div>
@@ -1013,6 +1029,7 @@ export function ContextManifestPanel({
                           key={key}
                           item={item}
                           projectId={manifest?.project_id}
+                          projectName={projectName}
                           parentTitle={
                             item.parent_source_id
                               ? (sourceTitlesById.get(item.parent_source_id) ??

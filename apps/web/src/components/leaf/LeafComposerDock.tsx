@@ -117,13 +117,13 @@ export function LeafComposerDock({
   return (
     <div
       className={cn(
-        'shrink-0 border-t px-6 py-3',
+        'shrink-0 border-t px-3 py-2',
         'bg-[color-mix(in_srgb,var(--surface-panel)_92%,transparent)]',
         'backdrop-blur-[6px]',
         className
       )}
     >
-      <div className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-card transition-colors focus-within:border-[var(--accent-leaf)]">
+      <div className="overflow-hidden rounded-md border border-[var(--stroke-default)] bg-card transition-colors focus-within:border-[var(--accent-commit)] focus-within:ring-1 focus-within:ring-[var(--accent-commit)]/15">
         {/* Textarea */}
         <textarea
           className={cn(
@@ -131,7 +131,7 @@ export function LeafComposerDock({
             'placeholder:text-[var(--text-tertiary)]',
             'min-h-[44px] max-h-[120px]'
           )}
-          placeholder="Generation instructions..."
+          placeholder="Describe the output you want to generate..."
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onBlur={handleBlur}
@@ -148,7 +148,7 @@ export function LeafComposerDock({
             </span>
           ) : modelOptions.length > 0 ? (
             <select
-              className="cursor-pointer border-none bg-transparent text-[11px] text-[var(--text-tertiary)] outline-none font-inherit min-w-[140px]"
+              className="min-w-0 max-w-[160px] cursor-pointer border-none bg-transparent font-inherit text-[11px] text-[var(--text-tertiary)] outline-none"
               value={currentModel ?? '__default__'}
               onChange={handleModelChange}
               disabled={savingModel}
@@ -179,7 +179,7 @@ export function LeafComposerDock({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="hidden h-8 w-8 xl:inline-flex"
                 onClick={() => setCompareOpen(true)}
               >
                 <Grid2x2 className="h-3.5 w-3.5" />
@@ -191,7 +191,12 @@ export function LeafComposerDock({
           {/* Suggest constraints */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSuggestOpen}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden h-8 w-8 xl:inline-flex"
+                onClick={onSuggestOpen}
+              >
                 <Sparkles className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
@@ -205,7 +210,7 @@ export function LeafComposerDock({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="hidden h-8 w-8 xl:inline-flex"
                   onClick={onValidate}
                   disabled={isValidating}
                 >
@@ -216,20 +221,23 @@ export function LeafComposerDock({
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{isValidating ? 'Validating...' : 'Validate'}</TooltipContent>
+              <TooltipContent>
+                {isValidating ? 'Validating...' : 'Run validation only'}
+              </TooltipContent>
             </Tooltip>
           )}
 
           {/* Divider */}
-          <div className="mx-0.5 h-5 w-px bg-[var(--stroke-divider)]" />
+          <div className="mx-0.5 hidden h-5 w-px bg-[var(--stroke-divider)] xl:block" />
 
           {/* Generate button — primary */}
           <Button
             size="sm"
-            className="h-7 gap-1.5 rounded-lg bg-[var(--accent-leaf)] text-[var(--on-accent)] text-xs font-semibold hover:brightness-110"
+            className="h-8 gap-1.5 rounded-md px-3 text-xs font-semibold"
             onClick={onGenerate}
             disabled={isGenerating}
             data-intro-target="leaf-generate-action"
+            variant="branch"
           >
             {isGenerating ? (
               <>
@@ -239,7 +247,7 @@ export function LeafComposerDock({
             ) : (
               <>
                 <Play className="h-3 w-3" />
-                Generate
+                {hasOutput ? 'Regenerate & Verify' : 'Generate & Verify'}
               </>
             )}
           </Button>

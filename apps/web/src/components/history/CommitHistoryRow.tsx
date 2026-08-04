@@ -4,11 +4,10 @@
  * CommitHistoryRow — a single row in the commit history timeline.
  *
  * Displays: commit hash, message, author, relative time, diff stats, branch badge.
- * Clickable → navigates to commit detail page.
+ * Clickable → opens the shared T3X Diff review inside History.
  */
 
 import { Minus, Pencil, Plus } from 'lucide-react';
-import Link from 'next/link';
 import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
 
@@ -17,7 +16,6 @@ import { cn } from '@/utils/cn';
 // ============================================================================
 
 export interface CommitHistoryRowProps {
-  projectId: string;
   hash: string;
   message: string | null;
   author: { type: string; name?: string } | null;
@@ -39,8 +37,8 @@ export interface CommitHistoryRowProps {
   isLast: boolean;
   /** Whether this row is keyboard-active */
   isActive?: boolean;
-  /** Whether the demo tour should continue after opening this commit */
-  introDemo?: boolean;
+  /** Opens this commit in the History diff review. */
+  onOpen: (hash: string) => void;
 }
 
 // ============================================================================
@@ -48,7 +46,6 @@ export interface CommitHistoryRowProps {
 // ============================================================================
 
 export function CommitHistoryRow({
-  projectId,
   hash,
   message,
   author,
@@ -60,14 +57,15 @@ export function CommitHistoryRow({
   isFirst,
   isLast,
   isActive,
-  introDemo = false,
+  onOpen,
 }: CommitHistoryRowProps) {
   return (
-    <Link
-      href={`/project/${projectId}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : ''}`}
+    <button
+      type="button"
+      onClick={() => onOpen(hash)}
       data-commit-hash={hash}
       className={cn(
-        'group flex items-stretch hover:bg-[var(--hover-bg)] transition-colors rounded-md -mx-2 px-2',
+        'group flex w-full items-stretch rounded-md -mx-2 px-2 text-left transition-colors hover:bg-[var(--hover-bg)]',
         isActive && 'bg-[var(--hover-bg)] ring-1 ring-[var(--accent-commit)]/30'
       )}
     >
@@ -153,6 +151,6 @@ export function CommitHistoryRow({
           <span title={formatDate(committedAt)}>{relativeTime(committedAt)}</span>
         </div>
       </div>
-    </Link>
+    </button>
   );
 }

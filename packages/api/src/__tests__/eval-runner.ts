@@ -27,10 +27,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 import type { SemanticContent } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
-import { Hono } from 'hono';
 import { closeDB, getDB } from '../lib/db';
-// Import the actual route (uses real DB + real LLM via provider-registry)
-import { treeExtractRoutes } from '../routes/tree-extract.openapi';
+import { runExtractionPipeline } from '../lib/extraction-pipeline';
 
 // ============================================================
 // Output Directory
@@ -466,7 +464,36 @@ function generateScenarioMarkdown(
 // Main Runner
 // ============================================================
 
-async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
+interface EvaluationExtraction {
+  snapshot: SemanticContent;
+  delta: unknown;
+  yops_log_id?: string;
+}
+
+async function extractForEvaluation(
+  conversationId: string,
+  projectId: string
+): Promise<EvaluationExtraction> {
+  for await (const event of runExtractionPipeline({ conversationId, projectId })) {
+    if (event.type === 'error') {
+      throw new Error(
+        `${String(event.data.code ?? 'EXTRACTION_FAILED')}: ${String(event.data.message ?? 'Unknown extraction error')}`
+      );
+    }
+    if (event.type === 'done' || event.type === 'skipped') {
+      return {
+        snapshot: event.data.snapshot as SemanticContent,
+        delta: event.data.delta,
+        ...(typeof event.data.yops_log_id === 'string' && {
+          yops_log_id: event.data.yops_log_id,
+        }),
+      };
+    }
+  }
+  throw new Error('Extraction pipeline ended without a terminal event');
+}
+
+async function runScenario(scenario: Scenario): Promise<void> {
   const db = await getDB();
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Scenario ${scenario.id}: ${scenario.name}`);
@@ -501,30 +528,21 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   // First extraction
   console.log('  Running first extraction...');
   const t0 = Date.now();
-  const res1 = await app.request('/v1/extract/trees', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conv.conversationId }),
-  });
-  const durationMs = Date.now() - t0;
-
-  if (res1.status !== 200) {
-    const body = await res1.json();
-    console.error(`  FAILED (${res1.status}):`, JSON.stringify(body, null, 2));
+  let firstResult: EvaluationExtraction;
+  try {
+    firstResult = await extractForEvaluation(conv.conversationId, project.projectId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('  FAILED:', message);
     fs.writeFileSync(
       path.join(RESULTS_DIR, `scenario-${scenario.id}.md`),
-      `# Scenario ${scenario.id}: ${scenario.name}\n\n**EXTRACTION FAILED**\n\nStatus: ${res1.status}\n\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\`\n`
+      `# Scenario ${scenario.id}: ${scenario.name}\n\n**EXTRACTION FAILED**\n\n\`\`\`\n${message}\n\`\`\`\n`
     );
     return;
   }
-
-  const body1 = (await res1.json()) as {
-    success: boolean;
-    // biome-ignore lint/suspicious/noExplicitAny: test helper
-    data: { delta: any; snapshot: SemanticContent; yops_log_id?: string };
-  };
+  const durationMs = Date.now() - t0;
   console.log(
-    `  First extraction: ${flattenTrees(body1.data.snapshot.trees).length} frames, ${getDeltaChangeCount(body1.data.delta)} changes (${durationMs}ms)`
+    `  First extraction: ${flattenTrees(firstResult.snapshot.trees).length} frames, ${getDeltaChangeCount(firstResult.delta)} changes (${durationMs}ms)`
   );
 
   let secondSnapshot: SemanticContent | undefined;
@@ -546,26 +564,19 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
     console.log('  Running incremental extraction...');
 
     const t1 = Date.now();
-    const res2 = await app.request('/v1/extract/trees', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversation_id: conv.conversationId }),
-    });
-    secondDurationMs = Date.now() - t1;
-
-    if (res2.status !== 200) {
-      const errBody = await res2.json();
-      console.error(`  Incremental FAILED (${res2.status}):`, JSON.stringify(errBody, null, 2));
-    } else {
-      const body2 = (await res2.json()) as {
-        success: boolean;
-        // biome-ignore lint/suspicious/noExplicitAny: test helper
-        data: { delta: any; snapshot: SemanticContent; yops_log_id?: string };
-      };
-      secondSnapshot = body2.data.snapshot;
-      secondDelta = body2.data.delta;
+    try {
+      const secondResult = await extractForEvaluation(conv.conversationId, project.projectId);
+      secondDurationMs = Date.now() - t1;
+      secondSnapshot = secondResult.snapshot;
+      secondDelta = secondResult.delta;
       console.log(
         `  Incremental extraction: ${flattenTrees(secondSnapshot.trees).length} frames, ${getDeltaChangeCount(secondDelta)} changes (${secondDurationMs}ms)`
+      );
+    } catch (error) {
+      secondDurationMs = Date.now() - t1;
+      console.error(
+        '  Incremental FAILED:',
+        error instanceof Error ? error.message : String(error)
       );
     }
   }
@@ -573,8 +584,8 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   // Write markdown
   const md = generateScenarioMarkdown(
     scenario,
-    body1.data.snapshot,
-    body1.data.delta,
+    firstResult.snapshot,
+    firstResult.delta,
     durationMs,
     secondSnapshot,
     secondDelta,
@@ -593,10 +604,6 @@ async function main(): Promise<void> {
   // Ensure output directory exists
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 
-  // Create Hono app with real routes
-  const app = new Hono();
-  app.route('/', treeExtractRoutes);
-
   // Initialize DB (uses embedded PG or DATABASE_URL)
   console.log('Initializing database...');
   await getDB();
@@ -613,7 +620,7 @@ async function main(): Promise<void> {
 
   for (const scenario of scenarios) {
     try {
-      await runScenario(app, scenario);
+      await runScenario(scenario);
     } catch (err) {
       console.error(`\nScenario ${scenario.id} CRASHED:`, err);
       fs.writeFileSync(

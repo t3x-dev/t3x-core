@@ -8,19 +8,59 @@ file is the short cross-agent source for day-to-day development behavior.
 
 T3X is version control for structured state.
 
-The core loop is:
+The product thesis is:
 
 ```text
-Source -> YOps -> Commit
+Change as a verifiable object.
 ```
 
-Source evidence comes from chats, docs, specs, prompt runs, and other
-structured inputs. YOps applies deterministic YAML operations to
-schema-backed state. Commits version the result with parents, operation logs,
-diffs, merges, and provenance.
+The architecture follows one deterministic State law and one small governance
+lifecycle:
 
-Do not reintroduce the old graph, meaning, knowledge, or AI-first positioning
-unless the README changes first.
+```text
+Result = Replay(Base, DefinitionOf(Effect))
+Propose -> Verify* -> Decide -> Commit?
+```
+
+`Verify*` always includes deterministic replay verification and may add zero or
+more external Statements. `Commit?` exists only for accepted or authorized
+overridden Decisions; rejection remains auditable without advancing history.
+Preparation, retries, revisions, and post-processing compose these verbs rather
+than adding kernel lifecycle hooks.
+
+State, Effect, Statement, and CommitV2 are the four public protocol nouns.
+Transition is the application/product aggregate over that immutable graph, not
+a fifth envelope. Product surfaces stay task-oriented and consume derived
+projections instead of mirroring protocol nouns one-to-one.
+
+`Source -> YOps -> Commit` remains one useful product path, but it is not the
+architecture. Source material can support a Proposal, YOps can implement an
+Effect, and a Commit advances only after verification and Decision.
+
+Do not reintroduce the retired graph, meaning, knowledge, or AI-first
+positioning unless the README changes first.
+
+## Transition Spine
+
+Epic #1222 completed the internal Transition Spine architecture. The protocol
+kernel and conformance bundle are implemented, but `@t3x-dev/transition`
+remains an internal surface until explicitly promoted through the release
+process.
+
+Preserve these boundaries:
+
+- keep YOps, YSchema, codecs, MutationDrivers, and Statement providers
+  independently usable;
+- keep protocol contracts in the leaf `@t3x-dev/transition` package;
+- distinguish protocol ports, native adapters/providers, application use cases,
+  and derived product projections instead of using one framework;
+- integrate native components through one-way adapters rather than inheritance;
+- keep database, network, LLM, runner, UI, clock, and randomness outside the
+  protocol kernel;
+- keep product surfaces task-oriented and derive them from shared application
+  projections rather than raw protocol records;
+- update the owning GitHub Issue before changing a frozen architecture
+  decision.
 
 ## Repository Shape
 
@@ -28,6 +68,8 @@ This is a pnpm workspace with Turborepo:
 
 - `packages/yops` — deterministic YAML operation engine.
 - `packages/yschema` — WIP validation candidate with auto-fix.
+- `packages/transition` — leaf protocol contracts, Replay, identity, and
+  integrity verification.
 - `packages/core` — engine layer for commits, diffs, merges, extraction, ylint.
 - `packages/storage` — PostgreSQL persistence.
 - `packages/api` — Hono route library.
@@ -118,6 +160,11 @@ Match verification to the change:
   `pnpm standards:validate`, and relevant `node --test tools/__tests__/*.mjs`.
 - Package/runtime changes: run the package-specific build/test plus `pnpm build`
   when practical.
+- Transition Spine changes: record the clean `origin/dev` baseline; map each
+  changed invariant to its native, adapter, protocol-conformance, or E2E test;
+  include an adversarial case; and run `pnpm test` before review. A retry does
+  not erase the first failure—classify assertion, teardown/resource, environment,
+  and flaky failures separately.
 - WebUI changes: run the relevant WebUI test/build and inspect in a browser when
   layout or interaction changes.
 

@@ -4,7 +4,7 @@
  *
  * v2 §2.2 — pure functions, no React, no I/O. Previously lived in
  * @/infrastructure/commits; components were reaching them through a
- * @/queries/commits re-export (v2 §1 ban). Domain is the right home.
+ * @/infrastructure/commits re-export (v2 §1 ban). Domain is the right home.
  *
  * Types are narrowed via structural typing so this module does not
  * need to import ApiCommit from infrastructure. Any object with a

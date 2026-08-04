@@ -145,7 +145,7 @@ export const leaves = pgTable(
      * The commit this leaf uses for knowledge.
      *
      * Fix 14 (no-fk note): No foreign key is declared here intentionally.
-     * Leaves can reference commits from the commits table,
+     * Leaves can reference commits from the CommitV2 storage,
      * so a single FK to one table would be incorrect. Application-level
      * validation (in the leaves query layer) is responsible for confirming that
      * the referenced commit exists before creating or updating a leaf.
@@ -391,7 +391,7 @@ export const pins = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Type of pinned item: 'conversation' | 'leaf' | 'import' */
+    /** Type of pinned item: 'conversation' | 'conversation_turn' | 'leaf' | 'import' */
     type: text('type').notNull(),
 
     /** ID of the pinned item */
@@ -545,6 +545,12 @@ export const apiKeys = pgTable(
     /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
     userId: text('user_id'),
 
+    /** Trusted principal kind; legacy credentials migrate to human. */
+    principalKind: text('principal_kind').notNull().default('human'),
+
+    /** Closed Transition capabilities; no implicit grants for legacy credentials. */
+    transitionScopes: jsonb('transition_scopes').$type<string[]>().notNull().default([]),
+
     /** Creation time */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
@@ -557,6 +563,18 @@ export const apiKeys = pgTable(
   (table) => ({
     keyHashIdx: uniqueIndex('idx_api_keys_hash').on(table.keyHash),
     projectIdx: index('idx_api_keys_project').on(table.projectId),
+    principalKindCheck: check(
+      'api_keys_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    transitionScopesArrayCheck: check(
+      'api_keys_transition_scopes_array_check',
+      sql`jsonb_typeof(${table.transitionScopes}) = 'array'`
+    ),
+    transitionScopesClosedCheck: check(
+      'api_keys_transition_scopes_closed_check',
+      sql`${table.transitionScopes} <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb`
+    ),
   })
 );
 
@@ -770,7 +788,13 @@ export const drafts = pgTable(
     committedLeafId: text('committed_leaf_id'),
 
     /** Target branch for commit */
-    targetBranch: text('target_branch').default('main'),
+    targetBranch: text('target_branch').notNull().default('main'),
+
+    /** Stable Workspace ID for Project Workspaces staged state */
+    workspaceId: text('workspace_id'),
+
+    /** Current Workspace staged state */
+    workspaceStateJson: jsonb('workspace_state_json').$type<Record<string, unknown>>(),
 
     /** Optimistic lock revision counter */
     revision: integer('revision').notNull().default(1),
@@ -793,6 +817,14 @@ export const drafts = pgTable(
   (table) => ({
     projectIdx: index('idx_drafts_project').on(table.projectId),
     statusIdx: index('idx_drafts_status').on(table.status),
+    workspaceIdx: uniqueIndex('idx_drafts_workspace')
+      .on(table.projectId, table.workspaceId)
+      .where(sql`${table.workspaceId} IS NOT NULL`),
+    openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
+      .on(table.projectId, table.targetBranch)
+      .where(
+        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+      ),
   })
 );
 
@@ -961,10 +993,9 @@ export const yopsLog = pgTable(
      * `supersedeYOpsLogEntryForRepair` on a Repair flow. The WebUI
      * staged-Extract Apply path no longer triggers supersede — it
      * appends. Never set on committed entries — once an id appears
-     * in some commit's `yops_log_ids` it is part of the immutable
-     * baseline and must stay `superseded_at = NULL` forever.
-     * `createCommit` defends this by rejecting any `yops_log_ids`
-     * whose `superseded_at IS NOT NULL` at insert time.
+     * in a CommitV2 application consumption record it is part of the
+     * immutable baseline and must stay `superseded_at = NULL` forever.
+     * The CommitV2 insert path rejects rows whose `superseded_at IS NOT NULL`.
      */
     supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },

@@ -66,16 +66,16 @@ function getActionNote(node: CanvasUnitNode, hasParent: boolean, canMerge: boole
   const hasLeaf = (node.data.leaves?.length ?? 0) > 0;
   if (!hasParent) {
     return hasLeaf
-      ? 'Root commit has no parent, so View Diff is hidden. Open Leaf keeps existing output one click away; New Leaf creates another output from this exact version.'
-      : 'Root commit has no parent, so View Diff is hidden. New Leaf creates output from this exact version.';
+      ? 'Version context stays on the canvas. Open Leaf keeps existing output one click away; New Leaf creates another output from this exact version.'
+      : 'Version context stays on the canvas. New Leaf creates output from this exact version.';
   }
   if (node.data.branchType === 'branch' && canMerge) {
-    return 'Merge appears because this is the latest branch head. New Leaf still targets this exact commit version.';
+    return 'Version context stays on the canvas. New Leaf targets this exact branch version.';
   }
   if (node.data.branchType === 'branch') {
-    return 'Diff compares this branch commit with its parent. Merge appears only on the latest branch head.';
+    return 'Version context stays on the canvas. Use Pull requests for branch review and merge.';
   }
-  return 'Diff compares this commit with its parent. Merge is hidden on main; New Leaf targets this exact version.';
+  return 'Version context stays on the canvas. New Leaf targets this exact version.';
 }
 
 function actionButtonClass(action: CommitAction): string {
@@ -102,7 +102,6 @@ function panelActionClass(action: CommitAction): string {
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
-  if (action.label === 'Details') return 'canvas-action-details';
   if (action.label === 'View Diff') return 'canvas-action-diff';
   if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
   if (action.label === 'New Leaf') return 'canvas-action-new-leaf';

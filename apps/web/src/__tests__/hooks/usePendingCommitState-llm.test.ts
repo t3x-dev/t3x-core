@@ -414,4 +414,38 @@ describe('usePendingCommitState — LLM commit flow', () => {
       })
     );
   });
+
+  it('returns to the canvas after a successful commit without opening commit details', async () => {
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
+    (api.commitWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue({
+      commit: { hash: 'sha256:abc123' },
+      leaf: null,
+      draft_status: 'committed',
+    });
+
+    const { result } = renderHook(() =>
+      usePendingCommitState({
+        node: makeNode(),
+        onClose,
+        onUpdate,
+        projectId,
+        onConvertDraft,
+      })
+    );
+
+    await waitForHook();
+    await act(async () => {
+      await result.current.handleProceed();
+    });
+    await act(async () => {
+      await result.current.handleCommit();
+    });
+
+    act(() => {
+      result.current.handleBackToCanvas();
+    });
+
+    expect(onConvertDraft).toHaveBeenCalledTimes(1);
+  });
 });

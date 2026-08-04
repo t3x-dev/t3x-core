@@ -1,3 +1,4 @@
+import { API_BASE } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -20,7 +21,7 @@ test.describe('DiffDisplayView Integration', () => {
 
   test.beforeAll(async ({ request }) => {
     // Create test project
-    const projectRes = await request.post('http://localhost:8000/api/v1/projects', {
+    const projectRes = await request.post(`${API_BASE}/projects`, {
       data: { name: TEST_PROJECT_NAME },
     });
     const projectData = await projectRes.json();
@@ -28,12 +29,13 @@ test.describe('DiffDisplayView Integration', () => {
     projectId = projectData.data.project_id;
 
     // Create first commit
-    const commit1Res = await request.post('http://localhost:8000/api/v1/commits', {
+    const commit1Res = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Base commit',
         parents: [],
+        expected_head: null,
         content: {
           trees: [
             {
@@ -62,15 +64,16 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    commitHash1 = commit1Data.data.commit.hash;
+    commitHash1 = commit1Data.data.commit.digest;
 
     // Create second commit with changes
-    const commit2Res = await request.post('http://localhost:8000/api/v1/commits', {
+    const commit2Res = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Updated commit',
         parents: [commitHash1],
+        expected_head: commitHash1,
         content: {
           trees: [
             {
@@ -100,7 +103,7 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    commitHash2 = commit2Data.data.commit.hash;
+    commitHash2 = commit2Data.data.commit.digest;
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -108,13 +111,13 @@ test.describe('DiffDisplayView Integration', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('API returns correct data for diff comparison', async ({ request }) => {
     // Fetch commit 1
-    const commit1Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash1}`);
+    const commit1Res = await request.get(`${API_BASE}/commits/${commitHash1}?project_id=${projectId}`);
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
     expect(commit1Data.data.commit.content.trees).toHaveLength(3);
 
     // Fetch commit 2
-    const commit2Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash2}`);
+    const commit2Res = await request.get(`${API_BASE}/commits/${commitHash2}?project_id=${projectId}`);
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
     expect(commit2Data.data.commit.content.trees).toHaveLength(3);
@@ -149,12 +152,13 @@ test.describe('DiffDisplayView Integration', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('Empty commit comparison works (validates || fix)', async ({ request }) => {
     // Create an empty commit
-    const emptyCommitRes = await request.post('http://localhost:8000/api/v1/commits', {
+    const emptyCommitRes = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
-        branch: 'test-empty',
+        branch: 'main',
         message: 'Empty commit',
-        parents: [],
+        parents: [commitHash2],
+        expected_head: commitHash2,
         content: {
           trees: [],
           relations: [],
@@ -164,10 +168,10 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const emptyCommitData = await emptyCommitRes.json();
     expect(emptyCommitData.success).toBe(true);
-    const emptyCommitHash = emptyCommitData.data.commit.hash;
+    const emptyCommitHash = emptyCommitData.data.commit.digest;
 
     // Verify empty commit has 0 frames
-    const verifyRes = await request.get(`http://localhost:8000/api/v1/commits/${emptyCommitHash}`);
+    const verifyRes = await request.get(`${API_BASE}/commits/${emptyCommitHash}?project_id=${projectId}`);
     const verifyData = await verifyRes.json();
     expect(verifyData.data.commit.content.trees).toHaveLength(0);
   });
@@ -178,8 +182,8 @@ test.describe('DiffDisplayView Integration', () => {
   test('Diff algorithm produces expected results', async ({ request }) => {
     // Fetch both commits
     const [res1, res2] = await Promise.all([
-      request.get(`http://localhost:8000/api/v1/commits/${commitHash1}`),
-      request.get(`http://localhost:8000/api/v1/commits/${commitHash2}`),
+      request.get(`${API_BASE}/commits/${commitHash1}?project_id=${projectId}`),
+      request.get(`${API_BASE}/commits/${commitHash2}?project_id=${projectId}`),
     ]);
 
     const data1 = await res1.json();

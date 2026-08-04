@@ -68,6 +68,130 @@ export async function updateProject(
 }
 
 // ============================================================================
+// YSchema Validation Runs
+// ============================================================================
+
+export type YSchemaValidationRunStatus = 'pending' | 'running' | 'passed' | 'failed' | 'stale';
+
+export interface YSchemaValidationRun {
+  checked_at?: string | null;
+  commit_hash: string;
+  created_at: string;
+  error_count: number;
+  finished_at: string | null;
+  fix_count: number;
+  gap_count: number;
+  id: string;
+  project_id: string;
+  ready: boolean;
+  result: Record<string, unknown>;
+  schema_hash: string;
+  schema_name: string;
+  schema_version: string;
+  started_at: string | null;
+  status: YSchemaValidationRunStatus;
+  valid: boolean;
+  validator_version: string;
+}
+
+export interface LatestYSchemaValidationRunOptions {
+  commitHash?: string;
+  schemaName?: string;
+}
+
+export async function getLatestYSchemaValidationRun(
+  projectId: string,
+  options: LatestYSchemaValidationRunOptions = {}
+): Promise<YSchemaValidationRun | null> {
+  const query = buildQueryString({
+    commit_hash: options.commitHash,
+    schema_name: options.schemaName,
+  });
+  const suffix = query ? `?${query}` : '';
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema-validation/latest${suffix}`
+  );
+  return handleResponse<YSchemaValidationRun | null>(res);
+}
+
+export interface CreateYSchemaValidationRunPayload {
+  commit_hash?: string;
+  schema_name?: string;
+}
+
+export async function createYSchemaValidationRun(
+  projectId: string,
+  payload: CreateYSchemaValidationRunPayload = {}
+): Promise<YSchemaValidationRun> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema-validation/runs`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+  return handleResponse<YSchemaValidationRun>(res);
+}
+
+// ============================================================================
+// Deterministic Skill artifacts
+// ============================================================================
+
+export interface SkillArtifactFile {
+  path: string;
+  media_type: string;
+  content: string;
+  sha256: string;
+}
+
+export interface SkillArtifactCheck {
+  key: string;
+  kind: string;
+  run_when: string;
+  blocking: boolean;
+  command_resource?: string;
+  assertions: string[];
+  success_criteria: string[];
+  workflow_keys: string[];
+}
+
+export interface SkillArtifactIssue {
+  code: string;
+  path: string;
+  message: string;
+}
+
+export interface SkillArtifact {
+  commit_hash: string;
+  schema_name: 't3x/skill';
+  renderer_version: string;
+  generated_description: string;
+  bundle_hash: string;
+  publishable: boolean;
+  missing_resources: string[];
+  gate: {
+    declaratively_ready: boolean;
+    blocking_check_count: number;
+    requires_execution: boolean;
+    errors: SkillArtifactIssue[];
+    gaps: SkillArtifactIssue[];
+  };
+  checks: SkillArtifactCheck[];
+  files: SkillArtifactFile[];
+}
+
+export async function getSkillArtifact(
+  projectId: string,
+  commitHash: string
+): Promise<SkillArtifact> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitHash)}/artifacts/skill`
+  );
+  return handleResponse<SkillArtifact>(res);
+}
+
+// ============================================================================
 // Hash Chain Verification
 // ============================================================================
 

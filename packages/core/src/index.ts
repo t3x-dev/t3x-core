@@ -30,15 +30,9 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 // Commit
 // ═══════════════════════════════════════════════════════════════════════════
-export {
-  type Author,
-  COMMIT_SCHEMA,
-  type Commit,
-  type CommitFirstClass,
-  type CommitSchemaTag,
-  computeCommitHash,
-  LEGACY_COMMIT_SCHEMAS,
-  type Provenance,
+export type {
+  Author,
+  Provenance,
 } from './commit';
 // ═══════════════════════════════════════════════════════════════════════════
 // Common utilities
@@ -303,7 +297,10 @@ export {
   type TopicChangedEvent,
   type UserAnswer,
 } from './pipeline';
-
+// ═══════════════════════════════════════════════════════════════════════════
+// Portable Prompt policy and deterministic compiler
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './prompt';
 // ═══════════════════════════════════════════════════════════════════════════
 // Provider interfaces and implementations
 // ═══════════════════════════════════════════════════════════════════════════
@@ -432,6 +429,10 @@ export {
   getTreeNodeJsonSchema,
 } from './semantic/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
+// Portable Skill schema policy and deterministic artifact compiler
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './skill';
+// ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 // ═══════════════════════════════════════════════════════════════════════════
@@ -502,6 +503,15 @@ export {
 } from './t3x-yops';
 export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
+// Transition adapters — one-way integration; native engines stay autonomous
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './transition-adapters';
+export * from './transition-commits';
+export * from './transition-decisions';
+export * from './transition-projection';
+export * from './transition-proposals';
+export * from './transition-statements';
+// ═══════════════════════════════════════════════════════════════════════════
 // Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
 // @see docs/specification/memory-pin-system-design.md
@@ -512,9 +522,11 @@ export {
   ALL_LEAF_TYPES,
   // Leaf (owns constraints)
   type AnyLeafType,
+  API_KEY_PRINCIPAL_KINDS,
   API_KEY_VALUE_PREFIX,
   // API Key
   type ApiKey,
+  type ApiKeyPrincipalKind,
   // Assertion
   type Assertion,
   // Built Context
@@ -541,8 +553,11 @@ export {
   type ExcludeConstraint,
   // ID Prefixes
   ID_PREFIXES,
+  isApiKeyPrincipalKind,
   isDeployLeaf,
   isGenerationLeaf,
+  isTransitionScope,
+  isTransitionWriteScope,
   LEAF_TYPES,
   type Leaf,
   type LeafConfig,
@@ -563,6 +578,9 @@ export {
   type RequireConstraint,
   // Share Token
   type ShareToken,
+  TRANSITION_SCOPES,
+  TRANSITION_WRITE_SCOPES,
+  type TransitionScope,
   type User,
 } from './types';
 export type {

@@ -35,6 +35,7 @@ import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectStore } from '@/store/projectStore';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
@@ -57,7 +58,7 @@ interface ChatWorkspaceProps {
   initialModel?: string;
   className?: string;
   style?: CSSProperties;
-  /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
+  /** Called when a new conversation is created so the owning shell can update local state. */
   onConversationCreated?: (conversationId: string) => void;
   /** Parent commit hash — if set, hydrate extraction panel with parent's trees */
   inheritFromCommitHash?: string;
@@ -152,7 +153,11 @@ const INTRO_DEMO_ASSISTANT_REPLY = [
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {
   return (
     manifest?.source_items.filter(
-      (item) => item.role === 'evidence' && item.pinned && Boolean(item.pin_id)
+      (item) =>
+        item.role === 'evidence' &&
+        item.pinned &&
+        Boolean(item.pin_id) &&
+        item.kind !== 'conversation_turn'
     ) ?? []
   );
 }
@@ -233,6 +238,7 @@ export function ChatWorkspace({
   // For "/chat/new" routes: create either a temporary local chat or a project conversation.
   const isNewChat = conversationId === 'new';
   const [resolvedProjectId, setResolvedProjectId] = useState(projectId ?? '');
+  const projectName = useProjectStore((state) => state.getProject(resolvedProjectId))?.name;
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
@@ -318,15 +324,7 @@ export function ChatWorkspace({
     onConversationCreated: useCallback(
       (newConvId: string) => {
         setResolvedConversationId(newConvId);
-        if (onConversationCreatedProp) {
-          onConversationCreatedProp(newConvId);
-        } else {
-          // Update URL without triggering Next.js navigation (avoids re-mount)
-          const params = new URLSearchParams(window.location.search);
-          params.delete('firstMessage');
-          const suffix = params.toString() ? `?${params.toString()}` : '';
-          window.history.replaceState(null, '', `/chat/${newConvId}${suffix}`);
-        }
+        onConversationCreatedProp?.(newConvId);
       },
       [onConversationCreatedProp]
     ),
@@ -945,6 +943,7 @@ export function ChatWorkspace({
             <div data-intro-target="chat-sources">
               <ContextManifestBar
                 manifest={contextManifest}
+                projectName={projectName}
                 loading={contextManifestLoading}
                 error={contextManifestError}
                 open={contextManifestOpen}
@@ -1009,12 +1008,6 @@ export function ChatWorkspace({
                 <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 text-xs text-[var(--text-secondary)]">
                   <GitCommit size={12} className="text-[var(--accent-commit)]" />
                   <span>Continuing from previous commit</span>
-                  <a
-                    href={`/chat/${parentConversationId}`}
-                    className="text-[var(--accent-commit)] hover:underline font-medium"
-                  >
-                    View parent conversation
-                  </a>
                 </div>
               </div>
             )}

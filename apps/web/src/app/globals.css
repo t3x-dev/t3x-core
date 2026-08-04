@@ -311,6 +311,7 @@
   --surface-elevated: oklch(1 0 0);
   --surface-radial: oklch(0.97 0.002 250);
   --surface-canvas: var(--surface-app);
+  --surface-code: #111827;
   --sidebar-panel: oklch(0.948 0.002 250);
   --chat-panel: oklch(0.97 0.0015 250);
   --workspace-panel: oklch(0.99 0.001 250);
@@ -366,11 +367,16 @@
   --text-primary: oklch(0.15 0.01 260);
   --text-secondary: oklch(0.4 0.01 260);
   --text-tertiary: oklch(0.55 0.01 260);
+  --text-code: #dbeafe;
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
   --scrollbar-thumb: oklch(0 0 0 / 15%);
   --scrollbar-thumb-hover: oklch(0 0 0 / 25%);
+  --state-scrollbar-track: oklch(0.94 0.002 250);
+  --state-scrollbar-thumb: oklch(0 0 0 / 34%);
+  --state-scrollbar-thumb-hover: oklch(0 0 0 / 46%);
+  --state-scrollbar-thumb-active: oklch(0 0 0 / 58%);
 
   /* ===== Reading Surfaces ===== */
   --glass-bg-reading: oklch(0.98 0.002 250);
@@ -460,6 +466,7 @@
   --surface-elevated: #1b2432;
   --surface-radial: #121923;
   --surface-canvas: #121923;
+  --surface-code: #0d131d;
   --sidebar-panel: var(--panel);
   --chat-panel: var(--panel);
   --workspace-panel: var(--panel-alt);
@@ -543,6 +550,7 @@
   --text-primary: #f0f4fa;
   --text-secondary: #b5becd;
   --text-tertiary: #8490a3;
+  --text-code: #dbeafe;
   /* Aliases */
   --text-1: var(--text-primary);
   --text-2: var(--text-secondary);
@@ -553,6 +561,10 @@
   --scrollbar-width: 4px;
   --scrollbar-thumb: rgba(226, 234, 248, 0.15);
   --scrollbar-thumb-hover: rgba(226, 234, 248, 0.24);
+  --state-scrollbar-track: #0e141e;
+  --state-scrollbar-thumb: rgba(226, 234, 248, 0.32);
+  --state-scrollbar-thumb-hover: rgba(226, 234, 248, 0.46);
+  --state-scrollbar-thumb-active: rgba(226, 234, 248, 0.58);
 
   /* ===== Diff Token System — Unified Design v2 dark overrides ===== */
   --diff-added-bg: rgba(123, 201, 159, 0.11);

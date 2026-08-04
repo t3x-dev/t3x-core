@@ -1,41 +1,43 @@
 /**
- * Frame-Based Commits Routes with OpenAPI
- *
- * REST API endpoints for frame-based commits with OpenAPI documentation.
- * Frame-based commits store state content as frames + relations.
+ * CommitV2 repository routes with OpenAPI.
  *
  * Endpoints:
  * - POST   /v1/commits               - Create a new commit
  * - GET    /v1/commits/:hash         - Get commit by hash
  * - GET    /v1/projects/:projectId/commits - List commits by project
- *
- * @see packages/core/src/commit/types.ts
+ * - GET    /v1/projects/:projectId/commit-history - List CommitV2 history projections
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Commit, SemanticContent, YOp } from '@t3x-dev/core';
-import { collectResult, extractOpsFromEntries, runOperation, verifyReplay } from '@t3x-dev/core';
+import type { SemanticContent } from '@t3x-dev/core';
+import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
-  collectYOpsForCommitRange,
-  createCommit,
+  ensureMainBranch,
+  findBranchesByProject,
   findConversationById,
-  getCommit,
-  getYOpsForCommit,
-  insertRewrite,
-  isCommitSuperseded,
-  listCommits,
+  getCommitHistoryEntry,
+  getTransitionRefHead,
+  getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
+  getYOpsForTransitionCommit,
+  listCommitHistory,
   markConversationCommitted,
-  updateCommitMessage,
-  updateCommitPosition,
+  TransitionHeadConflictError,
+  TransitionProjectionAuthorizationInvalidError,
+  TransitionRefHeadIntegrityError,
 } from '@t3x-dev/storage';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
-import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  decodeRepositorySemanticContentState,
+  getRepositoryConversationEvidence,
+  getRepositorySemanticCommit,
+  RepositoryStateDomainUnsupportedError,
+} from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
-import { commitOp } from '../ops/commit';
-import { buildPipelineContext } from '../ops/context';
 import {
   ErrorResponseSchema,
   HashParamSchema,
@@ -51,24 +53,6 @@ export const commitRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================
 
-const AuthorSchema = z.object({
-  type: z.enum(['human', 'agent', 'system']),
-  id: z.string().optional(),
-  name: z.string().optional(),
-});
-
-const _SourceSchema = z.object({
-  type: z.enum(['conversation', 'import', 'leaf']),
-  id: z.string(),
-  title: z.string().optional(),
-});
-
-const ProvenanceSchema = z.object({
-  method: z.enum(['llm_extraction', 'human_curation', 'import', 'merge']),
-  model: z.string().optional(),
-  extracted_at: z.string().optional(),
-});
-
 const CreateCommitRequestSchema = z.object({
   project_id: z.string().min(1),
   source_conversation_id: z.string().optional(),
@@ -77,20 +61,8 @@ const CreateCommitRequestSchema = z.object({
     relations: z.any().optional(),
   }),
   branch: z.string().optional(),
-  parents: z.array(z.string()).optional(),
+  expected_head: z.string().nullable(),
   message: z.string().optional(),
-  author: AuthorSchema.optional(),
-  provenance: ProvenanceSchema.optional(),
-  yops_log_ids: z.array(z.string()).optional(),
-  sources: z
-    .array(
-      z.object({
-        type: z.enum(['conversation', 'import', 'leaf']),
-        id: z.string(),
-        title: z.string().optional(),
-      })
-    )
-    .optional(),
 });
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
@@ -102,28 +74,112 @@ class SourceConversationAlreadyCommittedError extends Error {
   }
 }
 
-const CommitResponseSchema = z.object({
-  hash: z.string(),
-  schema: z.string(),
-  parents: z.array(z.string()),
-  author: AuthorSchema,
-  committed_at: z.string(),
-  content: z.any(),
-  project_id: z.string(),
-  message: z.string().nullable(),
-  branch: z.string(),
-  provenance: ProvenanceSchema.nullable(),
+const DigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+const CommitDescriptorSchema = z.object({
+  kind: z.literal('commit'),
+  schema: z.literal('t3x/commit/v2'),
+  digest: DigestSchema,
+});
+const CommitV2ObjectSchema = z.object({
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(CommitDescriptorSchema),
+  decision: z.object({
+    kind: z.literal('statement'),
+    schema: z.literal('t3x/statement/v1'),
+    digest: DigestSchema,
+  }),
+  result: z.object({
+    kind: z.literal('state'),
+    schema: z.literal('t3x/state/v1'),
+    digest: DigestSchema,
+  }),
+});
+const CreatedCommitV2ResponseSchema = z.object({
+  digest: DigestSchema,
+  ref_name: z.string(),
+  object: CommitV2ObjectSchema,
+});
+const StoredCommitV2ResponseSchema = z.object({
+  digest: DigestSchema,
+  recorded_at: z.string(),
+  object: CommitV2ObjectSchema,
 });
 
+const DescriptorBaseSchema = z.object({
+  digest: z.string(),
+});
+
+const CommitHistoryProjectionSchema = z.object({
+  format: z.literal('transition_v2'),
+  id: z.string(),
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(z.string()),
+  recordedAt: z.string(),
+  result: z.object({
+    mode: z.literal('state_descriptor'),
+    descriptor: DescriptorBaseSchema.extend({
+      kind: z.literal('state'),
+      schema: z.literal('t3x/state/v1'),
+    }),
+  }),
+  assurance: z.object({
+    mode: z.literal('decision_bound'),
+    decision: DescriptorBaseSchema.extend({
+      kind: z.literal('statement'),
+      schema: z.literal('t3x/statement/v1'),
+    }),
+  }),
+});
+
+type VerifiedCommitGraph = NonNullable<
+  Awaited<ReturnType<typeof getVerifiedTransitionCommitGraph>>
+>;
+type CommitHistoryEntry = NonNullable<Awaited<ReturnType<typeof getCommitHistoryEntry>>>;
+type RepositoryDB = Parameters<typeof getRepositorySemanticCommit>[0];
+
+function proposalMessage(graph: VerifiedCommitGraph): string | null {
+  const intent = graph.proposal.predicate.intent;
+  if (intent.mode !== 'unspecified') return intent.value;
+  const rationale = graph.proposal.predicate.rationale;
+  return rationale.mode === 'unspecified' ? null : rationale.value;
+}
+
+function semanticContentFromTransitionState(state: VerifiedCommitGraph['state']): SemanticContent {
+  try {
+    return decodeRepositorySemanticContentState(state);
+  } catch (error) {
+    if (
+      error instanceof RepositoryStateDomainUnsupportedError &&
+      state.codec.mediaType === YOPS_STATE_MEDIA_TYPE
+    ) {
+      return { trees: yvalueToTrees(state.value), relations: [] };
+    }
+    throw error;
+  }
+}
+
+async function getRepositorySemanticCommitIfSupported(
+  db: RepositoryDB,
+  digest: string,
+  projectId: string
+) {
+  try {
+    return await getRepositorySemanticCommit(db, digest, projectId);
+  } catch (error) {
+    if (error instanceof RepositoryStateDomainUnsupportedError) return null;
+    throw error;
+  }
+}
+
 // ============================================================
-// POST /v1/commits — Create a new frame-based commit
+// POST /v1/commits — Commit an exact structured State through Transition
 // ============================================================
 
 const createCommitRoute = createRoute({
   method: 'post',
   path: '/v1/commits',
   tags: ['Commits'],
-  summary: 'Create a new frame-based commit',
+  summary: 'Commit structured repository state',
   request: {
     body: {
       content: {
@@ -135,10 +191,10 @@ const createCommitRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Commit created successfully',
+      description: 'CommitV2 created successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commit: CommitResponseSchema })),
+          schema: SuccessResponseSchema(z.object({ commit: CreatedCommitV2ResponseSchema })),
         },
       },
     },
@@ -157,13 +213,14 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
   const body = c.req.valid('json');
 
   try {
-    const ctx = await buildPipelineContext(c, body.project_id);
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, body.project_id);
+    if (access instanceof Response) return access;
     const sourceConversationId = body.source_conversation_id;
-
-    let yopsLogIds = body.yops_log_ids;
-    let inheritedParentHash: string | undefined;
+    let yopsLogIds: string[] = [];
+    let inheritedParentHash: string | null = null;
     if (sourceConversationId) {
-      const sourceConversation = await findConversationById(ctx.db, sourceConversationId);
+      const sourceConversation = await findConversationById(db, sourceConversationId);
       if (!sourceConversation) {
         return errorResponse(c, 'NOT_FOUND', `Conversation ${sourceConversationId} not found`);
       }
@@ -181,66 +238,96 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
           `Conversation ${sourceConversationId} has already been committed`
         );
       }
-      inheritedParentHash = sourceConversation.parentCommitHash ?? undefined;
-      yopsLogIds ??= await findUncommittedYOpsIds(ctx.db, sourceConversationId, body.project_id);
+      inheritedParentHash = sourceConversation.parentCommitHash;
+      yopsLogIds = await findUncommittedYOpsIds(db, sourceConversationId, body.project_id);
     }
     const targetBranch = body.branch ?? 'main';
-    const parents =
-      body.parents !== undefined
-        ? body.parents
-        : await resolveDefaultCommitParents(
-            ctx.db,
-            body.project_id,
-            targetBranch,
-            inheritedParentHash
-          );
-
-    const commitInput = {
-      project_id: body.project_id,
-      // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
-      content: body.content as any,
-      branch: targetBranch,
-      parents,
-      message: body.message,
-      author: body.author,
-      provenance: body.provenance,
-      yops_log_ids: yopsLogIds,
-      sources: body.sources,
-    };
-
-    if (sourceConversationId) {
-      let commit: Commit | undefined;
-      await (ctx.db as unknown as TxRunner).transaction(async (tx) => {
-        const txCtx = { ...ctx, db: tx as typeof ctx.db };
-        commit = await collectResult(runOperation(commitOp, commitInput, txCtx));
-        const marked = await markConversationCommitted(
-          tx as typeof ctx.db,
-          sourceConversationId,
-          commit.hash
-        );
-        if (!marked) {
-          throw new SourceConversationAlreadyCommittedError(sourceConversationId);
-        }
-      });
-      if (!commit) throw new Error('Commit transaction did not return a commit');
-
-      return c.json({ success: true as const, data: { commit } }, 200);
+    if (targetBranch === 'main') await ensureMainBranch(db, body.project_id);
+    const expectedHead = body.expected_head;
+    if (inheritedParentHash !== null && inheritedParentHash !== expectedHead) {
+      return errorResponse(
+        c,
+        'BRANCH_NOT_HEAD',
+        'The source conversation parent does not match the target ref head'
+      );
     }
+    const content = {
+      trees: Array.isArray(body.content.trees) ? body.content.trees : [],
+      relations: Array.isArray(body.content.relations) ? body.content.relations : [],
+    } as SemanticContent;
+    const validation = validateTree(content);
+    if (!validation.valid) {
+      return errorResponse(
+        c,
+        'VALIDATION_FAILED',
+        validation.warnings
+          .filter((warning) => warning.severity === 'error')
+          .map((warning) => `${warning.rule}: ${warning.message}`)
+          .join('; ')
+      );
+    }
+    const target = createRepositoryYOpsStateFromSemanticContent(content);
+    const userId = getUserId(c);
+    let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
+    await (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as typeof db;
+      const evidence = sourceConversationId
+        ? await getRepositoryConversationEvidence(tx, body.project_id, sourceConversationId)
+        : [];
+      created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId: body.project_id,
+        refName: targetBranch,
+        expectedHead,
+        target,
+        actor: {
+          kind: 'human',
+          id: userId ? `user:${userId}` : 'human:local-user',
+        },
+        ...(body.message?.trim() ? { intent: body.message.trim() } : {}),
+        ...(evidence.length === 0 ? {} : { evidence }),
+        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
+      });
+      if (sourceConversationId) {
+        const marked = await markConversationCommitted(
+          tx,
+          sourceConversationId,
+          created.commitDigest
+        );
+        if (!marked) throw new SourceConversationAlreadyCommittedError(sourceConversationId);
+      }
+    });
+    if (created === undefined) throw new Error('CommitV2 transaction did not return a commit');
 
-    const commit = await collectResult(runOperation(commitOp, commitInput, ctx));
-
-    return c.json({ success: true as const, data: { commit } }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: {
+            digest: created.commitDigest,
+            hash: created.commitDigest,
+            ref_name: targetBranch,
+            object: created.commit,
+          },
+        },
+      },
+      200
+    );
   } catch (err) {
     if (err instanceof SourceConversationAlreadyCommittedError) {
       return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
+    if (err instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
+    }
+    if (err instanceof RepositoryStateDomainUnsupportedError) {
+      return errorResponse(c, 'SEMANTIC_NOT_SUPPORTED', err.message);
     }
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500. Same boundary as the
     // draft / autopilot / drafts-workflow commit routes.
     const conflict = mapSupersededError(c, err);
     if (conflict) return conflict;
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
     const message = err instanceof Error ? err.message : 'Failed to create commit';
     return errorResponse(c, 'CREATE_FAILED', message);
   }
@@ -257,13 +344,14 @@ const getCommitRoute = createRoute({
   summary: 'Get a commit by hash',
   request: {
     params: HashParamSchema,
+    query: z.object({ project_id: z.string().min(1) }),
   },
   responses: {
     200: {
       description: 'Commit found',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commit: CommitResponseSchema })),
+          schema: SuccessResponseSchema(z.object({ commit: StoredCommitV2ResponseSchema })),
         },
       },
     },
@@ -280,23 +368,112 @@ const getCommitRoute = createRoute({
 
 commitRoutes.openapi(getCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { project_id: projectId } = c.req.valid('query');
   const db = await getDB();
 
   try {
-    const commit = await getCommit(db, hash);
-    if (!commit) {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
+    if (!graph) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
-    if (commit.project_id) {
-      const accessResult = await assertProjectAccess(c, db, commit.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
-    return c.json({ success: true as const, data: { commit } }, 200);
+    const semanticCommit = await getRepositorySemanticCommitIfSupported(db, hash, projectId);
+    const content =
+      semanticCommit?.semanticContent ?? semanticContentFromTransitionState(graph.state);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: {
+            digest: hash,
+            recorded_at: graph.recordedAt,
+            object: graph.commit,
+            hash,
+            schema: graph.commit.schema,
+            parents: graph.commit.parents.map((parent) => parent.digest),
+            committed_at: graph.recordedAt,
+            content,
+            project_id: projectId,
+            message: semanticCommit?.intent ?? proposalMessage(graph),
+            branch: 'main',
+            sources: null,
+            provenance: { method: 'transition_v2' },
+          },
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get commit';
     return errorResponse(c, 'GET_FAILED', message);
   }
 });
+
+async function withSemanticCommitFields(
+  db: RepositoryDB,
+  projectId: string,
+  branch: string,
+  entry: CommitHistoryEntry
+) {
+  const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
+  const graph = semanticCommit
+    ? null
+    : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
+  return {
+    ...entry,
+    branch,
+    content:
+      semanticCommit?.semanticContent ??
+      (graph ? semanticContentFromTransitionState(graph.state) : undefined),
+    message: semanticCommit?.intent ?? (graph ? proposalMessage(graph) : null),
+    project_id: projectId,
+  };
+}
+
+async function listCommitHistoryForRef(
+  db: RepositoryDB,
+  projectId: string,
+  refName: string,
+  options: { limit: number; offset: number }
+) {
+  const head = await getTransitionRefHead(db, { projectId, refName });
+  if (head.format === 'empty') return [];
+  const commits = [];
+  const seen = new Set<string>();
+  const stack = [head.head];
+  while (stack.length > 0 && commits.length < options.limit + options.offset) {
+    const digest = stack.shift()!;
+    if (seen.has(digest)) continue;
+    seen.add(digest);
+    const entry = await getCommitHistoryEntry(db, projectId, digest);
+    if (!entry) continue;
+    commits.push(await withSemanticCommitFields(db, projectId, refName, entry));
+    stack.push(...entry.parents);
+  }
+  return commits.slice(options.offset, options.offset + options.limit);
+}
+
+async function listCommitHistoryForAllRefs(
+  db: RepositoryDB,
+  projectId: string,
+  options: { limit: number; offset: number }
+) {
+  const branches = await findBranchesByProject(db, { projectId, limit: 1000, offset: 0 });
+  const byDigest = new Map<string, Awaited<ReturnType<typeof withSemanticCommitFields>>>();
+  for (const branch of branches) {
+    const entries = await listCommitHistoryForRef(db, projectId, branch.name, {
+      limit: options.limit + options.offset,
+      offset: 0,
+    });
+    for (const entry of entries) {
+      if (!byDigest.has(entry.id)) byDigest.set(entry.id, entry);
+    }
+  }
+  return Array.from(byDigest.values())
+    .sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt))
+    .slice(options.offset, options.offset + options.limit);
+}
 
 // ============================================================
 // GET /v1/projects/:projectId/commits — List commits for a project
@@ -311,18 +488,22 @@ const listCommitsRoute = createRoute({
     params: z.object({
       projectId: z.string().min(1),
     }),
-    query: PaginationQuerySchema.extend({
-      branch: z.string().optional(),
-    }),
+    query: PaginationQuerySchema.extend({ branch: z.string().trim().min(1).optional() }),
   },
   responses: {
     200: {
       description: 'Commits listed successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.object({ commits: z.array(CommitResponseSchema) })),
+          schema: SuccessResponseSchema(
+            z.object({ commits: z.array(CommitHistoryProjectionSchema) })
+          ),
         },
       },
+    },
+    409: {
+      description: 'The requested ref points to an unverifiable CommitV2 head',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -340,113 +521,147 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const commits = await listCommits(db, {
-      projectId,
-      branch,
-      limit,
-      offset,
-    });
+    const commits = branch
+      ? await listCommitHistoryForRef(db, projectId, branch, { limit, offset })
+      : await listCommitHistoryForAllRefs(db, projectId, { limit, offset });
 
     return c.json({ success: true as const, data: { commits } }, 200);
   } catch (err) {
+    if (err instanceof TransitionRefHeadIntegrityError) {
+      return errorResponse(c, 'REF_HEAD_INTEGRITY_INVALID', err.message, {
+        project_id: err.projectId,
+        ref: err.refName,
+        head: err.head,
+      });
+    }
     const message = err instanceof Error ? err.message : 'Failed to list commits';
     return errorResponse(c, 'LIST_FAILED', message);
   }
 });
 
 // ============================================================
-// PATCH /v1/commits/:hash/position — Update canvas position
+// GET /v1/projects/:projectId/commit-history — CommitV2 read projection
 // ============================================================
 
-const updatePositionRoute = createRoute({
-  method: 'patch',
-  path: '/v1/commits/{hash}/position',
+const listCommitHistoryRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commit-history',
+  tags: ['Commits'],
+  summary: 'List CommitV2 history projections',
   request: {
-    params: HashParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            position_x: z.number(),
-            position_y: z.number(),
-          }),
-        },
-      },
-    },
+    params: z.object({ projectId: z.string().min(1) }),
+    query: PaginationQuerySchema,
   },
   responses: {
     200: {
-      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
-      description: 'Position updated',
-    },
-    404: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Commit not found',
-    },
-  },
-});
-
-commitRoutes.openapi(updatePositionRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { position_x, position_y } = c.req.valid('json') as any;
-  const db = await getDB();
-  const decodedHash = decodeURIComponent(hash);
-
-  const updated = await updateCommitPosition(db, decodedHash, position_x, position_y);
-  if (!updated) {
-    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
-  }
-
-  return c.json({ success: true as const, data: updated }, 200);
-});
-
-// ============================================================
-// PATCH /v1/commits/:hash/message — Update commit message
-// ============================================================
-
-const updateMessageRoute = createRoute({
-  method: 'patch',
-  path: '/v1/commits/{hash}/message',
-  request: {
-    params: HashParamSchema,
-    body: {
+      description: 'CommitV2 history listed successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string().min(1).max(200),
-          }),
+          schema: SuccessResponseSchema(
+            z.object({ history: z.array(CommitHistoryProjectionSchema) })
+          ),
         },
       },
     },
-  },
-  responses: {
-    200: {
-      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
-      description: 'Message updated',
-    },
-    404: {
+    500: {
+      description: 'Internal server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Commit not found',
     },
   },
 });
 
-commitRoutes.openapi(updateMessageRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { message } = c.req.valid('json') as any;
+commitRoutes.openapi(listCommitHistoryRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const { limit, offset } = c.req.valid('query');
   const db = await getDB();
-  const decodedHash = decodeURIComponent(hash);
-
-  const updated = await updateCommitMessage(db, decodedHash, message);
-  if (!updated) {
-    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
+  try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const history = await listCommitHistory(db, projectId, { limit, offset });
+    return c.json({ success: true as const, data: { history } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list commit history';
+    return errorResponse(c, 'LIST_FAILED', message);
   }
+});
 
-  return c.json({ success: true as const, data: updated }, 200);
+// ============================================================
+// GET /v1/projects/:projectId/commits/:commitId/transition-view
+// ============================================================
+
+const getTransitionViewRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commits/{commitId}/transition-view',
+  tags: ['Commits'],
+  summary: 'Resolve a verified task-oriented Transition view for one commit',
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      commitId: z.string().min(1),
+    }),
+    query: z.object({ ref: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: 'Server-derived TransitionViewV1',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              transition: z
+                .unknown()
+                .openapi({ description: 'Shared @t3x-dev/core TransitionViewV1 contract' }),
+            })
+          ),
+        },
+      },
+    },
+    404: {
+      description: 'Commit not found in the project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Stored Transition graph or authorization facts do not verify',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(getTransitionViewRoute, async (c) => {
+  const { projectId, commitId } = c.req.valid('param');
+  const { ref } = c.req.valid('query');
+  const db = await getDB();
+
+  try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const transition = await getTransitionViewForCommit(db, {
+      projectId,
+      refName: ref,
+      commitId: decodeURIComponent(commitId),
+    });
+    if (transition === null) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${commitId} not found`);
+    }
+    return c.json({ success: true as const, data: { transition } }, 200);
+  } catch (err) {
+    if (
+      err instanceof TransitionProjectionAuthorizationInvalidError ||
+      (typeof err === 'object' && err !== null && 'code' in err)
+    ) {
+      return errorResponse(
+        c,
+        'TRANSITION_VIEW_UNAVAILABLE',
+        'The stored Transition graph or its repository authorization did not verify'
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Failed to resolve Transition view';
+    return errorResponse(c, 'GET_FAILED', message);
+  }
 });
 
 // ============================================================
@@ -458,7 +673,10 @@ const getHistoryRoute = createRoute({
   path: '/v1/commits/{hash}/history',
   request: {
     params: HashParamSchema,
-    query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(500).default(50),
+    }),
   },
   responses: {
     200: {
@@ -473,15 +691,16 @@ const getHistoryRoute = createRoute({
 });
 
 commitRoutes.openapi(getHistoryRoute, async (c) => {
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { hash } = c.req.valid('param') as any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const { limit } = c.req.valid('query') as any;
+  const { hash } = c.req.valid('param');
+  const { project_id: projectId, limit } = c.req.valid('query');
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
 
   const visited = new Set<string>();
   const queue = [decodedHash];
+  const queued = new Set(queue);
   const commits = [];
 
   while (queue.length > 0 && commits.length < limit) {
@@ -489,12 +708,15 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     if (visited.has(currentHash)) continue;
     visited.add(currentHash);
 
-    const commit = await getCommit(db, currentHash);
+    const commit = await getCommitHistoryEntry(db, projectId, currentHash);
     if (!commit) continue;
     commits.push(commit);
 
     for (const parentHash of commit.parents) {
-      if (!visited.has(parentHash)) queue.push(parentHash);
+      if (!visited.has(parentHash) && !queued.has(parentHash)) {
+        queued.add(parentHash);
+        queue.push(parentHash);
+      }
     }
   }
 
@@ -502,10 +724,7 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
   }
 
-  return c.json(
-    { success: true as const, data: { commits, truncated: commits.length >= limit } },
-    200
-  );
+  return c.json({ success: true as const, data: { commits, truncated: queue.length > 0 } }, 200);
 });
 
 // ============================================================
@@ -519,6 +738,7 @@ const getCommitOperationsRoute = createRoute({
   summary: 'Get operations that produced a commit',
   request: {
     params: HashParamSchema,
+    query: z.object({ project_id: z.string().min(1) }),
   },
   responses: {
     200: {
@@ -527,7 +747,7 @@ const getCommitOperationsRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(
             z.object({
-              commit_hash: z.string(),
+              commit_digest: z.string(),
               operations: z.array(
                 z.object({
                   id: z.string(),
@@ -556,22 +776,25 @@ const getCommitOperationsRoute = createRoute({
 
 commitRoutes.openapi(getCommitOperationsRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { project_id: projectId } = c.req.valid('query');
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
 
   try {
-    const commit = await getCommit(db, decodedHash);
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const commit = await getVerifiedTransitionCommitGraph(db, projectId, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
 
-    const operations = await getYOpsForCommit(db, commit.yops_log_ids);
+    const operations = await getYOpsForTransitionCommit(db, projectId, decodedHash);
 
     return c.json(
       {
         success: true as const,
         data: {
-          commit_hash: commit.hash,
+          commit_digest: decodedHash,
           operations: operations.map((op) => ({
             id: op.id,
             source: op.source,
@@ -587,191 +810,5 @@ commitRoutes.openapi(getCommitOperationsRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get commit operations';
     return errorResponse(c, 'GET_FAILED', message);
-  }
-});
-
-// ============================================================
-// POST /v1/branches/:branch/squash — Squash consecutive commits
-// ============================================================
-
-const squashRoute = createRoute({
-  method: 'post',
-  path: '/v1/branches/{branch}/squash',
-  tags: ['Commits'],
-  summary: 'Squash consecutive commits by replaying their YOps',
-  request: {
-    params: z.object({ branch: z.string() }),
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            project_id: z.string(),
-            commit_hashes: z.array(z.string()).min(2),
-            message: z.string().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: 'Squash successful',
-      content: {
-        'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              commit: z.unknown(),
-              superseded: z.array(z.string()),
-              ops_replayed: z.number(),
-            })
-          ),
-        },
-      },
-    },
-    400: {
-      description: 'Invalid input',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    404: {
-      description: 'Not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    409: {
-      description: 'Replay mismatch',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-commitRoutes.openapi(squashRoute, async (c) => {
-  const { branch } = c.req.valid('param');
-  const { project_id, commit_hashes, message } = c.req.valid('json');
-  const db = await getDB();
-
-  try {
-    // 1. Fetch all commits and validate
-    const commitMap = new Map<string, NonNullable<Awaited<ReturnType<typeof getCommit>>>>();
-    for (const hash of commit_hashes) {
-      const commit = await getCommit(db, hash);
-      if (!commit) {
-        return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
-      }
-      if (commit.branch !== branch) {
-        return errorResponse(
-          c,
-          'INVALID_REQUEST',
-          `Commit ${hash} is on branch '${commit.branch}', not '${branch}'`
-        );
-      }
-      if (commit.project_id !== project_id) {
-        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} belongs to different project`);
-      }
-      commitMap.set(hash, commit);
-    }
-
-    // 1b. Check none are already superseded
-    for (const hash of commit_hashes) {
-      if (await isCommitSuperseded(db, project_id, hash)) {
-        return errorResponse(
-          c,
-          'INVALID_REQUEST',
-          `Commit ${hash} is already superseded by a previous rewrite`
-        );
-      }
-    }
-
-    // 2. Validate consecutive chain
-    for (let i = 1; i < commit_hashes.length; i++) {
-      const current = commitMap.get(commit_hashes[i])!;
-      if (!current.parents.includes(commit_hashes[i - 1])) {
-        return errorResponse(
-          c,
-          'INVALID_REQUEST',
-          `Commits are not consecutive: ${commit_hashes[i]} does not have ${commit_hashes[i - 1]} as parent`
-        );
-      }
-    }
-
-    // 3. Find base content
-    const firstCommit = commitMap.get(commit_hashes[0])!;
-    let baseContent: SemanticContent = { trees: [], relations: [] };
-    if (firstCommit.parents.length > 0) {
-      const baseCommit = await getCommit(db, firstCommit.parents[0]);
-      if (baseCommit) {
-        baseContent = baseCommit.content;
-      }
-    }
-
-    // 4. Collect and extract ops
-    let allYopsLogIds: string[];
-    try {
-      allYopsLogIds = await collectYOpsForCommitRange(db, commit_hashes);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return errorResponse(c, 'INVALID_REQUEST', msg);
-    }
-
-    const yopsEntries = await getYOpsForCommit(db, allYopsLogIds);
-
-    let ops: YOp[];
-    try {
-      ops = extractOpsFromEntries(yopsEntries.map((e) => ({ id: e.id, yops: e.yops })));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return errorResponse(c, 'CONFLICT', `Failed to parse YOps: ${msg}`);
-    }
-
-    // 5. Verify replay matches last commit's snapshot
-    const lastCommit = commitMap.get(commit_hashes[commit_hashes.length - 1])!;
-    const verification = verifyReplay(baseContent, ops, lastCommit.content);
-
-    if (!verification.match) {
-      return errorResponse(
-        c,
-        'CONFLICT',
-        'Replayed content does not match commit snapshot — pipeline bug detected',
-        verification.mismatch ?? undefined
-      );
-    }
-
-    // 6. Create squashed commit
-    const newCommit = await createCommit(db, {
-      parents: firstCommit.parents,
-      author: { type: 'human', name: 'api' },
-      content: verification.replayedContent,
-      project_id,
-      message: message ?? `Squash ${commit_hashes.length} commits`,
-      branch,
-      provenance: { method: 'squash', source_commits: commit_hashes },
-      yops_log_ids: allYopsLogIds,
-    });
-
-    // 7. Record rewrite
-    await insertRewrite(db, {
-      projectId: project_id,
-      branch,
-      operation: 'squash',
-      sourceHashes: commit_hashes,
-      resultHash: newCommit.hash,
-      baseHash: firstCommit.parents[0] ?? null,
-      opsReplayed: verification.opsApplied,
-      yopsLogIds: allYopsLogIds,
-      author: { type: 'human', name: 'api' },
-    });
-
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          commit: newCommit,
-          superseded: commit_hashes,
-          ops_replayed: verification.opsApplied,
-        },
-      },
-      200
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Squash failed';
-    return errorResponse(c, 'INTERNAL_ERROR', msg);
   }
 });

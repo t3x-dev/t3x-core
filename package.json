@@ -6,7 +6,7 @@
   "description": "Version control for structured state.",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
-    "prepare": "sh tools/hooks/install-hooks.sh",
+    "prepare": "node tools/hooks/install-hooks.mjs",
     "build": "turbo run build",
     "build:core": "turbo run build --filter=@t3x-dev/core",
     "build:storage": "turbo run build --filter=@t3x-dev/storage",
@@ -21,12 +21,13 @@
     "test:api": "turbo run test --filter=@t3x-dev/api",
     "test:yschema": "turbo run test --filter=@t3x-dev/yschema",
     "clean": "turbo run clean",
-    "test": "node --test tools/__tests__/sourceDevAuthDefaults.test.mjs tools/__tests__/releaseSurface.test.mjs tools/__tests__/releaseDocsAlignment.test.mjs tools/__tests__/apiSurface.test.mjs tools/__tests__/apiDiff.test.mjs tools/__tests__/standardsMatrix.test.mjs tools/__tests__/standardsRunner.test.mjs tools/__tests__/standardsRow3.test.mjs tools/__tests__/standardsRow4.test.mjs tools/__tests__/releasePr.test.mjs tools/__tests__/releaseReadiness.test.mjs tools/__tests__/releaseReadinessSignoff.test.mjs tools/__tests__/releaseReadinessWorkflow.test.mjs tools/__tests__/productRelease.test.mjs tools/__tests__/packageReleaseAssets.test.mjs tools/__tests__/issueTemplates.test.mjs tools/__tests__/screenshotDemoConfig.test.mjs tools/__tests__/productPositioning.test.mjs && turbo run test",
+    "test": "node --test tools/__tests__/sourceDevAuthDefaults.test.mjs tools/__tests__/releaseSurface.test.mjs tools/__tests__/releaseDocsAlignment.test.mjs tools/__tests__/apiSurface.test.mjs tools/__tests__/apiDiff.test.mjs tools/__tests__/standardsMatrix.test.mjs tools/__tests__/standardsRunner.test.mjs tools/__tests__/standardsRow3.test.mjs tools/__tests__/standardsRow4.test.mjs tools/__tests__/releasePr.test.mjs tools/__tests__/releaseReadiness.test.mjs tools/__tests__/releaseReadinessSignoff.test.mjs tools/__tests__/releaseReadinessWorkflow.test.mjs tools/__tests__/fullStackE2EWorkflow.test.mjs tools/__tests__/productRelease.test.mjs tools/__tests__/packageReleaseAssets.test.mjs tools/__tests__/issueTemplates.test.mjs tools/__tests__/screenshotDemoConfig.test.mjs tools/__tests__/productPositioning.test.mjs tools/__tests__/transitionBoundaries.test.mjs && turbo run test",
     "test:core": "turbo run test --filter=@t3x-dev/core",
     "test:storage": "turbo run test --filter=@t3x-dev/storage",
     "test:webui": "turbo run test --filter=t3x-webui",
     "test:webui:no-deps": "pnpm --filter t3x-webui exec vitest run",
     "test:runner": "turbo run test --filter=@t3x-dev/runner",
+    "test:transition-conformance": "python3 tools/transition-conformance-python/run.py --repo-root .",
     "test:yops": "turbo run test --filter=@t3x-dev/yops",
     "screenshots:demo": "node tools/screenshot-demo.mjs",
     "typecheck": "turbo run typecheck",
@@ -38,6 +39,7 @@
     "check:fix": "biome check --write .",
     "check:release-docs-alignment": "node tools/check-release-docs-alignment.mjs",
     "check:release-surface": "node tools/check-release-surface.mjs",
+    "check:transition-boundaries": "node tools/check-transition-boundaries.mjs",
     "check:release-pr": "node tools/check-release-pr.mjs",
     "api-extract": "node tools/api-surface/extract.mjs --write",
     "api-extract:verify": "node tools/api-surface/extract.mjs --verify",
@@ -50,7 +52,9 @@
     "dev:api": "node tools/dev-source-runner.mjs api",
     "dev:api:persistent": "pnpm --filter t3x-api-server dev:persistent",
     "dev:agent": "turbo run dev --filter=agent-demo",
-    "e2e": "pnpm e2e:stop && node tools/dev-package-runner.mjs webui pnpm build && (node tools/dev-package-runner.mjs api node apps/api/dist/index.js & pnpm --filter t3x-webui start & wait)",
+    "e2e": "pnpm e2e:full",
+    "e2e:full": "node tools/full-e2e.mjs",
+    "e2e:serve": "pnpm e2e:stop && node tools/dev-package-runner.mjs webui pnpm build && (node tools/dev-package-runner.mjs api node apps/api/dist/index.js & pnpm --filter t3x-webui start & wait)",
     "e2e:api": "(lsof -ti:8000 | xargs kill -9 2>/dev/null; true) && node tools/dev-package-runner.mjs api pnpm build && node tools/dev-package-runner.mjs api node apps/api/dist/index.js",
     "e2e:webui": "(lsof -ti:3000 | xargs kill -9 2>/dev/null; true) && node tools/dev-package-runner.mjs webui pnpm --filter t3x-webui build && pnpm --filter t3x-webui start",
     "e2e:stop": "(lsof -ti:8000 | xargs kill -9 2>/dev/null; true); (lsof -ti:3000 | xargs kill -9 2>/dev/null; true)",
@@ -74,20 +78,6 @@
   "engines": {
     "node": ">=20.9.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@embedded-postgres/darwin-arm64",
-      "@embedded-postgres/darwin-x64",
-      "@embedded-postgres/linux-arm64",
-      "@embedded-postgres/linux-x64",
-      "@swc/core"
-    ],
-    "overrides": {
-      "fast-uri@3.1.0": "3.1.2",
-      "picomatch@2.3.1": "2.3.2",
-      "picomatch@4.0.3": "4.0.4"
-    }
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
     "@changesets/changelog-github": "^0.6.0",
@@ -95,6 +85,7 @@
     "@types/js-yaml": "^4.0.9",
     "dotenv-cli": "^11.0.0",
     "js-yaml": "^4.1.1",
-    "turbo": "^2.7.2"
+    "turbo": "^2.7.2",
+    "typescript": "^5.9.3"
   }
 }

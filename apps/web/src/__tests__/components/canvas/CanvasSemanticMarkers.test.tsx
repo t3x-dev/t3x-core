@@ -7,6 +7,7 @@ import { canvasNodeTypes } from '@/components/canvas/CanvasNodes';
 import type { CanvasNodeData } from '@/types/nodes';
 
 const navigationMocks = vi.hoisted(() => ({
+  params: { projectId: 'proj_canvas' } as Record<string, string>,
   routerPush: vi.fn(),
   searchParams: new URLSearchParams(),
 }));
@@ -38,9 +39,21 @@ vi.mock('framer-motion', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ projectId: 'proj_canvas' }),
+  useParams: () => navigationMocks.params,
   useRouter: () => ({ push: navigationMocks.routerPush }),
   useSearchParams: () => navigationMocks.searchParams,
+}));
+
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('@/components/canvas/AutoDraftBadge', () => ({
@@ -101,6 +114,7 @@ vi.mock('@/hooks/shared/useTerminology', () => ({
 }));
 
 const openLeafPanelMock = vi.hoisted(() => vi.fn());
+const openNodeModalMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -108,7 +122,8 @@ vi.mock('@/store/canvasStore', () => ({
       getCommitTone: () => 'main-latest',
       hasMainCommit: false,
       openLeafPanel: openLeafPanelMock,
-      openNodeModal: vi.fn(),
+      openNodeModal: openNodeModalMock,
+      projectId: 'proj_store',
       updateNode: vi.fn(),
     }),
 }));
@@ -119,7 +134,10 @@ vi.mock('@/store/pinsStore', () => ({
 
 vi.mock('@/store/projectStore', () => ({
   useProjectStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notifyCallback: vi.fn() }),
+    selector({
+      getProject: (projectId: string) => ({ id: projectId, name: 'Canvas Project' }),
+      notifyCallback: vi.fn(),
+    }),
 }));
 
 class ResizeObserverStub {
@@ -140,7 +158,7 @@ function makeNodeData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
       content: { trees: [{ key: 'goal', slots: {}, children: [] }], relations: [] },
       hash: 'sha256:abc123',
       message: 'Canvas marker fixture',
-      schema: 't3x/commit',
+      schema: 't3x/commit/v2',
       sources: null,
     },
     commitHash: 'sha256:abc123',
@@ -200,6 +218,7 @@ function renderSelectedUnitNode(data: CanvasNodeData) {
 describe('Canvas node semantic markers', () => {
   beforeEach(() => {
     openLeafPanelMock.mockClear();
+    navigationMocks.params = { projectId: 'proj_canvas' };
     navigationMocks.routerPush.mockClear();
     navigationMocks.searchParams = new URLSearchParams();
   });
@@ -271,35 +290,49 @@ describe('Canvas node semantic markers', () => {
     expect(screen.queryByTitle('Rename commit')).not.toBeInTheDocument();
   });
 
-  it('opens commit details from the committed hash inside the node', () => {
+  it('renders the committed hash without an old commit-detail action', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
-
-    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_canvas/commit/sha256%3Aabc123'
-    );
+    expect(screen.getByText('hash:abc123')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open commit hash:abc123' })
+    ).not.toBeInTheDocument();
+    expect(openNodeModalMock).not.toHaveBeenCalled();
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('keeps the intro demo query when opening commit details from the hash', () => {
+  it('does not restore the old commit-detail action during the intro demo', () => {
     navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
-
-    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_canvas/commit/sha256%3Aabc123?introDemo=1'
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Open commit hash:abc123' })
+    ).not.toBeInTheDocument();
+    expect(openNodeModalMock).not.toHaveBeenCalled();
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('shows a local new leaf action after expanding existing leaf output', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: /Launch brief/i }));
+    const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
+    expect(leafLink).toHaveAttribute('href', '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas');
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
 
     expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+  });
+
+  it('uses the canvas project id for leaf detail links when the route has no projectId param', () => {
+    navigationMocks.params = {};
+    renderUnitNode(makeNodeData());
+
+    expect(screen.getByRole('link', { name: /Open leaf Launch brief/i })).toHaveAttribute(
+      'href',
+      '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas'
+    );
   });
 
   it('keeps the empty leaf state informational without a local new leaf action', () => {

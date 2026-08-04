@@ -17,7 +17,6 @@ import {
   findCurrentBranch,
   insertBranch,
   switchBranch,
-  updateBranchHead,
 } from '../queries/branches';
 import { insertProject } from '../queries/projects';
 import { branches } from '../schema';
@@ -225,25 +224,6 @@ describe('Branches Storage', () => {
 
     it('returns null when target branch does not exist', async () => {
       const result = await switchBranch(db, testProjectId, 'nonexistent');
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('updateBranchHead', () => {
-    it('updates branch head commit hash', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Head Update Project' }));
-      await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
-
-      const commitHash = 'sha256:abc123';
-      const updated = await updateBranchHead(db, newProject.projectId, 'main', commitHash);
-
-      expect(updated).toBeDefined();
-      expect(updated!.headCommitHash).toBe(commitHash);
-    });
-
-    it('returns null when branch does not exist', async () => {
-      const result = await updateBranchHead(db, testProjectId, 'nonexistent', 'sha256:xyz');
 
       expect(result).toBeNull();
     });

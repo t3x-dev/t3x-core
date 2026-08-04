@@ -47,8 +47,8 @@ test.describe('Canvas Workflow', () => {
     await expect(commitNode.first()).toBeVisible({ timeout: 15000 });
   });
 
-  // CW-02: Clicking a node opens the detail panel with meaningful content (#9)
-  test('CW-02: Node click opens panel', async ({ page }) => {
+  // CW-02: Clicking a commit selects it without reviving the retired details modal.
+  test('CW-02: Node click selects the version on Canvas', async ({ page }) => {
     const canvas = new CanvasPage(page);
     await canvas.goto(projectId);
     await canvas.waitForLoad();
@@ -56,42 +56,25 @@ test.describe('Canvas Workflow', () => {
     // Click the commit node
     await canvas.clickNode(commitHash);
 
-    // A panel or expanded card should appear with commit details
-    // The canvas shows commit message + node count (not individual nodes)
-    const commitLabel = page.locator(`text=${commitMessage}`);
-    await expect(commitLabel.first()).toBeVisible({ timeout: 10000 });
-
-    // Should show node/frame/tree count
-    const contentCount = page.locator('text=/\\d+ (nodes?|frames?|trees?|evidence)/');
-    await expect(contentCount.first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+    await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  // CW-03: Mode switch (editor/execution) — skip explicitly if unavailable (#3)
-  test('CW-03: Mode switch', async ({ page }) => {
+  // CW-03: Current canvas toolbar remains interactive after fitting the graph.
+  test('CW-03: Fit View keeps the commit graph operational', async ({ page }) => {
     const canvas = new CanvasPage(page);
     await canvas.goto(projectId);
     await canvas.waitForLoad();
 
-    const executionBtn = page.locator('button:has-text("Execution")');
-    const hasToggle = await executionBtn
-      .first()
-      .isVisible()
-      .catch(() => false);
+    const fitView = page.locator('[title="Fit View"]:visible').first();
+    await expect(fitView).toBeVisible();
+    await fitView.click();
 
-    if (!hasToggle) {
-      test.skip(true, 'Editor/Execution mode toggle not present on this page');
-      return;
-    }
-
-    // Switch to Execution mode
-    await executionBtn.first().click();
-    const executionView = page.locator('text=Execution Monitor');
-    await expect(executionView.first()).toBeVisible({ timeout: 10000 });
-
-    // Switch back to Editor mode
-    const editorBtn = page.locator('button:has-text("Editor")');
-    await editorBtn.first().click();
-    await canvas.waitForLoad();
+    await expect(canvas.canvas).toBeVisible();
+    await expect(canvas.getNodeByHash(commitHash).first()).toBeVisible();
   });
 
   // CW-04: Canvas renders without unexpected console errors (#7, #11)

@@ -41,6 +41,7 @@ describe('T3xClient merge draft methods', () => {
         project_id: 'proj_1',
         source_hash: 'sha_src',
         target_hash: 'sha_tgt',
+        target_branch: 'main',
       });
 
       expect(result.id).toBe('md_123');

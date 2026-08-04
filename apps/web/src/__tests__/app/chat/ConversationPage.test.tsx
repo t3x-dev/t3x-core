@@ -11,11 +11,18 @@ const workspaceMock = vi.hoisted(() => ({
   expanded: false,
   setActiveProject: vi.fn(),
 }));
+const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ conversationId: routeConversationId }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => routerMock,
   useSearchParams: () => searchParamsValue,
+}));
+
+const redirectResolverMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/hooks/sources/useLegacySourceRedirectResolver', () => ({
+  useLegacySourceRedirectResolver: () => redirectResolverMock,
 }));
 
 vi.mock('@/components/chat/ChatWorkspace', () => ({
@@ -71,6 +78,7 @@ afterEach(() => {
   routeConversationId = 'conv_123';
   compactViewport = false;
   workspaceMock.expanded = false;
+  redirectResolverMock.mockReset().mockResolvedValue({ project_id: 'proj_resolved' });
 });
 
 describe('ConversationPage', () => {
@@ -188,5 +196,37 @@ describe('ConversationPage', () => {
     render(<ConversationPage />);
 
     expect(vi.mocked(YOpsWorkspace)).not.toHaveBeenCalled();
+  });
+
+  it('redirects an explicitly marked provenance deep link without opening Chat', async () => {
+    searchParamsValue = new URLSearchParams({
+      view: 'source',
+      projectId: 'proj_1',
+      branch: 'main',
+      commit: 'sha256:commit-1',
+      turn: 'sha256:turn-1',
+      returnTo: '/project/proj_1?view=canvas&commit=sha256%3Acommit-1',
+    });
+
+    render(<ConversationPage />);
+
+    await waitFor(() =>
+      expect(routerMock.replace).toHaveBeenCalledWith(
+        '/project/proj_1/sources/conversations/conv_123?branch=main&commit=sha256%3Acommit-1&turn=sha256%3Aturn-1&returnTo=%2Fproject%2Fproj_1%3Fview%3Dcanvas%26commit%3Dsha256%253Acommit-1'
+      )
+    );
+    expect(ChatWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('resolves project identity for a legacy provenance link that lacks projectId', async () => {
+    searchParamsValue = new URLSearchParams({ view: 'source', commit: 'sha256:old' });
+
+    render(<ConversationPage />);
+
+    await waitFor(() => expect(redirectResolverMock).toHaveBeenCalledWith('conv_123'));
+    expect(routerMock.replace).toHaveBeenCalledWith(
+      '/project/proj_resolved/sources/conversations/conv_123?commit=sha256%3Aold'
+    );
+    expect(ChatWorkspace).not.toHaveBeenCalled();
   });
 });

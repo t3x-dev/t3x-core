@@ -8,17 +8,23 @@ export const DOCUMENT_SOURCE_ACCEPTED_TYPES = [
   '.htm',
   '.xlsx',
   '.csv',
+  '.yaml',
+  '.yml',
   'text/plain',
   'text/markdown',
   'text/html',
   'text/csv',
   'application/csv',
   'application/pdf',
+  'application/yaml',
+  'application/x-yaml',
+  'text/yaml',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ].join(',');
 
-export const DOCUMENT_SOURCE_ACCEPT_HINT = 'PDF, DOCX, Markdown, TXT, HTML, XLSX, CSV (max 50MB)';
+export const DOCUMENT_SOURCE_ACCEPT_HINT =
+  'PDF, DOCX, Markdown, TXT, HTML, XLSX, CSV, YAML (max 50MB)';
 
 export const CHAT_MATERIAL_SOURCE_MAX_SIZE_MB = 5;
 

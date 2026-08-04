@@ -82,10 +82,16 @@ const PROMPTS: PromptDef[] = [
     description:
       'User entry for comparing two commits, preparing a merge draft, and resolving conflicts.',
     arguments: [
+      {
+        name: 'project_id',
+        description: 'Project scope for both CommitV2 inputs.',
+        required: true,
+      },
       { name: 'source_hash', description: 'Source commit hash for the merge.', required: true },
       { name: 'target_hash', description: 'Target commit hash for the merge.', required: true },
     ],
     render: (args) => {
+      const projectId = args.project_id ?? '<project_id>';
       const sourceHash = args.source_hash ?? '<source_hash>';
       const targetHash = args.target_hash ?? '<target_hash>';
       return {
@@ -98,8 +104,8 @@ const PROMPTS: PromptDef[] = [
               type: 'text',
               text: [
                 'Workflow: prepare and resolve a semantic merge.',
-                formatResourceUri(`t3x://commits/${sourceHash}`),
-                formatResourceUri(`t3x://commits/${targetHash}`),
+                formatResourceUri(`t3x://projects/${projectId}/commits/${sourceHash}`),
+                formatResourceUri(`t3x://projects/${projectId}/commits/${targetHash}`),
                 '1. Read both commit resources to understand the inputs.',
                 '2. Compare them with `t3x_diff`.',
                 '3. Start the merge flow with `t3x_merge` action `prepare`.',

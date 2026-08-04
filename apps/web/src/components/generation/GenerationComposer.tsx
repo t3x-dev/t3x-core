@@ -1,0 +1,435 @@
+'use client';
+
+import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
+import NextImage from 'next/image';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { providerSupports } from '@/domain/providerCapabilities';
+import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { AttachedImage } from '@/types/generation';
+import { cn } from '@/utils/cn';
+import { GenerationModelSelector } from './GenerationModelSelector';
+
+// Re-exported for component consumers; the canonical definition stays in
+// types/generation so hooks do not import components.
+export type { AttachedImage };
+
+async function resizeImage(file: File, maxDim: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim / width, maxDim / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('No canvas context'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('toBlob failed'));
+        },
+        file.type || 'image/jpeg',
+        0.85
+      );
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function processImage(file: File): Promise<AttachedImage> {
+  let blob: Blob = file;
+  if (file.size > 4 * 1024 * 1024) {
+    blob = await resizeImage(file, 2048);
+  }
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  return {
+    id: crypto.randomUUID(),
+    preview: URL.createObjectURL(file),
+    base64,
+    mediaType: file.type || 'image/jpeg',
+  };
+}
+
+export interface GenerationComposerProps {
+  onSend: (message: string, images?: AttachedImage[]) => void;
+  onStop?: () => void;
+  isStreaming?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  draftKey?: string | null;
+  selectedProvider?: string;
+  selectedModel?: string;
+  onModelChange?: (provider: string, model: string) => void;
+  prefillText?: string | null;
+  prefillRevision?: number;
+  sendIntroTarget?: string;
+}
+
+const CHAT_INPUT_DRAFT_STORAGE_PREFIX = 't3x:chat-input-draft:';
+
+function getDraftStorageKey(draftKey: string | null | undefined): string | null {
+  const trimmed = draftKey?.trim();
+  return trimmed ? `${CHAT_INPUT_DRAFT_STORAGE_PREFIX}${trimmed}` : null;
+}
+
+function readDraft(storageKey: string): string {
+  try {
+    return window.localStorage.getItem(storageKey) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeDraft(storageKey: string, value: string): void {
+  try {
+    if (value.length > 0) {
+      window.localStorage.setItem(storageKey, value);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
+  } catch {
+    // Browser storage can be unavailable or full; draft persistence is best-effort.
+  }
+}
+
+export function GenerationComposer({
+  onSend,
+  onStop,
+  isStreaming = false,
+  disabled = false,
+  placeholder = 'Reply...',
+  draftKey,
+  selectedProvider,
+  selectedModel,
+  onModelChange,
+  prefillText,
+  prefillRevision,
+  sendIntroTarget,
+}: GenerationComposerProps) {
+  const [value, setValue] = useState('');
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
+  const skipNextDraftPersistRef = useRef(false);
+  const draftStorageKey = getDraftStorageKey(draftKey);
+
+  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+  const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
+  const toggleThinking = useChatSessionStore((s) => s.toggleThinking);
+  const setWebSearch = useChatSessionStore((s) => s.setWebSearch);
+  const setThinking = useChatSessionStore((s) => s.setThinking);
+
+  // Capability gating — every provider has a different surface for these
+  // features. The capability table in domain/providerCapabilities owns the
+  // truth; here we read it and (a) disable the button when unsupported,
+  // (b) auto-clear the toggle when the user switches to a provider that
+  // can't honour it. That stops the "click → 400 from server" loop.
+  const supportsWebSearch = providerSupports(selectedProvider ?? '', 'web_search');
+  const supportsThinking = providerSupports(selectedProvider ?? '', 'thinking');
+
+  useEffect(() => {
+    if (!supportsWebSearch && webSearchEnabled) setWebSearch(false);
+    if (!supportsThinking && thinkingEnabled) setThinking(false);
+  }, [
+    supportsWebSearch,
+    supportsThinking,
+    webSearchEnabled,
+    thinkingEnabled,
+    setWebSearch,
+    setThinking,
+  ]);
+
+  // Auto-resize textarea as content grows
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, []);
+
+  useEffect(() => {
+    autoResize();
+  }, [value, autoResize]);
+
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    skipNextDraftPersistRef.current = true;
+    setValue(readDraft(draftStorageKey));
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
+      return;
+    }
+    writeDraft(draftStorageKey, value);
+  }, [draftStorageKey, value]);
+
+  useEffect(() => {
+    if (!prefillText || prefillRevision == null) return;
+    setValue(prefillText);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      autoResize();
+    });
+  }, [prefillText, prefillRevision, autoResize]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    const images = await Promise.all(files.map(processImage));
+    setAttachedImages((prev) => [...prev, ...images]);
+    e.target.value = '';
+  };
+
+  const removeImage = (id: string) => {
+    setAttachedImages((prev) => {
+      const removed = prev.find((img) => img.id === id);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((img) => img.id !== id);
+    });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    const images = await Promise.all(files.map(processImage));
+    setAttachedImages((prev) => [...prev, ...images]);
+  };
+
+  const handleSend = useCallback(() => {
+    const trimmed = value.trim();
+    if ((!trimmed && attachedImages.length === 0) || disabled) return;
+    onSend(trimmed || '', attachedImages.length > 0 ? attachedImages : undefined);
+    if (draftStorageKey) writeDraft(draftStorageKey, '');
+    setValue('');
+    for (const img of attachedImages) URL.revokeObjectURL(img.preview);
+    setAttachedImages([]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [value, disabled, onSend, attachedImages]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const isEmpty = !value.trim() && attachedImages.length === 0;
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        'rounded-[24px] border bg-[var(--surface-panel)]/28 shadow-[var(--fx-shadow-sm)] transition-[background,border-color,box-shadow] duration-[var(--motion-base)]',
+        'focus-within:border-[var(--accent-commit)]/20 focus-within:bg-[var(--surface-panel)]/60 focus-within:shadow-[var(--fx-shadow-md)]',
+        isDragging
+          ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/5 shadow-[var(--fx-shadow-md)]'
+          : 'border-[var(--stroke-divider)]/70'
+      )}
+    >
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleFileChange}
+      />
+
+      {/* Image preview strip */}
+      {attachedImages.length > 0 && (
+        <div className="flex gap-2 px-3 pt-2 flex-wrap">
+          {attachedImages.map((img) => (
+            <div key={img.id} className="relative group/img">
+              <NextImage
+                src={img.preview}
+                alt="Attached"
+                unoptimized
+                width={64}
+                height={64}
+                className="h-16 w-16 object-cover rounded border border-[var(--border-primary)]"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(img.id)}
+                className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--status-error)] text-[10px] text-[var(--on-status)] opacity-0 transition-opacity group-hover/img:opacity-100"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Textarea */}
+      <div className="px-3 pb-1 pt-2.5">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          rows={1}
+          className={cn(
+            'chat-scrollbar w-full resize-none bg-transparent text-[14px] leading-[1.6] text-[var(--text-primary)]',
+            'placeholder:text-[var(--text-tertiary)]',
+            'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
+            'min-h-[24px] max-h-[200px] overflow-y-auto'
+          )}
+          style={{ height: 'auto' }}
+        />
+      </div>
+
+      {/* Bottom toolbar: left tools + right model/send */}
+      <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
+        {/* Left: attach + search + thinking */}
+        <div className="flex items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleFileClick}
+            disabled={disabled}
+            className="h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 text-[var(--text-tertiary)] shadow-[var(--fx-shadow-sm)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
+            aria-label="Attach file"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleWebSearch}
+            disabled={disabled || !supportsWebSearch}
+            className={cn(
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[var(--fx-shadow-sm)] transition-colors',
+              webSearchEnabled
+                ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/16'
+                : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
+              !supportsWebSearch && 'opacity-40'
+            )}
+            aria-label={webSearchEnabled ? 'Disable web search' : 'Enable web search'}
+            title={
+              !supportsWebSearch
+                ? 'Web search not available for this provider'
+                : webSearchEnabled
+                  ? 'Web search on'
+                  : 'Web search'
+            }
+          >
+            <Globe className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleThinking}
+            disabled={disabled || !supportsThinking}
+            className={cn(
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[var(--fx-shadow-sm)] transition-colors',
+              thinkingEnabled
+                ? 'border-[var(--source)]/20 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/16'
+                : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
+              !supportsThinking && 'opacity-40'
+            )}
+            aria-label={thinkingEnabled ? 'Disable extended thinking' : 'Enable extended thinking'}
+            title={
+              !supportsThinking
+                ? 'Extended thinking not available for this provider'
+                : thinkingEnabled
+                  ? 'Extended thinking on'
+                  : 'Extended thinking'
+            }
+          >
+            <Brain className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Right: model selector + send */}
+        <div className="flex items-center gap-2">
+          {selectedModel && onModelChange && (
+            <GenerationModelSelector selectedModel={selectedModel} onModelChange={onModelChange} />
+          )}
+
+          {isStreaming ? (
+            <Button
+              type="button"
+              size="icon"
+              onClick={onStop}
+              className="h-8 w-8 rounded-full border border-[var(--status-error)]/15 bg-[var(--status-error)]/10 text-[var(--status-error)] shadow-[var(--fx-shadow-sm)] hover:bg-[var(--status-error)]/20"
+              aria-label="Stop generation"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              onClick={handleSend}
+              disabled={isEmpty || disabled}
+              className="h-8 w-8 rounded-full bg-[var(--accent-commit)] text-[var(--on-accent)] shadow-[var(--fx-shadow-md)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Send message"
+              data-intro-target={sendIntroTarget}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

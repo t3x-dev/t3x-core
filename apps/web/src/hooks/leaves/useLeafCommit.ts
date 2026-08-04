@@ -93,12 +93,12 @@ export function useLeafCommit(leaf: Leaf | null): UseLeafCommitReturn {
 
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getApiCommit(leaf.commit_hash)
+    getApiCommit(leaf.commit_hash, leaf.project_id)
       .then(setCommitData)
       .catch(() => {
         setCommitLoadError(true);
       });
-  }, [leaf?.commit_hash]);
+  }, [leaf?.commit_hash, leaf?.project_id]);
 
   const semanticContent = useMemo(
     () => (commitData ? getSemanticContent(commitData) : null),

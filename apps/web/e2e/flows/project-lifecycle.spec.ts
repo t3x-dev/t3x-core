@@ -31,7 +31,7 @@ test.describe('Project Lifecycle', () => {
 
     await page.goto('/');
     // Wait for a concrete element instead of networkidle (#6)
-    const projectEntry = page.locator(`text=${projectName}`);
+    const projectEntry = page.locator('article').filter({ hasText: projectName }).first();
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
   });
 
@@ -70,12 +70,12 @@ test.describe('Project Lifecycle', () => {
   test('PL-04: Project not found shows error', async ({ page }) => {
     await page.goto('/project/proj_nonexistent_999');
 
-    // Page should show a "Project not found" error message
-    const errorHeading = page.locator('text=Project not found');
-    await expect(errorHeading).toBeVisible({ timeout: 15000 });
-
-    // Should also show a link back to chats (canvas-only redesign renamed the back button)
-    const backLink = page.locator('text=Go to Chats');
-    await expect(backLink).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Something went wrong', { exact: true })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.getByText('This project is no longer available.', { exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 });

@@ -17,9 +17,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useTerminology } from '@/hooks/shared/useTerminology';
+import { useProjectStore } from '@/store/projectStore';
 import type { LeafType } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { LEAF_TYPES } from './CanvasNodes';
@@ -41,6 +43,7 @@ export function LeafCreationDialog({
 }: LeafCreationDialogProps) {
   const { t } = useTerminology();
   const router = useRouter();
+  const projectName = useProjectStore((state) => state.getProject(projectId))?.name;
   const { create: createLeaf } = useCreateLeaf();
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
@@ -93,10 +96,9 @@ export function LeafCreationDialog({
       });
       onOpenChange(false);
 
-      // Navigate to leaf detail page
-      router.push(
-        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`
-      );
+      if (projectName) {
+        router.push(getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id));
+      }
     } catch (err) {
       toast.error(formatUserFacingError(err, 'Could not create leaf. Try again.'));
     } finally {

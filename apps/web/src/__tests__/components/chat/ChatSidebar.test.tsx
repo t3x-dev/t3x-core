@@ -976,10 +976,10 @@ describe('ChatSidebar', () => {
     render(<ChatSidebar />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/canvas');
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke?view=canvas');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Leaf' }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/leaf');
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke?tab=outputs');
   });
 
   it('shows canvas-scoped navigation below the Canvas tab', async () => {
@@ -1085,7 +1085,7 @@ describe('ChatSidebar', () => {
     fireEvent.click(commitButton);
 
     expect(mocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_smoke/commit/sha256%3Aabcdef123456?returnTo=%2Fchat%2Fproject%2Fproj_smoke%2Fcanvas'
+      '/project/proj_smoke?view=canvas&commit=sha256%3Aabcdef123456'
     );
   });
 
@@ -1120,6 +1120,11 @@ describe('ChatSidebar', () => {
     expect(screen.getByText('Output artifacts')).toBeInTheDocument();
     expect(screen.getByText('Release note brief')).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Release note brief/i }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith(
+      '/project/proj_smoke?tab=outputs&leaf=leaf_first'
+    );
   });
 
   it('collapses an expanded project with conversations when clicked again', () => {

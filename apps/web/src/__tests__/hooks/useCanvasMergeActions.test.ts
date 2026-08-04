@@ -16,10 +16,12 @@ vi.mock('@/commands/merge', () => ({
 
 import { executeMerge, prepareMerge } from '@/commands/merge';
 import { useCanvasMergeActions } from '@/hooks/canvas/useCanvasMergeActions';
+import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 import { useCanvasStore } from '@/store/canvasStore';
 
 function resetStore() {
   useCanvasStore.setState({
+    projectId: 'proj_1',
     nodes: [],
     edges: [],
     mergeState: null,
@@ -87,6 +89,7 @@ describe('useCanvasMergeActions.execute', () => {
 
   it('appends merge commit node + parent edges on success', async () => {
     useCanvasStore.setState({
+      projectId: 'proj_1',
       mergeState: {
         sourceHash: 'sha256:src',
         targetHash: 'sha256:tgt',
@@ -103,6 +106,8 @@ describe('useCanvasMergeActions.execute', () => {
       branch: 'main',
     } as never);
 
+    const commitCreated = vi.fn();
+    window.addEventListener(COMMIT_CREATED_EVENT, commitCreated);
     const { result } = renderHook(() => useCanvasMergeActions());
     const commit = await result.current.execute('Merge');
     await waitForHook();
@@ -112,5 +117,13 @@ describe('useCanvasMergeActions.execute', () => {
     expect(state.mergeState).toBeNull();
     expect(state.nodes.find((n) => n.id === 'sha256:merge')).toBeDefined();
     expect(state.edges).toHaveLength(2);
+    expect(commitCreated).toHaveBeenCalledOnce();
+    expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      type: 'commit.created',
+      projectId: 'proj_1',
+      branch: 'main',
+      payload: { hash: 'sha256:merge', branch: 'main' },
+    });
+    window.removeEventListener(COMMIT_CREATED_EVENT, commitCreated);
   });
 });

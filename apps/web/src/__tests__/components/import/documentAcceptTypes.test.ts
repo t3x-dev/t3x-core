@@ -22,6 +22,9 @@ describe('document source accepted types', () => {
     expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('.xlsx');
     expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('.csv');
     expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('text/csv');
+    expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('.yaml');
+    expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('.yml');
+    expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain('application/yaml');
     expect(DOCUMENT_SOURCE_ACCEPTED_TYPES).toContain(
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );

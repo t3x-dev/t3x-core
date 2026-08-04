@@ -1,0 +1,595 @@
+{
+  "schema_version": 1,
+  "purpose": "Own the Generation, Source Thread, and legacy conversation workflow contracts during the repository-first migration.",
+  "compatibility_states": ["retained", "compatibility", "removal_candidate"],
+  "route_modules": [
+    "packages/api/src/routes/agent-drafts.openapi.ts",
+    "packages/api/src/routes/chat.openapi.ts",
+    "packages/api/src/routes/conversations.openapi.ts",
+    "packages/api/src/routes/extract-incremental.openapi.ts",
+    "packages/api/src/routes/extract-yops.openapi.ts",
+    "packages/api/src/routes/extract.openapi.ts",
+    "packages/api/src/routes/source-evidence.openapi.ts",
+    "packages/api/src/routes/source-text-revisions.openapi.ts",
+    "packages/api/src/routes/topics.openapi.ts",
+    "packages/api/src/routes/turns.openapi.ts",
+    "packages/api/src/routes/yops-log.openapi.ts"
+  ],
+  "contracts": [
+    {
+      "id": "generation",
+      "owner": "generation",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Generation must remain usable without the legacy Chat WebUI.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/chat",
+          "source": "packages/api/src/routes/chat.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/chat/stream",
+          "source": "packages/api/src/routes/chat.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/chat/providers",
+          "source": "packages/api/src/routes/chat.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "generationApi.complete("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "generationApi.stream("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/chat.ts",
+          "token": "export async function chat("
+        },
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "readonly generation: GenerationCapability"
+        }
+      ]
+    },
+    {
+      "id": "source-thread-metadata",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Workspaces, source evidence, API-client consumers, and MCP require durable source-thread identity.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/conversations",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/conversations",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/conversations/{id}",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/conversations/{id}",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/conversations/{conversation_id}/rename",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "sourceThreadApi.create("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/conversations/useProjectConversations.ts",
+          "token": "listConversations"
+        },
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "readonly sourceThreads: SourceThreadCapability"
+        },
+        {
+          "kind": "mcp",
+          "file": "packages/mcp/src/tools/core/query.ts",
+          "token": "client.sourceThreads.list("
+        }
+      ]
+    },
+    {
+      "id": "source-thread-context",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Generation still assembles server-owned permitted context through this boundary.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}/context",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/conversations/{id}/context",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}/memory",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "sourceThreadApi.memory("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/commands/conversations/updateConversationContextPins.ts",
+          "token": "updateConversationContext("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/pins.ts",
+          "token": "getConversationContext("
+        }
+      ]
+    },
+    {
+      "id": "source-thread-turns",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Turns are immutable source material and remain addressable evidence.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/turns",
+          "source": "packages/api/src/routes/turns.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/turns",
+          "source": "packages/api/src/routes/turns.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/turns/{hash}",
+          "source": "packages/api/src/routes/turns.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/turns/{hash}/chain",
+          "source": "packages/api/src/routes/turns.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/turns/{hash}/context",
+          "source": "packages/api/src/routes/turns.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "sourceThreadApi.appendTurn("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/conversations/useChatHistory.ts",
+          "token": "sourceThreadApi.listTurns("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/turns.ts",
+          "token": "fetchTurnContext("
+        },
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "appendTurn: (input) => this.appendSourceThreadTurn(input)"
+        }
+      ]
+    },
+    {
+      "id": "source-thread-revisions",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Revisions preserve exact source edits and their turn linkage.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/source-text-revisions",
+          "source": "packages/api/src/routes/source-text-revisions.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/source-text-revisions",
+          "source": "packages/api/src/routes/source-text-revisions.openapi.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/source-text-revisions/{revisionId}",
+          "source": "packages/api/src/routes/source-text-revisions.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/shared/useSourceTextDraft.ts",
+          "token": "createSourceTextRevision("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/conversations/hydrateConversationToStore.ts",
+          "token": "listSourceTextRevisions("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/sourceTextRevisions.ts",
+          "token": "updateSourceTextRevision("
+        }
+      ]
+    },
+    {
+      "id": "repository-source-evidence",
+      "owner": "repository_source",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. This is the repository-owned source and evidence read boundary.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}",
+          "source": "packages/api/src/routes/source-evidence.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "async getConversationSourceEvidence("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/infrastructure/sourceEvidence.ts",
+          "token": "getConversationSourceEvidence"
+        },
+        {
+          "kind": "mcp",
+          "file": "packages/mcp/src/tools/core/query.ts",
+          "token": "client.sourceThreads.evidence("
+        }
+      ]
+    },
+    {
+      "id": "legacy-context-projection",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "removal_gate": "Remove only after repository Source/Evidence and Generation cover every live context consumer and external compatibility is explicitly ended.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}/context-manifest",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}/context-export",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "legacy_application",
+          "file": "apps/web/src/components/chat/ChatWorkspace.tsx",
+          "token": "useContextManifest("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/conversations.ts",
+          "token": "exportConversationContext("
+        }
+      ]
+    },
+    {
+      "id": "legacy-topics",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "removal_gate": "Remove after the legacy Chat initializer is retired and the caller guard observes no application consumer.",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{id}/topics",
+          "source": "packages/api/src/routes/topics.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/conversations/{id}/topics",
+          "source": "packages/api/src/routes/topics.openapi.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/topics/{id}",
+          "source": "packages/api/src/routes/topics.openapi.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/topics/{id}",
+          "source": "packages/api/src/routes/topics.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "legacy_application",
+          "file": "apps/web/src/queries/chatInitFetch.ts",
+          "token": "listTopics("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/topics.ts",
+          "token": "createTopicApi("
+        }
+      ]
+    },
+    {
+      "id": "legacy-conversation-yops",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "removal_gate": "Remove writes only after Workspace parity is proven; retain mixed-history reads until #1297 proves archived YOps remain readable elsewhere.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/conversations/{conversationId}/yops",
+          "source": "packages/api/src/routes/yops-log.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{conversationId}/yops",
+          "source": "packages/api/src/routes/yops-log.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/conversations/{conversationId}/draft",
+          "source": "packages/api/src/routes/yops-log.openapi.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/conversations/{conversationId}/yops/{yopsId}",
+          "source": "packages/api/src/routes/yops-log.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/infrastructure/yopsLog.ts",
+          "token": "createYOpsEntry("
+        },
+        {
+          "kind": "historical_read",
+          "file": "apps/web/src/queries/archivedYopsLog.ts",
+          "token": "loadYOpsLog("
+        },
+        {
+          "kind": "compatibility_adapter",
+          "file": "apps/web/src/infrastructure/trees.ts",
+          "token": "getSemanticDraft("
+        }
+      ]
+    },
+    {
+      "id": "legacy-conversation-extraction",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "removal_gate": "Remove only after Workspace proposal creation and MCP extraction use authenticated Source/Workspace services with equivalent behavior.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/extract",
+          "source": "packages/api/src/routes/extract.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/extract-yops",
+          "source": "packages/api/src/routes/extract-yops.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/extract/incremental",
+          "source": "packages/api/src/routes/extract-incremental.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/commands/yops/llmAdapter.ts",
+          "token": "postExtractYops("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/canvas/usePendingCommitExtraction.ts",
+          "token": "api.extractIncremental("
+        },
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "async extract("
+        },
+        {
+          "kind": "mcp",
+          "file": "packages/mcp/src/tools/core/extract.ts",
+          "token": "client.extract("
+        }
+      ]
+    },
+    {
+      "id": "legacy-agent-drafts",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "removal_gate": "Remove after the remaining typed-client compatibility methods have no verified first-party consumers.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/agent/drafts",
+          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/agent/drafts/{id}",
+          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/agent/drafts/{id}",
+          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "async getAgentDraft("
+        }
+      ]
+    }
+  ],
+  "related_modules": [
+    {
+      "file": "packages/api/src/routes/commit-from-draft.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Carries source conversation provenance into a repository commit."
+    },
+    {
+      "file": "packages/api/src/routes/commits.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Persists and resolves source conversation references in commit history."
+    },
+    {
+      "file": "packages/api/src/routes/curate.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Accepts an optional source conversation for curation provenance."
+    },
+    {
+      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "owner": "legacy_conversation_workflow",
+      "compatibility": "compatibility",
+      "reason": "Legacy draft workflow still accepts conversation identity."
+    },
+    {
+      "file": "packages/api/src/routes/export.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Exports repository history that can contain conversation provenance."
+    },
+    {
+      "file": "packages/api/src/routes/gate.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Validation may bind a source conversation without transferring authority to it."
+    },
+    {
+      "file": "packages/api/src/routes/import.openapi.ts",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "reason": "Import creates durable source threads and turns."
+    },
+    {
+      "file": "packages/api/src/routes/ingest.openapi.ts",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "reason": "Ingest appends durable source material."
+    },
+    {
+      "file": "packages/api/src/routes/workspaces.openapi.ts",
+      "owner": "repository_review",
+      "compatibility": "retained",
+      "reason": "Workspace source linkage references a conversation but owns repository review state."
+    },
+    {
+      "file": "packages/api/src/routes/ws.ts",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "reason": "Realtime subscriptions can be scoped to a source thread."
+    }
+  ],
+  "known_contract_gaps": [],
+  "retired_routes": [
+    {
+      "method": "POST",
+      "path": "/v1/extract/trees",
+      "reason": "Removed after the executable inventory proved zero production callers; evaluation now invokes the extraction pipeline directly."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract/trees/stream",
+      "reason": "Removed with the unused Web extraction stream adapter."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract/trees/answer",
+      "reason": "Removed after the executable inventory proved zero production callers."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/{conversationId}/compress",
+      "reason": "Removed after the executable inventory proved zero production callers."
+    }
+  ],
+  "deprecated_caller_guards": [
+    {
+      "symbol": "getContextManifest",
+      "allowed_files": [
+        "apps/web/src/infrastructure/contextManifest.ts",
+        "apps/web/src/queries/contextManifest.ts"
+      ]
+    },
+    {
+      "symbol": "exportConversationContext",
+      "allowed_files": ["apps/web/src/infrastructure/conversations.ts"]
+    },
+    {
+      "symbol": "listTopics",
+      "allowed_files": [
+        "apps/web/src/infrastructure/topics.ts",
+        "apps/web/src/queries/chatInitFetch.ts"
+      ]
+    },
+    { "symbol": "createTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
+    { "symbol": "updateTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
+    { "symbol": "deleteTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
+    {
+      "symbol": "postExtractYops",
+      "allowed_files": [
+        "apps/web/src/commands/yops/llmAdapter.ts",
+        "apps/web/src/infrastructure/llm.ts"
+      ]
+    }
+  ]
+}

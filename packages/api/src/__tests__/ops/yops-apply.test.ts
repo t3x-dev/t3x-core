@@ -28,9 +28,13 @@ vi.mock('@t3x-dev/storage', () => ({
       parentCommitHash: null,
     })
   ),
+  findCommitHashesByYOpsLogIds: vi.fn(() => Promise.resolve(new Map())),
   getCommit: vi.fn(() => Promise.resolve(null)),
+  getVerifiedTransitionCommitGraph: vi.fn(() => Promise.resolve(null)),
   insertYOpsLogEntry: vi.fn(() => Promise.resolve(mockRecord)),
   listActiveYOpsLogByConversation: vi.fn(() => Promise.resolve([])),
+  listTransitionCommitProjectIds: vi.fn(() => Promise.resolve(['proj_123'])),
+  listYOpsLogByConversation: vi.fn(() => Promise.resolve([])),
   // RFC 2026-04-26: yopsApplyOp now also imports the supersede query so
   // it can flip prior LLM suggestions to superseded inside the same
   // transaction when `replaceActiveLLMDraft` is set. Default mock is a
@@ -97,6 +101,35 @@ describe('yopsApplyOp', () => {
       relations: [],
     },
   };
+
+  function commitGraphForContent(content: typeof inheritedTripCommit.content) {
+    return {
+      commit: {
+        schema: 't3x/commit/v2',
+        parents: [],
+      },
+      proposal: {
+        actor: { kind: 'human', id: 'human:test-maintainer' },
+        predicate: {
+          intent: { mode: 'unspecified' },
+          rationale: { mode: 'unspecified' },
+        },
+      },
+      recordedAt: '2026-04-28T00:00:00.000Z',
+      state: {
+        schema: 't3x/state/v1',
+        codec: {
+          mediaType: 'application/vnd.t3x.yops-document+json',
+          version: '1',
+        },
+        value: {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
+          content,
+        },
+      },
+    };
+  }
 
   it('has the correct name', () => {
     expect(yopsApplyOp.name).toBe('yops-apply');
@@ -278,7 +311,7 @@ describe('yopsApplyOp', () => {
       const ctx = buildMockContext();
       const {
         findConversationById,
-        getCommit,
+        getVerifiedTransitionCommitGraph,
         insertYOpsLogEntry,
         listActiveYOpsLogByConversation,
         supersedeActiveLLMSuggestions,
@@ -288,7 +321,9 @@ describe('yopsApplyOp', () => {
         projectId: 'proj_123',
         parentCommitHash: 'sha256:parent',
       });
-      (getCommit as any).mockResolvedValueOnce(inheritedTripCommit);
+      (getVerifiedTransitionCommitGraph as any).mockResolvedValueOnce(
+        commitGraphForContent(inheritedTripCommit.content)
+      );
       (insertYOpsLogEntry as any).mockClear();
       (listActiveYOpsLogByConversation as any).mockClear();
       (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
@@ -326,7 +361,7 @@ describe('yopsApplyOp', () => {
       const ctx = buildMockContext();
       const {
         findConversationById,
-        getCommit,
+        getVerifiedTransitionCommitGraph,
         insertYOpsLogEntry,
         listActiveYOpsLogByConversation,
         supersedeActiveLLMSuggestions,
@@ -336,7 +371,9 @@ describe('yopsApplyOp', () => {
         projectId: 'proj_123',
         parentCommitHash: 'sha256:parent',
       });
-      (getCommit as any).mockResolvedValueOnce(inheritedTripCommit);
+      (getVerifiedTransitionCommitGraph as any).mockResolvedValueOnce(
+        commitGraphForContent(inheritedTripCommit.content)
+      );
       (insertYOpsLogEntry as any).mockClear();
       (listActiveYOpsLogByConversation as any).mockClear();
       (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);

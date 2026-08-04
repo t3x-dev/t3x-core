@@ -3,12 +3,12 @@
  */
 
 import { useCallback } from 'react';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 
 export function useCommitsList() {
   const loadCommits = useCallback(
-    async (projectId: string, branch?: string, limit?: number) =>
-      fetchCommits(projectId, branch, limit),
+    async (projectId: string, branch?: string, limit?: number, offset?: number) =>
+      fetchCommits(projectId, branch, limit, offset),
     []
   );
   return { loadCommits };

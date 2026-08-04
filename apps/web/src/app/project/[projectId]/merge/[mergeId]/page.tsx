@@ -10,6 +10,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
+import { getProjectIdCanvasCommitPath, getProjectIdCanvasPath } from '@/domain/project/repoPath';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useMicrocopy } from '@/utils/microcopy';
@@ -21,16 +22,17 @@ export default function MergeWorkspacePage() {
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;
   const mergeId = params.mergeId as string;
+  const pullRequestNumberValue = Number(searchParams.get('pullRequest'));
+  const pullRequestNumber =
+    Number.isInteger(pullRequestNumberValue) && pullRequestNumberValue > 0
+      ? pullRequestNumberValue
+      : undefined;
 
   const mc = useMicrocopy();
   const { loading, error, reset } = useMergeWorkspaceStore();
   const { load: loadDraft } = useMergeWorkspaceActions();
   const returnHref = useMemo(
-    () =>
-      safeInternalReturnTo(
-        searchParams.get('returnTo'),
-        `/chat/project/${encodeURIComponent(projectId)}/canvas`
-      ),
+    () => safeInternalReturnTo(searchParams.get('returnTo'), getProjectIdCanvasPath(projectId)),
     [projectId, searchParams]
   );
 
@@ -61,7 +63,11 @@ export default function MergeWorkspacePage() {
 
   const handleMergeCommitted = (commitHash: string) => {
     reset();
-    router.push(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`);
+    if (pullRequestNumber !== undefined) {
+      router.push(returnHref);
+      return;
+    }
+    router.push(getProjectIdCanvasCommitPath(projectId, commitHash));
   };
 
   if (loading) {
@@ -100,6 +106,7 @@ export default function MergeWorkspacePage() {
       onBack={handleBack}
       onClose={handleClose}
       onMergeCommitted={handleMergeCommitted}
+      pullRequestNumber={pullRequestNumber}
     />
   );
 }

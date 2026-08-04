@@ -15,7 +15,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cleanupRoots, renderHook } from './renderHook';
 
 const mocks = vi.hoisted(() => ({
-  createCommit: vi.fn(),
+  commitRepositoryState: vi.fn(),
   toast: {
     dismiss: vi.fn(),
     error: vi.fn(),
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/commands/commits', () => ({
-  createCommit: mocks.createCommit,
+  commitRepositoryState: mocks.commitRepositoryState,
 }));
 
 vi.mock('sonner', () => ({
@@ -87,7 +87,7 @@ describe('useIntroDemoReplayActions demo content', () => {
   it('persists the demo commit through the commit API and records the returned hash', async () => {
     vi.useFakeTimers();
     const apiHash = 'sha256:api_demo_commit';
-    mocks.createCommit.mockResolvedValueOnce({ commit: { hash: apiHash } });
+    mocks.commitRepositoryState.mockResolvedValueOnce({ commit: { digest: apiHash } });
     const commitEvents: CustomEvent[] = [];
     const onCommitCreated = (event: Event) => commitEvents.push(event as CustomEvent);
     window.addEventListener('t3x:commit-created', onCommitCreated);
@@ -117,19 +117,17 @@ describe('useIntroDemoReplayActions demo content', () => {
     window.removeEventListener('t3x:commit-created', onCommitCreated);
 
     expect(hash).toBe(apiHash);
-    expect(mocks.createCommit).toHaveBeenCalledWith(
+    expect(mocks.commitRepositoryState).toHaveBeenCalledWith(
       'proj_demo',
       expect.objectContaining({
         trees: expect.any(Array),
         relations: expect.any(Array),
       }),
       expect.objectContaining({
-        parents: ['sha256:seed'],
+        expectedHead: 'sha256:seed',
         branch: 'demo-branch',
         message: 'Prompt Review Intake',
-        sources: [{ type: 'conversation', id: 'conv_demo', title: 'Prompt Review Demo' }],
-        source_conversation_id: 'conv_demo',
-        provenance: { method: 'llm_extraction', model: 'fixture-replay' },
+        sourceConversationId: 'conv_demo',
       })
     );
     expect(readIntroDemoLocalCommit('proj_demo')?.hash).toBe(apiHash);

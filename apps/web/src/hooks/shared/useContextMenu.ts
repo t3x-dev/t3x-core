@@ -3,7 +3,7 @@
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
+import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
@@ -13,7 +13,6 @@ import {
   buildUnitNodeMenu,
   type ContextMenuGroup,
 } from '@/utils/canvasMenuBuilders';
-import { withReturnTo } from '@/utils/navigationReturn';
 
 /**
  * Module-level ref for the leaf context menu handler.
@@ -35,11 +34,10 @@ interface UseContextMenuOptions {
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
   projectId: string | null;
+  projectName: string;
   fitView: (options?: { padding?: number; duration?: number }) => void;
   /** Router push for page navigation */
   onNavigate?: (url: string) => void;
-  /** Source route for shellless detail pages opened from the canvas. */
-  returnTo?: string;
 }
 
 export function useContextMenu({
@@ -47,14 +45,13 @@ export function useContextMenu({
   isDeveloperMode,
   notify,
   projectId,
+  projectName,
   fitView,
   onNavigate,
-  returnTo,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
-  const { startMerge } = useCanvasCommitActions();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -62,59 +59,16 @@ export function useContextMenu({
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
       event.preventDefault();
+      event.stopPropagation();
       const isDraft = node.data.commitStatus === 'draft';
       const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
       const commitHash = node.data.commit?.hash || node.data.commitHash || '';
-      const conversationId = node.data.conversationId;
-      // Resolve parent commit hash for Quick Diff (via edges)
-      let parentCommitHash: string | undefined;
-      if (isCommitted && commitHash) {
-        const storeState = useCanvasStore.getState();
-        const incomingEdge = storeState.edges.find((e) => e.target === node.id);
-        if (incomingEdge) {
-          const parentNode = storeState.nodes.find((n) => n.id === incomingEdge.source);
-          if (parentNode?.data?.commitHash && parentNode.data.commitStatus === 'committed') {
-            parentCommitHash = parentNode.data.commitHash as string;
-          }
-        }
-      }
-
-      // Resolve Quick Merge eligibility (branch commit with main to merge into)
-      const isBranchCommit = node.data.branchType === 'branch';
-      const canMerge = isCommitted && isBranchCommit && useCanvasStore.getState().hasMainCommit;
 
       const groups = buildUnitNodeMenu({
-        onOpenConversation:
-          hasConversation && conversationId && onNavigate
-            ? () => onNavigate(`/chat/${conversationId}`)
-            : undefined,
-        onQuickDiff:
-          isCommitted && commitHash && parentCommitHash && projectId && onNavigate
-            ? () =>
-                onNavigate(
-                  withReturnTo(
-                    `/project/${projectId}/diff?base=${encodeURIComponent(parentCommitHash)}&target=${encodeURIComponent(commitHash)}`,
-                    returnTo ?? `/chat/project/${projectId}/canvas`
-                  )
-                )
-            : undefined,
-        onQuickMerge:
-          canMerge && projectId && onNavigate
-            ? () => {
-                startTransition(async () => {
-                  const draftId = await startMerge(node.id);
-                  if (draftId && onNavigate) {
-                    onNavigate(
-                      withReturnTo(
-                        `/project/${projectId}/merge/${draftId}`,
-                        returnTo ?? `/chat/project/${projectId}/canvas`
-                      )
-                    );
-                  }
-                });
-              }
-            : undefined,
+        onOpenConversation: hasConversation
+          ? () => useCanvasStore.getState().openNodeModal(node.id, 'conversation')
+          : undefined,
         onCreateBranch: () => {
           const position = { x: node.position.x + 320, y: node.position.y };
           startTransition(async () => {
@@ -131,7 +85,7 @@ export function useContextMenu({
               notify?.('Hash copied to clipboard', 'success');
             }
           : undefined,
-        onDelete: isDraft
+        onDelete: !isCommitted
           ? () => {
               // Trigger removal via onNodesChange (same as pressing Delete key)
               const change = { id: node.id, type: 'remove' as const };
@@ -144,7 +98,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, isDeveloperMode, notify, projectId, onNavigate, returnTo, startMerge]
+    [addNode, isDeveloperMode, notify]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode
@@ -164,13 +118,16 @@ export function useContextMenu({
     (event: React.MouseEvent, leafId: string, nodeId: string) => {
       event.preventDefault();
       event.stopPropagation();
+      const leafHref = projectId
+        ? getProjectOutputsPath({ id: projectId, name: projectName }, leafId)
+        : undefined;
       const groups = buildLeafNodeMenu({
         onOpenDetail: () => {
-          if (projectId) {
+          if (leafHref) {
             if (onNavigate) {
-              onNavigate(`/project/${projectId}/leaf/${leafId}`);
+              onNavigate(leafHref);
             } else {
-              window.location.href = `/project/${projectId}/leaf/${leafId}`;
+              window.location.href = leafHref;
             }
           }
         },
@@ -178,15 +135,15 @@ export function useContextMenu({
           useCanvasStore.getState().openLeafPanel(nodeId);
         },
         onShare: () => {
-          if (projectId) {
-            const url = `${window.location.origin}/project/${projectId}/leaf/${leafId}`;
+          if (leafHref) {
+            const url = `${window.location.origin}${leafHref}`;
             navigator.clipboard.writeText(url);
             notify?.('Link copied to clipboard', 'success');
           }
         },
         onExport: () => {
-          if (projectId) {
-            window.open(`/project/${projectId}/leaf/${leafId}`, '_blank');
+          if (leafHref) {
+            window.open(leafHref, '_blank');
           }
         },
         onDelete: () => {
@@ -195,7 +152,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [projectId, notify, onNavigate, removeLeafFromNode]
+    [projectId, projectName, notify, onNavigate, removeLeafFromNode]
   );
 
   // Keep the module-level ref up to date so CanvasNodes can call the handler

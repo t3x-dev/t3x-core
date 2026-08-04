@@ -1,3 +1,4 @@
+import { API_BASE } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -18,21 +19,21 @@ test.describe('Source Context Fix Verification', () => {
 
   test.beforeAll(async ({ request }) => {
     // Create test project
-    const projectRes = await request.post('http://localhost:8000/api/v1/projects', {
+    const projectRes = await request.post(`${API_BASE}/projects`, {
       data: { name: `Source Context Test ${Date.now()}` },
     });
     const projectData = await projectRes.json();
     projectId = projectData.data.project_id;
 
     // Create conversation
-    const convRes = await request.post('http://localhost:8000/api/v1/conversations', {
+    const convRes = await request.post(`${API_BASE}/conversations`, {
       data: { project_id: projectId, title: 'Test Conversation' },
     });
     const convData = await convRes.json();
     conversationId = convData.data.conversation_id;
 
     // Create turn with content
-    const turnRes = await request.post('http://localhost:8000/api/v1/turns', {
+    const turnRes = await request.post(`${API_BASE}/turns`, {
       data: {
         project_id: projectId,
         conversation_id: conversationId,
@@ -46,7 +47,7 @@ test.describe('Source Context Fix Verification', () => {
 
   test('Curate API returns turn_hash and turn-relative positions', async ({ request }) => {
     // Call curate preview
-    const curateRes = await request.post('http://localhost:8000/api/v1/curate/preview', {
+    const curateRes = await request.post(`${API_BASE}/curate/preview`, {
       data: {
         project_id: projectId,
         source_conversation_id: conversationId,
@@ -95,11 +96,12 @@ test.describe('Source Context Fix Verification', () => {
     // Position 0-30: "I prefer dark mode for coding." (30 chars)
     // Position 30: space
     // Position 31-57: "My budget is around $5000." (26 chars)
-    const commitRes = await request.post('http://localhost:8000/api/v1/commits', {
+    const commitRes = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Test commit with source context',
+        expected_head: null,
         content: {
           trees: [
             {
@@ -139,10 +141,10 @@ test.describe('Source Context Fix Verification', () => {
 
     expect(commitRes.ok()).toBe(true);
     const commitData = await commitRes.json();
-    const commitHash = commitData.data.commit.hash;
+    const commitHash = commitData.data.commit.digest;
 
     // Fetch the commit and verify source_ref
-    const getRes = await request.get(`http://localhost:8000/api/v1/commits/${commitHash}`);
+    const getRes = await request.get(`${API_BASE}/commits/${commitHash}?project_id=${projectId}`);
     expect(getRes.ok()).toBe(true);
     const getData = await getRes.json();
 

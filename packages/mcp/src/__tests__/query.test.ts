@@ -6,6 +6,11 @@ const mockDB = {};
 const mockApiClient = {
   getProject: vi.fn(),
   listProjects: vi.fn(),
+  sourceThreads: {
+    get: vi.fn(),
+    list: vi.fn(),
+    evidence: vi.fn(),
+  },
 };
 
 vi.mock('../db.js', () => ({
@@ -35,20 +40,6 @@ const MOCK_DRAFT = {
   title: 'Workbench Draft',
   status: 'editing',
   revision: 3,
-};
-
-const MOCK_AGENT_DRAFT = {
-  draftId: 'agent_draft_test1',
-  projectId: 'proj_test1',
-  text: 'agent draft text',
-  status: 'ephemeral',
-};
-
-const MOCK_COMMIT = {
-  hash: 'sha256:abc',
-  schema: 't3x/commit/v4',
-  parents: [],
-  content: { trees: [], relations: [] },
 };
 
 const MOCK_LEAF = {
@@ -86,14 +77,25 @@ vi.mock('@t3x-dev/storage', () => ({
     Promise.resolve(id === 'draft_test1' ? MOCK_DRAFT : null)
   ),
   listDraftsByProject: vi.fn(() => Promise.resolve([MOCK_DRAFT])),
-  findAgentDraftById: vi.fn((_db: unknown, id: string) =>
-    Promise.resolve(id === 'agent_draft_test1' ? MOCK_AGENT_DRAFT : null)
+  getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) =>
+    Promise.resolve(
+      projectId === 'proj_test1' && hash === 'sha256:abc'
+        ? {
+            recordedAt: '2026-01-01T00:00:00.000Z',
+            commit: { schema: 't3x/commit/v2', parents: [] },
+          }
+        : null
+    )
   ),
-  findAgentDraftsByProject: vi.fn(() => Promise.resolve([MOCK_AGENT_DRAFT])),
-  getCommit: vi.fn((_db: unknown, hash: string) =>
-    Promise.resolve(hash === 'sha256:abc' ? MOCK_COMMIT : null)
+  listCommitHistory: vi.fn(() =>
+    Promise.resolve([
+      {
+        digest: 'sha256:abc',
+        recordedAt: '2026-01-01T00:00:00.000Z',
+        parents: [],
+      },
+    ])
   ),
-  listCommits: vi.fn(() => Promise.resolve([MOCK_COMMIT])),
   findLeafById: vi.fn((_db: unknown, id: string) =>
     Promise.resolve(id === 'leaf_test1' ? MOCK_LEAF : null)
   ),
@@ -119,6 +121,7 @@ const originalBackend = process.env.T3X_MCP_BACKEND;
 
 describe('t3x_query handler', () => {
   afterEach(() => {
+    vi.clearAllMocks();
     if (originalBackend === undefined) {
       delete process.env.T3X_MCP_BACKEND;
     } else {
@@ -136,6 +139,13 @@ describe('t3x_query handler', () => {
 
   it('returns error when target is invalid', async () => {
     const result = await queryHandler({ target: 'unicorns' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid "target"');
+  });
+
+  it('does not advertise the retired Agent Draft query surface', async () => {
+    const result = await queryHandler({ target: 'agent_drafts', project_id: 'proj_test1' });
+
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Missing or invalid "target"');
   });
@@ -176,18 +186,16 @@ describe('t3x_query handler', () => {
     expect(data.title).toBe('Workbench Draft');
   });
 
-  it('returns an agent draft by id', async () => {
-    const result = await queryHandler({ target: 'agent_draft', id: 'agent_draft_test1' });
-    expect(result.isError).toBeUndefined();
-    const data = JSON.parse(result.content[0].text);
-    expect(data.draftId).toBe('agent_draft_test1');
-  });
-
   it('returns a commit by hash', async () => {
-    const result = await queryHandler({ target: 'commit', id: 'sha256:abc' });
+    const result = await queryHandler({
+      target: 'commit',
+      id: 'sha256:abc',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
-    expect(data.hash).toBe('sha256:abc');
+    expect(data.digest).toBe('sha256:abc');
+    expect(data.object.schema).toBe('t3x/commit/v2');
   });
 
   it('returns a leaf by id', async () => {
@@ -204,11 +212,17 @@ describe('t3x_query handler', () => {
     expect(data.id).toBe('pin_test1');
   });
 
-  it('returns a conversation by id', async () => {
-    const result = await queryHandler({ target: 'conversation', id: 'conv_test1' });
+  it('returns a source thread by id', async () => {
+    const result = await queryHandler({ target: 'source_thread', id: 'conv_test1' });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.conversationId).toBe('conv_test1');
+  });
+
+  it('keeps conversation as a compatibility alias for source_thread', async () => {
+    const result = await queryHandler({ target: 'conversation', id: 'conv_test1' });
+    expect(result.isError).toBeUndefined();
+    expect(JSON.parse(result.content[0].text).conversationId).toBe('conv_test1');
   });
 
   // ── Plural targets ──
@@ -246,6 +260,63 @@ describe('t3x_query handler', () => {
     });
   });
 
+  it('uses the authenticated Source capability for api source-thread queries', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.sourceThreads.get.mockResolvedValueOnce({
+      conversation_id: 'conv_api1',
+      project_id: 'proj_api1',
+      title: 'API source',
+    });
+
+    const result = await queryHandler({ target: 'source_thread', id: 'conv_api1' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.sourceThreads.get).toHaveBeenCalledWith('conv_api1');
+  });
+
+  it('reads source evidence only through the project-scoped API capability', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.sourceThreads.evidence.mockResolvedValueOnce({
+      availability: { mode: 'available', reasons: [] },
+      source: { id: 'conv_api1', project_id: 'proj_api1' },
+    });
+
+    const result = await queryHandler({
+      target: 'source_evidence',
+      id: 'conv_api1',
+      project_id: 'proj_api1',
+      limit: 10,
+      offset: 2,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.sourceThreads.evidence).toHaveBeenCalledWith('proj_api1', 'conv_api1', {
+      limit: 10,
+      offset: 2,
+    });
+  });
+
+  it('requires project scope before reading source evidence', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+
+    const result = await queryHandler({ target: 'source_evidence', id: 'conv_api1' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"project_id" is required');
+    expect(mockApiClient.sourceThreads.evidence).not.toHaveBeenCalled();
+  });
+
+  it('refuses direct-storage source evidence reads', async () => {
+    const result = await queryHandler({
+      target: 'source_evidence',
+      id: 'conv_test1',
+      project_id: 'proj_test1',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
+  });
+
   it('lists drafts by project', async () => {
     const result = await queryHandler({ target: 'drafts', project_id: 'proj_test1' });
     expect(result.isError).toBeUndefined();
@@ -277,7 +348,7 @@ describe('t3x_query handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(Array.isArray(data)).toBe(true);
-    expect(data[0].hash).toBe('sha256:abc');
+    expect(data[0].digest).toBe('sha256:abc');
   });
 
   it('lists leaves by project', async () => {
@@ -304,9 +375,9 @@ describe('t3x_query handler', () => {
     expect(data[0].name).toBe('main');
   });
 
-  it('lists conversations by project', async () => {
+  it('lists source threads by project', async () => {
     const result = await queryHandler({
-      target: 'conversations',
+      target: 'source_threads',
       project_id: 'proj_test1',
     });
     expect(result.isError).toBeUndefined();
@@ -318,41 +389,27 @@ describe('t3x_query handler', () => {
   // ── Edge cases ──
 
   it('returns not-found for missing commit', async () => {
-    const result = await queryHandler({ target: 'commit', id: 'sha256:missing' });
+    const result = await queryHandler({
+      target: 'commit',
+      id: 'sha256:missing',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Commit not found');
   });
 
-  it('passes limit and offset to agent draft list queries when explicitly requested', async () => {
-    const { findAgentDraftsByProject } = await import('@t3x-dev/storage');
-    const mock = findAgentDraftsByProject as ReturnType<typeof vi.fn>;
-    mock.mockClear();
-
-    await queryHandler({
-      target: 'agent_drafts',
-      project_id: 'proj_test1',
-      limit: 5,
-      offset: 10,
-    });
-
-    expect(mock).toHaveBeenCalledWith(mockDB, {
-      projectId: 'proj_test1',
-      limit: 5,
-      offset: 10,
-    });
-  });
-
-  it('passes branch filter to commits query', async () => {
-    const { listCommits } = await import('@t3x-dev/storage');
-    const mock = listCommits as ReturnType<typeof vi.fn>;
+  it('passes pagination to CommitV2 history queries', async () => {
+    const { listCommitHistory } = await import('@t3x-dev/storage');
+    const mock = listCommitHistory as ReturnType<typeof vi.fn>;
     mock.mockClear();
 
     await queryHandler({
       target: 'commits',
       project_id: 'proj_test1',
-      branch: 'feature-x',
+      limit: 5,
+      offset: 10,
     });
 
-    expect(mock).toHaveBeenCalledWith(mockDB, expect.objectContaining({ branch: 'feature-x' }));
+    expect(mock).toHaveBeenCalledWith(mockDB, 'proj_test1', { limit: 5, offset: 10 });
   });
 });

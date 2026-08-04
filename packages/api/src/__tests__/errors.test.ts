@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 71 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(71);
+  it('has 81 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(81);
   });
 
   it('key equals value for every code', () => {
@@ -39,6 +39,7 @@ describe('ErrorCodes', () => {
         "CONVERSATION_NOT_FOUND": "CONVERSATION_NOT_FOUND",
         "CREATE_FAILED": "CREATE_FAILED",
         "DATABASE_ERROR": "DATABASE_ERROR",
+        "DECISION_NOT_PERMITTED": "DECISION_NOT_PERMITTED",
         "DELETE_FAILED": "DELETE_FAILED",
         "DEPRECATED": "DEPRECATED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
@@ -60,6 +61,7 @@ describe('ErrorCodes', () => {
         "INVALID_STATUS": "INVALID_STATUS",
         "LEAF_NOT_FOUND": "LEAF_NOT_FOUND",
         "LEARN_FAILED": "LEARN_FAILED",
+        "LEGACY_HEAD_READ_ONLY": "LEGACY_HEAD_READ_ONLY",
         "LIST_FAILED": "LIST_FAILED",
         "LLM_NOT_CONFIGURED": "LLM_NOT_CONFIGURED",
         "MERGE_FAILED": "MERGE_FAILED",
@@ -76,22 +78,30 @@ describe('ErrorCodes', () => {
         "PROVIDER_UNAVAILABLE": "PROVIDER_UNAVAILABLE",
         "RATE_LIMITED": "RATE_LIMITED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
+        "REF_HEAD_INTEGRITY_INVALID": "REF_HEAD_INTEGRITY_INVALID",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
+        "REVIEW_REQUIRED": "REVIEW_REQUIRED",
+        "SCHEMA_UNAVAILABLE": "SCHEMA_UNAVAILABLE",
         "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "STALE_REVIEW": "STALE_REVIEW",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
+        "TRANSITION_VIEW_UNAVAILABLE": "TRANSITION_VIEW_UNAVAILABLE",
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UNRESOLVED_PAIRS": "UNRESOLVED_PAIRS",
         "UNSUPPORTED_OP": "UNSUPPORTED_OP",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
+        "VALIDATION_INPUT_NOT_SUPPORTED": "VALIDATION_INPUT_NOT_SUPPORTED",
         "VERIFY_FAILED": "VERIFY_FAILED",
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
+        "WORKSPACE_BASE_BRANCH_MISMATCH": "WORKSPACE_BASE_BRANCH_MISMATCH",
+        "WORKSPACE_NOT_FOUND": "WORKSPACE_NOT_FOUND",
         "YOPS_LOG_SUPERSEDED": "YOPS_LOG_SUPERSEDED",
       }
     `);
@@ -126,6 +136,8 @@ describe('ErrorStatusCodes', () => {
     expect(ErrorStatusCodes.HASH_CONFLICT).toBe(409);
     expect(ErrorStatusCodes.BRANCH_NOT_HEAD).toBe(409);
     expect(ErrorStatusCodes.BRANCH_ROOT_EXISTS).toBe(409);
+    expect(ErrorStatusCodes.REVIEW_REQUIRED).toBe(409);
+    expect(ErrorStatusCodes.REF_HEAD_INTEGRITY_INVALID).toBe(409);
   });
 
   it('maps operation failures to 500', () => {

@@ -2,7 +2,6 @@
 
 import type { Node } from '@xyflow/react';
 import { X } from 'lucide-react';
-import { useParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -13,7 +12,6 @@ import type {
 } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
-import { CommittedCommitView } from './CommittedCommitView';
 import { ConversationView } from './ConversationView';
 import { PendingCommitView } from './PendingCommitView';
 
@@ -58,8 +56,6 @@ export function NodeModal({
   isConversationLocked,
   viewMode = 'commit',
 }: NodeModalProps) {
-  const params = useParams();
-  const routeProjectId = params?.projectId as string | undefined;
   const projectId = useCanvasStore((state) => state.projectId);
 
   // For staging units: toggle between conversation view and commit config view
@@ -77,7 +73,6 @@ export function NodeModal({
   const isConversation =
     (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
   const isPendingCommit = isStagingUnit && showCommitConfig && viewMode !== 'conversation';
-  const isCommittedCommit = isCommittedUnit && viewMode !== 'conversation';
 
   if (isConversation) {
     return (
@@ -104,7 +99,7 @@ export function NodeModal({
         onClose={onClose}
         onUpdate={onUpdate}
         projectId={projectId || ''}
-        routeProjectId={routeProjectId}
+        onShowConversation={() => setShowCommitConfig(false)}
         onConvertDraft={onConvertDraft}
         onBranchChange={onBranchChange}
         onBranchNameChange={onBranchNameChange}
@@ -112,18 +107,10 @@ export function NodeModal({
     );
   }
 
-  if (isCommittedCommit) {
-    return (
-      <CommittedCommitView
-        node={node}
-        onClose={onClose}
-        onUpdate={onUpdate}
-        projectId={projectId || ''}
-        routeProjectId={routeProjectId}
-        quickActions={quickActions}
-      />
-    );
-  }
+  // Committed versions are inspected directly on the Canvas. The legacy
+  // commit-mode modal is intentionally unavailable, while conversation mode
+  // remains usable when the node has source discussion.
+  if (isCommittedUnit) return null;
 
   // Fallback for unknown node types
   return (

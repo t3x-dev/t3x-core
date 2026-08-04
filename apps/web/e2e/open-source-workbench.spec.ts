@@ -164,28 +164,28 @@ test.describe('Open-source workbench visual smoke', () => {
 
       const routes: WorkbenchRoute[] = [
         {
-          name: 'chat-landing',
-          path: () => '/chat',
+          name: 'repository-directory',
+          path: () => '/',
           ready: async (p) => {
-            await expect(
-              p.getByRole('heading', { name: 'What should T3X structure?' })
-            ).toBeVisible();
+            await expect(p.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
           },
         },
         {
           name: 'canvas',
-          path: () => `/project/${projectId}`,
+          path: () => `/project/${projectId}?view=canvas`,
           ready: async (p) => {
             await expect(p.locator('.react-flow')).toBeVisible({ timeout: 15000 });
             await expect(p.locator('.react-flow__node').first()).toBeVisible({ timeout: 15000 });
           },
         },
         {
-          name: 'commit-audit',
-          path: () => `/project/${projectId}/commit/${encodeHash(promptTargetHash)}`,
+          name: 'canvas-focused-commit',
+          path: () =>
+            `/project/${projectId}?view=canvas&commit=${encodeHash(promptTargetHash)}`,
           ready: async (p) => {
-            await expect(p.getByText('Commit Audit')).toBeVisible({ timeout: 15000 });
-            await expect(p.getByText('assistant_prompt').first()).toBeVisible();
+            await expect(p.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 15000 });
+            await expect(p.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+            await expect(p.getByText('Commit Audit', { exact: true })).toHaveCount(0);
           },
         },
         {
@@ -193,7 +193,8 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () => `/project/${projectId}/leaf/${leafId}`,
           ready: async (p) => {
             await expect(p.getByText('Output').first()).toBeVisible({ timeout: 15000 });
-            await expect(p.getByText('SOURCE YAML').first()).toBeVisible();
+            await expect(p.getByText('Source nodes').first()).toBeVisible();
+            await expect(p.getByRole('button', { name: 'Generate & Verify' })).toBeVisible();
           },
         },
         {
@@ -213,7 +214,7 @@ test.describe('Open-source workbench visual smoke', () => {
           ready: async (p) => {
             await expect(p.getByText('Conflicts (2)')).toBeVisible({ timeout: 15000 });
             await expect(
-              p.getByRole('button', { name: /(Accept Source|Use source|Use feature)/i }).first()
+              p.getByRole('button', { name: /^Use (phase-two-source|main)$/i }).first()
             ).toBeVisible();
           },
         },

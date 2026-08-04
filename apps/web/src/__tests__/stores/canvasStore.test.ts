@@ -22,7 +22,7 @@ vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
 }));
 
-vi.mock('@/queries/commits', () => ({
+vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: vi.fn().mockResolvedValue([]),
   getSemanticContent: vi.fn(),
 }));
@@ -153,6 +153,8 @@ const resetStore = () => {
     loadError: null,
     leafPanelOpen: false,
     leafPanelCommitId: undefined,
+    deleteConversationCallback: null,
+    deleteDraftCallback: null,
     deletionConfirmation: null,
   });
 };
@@ -608,19 +610,42 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(state.nodes.find((n) => n.id === 'unit-2')).toBeDefined();
     });
 
-    it('staging units can be deleted', () => {
+    it('deletes a staging unit through its persisted conversation callback after confirmation', () => {
       const stagingUnit = createStagingUnitNode('unit-1');
+      const deleteConversation = vi.fn();
       useCanvasStore.setState({
         nodes: [stagingUnit],
         edges: [],
+        deleteConversationCallback: deleteConversation,
       });
 
-      // Delete staging unit
       useCanvasStore.getState().onNodesChange([{ id: 'unit-1', type: 'remove' }]);
+      expect(useCanvasStore.getState().deletionConfirmation?.nodeIds).toEqual(['unit-1']);
 
-      const _state = useCanvasStore.getState();
-      // May trigger confirmation dialog, but node should be removable
-      // The exact behavior depends on isUpstreamOfStagingUnit
+      useCanvasStore.getState().confirmDeletion();
+
+      expect(deleteConversation).toHaveBeenCalledWith('conv_unit-1');
+      expect(useCanvasStore.getState().nodes).toHaveLength(0);
+      expect(useCanvasStore.getState().deletionConfirmation).toBeNull();
+    });
+
+    it('deletes a draft unit through its persisted draft callback after confirmation', () => {
+      const draftUnit = createDraftUnitNode('draft-1');
+      const deleteDraft = vi.fn();
+      useCanvasStore.setState({
+        nodes: [draftUnit],
+        edges: [],
+        deleteDraftCallback: deleteDraft,
+      });
+
+      useCanvasStore.getState().onNodesChange([{ id: 'draft-1', type: 'remove' }]);
+      expect(useCanvasStore.getState().deletionConfirmation?.nodeIds).toEqual(['draft-1']);
+
+      useCanvasStore.getState().confirmDeletion();
+
+      expect(deleteDraft).toHaveBeenCalledWith('draft-1');
+      expect(useCanvasStore.getState().nodes).toHaveLength(0);
+      expect(useCanvasStore.getState().deletionConfirmation).toBeNull();
     });
   });
 

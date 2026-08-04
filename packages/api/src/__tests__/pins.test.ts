@@ -86,6 +86,25 @@ describe('Pins Routes', () => {
       expect(data.data.pinned_by).toBeNull();
     });
 
+    it('creates a conversation turn pin', async () => {
+      const turnHash = `turn_hash_${Date.now()}`;
+      const res = await app.request(`/v1/projects/${testProjectId}/pins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'conversation_turn',
+          ref_id: turnHash,
+        }),
+      });
+
+      expect(res.status).toBe(201);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.type).toBe('conversation_turn');
+      expect(data.data.ref_id).toBe(turnHash);
+    });
+
     it('creates a leaf pin with selected_assertion_ids', async () => {
       const assertionIds = ['ast_test1', 'ast_test2'];
       const res = await app.request(`/v1/projects/${testProjectId}/pins`, {

@@ -103,9 +103,9 @@ pnpm screenshots:demo
 The stable landing-only script writes ignored local review copies to
 `tmp/screenshots/demo/`:
 
-- `tmp/screenshots/demo/chat-light.png`
-- `tmp/screenshots/demo/chat-dark.png`
-- `tmp/screenshots/demo/chat-mobile.png`
+- `tmp/screenshots/demo/repository-light.png`
+- `tmp/screenshots/demo/repository-dark.png`
+- `tmp/screenshots/demo/repository-mobile.png`
 
 The broader workflow screenshot set lives in the docs repository under
 `static/img/screenshots/`.

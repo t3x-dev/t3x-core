@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
@@ -274,12 +275,12 @@ export default function RunDetailPage() {
   // Fetch commit data for lineage chain (assertion → constraint → node → source_ref)
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getApiCommit(leaf.commit_hash)
+    getApiCommit(leaf.commit_hash, leaf.project_id)
       .then(setCommit)
       .catch(() => {
         // Commit fetch failure is non-fatal
       });
-  }, [leaf?.commit_hash]);
+  }, [leaf?.commit_hash, leaf?.project_id]);
 
   // Build map: constraint_id → source_ref (for lineage links)
   const constraintSourceRefMap = useMemo(() => {
@@ -898,7 +899,17 @@ export default function RunDetailPage() {
                                     constraintSourceRefMap.get(assertion.constraint_id) &&
                                     projectId && (
                                       <Link
-                                        href={`/chat/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
+                                        href={repositoryConversationSourceHref({
+                                          projectId,
+                                          conversationId: constraintSourceRefMap.get(
+                                            assertion.constraint_id
+                                          )!.conversation_id,
+                                          commitId: leaf?.commit_hash,
+                                          turnHash: constraintSourceRefMap.get(
+                                            assertion.constraint_id
+                                          )!.turn_hash,
+                                          returnTo: `/deploy/eval/${encodeURIComponent(runId)}`,
+                                        })}
                                         className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
                                       >
                                         <MapPin size={10} />

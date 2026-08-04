@@ -109,6 +109,28 @@ describe('T3xClient', () => {
       await expect(client.getProject('proj_123')).rejects.toThrow(T3xApiError);
     });
 
+    it('preserves structured protocol details from API errors', async () => {
+      const fn = mockFetch(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Missing transition:inspect scope',
+            details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+          },
+        },
+        403,
+        false
+      );
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_1')).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+        details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+      });
+    });
+
     it('throws with UNKNOWN code when response is not ok and success is true', async () => {
       // Edge case: HTTP 500 but body says success:true (shouldn't happen, but defensive)
       const fn = mockFetch({ success: true, data: {} }, 500, false);
@@ -261,6 +283,19 @@ describe('T3xClient', () => {
   // Conversations
   // =========================================================================
   describe('conversations', () => {
+    it('exposes Source Thread operations through the neutral capability object', async () => {
+      const data = { conversations: [], limit: 20, offset: 0 };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.sourceThreads.list('proj_1')).toEqual(data);
+      expect(Object.isFrozen(client.sourceThreads)).toBe(true);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/conversations?project_id=proj_1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
     it('listConversations adds project_id to query', async () => {
       const fn = mockFetch(successResponse({ conversations: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
@@ -304,10 +339,54 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('repository sources', () => {
+    it('gets project-scoped conversation evidence with pagination', async () => {
+      const source = {
+        availability: { mode: 'available', reasons: [] },
+        source: { type: 'conversation', id: 'conv/1', project_id: 'proj/1' },
+        turns: { items: [], total: 0, limit: 20, offset: 5, completeness: 'complete' },
+        revisions: [],
+        evidence_selection: { mode: 'not_recorded', turn_hashes: [] },
+        referring_commits: [],
+      };
+      const fn = mockFetch(successResponse(source));
+      const client = createTestClient(fn);
+
+      const result = await client.getConversationSourceEvidence('proj/1', 'conv/1', {
+        limit: 20,
+        offset: 5,
+      });
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+
+      expect(result).toEqual(source);
+      expect(url).toContain('/v1/projects/proj%2F1/sources/conversations/conv%2F1');
+      expect(url).toContain('limit=20');
+      expect(url).toContain('offset=5');
+    });
+  });
+
   // =========================================================================
   // Turns
   // =========================================================================
   describe('turns', () => {
+    it('appends immutable turns through the Source Thread capability', async () => {
+      const turn = { turn_hash: 'sha256:new' };
+      const fn = mockFetch(successResponse(turn));
+      const client = createTestClient(fn);
+      const input = {
+        project_id: 'proj_1',
+        conversation_id: 'conv_1',
+        role: 'user' as const,
+        content: 'Hello',
+      };
+
+      expect(await client.sourceThreads.appendTurn(input)).toEqual(turn);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/turns'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('listTurns adds conversation_id to query', async () => {
       const fn = mockFetch(successResponse({ turns: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
@@ -345,6 +424,7 @@ describe('T3xClient', () => {
       const client = createTestClient(fn);
 
       await client.createTurn({
+        project_id: 'proj_1',
         conversation_id: 'conv_1',
         role: 'user',
         content: 'Hello',
@@ -360,45 +440,66 @@ describe('T3xClient', () => {
   // Commits
   // =========================================================================
   describe('commits', () => {
-    it('listCommits sends GET /v1/projects/:id/commits with branch query', async () => {
+    it('listCommits sends GET /v1/projects/:id/commits with pagination', async () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
-      await client.listCommits('proj_1', 'main');
+      await client.listCommits('proj_1', { limit: 10, offset: 5 });
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
-      expect(url).toContain('branch=main');
+      expect(url).toContain('limit=10');
+      expect(url).toContain('offset=5');
     });
 
-    it('listCommits omits undefined branch', async () => {
+    it('listCommits works without pagination', async () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
       await client.listCommits('proj_1');
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
-      expect(url).not.toContain('branch=');
+      expect(url).not.toContain('limit=');
+      expect(url).not.toContain('offset=');
     });
 
-    it('getCommit sends GET /v1/commits/:hash', async () => {
-      const fn = mockFetch(successResponse({ commit_hash: 'sha256:abc' }));
+    it('getCommit sends a project-scoped GET /v1/commits/:digest', async () => {
+      const fn = mockFetch(successResponse({ digest: 'sha256:abc' }));
       const client = createTestClient(fn);
 
-      await client.getCommit('sha256:abc');
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/commits/sha256:abc'),
-        expect.any(Object)
+      await client.getCommit('proj_1', 'sha256:abc');
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/commits/sha256%3Aabc');
+      expect(url).toContain('project_id=proj_1');
+    });
+
+    it('commitRepositoryState sends a CommitV2 POST', async () => {
+      const fn = mockFetch(
+        successResponse({
+          digest: `sha256:${'a'.repeat(64)}`,
+          ref_name: 'main',
+          object: {
+            schema: 't3x/commit/v2',
+            parents: [],
+            decision: {
+              kind: 'statement',
+              schema: 't3x/statement/v1',
+              digest: `sha256:${'b'.repeat(64)}`,
+            },
+            result: {
+              kind: 'state',
+              schema: 't3x/state/v1',
+              digest: `sha256:${'c'.repeat(64)}`,
+            },
+          },
+        })
       );
-    });
-
-    it('createCommit sends POST', async () => {
-      const fn = mockFetch(successResponse({ commit_hash: 'sha256:new' }));
       const client = createTestClient(fn);
 
-      await client.createCommit({
+      await client.commitRepositoryState({
         project_id: 'proj_1',
         content: { trees: [{ key: 'test', slots: { text: 'hello' }, children: [] }] },
         branch: 'main',
+        expected_head: null,
         message: 'Initial',
       });
       expect(fn).toHaveBeenCalledWith(
@@ -513,15 +614,6 @@ describe('T3xClient', () => {
   // Agent Drafts
   // =========================================================================
   describe('agent drafts', () => {
-    it('listAgentDrafts calls /v1/agent/drafts', async () => {
-      const fn = mockFetch(successResponse({ drafts: [], limit: 20, offset: 0 }));
-      const client = createTestClient(fn);
-
-      await client.listAgentDrafts('proj_1');
-      const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('/v1/agent/drafts');
-    });
-
     it('getAgentDraft calls /v1/agent/drafts/:id', async () => {
       const fn = mockFetch(successResponse({ draft_id: 'ad_1' }));
       const client = createTestClient(fn);
@@ -609,27 +701,150 @@ describe('T3xClient', () => {
   });
 
   // =========================================================================
-  // Chat
+  // Generation
   // =========================================================================
-  describe('chat', () => {
-    it('chat sends POST /v1/chat', async () => {
-      const fn = mockFetch(successResponse({ message: { role: 'assistant', content: 'Hi' } }));
+  describe('generation', () => {
+    it('uses the compatibility route through the neutral Generation capability', async () => {
+      const response = { content: 'Hi', model: 'gpt-5' };
+      const fn = mockFetch(successResponse(response));
       const client = createTestClient(fn);
 
-      await client.chat({ messages: [{ role: 'user', content: 'Hello' }] });
+      expect(
+        await client.generation.complete({ messages: [{ role: 'user', content: 'Hello' }] })
+      ).toEqual(response);
+      expect(Object.isFrozen(client.generation)).toBe(true);
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/chat'),
         expect.objectContaining({ method: 'POST' })
       );
     });
 
-    it('listChatProviders sends GET /v1/chat/providers', async () => {
-      const fn = mockFetch(successResponse([{ id: 'openai', name: 'OpenAI', models: ['gpt-4'] }]));
+    it('preserves chat() as a compatibility alias', async () => {
+      const response = { content: 'Hi', model: 'gpt-5' };
+      const fn = mockFetch(successResponse(response));
       const client = createTestClient(fn);
 
-      const result = await client.listChatProviders();
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('openai');
+      expect(await client.chat({ messages: [{ role: 'user', content: 'Hello' }] })).toEqual(
+        response
+      );
+    });
+
+    it('returns the provider catalog shape implemented by the API', async () => {
+      const catalog = { providers: ['openai'], default: 'openai' };
+      const fn = mockFetch(successResponse(catalog));
+      const client = createTestClient(fn);
+
+      expect(await client.generation.providers()).toEqual(catalog);
+      expect(await client.listChatProviders()).toEqual(catalog);
+    });
+
+    it('streams typed Generation events without exposing the legacy Chat UI', async () => {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"token","content":"Hi"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"done","model":"gpt-5"}\n\n'));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+      const fn = vi.fn(() =>
+        Promise.resolve(new Response(body, { status: 200, statusText: 'OK' }))
+      ) as unknown as typeof fetch;
+      const client = createTestClient(fn);
+
+      const events = [];
+      for await (const event of client.generation.stream({
+        messages: [{ role: 'user', content: 'Hello' }],
+      })) {
+        events.push(event);
+      }
+
+      expect(events).toEqual([
+        { type: 'token', content: 'Hi' },
+        { type: 'done', model: 'gpt-5' },
+      ]);
+      expect(fn).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/chat/stream',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
+  // =========================================================================
+  // Transition control plane
+  // =========================================================================
+  describe('Transition control plane', () => {
+    it('proposes a Transition through the project-scoped endpoint', async () => {
+      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'structured_yops' as const,
+        request_id: 'request:proposal:1',
+        workspace_id: 'ws_1',
+        operations: [{ set: { path: 'device/name', value: 'greenhouse' } }],
+        why: 'Rename the device.',
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('inspects one project-scoped Transition', async () => {
+      const data = { transition_id: 'trn_abc', view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.inspectTransition('proj_1', 'trn_abc')).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc'),
+        expect.objectContaining({ method: 'GET', body: undefined })
+      );
+    });
+
+    it('verifies one Transition with an explicit idempotency key', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        view: {},
+        statements: [],
+        operational_results: [],
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.verifyTransition('proj_1', 'trn_abc', { request_id: 'request:verify:1' })
+      ).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/verify'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ request_id: 'request:verify:1' }),
+        })
+      );
+    });
+
+    it('attaches only an external predicate payload and subject roles', async () => {
+      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:statement:1',
+        predicate_type: 'example.dev/review/v1',
+        predicate: { outcome: 'reviewed' },
+        subjects: ['proposal' as const],
+      };
+
+      expect(await client.attachTransitionStatement('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/statements'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
     });
   });
 
@@ -651,12 +866,11 @@ describe('T3xClient', () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
-      await client.listCommits('proj_1', undefined, { limit: 10 });
+      await client.listCommits('proj_1', { limit: 10 });
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
       expect(url).toContain('/v1/projects/proj_1/commits');
       expect(url).toContain('limit=10');
-      // branch should not appear since it's undefined
-      expect(url).not.toContain('branch');
+      expect(url).not.toContain('offset');
     });
   });
 });

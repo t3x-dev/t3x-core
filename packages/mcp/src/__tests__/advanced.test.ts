@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // -- Mocks --
 
-const mockDB = {};
+const mockDB = {
+  transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(mockDB),
+};
 const mockApiClient = {
   createProject: vi.fn(),
 };
@@ -25,6 +27,8 @@ const MOCK_COMMIT_A = {
     trees: [{ key: 'trip', type: 'node', slots: { budget: 5000 }, children: [] }],
     relations: [],
   },
+  project_id: 'proj_test1',
+  branch: 'feature',
 };
 
 const MOCK_COMMIT_B = {
@@ -35,6 +39,8 @@ const MOCK_COMMIT_B = {
     trees: [{ key: 'trip', type: 'node', slots: { budget: 8000 }, children: [] }],
     relations: [],
   },
+  project_id: 'proj_test1',
+  branch: 'release',
 };
 
 const MOCK_MERGE_DRAFT = {
@@ -42,8 +48,8 @@ const MOCK_MERGE_DRAFT = {
   projectId: 'proj_test1',
   sourceHash: 'sha256:aaa',
   targetHash: 'sha256:bbb',
-  sourceBranch: null,
-  targetBranch: 'main',
+  sourceBranch: 'feature',
+  targetBranch: 'release',
   preparedJson: JSON.stringify({
     autoKept: [],
     conflicts: [
@@ -145,25 +151,55 @@ const MOCK_LEAF = {
 const MOCK_MERGED_COMMIT = {
   hash: 'sha256:merged',
   schema: 't3x/commit/v4',
-  parents: ['sha256:aaa', 'sha256:bbb'],
+  parents: ['sha256:bbb', 'sha256:aaa'],
   author: { type: 'human', name: 'mcp' },
   committed_at: '2026-04-13T00:00:00.000Z',
   content: { trees: [], relations: [] },
   project_id: 'proj_test1',
   message: 'Merge',
-  branch: 'main',
+  branch: 'release',
 };
+
+const transitionMock = {
+  prepareRepositoryYOpsMerge: vi.fn(async () => JSON.parse(MOCK_MERGE_DRAFT.preparedJson)),
+  commitRepositoryYOpsMerge: vi.fn(async () => ({
+    commit: {
+      schema: 't3x/commit/v2',
+      parents: [
+        { kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:bbb' },
+        { kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:aaa' },
+      ],
+    },
+    commitDigest: 'sha256:merged',
+    recordedAt: '2026-04-13T00:00:00.000Z',
+  })),
+};
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => transitionMock);
 
 // -- Storage mock --
 
 vi.mock('@t3x-dev/storage', () => ({
-  getCommit: vi.fn((_db: unknown, hash: string) => {
+  getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) => {
     const commits: Record<string, unknown> = {
       'sha256:aaa': MOCK_COMMIT_A,
       'sha256:bbb': MOCK_COMMIT_B,
     };
-    return Promise.resolve(commits[hash] ?? null);
+    const commit = commits[hash] as typeof MOCK_COMMIT_A | undefined;
+    if (!commit || commit.project_id !== projectId) return Promise.resolve(null);
+    return Promise.resolve({
+      recordedAt: '2026-04-13T00:00:00.000Z',
+      state: { content: commit.content },
+      commit: { schema: 't3x/commit/v2', parents: [] },
+    });
   }),
+  getLatestCommit: vi.fn((_db: unknown, projectId: string, branch: string) => {
+    if (projectId === 'proj_test1' && branch === 'release') return Promise.resolve(MOCK_COMMIT_B);
+    return Promise.resolve(null);
+  }),
+  getTransitionRefHead: vi.fn(() =>
+    Promise.resolve({ format: 'transition_v2', head: 'sha256:bbb' })
+  ),
   createMergeDraft: vi.fn(() => Promise.resolve(MOCK_MERGE_DRAFT)),
   getMergeDraft: vi.fn((_db: unknown, id: string) => {
     const drafts: Record<string, unknown> = {
@@ -209,6 +245,9 @@ vi.mock('@t3x-dev/core', () => ({
     relationsAdded: [],
     relationsRemoved: [],
   })),
+  decodeRepositorySemanticState: vi.fn(
+    (state: { content: typeof MOCK_COMMIT_A.content }) => state.content
+  ),
   prepareMerge: vi.fn(() => ({
     autoKept: [],
     conflicts: [
@@ -241,6 +280,7 @@ import { mergeHandler } from '../tools/advanced/merge.js';
 const originalBackend = process.env.T3X_MCP_BACKEND;
 
 afterEach(() => {
+  vi.clearAllMocks();
   if (originalBackend === undefined) {
     delete process.env.T3X_MCP_BACKEND;
   } else {
@@ -275,19 +315,31 @@ describe('t3x_diff handler', () => {
   });
 
   it('returns error when base commit not found', async () => {
-    const result = await diffHandler({ base: 'sha256:missing', target: 'sha256:bbb' });
+    const result = await diffHandler({
+      base: 'sha256:missing',
+      target: 'sha256:bbb',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Base commit not found');
   });
 
   it('returns error when target commit not found', async () => {
-    const result = await diffHandler({ base: 'sha256:aaa', target: 'sha256:missing' });
+    const result = await diffHandler({
+      base: 'sha256:aaa',
+      target: 'sha256:missing',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Target commit not found');
   });
 
   it('returns structured diff on success', async () => {
-    const result = await diffHandler({ base: 'sha256:aaa', target: 'sha256:bbb' });
+    const result = await diffHandler({
+      base: 'sha256:aaa',
+      target: 'sha256:bbb',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.base).toBe('sha256:aaa');
@@ -330,16 +382,41 @@ describe('t3x_merge handler', () => {
   });
 
   it('prepare: returns draft with conflict summary', async () => {
+    const { createMergeDraft } = await import('@t3x-dev/storage');
     const result = await mergeHandler({
       action: 'prepare',
       project_id: 'proj_test1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
     });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.draft_id).toBe('md_test1');
     expect(data.summary.conflicts).toBe(1);
+    expect(createMergeDraft).toHaveBeenLastCalledWith(
+      mockDB,
+      expect.objectContaining({ sourceBranch: 'feature', targetBranch: 'release' })
+    );
+  });
+
+  it('prepare: rejects a commit from another project', async () => {
+    transitionMock.prepareRepositoryYOpsMerge.mockRejectedValueOnce(
+      new Error('Source commit does not belong to project proj_test1')
+    );
+
+    const result = await mergeHandler({
+      action: 'prepare',
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('does not belong to project');
   });
 
   // -- show_conflict --
@@ -425,7 +502,31 @@ describe('t3x_merge handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.commit_hash).toBe('sha256:merged');
-    expect(data.parents).toEqual(['sha256:aaa', 'sha256:bbb']);
+    expect(data.parents).toEqual(['sha256:bbb', 'sha256:aaa']);
+    expect(data.branch).toBe('release');
+    expect(transitionMock.commitRepositoryYOpsMerge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        projectId: 'proj_test1',
+        refName: 'release',
+        sourceDigest: 'sha256:aaa',
+        targetDigest: 'sha256:bbb',
+      })
+    );
+  });
+
+  it('execute: rejects a draft whose target is no longer the branch head', async () => {
+    transitionMock.commitRepositoryYOpsMerge.mockRejectedValueOnce(
+      new Error('Target commit is no longer the current head')
+    );
+
+    const result = await mergeHandler({
+      action: 'execute',
+      draft_id: 'md_resolved',
+      message: 'Stale merge',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('no longer the current head');
   });
 
   it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {
@@ -442,6 +543,8 @@ describe('t3x_merge handler', () => {
       project_id: 'proj_test1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
     });
     expect(prepared.isError).toBeUndefined();
     expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_test1');

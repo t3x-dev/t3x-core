@@ -13,7 +13,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES, LEGACY_COMMIT_SCHEMAS } from '@t3x-dev/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Local SemanticContent Schema (mirrors @t3x-dev/core SemanticContentSchema)
@@ -130,7 +130,7 @@ export const AssertionSchema = z.object({
 // Use passthrough() to preserve unknown fields for invalid field detection
 //
 // Validation Rules:
-// 1. If `schema` provided, must equal COMMIT_SCHEMA ('t3x/commit')
+// 1. If `schema` provided, must equal 't3x/commit/v2'
 // 2. `content` required with trees (SemanticContent)
 // 3. `author` required with type ('human' | 'agent')
 // 4. `constraints` NOT allowed at commit level (use Leaves instead)
@@ -161,18 +161,18 @@ export const CreateCommitRequest = z
       .optional()
       .describe('Primary conversation to lock as committed after this commit succeeds'),
 
-    // Optional self-identifier; if present it must match COMMIT_SCHEMA.
-    schema: z.string().optional().describe(`If provided, must equal '${COMMIT_SCHEMA}'`),
+    // Optional self-identifier; if present it must match CommitV2.
+    schema: z
+      .literal('t3x/commit/v2')
+      .optional()
+      .describe("If provided, must equal 't3x/commit/v2'"),
     constraints: z.unknown().optional().describe('Not allowed at commit level - use Leaves'),
   })
   .passthrough();
 
 export const CommitResponse = z.object({
   hash: z.string(),
-  // Accept historical schema values so legacy commits (written before the
-  // 2026-04-13 rename) can still be serialised. New commits always use
-  // COMMIT_SCHEMA. Audit 2026-04-15, B-8.
-  schema: z.enum(LEGACY_COMMIT_SCHEMAS),
+  schema: z.literal('t3x/commit/v2'),
   parents: z.array(z.string()),
   author: z.object({
     type: z.enum(['human', 'agent']),
@@ -441,7 +441,7 @@ export const BatchGenerateResponse = SuccessResponse(
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PinTypeEnum = z.enum(['conversation', 'leaf', 'import']);
+const PinTypeEnum = z.enum(['conversation', 'conversation_turn', 'leaf', 'import']);
 
 // POST /v1/projects/:id/pins
 export const CreatePinRequest = z.object({
@@ -791,9 +791,20 @@ export const CommitDraftRequest = z.object({
   branch: z.string().optional(),
 });
 
+export const RepositoryCommitProjectionV2 = z.object({
+  hash: z.string(),
+  schema: z.literal('t3x/commit/v2'),
+  parents: z.array(z.string()),
+  committed_at: z.string(),
+  content: OapiSemanticContentSchema,
+  project_id: z.string(),
+  message: z.string().nullable(),
+  branch: z.string(),
+});
+
 export const CommitDraftResponse = SuccessResponse(
   z.object({
-    commit: CommitResponse,
+    commit: RepositoryCommitProjectionV2,
     leaf: LeafResponse.nullable(),
     draft_status: z.literal('committed'),
   })

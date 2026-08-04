@@ -7,9 +7,11 @@ import { describe, expect, it, vi } from 'vitest';
 import SettingsLayout from '@/app/settings/layout';
 
 let mockPathname = '/settings';
+let mockSearchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useSearchParams: () => mockSearchParams,
 }));
 
 vi.mock('next/link', () => ({
@@ -34,6 +36,7 @@ vi.mock('@/hooks/shared/useSession', () => ({
 describe('SettingsLayout', () => {
   it('groups settings navigation by product ownership and scope', () => {
     mockPathname = '/settings';
+    mockSearchParams = new URLSearchParams();
 
     render(
       <SettingsLayout>
@@ -48,11 +51,8 @@ describe('SettingsLayout', () => {
     expect(screen.getByText('AUTOMATION')).toBeInTheDocument();
     expect(screen.getByText('PROJECT')).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: /Back to workspace/i })).toHaveAttribute(
-      'href',
-      '/chat'
-    );
-    expect(screen.getByRole('link', { name: /Health/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: /Overview/i })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',
       '/settings/profile'
@@ -66,5 +66,21 @@ describe('SettingsLayout', () => {
       '/settings/webhooks'
     );
     expect(screen.getByText('Project overrides are edited from each project.')).toBeInTheDocument();
+  });
+
+  it('uses a safe return target for the back link', () => {
+    mockPathname = '/settings/providers';
+    mockSearchParams = new URLSearchParams('returnTo=%2Ft3x-dev%2Fsettings');
+
+    render(
+      <SettingsLayout>
+        <div>Settings content</div>
+      </SettingsLayout>
+    );
+
+    expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute(
+      'href',
+      '/t3x-dev/settings'
+    );
   });
 });

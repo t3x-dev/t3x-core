@@ -1,7 +1,8 @@
 import type { APIRequestContext } from '@playwright/test';
 import type { DemoTreeNode } from './open-source-demo-datasets';
 
-export const API_BASE = 'http://localhost:8000/api/v1';
+export const API_ORIGIN = process.env.API_URL ?? 'http://localhost:8000';
+export const API_BASE = `${API_ORIGIN}/api/v1`;
 
 interface ApiTreeNode {
   key: string;
@@ -66,8 +67,14 @@ export async function createTestCommit(
   request: APIRequestContext,
   projectId: string,
   nodes: Array<{ id: string; text: string }>,
-  options?: { branch?: string; message?: string; parents?: string[] }
+  options?: { branch?: string; message?: string; parents?: string[]; expectedHead?: string | null }
 ): Promise<string> {
+  const branch = options?.branch || 'main';
+  await ensureTestBranch(request, projectId, branch);
+  const expectedHead =
+    options && 'expectedHead' in options
+      ? options.expectedHead
+      : await getBranchHead(request, projectId, branch);
   const trees = nodes.map((s) => ({
     key: s.id,
     type: 'legacy_sentence',
@@ -79,14 +86,15 @@ export async function createTestCommit(
       project_id: projectId,
       content: { trees, relations: [] },
       author: { type: 'human', name: 'E2E Tester' },
-      branch: options?.branch || 'main',
+      branch,
       message: options?.message || 'E2E test commit',
       parents: options?.parents,
+      expected_head: expectedHead,
     },
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create commit: ${data.error?.message}`);
-  return data.data.commit.hash;
+  return data.data.commit.digest;
 }
 
 function normalizeDemoTree(tree: DemoTreeNode): ApiTreeNode {
@@ -104,21 +112,48 @@ export async function createTestCommitFromTrees(
   request: APIRequestContext,
   projectId: string,
   trees: DemoTreeNode[],
-  options?: { branch?: string; message?: string; parents?: string[] }
+  options?: { branch?: string; message?: string; parents?: string[]; expectedHead?: string | null }
 ): Promise<string> {
+  const branch = options?.branch || 'main';
+  await ensureTestBranch(request, projectId, branch);
+  const expectedHead =
+    options && 'expectedHead' in options
+      ? options.expectedHead
+      : await getBranchHead(request, projectId, branch);
   const response = await request.post(`${API_BASE}/commits`, {
     data: {
       project_id: projectId,
       content: { trees: trees.map(normalizeDemoTree), relations: [] },
       author: { type: 'human', name: 'E2E Tester' },
-      branch: options?.branch || 'main',
+      branch,
       message: options?.message || 'E2E tree commit',
       parents: options?.parents,
+      expected_head: expectedHead,
     },
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create tree commit: ${data.error?.message}`);
-  return data.data.commit.hash;
+  return data.data.commit.digest;
+}
+
+async function getBranchHead(
+  request: APIRequestContext,
+  projectId: string,
+  branchName: string
+): Promise<string | null> {
+  const branches = await listTestBranches(request, projectId);
+  return branches.find((branch) => branch.name === branchName)?.head_commit_hash ?? null;
+}
+
+async function ensureTestBranch(
+  request: APIRequestContext,
+  projectId: string,
+  branchName: string
+): Promise<void> {
+  if (branchName === 'main') return;
+  const branches = await listTestBranches(request, projectId);
+  if (branches.some((branch) => branch.name === branchName)) return;
+  await createTestBranch(request, projectId, branchName, { parentBranch: 'main' });
 }
 
 /**
@@ -177,7 +212,7 @@ export async function createTestMergeDraft(
       source_hash: sourceHash,
       target_hash: targetHash,
       source_branch: options?.sourceBranch,
-      target_branch: options?.targetBranch,
+      target_branch: options?.targetBranch ?? 'main',
     },
   });
   const data = await response.json();

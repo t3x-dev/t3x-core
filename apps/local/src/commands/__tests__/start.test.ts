@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatStartedRuntimeMessages } from '../start.js';
 
 describe('formatStartedRuntimeMessages', () => {
-  it('includes the guided demo URL in the local start output', () => {
+  it('includes the repository-first URL in the local start output', () => {
     expect(
       formatStartedRuntimeMessages({
         apiPid: 101,
@@ -14,6 +14,6 @@ describe('formatStartedRuntimeMessages', () => {
         apiLogPath: '/tmp/api.log',
         webLogPath: '/tmp/web.log',
       })
-    ).toContain('[t3x-local] Demo: http://localhost:3000/chat?introDemo=1');
+    ).toContain('[t3x-local] Open: http://localhost:3000/');
   });
 });

@@ -30,9 +30,12 @@ export interface ParentCommitData {
   fetched: boolean;
 }
 
-export async function fetchParentCommitData(hash: string): Promise<ParentCommitData> {
+export async function fetchParentCommitData(
+  hash: string,
+  projectId?: string
+): Promise<ParentCommitData> {
   try {
-    const parentCommit = await fetchCommitForInheritance(hash);
+    const parentCommit = await fetchCommitForInheritance(hash, projectId);
 
     const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> }).sources;
     const parentConvSource = sources?.find((s) => s.type === 'conversation');

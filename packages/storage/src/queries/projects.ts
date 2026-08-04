@@ -16,7 +16,7 @@ import {
   projects,
   turns,
 } from '../schema';
-import { commits } from '../schema-commits';
+import { transitionCommits } from '../schema-transition-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
@@ -244,7 +244,9 @@ export async function restoreProject(db: AnyDB, projectId: string): Promise<Proj
 }
 
 /**
- * Permanently delete a project (hard delete with cascade)
+ * Permanently delete a project and all project-scoped data through cascades,
+ * including the trusted Decision audit ledger. Normal soft deletion preserves
+ * that audit history and remains restorable.
  */
 export async function permanentDeleteProject(db: AnyDB, projectId: string): Promise<boolean> {
   const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();
@@ -275,8 +277,8 @@ export async function findProjectWithStats(
 
   const [commitCount] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
+    .from(transitionCommits)
+    .where(eq(transitionCommits.projectId, projectId));
 
   const [branchCount] = await db
     .select({ count: sql<number>`count(*)::int` })

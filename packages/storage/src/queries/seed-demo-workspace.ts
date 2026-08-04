@@ -1,15 +1,94 @@
-import type { Commit, Leaf, SourcedYOp } from '@t3x-dev/core';
-import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
+import {
+  authorizeDecisionForRepository,
+  buildReplayVerificationStatement,
+  type CommitV2,
+  compileProposalDraft,
+  createAcceptancePolicyResource,
+  createCommitV2,
+  createYOpsReplacementEffect,
+  createYOpsState,
+  DEMO_WORKSPACE_FIXTURE,
+  describeTransitionObject,
+  emptyProposalReview,
+  InMemoryTransitionObjectResolver,
+  type Leaf,
+  type ProtocolObject,
+  parseAcceptancePolicy,
+  type SourcedYOp,
+  type StatementObservation,
+  sha256,
+} from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import type { Conversation, Project, Turn } from '../schema';
-import { ensureMainBranch, updateBranchHead } from './branches';
-import { createCommit } from './commits';
+import { ensureMainBranch } from './branches';
 import { insertConversation } from './conversations';
 import { getGlobalSetting, setGlobalSetting } from './global-settings';
 import { createLeaf, updateLeafAtomic } from './leaves';
 import { findProjectByIdIncludingDeleted, insertProject } from './projects';
+import {
+  createTransitionCommit,
+  recordRepositoryDecisionAuthorization,
+} from './transition-commits';
 import { insertTurn } from './turns';
 import { insertYOpsLogEntry } from './yops-log';
+
+const DEMO_REPLAY_ACTOR = Object.freeze({
+  kind: 'service' as const,
+  id: 'service:t3x-demo-fixture-replay',
+});
+const DEMO_DECIDER = Object.freeze({
+  kind: 'service' as const,
+  id: 'service:t3x-demo-fixture-seed',
+});
+const DEMO_REPLAY_TOOL = Object.freeze({ name: '@t3x-dev/core/yops-replay', version: '1' });
+const DEMO_ENVIRONMENT = Object.freeze({ mode: 'unspecified' as const });
+const DEMO_POLICY = createAcceptancePolicyResource({
+  uri: 't3x://policies/demo-fixture-seed/v1',
+  policy: parseAcceptancePolicy({
+    schema: 't3x.dev/acceptance-policy/v1',
+    version: 1,
+    authorization: {
+      decide: { actors: { mode: 'one_of', values: [DEMO_DECIDER] } },
+      override: { actors: { mode: 'one_of', values: [DEMO_DECIDER] } },
+      allowSelfApproval: true,
+    },
+    claims: {
+      intent: {
+        allowedModes: ['authored'],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required',
+      },
+      rationale: {
+        allowedModes: ['inferred'],
+        minimumEvidence: 1,
+        humanConfirmation: 'not_required',
+      },
+    },
+    checks: {
+      replay: {
+        issuers: { mode: 'one_of', values: [DEMO_REPLAY_ACTOR] },
+        tools: { mode: 'one_of', values: [DEMO_REPLAY_TOOL] },
+        environments: { mode: 'one_of', values: [DEMO_ENVIRONMENT] },
+      },
+      validation: {
+        requirement: 'optional',
+        issuers: { mode: 'any' },
+        tools: { mode: 'any' },
+        environments: { mode: 'any' },
+        profiles: { mode: 'any' },
+        schemas: { mode: 'any' },
+        contexts: { mode: 'any' },
+      },
+      humanConfirmation: { issuers: { mode: 'any' } },
+    },
+    override: {
+      allowClaimFailures: false,
+      allowFailedValidation: false,
+      allowMissingHumanConfirmation: false,
+      allowMissingValidation: true,
+    },
+  }),
+});
 
 export interface DemoWorkspaceSeedMarker {
   fixture_id: string;
@@ -31,7 +110,7 @@ export interface SeedDemoWorkspaceResult {
   project: Project | null;
   conversation?: Conversation;
   turn?: Turn;
-  commit?: Commit;
+  commit?: { digest: string; object: CommitV2; recordedAt: string };
   leaf?: Leaf;
 }
 
@@ -96,7 +175,7 @@ async function createDemoWorkspaceRows(
   project: Project;
   conversation: Conversation;
   turn: Turn;
-  commit: Commit;
+  commit: { digest: string; object: CommitV2; recordedAt: string };
   leaf: Leaf;
 }> {
   const seededAt = new Date().toISOString();
@@ -152,31 +231,16 @@ async function createDemoWorkspaceRows(
     },
   });
 
-  const commit = await createCommit(db, {
-    parents: [],
-    author: DEMO_WORKSPACE_FIXTURE.commit.author,
-    content: {
-      trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
-      relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
-    },
-    project_id: project.projectId,
-    message: DEMO_WORKSPACE_FIXTURE.commit.message,
-    branch: 'main',
-    provenance: DEMO_WORKSPACE_FIXTURE.commit.provenance,
-    yops_log_ids: [yopsLogEntry.id],
-    sources: [
-      {
-        type: 'conversation',
-        id: conversation.conversationId,
-        title: conversation.title ?? DEMO_WORKSPACE_FIXTURE.source.title,
-      },
-    ],
-    enforceBranchLinearity: true,
+  const commit = await commitDemoWorkspaceTransition(db, {
+    projectId: project.projectId,
+    conversationId: conversation.conversationId,
+    turn,
+    yopsLogId: yopsLogEntry.id,
+    recordedAt: seededAt,
   });
-  await updateBranchHead(db, project.projectId, 'main', commit.hash);
 
   const createdLeaf = await createLeaf(db, {
-    commit_hash: commit.hash,
+    commit_hash: commit.digest,
     type: DEMO_WORKSPACE_FIXTURE.leaf.type,
     title: DEMO_WORKSPACE_FIXTURE.leaf.title,
     constraints: DEMO_WORKSPACE_FIXTURE.leaf.constraints,
@@ -191,6 +255,130 @@ async function createDemoWorkspaceRows(
     })) ?? createdLeaf;
 
   return { project, conversation, turn, commit, leaf };
+}
+
+async function commitDemoWorkspaceTransition(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    conversationId: string;
+    turn: Turn;
+    yopsLogId: string;
+    recordedAt: string;
+  }
+): Promise<{ digest: string; object: CommitV2; recordedAt: string }> {
+  const base = createYOpsState({});
+  const target = createYOpsState({
+    domain: 't3x.dev/semantic-content',
+    version: 1,
+    content: {
+      trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
+      relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
+    },
+  } as unknown as Parameters<typeof createYOpsState>[0]);
+  const { effect, result } = createYOpsReplacementEffect({
+    base,
+    target,
+    expectedBase: describeTransitionObject(base),
+  });
+  const sourceEvidence = {
+    resource: {
+      uri: `t3x://projects/${input.projectId}/conversations/${input.conversationId}/turns/${input.turn.turnHash}`,
+      mediaType: 'text/plain;charset=utf-8',
+      digest: `sha256:${sha256(input.turn.content)}` as `sha256:${string}`,
+    },
+    locator: {
+      scheme: 't3x.text-quote/v1',
+      value: { quote: input.turn.content },
+    },
+  };
+  const compiled = compileProposalDraft({
+    draft: {
+      schema: 't3x/proposal-draft',
+      version: 1,
+      intent: {
+        mode: 'authored',
+        value: DEMO_WORKSPACE_FIXTURE.commit.message,
+        evidence: [],
+      },
+      rationale: {
+        mode: 'inferred',
+        value: 'Replay the bundled source fixture into deterministic structured state.',
+        evidence: [sourceEvidence],
+      },
+      review: emptyProposalReview(),
+    },
+    effect,
+    actor: DEMO_DECIDER,
+  });
+  if (!compiled.ok) {
+    throw new TypeError(`Demo fixture Proposal failed: ${JSON.stringify(compiled.issues)}`);
+  }
+  const replay = buildReplayVerificationStatement({
+    effect,
+    actor: DEMO_REPLAY_ACTOR,
+    predicate: {
+      outcome: 'verified',
+      result: effect.result,
+      tool: DEMO_REPLAY_TOOL,
+      run: {
+        id: `demo:${DEMO_WORKSPACE_FIXTURE.id}:replay`,
+        recordedAt: input.recordedAt as Parameters<
+          typeof authorizeDecisionForRepository
+        >[0]['decidedAt'],
+      },
+      environment: DEMO_ENVIRONMENT,
+    },
+  });
+  const observations: StatementObservation[] = [
+    { statement: replay, issuerContext: { actor: DEMO_REPLAY_ACTOR } },
+  ];
+  const issued = await authorizeDecisionForRepository({
+    projectId: input.projectId,
+    refName: 'main',
+    proposal: compiled.proposal,
+    effect,
+    outcome: 'accepted',
+    rationale: { mode: 'unspecified' },
+    decidedAt: input.recordedAt as Parameters<
+      typeof authorizeDecisionForRepository
+    >[0]['decidedAt'],
+    authority: {
+      async resolve() {
+        return {
+          actorContext: { actor: DEMO_DECIDER },
+          observationScope: {
+            completeness: 'complete' as const,
+            sources: ['server:demo-fixture-seed'],
+          },
+          policy: DEMO_POLICY.policy,
+          policyResource: DEMO_POLICY.resource,
+          statements: observations,
+        };
+      },
+    },
+  });
+  if (!issued.ok || issued.authorization === null) {
+    throw new TypeError(
+      `Demo fixture Decision failed: ${JSON.stringify(issued.ok ? [] : issued.failures)}`
+    );
+  }
+  await recordRepositoryDecisionAuthorization(db, issued.authorization);
+  const objects: ProtocolObject[] = [base, result, ...issued.authorization.objects];
+  const object = await createCommitV2({
+    parents: [],
+    decision: issued.decision,
+    resolver: new InMemoryTransitionObjectResolver(objects),
+  });
+  const created = await createTransitionCommit(db, {
+    projectId: input.projectId,
+    refName: 'main',
+    expectedHead: null,
+    commit: object,
+    objects,
+    yopsLogIds: [input.yopsLogId],
+  });
+  return { digest: created.digest, object, recordedAt: input.recordedAt };
 }
 
 function getMetadataString(metadataJson: string | null, key: string): string {

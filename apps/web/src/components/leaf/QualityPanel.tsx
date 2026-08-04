@@ -8,9 +8,8 @@
  * the corresponding YAML tree in YAMLTreePanel.
  */
 
-import { Check, CheckCircle, Clipboard, FileDown, Share2, XCircle } from 'lucide-react';
+import { Check, CheckCircle, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
-import { Button } from '@/components/ui/button';
 import type { LeafSemanticPointItem } from '@/domain/leaf/semanticPoints';
 import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -22,14 +21,11 @@ import { cn } from '@/utils/cn';
 interface QualityPanelProps {
   assertions: Assertion[];
   constraints: Constraint[];
-  generatedAt?: string;
   semanticPoints?: LeafSemanticPointItem[];
   coverageIncluded?: number;
   coverageTotal?: number;
   /** Callback to highlight a YAML tree when hovering an assertion */
   onHighlightConstraint?: (constraintId: string | null) => void;
-  /** Export actions */
-  onExport: (format: 'clipboard' | 'markdown' | 'json' | 'prompt') => Promise<void>;
 }
 
 // ============================================================================
@@ -103,12 +99,10 @@ function AssertionCard({
 export function QualityPanel({
   assertions,
   constraints,
-  generatedAt,
   semanticPoints = [],
   coverageIncluded,
   coverageTotal,
   onHighlightConstraint,
-  onExport,
 }: QualityPanelProps) {
   const passedCount = assertions.filter((a) => a.passed).length;
   const totalCount = assertions.length;
@@ -119,7 +113,6 @@ export function QualityPanel({
   const coveragePercent =
     totalCoverage > 0 ? Math.round((includedCoverage / totalCoverage) * 100) : 0;
   const coverageComplete = totalCoverage > 0 && includedCoverage === totalCoverage;
-  const generatedLabel = generatedAt ? formatDisplayDateTime(generatedAt) : null;
 
   // Map constraint_id to constraint for display
   const constraintMap = useMemo(() => {
@@ -145,21 +138,33 @@ export function QualityPanel({
     >
       <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-4 py-3">
         <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-          Review Stack
+          Quality
         </span>
-        <span className="text-[11px] text-[var(--text-tertiary)]">j / k navigate</span>
+        <span className="text-[11px] text-[var(--text-tertiary)]">Output review</span>
       </div>
 
       <div className="space-y-3 p-4">
-        <section className="rounded-xl border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] p-3">
+        <section
+          className={cn(
+            'rounded-md border p-3',
+            coverageComplete
+              ? 'border-[var(--status-success)]/25 bg-[var(--status-success-muted)]'
+              : 'border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)]'
+          )}
+        >
           <div className="flex items-center gap-3">
             <div
               className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
               style={{
-                background: `conic-gradient(var(--accent-leaf) ${coveragePercent}%, var(--surface-elevated) 0)`,
+                background: `conic-gradient(${coverageComplete ? 'var(--status-success)' : 'var(--accent-commit)'} ${coveragePercent}%, var(--surface-elevated) 0)`,
               }}
             >
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-[var(--surface-card)] text-[12px] font-bold text-[var(--accent-leaf)]">
+              <div
+                className={cn(
+                  'grid h-10 w-10 place-items-center rounded-full bg-[var(--surface-card)] text-[12px] font-bold',
+                  coverageComplete ? 'text-[var(--status-success)]' : 'text-[var(--accent-commit)]'
+                )}
+              >
                 {coveragePercent}%
               </div>
             </div>
@@ -178,7 +183,7 @@ export function QualityPanel({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]">
+        <section className="overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)]">
           <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
               State Coverage
@@ -194,7 +199,7 @@ export function QualityPanel({
                 .slice(0, 5)
                 .map((point) => (
                   <div key={point.id} className="flex items-start gap-2 text-[12px]">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm bg-[var(--accent-leaf)] p-0.5 text-[var(--on-accent)]" />
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm bg-[var(--accent-commit)] p-0.5 text-[var(--on-accent)]" />
                     <span className="min-w-0 flex-1 truncate font-mono text-[var(--text-secondary)]">
                       {point.label}
                     </span>
@@ -208,7 +213,7 @@ export function QualityPanel({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]">
+        <section className="overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)]">
           <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
               Constraints
@@ -223,12 +228,12 @@ export function QualityPanel({
                 <button
                   key={constraint.id}
                   type="button"
-                  className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-[var(--surface-hover)]"
+                  className="flex min-h-8 w-full items-start gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/30"
                   onMouseEnter={() => handleHover(constraint.id)}
                   onMouseLeave={() => handleHover(null)}
                 >
                   {constraint.type === 'require' ? (
-                    <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent-leaf)]" />
+                    <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent-commit)]" />
                   ) : (
                     <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-error)]" />
                   )}
@@ -246,7 +251,7 @@ export function QualityPanel({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]">
+        <section className="overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)]">
           <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
               Assertions
@@ -284,60 +289,7 @@ export function QualityPanel({
             )}
           </div>
         </section>
-
-        <section className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]">
-          <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-              Publish
-            </span>
-            {generatedLabel && (
-              <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
-                {generatedLabel}
-              </span>
-            )}
-          </div>
-          <div className="space-y-1 px-2 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 h-8 text-xs"
-              onClick={() => onExport('clipboard')}
-            >
-              <Clipboard className="h-3.5 w-3.5" />
-              Copy to clipboard
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 h-8 text-xs"
-              onClick={() => onExport('markdown')}
-            >
-              <FileDown className="h-3.5 w-3.5" />
-              Export Markdown
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 h-8 text-xs"
-              onClick={() => onExport('json')}
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Share via API
-            </Button>
-          </div>
-        </section>
       </div>
     </aside>
   );
-}
-
-function formatDisplayDateTime(value: string): string {
-  const date = new Date(value);
-  const chinaTime = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-  const year = chinaTime.getUTCFullYear();
-  const month = String(chinaTime.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(chinaTime.getUTCDate()).padStart(2, '0');
-  const hours = String(chinaTime.getUTCHours()).padStart(2, '0');
-  const minutes = String(chinaTime.getUTCMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }

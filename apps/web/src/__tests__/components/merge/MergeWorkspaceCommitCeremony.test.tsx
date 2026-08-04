@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const createMergeCommitMock = vi.fn();
+const commitMergeDraftMock = vi.fn();
 const loadCommitMock = vi.fn();
 const loadCanvasMock = vi.fn();
 
@@ -24,8 +24,12 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
   };
 });
 
-vi.mock('@/hooks/commits/useCreateMergeCommit', () => ({
-  useCreateMergeCommit: () => ({ create: createMergeCommitMock }),
+vi.mock('@/hooks/merge/useMergeWorkspaceActions', () => ({
+  useMergeWorkspaceActions: () => ({
+    save: vi.fn(),
+    cancel: vi.fn(),
+    commit: commitMergeDraftMock,
+  }),
 }));
 
 vi.mock('@/hooks/commits/useCommitByHash', () => ({
@@ -60,7 +64,7 @@ describe('MergeWorkspace commit ceremony', () => {
       parents: [],
       content: commitContent,
     });
-    createMergeCommitMock.mockResolvedValue({ commit: { hash: 'sha256:merge' } });
+    commitMergeDraftMock.mockResolvedValue({ hash: 'sha256:merge' });
   });
 
   it('shows the shared commit ceremony before navigating after a merge commit', async () => {
@@ -73,7 +77,15 @@ describe('MergeWorkspace commit ceremony', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Execute Merge' }));
     fireEvent.click(screen.getByTestId('merge-review-confirm'));
 
-    await waitFor(() => expect(createMergeCommitMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(commitMergeDraftMock).toHaveBeenCalledTimes(1));
+    expect(commitMergeDraftMock).toHaveBeenCalledWith(
+      'main',
+      expect.objectContaining({
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+      })
+    );
     expect(await screen.findByRole('status', { name: 'Commit sealed' })).toBeVisible();
     expect(onMergeCommitted).not.toHaveBeenCalled();
   });

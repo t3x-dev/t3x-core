@@ -14,6 +14,7 @@ import { useCallback } from 'react';
 import { executeMerge, prepareMerge } from '@/commands/merge';
 import { computeMergeNodePosition } from '@/domain/canvasLayout';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { getTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { edgeStyle, edgeType } from '@/store/canvasStoreUtils';
@@ -36,13 +37,14 @@ interface MergeCommitResult {
 
 export function useCanvasMergeActions() {
   const prepare = useCallback(async (sourceHash: string, targetHash: string): Promise<void> => {
-    const { notifyCallback } = useCanvasStore.getState();
+    const { notifyCallback, projectId } = useCanvasStore.getState();
+    if (!projectId) throw new Error('Project is required to prepare a merge');
 
     useCanvasStore.getState().setMergeLoading(true);
     useCanvasStore.getState().setMergeError(null);
 
     try {
-      const data = await prepareMerge(sourceHash, targetHash);
+      const data = await prepareMerge(projectId, sourceHash, targetHash);
       useCanvasStore.getState().setMergePrepared({ sourceHash, targetHash, prepared: data });
       notifyCallback?.('Merge prepared successfully', 'success');
     } catch (error) {
@@ -55,7 +57,7 @@ export function useCanvasMergeActions() {
   }, []);
 
   const execute = useCallback(async (message: string): Promise<MergeCommitResult> => {
-    const { mergeState, notifyCallback } = useCanvasStore.getState();
+    const { mergeState, notifyCallback, projectId } = useCanvasStore.getState();
 
     if (!mergeState) {
       const errorMsg = 'No merge in progress';
@@ -63,6 +65,7 @@ export function useCanvasMergeActions() {
       notifyCallback?.(errorMsg, 'error');
       throw new Error(errorMsg);
     }
+    if (!projectId) throw new Error('Project is required to execute a merge');
 
     useCanvasStore.getState().setMergeLoading(true);
     useCanvasStore.getState().setMergeError(null);
@@ -71,12 +74,14 @@ export function useCanvasMergeActions() {
       const targetBranch = mergeState.targetBranch || 'main';
 
       const mergeCommit = (await executeMerge({
+        project_id: projectId,
         source_hash: mergeState.sourceHash,
         target_hash: mergeState.targetHash,
         prepared: mergeState.prepared,
         message,
         branch: targetBranch,
       })) as unknown as MergeCommitResult;
+      const mergeBranch = mergeCommit.branch || targetBranch;
 
       const { nodes } = useCanvasStore.getState();
       const sourceNode = nodes.find((n) => n.id === mergeState.sourceHash);
@@ -100,11 +105,8 @@ export function useCanvasMergeActions() {
           commitStatus: 'committed',
           commitHash: mergeCommit.hash,
           isMergeCommit: true,
-          branchType: (mergeCommit.branch || targetBranch) === 'main' ? 'main' : 'branch',
-          branchName:
-            (mergeCommit.branch || targetBranch) !== 'main'
-              ? mergeCommit.branch || targetBranch
-              : undefined,
+          branchType: mergeBranch === 'main' ? 'main' : 'branch',
+          branchName: mergeBranch !== 'main' ? mergeBranch : undefined,
           sourceExcerpt:
             mergeCommit.content.trees?.map(
               (f: { type?: string; slots?: Record<string, unknown> }) =>
@@ -116,12 +118,12 @@ export function useCanvasMergeActions() {
           mustntHave: undefined,
           commit: {
             hash: mergeCommit.hash,
-            schema: 't3x/commit' as const,
+            schema: 't3x/commit/v2' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
             content: { trees: [], relations: [] },
             message: mergeCommit.message ?? null,
-            branch: mergeCommit.branch ?? 'main',
+            branch: mergeBranch,
             sources: null,
             merge_summary: mergeCommit.merge_summary,
           },
@@ -138,6 +140,13 @@ export function useCanvasMergeActions() {
       }));
 
       useCanvasStore.getState().appendMergeCommit(mergeNode, newEdges);
+      if (projectId) {
+        dispatchCommitCreated({
+          projectId,
+          hash: mergeCommit.hash,
+          branch: mergeBranch,
+        });
+      }
       notifyCallback?.('Merge executed successfully', 'success');
       return mergeCommit;
     } catch (error) {

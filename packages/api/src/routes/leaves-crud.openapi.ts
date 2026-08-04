@@ -20,14 +20,18 @@ import {
   findLeafById,
   findLeavesByCommit,
   findLeavesByProject,
-  getCommitUnified,
   insertLeafOutputEdit,
+  listTransitionCommitProjectIds,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import {
+  getRepositorySemanticCommit,
+  RepositoryStateDomainUnsupportedError,
+} from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -322,11 +326,14 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, body.project_id);
     if (accessResult instanceof Response) return accessResult;
 
-    // Auto-generate title from commit message if not provided
+    const commit = await getRepositorySemanticCommit(db, body.commit_hash, body.project_id);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${body.commit_hash}`);
+    }
+    // Auto-generate title from the immutable Proposal rationale if not provided.
     let title = body.title;
     if (!title) {
-      const commit = await getCommitUnified(db, body.commit_hash);
-      const msg = commit?.message || body.commit_hash.slice(0, 16);
+      const msg = commit.rationale || body.commit_hash.slice(0, 16);
       title = `${msg} — ${body.type}`;
     }
 
@@ -393,9 +400,17 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const commit = await getCommitUnified(db, decodedHash);
-    if (commit?.project_id) {
-      const accessResult = await assertProjectAccess(c, db, commit.project_id);
+    let commitProjectId: string | null = null;
+    try {
+      const commit = await getRepositorySemanticCommit(db, decodedHash);
+      commitProjectId = commit?.projectId ?? null;
+    } catch (error) {
+      if (!(error instanceof RepositoryStateDomainUnsupportedError)) throw error;
+      const projectIds = await listTransitionCommitProjectIds(db, decodedHash);
+      commitProjectId = projectIds.length === 1 ? projectIds[0] : null;
+    }
+    if (commitProjectId) {
+      const accessResult = await assertProjectAccess(c, db, commitProjectId);
       if (accessResult instanceof Response) return accessResult;
     }
 

@@ -5,7 +5,9 @@ import {
   createTestProject,
   createTestTurn,
 } from './fixtures/api-helpers';
+import { mockConfiguredExtractionModel } from './fixtures/mock-model';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 /**
  * Extraction flow e2e — uses page.route() to mock the extract-yops API
@@ -55,10 +57,7 @@ function validOps(turnHash: string) {
 
 /** Expand the YOps panel (collapsed by default on first load) then click Extract. */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
-  }
+  await expandWorkspaceIfCollapsed(page);
   // Extract button is only rendered when panelExpanded && !isCommitted
   await page.getByTestId('extract-button').click();
 }
@@ -93,7 +92,8 @@ test.describe('Extraction flow', () => {
     ({ projectId } = await createTestProject(request, `Extraction E2E ${Date.now()}`));
   });
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
+    await mockConfiguredExtractionModel(page);
     conversationId = await createTestConversation(request, projectId, 'E2E Extraction');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', userContent);
   });

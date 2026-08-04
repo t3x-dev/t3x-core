@@ -17,13 +17,15 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { buildMergeDecisionLabels, buildMergeVoices } from '@/domain/merge/voices';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
-import { useCreateMergeCommit } from '@/hooks/commits/useCreateMergeCommit';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
+import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/shared/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { isTreeResolutionComplete } from '@/types/merge';
 import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
@@ -32,7 +34,7 @@ import { MergeNavigator } from './MergeNavigator';
 import { MergePreview } from './MergePreview';
 import { MergeReadyStrip } from './MergeReadyStrip';
 import { MergeReviewDialog } from './MergeReviewDialog';
-import { buildMergedContent, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
+import { buildMergeDecision, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
 import { useMergeKeyboard } from './useMergeKeyboard';
 
 interface MergeWorkspaceProps {
@@ -42,6 +44,8 @@ interface MergeWorkspaceProps {
   onClose: () => void;
   /** Called after a successful merge commit with the new commit hash */
   onMergeCommitted?: (commitHash: string) => void;
+  /** When set, commit through the PR lifecycle instead of the standalone merge endpoint. */
+  pullRequestNumber?: number;
 }
 
 export function MergeWorkspace({
@@ -49,9 +53,10 @@ export function MergeWorkspace({
   onClose,
   onBack = onClose,
   onMergeCommitted,
+  pullRequestNumber,
 }: MergeWorkspaceProps) {
-  const { create: createMergeCommit } = useCreateMergeCommit();
   const { load: loadCanvas } = useCanvasNodeActions();
+  const { mergePullRequest: mergeProjectPullRequest } = useProjectPullRequestsApi();
   const {
     message,
     isDirty,
@@ -78,7 +83,11 @@ export function MergeWorkspace({
     getTreeMergeChecks,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
-  const { save: saveDraft, cancel: cancelMerge } = useMergeWorkspaceActions();
+  const {
+    save: saveDraft,
+    cancel: cancelMerge,
+    commit: commitMergeDraft,
+  } = useMergeWorkspaceActions();
   const { loadCommit } = useCommitByHash();
 
   // Timer-driven saveStatus->idle transition (v2 §2.5 — store pure).
@@ -113,7 +122,7 @@ export function MergeWorkspace({
     setTreeLoading(true);
     setTreeError(null);
 
-    Promise.all([loadCommit(sh), loadCommit(th)])
+    Promise.all([loadCommit(sh, projectId), loadCommit(th, projectId)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
@@ -126,7 +135,14 @@ export function MergeWorkspace({
           target: targetContent,
         });
 
-        // Determine base: use source's first parent if available
+        // PR readiness already persisted the authoritative two-way preparation.
+        // Keep that draft result and only load commit content for rendering.
+        if (useMergeWorkspaceStore.getState().treeMergeResult) {
+          setTreeLoading(false);
+          return;
+        }
+
+        // Standalone merge: determine a useful base for the workspace preview.
         if (sourceContent?.trees?.length && targetContent?.trees?.length) {
           // Try to find a common ancestor via parent hashes
           const sourceParents = srcCommit.parents ?? [];
@@ -137,7 +153,7 @@ export function MergeWorkspace({
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            loadCommit(baseParent)
+            loadCommit(baseParent, projectId)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
@@ -176,7 +192,7 @@ export function MergeWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [sourceHash, targetHash, setTreeMergeResult, loadCommit]);
+  }, [sourceHash, targetHash, projectId, setTreeMergeResult, loadCommit]);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -190,9 +206,13 @@ export function MergeWorkspace({
   }, [isDirty, saveDraft]);
 
   const handleCancel = useCallback(async () => {
+    if (pullRequestNumber !== undefined) {
+      onClose();
+      return;
+    }
     await cancelMerge();
     onClose();
-  }, [cancelMerge, onClose]);
+  }, [cancelMerge, onClose, pullRequestNumber]);
 
   // Keyboard shortcuts
   useMergeKeyboard({
@@ -227,7 +247,37 @@ export function MergeWorkspace({
 
     setCommitMergeLoading(true);
     try {
-      const mergedContent = buildMergedContent(
+      if (pullRequestNumber !== undefined) {
+        const decisions = buildMergeDecision(
+          treeMergeResult,
+          treeResolutions,
+          keepSourceNodes,
+          keepTargetNodes,
+          semanticData.source,
+          semanticData.target
+        );
+        const merged = await mergeProjectPullRequest(projectId, {
+          number: pullRequestNumber,
+          expected_source_commit_id: sourceHash,
+          expected_target_commit_id: targetHash,
+          decisions,
+          message: message || `Merge pull request #${pullRequestNumber}`,
+        });
+        if (!merged.merge_commit_id) {
+          throw new Error('The pull request merged without returning a merge commit.');
+        }
+        dispatchCommitCreated({
+          projectId,
+          hash: merged.merge_commit_id,
+          branch: targetBranch || 'main',
+        });
+        useMergeWorkspaceStore.getState().setCommitted();
+        setShowReviewDialog(false);
+        setMergeCeremonyHash(merged.merge_commit_id);
+        return;
+      }
+
+      const decisions = buildMergeDecision(
         treeMergeResult,
         treeResolutions,
         keepSourceNodes,
@@ -236,26 +286,15 @@ export function MergeWorkspace({
         semanticData.target
       );
 
-      const result = await createMergeCommit({
-        projectId,
-        content: {
-          trees: mergedContent.trees,
-          relations: mergedContent.relations,
-        },
-        branch: targetBranch || 'main',
-        message: message || 'Tree merge',
-        parents: [sourceHash, targetHash],
-        author: { type: 'human', name: 'User' },
-        provenance: { method: 'merge' },
-      });
+      const result = await commitMergeDraft(targetBranch || 'main', decisions);
 
       // Reload canvas data to show the new merge commit
       void loadCanvas(projectId);
 
       // Navigate to the new merge commit detail page
-      if (result?.commit?.hash) {
+      if (result?.hash) {
         setShowReviewDialog(false);
-        setMergeCeremonyHash(result.commit.hash);
+        setMergeCeremonyHash(result.hash);
       } else {
         onClose();
       }
@@ -277,9 +316,11 @@ export function MergeWorkspace({
     targetBranch,
     message,
     onClose,
-    onMergeCommitted,
     semanticData,
     loadCanvas,
+    commitMergeDraft,
+    mergeProjectPullRequest,
+    pullRequestNumber,
   ]);
 
   const handleMergeCeremonyComplete = useCallback(() => {
@@ -320,7 +361,8 @@ export function MergeWorkspace({
   // Tree merge workspace
   if (treeMergeResult) {
     const frameUnresolvedCount = treeMergeResult.conflicts.filter(
-      (c) => !treeResolutions.has(c.path)
+      (conflict) =>
+        !isTreeResolutionComplete(treeResolutions.get(conflict.path), conflict.slotConflicts)
     ).length;
 
     const containerVariants = prefersReducedMotion

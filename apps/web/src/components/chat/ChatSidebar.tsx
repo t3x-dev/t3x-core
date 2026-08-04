@@ -31,6 +31,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import {
+  getProjectIdCanvasCommitPath,
+  getProjectIdCanvasPath,
+  getProjectIdOutputsPath,
+} from '@/domain/project/repoPath';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
@@ -56,7 +61,6 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { ApiCommit, Leaf as ApiLeaf, Conversation } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
-import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
 import { LogoIcon } from './sidebar/LogoIcon';
@@ -142,13 +146,6 @@ function notifyProjectConversationsLoadFailure(err: unknown) {
   toast.error(formatUserFacingError(err, 'Failed to load conversations.'), {
     id: 'project-conversations-load-error',
   });
-}
-
-function buildCurrentReturnTo(pathname: string) {
-  if (typeof window !== 'undefined' && window.location.pathname === pathname) {
-    return buildReturnTo(pathname, window.location.search);
-  }
-  return buildReturnTo(pathname);
 }
 
 function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
@@ -991,7 +988,9 @@ export function ChatSidebar() {
   }
 
   function handleCanvasClick(projectId: string) {
-    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas${introDemoSuffix}`);
+    router.push(
+      `${getProjectIdCanvasPath(projectId)}${introDemoSuffix ? `&${introDemoSuffix.slice(1)}` : ''}`
+    );
   }
 
   function expandSidebarFromRail() {
@@ -1024,7 +1023,9 @@ export function ChatSidebar() {
   function handleLeafTabClick() {
     expandSidebarFromRail();
     if (!currentProjectId) return;
-    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf${introDemoSuffix}`);
+    router.push(
+      `${getProjectIdOutputsPath(currentProjectId)}${introDemoSuffix ? `&${introDemoSuffix.slice(1)}` : ''}`
+    );
   }
 
   function handleNewTemporaryChatClick() {
@@ -1773,12 +1774,7 @@ export function ChatSidebar() {
                                   type="button"
                                   onClick={() =>
                                     router.push(
-                                      withReturnTo(
-                                        `/project/${currentProjectId}/commit/${encodeURIComponent(
-                                          commit.hash
-                                        )}`,
-                                        buildCurrentReturnTo(pathname)
-                                      )
+                                      getProjectIdCanvasCommitPath(currentProjectId, commit.hash)
                                     )
                                   }
                                   className="grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
@@ -1887,11 +1883,7 @@ export function ChatSidebar() {
                                   key={leaf.id}
                                   type="button"
                                   onClick={() =>
-                                    router.push(
-                                      `/chat/project/${encodeURIComponent(
-                                        currentProjectId
-                                      )}/leaf/${encodeURIComponent(leaf.id)}`
-                                    )
+                                    router.push(getProjectIdOutputsPath(currentProjectId, leaf.id))
                                   }
                                   className={cn(
                                     'grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors',

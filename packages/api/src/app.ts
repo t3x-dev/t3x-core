@@ -19,6 +19,8 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
+import type { WorkspaceSourceTransitionCapabilities } from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
@@ -33,13 +35,14 @@ import {
   authMeRoutes,
   autopilotRoutes,
   branchRoutes,
-  chatRoutes,
   checkRoutes,
   commitFromDraftRoutes,
   commitRoutes,
   comparisonsRoutes,
   contextRoutes,
   conversationRoutes,
+  createTransitionControlPlaneRoutes,
+  createWorkspaceSourceTransitionRoutes,
   curateRoutes,
   deployAgentRoutes,
   diffRoutes,
@@ -50,6 +53,7 @@ import {
   extractionFeedbackRoutes,
   extractYopsRoutes,
   gateRoutes,
+  generationRoutes,
   healthRoutes,
   importRoutes,
   ingestRoutes,
@@ -63,26 +67,31 @@ import {
   notificationsRoutes,
   pinsRoutes,
   projectRoutes,
+  promptCompileRoutes,
   providersRoutes,
+  pullRequestRoutes,
   recipesRoutes,
   relationsRoutes,
   runnerRoutes,
   runsRoutes,
   searchRoutes,
   shareRoutes,
+  skillArtifactRoutes,
+  sourceEvidenceRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
   topicsRoutes,
-  treeAnswerRoutes,
-  treeCompressRoutes,
-  treeExtractRoutes,
+  transitionPolicyBindingRoutes,
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  workspaceRoutes,
+  workspaceValidationRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
   yschemaPrdSmokeRoutes,
+  yschemaValidationRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
 
@@ -97,6 +106,10 @@ export interface CreateAppOptions {
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
   routes?: (api: OpenAPIHono) => void;
+  /** Server-owned exact-source secret and Runner capabilities. */
+  workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
+  /** Server-owned Transition verification providers and external predicate allowlist. */
+  transitionControlPlane?: TransitionControlPlaneOptions;
 }
 
 export interface CreateAppResult {
@@ -158,12 +171,13 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // Mount routes
   api.route('/', statusRoutes);
   api.route('/', projectRoutes);
+  api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
   api.route('/', commitRoutes);
   api.route('/', branchRoutes);
   api.route('/', agentDraftRoutes);
-  api.route('/', chatRoutes);
+  api.route('/', generationRoutes);
   api.route('/', curateRoutes);
   api.route('/', diffRoutes);
   api.route('/', exportRoutes);
@@ -171,20 +185,23 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
-  api.route('/', treeExtractRoutes); // /v1/extract/trees + /v1/extract/trees/stream
-  api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
-  api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
+  api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
+  api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
+  api.route('/', transitionPolicyBindingRoutes);
+  api.route('/', createTransitionControlPlaneRoutes(options?.transitionControlPlane));
   api.route('/', shareRoutes);
   api.route('/', sourceTextRevisionRoutes);
+  api.route('/', sourceEvidenceRoutes);
   api.route('/', comparisonsRoutes);
   api.route('/', templatesRoutes);
   api.route('/', webhooksRoutes);
@@ -210,6 +227,9 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
+  api.route('/', workspaceValidationRoutes);
+  api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
+  api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);
@@ -246,22 +266,37 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Projects', description: 'Project management' },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
+      { name: 'Sources', description: 'Repository-owned source and evidence reads' },
+      { name: 'Workspaces', description: 'Workspace review and YOps handoff workflows' },
+      {
+        name: 'Workspace Validation',
+        description: 'Workspace validation profiles, runs, and results',
+      },
+      { name: 'Artifacts', description: 'Generated and stored workspace artifacts' },
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
+      { name: 'YSchema', description: 'YSchema validation workflows' },
+      { name: 'Prompts', description: 'Deterministic Prompt validation and compilation previews' },
       { name: 'YOps', description: 'YOps validation and mutation operations' },
       { name: 'YOps Log', description: 'Structured-state change log (incremental tree changes)' },
       { name: 'Diff', description: 'Structured diff operations' },
       { name: 'Extract', description: 'LLM-based structured extraction from conversations' },
       { name: 'Extraction', description: 'Extraction workflows and generated YOps plans' },
       { name: 'Extraction Feedback', description: 'Feedback for extraction quality and review' },
+      { name: 'Curation', description: 'Source selection and curation previews' },
       { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
       { name: 'Merge', description: 'Merge operations' },
+      { name: 'Pull requests', description: 'Branch review and deterministic merge workflows' },
       { name: 'Export', description: 'Export operations' },
-      { name: 'Chat', description: 'LLM chat operations' },
+      { name: 'Generation', description: 'Model generation and provider discovery' },
       { name: 'Search', description: 'State and project search' },
       { name: 'State Index', description: 'State graph nodes, edges, and membership' },
       { name: 'Runner', description: 'Grey-box agent evaluation' },
+      {
+        name: 'Transition',
+        description: 'Transition control plane, authority, and policy administration',
+      },
       { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },

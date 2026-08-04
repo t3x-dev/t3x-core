@@ -4,7 +4,7 @@
  * Persists a batch of YOps to the log and syncs the materialised trees.
  * This is the first concrete Operation in the unified pipeline.
  *
- * Note: validation runs at commit time (commitOp), not on every edit.
+ * Note: repository validation runs at the Transition commit boundary, not on every edit.
  * This keeps edits fast — validate when you're ready to commit.
  *
  * Steps:
@@ -29,8 +29,7 @@
  * applied LLM rows stay active and are only superseded by an explicit
  * Replace (active_dirty Apply) or Repair flow. The parameter itself is
  * retained for non-WebUI callers that want explicit-supersede
- * semantics. See
- * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+ * semantics.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */

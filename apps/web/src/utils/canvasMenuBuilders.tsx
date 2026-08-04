@@ -90,7 +90,7 @@ export function buildUnitNodeMenu(opts: {
   }
   if (utilityItems.length > 0) groups.push({ items: utilityItems });
 
-  if (opts.isDraft && opts.onDelete) {
+  if (opts.onDelete) {
     groups.push({
       items: [{ label: 'Delete', icon: <Trash2 size={14} />, action: opts.onDelete, danger: true }],
     });

@@ -3,13 +3,12 @@
 /**
  * DraftQuickSheet - Sheet (drawer) for quick draft editing from canvas
  *
- * RFC §11 Q1: Two-level entry — Sheet quick mode + full-screen deep mode.
+ * RFC §11 Q1: Sheet-based draft editing from the canonical canvas.
  * Shows simplified Draft view: node list with toggles, constraint count,
- * commit button, and "Open Full Draft" link.
+ * promotion controls, and commit action without leaving the repository shell.
  */
 
-import { AlertTriangle, ExternalLink, FileEdit, Loader2, Send } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { AlertTriangle, FileEdit, Loader2, Send } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -34,11 +33,9 @@ interface DraftQuickSheetProps {
   open: boolean;
   onClose: () => void;
   draftId: string;
-  projectId: string;
 }
 
-export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuickSheetProps) {
-  const router = useRouter();
+export function DraftQuickSheet({ open, onClose, draftId }: DraftQuickSheetProps) {
   const { t } = useTerminology();
   const [draft, setDraft] = useState<WorkbenchDraft | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,11 +81,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     if (!draft) return;
     setCommitting(true);
     try {
-      const result = await commit(draftId);
-      const commitHash = result.commit.hash as string;
-
-      if (commitHash) {
-      }
+      await commit(draftId);
 
       toast.success(t('draft_committed'));
       onClose();
@@ -111,11 +104,6 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       setPromoting(false);
     }
   }, [draftId, promote]);
-
-  const handleOpenFull = useCallback(() => {
-    onClose();
-    router.push(`/project/${projectId}/draft/${draftId}`);
-  }, [router, projectId, draftId, onClose]);
 
   const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
   const totalCount = draft?.nodes.length ?? 0;
@@ -173,20 +161,16 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
                 ))}
               {draft.nodes.length === 0 && (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  No nodes. Open the full draft to add content.
+                  No nodes in this draft.
                 </p>
               )}
             </div>
           )}
         </div>
 
-        <SheetFooter className="flex-row gap-2">
-          <Button variant="outline" className="flex-1 gap-1.5" onClick={handleOpenFull}>
-            <ExternalLink className="h-3.5 w-3.5" />
-            Open Full Draft
-          </Button>
+        <SheetFooter>
           <Button
-            className="flex-1 gap-1.5"
+            className="w-full gap-1.5"
             onClick={handleCommit}
             disabled={includedCount === 0 || committing || draft?.status !== 'editing'}
           >

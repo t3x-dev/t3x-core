@@ -1,0 +1,139 @@
+name: Full-stack E2E
+
+# Intentionally manual. Run after large integration merges and before releases;
+# ordinary pull requests remain covered by PR Validation.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to qualify
+        required: true
+        default: dev
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-stack-e2e-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Full qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: full-e2e-turbo-${{ runner.os }}-${{ inputs.ref }}-${{ github.sha }}
+          restore-keys: |
+            full-e2e-turbo-${{ runner.os }}-${{ inputs.ref }}-
+            full-e2e-turbo-${{ runner.os }}-dev-
+            full-e2e-turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter t3x-webui exec playwright install --with-deps chromium
+
+      - name: Verify fixed versions
+        run: pnpm verify:versions:no-manifest
+
+      - name: Lint and format check
+        run: pnpm check
+
+      - name: Check release surface
+        run: pnpm check:release-surface
+
+      - name: Check standards matrix
+        run: pnpm standards:validate
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run full TypeScript test suite
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test
+
+      - name: Build local runtime artifact
+        run: pnpm build:local-runtime
+
+      - name: Verify fixed versions with manifest
+        run: pnpm verify:versions
+
+      - name: Smoke local install
+        run: pnpm smoke:local-install
+
+      - name: Run full browser qualification
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm e2e:full
+
+      - name: Publish qualification summary
+        if: always()
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const heading = '## Full-stack E2E\n\n';
+          const summaryPath = 'test-results/full-e2e/run-summary.json';
+          let body = 'No browser qualification summary was produced. Check the preceding setup steps.\n';
+
+          if (fs.existsSync(summaryPath)) {
+            const result = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            body = [
+              `- Status: **${result.status}**`,
+              `- Test exit code: \`${result.test_exit_code}\``,
+              `- API: \`${result.api_url}\``,
+              `- WebUI: \`${result.webui_url}\``,
+              result.error ? `- Error: ${result.error}` : null,
+            ].filter(Boolean).join('\n') + '\n';
+          }
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, heading + body);
+          NODE
+
+      - name: Upload qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-stack-e2e-${{ github.run_id }}
+          path: test-results/full-e2e/
+          if-no-files-found: warn
+          retention-days: 14

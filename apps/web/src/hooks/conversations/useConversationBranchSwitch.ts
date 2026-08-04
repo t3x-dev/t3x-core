@@ -1,8 +1,8 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { updateConversation } from '@/commands/conversations';
+import { fetchCommits } from '@/infrastructure/commits';
 import { getConversation } from '@/infrastructure/conversations';
-import { fetchCommits } from '@/queries/commits';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';

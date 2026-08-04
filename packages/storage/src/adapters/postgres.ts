@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 48;
+const SCHEMA_VERSION = 60;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -102,6 +102,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
   if (rows.length > 0) {
     await ensureSourceTextRevisionsSchema(sql);
+    await ensurePullRequestsSchema(sql);
   }
 
   if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
@@ -286,8 +287,66 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
+    -- Pull requests and their deterministic readiness/audit records
+    CREATE TABLE IF NOT EXISTS pull_requests (
+      pull_request_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      source_branch TEXT NOT NULL,
+      target_branch TEXT NOT NULL,
+      source_commit_hash TEXT NOT NULL,
+      target_base_commit_hash TEXT NOT NULL,
+      merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+      merge_commit_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+      author_id TEXT NOT NULL,
+      review_owner_id TEXT,
+      linked_work TEXT,
+      diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      merged_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ,
+      UNIQUE(project_id, number),
+      CONSTRAINT pull_requests_merged_commit_required
+        CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+      ON pull_requests(project_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+      ON pull_requests(project_id, source_branch, target_branch)
+      WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+    CREATE TABLE IF NOT EXISTS pull_request_checks (
+      check_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL
+        CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+      title TEXT NOT NULL,
+      message TEXT,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+      ON pull_request_checks(pull_request_id);
+
+    CREATE TABLE IF NOT EXISTS pull_request_activity (
+      activity_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+      ON pull_request_activity(pull_request_id, created_at);
+
     -- ═══════════════════════════════════════════════════════════════════════════
-    -- V4 Architecture Tables (commits_v4 RETIRED — use 'commits' table)
+    -- Semantic projection tables
     -- ═══════════════════════════════════════════════════════════════════════════
 
     -- Leaves table (application layer - owns constraints, output, validation)
@@ -407,6 +466,104 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
     CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
 
+    -- YSchema validation runs (internal deterministic validation records)
+    CREATE TABLE IF NOT EXISTS yschema_validation_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      commit_hash TEXT NOT NULL,
+      schema_name TEXT NOT NULL,
+      schema_version TEXT NOT NULL,
+      schema_hash TEXT NOT NULL,
+      validator_version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      valid BOOLEAN NOT NULL,
+      ready BOOLEAN NOT NULL,
+      error_count INTEGER NOT NULL,
+      gap_count INTEGER NOT NULL,
+      fix_count INTEGER NOT NULL,
+      result_json JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_project
+      ON yschema_validation_runs(project_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_commit
+      ON yschema_validation_runs(project_id, commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
+      ON yschema_validation_runs(schema_name, schema_hash);
+
+    -- Workspace validation runs (candidate-level external validator records)
+    CREATE TABLE IF NOT EXISTS validation_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_hash TEXT NOT NULL,
+      workflow_name TEXT NOT NULL,
+      workflow_hash TEXT NOT NULL,
+      input_hash TEXT NOT NULL,
+      validator_hash TEXT NOT NULL,
+      environment_hash TEXT,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      gate_status TEXT NOT NULL,
+      summary TEXT,
+      result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_workspace_created
+      ON validation_runs(project_id, workspace_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_subject
+      ON validation_runs(project_id, workspace_id, subject_type, subject_hash);
+    CREATE INDEX IF NOT EXISTS idx_validation_runs_workflow
+      ON validation_runs(workflow_name, workflow_hash);
+
+    CREATE TABLE IF NOT EXISTS validation_step_runs (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+      step_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT,
+      error_code TEXT,
+      exit_code INTEGER,
+      duration_ms INTEGER,
+      command_json JSONB,
+      log_excerpt TEXT,
+      log_truncated BOOLEAN NOT NULL DEFAULT FALSE,
+      log_artifact_id TEXT,
+      result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run
+      ON validation_step_runs(run_id);
+    CREATE INDEX IF NOT EXISTS idx_validation_step_runs_run_step
+      ON validation_step_runs(run_id, step_id);
+
+    CREATE TABLE IF NOT EXISTS validation_findings (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+      step_run_id TEXT REFERENCES validation_step_runs(id) ON DELETE CASCADE,
+      severity TEXT NOT NULL,
+      file TEXT,
+      line INTEGER,
+      state_path TEXT,
+      code TEXT NOT NULL,
+      message TEXT NOT NULL,
+      log_excerpt TEXT,
+      evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_validation_findings_run
+      ON validation_findings(run_id);
+    CREATE INDEX IF NOT EXISTS idx_validation_findings_step
+      ON validation_findings(step_run_id);
+
     -- Templates table (reusable prompt templates for leaf generation)
     CREATE TABLE IF NOT EXISTS templates (
       template_id TEXT PRIMARY KEY,
@@ -453,7 +610,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'editing',
       committed_as TEXT,
       committed_leaf_id TEXT,
-      target_branch TEXT DEFAULT 'main',
+      target_branch TEXT NOT NULL DEFAULT 'main',
+      workspace_id TEXT,
+      workspace_state_json JSONB,
       revision INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
@@ -465,6 +624,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
@@ -571,6 +735,32 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add user_id to api_keys (nullable — null = legacy key)
     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+    -- Migration: Explicit principal and closed Transition scopes. Legacy keys
+    -- receive no Transition authority.
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS principal_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_array_check
+        CHECK (jsonb_typeof(transition_scopes) = 'array');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_closed_check
+        CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
 
     -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
     CREATE TABLE IF NOT EXISTS leaf_output_edits (
@@ -1012,57 +1202,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS default_model TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS default_extraction_style JSONB;
 
-    -- ═══════════════════════════════════════════════════════════════
-    -- Frame-Based Commits (commits + frame_lineage)
-    -- ═══════════════════════════════════════════════════════════════
-
-    -- Auto-migrate: rename legacy commits_v5 table if it exists
-    ALTER TABLE IF EXISTS commits_v5 RENAME TO commits;
-    ALTER INDEX IF EXISTS idx_commits_v5_project RENAME TO idx_commits_project;
-    ALTER INDEX IF EXISTS idx_commits_v5_branch RENAME TO idx_commits_branch;
-    ALTER INDEX IF EXISTS idx_commits_v5_committed_at RENAME TO idx_commits_committed_at;
-
-    CREATE TABLE IF NOT EXISTS commits (
-      -- First class (in hash)
-      hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 't3x/commit',
-      parents JSONB NOT NULL DEFAULT '[]',
-      author JSONB NOT NULL,
-      committed_at TIMESTAMPTZ NOT NULL,
-      content JSONB NOT NULL,
-
-      -- Second class (not in hash)
-      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-      message TEXT,
-      branch TEXT DEFAULT 'main',
-      sources JSONB,
-      provenance JSONB,
-      yops_log_ids JSONB DEFAULT '[]',
-      position_x REAL,
-      position_y REAL,
-
-      -- Timestamps
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_project ON commits(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_branch ON commits(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_committed_at ON commits(committed_at);
-
-    -- Migration: add yops_log_ids to existing commits table
-    ALTER TABLE commits ADD COLUMN IF NOT EXISTS yops_log_ids JSONB DEFAULT '[]';
-    CREATE INDEX IF NOT EXISTS commits_yops_log_ids_gin
-      ON commits USING gin (yops_log_ids jsonb_path_ops);
-
-    CREATE TABLE IF NOT EXISTS frame_lineage (
-      id TEXT PRIMARY KEY,
-      commit_hash TEXT NOT NULL,
-      frame_id TEXT NOT NULL,
-      slot_sources JSONB,
-      meta JSONB
-    );
-    CREATE INDEX IF NOT EXISTS idx_frame_lineage_commit ON frame_lineage(commit_hash);
-    CREATE INDEX IF NOT EXISTS idx_frame_lineage_frame ON frame_lineage(frame_id);
-
     -- Token Usage table (LLM token metering)
     CREATE TABLE IF NOT EXISTS token_usage (
       id TEXT PRIMARY KEY,
@@ -1262,25 +1401,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     END;
     $$ LANGUAGE plpgsql;
 
-    -- commits INSERT → commit.created
-    CREATE OR REPLACE FUNCTION t3x_trg_commit_created() RETURNS TRIGGER AS $$
-    BEGIN
-      IF NEW.project_id IS NULL THEN RETURN NEW; END IF;
-      PERFORM t3x_emit_event(
-        'commit.created',
-        NEW.project_id,
-        NULL,
-        jsonb_build_object('hash', NEW.hash, 'branch', NEW.branch)
-      );
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    DROP TRIGGER IF EXISTS trg_commits_event ON commits;
-    CREATE TRIGGER trg_commits_event
-      AFTER INSERT ON commits
-      FOR EACH ROW EXECUTE FUNCTION t3x_trg_commit_created();
-
     -- drafts UPDATE → draft.changed (only when updated_at moves)
     CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$
     BEGIN
@@ -1374,13 +1494,402 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
   `);
 
+  // ── Schema v50: Workspace staged state persisted through drafts ──
+  await sql.unsafe(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
+  `);
+
+  // ── Schema v52: one open Project Workspace per branch ──
+  await sql.unsafe(`
+    UPDATE drafts
+    SET target_branch = 'main'
+    WHERE target_branch IS NULL;
+
+    ALTER TABLE drafts ALTER COLUMN target_branch SET DEFAULT 'main';
+    ALTER TABLE drafts ALTER COLUMN target_branch SET NOT NULL;
+
+    WITH ranked_open_workspaces AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY project_id, target_branch
+          ORDER BY updated_at DESC, id DESC
+        ) AS workspace_rank
+      FROM drafts
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed'
+    )
+    UPDATE drafts AS draft
+    SET status = 'abandoned', updated_at = NOW()
+    FROM ranked_open_workspaces AS ranked
+    WHERE draft.id = ranked.id
+      AND ranked.workspace_rank > 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
+      ON drafts(project_id, target_branch)
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+  `);
+
+  // ── Schema v53: immutable Transition objects, CommitV2 membership, and authority facts ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_objects (
+      digest TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      schema TEXT NOT NULL,
+      canonical_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS transition_commits (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      media_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, digest)
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_commits_project_created
+      ON transition_commits(project_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS transition_decision_authorizations (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      decision_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      policy_uri TEXT NOT NULL,
+      policy_digest TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      observation_scope JSONB NOT NULL,
+      statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb,
+      authorized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, ref_name, decision_digest)
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_decision_authorizations_decision
+      ON transition_decision_authorizations(decision_digest);
+  `);
+
+  // ── Schema v54: trusted issuer facts for committed Transition projections ──
+  await sql.unsafe(`
+    ALTER TABLE transition_decision_authorizations
+      ADD COLUMN IF NOT EXISTS statement_issuers JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+
+  // ── Schema v55: append-only trusted Decision audit ledger ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_decision_ledger (
+      decision_digest TEXT PRIMARY KEY REFERENCES transition_objects(digest),
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      policy_uri TEXT NOT NULL,
+      policy_digest TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      observation_scope JSONB NOT NULL,
+      statement_issuers JSONB NOT NULL,
+      recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_decision_ledger_project_ref_recorded
+      ON transition_decision_ledger(project_id, ref_name, recorded_at, decision_digest);
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT decision_digest
+        FROM transition_decision_authorizations
+        GROUP BY decision_digest
+        HAVING COUNT(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate a Decision authorized for multiple repository refs';
+      END IF;
+    END $$;
+
+    INSERT INTO transition_decision_ledger (
+      decision_digest,
+      project_id,
+      ref_name,
+      policy_uri,
+      policy_digest,
+      actor_kind,
+      actor_id,
+      outcome,
+      observation_scope,
+      statement_issuers,
+      recorded_at
+    )
+    SELECT
+      decision_digest,
+      project_id,
+      ref_name,
+      policy_uri,
+      policy_digest,
+      actor_kind,
+      actor_id,
+      outcome,
+      observation_scope,
+      statement_issuers,
+      authorized_at
+    FROM transition_decision_authorizations
+    ON CONFLICT (decision_digest) DO NOTHING;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_decision_authorizations AS source_authorization
+        LEFT JOIN transition_decision_ledger AS ledger
+          ON ledger.decision_digest = source_authorization.decision_digest
+        WHERE ledger.decision_digest IS NULL
+          OR ledger.project_id IS DISTINCT FROM source_authorization.project_id
+          OR ledger.ref_name IS DISTINCT FROM source_authorization.ref_name
+          OR ledger.policy_uri IS DISTINCT FROM source_authorization.policy_uri
+          OR ledger.policy_digest IS DISTINCT FROM source_authorization.policy_digest
+          OR ledger.actor_kind IS DISTINCT FROM source_authorization.actor_kind
+          OR ledger.actor_id IS DISTINCT FROM source_authorization.actor_id
+          OR ledger.outcome IS DISTINCT FROM source_authorization.outcome
+          OR ledger.observation_scope IS DISTINCT FROM source_authorization.observation_scope
+          OR ledger.statement_issuers IS DISTINCT FROM source_authorization.statement_issuers
+          OR ledger.recorded_at IS DISTINCT FROM source_authorization.authorized_at
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate a conflicting existing Decision ledger row';
+      END IF;
+    END $$;
+  `);
+
+  // ── Schema v56: Transition credential authority and policy bindings ──
+  await sql.unsafe(`
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS principal_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_array_check
+        CHECK (jsonb_typeof(transition_scopes) = 'array');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    DO $$
+    BEGIN
+      ALTER TABLE api_keys
+        ADD CONSTRAINT api_keys_transition_scopes_closed_check
+        CHECK (transition_scopes <@ '["transition:propose","transition:inspect","transition:verify","transition:statement:issue","transition:decide:accept","transition:decide:override","transition:decide:reject","transition:commit:create","transition:ref:advance"]'::jsonb);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS transition_policy_resources (
+      digest TEXT PRIMARY KEY,
+      canonical_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS transition_policy_bindings (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      ref_name TEXT NOT NULL,
+      policy_digest TEXT NOT NULL REFERENCES transition_policy_resources(digest),
+      policy_uri TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, ref_name),
+      CHECK (actor_kind IN ('human', 'agent', 'service'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_policy_bindings_digest
+      ON transition_policy_bindings(policy_digest);
+  `);
+
+  // ── Schema v57: append-only Proposal and Statement project memberships ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_proposal_memberships (
+      transition_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      workspace_revision INTEGER NOT NULL,
+      ref_name TEXT NOT NULL,
+      ref_head TEXT,
+      proposal_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      effect_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      request_kind TEXT NOT NULL
+        CHECK (request_kind IN ('structured_yops', 'exact_source_import', 'exact_source_edit', 'exact_source_revert')),
+      request_canonical_json TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_proposal_memberships_idempotency
+      ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
+    CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
+      ON transition_proposal_memberships(project_id, created_at, transition_id);
+
+    CREATE TABLE IF NOT EXISTS transition_statement_memberships (
+      transition_id TEXT NOT NULL
+        REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+      statement_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      source TEXT NOT NULL,
+      issuer_kind TEXT NOT NULL CHECK (issuer_kind IN ('human', 'agent', 'service')),
+      issuer_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (transition_id, statement_digest)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_statement_memberships_idempotency
+      ON transition_statement_memberships(
+        transition_id,
+        source,
+        issuer_kind,
+        issuer_id,
+        request_id
+      );
+    CREATE INDEX IF NOT EXISTS idx_transition_statement_memberships_transition_created
+      ON transition_statement_memberships(transition_id, created_at, statement_digest);
+  `);
+
+  // ── Schema v58: append-only Decision/Commit command idempotency receipts ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_command_receipts (
+      transition_id TEXT NOT NULL
+        REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      action TEXT NOT NULL CHECK (action IN ('decide', 'commit')),
+      actor_kind TEXT NOT NULL CHECK (actor_kind IN ('human', 'agent', 'service')),
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      result_kind TEXT NOT NULL CHECK (result_kind IN ('decision', 'commit')),
+      result_digest TEXT NOT NULL REFERENCES transition_objects(digest),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, transition_id, actor_kind, actor_id, request_id),
+      CONSTRAINT transition_command_receipts_action_result_check CHECK (
+        (action = 'decide' AND result_kind = 'decision') OR
+        (action = 'commit' AND result_kind = 'commit')
+      )
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_command_receipts_result
+      ON transition_command_receipts(project_id, transition_id, result_digest);
+  `);
+
+  // ── Schema v59: application-owned YOps consumption for CommitV2 ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      yops_log_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, yops_log_id, commit_digest),
+      CONSTRAINT transition_yops_log_consumptions_commit_fk
+        FOREIGN KEY (project_id, commit_digest)
+        REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_commit
+      ON transition_yops_log_consumptions(project_id, commit_digest);
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
+      ON transition_yops_log_consumptions(project_id, yops_log_id);
+  `);
+
+  // ── Schema v60: one durable YOps row may be consumed by only one commit ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_yops_log_consumptions
+        GROUP BY project_id, yops_log_id
+        HAVING COUNT(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate multiply-consumed YOps log rows';
+      END IF;
+    END $$;
+
+    ALTER TABLE transition_yops_log_consumptions
+      DROP CONSTRAINT IF EXISTS transition_yops_log_consumptions_pkey;
+    ALTER TABLE transition_yops_log_consumptions
+      ADD CONSTRAINT transition_yops_log_consumptions_pkey
+      PRIMARY KEY (project_id, yops_log_id);
+  `);
+
   await ensureSourceTextRevisionsSchema(sql);
+  await ensurePullRequestsSchema(sql);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
     ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+  `);
+}
+
+async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS pull_requests (
+      pull_request_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      source_branch TEXT NOT NULL,
+      target_branch TEXT NOT NULL,
+      source_commit_hash TEXT NOT NULL,
+      target_base_commit_hash TEXT NOT NULL,
+      merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+      merge_commit_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+      author_id TEXT NOT NULL,
+      review_owner_id TEXT,
+      linked_work TEXT,
+      diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      merged_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ,
+      UNIQUE(project_id, number),
+      CONSTRAINT pull_requests_merged_commit_required
+        CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+      ON pull_requests(project_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+      ON pull_requests(project_id, source_branch, target_branch)
+      WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+    CREATE TABLE IF NOT EXISTS pull_request_checks (
+      check_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL
+        CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+      title TEXT NOT NULL,
+      message TEXT,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+      ON pull_request_checks(pull_request_id);
+
+    CREATE TABLE IF NOT EXISTS pull_request_activity (
+      activity_id TEXT PRIMARY KEY,
+      pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+      ON pull_request_activity(pull_request_id, created_at);
   `);
 }
 

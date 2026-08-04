@@ -1,0 +1,149 @@
+'use client';
+
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo } from 'react';
+import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
+import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
+import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
+import { isProjectTabSegment, parseProjectTab } from '@/components/project/projectTabModel';
+import { DEFAULT_OWNER_SLUG, toRepoSlug } from '@/domain/project/repoPath';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { useProjectStore } from '@/store/projectStore';
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+}
+
+function OwnerRepoProjectPageContent() {
+  const params = useParams<{ owner?: string | string[]; repoPath?: string[] }>();
+  const router = useRouter();
+  const ownerSlug = firstParam(params.owner).toLowerCase();
+  const repoSegments = params.repoPath ?? [];
+  const repoSlug = (repoSegments[0] ?? '').toLowerCase();
+  const tabSegment = repoSegments[1] ?? null;
+  const initialTab = parseProjectTab(tabSegment);
+  const hasStateTabSegment = repoSegments.length > 1 && tabSegment === 'state';
+  const hasInvalidTabSegment =
+    repoSegments.length > 1 && tabSegment !== null && !isProjectTabSegment(tabSegment);
+  const isDefaultOwner = ownerSlug === DEFAULT_OWNER_SLUG;
+  const isOrganizationDirectory = isDefaultOwner && repoSegments.length === 0;
+  const isNewRepositoryPage = isDefaultOwner && repoSlug === 'new' && repoSegments.length === 1;
+  const isOrganizationSettingsPage =
+    isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
+  const projects = useProjectStore((state) => state.projects);
+  const initialized = useProjectStore((state) => state.initialized);
+  const loading = useProjectStore((state) => state.loading);
+  const error = useProjectStore((state) => state.error);
+  const { list: fetchProjects } = useProjectCrud();
+
+  useEffect(() => {
+    if (isOrganizationDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
+    if (!initialized && !loading) void fetchProjects();
+  }, [
+    fetchProjects,
+    initialized,
+    isNewRepositoryPage,
+    isOrganizationDirectory,
+    isOrganizationSettingsPage,
+    loading,
+  ]);
+
+  const project = useMemo(() => {
+    if (ownerSlug !== DEFAULT_OWNER_SLUG || !repoSlug) return undefined;
+    return projects.find((item) => toRepoSlug(item.name, item.id) === repoSlug);
+  }, [ownerSlug, projects, repoSlug]);
+
+  useEffect(() => {
+    if (!project || !hasStateTabSegment) return;
+    router.replace(`/${ownerSlug}/${repoSlug}`);
+  }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
+
+  if (isOrganizationDirectory) {
+    return <ProjectDirectoryPage />;
+  }
+
+  if (isNewRepositoryPage) {
+    return <NewRepositoryPage />;
+  }
+
+  if (isOrganizationSettingsPage) {
+    return <OrganizationSettingsPage ownerSlug={ownerSlug} />;
+  }
+
+  if (!initialized || loading) {
+    return (
+      <div className="flex h-full flex-col">
+        <LoadingSpinner message="Loading repository..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col">
+        <ErrorMessage error={error} onRetry={() => void fetchProjects()} />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
+        <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
+          <p className="text-lg font-semibold text-foreground">Repository not found</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The repository{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+              /{ownerSlug || DEFAULT_OWNER_SLUG}/{repoSlug || 'repo'}
+            </code>{' '}
+            does not exist or was deleted.
+          </p>
+          <Link
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            href="/"
+          >
+            Back to {DEFAULT_OWNER_SLUG}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasInvalidTabSegment) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
+        <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
+          <p className="text-lg font-semibold text-foreground">Repository view not found</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The repository view{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+              /{ownerSlug}/{repoSlug}/{tabSegment}
+            </code>{' '}
+            does not exist.
+          </p>
+          <Link
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            href={`/${ownerSlug}/${repoSlug}`}
+          >
+            Back to {repoSlug}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ProjectDetailPageContent initialTabOverride={initialTab} projectIdOverride={project.id} />
+  );
+}
+
+export default function OwnerRepoProjectPage() {
+  return (
+    <Suspense fallback={null}>
+      <OwnerRepoProjectPageContent />
+    </Suspense>
+  );
+}
