@@ -4,22 +4,18 @@
  * CommitHistoryRow — a single row in the commit history timeline.
  *
  * Displays: commit hash, message, author, relative time, diff stats, branch badge.
- * Clickable → compares with its parent, or focuses a root commit on Canvas.
+ * Clickable → opens the shared T3X Diff review inside History.
  */
 
 import { Minus, Pencil, Plus } from 'lucide-react';
-import Link from 'next/link';
 import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
-import { getProjectIdCanvasCommitPath, getProjectIdDiffPath } from '@/domain/project/repoPath';
 import { cn } from '@/utils/cn';
-import { withReturnTo } from '@/utils/navigationReturn';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface CommitHistoryRowProps {
-  projectId: string;
   hash: string;
   message: string | null;
   author: { type: string; name?: string } | null;
@@ -27,8 +23,6 @@ export interface CommitHistoryRowProps {
   branch: string | null;
   /** Number of parents (0 = root, 1 = normal, 2+ = merge) */
   parentCount: number;
-  /** First parent used by the shared diff route. */
-  parentHash?: string | null;
   /** Diff stats vs parent (if available) */
   diffStats?: {
     addedCount: number;
@@ -43,10 +37,8 @@ export interface CommitHistoryRowProps {
   isLast: boolean;
   /** Whether this row is keyboard-active */
   isActive?: boolean;
-  /** Whether the demo tour should continue after opening this commit */
-  introDemo?: boolean;
-  /** History URL restored by the commit page Back action. */
-  returnTo: string;
+  /** Opens this commit in the History diff review. */
+  onOpen: (hash: string) => void;
 }
 
 // ============================================================================
@@ -54,36 +46,26 @@ export interface CommitHistoryRowProps {
 // ============================================================================
 
 export function CommitHistoryRow({
-  projectId,
   hash,
   message,
   author,
   committedAt,
   branch,
   parentCount,
-  parentHash,
   diffStats,
   nodeCount,
   isFirst,
   isLast,
   isActive,
-  introDemo = false,
-  returnTo,
+  onOpen,
 }: CommitHistoryRowProps) {
-  const commitHref = buildCommitHistoryHref({
-    hash,
-    introDemo,
-    parentHash,
-    projectId,
-    returnTo,
-  });
-
   return (
-    <Link
-      href={commitHref}
+    <button
+      type="button"
+      onClick={() => onOpen(hash)}
       data-commit-hash={hash}
       className={cn(
-        'group flex items-stretch hover:bg-[var(--hover-bg)] transition-colors rounded-md -mx-2 px-2',
+        'group flex w-full items-stretch rounded-md -mx-2 px-2 text-left transition-colors hover:bg-[var(--hover-bg)]',
         isActive && 'bg-[var(--hover-bg)] ring-1 ring-[var(--accent-commit)]/30'
       )}
     >
@@ -169,28 +151,6 @@ export function CommitHistoryRow({
           <span title={formatDate(committedAt)}>{relativeTime(committedAt)}</span>
         </div>
       </div>
-    </Link>
+    </button>
   );
-}
-
-export function buildCommitHistoryHref({
-  hash,
-  introDemo = false,
-  parentHash,
-  projectId,
-  returnTo,
-}: {
-  hash: string;
-  introDemo?: boolean;
-  parentHash?: string | null;
-  projectId: string;
-  returnTo: string;
-}): string {
-  const destination = introDemo
-    ? `${getProjectIdCanvasCommitPath(projectId, hash)}&introDemo=1`
-    : parentHash
-      ? getProjectIdDiffPath(projectId, parentHash, hash)
-      : getProjectIdCanvasCommitPath(projectId, hash);
-
-  return withReturnTo(destination, returnTo);
 }
