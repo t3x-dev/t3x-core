@@ -1,13 +1,17 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
+import { createYOpsState, yvalueToTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  createMaterial,
   findBranchByName,
   getMergeDraft,
   insertBranch,
   insertProject,
   listCommitHistory,
+  upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
+import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -25,8 +29,10 @@ vi.mock('../lib/db', () => ({
 
 import {
   commitRepositoryYOpsMerge,
+  commitRepositoryYOpsState,
   getRepositorySemanticCommit,
 } from '../lib/repository-state-transition';
+import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
@@ -62,6 +68,72 @@ describe('Pull request routes', () => {
       content: input.content,
       branch: input.branch,
     };
+  }
+
+  async function createWorkspaceCommit(input: {
+    projectId: string;
+    branch: string;
+    workspaceId: string;
+    candidate: typeof t3xPrdP0Fixtures.validCandidateTree;
+  }) {
+    const material = await createMaterial(mockDB, {
+      project_id: input.projectId,
+      source_type: 'document',
+      title: `Source ${input.workspaceId}`,
+      content_text: `Source evidence for ${input.workspaceId}`,
+      content_hash: `sha256:${input.workspaceId}`,
+    });
+    const draft = await upsertWorkspaceDraft(mockDB, {
+      project_id: input.projectId,
+      workspace_id: input.workspaceId,
+      title: `Workspace ${input.workspaceId}`,
+      target_branch: input.branch,
+      workspace_state: {
+        id: input.workspaceId,
+        projectId: input.projectId,
+        title: `Workspace ${input.workspaceId}`,
+        targetBranch: input.branch,
+        schemaBindings: [
+          {
+            canonicalName: 't3x/prd',
+            version: t3xPrdP0Fixtures.normalizedYSchema.version,
+            mode: 'pinned',
+          },
+        ],
+        sourceBundle: [
+          {
+            id: `material:${material.id}`,
+            type: 'document',
+            materialId: material.id,
+            contentHash: material.content_hash,
+          },
+        ],
+      },
+    });
+    const content = {
+      trees: yvalueToTrees({ prd: structuredClone(input.candidate) }),
+      relations: [],
+    };
+    const actor = { kind: 'human' as const, id: 'human:workspace-pr-test' };
+    const reviewed = await reviewWorkspaceTransition(mockDB, {
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      content,
+      why: `Commit ${input.workspaceId}`,
+      expectedRevision: draft.revision,
+      actor,
+    });
+    const decided = await decideWorkspaceTransition(mockDB, {
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      content,
+      why: `Commit ${input.workspaceId}`,
+      outcome: 'accepted',
+      precondition: reviewed.precondition,
+      actor,
+    });
+    if (!decided.commit) throw new Error('Workspace fixture did not create a CommitV2');
+    return decided;
   }
 
   async function mergeRepositoryBranches(input: {
@@ -311,6 +383,130 @@ describe('Pull request routes', () => {
       base_branches: ['main'],
       compare_branches: [],
     });
+  });
+
+  it('lists a lone base branch without decoding an older non-semantic head', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Legacy lone base PR project' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ prd: { summary: { problem: 'Older Workspace State' } } }),
+      actor: { kind: 'human', id: 'human:legacy-workspace-fixture' },
+      intent: 'Preserve a pre-fix Workspace State fixture',
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main'],
+      compare_branches: [],
+    });
+  });
+
+  it('lists an inherited branch with the same older non-semantic head as no changes', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Legacy inherited branch PR project' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    const committed = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ prd: { summary: { problem: 'Older Workspace State' } } }),
+      actor: { kind: 'human', id: 'human:legacy-workspace-fixture' },
+      intent: 'Preserve a pre-fix Workspace State fixture',
+    });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/empty',
+      parentBranch: 'main',
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main', 'feature/empty'],
+      compare_branches: [
+        expect.objectContaining({
+          branch: 'feature/empty',
+          base_branch: 'main',
+          head_commit_id: committed.commitDigest,
+          base_commit_id: committed.commitDigest,
+          ahead_by: 0,
+          behind_by: 0,
+          changed_nodes: 0,
+          status: 'no_changes',
+          status_label: 'No semantic changes',
+        }),
+      ],
+    });
+  });
+
+  it('compares branches created through the real Workspace CommitV2 flow', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Workspace to PR comparison' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'main',
+      workspaceId: 'workspace-pr-main',
+      candidate: t3xPrdP0Fixtures.validCandidateTree,
+    });
+
+    const onlyMain = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    expect(onlyMain.status).toBe(200);
+    expect(((await onlyMain.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main'],
+      compare_branches: [],
+    });
+
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/workspace-pr',
+      parentBranch: 'main',
+    });
+    const featureCandidate = structuredClone(t3xPrdP0Fixtures.validCandidateTree);
+    featureCandidate.summary.outcome = 'Workspace commits remain comparable by pull requests.';
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'feature/workspace-pr',
+      workspaceId: 'workspace-pr-feature',
+      candidate: featureCandidate,
+    });
+
+    const withFeature = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    expect(withFeature.status).toBe(200);
+    const data = (await withFeature.json()) as ApiResponse;
+    expect(data.data.base_branches).toEqual(['main', 'feature/workspace-pr']);
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        branch: 'feature/workspace-pr',
+        base_branch: 'main',
+        ahead_by: 1,
+        behind_by: 0,
+        status: 'ready',
+      }),
+    ]);
   });
 
   it('lists committed source branches when the selected base branch is empty', async () => {

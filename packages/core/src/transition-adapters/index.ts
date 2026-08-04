@@ -84,6 +84,9 @@ export {
 export {
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
+  type RepositorySemanticYSchemaStatementProviderInput,
+  repositorySemanticYSchemaTree,
+  runRepositorySemanticYSchemaStatementProvider,
   runYSchemaStatementProvider,
   YSCHEMA_CONTEXT_MEDIA_TYPE,
   YSCHEMA_NATIVE_PROFILE,

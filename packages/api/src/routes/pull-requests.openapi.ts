@@ -339,10 +339,22 @@ async function buildCompareCandidates(
   branches: Branch[],
   activePullRequests: StoredPullRequest[]
 ): Promise<PullRequestCompareCandidate[]> {
-  const targetCommit = baseBranch.headCommitHash
-    ? await loadRepositoryCommit(db, projectId, baseBranch.headCommitHash)
-    : null;
-  if (baseBranch.headCommitHash && !targetCommit) {
+  const comparisonBranches = branches.filter(
+    (branch) => branch.name !== baseBranch.name && branch.headCommitHash
+  );
+  // A lone committed base has nothing to compare. Return its branch metadata
+  // without decoding the immutable head; semantic decoding belongs to an
+  // actual comparison, not to populating the base selector.
+  if (comparisonBranches.length === 0) return [];
+
+  const requiresSemanticComparison = comparisonBranches.some(
+    (branch) => branch.headCommitHash !== baseBranch.headCommitHash
+  );
+  const targetCommit =
+    baseBranch.headCommitHash && requiresSemanticComparison
+      ? await loadRepositoryCommit(db, projectId, baseBranch.headCommitHash)
+      : null;
+  if (baseBranch.headCommitHash && requiresSemanticComparison && !targetCommit) {
     return [];
   }
 
@@ -354,36 +366,12 @@ async function buildCompareCandidates(
   );
 
   const candidates = await Promise.all(
-    branches
-      .filter((branch) => branch.name !== baseBranch.name && branch.headCommitHash)
-      .map(async (branch): Promise<PullRequestCompareCandidate | null> => {
-        const sourceCommit = await loadRepositoryCommit(
-          db,
-          projectId,
-          branch.headCommitHash as string
-        );
-        if (!sourceCommit) return null;
-        const distances = targetCommit
-          ? await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash)
-          : {
-              ahead: (await collectAncestorDistances(db, projectId, sourceCommit.hash)).size,
-              behind: 0,
-            };
-        const openPullRequestNumber = openByBranch.get(`${baseBranch.name}:${branch.name}`) ?? null;
-        const { changedNodes, hasChanges: hasSemanticChanges } = targetCommit
-          ? summarizeCommitChanges(sourceCommit, targetCommit)
-          : summarizeCommitChanges(sourceCommit, {
-              ...sourceCommit,
-              content: { trees: [], relations: [] },
-            });
-        const hasChanges = distances.ahead > 0 && hasSemanticChanges;
-        const status = !targetCommit
-          ? 'base_empty'
-          : openPullRequestNumber
-            ? 'already_open'
-            : hasChanges
-              ? 'ready'
-              : 'no_changes';
+    comparisonBranches.map(async (branch): Promise<PullRequestCompareCandidate | null> => {
+      const openPullRequestNumber = openByBranch.get(`${baseBranch.name}:${branch.name}`) ?? null;
+      if (
+        baseBranch.headCommitHash !== null &&
+        branch.headCommitHash === baseBranch.headCommitHash
+      ) {
         return {
           id: `${projectId}:compare:${branch.branchId}`,
           branch: branch.name,
@@ -392,32 +380,83 @@ async function buildCompareCandidates(
           description:
             branch.description?.trim() ||
             `Review ${branch.name} before merging into ${baseBranch.name}.`,
-          head_commit_id: sourceCommit.hash,
-          base_commit_id: targetCommit?.hash ?? null,
+          head_commit_id: branch.headCommitHash,
+          base_commit_id: baseBranch.headCommitHash,
           updated_at: branch.updatedAt.toISOString(),
-          ahead_by: distances.ahead,
-          behind_by: distances.behind,
-          yops_changes: sourceCommit.yops_log_ids.length,
-          changed_nodes: changedNodes,
+          ahead_by: 0,
+          behind_by: 0,
+          yops_changes: 0,
+          changed_nodes: 0,
           output_impacts: 0,
-          source_refs: sourceCommit.sources?.length ?? 0,
-          schema: sourceCommit.schema,
-          status,
-          status_label:
-            status === 'already_open'
-              ? `PR #${openPullRequestNumber} already open`
-              : status === 'ready'
-                ? 'Available'
-                : status === 'base_empty'
-                  ? 'Base has no commit'
-                  : distances.ahead === 0 && distances.behind > 0
-                    ? 'Behind base'
-                    : hasSemanticChanges
-                      ? 'No changes'
-                      : 'No semantic changes',
+          source_refs: 0,
+          schema: 't3x/commit/v2',
+          status: openPullRequestNumber ? 'already_open' : 'no_changes',
+          status_label: openPullRequestNumber
+            ? `PR #${openPullRequestNumber} already open`
+            : 'No semantic changes',
           open_pull_request_number: openPullRequestNumber,
         };
-      })
+      }
+      const sourceCommit = await loadRepositoryCommit(
+        db,
+        projectId,
+        branch.headCommitHash as string
+      );
+      if (!sourceCommit) return null;
+      const distances = targetCommit
+        ? await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash)
+        : {
+            ahead: (await collectAncestorDistances(db, projectId, sourceCommit.hash)).size,
+            behind: 0,
+          };
+      const { changedNodes, hasChanges: hasSemanticChanges } = targetCommit
+        ? summarizeCommitChanges(sourceCommit, targetCommit)
+        : summarizeCommitChanges(sourceCommit, {
+            ...sourceCommit,
+            content: { trees: [], relations: [] },
+          });
+      const hasChanges = distances.ahead > 0 && hasSemanticChanges;
+      const status = !targetCommit
+        ? 'base_empty'
+        : openPullRequestNumber
+          ? 'already_open'
+          : hasChanges
+            ? 'ready'
+            : 'no_changes';
+      return {
+        id: `${projectId}:compare:${branch.branchId}`,
+        branch: branch.name,
+        base_branch: baseBranch.name,
+        title: branch.description?.trim() || `Merge ${branch.name}`,
+        description:
+          branch.description?.trim() ||
+          `Review ${branch.name} before merging into ${baseBranch.name}.`,
+        head_commit_id: sourceCommit.hash,
+        base_commit_id: targetCommit?.hash ?? null,
+        updated_at: branch.updatedAt.toISOString(),
+        ahead_by: distances.ahead,
+        behind_by: distances.behind,
+        yops_changes: sourceCommit.yops_log_ids.length,
+        changed_nodes: changedNodes,
+        output_impacts: 0,
+        source_refs: sourceCommit.sources?.length ?? 0,
+        schema: sourceCommit.schema,
+        status,
+        status_label:
+          status === 'already_open'
+            ? `PR #${openPullRequestNumber} already open`
+            : status === 'ready'
+              ? 'Available'
+              : status === 'base_empty'
+                ? 'Base has no commit'
+                : distances.ahead === 0 && distances.behind > 0
+                  ? 'Behind base'
+                  : hasSemanticChanges
+                    ? 'No changes'
+                    : 'No semantic changes',
+        open_pull_request_number: openPullRequestNumber,
+      };
+    })
   );
   return candidates.filter(
     (candidate): candidate is PullRequestCompareCandidate => candidate !== null

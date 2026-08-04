@@ -6,6 +6,7 @@ import {
   createAcceptancePolicyResource,
   createCommitV2,
   createHumanProposalDraft,
+  createRepositorySemanticState,
   createYOpsEffect,
   createYOpsReplacementEffect,
   createYOpsState,
@@ -19,12 +20,12 @@ import {
   parseAcceptancePolicy,
   projectTransitionView,
   type RepositoryDecisionAuthority,
-  runYSchemaStatementProvider,
+  repositorySemanticYSchemaTree,
+  runRepositorySemanticYSchemaStatementProvider,
   type SemanticContent,
   type State,
   type StatementObservation,
   type TransitionViewV1,
-  treesToYValue,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -43,6 +44,7 @@ import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema
 import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
+  schemaRootKeyFromBinding,
   schemaVersionFromBinding,
 } from './yschema-registry';
 
@@ -267,17 +269,19 @@ function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue>
 
 function resolveWorkspaceSchema(workspace: Record<string, unknown>): {
   canonicalName: string;
+  rootKey: string;
   schema: YSchema;
 } {
   const bindings = Array.isArray(workspace.schemaBindings) ? workspace.schemaBindings : [];
   if (bindings.length !== 1) throw new WorkspaceTransitionSchemaUnavailableError(null);
-  const canonicalName = canonicalSchemaNameFromBinding(bindings[0]);
-  const version = schemaVersionFromBinding(bindings[0]);
+  const binding = bindings[0];
+  const canonicalName = canonicalSchemaNameFromBinding(binding);
+  const version = schemaVersionFromBinding(binding);
   const schema = canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null;
   if (canonicalName === null || schema === null) {
     throw new WorkspaceTransitionSchemaUnavailableError(canonicalName, version);
   }
-  return { canonicalName, schema };
+  return { canonicalName, rootKey: schemaRootKeyFromBinding(binding), schema };
 }
 
 function protocolLeafPaths(value: ProtocolValue, prefix = ''): string[] {
@@ -292,7 +296,7 @@ async function workspaceProvenance(
   db: AnyDB,
   projectId: string,
   workspace: Record<string, unknown>,
-  target: State
+  validationTree: ProtocolValue
 ): Promise<ProvenanceIndex> {
   const sources = Array.isArray(workspace.sourceBundle) ? workspace.sourceBundle : [];
   const requested = sources.flatMap((source) => {
@@ -326,7 +330,7 @@ async function workspaceProvenance(
   );
   if (refs.length === 0) return {};
   return Object.fromEntries(
-    protocolLeafPaths(target.value).map((path) => [path, refs.map((ref) => ({ ...ref }))])
+    protocolLeafPaths(validationTree).map((path) => [path, refs.map((ref) => ({ ...ref }))])
   );
 }
 
@@ -436,7 +440,7 @@ async function prepareWorkspaceTransition(
   }
   const context = await resolveWorkspaceTransitionContext(db, input);
   const base = context.base;
-  const target = createYOpsState(treesToYValue(input.content.trees));
+  const target = createRepositorySemanticState(input.content);
   const { effect, result } = createYOpsReplacementEffect({
     base,
     target,
@@ -454,7 +458,7 @@ async function prepareWorkspaceTransition(
   }
   const proposal = compiled.proposal;
 
-  const { canonicalName, schema } = resolveWorkspaceSchema(context.workspace);
+  const { canonicalName, rootKey, schema } = resolveWorkspaceSchema(context.workspace);
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,
@@ -465,14 +469,15 @@ async function prepareWorkspaceTransition(
     db,
     input.projectId,
     context.workspace,
-    result
+    repositorySemanticYSchemaTree(result, rootKey) as ProtocolValue
   );
   const contextResource = createYSchemaContextDescriptor(
     `t3x://projects/${encodeURIComponent(input.projectId)}/workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/yschema-context`,
-    { relations, provenanceByPath }
+    { relations, provenanceByPath, rootKey }
   );
-  const validation = runYSchemaStatementProvider({
+  const validation = runRepositorySemanticYSchemaStatementProvider({
     state: result,
+    rootKey,
     schema,
     schemaResource,
     context: { mode: 'bound', resource: contextResource },
