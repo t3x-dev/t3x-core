@@ -441,7 +441,7 @@ export {
 } from './topics';
 // Transition Decision/Commit command idempotency receipts
 export * from './transition-command-receipts';
-// CommitV2 repository path and mixed-history projections
+// CommitV2 repository path
 export {
   type CreatedTransitionCommit,
   type CreateTransitionCommitInput,
