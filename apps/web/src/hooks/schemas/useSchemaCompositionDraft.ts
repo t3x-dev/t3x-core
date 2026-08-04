@@ -3,9 +3,12 @@
 import { useCallback } from 'react';
 import {
   applyWorkspaceYSchemaComposition,
+  publishWorkspaceYSchemaComposition,
   saveWorkspaceYSchemaComposition,
 } from '@/infrastructure/schemaComposition';
 import type {
+  PublishedSchemaVersionManifest,
+  PublishSchemaCompositionInput,
   SchemaCompositionDraft,
   WorkspaceSchemaCompositionResult,
 } from '@/types/schemaModules';
@@ -40,5 +43,15 @@ export function useSchemaCompositionDraft() {
     []
   );
 
-  return { apply, save };
+  const publish = useCallback(
+    (
+      projectId: string,
+      workspaceId: string,
+      input: PublishSchemaCompositionInput
+    ): Promise<PublishedSchemaVersionManifest> =>
+      publishWorkspaceYSchemaComposition(projectId, workspaceId, input),
+    []
+  );
+
+  return { apply, publish, save };
 }

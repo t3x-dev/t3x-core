@@ -2,16 +2,20 @@ import {
   builtInPrdCoreArtifact,
   builtInPrdModules,
   compileYSchemaComposition,
+  normalizeYSchemaObject,
+  sha256CompositionValue,
   type YSchemaCompositionDraft,
 } from '@t3x-dev/yschema';
 import { describe, expect, it, vi } from 'vitest';
 
 const storageMock = vi.hoisted(() => ({
+  findYSchemaArtifactVersion: vi.fn(),
   findYSchemaCompositionSnapshot: vi.fn(),
 }));
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
+  findYSchemaArtifactVersion: storageMock.findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot: storageMock.findYSchemaCompositionSnapshot,
 }));
 
@@ -111,5 +115,50 @@ describe('Workspace YSchema resolution', () => {
       })
     );
     expect(resolved.schema).toEqual(compiled.schema);
+  });
+
+  it('resolves a deprecated project version by its exact identity and Schema hash', async () => {
+    const schema = {
+      yschema: '0.1' as const,
+      name: 'projects/proj_history/prd',
+      version: '1.0.0',
+      strict: true,
+      nodes: { summary: { required: true, repeated: false } },
+    };
+    const normalizedSchema = normalizeYSchemaObject(schema);
+    const schemaHash = await sha256CompositionValue(normalizedSchema);
+    storageMock.findYSchemaArtifactVersion.mockResolvedValueOnce({
+      status: 'deprecated',
+      manifest: {
+        apiVersion: 't3x.dev/yschema-core/v1',
+        schema,
+      },
+    });
+
+    const resolved = await resolveWorkspaceYSchema(
+      {
+        schemaBindings: [
+          {
+            canonicalName: schema.name,
+            schemaName: 'Historical PRD',
+            version: schema.version,
+            schemaHash,
+          },
+        ],
+      },
+      { select: vi.fn() } as never,
+      'proj_history'
+    );
+
+    expect(storageMock.findYSchemaArtifactVersion).toHaveBeenCalledWith(expect.anything(), {
+      canonical_name: schema.name,
+      version: schema.version,
+      project_id: 'proj_history',
+    });
+    expect(resolved).toEqual({
+      canonicalName: schema.name,
+      schema: normalizedSchema,
+      version: schema.version,
+    });
   });
 });

@@ -27,7 +27,7 @@ describe('SchemaModuleRegistry', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Compile preview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No Workspace' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Apply unavailable' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Publish unavailable' })).toBeDisabled();
   });
 
   it('inspects Module rules and adds or removes Modules explicitly', () => {
@@ -145,8 +145,8 @@ describe('SchemaModuleRegistry', () => {
     expect(screen.getByText(/No Commit was created/)).toBeInTheDocument();
   });
 
-  it('previews and applies a saved Composition without creating a Commit', async () => {
-    const onApplied = vi.fn();
+  it('previews and publishes a saved Composition into version history', async () => {
+    const onPublished = vi.fn();
     const compositionHash = `sha256:${'2'.repeat(64)}`;
     const compiledSchemaHash = `sha256:${'1'.repeat(64)}`;
     const preview = {
@@ -158,28 +158,26 @@ describe('SchemaModuleRegistry', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const request = JSON.parse(String(init?.body));
-      const data = url.endsWith('/schema-composition/apply')
+      const data = url.endsWith('/schema-composition/publish')
         ? {
-            composition: persistedComposition,
-            workspaceRevision: 9,
-            preview,
-            binding: {
-              canonicalName: 't3x/prd',
-              schemaName: 'PRD Composition',
-              version: '1.1.0',
-              mode: 'draft_override',
-              schemaHash: compiledSchemaHash,
-              compositionId: persistedComposition.id,
-              compositionRevision: 2,
-              compositionHash,
-            },
+            apiVersion: 't3x.dev/yschema-core/v1',
+            canonicalName: 'projects/proj_modules/prd',
+            version: '1.0.0',
+            family: 'prd',
+            title: 'Module Workspace PRD',
+            description: 'Published Composition',
+            status: 'active',
+            source: 'team',
+            schema: {},
           }
         : preview;
-      if (url.endsWith('/schema-composition/apply')) {
+      if (url.endsWith('/schema-composition/publish')) {
         expect(request).toEqual({
-          if_revision: 8,
           composition_revision: 2,
           composition_hash: compositionHash,
+          canonical_name: 'projects/proj_modules/prd',
+          version: '1.0.0',
+          title: 'Module Workspace PRD',
         });
       }
       return new Response(JSON.stringify({ success: true, data }), {
@@ -198,17 +196,22 @@ describe('SchemaModuleRegistry', () => {
           workspaceTitle: 'Module Workspace',
           workspaceRevision: 8,
           composition: persistedComposition,
-          onApplied,
+          onPublished,
         }}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apply to Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish version' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Publish Schema version' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish 1.0.0' }));
 
-    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onPublished).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('button', { name: 'Applied revision 2' })).toBeDisabled();
-    expect(screen.getByText(/Candidate and YOps proposals are now stale/)).toBeInTheDocument();
+    expect(onPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ canonicalName: 'projects/proj_modules/prd', version: '1.0.0' })
+    );
   });
 });
 

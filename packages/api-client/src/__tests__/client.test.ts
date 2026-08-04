@@ -893,6 +893,44 @@ describe('T3xClient', () => {
         })
       );
     });
+
+    it('lists and publishes immutable project Schema versions', async () => {
+      const fn = mockFetch(successResponse({ items: [] }));
+      const client = createTestClient(fn);
+
+      await client.listProjectYSchemaVersions('project/a', 'prd');
+      await client.publishWorkspaceYSchemaComposition('project/a', 'workspace/1', {
+        compositionRevision: 2,
+        compositionHash: 'sha256:composition',
+        canonicalName: 'projects/project-a/prd',
+        version: '1.0.0',
+        title: 'Project A PRD',
+        releaseNotes: 'Initial composed contract.',
+      });
+
+      expect(fn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/v1/projects/project%2Fa/yschema/versions?family=prd'),
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          '/v1/projects/project%2Fa/workspaces/workspace%2F1/schema-composition/publish'
+        ),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            composition_revision: 2,
+            composition_hash: 'sha256:composition',
+            canonical_name: 'projects/project-a/prd',
+            version: '1.0.0',
+            title: 'Project A PRD',
+            release_notes: 'Initial composed contract.',
+          }),
+        })
+      );
+    });
   });
 
   // =========================================================================

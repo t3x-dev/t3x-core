@@ -9,6 +9,7 @@ import {
 } from '@/components/schemas';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import {
   getProjectDefaultSchemaBinding,
   type ProjectWorkspaceSchemaBindings,
@@ -16,6 +17,7 @@ import {
   schemaReleaseToWorkspaceBinding,
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectSchemaDefault } from '@/hooks/projects/useProjectSchemaDefault';
+import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
@@ -39,7 +41,16 @@ export function ProjectSchemasTab({
   schemaBindings,
 }: ProjectSchemasTabProps) {
   const searchParams = useSearchParams();
-  const registry = useMemo(() => getSchemaRegistryPreview(projectId), [projectId]);
+  const publishedVersions = useProjectYSchemaVersions(projectId);
+  const registry = useMemo(
+    () =>
+      mergePublishedSchemaVersions(
+        getSchemaRegistryPreview(projectId),
+        publishedVersions.versions,
+        projectId
+      ),
+    [projectId, publishedVersions.versions]
+  );
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const { extractCandidate, saveDraft } = useWorkspaceFlow();
   const setProjectDefault = useProjectSchemaDefault();
@@ -154,6 +165,9 @@ export function ProjectSchemasTab({
               appliedSchemaHash: workspaceBinding?.schemaHash,
               onSaved: async () => {
                 await projectWorkspaces.refresh();
+              },
+              onPublished: async () => {
+                await publishedVersions.refresh();
               },
               onApplied: async (result) => {
                 if (result.binding) {

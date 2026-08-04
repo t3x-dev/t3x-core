@@ -72,7 +72,7 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Schema families define different kinds of structured state. Choose a family to inspect its current contract, deterministic rules, typed relations, and canonical YAML.'
+        'Choose an immutable version to inspect, reuse, or apply. Create a new version by composing Core with ordered Modules.'
       )
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'PRD Schema v2' })).toHaveAttribute(

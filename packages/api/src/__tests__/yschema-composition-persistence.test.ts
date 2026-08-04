@@ -58,6 +58,10 @@ const storageMock = vi.hoisted(() => {
       }
     ),
     saveYSchemaCompositionSnapshot: vi.fn((_db, input) => Promise.resolve(input)),
+    publishYSchemaArtifactVersion: vi.fn((_db, input) =>
+      Promise.resolve({ manifest: input.manifest_json })
+    ),
+    listProjectYSchemaVersionHistory: vi.fn(() => Promise.resolve([])),
     state: () => workspaceState,
   };
 });
@@ -68,6 +72,8 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findProjectById: storageMock.findProjectById,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    listProjectYSchemaVersionHistory: storageMock.listProjectYSchemaVersionHistory,
+    publishYSchemaArtifactVersion: storageMock.publishYSchemaArtifactVersion,
     saveYSchemaCompositionSnapshot: storageMock.saveYSchemaCompositionSnapshot,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
@@ -169,6 +175,78 @@ describe('Workspace YSchema Composition persistence', () => {
     const body: any = await response.json();
     expect(body.error.code).toBe('CONFLICT');
     expect(body.error.details.expectedRevision).toBe(1);
+  });
+
+  it('publishes a saved verified Composition as an immutable Schema version', async () => {
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: composition(), if_revision: 4 }),
+      }
+    );
+    const saved: any = await savedResponse.json();
+    const response = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/prd',
+          version: '1.0.0',
+          title: 'Module Workspace PRD',
+          release_notes: 'Initial composed version.',
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data).toMatchObject({
+      apiVersion: 't3x.dev/yschema-core/v1',
+      canonicalName: 'projects/proj_modules/prd',
+      version: '1.0.0',
+      title: 'Module Workspace PRD',
+      status: 'active',
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        owner_project_id: 'proj_modules',
+        visibility: 'private',
+        version: '1.0.0',
+        status: 'active',
+      })
+    );
+  });
+
+  it('lists the project-owned immutable Schema version history', async () => {
+    storageMock.listProjectYSchemaVersionHistory.mockResolvedValueOnce([
+      {
+        manifest: {
+          apiVersion: 't3x.dev/yschema-core/v1',
+          canonicalName: 'projects/proj_modules/prd',
+          version: '1.0.0',
+          status: 'active',
+        },
+      },
+    ]);
+
+    const response = await app.request('/v1/projects/proj_modules/yschema/versions?family=prd');
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data.items).toEqual([
+      expect.objectContaining({ canonicalName: 'projects/proj_modules/prd', version: '1.0.0' }),
+    ]);
+    expect(storageMock.listProjectYSchemaVersionHistory).toHaveBeenCalledWith(expect.anything(), {
+      project_id: 'proj_modules',
+      family: 'prd',
+      kind: 'core',
+    });
   });
 
   it('rejects duplicate order values instead of normalizing ambiguous input', async () => {

@@ -2,7 +2,9 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   ConflictError,
   findWorkspaceDraft,
+  listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
+  publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
@@ -10,7 +12,11 @@ import {
   builtInPrdCoreArtifact,
   builtInPrdModules,
   compileYSchemaComposition,
+  type NodeSchema,
+  normalizeYSchemaObject,
+  sha256CompositionValue,
   type YSchemaCompositionDraft,
+  type YSchemaCoreArtifact,
 } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -98,6 +104,23 @@ const ApplyWorkspaceCompositionRequestSchema = z
   .strict()
   .openapi('ApplyWorkspaceYSchemaCompositionRequest');
 
+const PublishWorkspaceCompositionRequestSchema = z
+  .object({
+    composition_revision: z.number().int().positive(),
+    composition_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    canonical_name: z
+      .string()
+      .min(3)
+      .max(160)
+      .regex(/^[a-z0-9][a-z0-9._/-]*[a-z0-9]$/),
+    version: z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/),
+    title: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+    release_notes: z.string().trim().max(1000).optional(),
+  })
+  .strict()
+  .openapi('PublishWorkspaceYSchemaCompositionRequest');
+
 const CompositionIssueSchema = z
   .object({
     code: z.string(),
@@ -155,6 +178,10 @@ const ArtifactRegistryResponseSchema = z
   })
   .openapi('YSchemaArtifactRegistryResponse');
 
+const ProjectYSchemaVersionHistoryResponseSchema = z
+  .object({ items: z.array(z.any()) })
+  .openapi('ProjectYSchemaVersionHistoryResponse');
+
 const listArtifactsRoute = createRoute({
   method: 'get',
   path: '/v1/yschema/artifacts',
@@ -185,6 +212,31 @@ const listProjectArtifactsRoute = createRoute({
       description: 'Paginated official, community, team, and private Artifacts visible to project',
       content: {
         'application/json': { schema: SuccessResponseSchema(ArtifactRegistryResponseSchema) },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const listProjectVersionsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/yschema/versions',
+  tags: ['YSchema'],
+  summary: 'List immutable YSchema versions published by a project',
+  request: {
+    params: z.object({ projectId: z.string().min(1) }),
+    query: z.object({ family: z.enum(['prd', 'prompt', 'skill']).optional() }),
+  },
+  responses: {
+    200: {
+      description: 'Project-owned Schema version history, newest first',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ProjectYSchemaVersionHistoryResponseSchema),
+        },
       },
     },
     403: {
@@ -331,6 +383,38 @@ const applyWorkspaceCompositionRoute = createRoute({
   },
 });
 
+const publishWorkspaceCompositionRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/publish',
+  tags: ['YSchema'],
+  summary: 'Publish a saved Composition as an immutable project Schema version',
+  request: {
+    params: WorkspaceCompositionParamsSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: PublishWorkspaceCompositionRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Published immutable Schema version',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace or Composition not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Composition hash or immutable version conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 export const yschemaCompositionRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
 yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
@@ -367,6 +451,23 @@ yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
       success: true as const,
       data: { ...page, items: page.items.map(artifactViewToManifest) },
     },
+    200
+  );
+});
+
+yschemaCompositionRoutes.openapi(listProjectVersionsRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const { family } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const items = await listProjectYSchemaVersionHistory(db, {
+    project_id: projectId,
+    family,
+    kind: 'core',
+  });
+  return c.json(
+    { success: true as const, data: { items: items.map(artifactViewToManifest) } },
     200
   );
 });
@@ -511,6 +612,126 @@ yschemaCompositionRoutes.openapi(saveWorkspaceCompositionRoute, async (c) => {
   } catch (error) {
     if (error instanceof ConflictError) {
       return errorResponse(c, 'CONFLICT', error.message, { expectedRevision: ifRevision });
+    }
+    throw error;
+  }
+});
+
+yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  if (!draft?.workspace_state) {
+    return errorResponse(c, 'WORKSPACE_NOT_FOUND', `Workspace not found: ${workspaceId}`);
+  }
+  const persisted = parsePersistedComposition(draft.workspace_state.schemaComposition);
+  if (!persisted.ok) {
+    return errorResponse(
+      c,
+      'DATABASE_ERROR',
+      `Workspace ${workspaceId} contains an invalid YSchema Composition draft.`,
+      { issues: persisted.issues }
+    );
+  }
+  if (!persisted.composition) {
+    return errorResponse(c, 'NOT_FOUND', `Workspace ${workspaceId} has no saved Composition.`);
+  }
+  if (persisted.composition.revision !== input.composition_revision) {
+    return errorResponse(
+      c,
+      'CONFLICT',
+      `Composition revision conflict: expected ${persisted.composition.revision}, received ${input.composition_revision}.`,
+      { expectedRevision: persisted.composition.revision }
+    );
+  }
+
+  const artifacts = await resolveCompositionArtifacts(db, persisted.composition, projectId);
+  const preview = await compileYSchemaComposition({
+    composition: persisted.composition,
+    ...artifacts,
+  });
+  if (preview.compositionHash !== input.composition_hash) {
+    return errorResponse(
+      c,
+      'CONFLICT',
+      'Composition preview is stale. Compile the saved revision again before publishing it.',
+      { expectedCompositionHash: preview.compositionHash }
+    );
+  }
+  if (!preview.report.valid) {
+    return errorResponse(
+      c,
+      'REVIEW_REQUIRED',
+      'Composition has blocking verification issues and cannot be published.',
+      { issues: preview.report.issues }
+    );
+  }
+
+  const schema = normalizeYSchemaObject({
+    ...preview.schema,
+    name: input.canonical_name,
+    version: input.version,
+    description: input.description || preview.schema.description,
+  });
+  const schemaHash = await sha256CompositionValue(schema);
+  const provides = Array.from(
+    new Set([...artifacts.core.provides, ...artifacts.modules.flatMap((module) => module.provides)])
+  ).sort();
+  const manifest: YSchemaCoreArtifact & { registry: Record<string, unknown> } = {
+    apiVersion: 't3x.dev/yschema-core/v1',
+    canonicalName: input.canonical_name,
+    version: input.version,
+    family: persisted.composition.family,
+    title: input.title,
+    description: input.description || `Published from ${persisted.composition.id}.`,
+    status: 'active',
+    source: 'team',
+    provides,
+    extensionSlots: artifacts.core.extensionSlots,
+    schema,
+    registry: {
+      origin: 'composition',
+      compositionId: persisted.composition.id,
+      compositionRevision: persisted.composition.revision,
+      compositionHash: preview.compositionHash,
+      sourceCompiledSchemaHash: preview.compiledSchemaHash,
+      schemaHash,
+      renderPlan: preview.renderPlan,
+      originsByPath: preview.originsByPath,
+      modules: persisted.composition.modules,
+      releaseNotes: input.release_notes ?? '',
+    },
+  };
+  const artifactHash = await sha256CompositionValue(manifest);
+
+  try {
+    const published = await publishYSchemaArtifactVersion(db, {
+      artifact_id: yschemaArtifactId(input.canonical_name),
+      artifact_version_id: yschemaArtifactVersionId(input.canonical_name, input.version),
+      canonical_name: input.canonical_name,
+      family: persisted.composition.family,
+      kind: 'core',
+      owner_project_id: projectId,
+      visibility: 'private',
+      version: input.version,
+      status: 'active',
+      manifest_json: manifest as unknown as Record<string, unknown>,
+      artifact_hash: artifactHash,
+      path_count: countSchemaNodePaths(schema.nodes),
+      created_by: `project:${projectId}`,
+      provides,
+      requires: [],
+    });
+    return c.json({ success: true as const, data: artifactViewToManifest(published) }, 200);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Schema version could not be published.';
+    if (message.includes('immutable') || message.includes('identity conflict')) {
+      return errorResponse(c, 'CONFLICT', message);
     }
     throw error;
   }
@@ -721,4 +942,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function yschemaArtifactId(canonicalName: string): string {
+  return `ysa_${canonicalName.replace(/[^a-zA-Z0-9]+/g, '_')}`;
+}
+
+function yschemaArtifactVersionId(canonicalName: string, version: string): string {
+  return `${yschemaArtifactId(canonicalName)}_${version.replace(/[^a-zA-Z0-9]+/g, '_')}`;
+}
+
+function countSchemaNodePaths(nodes: Record<string, NodeSchema>): number {
+  let count = 0;
+  for (const node of Object.values(nodes)) {
+    count += 1 + Object.keys(node.slots ?? {}).length;
+    if (node.children && node.children !== 'any') count += countSchemaNodePaths(node.children);
+  }
+  return count;
 }

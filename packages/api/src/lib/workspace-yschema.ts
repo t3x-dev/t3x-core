@@ -1,4 +1,8 @@
-import { type AnyDB, findYSchemaCompositionSnapshot } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  findYSchemaArtifactVersion,
+  findYSchemaCompositionSnapshot,
+} from '@t3x-dev/storage';
 import {
   builtInPrdCoreArtifact,
   builtInPrdModules,
@@ -82,11 +86,32 @@ export async function resolveWorkspaceYSchema(
 
   const canonicalName = canonicalSchemaNameFromBinding(binding);
   const version = schemaVersionFromBinding(binding);
+  const builtIn = canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null;
+  if (builtIn) return { canonicalName, schema: builtIn, ...(version ? { version } : {}) };
+
+  if (db && canQueryYSchemaRegistry(db) && projectId && canonicalName && version) {
+    const published = await findYSchemaArtifactVersion(db, {
+      canonical_name: canonicalName,
+      version,
+      project_id: projectId,
+    });
+    const manifest = asRecord(published?.manifest);
+    if (manifest?.apiVersion === 't3x.dev/yschema-core/v1' && manifest.schema) {
+      const schema = normalizeYSchemaObject(manifest.schema);
+      if (!expectedSchemaHash || (await sha256CompositionValue(schema)) === expectedSchemaHash) {
+        return { canonicalName, schema, version };
+      }
+    }
+  }
   return {
     canonicalName,
-    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
+    schema: null,
     ...(version ? { version } : {}),
   };
+}
+
+function canQueryYSchemaRegistry(db: AnyDB): boolean {
+  return typeof (db as AnyDB & { select?: unknown }).select === 'function';
 }
 
 function asComposition(value: unknown): YSchemaCompositionDraft | null {

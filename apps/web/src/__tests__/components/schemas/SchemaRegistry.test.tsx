@@ -150,7 +150,7 @@ describe('SchemaRegistry', () => {
     expect(screen.getByText('skill.generated-trigger-description')).toBeInTheDocument();
   });
 
-  it('binds only the registered current release through explicit Workspace actions', () => {
+  it('binds runtime releases and keeps draft previews view-only', () => {
     const preview = getSchemaRegistryPreview('proj_test');
     const onSetProjectDefault = vi.fn().mockResolvedValue(undefined);
     const onApplyToWorkspace = vi.fn().mockResolvedValue(undefined);

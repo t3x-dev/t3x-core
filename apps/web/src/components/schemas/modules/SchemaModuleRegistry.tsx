@@ -17,17 +17,22 @@ import { SchemaArtifactIcon } from './SchemaArtifactIcon';
 import { SchemaCompositionWorkbench } from './SchemaCompositionWorkbench';
 
 export function SchemaModuleRegistry({
+  nextVersion,
   workspace,
   registryArtifacts,
 }: {
+  nextVersion?: string;
   workspace?: SchemaCompositionWorkspaceContext;
   registryArtifacts?: SchemaArtifactPreview[];
 }) {
   const registry = useSchemaArtifactRegistry(workspace?.projectId, registryArtifacts === undefined);
   const artifacts = registryArtifacts ?? registry.artifacts;
-  const core = artifacts.find((artifact) => artifact.kind === 'core');
+  const core =
+    artifacts.find(
+      (artifact) => artifact.kind === 'core' && artifact.canonicalName === 't3x/prd-core'
+    ) ?? artifacts.find((artifact) => artifact.kind === 'core');
   const availableModules = artifacts.filter((artifact) => artifact.kind === 'module');
-  const { apply, save } = useSchemaCompositionDraft();
+  const { publish, save } = useSchemaCompositionDraft();
   const [query, setQuery] = useState('');
   const [domain, setDomain] = useState('All');
   const [selectedArtifactName, setSelectedArtifactName] = useState('');
@@ -38,10 +43,6 @@ export function SchemaModuleRegistry({
     workspace?.composition?.revision ?? 0
   );
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
-  const [appliedCompositionRevision, setAppliedCompositionRevision] = useState(
-    workspace?.appliedCompositionRevision
-  );
-  const [appliedSchemaHash, setAppliedSchemaHash] = useState(workspace?.appliedSchemaHash);
   const [savedSignature, setSavedSignature] = useState<string>();
   const artifactSignature = artifacts
     .map((artifact) => `${artifact.canonicalName}@${artifact.version}`)
@@ -56,8 +57,6 @@ export function SchemaModuleRegistry({
     setCompositionModules(persistedModules);
     setCompositionRevision(workspace?.composition?.revision ?? 0);
     setWorkspaceRevision(workspace?.workspaceRevision);
-    setAppliedCompositionRevision(workspace?.appliedCompositionRevision);
-    setAppliedSchemaHash(workspace?.appliedSchemaHash);
     setSavedSignature(persistedCompositionSignature);
     setSelectedArtifactName((current) =>
       artifacts.some((artifact) => artifact.canonicalName === current)
@@ -68,8 +67,6 @@ export function SchemaModuleRegistry({
     artifactSignature,
     persistedCompositionSignature,
     workspace?.composition?.revision,
-    workspace?.appliedCompositionRevision,
-    workspace?.appliedSchemaHash,
     workspace?.workspaceId,
     workspace?.workspaceRevision,
   ]);
@@ -122,24 +119,13 @@ export function SchemaModuleRegistry({
     return saved;
   }
 
-  async function applyComposition(
-    compositionHash: string
-  ): Promise<WorkspaceSchemaCompositionResult> {
-    if (!workspace || workspaceRevision === undefined || compositionRevision < 1) {
-      throw new Error('Save this Composition to a persisted Workspace before applying it.');
+  async function publishComposition(input: Parameters<typeof publish>[2]) {
+    if (!workspace || compositionRevision < 1) {
+      throw new Error('Save this Composition to a persisted Workspace before publishing it.');
     }
-    const applied = await apply(
-      workspace.projectId,
-      workspace.workspaceId,
-      workspaceRevision,
-      compositionRevision,
-      compositionHash
-    );
-    setWorkspaceRevision(applied.workspaceRevision);
-    setAppliedCompositionRevision(applied.composition?.revision ?? compositionRevision);
-    setAppliedSchemaHash(applied.binding?.schemaHash);
-    await workspace.onApplied?.(applied);
-    return applied;
+    const published = await publish(workspace.projectId, workspace.workspaceId, input);
+    await workspace.onPublished?.(published);
+    return published;
   }
 
   if (!core || !selectedArtifact) {
@@ -303,11 +289,11 @@ export function SchemaModuleRegistry({
         compositionRevision={compositionRevision}
         core={core}
         dirty={savedSignature !== compositionSignature(compositionModules)}
-        applied={appliedCompositionRevision === compositionRevision && Boolean(appliedSchemaHash)}
         modules={compositionModules}
-        onApply={workspaceRevision === undefined ? undefined : applyComposition}
         onModulesChange={setCompositionModules}
+        onPublish={workspaceRevision === undefined ? undefined : publishComposition}
         onSave={workspaceRevision === undefined ? undefined : saveComposition}
+        nextVersion={nextVersion}
         workspaceTitle={workspace?.workspaceTitle}
         projectId={workspace?.projectId}
       />

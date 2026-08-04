@@ -24,44 +24,56 @@ import {
   ChevronUp,
   GripVertical,
   LockKeyhole,
+  PackageCheck,
   Play,
   Save,
-  Sparkles,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useSchemaCompositionPreview } from '@/hooks/schemas/useSchemaCompositionPreview';
 import type {
+  PublishedSchemaVersionManifest,
+  PublishSchemaCompositionInput,
   SchemaArtifactPreview,
   SchemaCompositionDraft,
   WorkspaceSchemaCompositionResult,
 } from '@/types/schemaModules';
 
 interface SchemaCompositionWorkbenchProps {
-  applied: boolean;
   compositionId: string;
   compositionRevision: number;
   core: SchemaArtifactPreview;
   dirty: boolean;
   modules: SchemaArtifactPreview[];
+  nextVersion?: string;
   onModulesChange: (modules: SchemaArtifactPreview[]) => void;
-  onApply?: (compositionHash: string) => Promise<WorkspaceSchemaCompositionResult>;
+  onPublish?: (input: PublishSchemaCompositionInput) => Promise<PublishedSchemaVersionManifest>;
   onSave?: (composition: SchemaCompositionDraft) => Promise<WorkspaceSchemaCompositionResult>;
   projectId?: string;
   workspaceTitle?: string;
 }
 
 export function SchemaCompositionWorkbench({
-  applied,
   compositionId,
   compositionRevision,
   core,
   dirty,
   modules,
+  nextVersion = '1.0.0',
   onModulesChange,
-  onApply,
+  onPublish,
   onSave,
   projectId,
   workspaceTitle,
@@ -70,9 +82,15 @@ export function SchemaCompositionWorkbench({
   const [savePending, setSavePending] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const [saveFeedback, setSaveFeedback] = useState<string>();
-  const [applyPending, setApplyPending] = useState(false);
-  const [applyError, setApplyError] = useState<string>();
-  const [applyFeedback, setApplyFeedback] = useState<string>();
+  const [publishPending, setPublishPending] = useState(false);
+  const [publishError, setPublishError] = useState<string>();
+  const [publishFeedback, setPublishFeedback] = useState<string>();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishTitle, setPublishTitle] = useState(`${workspaceTitle ?? 'Project'} PRD`);
+  const [publishCanonicalName, setPublishCanonicalName] = useState(defaultCanonicalName(projectId));
+  const [publishVersion, setPublishVersion] = useState(nextVersion);
+  const [publishDescription, setPublishDescription] = useState('');
+  const [releaseNotes, setReleaseNotes] = useState('');
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -81,7 +99,7 @@ export function SchemaCompositionWorkbench({
   useEffect(() => {
     if (dirty) {
       setSaveFeedback(undefined);
-      setApplyFeedback(undefined);
+      setPublishFeedback(undefined);
     }
   }, [dirty]);
 
@@ -140,27 +158,40 @@ export function SchemaCompositionWorkbench({
     }
   }
 
-  async function applyComposition() {
-    if (!onApply || dirty) return;
-    setApplyPending(true);
-    setApplyError(undefined);
-    setApplyFeedback(undefined);
+  async function preparePublish() {
+    if (!onPublish || dirty) return;
+    setPublishError(undefined);
+    const verified = preview ?? (await compile(buildComposition(), projectId));
+    if (!verified) return;
+    if (!verified.report.valid) {
+      setPublishError('Resolve the blocking Composition issues before publishing it.');
+      return;
+    }
+    setPublishVersion(nextVersion);
+    setPublishOpen(true);
+  }
+
+  async function submitPublish() {
+    if (!onPublish || !preview) return;
+    setPublishPending(true);
+    setPublishError(undefined);
+    setPublishFeedback(undefined);
     try {
-      const verified = preview ?? (await compile(buildComposition(), projectId));
-      if (!verified) return;
-      if (!verified.report.valid) {
-        setApplyError('Resolve the blocking Composition issues before applying it.');
-        return;
-      }
-      const result = await onApply(verified.compositionHash);
-      if (result.preview) accept(result.preview);
-      setApplyFeedback(
-        `Applied revision ${result.composition?.revision ?? compositionRevision} to ${workspaceTitle ?? 'Workspace'}. Candidate and YOps proposals are now stale; regenerate before review.`
-      );
+      const published = await onPublish({
+        compositionRevision,
+        compositionHash: preview.compositionHash,
+        canonicalName: publishCanonicalName.trim(),
+        version: publishVersion.trim(),
+        title: publishTitle.trim(),
+        ...(publishDescription.trim() ? { description: publishDescription.trim() } : {}),
+        ...(releaseNotes.trim() ? { releaseNotes: releaseNotes.trim() } : {}),
+      });
+      setPublishFeedback(`Published ${published.title} ${published.version} to version history.`);
+      setPublishOpen(false);
     } catch (cause) {
-      setApplyError(cause instanceof Error ? cause.message : 'Composition apply failed.');
+      setPublishError(cause instanceof Error ? cause.message : 'Schema version publish failed.');
     } finally {
-      setApplyPending(false);
+      setPublishPending(false);
     }
   }
 
@@ -180,11 +211,7 @@ export function SchemaCompositionWorkbench({
             </h3>
           </div>
           <Badge variant={dirty ? 'pending' : 'success'}>
-            {dirty
-              ? 'unsaved'
-              : applied
-                ? `applied r${compositionRevision}`
-                : `saved r${compositionRevision}`}
+            {dirty ? 'unsaved' : `saved r${compositionRevision}`}
           </Badge>
         </div>
         <p className="mt-2 text-[12px] leading-5 text-[var(--text-secondary)]">
@@ -266,9 +293,9 @@ export function SchemaCompositionWorkbench({
             ))}
           </div>
         ) : null}
-        {error || saveError || applyError ? (
+        {error || saveError || publishError ? (
           <p className="mb-3 rounded-md bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-3 py-2 text-[11px] text-[var(--destructive)]">
-            {applyError ?? saveError ?? error}
+            {publishError ?? saveError ?? error}
           </p>
         ) : null}
         {saveFeedback ? (
@@ -276,15 +303,15 @@ export function SchemaCompositionWorkbench({
             {saveFeedback}
           </p>
         ) : null}
-        {applyFeedback ? (
+        {publishFeedback ? (
           <p className="mb-3 rounded-md bg-[color-mix(in_srgb,var(--accent-commit)_9%,transparent)] px-3 py-2 text-[11px] leading-4 text-[var(--text-secondary)]">
-            {applyFeedback}
+            {publishFeedback}
           </p>
         ) : null}
         <div className="grid grid-cols-2 gap-2">
           <Button
             className="w-full px-2"
-            disabled={pending || savePending || applyPending}
+            disabled={pending || savePending || publishPending}
             onClick={runPreview}
             type="button"
             variant="canvas-outline"
@@ -294,7 +321,7 @@ export function SchemaCompositionWorkbench({
           </Button>
           <Button
             className="w-full px-2"
-            disabled={!onSave || !dirty || pending || savePending || applyPending}
+            disabled={!onSave || !dirty || pending || savePending || publishPending}
             onClick={saveDraft}
             type="button"
             variant="pending"
@@ -306,34 +333,126 @@ export function SchemaCompositionWorkbench({
         <Button
           className="mt-2 w-full"
           disabled={
-            !onApply ||
+            !onPublish ||
             dirty ||
             compositionRevision < 1 ||
-            applied ||
+            (preview !== undefined && !preview.report.valid) ||
             pending ||
             savePending ||
-            applyPending
+            publishPending
           }
-          onClick={applyComposition}
+          onClick={preparePublish}
           type="button"
           variant="commit"
         >
-          <Sparkles aria-hidden="true" className="size-3.5" />{' '}
-          {applyPending
-            ? 'Applying…'
-            : applied
-              ? `Applied revision ${compositionRevision}`
-              : onApply
-                ? 'Apply to Workspace'
-                : 'Apply unavailable'}
+          <PackageCheck aria-hidden="true" className="size-3.5" />{' '}
+          {publishPending
+            ? 'Publishing…'
+            : preview && !preview.report.valid
+              ? 'Resolve issues to publish'
+              : onPublish
+                ? 'Publish version'
+                : 'Publish unavailable'}
         </Button>
         <p className="mt-2 text-center text-[10px] leading-4 text-[var(--text-tertiary)]">
-          Save stores the Manifest. Apply binds the verified contract and invalidates old proposals.
-          Neither action creates a Commit or advances history.
+          Save keeps an editable draft. Publish creates an immutable Schema version; apply it later
+          from version history. Neither action creates a Commit.
         </p>
       </div>
+
+      <Dialog onOpenChange={setPublishOpen} open={publishOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Publish Schema version</DialogTitle>
+            <DialogDescription>
+              Freeze saved Composition r{compositionRevision} as a reusable, immutable contract.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <PublishField id="schema-version-title" label="Version title">
+              <Input
+                id="schema-version-title"
+                onChange={(event) => setPublishTitle(event.target.value)}
+                value={publishTitle}
+              />
+            </PublishField>
+            <div className="grid gap-4 min-[481px]:grid-cols-[minmax(0,1fr)_120px]">
+              <PublishField id="schema-canonical-name" label="Canonical name">
+                <Input
+                  className="font-mono text-xs"
+                  id="schema-canonical-name"
+                  onChange={(event) => setPublishCanonicalName(event.target.value)}
+                  value={publishCanonicalName}
+                />
+              </PublishField>
+              <PublishField id="schema-semantic-version" label="Version">
+                <Input
+                  className="font-mono text-xs"
+                  id="schema-semantic-version"
+                  onChange={(event) => setPublishVersion(event.target.value)}
+                  value={publishVersion}
+                />
+              </PublishField>
+            </div>
+            <PublishField id="schema-version-description" label="Description (optional)">
+              <Textarea
+                id="schema-version-description"
+                onChange={(event) => setPublishDescription(event.target.value)}
+                placeholder="What this contract is designed to capture."
+                rows={2}
+                value={publishDescription}
+              />
+            </PublishField>
+            <PublishField id="schema-release-notes" label="Release notes (optional)">
+              <Textarea
+                id="schema-release-notes"
+                onChange={(event) => setReleaseNotes(event.target.value)}
+                placeholder="What changed from the previous version."
+                rows={3}
+                value={releaseNotes}
+              />
+            </PublishField>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPublishOpen(false)} type="button" variant="canvas-outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                publishPending ||
+                !publishTitle.trim() ||
+                !publishCanonicalName.trim() ||
+                !publishVersion.trim()
+              }
+              onClick={submitPublish}
+              type="button"
+              variant="commit"
+            >
+              <PackageCheck aria-hidden="true" className="size-3.5" />
+              {publishPending ? 'Publishing…' : `Publish ${publishVersion || 'version'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
+}
+
+function PublishField({ children, id, label }: { children: ReactNode; id: string; label: string }) {
+  return (
+    <div className="grid gap-1.5 text-xs font-medium text-[var(--text-primary)]">
+      <label htmlFor={id}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function defaultCanonicalName(projectId?: string): string {
+  const projectKey = (projectId ?? 'project')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `projects/${projectKey || 'project'}/prd`;
 }
 
 function SortableModuleRow({

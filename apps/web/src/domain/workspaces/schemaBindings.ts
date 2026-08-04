@@ -39,7 +39,7 @@ export function schemaReleaseToWorkspaceBinding(
 }
 
 export function isSchemaReleaseBindable(release: SchemaReleasePreview): boolean {
-  return release.status === 'active' && release.runtimeAvailable;
+  return release.status !== 'draft' && release.runtimeAvailable;
 }
 
 export function getProjectDefaultSchemaBinding(

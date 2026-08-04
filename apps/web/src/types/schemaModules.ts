@@ -89,8 +89,36 @@ export interface SchemaCompositionWorkspaceContext {
   composition?: SchemaCompositionDraft;
   onSaved?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
   onApplied?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
+  onPublished?: (version: PublishedSchemaVersionManifest) => void | Promise<void>;
   appliedCompositionRevision?: number;
   appliedSchemaHash?: string;
+}
+
+export interface PublishSchemaCompositionInput {
+  compositionRevision: number;
+  compositionHash: string;
+  canonicalName: string;
+  version: string;
+  title: string;
+  description?: string;
+  releaseNotes?: string;
+}
+
+export interface PublishedSchemaVersionManifest extends Record<string, unknown> {
+  apiVersion: 't3x.dev/yschema-core/v1';
+  canonicalName: string;
+  version: string;
+  family: 'prd' | 'prompt' | 'skill';
+  title: string;
+  description: string;
+  status: 'active' | 'deprecated' | 'draft';
+  source: 'official' | 'team' | 'community';
+  artifactHash?: string;
+  schema: Record<string, unknown>;
+}
+
+export interface ProjectSchemaVersionHistory {
+  items: PublishedSchemaVersionManifest[];
 }
 
 export interface YSchemaArtifactRegistryPage {

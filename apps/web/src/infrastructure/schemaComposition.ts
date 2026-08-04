@@ -1,4 +1,7 @@
 import type {
+  ProjectSchemaVersionHistory,
+  PublishedSchemaVersionManifest,
+  PublishSchemaCompositionInput,
   SchemaCompositionDraft,
   SchemaCompositionPreviewResult,
   WorkspaceSchemaCompositionResult,
@@ -28,6 +31,15 @@ export async function loadYSchemaArtifactRegistry(
     ? `/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
     : '/yschema/artifacts';
   const response = await fetchWithTimeout(`${API_V1}${path}?family=prd&limit=100`);
+  return handleResponse(response);
+}
+
+export async function loadProjectYSchemaVersions(
+  projectId: string
+): Promise<ProjectSchemaVersionHistory> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/versions?family=prd`
+  );
   return handleResponse(response);
 }
 
@@ -80,6 +92,32 @@ export async function applyWorkspaceYSchemaComposition(
         if_revision: workspaceRevision,
         composition_revision: compositionRevision,
         composition_hash: compositionHash,
+      }),
+    }
+  );
+  return handleResponse(response);
+}
+
+export async function publishWorkspaceYSchemaComposition(
+  projectId: string,
+  workspaceId: string,
+  input: PublishSchemaCompositionInput
+): Promise<PublishedSchemaVersionManifest> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+      workspaceId
+    )}/schema-composition/publish`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        composition_revision: input.compositionRevision,
+        composition_hash: input.compositionHash,
+        canonical_name: input.canonicalName,
+        version: input.version,
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
       }),
     }
   );

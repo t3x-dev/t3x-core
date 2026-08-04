@@ -56,6 +56,24 @@ export interface ListYSchemaArtifactsOptions {
   limit?: number;
 }
 
+export interface FindYSchemaArtifactVersionInput {
+  canonical_name: string;
+  version: string;
+  project_id?: string;
+}
+
+export interface ListProjectYSchemaVersionHistoryOptions {
+  project_id: string;
+  family?: string;
+  kind?: 'core' | 'module';
+}
+
+export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifactVersionInput {
+  owner_project_id: string;
+  visibility: 'private' | 'team';
+  status: 'active';
+}
+
 export async function upsertYSchemaArtifactVersion(
   db: AnyDB,
   input: UpsertYSchemaArtifactVersionInput
@@ -210,6 +228,140 @@ export async function listYSchemaArtifactVersions(
     limit,
     (item) => ({ t: item.updatedAt.toISOString(), k: item.canonicalName })
   );
+}
+
+/**
+ * Publish one immutable project Artifact version and make it the active version
+ * for that Artifact. Older versions remain addressable and are only deprecated.
+ */
+export async function publishYSchemaArtifactVersion(
+  db: AnyDB,
+  input: PublishYSchemaArtifactVersionInput
+): Promise<YSchemaArtifactVersionView> {
+  // biome-ignore lint/suspicious/noExplicitAny: AnyDB intentionally abstracts the supported drivers.
+  return (db as any).transaction(async (tx: AnyDB) => {
+    const [existingArtifact] = await tx
+      .select()
+      .from(yschemaArtifacts)
+      .where(eq(yschemaArtifacts.canonicalName, input.canonical_name))
+      .limit(1);
+    if (
+      existingArtifact &&
+      (existingArtifact.artifactId !== input.artifact_id ||
+        existingArtifact.ownerProjectId !== input.owner_project_id ||
+        existingArtifact.kind !== input.kind ||
+        existingArtifact.family !== input.family)
+    ) {
+      throw new Error(`YSchema Artifact identity conflict for ${input.canonical_name}`);
+    }
+
+    if (existingArtifact) {
+      const [existingVersion] = await tx
+        .select()
+        .from(yschemaArtifactVersions)
+        .where(
+          and(
+            eq(yschemaArtifactVersions.artifactId, input.artifact_id),
+            eq(yschemaArtifactVersions.version, input.version)
+          )
+        )
+        .limit(1);
+      if (existingVersion) {
+        if (
+          existingVersion.artifactHash === input.artifact_hash &&
+          existingVersion.status === 'active'
+        ) {
+          return joinedArtifactView(existingArtifact, existingVersion);
+        }
+        throw new Error(
+          `Published YSchema Artifact ${input.canonical_name}@${input.version} is immutable`
+        );
+      }
+    }
+
+    await tx
+      .update(yschemaArtifactVersions)
+      .set({ status: 'deprecated' })
+      .where(
+        and(
+          eq(yschemaArtifactVersions.artifactId, input.artifact_id),
+          eq(yschemaArtifactVersions.status, 'active')
+        )
+      );
+
+    const published = await upsertYSchemaArtifactVersion(tx, input);
+    await tx
+      .update(yschemaArtifacts)
+      .set({ updatedAt: new Date() })
+      .where(eq(yschemaArtifacts.artifactId, input.artifact_id));
+    return published;
+  });
+}
+
+/** Return every immutable project-owned version with its full manifest. */
+export async function listProjectYSchemaVersionHistory(
+  db: AnyDB,
+  options: ListProjectYSchemaVersionHistoryOptions
+): Promise<YSchemaArtifactVersionView[]> {
+  const conditions = [eq(yschemaArtifacts.ownerProjectId, options.project_id)];
+  if (options.family) conditions.push(eq(yschemaArtifacts.family, options.family));
+  if (options.kind) conditions.push(eq(yschemaArtifacts.kind, options.kind));
+  const rows = await db
+    .select({ artifact: yschemaArtifacts, version: yschemaArtifactVersions })
+    .from(yschemaArtifacts)
+    .innerJoin(
+      yschemaArtifactVersions,
+      eq(yschemaArtifactVersions.artifactId, yschemaArtifacts.artifactId)
+    )
+    .where(and(...conditions))
+    .orderBy(desc(yschemaArtifactVersions.createdAt), desc(yschemaArtifactVersions.version));
+
+  const versionsByArtifact = new Map<
+    string,
+    Array<{ version: string; status: string; createdAt: Date }>
+  >();
+  for (const { artifact, version } of rows) {
+    const versions = versionsByArtifact.get(artifact.artifactId) ?? [];
+    versions.push({
+      version: version.version,
+      status: version.status,
+      createdAt: version.createdAt,
+    });
+    versionsByArtifact.set(artifact.artifactId, versions);
+  }
+  return rows.map(({ artifact, version }) =>
+    joinedArtifactView(artifact, version, versionsByArtifact.get(artifact.artifactId))
+  );
+}
+
+/** Resolve one exact immutable version visible to the requesting project. */
+export async function findYSchemaArtifactVersion(
+  db: AnyDB,
+  input: FindYSchemaArtifactVersionInput
+): Promise<YSchemaArtifactVersionView | null> {
+  const visible = input.project_id
+    ? or(
+        eq(yschemaArtifacts.visibility, 'official'),
+        eq(yschemaArtifacts.visibility, 'community'),
+        eq(yschemaArtifacts.ownerProjectId, input.project_id)
+      )
+    : or(eq(yschemaArtifacts.visibility, 'official'), eq(yschemaArtifacts.visibility, 'community'));
+  const [row] = await db
+    .select({ artifact: yschemaArtifacts, version: yschemaArtifactVersions })
+    .from(yschemaArtifacts)
+    .innerJoin(
+      yschemaArtifactVersions,
+      eq(yschemaArtifactVersions.artifactId, yschemaArtifacts.artifactId)
+    )
+    .where(
+      and(
+        eq(yschemaArtifacts.canonicalName, input.canonical_name),
+        eq(yschemaArtifactVersions.version, input.version),
+        visible!
+      )
+    )
+    .limit(1);
+  return row ? joinedArtifactView(row.artifact, row.version) : null;
 }
 
 export interface SaveYSchemaCompositionSnapshotInput {

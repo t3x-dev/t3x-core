@@ -26,17 +26,11 @@ export interface SchemaBindingActionsState {
 
 interface SchemaBindingActionsProps {
   actions: SchemaBindingActionsState;
-  currentRelease: SchemaReleasePreview | null;
   selectedRelease: SchemaReleasePreview;
 }
 
-export function SchemaBindingActions({
-  actions,
-  currentRelease,
-  selectedRelease,
-}: SchemaBindingActionsProps) {
-  const isRuntimeRelease =
-    isSchemaReleaseBindable(selectedRelease) && selectedRelease.id === currentRelease?.id;
+export function SchemaBindingActions({ actions, selectedRelease }: SchemaBindingActionsProps) {
+  const isRuntimeRelease = isSchemaReleaseBindable(selectedRelease);
   const defaultMatches = bindingMatchesRelease(actions.defaultBinding, selectedRelease);
   const workspaceMatches = bindingMatchesRelease(actions.workspaceTarget?.binding, selectedRelease);
   const busy = actions.pending !== null;
@@ -78,7 +72,7 @@ export function SchemaBindingActions({
           title={
             isRuntimeRelease
               ? 'Use this Schema for newly created Workspaces.'
-              : 'Only the registered current release can be bound to a Workspace.'
+              : 'This preview does not have a runtime contract available for binding.'
           }
           type="button"
           variant="canvas-outline"
@@ -99,7 +93,7 @@ export function SchemaBindingActions({
               ? 'Open and save a Workspace before applying a Schema directly.'
               : isRuntimeRelease
                 ? `Bind this Schema to ${actions.workspaceTarget.title}.`
-                : 'Only the registered current release can be bound to a Workspace.'
+                : 'This preview does not have a runtime contract available for binding.'
           }
           type="button"
           variant="default"

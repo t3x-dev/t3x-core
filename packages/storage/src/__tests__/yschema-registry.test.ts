@@ -2,8 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
 import {
+  findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,
+  listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
+  publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
   upsertYSchemaArtifactVersion,
 } from '../queries/yschema-registry';
@@ -105,6 +108,55 @@ describe('YSchema Registry storage', () => {
       compiled_schema_hash: `sha256:${'6'.repeat(64)}`,
     });
     expect(restored?.schemaJson).toMatchObject({ name: 'test/schema', version: 'r2' });
+  });
+
+  it('publishes immutable project versions while retaining exact history', async () => {
+    const canonicalName = `projects/${projectId}/prd`;
+    const publishVersion = (version: string, hashCharacter: string) =>
+      publishYSchemaArtifactVersion(db, {
+        artifact_id: `ysa_project_${projectId}_prd`,
+        artifact_version_id: `ysav_project_${projectId}_${version.replaceAll('.', '_')}`,
+        canonical_name: canonicalName,
+        family: 'prd',
+        kind: 'core',
+        owner_project_id: projectId,
+        visibility: 'private',
+        version,
+        status: 'active',
+        manifest_json: {
+          apiVersion: 't3x.dev/yschema-core/v1',
+          canonicalName,
+          version,
+          status: 'active',
+          schema: { yschema: '0.1', name: canonicalName, version, nodes: {} },
+        },
+        artifact_hash: `sha256:${hashCharacter.repeat(64)}`,
+        path_count: 0,
+        provides: ['document-root'],
+        requires: [],
+      });
+
+    await publishVersion('1.0.0', '8');
+    await publishVersion('1.1.0', '9');
+
+    const history = await listProjectYSchemaVersionHistory(db, {
+      project_id: projectId,
+      family: 'prd',
+      kind: 'core',
+    });
+    expect(history.map((item) => [item.version, item.status])).toEqual([
+      ['1.1.0', 'active'],
+      ['1.0.0', 'deprecated'],
+    ]);
+    expect(history[1]?.manifest).toMatchObject({ version: '1.0.0' });
+
+    const historical = await findYSchemaArtifactVersion(db, {
+      canonical_name: canonicalName,
+      version: '1.0.0',
+      project_id: projectId,
+    });
+    expect(historical?.status).toBe('deprecated');
+    expect(historical?.manifest).toMatchObject({ version: '1.0.0' });
   });
 
   function publishArtifact(input: {

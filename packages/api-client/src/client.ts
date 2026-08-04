@@ -68,8 +68,10 @@ import type {
   PlatformImportResult,
   Project,
   ProjectWithStats,
+  ProjectYSchemaVersionHistory,
   ProposeTransitionInput,
   ProposeTransitionResult,
+  PublishWorkspaceYSchemaCompositionInput,
   RenameConversationInput,
   RenameConversationResult,
   ShareToken,
@@ -85,6 +87,7 @@ import type {
   VerifyTransitionResult,
   Webhook,
   WorkspaceYSchemaCompositionResult,
+  YSchemaArtifactManifest,
   YSchemaArtifactRegistryPage,
   YSchemaCompositionDraft,
   YSchemaCompositionPreview,
@@ -904,6 +907,18 @@ export class T3xClient {
     );
   }
 
+  async listProjectYSchemaVersions(
+    projectId: string,
+    family?: 'prd' | 'prompt' | 'skill'
+  ): Promise<ProjectYSchemaVersionHistory> {
+    return this.request<ProjectYSchemaVersionHistory>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/yschema/versions`,
+      undefined,
+      { family }
+    );
+  }
+
   async previewYSchemaComposition(
     composition: YSchemaCompositionDraft,
     projectId?: string
@@ -955,6 +970,28 @@ export class T3xClient {
         if_revision: input.workspaceRevision,
         composition_revision: input.compositionRevision,
         composition_hash: input.compositionHash,
+      }
+    );
+  }
+
+  async publishWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    input: PublishWorkspaceYSchemaCompositionInput
+  ): Promise<YSchemaArtifactManifest> {
+    return this.request<YSchemaArtifactManifest>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition/publish`,
+      {
+        composition_revision: input.compositionRevision,
+        composition_hash: input.compositionHash,
+        canonical_name: input.canonicalName,
+        version: input.version,
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
       }
     );
   }

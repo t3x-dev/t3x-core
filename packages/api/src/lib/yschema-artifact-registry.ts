@@ -1,5 +1,5 @@
 import type { AnyDB, YSchemaArtifactVersionView } from '@t3x-dev/storage';
-import { listYSchemaArtifactVersions, upsertYSchemaArtifactVersion } from '@t3x-dev/storage';
+import { findYSchemaArtifactVersion, upsertYSchemaArtifactVersion } from '@t3x-dev/storage';
 import {
   builtInPrdCoreArtifact,
   builtInPrdModules,
@@ -46,35 +46,36 @@ export async function resolveCompositionArtifacts(
   projectId?: string
 ): Promise<{ core: YSchemaCoreArtifact; modules: YSchemaModuleManifest[] }> {
   await ensureBuiltInYSchemaArtifacts(db);
-  const page = await listYSchemaArtifactVersions(db, {
-    project_id: projectId,
-    family: composition.family,
-    limit: 100,
-  });
-  const coreView = page.items.find(
-    (item) =>
-      item.kind === 'core' &&
-      item.canonicalName === composition.core.canonicalName &&
-      item.version === composition.core.version
-  );
-  const requestedModules = new Set(
-    composition.modules.map((module) => `${module.canonicalName}@${module.version}`)
-  );
+  const [coreView, ...moduleViews] = await Promise.all([
+    findYSchemaArtifactVersion(db, {
+      canonical_name: composition.core.canonicalName,
+      version: composition.core.version,
+      project_id: projectId,
+    }),
+    ...composition.modules.map((module) =>
+      findYSchemaArtifactVersion(db, {
+        canonical_name: module.canonicalName,
+        version: module.version,
+        project_id: projectId,
+      })
+    ),
+  ]);
   return {
     core: (coreView?.manifest ?? builtInPrdCoreArtifact) as unknown as YSchemaCoreArtifact,
-    modules: page.items
-      .filter(
-        (item) =>
-          item.kind === 'module' && requestedModules.has(`${item.canonicalName}@${item.version}`)
-      )
-      .map((item) => item.manifest as unknown as YSchemaModuleManifest),
+    modules: moduleViews.flatMap((item) =>
+      item?.kind === 'module' ? [item.manifest as unknown as YSchemaModuleManifest] : []
+    ),
   };
 }
 
 export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record<string, unknown> {
   return {
     ...view.manifest,
+    canonicalName: view.canonicalName,
+    version: view.version,
+    status: view.status,
     artifactHash: view.artifactHash,
+    updatedAt: view.createdAt.toISOString(),
     visibility: view.visibility,
     ownerProjectId: view.ownerProjectId,
     versions: view.versions.map((version) => ({

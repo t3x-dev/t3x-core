@@ -1038,6 +1038,10 @@ export interface YSchemaArtifactRegistryPage {
   has_more: boolean;
 }
 
+export interface ProjectYSchemaVersionHistory {
+  items: YSchemaArtifactManifest[];
+}
+
 export interface ListYSchemaArtifactsParams {
   projectId?: string;
   family?: 'prd' | 'prompt' | 'skill';
@@ -1093,4 +1097,14 @@ export interface WorkspaceYSchemaCompositionResult {
   workspaceRevision: number;
   preview?: YSchemaCompositionPreview;
   binding?: Record<string, unknown>;
+}
+
+export interface PublishWorkspaceYSchemaCompositionInput {
+  compositionRevision: number;
+  compositionHash: string;
+  canonicalName: string;
+  version: string;
+  title: string;
+  description?: string;
+  releaseNotes?: string;
 }
