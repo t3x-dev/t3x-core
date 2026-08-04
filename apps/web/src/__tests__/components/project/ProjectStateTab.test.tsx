@@ -970,7 +970,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('Source Chat')).toBeInTheDocument();
   });
 
-  it('keeps an inspectable generic reader for unregistered schemas', async () => {
+  it('renders unregistered schemas as an inspectable document instead of a generic card', async () => {
     const genericCommit: ApiCommit = {
       ...PRD_COMMIT,
       content: {
@@ -1000,16 +1000,13 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('Add device state');
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(screen.getByRole('region', { name: 'Schema render' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Device' })).toBeInTheDocument();
+    expect(screen.getAllByText('Platform')).not.toHaveLength(0);
+    expect(screen.getByText('esphome')).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'Generic structured state render' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'No specialized reader is registered; committed nodes remain fully inspectable.'
-      )
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('device')).not.toHaveLength(0);
-    expect(screen.queryByRole('region', { name: 'Schema render' })).not.toBeInTheDocument();
+      screen.queryByRole('region', { name: 'Generic structured state render' })
+    ).not.toBeInTheDocument();
   });
 
   it('initializes a new branch from main without inventing a schema binding', async () => {

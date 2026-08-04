@@ -18,7 +18,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
-import { StateGenericReader } from '@/components/project/StateGenericReader';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -337,7 +336,7 @@ export function ProjectStateTab({
   const readerKind = resolveStateReaderKind(schemaName);
   const prdRenderModel = useMemo(
     () =>
-      headCommit && readerKind === 'prd'
+      headCommit && (readerKind === 'prd' || readerKind === 'generic')
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
@@ -624,13 +623,6 @@ export function ProjectStateTab({
                       schemaName={schemaName}
                       validationGapCount={validationIssueCount}
                       validationReady={validationReady}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
-                  {activeView === 'render' && readerKind === 'generic' ? (
-                    <StateGenericReader
-                      rows={pointRows}
-                      schemaName={schemaName}
                       yamlText={yamlText}
                     />
                   ) : null}
