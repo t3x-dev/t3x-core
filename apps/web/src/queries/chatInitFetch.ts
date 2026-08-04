@@ -12,8 +12,11 @@ import { getConversation } from '@/infrastructure/conversations';
 import { listTopics, type Topic } from '@/infrastructure/topics';
 import type { Conversation } from '@/infrastructure/types';
 
-export async function fetchCommitForInheritance(hash: string): Promise<ApiCommit> {
-  return getApiCommit(hash);
+export async function fetchCommitForInheritance(
+  hash: string,
+  projectId?: string
+): Promise<ApiCommit> {
+  return getApiCommit(hash, projectId);
 }
 
 export async function fetchConversationMeta(convId: string): Promise<Conversation | null> {

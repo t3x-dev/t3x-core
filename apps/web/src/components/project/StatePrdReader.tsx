@@ -81,6 +81,7 @@ export function StatePrdReader({
   validationReady,
   yamlText,
 }: StatePrdReaderProps) {
+  const rootKey = model.rootKey || 'prd';
   const [mode, setMode] = useState<ReaderMode>('rendered');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('node');
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -263,7 +264,7 @@ export function StatePrdReader({
       <header className="flex min-h-[55px] shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="truncate font-mono text-[11px] font-semibold text-[var(--text-secondary)]">
-            prd <span className="text-[var(--text-tertiary)]">/</span>{' '}
+            {rootKey} <span className="text-[var(--text-tertiary)]">/</span>{' '}
             <span className="text-[var(--text-primary)]">{model.title}</span>
           </span>
           <Badge variant={validationReady ? 'success' : 'warning'}>{validationLabel}</Badge>
@@ -393,7 +394,7 @@ export function StatePrdReader({
           <StateScrollArea
             className="min-h-0 min-w-0 bg-[var(--surface-card)]"
             horizontal
-            label="Rendered PRD document"
+            label={schemaName === 't3x/prd' ? 'Rendered PRD document' : 'Rendered state document'}
             ref={documentScrollerRef}
           >
             <PrdDocument
@@ -435,7 +436,7 @@ export function StatePrdReader({
         >
           <header className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[var(--text-tertiary)]/20 bg-[var(--surface-code)] px-4">
             <span className="font-mono text-[11px] font-semibold text-[var(--text-code)]">
-              prd.yaml
+              {rootKey}.yaml
             </span>
             <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
               HEAD · {model.changes.length} YOps applied
@@ -475,6 +476,7 @@ function PrdDocument({
   validationGapCount: number;
   validationReady: boolean;
 }) {
+  const isPrdDocument = schemaName === 't3x/prd';
   return (
     <article className="mx-auto w-[min(1080px,calc(100%-56px))] py-10 max-md:w-[calc(100%-32px)] max-md:py-7">
       <header
@@ -482,13 +484,19 @@ function PrdDocument({
         data-prd-node="document"
       >
         <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-          Product requirements document{model.documentId ? ` · ${model.documentId}` : ''}
+          {isPrdDocument ? 'Product requirements document' : 'Structured state document'}
+          {model.documentId ? ` · ${model.documentId}` : ''}
         </p>
         <h1 className="mt-2.5 max-w-[820px] text-[31px] font-bold leading-[1.2] tracking-[-0.032em] text-[var(--text-primary)]">
           {model.title}
         </h1>
         <p className="mt-3.5 max-w-[820px] text-[15.5px] leading-[1.72] text-[var(--text-secondary)]">
-          {model.lede || model.outcome || model.problem || 'Materialized product requirements.'}
+          {model.lede ||
+            model.outcome ||
+            model.problem ||
+            (isPrdDocument
+              ? 'Materialized product requirements.'
+              : 'Materialized structured state.')}
         </p>
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-[var(--text-tertiary)]">
           <span>{model.schemaVersion || schemaName}</span>
@@ -502,64 +510,69 @@ function PrdDocument({
         </div>
       </header>
 
-      <section className="border-b border-[var(--stroke-divider)] py-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-              Executive summary
-            </p>
-            <h2 className="mt-2 text-[21px] font-bold leading-[1.35] tracking-[-0.02em] text-[var(--text-primary)]">
-              Problem, audience, and intended outcome
-            </h2>
+      {isPrdDocument ? (
+        <section className="border-b border-[var(--stroke-divider)] py-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                Executive summary
+              </p>
+              <h2 className="mt-2 text-[21px] font-bold leading-[1.35] tracking-[-0.02em] text-[var(--text-primary)]">
+                Problem, audience, and intended outcome
+              </h2>
+            </div>
+            <Badge variant={validationReady ? 'success' : 'warning'}>
+              {validationReady
+                ? 'Review ready'
+                : validationGapCount > 0
+                  ? `${validationGapCount} gaps`
+                  : 'Review pending'}
+            </Badge>
           </div>
-          <Badge variant={validationReady ? 'success' : 'warning'}>
-            {validationReady
-              ? 'Review ready'
-              : validationGapCount > 0
-                ? `${validationGapCount} gaps`
-                : 'Review pending'}
-          </Badge>
-        </div>
-        <div className="mt-4 grid border-y border-[var(--stroke-divider)] md:grid-cols-3">
-          <SummaryCell
-            evidenceIds={evidenceIdsForPath(model, 'summary/problem')}
-            label="Problem"
-            nodeId="summary-problem"
-            onInspectEvidence={onInspectEvidence}
-            onSelectNode={onSelectNode}
-            value={model.problem || 'No problem statement provided.'}
-          />
-          <SummaryCell
-            evidenceIds={evidenceIdsForPath(model, 'summary/audience')}
-            label="Audience"
-            missing={model.audienceMissing}
-            nodeId="summary-audience"
-            onInspectEvidence={onInspectEvidence}
-            onSelectNode={onSelectNode}
-            value={model.audience || 'This field is required by the schema.'}
-          />
-          <SummaryCell
-            evidenceIds={evidenceIdsForPath(model, 'summary/outcome')}
-            label="Outcome"
-            nodeId="summary-outcome"
-            onInspectEvidence={onInspectEvidence}
-            onSelectNode={onSelectNode}
-            value={model.outcome || 'No outcome specified.'}
-          />
-        </div>
-      </section>
+          <div className="mt-4 grid border-y border-[var(--stroke-divider)] md:grid-cols-3">
+            <SummaryCell
+              evidenceIds={evidenceIdsForPath(model, 'summary/problem')}
+              label="Problem"
+              nodeId="summary-problem"
+              onInspectEvidence={onInspectEvidence}
+              onSelectNode={onSelectNode}
+              value={model.problem || 'No problem statement provided.'}
+            />
+            <SummaryCell
+              evidenceIds={evidenceIdsForPath(model, 'summary/audience')}
+              label="Audience"
+              missing={model.audienceMissing}
+              nodeId="summary-audience"
+              onInspectEvidence={onInspectEvidence}
+              onSelectNode={onSelectNode}
+              value={model.audience || 'This field is required by the schema.'}
+            />
+            <SummaryCell
+              evidenceIds={evidenceIdsForPath(model, 'summary/outcome')}
+              label="Outcome"
+              nodeId="summary-outcome"
+              onInspectEvidence={onInspectEvidence}
+              onSelectNode={onSelectNode}
+              value={model.outcome || 'No outcome specified.'}
+            />
+          </div>
+        </section>
+      ) : null}
 
-      <RequirementsSection
-        model={model}
-        onInspectEvidence={onInspectEvidence}
-        onSelectNode={onSelectNode}
-        sectionNumber={1}
-        selectedNodeId={selectedNodeId}
-      />
+      {isPrdDocument ? (
+        <RequirementsSection
+          model={model}
+          onInspectEvidence={onInspectEvidence}
+          onSelectNode={onSelectNode}
+          sectionNumber={1}
+          selectedNodeId={selectedNodeId}
+        />
+      ) : null}
 
       {model.sections.map((section, index) => (
         <StructuredSection
-          index={index + 2}
+          alwaysExpanded={!isPrdDocument}
+          index={index + (isPrdDocument ? 2 : 1)}
           key={section.key}
           model={model}
           nodeId={`section-${String(index)}`}
@@ -626,6 +639,7 @@ function SummaryCell({
 }
 
 function StructuredSection({
+  alwaysExpanded = false,
   index,
   model,
   nodeId,
@@ -634,6 +648,7 @@ function StructuredSection({
   section,
   selected,
 }: {
+  alwaysExpanded?: boolean;
   index: number;
   model: PrdRenderModel;
   nodeId: string;
@@ -670,7 +685,7 @@ function StructuredSection({
         </h2>
         <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
       </div>
-      {selected ? (
+      {selected || alwaysExpanded ? (
         <div className="mt-4">
           <StructuredValue value={section.value} />
         </div>
@@ -972,6 +987,7 @@ function PrdOutline({
   open: boolean;
   selectedNodeId: string;
 }) {
+  const isPrdDocument = (model.rootKey || 'prd') === 'prd';
   const groups: PrdOutlineNode['group'][] = ['document', 'summary', 'requirements', 'optional'];
   const labels: Record<PrdOutlineNode['group'], string> = {
     document: 'Document',
@@ -999,9 +1015,12 @@ function PrdOutline({
             </Button>
           </header>
           <p className="truncate px-2 font-mono text-[9px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-            {model.documentId || 'prd'}
+            {model.documentId || model.rootKey || 'prd'}
           </p>
-          <nav className="mt-3" aria-label="PRD semantic nodes">
+          <nav
+            className="mt-3"
+            aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
+          >
             {groups.map((group) => {
               const groupNodes = nodes.filter((node) => node.group === group);
               if (groupNodes.length === 0) return null;
@@ -1076,9 +1095,10 @@ function PrdInspector({
   validationLabel: string;
   validationReady: boolean;
 }) {
+  const isPrdDocument = (model.rootKey || 'prd') === 'prd';
   return (
     <aside
-      aria-label="PRD inspector"
+      aria-label={isPrdDocument ? 'PRD inspector' : 'State document inspector'}
       className={cn(
         'z-30 min-h-0 min-w-0 flex-col overflow-hidden border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
         inspectorOpen
@@ -1119,7 +1139,10 @@ function PrdInspector({
         </Button>
       </header>
 
-      <StateScrollArea className="min-h-0 flex-1" label="PRD inspector content">
+      <StateScrollArea
+        className="min-h-0 flex-1"
+        label={isPrdDocument ? 'PRD inspector content' : 'State document inspector content'}
+      >
         {activeTab === 'node' ? (
           <NodeInspector
             model={model}
@@ -1154,7 +1177,9 @@ function NodeInspector({
   validationLabel: string;
   validationReady: boolean;
 }) {
-  const criteriaApplicable = node.type === 'Document' || node.type === 'Requirement';
+  const isPrdDocument = (model.rootKey || 'prd') === 'prd';
+  const criteriaApplicable =
+    (node.type === 'Document' && isPrdDocument) || node.type === 'Requirement';
   const criteriaStatus =
     node.acceptanceCount > 0 ? 'Present' : criteriaApplicable ? 'Missing' : 'Not applicable';
   return (
@@ -1187,7 +1212,10 @@ function NodeInspector({
           <InspectorDefinition label="Identity" mono value={node.identity} />
           <InspectorDefinition label="Cardinality" value={node.cardinality} />
           <InspectorDefinition label="Required" value={node.required ? 'Yes' : 'No'} />
-          <InspectorDefinition label="Render" value="PRD document" />
+          <InspectorDefinition
+            label="Render"
+            value={isPrdDocument ? 'PRD document' : 'Structured state document'}
+          />
         </dl>
       </section>
 
@@ -1491,17 +1519,23 @@ function acceptanceCriteria(value: string): string[] {
 }
 
 function buildOutlineNodes(model: PrdRenderModel): PrdOutlineNode[] {
+  const rootKey = model.rootKey || 'prd';
+  const isPrdDocument = rootKey === 'prd';
   return [
-    { group: 'document', id: 'document', label: model.title, meta: model.documentId || 'prd' },
-    { group: 'summary', id: 'summary-problem', label: 'Problem' },
-    { group: 'summary', id: 'summary-audience', label: 'Audience' },
-    { group: 'summary', id: 'summary-outcome', label: 'Outcome' },
-    ...model.requirements.map((requirement, index) => ({
-      group: 'requirements' as const,
-      id: `requirement-${String(index)}`,
-      label: requirement.title,
-      meta: requirement.key || `R-${String(index + 1).padStart(2, '0')}`,
-    })),
+    { group: 'document', id: 'document', label: model.title, meta: model.documentId || rootKey },
+    ...(isPrdDocument
+      ? [
+          { group: 'summary' as const, id: 'summary-problem', label: 'Problem' },
+          { group: 'summary' as const, id: 'summary-audience', label: 'Audience' },
+          { group: 'summary' as const, id: 'summary-outcome', label: 'Outcome' },
+          ...model.requirements.map((requirement, index) => ({
+            group: 'requirements' as const,
+            id: `requirement-${String(index)}`,
+            label: requirement.title,
+            meta: requirement.key || `R-${String(index + 1).padStart(2, '0')}`,
+          })),
+        ]
+      : []),
     ...model.sections.map((section, index) => ({
       group: 'optional' as const,
       id: `section-${String(index)}`,
@@ -1515,6 +1549,8 @@ function buildOutlineNodes(model: PrdRenderModel): PrdOutlineNode[] {
 }
 
 function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelectedNode {
+  const rootKey = model.rootKey || 'prd';
+  const isPrdDocument = rootKey === 'prd';
   if (
     nodeId === 'summary-problem' ||
     nodeId === 'summary-audience' ||
@@ -1527,7 +1563,7 @@ function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelected
       description: `Schema-backed ${key} field rendered in the executive summary.`,
       identity: key,
       label: humanizeKey(key),
-      path: `prd/summary/${key}`,
+      path: `${rootKey}/summary/${key}`,
       required: true,
       type: key === 'audience' ? 'Text or list slot' : 'String slot',
     };
@@ -1545,7 +1581,7 @@ function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelected
           requirement.description || 'A schema-backed requirement in the materialized PRD.',
         identity,
         label: `${identity} · ${requirement.title}`,
-        path: `prd/requirements/${requirement.key || String(requirementIndex)}`,
+        path: `${rootKey}/requirements/${requirement.key || String(requirementIndex)}`,
         required: true,
         type: 'Requirement',
       };
@@ -1562,7 +1598,7 @@ function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelected
         description: `Optional ${section.title.toLowerCase()} section materialized from committed state.`,
         identity: section.key,
         label: section.title,
-        path: `prd/${section.key}`,
+        path: `${rootKey}/${section.key}`,
         required: false,
         type: 'Section',
       };
@@ -1573,10 +1609,10 @@ function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelected
     return {
       acceptanceCount: 0,
       cardinality: 'Zero or one',
-      description: 'Versioning and source metadata attached to the PRD document.',
+      description: `Versioning and source metadata attached to the ${isPrdDocument ? 'PRD' : 'state'} document.`,
       identity: 'metadata',
       label: 'Document metadata',
-      path: 'prd/metadata',
+      path: `${rootKey}/metadata`,
       required: false,
       type: 'Metadata section',
     };
@@ -1588,10 +1624,12 @@ function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelected
       0
     ),
     cardinality: 'Exactly one',
-    description: 'Root document node rendered as the committed product requirements document.',
-    identity: model.documentId || 'prd',
+    description: isPrdDocument
+      ? 'Root document node rendered as the committed product requirements document.'
+      : 'Root document node rendered from committed structured state.',
+    identity: model.documentId || rootKey,
     label: model.title,
-    path: 'prd',
+    path: rootKey,
     required: true,
     type: 'Document',
   };

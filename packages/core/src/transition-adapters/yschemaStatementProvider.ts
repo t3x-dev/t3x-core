@@ -15,6 +15,7 @@ import {
   type YSchema,
   type YSchemaRelation,
 } from '@t3x-dev/yschema';
+import { treesToYValue } from '../t3x-yops/convert';
 import {
   buildYSchemaValidationStatement,
   type ProfileBinding,
@@ -27,6 +28,7 @@ import {
   type YSchemaValidationPredicate,
   type YSchemaValidationStatement,
 } from '../transition-statements';
+import { decodeRepositorySemanticState } from './semanticMergeDriver';
 import { YOPS_STATE_CODEC_VERSION, YOPS_STATE_MEDIA_TYPE, yopsStateCodec } from './stateCodec';
 
 export const YSCHEMA_NATIVE_PROFILE: Readonly<ProfileBinding> = Object.freeze({
@@ -51,6 +53,17 @@ export interface YSchemaStatementProviderInput {
   run: RunBinding;
 }
 
+export interface RepositorySemanticYSchemaStatementProviderInput
+  extends YSchemaStatementProviderInput {
+  rootKey: string;
+}
+
+interface YSchemaContextDescriptorInput {
+  relations?: YSchemaRelation[];
+  provenanceByPath?: ProvenanceIndex;
+  rootKey?: string;
+}
+
 function profileIsSupported(profile: ProfileBinding): boolean {
   return profile.id === YSCHEMA_PROFILE_ID && profile.version === YSCHEMA_PROFILE_VERSION;
 }
@@ -70,7 +83,7 @@ export function createYSchemaResourceDescriptor(uri: string, schema: YSchema): R
 
 export function createYSchemaContextDescriptor(
   uri: string,
-  context: Pick<YSchemaStatementProviderInput, 'relations' | 'provenanceByPath'>
+  context: YSchemaContextDescriptorInput
 ): ResourceDescriptor {
   return {
     uri,
@@ -78,6 +91,7 @@ export function createYSchemaContextDescriptor(
     digest: digestCanonicalResource({
       relations: (context.relations ?? []) as unknown as ProtocolValue,
       provenanceByPath: (context.provenanceByPath ?? {}) as unknown as ProtocolValue,
+      ...(context.rootKey === undefined ? {} : { rootKey: context.rootKey }),
     }),
   };
 }
@@ -101,8 +115,12 @@ function normalizedNativeResult(result: ValidationResult): ValidationResult {
   ) as ValidationResult;
 }
 
-function hasExternalContext(input: YSchemaStatementProviderInput): boolean {
-  return (input.relations?.length ?? 0) > 0 || Object.keys(input.provenanceByPath ?? {}).length > 0;
+function hasExternalContext(input: YSchemaStatementProviderInput & { rootKey?: string }): boolean {
+  return (
+    (input.relations?.length ?? 0) > 0 ||
+    Object.keys(input.provenanceByPath ?? {}).length > 0 ||
+    input.rootKey !== undefined
+  );
 }
 
 function assertSupportedState(state: State): void {
@@ -121,8 +139,9 @@ function assertSupportedState(state: State): void {
  * validated State. The caller supplies run/time metadata; this provider reads
  * no clock, random source, storage, network, or repository head.
  */
-export function runYSchemaStatementProvider(
-  input: YSchemaStatementProviderInput
+function runYSchemaStatementProviderForTree(
+  input: YSchemaStatementProviderInput & { rootKey?: string },
+  resolveTree: () => ValidationInput['tree']
 ): YSchemaValidationStatement {
   const profile = input.profile ?? YSCHEMA_NATIVE_PROFILE;
   assertResourceBinding(
@@ -160,7 +179,7 @@ export function runYSchemaStatementProvider(
 
   if (input.context.mode === 'unspecified' && hasExternalContext(input)) {
     throw new SchemaInvalidError(
-      'Relations or provenance require a bound validation context resource',
+      'Relations, provenance, or semantic root selection require a bound validation context resource',
       '$.context'
     );
   }
@@ -169,7 +188,7 @@ export function runYSchemaStatementProvider(
 
   const result = normalizedNativeResult(
     validateTree({
-      tree: yopsStateCodec.decode(input.state.value) as ValidationInput['tree'],
+      tree: resolveTree(),
       relations: input.relations,
       schema: input.schema,
       provenanceByPath: input.provenanceByPath,
@@ -190,4 +209,54 @@ export function runYSchemaStatementProvider(
     actor: input.actor,
     predicate,
   });
+}
+
+/**
+ * Select the schema-bound root from an explicit repository SemanticContent
+ * State. Root selection is exact so validation never guesses another State
+ * shape or silently validates an unrelated tree.
+ */
+export function repositorySemanticYSchemaTree(
+  state: State,
+  rootKey: string
+): ValidationInput['tree'] {
+  const normalizedRootKey = rootKey.trim();
+  if (!normalizedRootKey) {
+    throw new SchemaInvalidError('Repository semantic YSchema root key is required', '$.rootKey');
+  }
+  const content = decodeRepositorySemanticState(state);
+  const matches = content.trees.filter((tree) => tree.key === normalizedRootKey);
+  if (matches.length !== 1) {
+    throw new SchemaInvalidError(
+      `Repository semantic State must contain exactly one ${normalizedRootKey} root tree`,
+      '$.state.value.content.trees'
+    );
+  }
+  const wrapped = treesToYValue(matches);
+  if (wrapped === null || typeof wrapped !== 'object' || Array.isArray(wrapped)) {
+    throw new SchemaInvalidError(
+      'Repository semantic root tree could not be converted to YSchema input',
+      '$.state.value.content.trees'
+    );
+  }
+  return wrapped[normalizedRootKey] as ValidationInput['tree'];
+}
+
+/** Execute native YSchema against a repository SemanticContent root. */
+export function runRepositorySemanticYSchemaStatementProvider(
+  input: RepositorySemanticYSchemaStatementProviderInput
+): YSchemaValidationStatement {
+  return runYSchemaStatementProviderForTree(input, () =>
+    repositorySemanticYSchemaTree(input.state, input.rootKey)
+  );
+}
+
+/** Execute native YSchema against a generic YOps State document. */
+export function runYSchemaStatementProvider(
+  input: YSchemaStatementProviderInput
+): YSchemaValidationStatement {
+  return runYSchemaStatementProviderForTree(
+    input,
+    () => yopsStateCodec.decode(input.state.value) as ValidationInput['tree']
+  );
 }

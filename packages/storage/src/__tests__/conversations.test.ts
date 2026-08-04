@@ -7,7 +7,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommit, hasConversationCommitReferences } from '../queries/commits';
 import {
   ConversationHistoryReferencedError,
   deleteConversation,
@@ -22,6 +21,8 @@ import {
   updateConversation,
 } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
+import { seedDemoWorkspace } from '../queries/seed-demo-workspace';
+import { hasConversationSourceCommitReferences } from '../queries/source-evidence-references';
 import { insertTurn } from '../queries/turns';
 import { type Conversation, conversations } from '../schema';
 import { createTestDB, testData } from './setup';
@@ -401,17 +402,9 @@ describe('Conversations Storage', () => {
       await expect(findConversationById(db, created.conversationId)).resolves.not.toBeNull();
     });
 
-    it('refuses to cascade-delete a conversation referenced by immutable commit sources', async () => {
-      const created = await insertConversation(
-        db,
-        testData.conversation(testProjectId, { title: 'Referenced Source' })
-      );
-      await createCommit(db, {
-        project_id: testProjectId,
-        author: { type: 'human', name: 'Tester' },
-        content: { trees: [], relations: [] },
-        sources: [{ type: 'conversation', id: created.conversationId }],
-      });
+    it('refuses to cascade-delete a conversation referenced by immutable CommitV2 evidence', async () => {
+      const seeded = await seedDemoWorkspace(db, { ownerId: 'conversation-delete-guard' });
+      const created = seeded.conversation!;
 
       await expect(deleteConversation(db, created.conversationId)).rejects.toBeInstanceOf(
         ConversationHistoryReferencedError
@@ -420,43 +413,33 @@ describe('Conversations Storage', () => {
     });
   });
 
-  describe('hasConversationCommitReferences', () => {
-    it('returns true when a commit source references the conversation', async () => {
-      const conversation = await insertConversation(
-        db,
-        testData.conversation(testProjectId, { title: 'Committed Source' })
-      );
+  describe('hasConversationSourceCommitReferences', () => {
+    it('returns true when CommitV2 evidence references the conversation', async () => {
+      const seeded = await seedDemoWorkspace(db, { ownerId: 'conversation-reference-check' });
+      const conversation = seeded.conversation!;
 
-      await createCommit(db, {
-        project_id: testProjectId,
-        author: { type: 'human', name: 'Tester' },
-        content: {
-          trees: [{ key: 'source', slots: { text: 'Conversation source' }, children: [] }],
-          relations: [],
-        },
-        sources: [
-          {
-            type: 'conversation',
-            id: conversation.conversationId,
-            title: conversation.title ?? undefined,
-          },
-        ],
-      });
-
-      await expect(hasConversationCommitReferences(db, conversation.conversationId)).resolves.toBe(
-        true
-      );
+      await expect(
+        hasConversationSourceCommitReferences(
+          db,
+          conversation.projectId,
+          conversation.conversationId
+        )
+      ).resolves.toBe(true);
     });
 
-    it('returns false when no commit source references the conversation', async () => {
+    it('returns false when no CommitV2 evidence references the conversation', async () => {
       const conversation = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Uncommitted Source' })
       );
 
-      await expect(hasConversationCommitReferences(db, conversation.conversationId)).resolves.toBe(
-        false
-      );
+      await expect(
+        hasConversationSourceCommitReferences(
+          db,
+          conversation.projectId,
+          conversation.conversationId
+        )
+      ).resolves.toBe(false);
     });
   });
 

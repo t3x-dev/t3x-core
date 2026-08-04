@@ -86,6 +86,7 @@ test.describe('DiffDisplayView Full E2E', () => {
         branch: 'main',
         message: 'Initial requirements',
         parents: [],
+        expected_head: null,
         content: {
           trees: [
             {
@@ -115,7 +116,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    commit1Hash = commit1Data.data.commit.hash;
+    commit1Hash = commit1Data.data.commit.digest;
 
     // 7. Create second commit with modified frames
     const commit2Res = await request.post(`${API_BASE}/commits`, {
@@ -124,6 +125,7 @@ test.describe('DiffDisplayView Full E2E', () => {
         branch: 'main',
         message: 'Updated requirements',
         parents: [commit1Hash],
+        expected_head: commit1Hash,
         content: {
           trees: [
             {
@@ -154,14 +156,14 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    commit2Hash = commit2Data.data.commit.hash;
+    commit2Hash = commit2Data.data.commit.digest;
   });
 
   test('API data is correct', async ({ request }) => {
     // Verify commits have correct data
     const [res1, res2] = await Promise.all([
-      request.get(`${API_BASE}/commits/${commit1Hash}`),
-      request.get(`${API_BASE}/commits/${commit2Hash}`),
+      request.get(`${API_BASE}/commits/${commit1Hash}?project_id=${projectId}`),
+      request.get(`${API_BASE}/commits/${commit2Hash}?project_id=${projectId}`),
     ]);
 
     const data1 = await res1.json();
@@ -211,7 +213,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     expect(hasCommitContent).toBe(true);
   });
 
-  test('Can open commit modal with View full', async ({ page }) => {
+  test('Commit cards expose Canvas actions without View full or a details modal', async ({ page }) => {
     // Navigate directly to project canvas view
     await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
@@ -227,31 +229,12 @@ test.describe('DiffDisplayView Full E2E', () => {
     await nodes.first().click();
     const sidebar = page.locator('aside').first();
     await sidebar.waitFor({ state: 'visible', timeout: 10000 });
-
-    // Find View full button
-    const viewFullBtn = page.getByText('View full').first();
-    const hasViewFull = await viewFullBtn.isVisible({ timeout: 5_000 }).catch(() => false);
-
-    if (hasViewFull) {
-      await viewFullBtn.click();
-
-      // Wait for modal to open (check for modal header)
-      const modalHeader = page.locator('text=Commit:');
-      const modalOpened = await modalHeader.isVisible({ timeout: 5000 });
-
-      // Screenshot
-      await page.screenshot({ path: 'test-results/diff-full-modal.png' });
-
-      // Check for Compare section (UI shows "COMPARE" in uppercase)
-      const hasCompare = await page.locator('text=COMPARE').isVisible();
-      const hasCompareBtn = await page.locator('text=Compare with').isVisible();
-
-      expect(hasCompare || hasCompareBtn || modalOpened).toBe(true);
-    } else {
-      // Current canvas opens the commit detail sidebar directly from the node.
-      await expect(sidebar).toBeVisible();
-      await page.screenshot({ path: 'test-results/diff-full-modal-sources.png' });
-    }
+    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(page.getByText('View full', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+    await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.screenshot({ path: 'test-results/diff-full-canvas-selection.png' });
   });
 
   test('Can run diff comparison', async ({ page }) => {

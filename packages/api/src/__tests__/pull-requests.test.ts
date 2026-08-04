@@ -1,19 +1,21 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
+import { createYOpsState, yvalueToTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
+  createMaterial,
   findBranchByName,
-  getCommit,
   getMergeDraft,
   insertBranch,
   insertProject,
-  listCommits,
-  updateBranchHead,
+  listCommitHistory,
+  upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
+import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
+import { commitSemanticFixture } from './transition-fixture';
 
 type ApiResponse = any;
 
@@ -25,6 +27,12 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import {
+  commitRepositoryYOpsMerge,
+  commitRepositoryYOpsState,
+  getRepositorySemanticCommit,
+} from '../lib/repository-state-transition';
+import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
@@ -43,20 +51,126 @@ describe('Pull request routes', () => {
     await cleanup();
   });
 
+  async function createRepositoryCommit(input: {
+    projectId: string;
+    branch: string;
+    content: Parameters<typeof commitSemanticFixture>[1]['content'];
+    message: string;
+  }) {
+    const committed = await commitSemanticFixture(mockDB, {
+      projectId: input.projectId,
+      refName: input.branch,
+      content: input.content,
+      intent: input.message,
+    });
+    return {
+      hash: committed.commitDigest,
+      content: input.content,
+      branch: input.branch,
+    };
+  }
+
+  async function createWorkspaceCommit(input: {
+    projectId: string;
+    branch: string;
+    workspaceId: string;
+    candidate: typeof t3xPrdP0Fixtures.validCandidateTree;
+  }) {
+    const material = await createMaterial(mockDB, {
+      project_id: input.projectId,
+      source_type: 'document',
+      title: `Source ${input.workspaceId}`,
+      content_text: `Source evidence for ${input.workspaceId}`,
+      content_hash: `sha256:${input.workspaceId}`,
+    });
+    const draft = await upsertWorkspaceDraft(mockDB, {
+      project_id: input.projectId,
+      workspace_id: input.workspaceId,
+      title: `Workspace ${input.workspaceId}`,
+      target_branch: input.branch,
+      workspace_state: {
+        id: input.workspaceId,
+        projectId: input.projectId,
+        title: `Workspace ${input.workspaceId}`,
+        targetBranch: input.branch,
+        schemaBindings: [
+          {
+            canonicalName: 't3x/prd',
+            version: t3xPrdP0Fixtures.normalizedYSchema.version,
+            mode: 'pinned',
+          },
+        ],
+        sourceBundle: [
+          {
+            id: `material:${material.id}`,
+            type: 'document',
+            materialId: material.id,
+            contentHash: material.content_hash,
+          },
+        ],
+      },
+    });
+    const content = {
+      trees: yvalueToTrees({ prd: structuredClone(input.candidate) }),
+      relations: [],
+    };
+    const actor = { kind: 'human' as const, id: 'human:workspace-pr-test' };
+    const reviewed = await reviewWorkspaceTransition(mockDB, {
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      content,
+      why: `Commit ${input.workspaceId}`,
+      expectedRevision: draft.revision,
+      actor,
+    });
+    const decided = await decideWorkspaceTransition(mockDB, {
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      content,
+      why: `Commit ${input.workspaceId}`,
+      outcome: 'accepted',
+      precondition: reviewed.precondition,
+      actor,
+    });
+    if (!decided.commit) throw new Error('Workspace fixture did not create a CommitV2');
+    return decided;
+  }
+
+  async function mergeRepositoryBranches(input: {
+    projectId: string;
+    sourceHash: string;
+    targetHash: string;
+    branch?: string;
+  }) {
+    return commitRepositoryYOpsMerge({
+      db: mockDB,
+      projectId: input.projectId,
+      refName: input.branch ?? 'main',
+      sourceDigest: input.sourceHash,
+      targetDigest: input.targetHash,
+      decisions: {
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      },
+      actor: { kind: 'human', id: 'human:test' },
+      message: 'test merge',
+    });
+  }
+
   async function createBranchFixture(options: { conflict?: boolean } = {}) {
     const project = await insertProject(mockDB, testData.project({ name: 'PR route test' }));
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
-    const target = await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', name: 'Test User' },
+    const target = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'main',
       content: {
         trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
         relations: [],
       },
-      project_id: project.projectId,
       message: 'main baseline',
-      branch: 'main',
-      enforceBranchLinearity: true,
     });
 
     await insertBranch(mockDB, {
@@ -65,9 +179,9 @@ describe('Pull request routes', () => {
       parentBranch: 'main',
       description: 'Feature PR flow',
     });
-    const source = await createCommit(mockDB, {
-      parents: [target.hash],
-      author: { type: 'human', name: 'Test User' },
+    const source = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'feature/pr-flow',
       content: {
         trees: [
           {
@@ -79,24 +193,17 @@ describe('Pull request routes', () => {
         ],
         relations: [],
       },
-      project_id: project.projectId,
       message: 'feature update',
-      branch: 'feature/pr-flow',
-      sources: [{ type: 'import', id: 'spec_1' }],
-      enforceBranchLinearity: true,
     });
     const targetHead = options.conflict
-      ? await createCommit(mockDB, {
-          parents: [target.hash],
-          author: { type: 'human', name: 'Target User' },
+      ? await createRepositoryCommit({
+          projectId: project.projectId,
+          branch: 'main',
           content: {
             trees: [{ key: 'product', slots: { version: 3 }, children: [] }],
             relations: [],
           },
-          project_id: project.projectId,
           message: 'conflicting main update',
-          branch: 'main',
-          enforceBranchLinearity: true,
         })
       : target;
     return { projectId: project.projectId, source, target: targetHead };
@@ -153,27 +260,26 @@ describe('Pull request routes', () => {
     ]);
   });
 
-  it('repairs a legacy main branch before listing pull request comparisons', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'Legacy PR project' }));
-    const target = await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', name: 'Legacy User' },
+  it('keeps the main branch head before listing pull request comparisons', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Main PR project' }));
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    const target = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'main',
       content: {
         trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
         relations: [],
       },
-      project_id: project.projectId,
-      message: 'legacy main baseline',
-      branch: 'main',
+      message: 'main baseline',
     });
     await insertBranch(mockDB, {
       projectId: project.projectId,
       name: 'feature/pr-flow',
       parentBranch: 'main',
     });
-    await createCommit(mockDB, {
-      parents: [target.hash],
-      author: { type: 'human', name: 'Legacy User' },
+    await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'feature/pr-flow',
       content: {
         trees: [
           { key: 'product', slots: { version: 1 }, children: [] },
@@ -181,10 +287,7 @@ describe('Pull request routes', () => {
         ],
         relations: [],
       },
-      project_id: project.projectId,
-      message: 'legacy feature update',
-      branch: 'feature/pr-flow',
-      enforceBranchLinearity: true,
+      message: 'feature update',
     });
 
     const response = await app.request(
@@ -200,21 +303,11 @@ describe('Pull request routes', () => {
 
   it('does not offer or create a pull request when the source is only behind the target', async () => {
     const fixture = await createBranchFixture();
-    const target = await createCommit(mockDB, {
-      parents: [fixture.source.hash],
-      author: { type: 'human', name: 'Fast-forward User' },
-      content: {
-        trees: [
-          { key: 'product', slots: { version: 1 }, children: [] },
-          { key: 'release', slots: { ready: true, reviewed: true }, children: [] },
-        ],
-        relations: [],
-      },
-      project_id: fixture.projectId,
-      message: 'main contains feature',
-      branch: 'main',
+    await mergeRepositoryBranches({
+      projectId: fixture.projectId,
+      sourceHash: fixture.source.hash,
+      targetHash: fixture.target.hash,
     });
-    await updateBranchHead(mockDB, fixture.projectId, 'main', target.hash);
 
     const comparison = await app.request(
       `/v1/projects/${fixture.projectId}/pull-requests/compare?base=main`
@@ -242,31 +335,25 @@ describe('Pull request routes', () => {
       { key: 'product', slots: { version: 1 }, children: [] },
       { key: 'release', slots: { ready: true }, children: [] },
     ];
-    const target = await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', name: 'Relation User' },
-      content: { trees, relations: [] },
-      project_id: project.projectId,
-      message: 'relation baseline',
+    const target = await createRepositoryCommit({
+      projectId: project.projectId,
       branch: 'main',
-      enforceBranchLinearity: true,
+      content: { trees, relations: [] },
+      message: 'relation baseline',
     });
     await insertBranch(mockDB, {
       projectId: project.projectId,
       name: 'feature/pr-flow',
       parentBranch: 'main',
     });
-    const source = await createCommit(mockDB, {
-      parents: [target.hash],
-      author: { type: 'human', name: 'Relation User' },
+    const source = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'feature/pr-flow',
       content: {
         trees,
         relations: [{ from: 'release', to: 'product', type: 'depends' }],
       },
-      project_id: project.projectId,
       message: 'add relation',
-      branch: 'feature/pr-flow',
-      enforceBranchLinearity: true,
     });
 
     const comparison = await app.request(
@@ -298,6 +385,130 @@ describe('Pull request routes', () => {
     });
   });
 
+  it('lists a lone base branch without decoding an older non-semantic head', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Legacy lone base PR project' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ prd: { summary: { problem: 'Older Workspace State' } } }),
+      actor: { kind: 'human', id: 'human:legacy-workspace-fixture' },
+      intent: 'Preserve a pre-fix Workspace State fixture',
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main'],
+      compare_branches: [],
+    });
+  });
+
+  it('lists an inherited branch with the same older non-semantic head as no changes', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Legacy inherited branch PR project' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    const committed = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ prd: { summary: { problem: 'Older Workspace State' } } }),
+      actor: { kind: 'human', id: 'human:legacy-workspace-fixture' },
+      intent: 'Preserve a pre-fix Workspace State fixture',
+    });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/empty',
+      parentBranch: 'main',
+    });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main', 'feature/empty'],
+      compare_branches: [
+        expect.objectContaining({
+          branch: 'feature/empty',
+          base_branch: 'main',
+          head_commit_id: committed.commitDigest,
+          base_commit_id: committed.commitDigest,
+          ahead_by: 0,
+          behind_by: 0,
+          changed_nodes: 0,
+          status: 'no_changes',
+          status_label: 'No semantic changes',
+        }),
+      ],
+    });
+  });
+
+  it('compares branches created through the real Workspace CommitV2 flow', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Workspace to PR comparison' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'main',
+      workspaceId: 'workspace-pr-main',
+      candidate: t3xPrdP0Fixtures.validCandidateTree,
+    });
+
+    const onlyMain = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    expect(onlyMain.status).toBe(200);
+    expect(((await onlyMain.json()) as ApiResponse).data).toEqual({
+      base_branches: ['main'],
+      compare_branches: [],
+    });
+
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/workspace-pr',
+      parentBranch: 'main',
+    });
+    const featureCandidate = structuredClone(t3xPrdP0Fixtures.validCandidateTree);
+    featureCandidate.summary.outcome = 'Workspace commits remain comparable by pull requests.';
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'feature/workspace-pr',
+      workspaceId: 'workspace-pr-feature',
+      candidate: featureCandidate,
+    });
+
+    const withFeature = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    expect(withFeature.status).toBe(200);
+    const data = (await withFeature.json()) as ApiResponse;
+    expect(data.data.base_branches).toEqual(['main', 'feature/workspace-pr']);
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        branch: 'feature/workspace-pr',
+        base_branch: 'main',
+        ahead_by: 1,
+        behind_by: 0,
+        status: 'ready',
+      }),
+    ]);
+  });
+
   it('lists committed source branches when the selected base branch is empty', async () => {
     const project = await insertProject(
       mockDB,
@@ -309,17 +520,14 @@ describe('Pull request routes', () => {
       name: 'feature/first-commit',
       parentBranch: 'main',
     });
-    const source = await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', name: 'Feature User' },
+    const source = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'feature/first-commit',
       content: {
         trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
         relations: [],
       },
-      project_id: project.projectId,
       message: 'first feature commit',
-      branch: 'feature/first-commit',
-      enforceBranchLinearity: true,
     });
 
     const response = await app.request(
@@ -375,9 +583,9 @@ describe('Pull request routes', () => {
 
   it('rejects creation when a previewed branch head has moved', async () => {
     const fixture = await createBranchFixture();
-    await createCommit(mockDB, {
-      parents: [fixture.source.hash],
-      author: { type: 'human', name: 'Concurrent User' },
+    await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'feature/pr-flow',
       content: {
         trees: [
           { key: 'product', slots: { version: 1 }, children: [] },
@@ -385,10 +593,7 @@ describe('Pull request routes', () => {
         ],
         relations: [],
       },
-      project_id: fixture.projectId,
       message: 'source moved after preview',
-      branch: 'feature/pr-flow',
-      enforceBranchLinearity: true,
     });
 
     const opened = await openPullRequest(fixture.projectId, {
@@ -519,9 +724,13 @@ describe('Pull request routes', () => {
     const merged = (await response.json()) as ApiResponse;
     expect(merged.data.status).toBe('merged');
     expect(merged.data.merge_commit_id).toMatch(/^sha256:/);
-    const mergeCommit = await getCommit(mockDB, merged.data.merge_commit_id);
+    const mergeCommit = await getRepositorySemanticCommit(
+      mockDB,
+      merged.data.merge_commit_id,
+      fixture.projectId
+    );
     expect(mergeCommit?.parents).toEqual([fixture.target.hash, fixture.source.hash]);
-    expect(mergeCommit?.content.trees).toEqual(
+    expect(mergeCommit?.semanticContent.trees).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'product', slots: { version: 2 } }),
         expect.objectContaining({ key: 'release', slots: { ready: true } }),
@@ -559,7 +768,7 @@ describe('Pull request routes', () => {
       fixture.target.hash
     );
     expect((await getMergeDraft(mockDB, draftId))?.status).toBe('pending');
-    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(3);
+    expect(await listCommitHistory(mockDB, fixture.projectId)).toHaveLength(3);
   });
 
   it('records preparation failures as blocked instead of leaving a PR checking', async () => {
@@ -594,17 +803,14 @@ describe('Pull request routes', () => {
   it('refreshes the reviewed snapshots when a branch moved after PR creation', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
-    const movedTarget = await createCommit(mockDB, {
-      parents: [fixture.target.hash],
-      author: { type: 'human', name: 'Concurrent User' },
+    const movedTarget = await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'main',
       content: {
         trees: [{ key: 'product', slots: { version: 1, patch: true }, children: [] }],
         relations: [],
       },
-      project_id: fixture.projectId,
       message: 'target moved',
-      branch: 'main',
-      enforceBranchLinearity: true,
     });
 
     const rerun = await app.request(
@@ -660,11 +866,14 @@ describe('Pull request routes', () => {
       expect.arrayContaining([expect.objectContaining({ type: 'merged' })])
     );
 
-    const mergeCommit = await getCommit(mockDB, merged.data.merge_commit_id);
+    const mergeCommit = await getRepositorySemanticCommit(
+      mockDB,
+      merged.data.merge_commit_id,
+      fixture.projectId
+    );
     expect(mergeCommit?.parents).toEqual([fixture.target.hash, fixture.source.hash]);
-    expect(mergeCommit?.branch).toBe('main');
     expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
-      mergeCommit?.hash
+      mergeCommit?.digest
     );
     expect(
       (await findBranchByName(mockDB, fixture.projectId, 'feature/pr-flow'))?.headCommitHash
@@ -691,7 +900,7 @@ describe('Pull request routes', () => {
 
     const responses = await Promise.all([request(), request()]);
     expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
-    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(3);
+    expect(await listCommitHistory(mockDB, fixture.projectId)).toHaveLength(3);
 
     const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
     const data = (await detail.json()) as ApiResponse;
@@ -708,9 +917,9 @@ describe('Pull request routes', () => {
     await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`, {
       method: 'POST',
     });
-    const movedSource = await createCommit(mockDB, {
-      parents: [fixture.source.hash],
-      author: { type: 'human', name: 'Concurrent User' },
+    const movedSource = await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'feature/pr-flow',
       content: {
         trees: [
           { key: 'product', slots: { version: 1 }, children: [] },
@@ -718,10 +927,7 @@ describe('Pull request routes', () => {
         ],
         relations: [],
       },
-      project_id: fixture.projectId,
       message: 'source moved',
-      branch: 'feature/pr-flow',
-      enforceBranchLinearity: true,
     });
 
     const response = await app.request(

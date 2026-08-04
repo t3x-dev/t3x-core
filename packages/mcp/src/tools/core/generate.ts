@@ -25,7 +25,6 @@ import {
   findLeafById,
   findLeavesByCommit,
   findProjectById,
-  getCommitUnified,
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
@@ -33,6 +32,7 @@ import {
 import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { resolveGenerationTarget } from '../../provider-runtime.js';
+import { getMcpRepositorySemanticCommit } from '../../repository-semantic-commit.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // ── Tool definition ──
@@ -113,13 +113,13 @@ export const generateHandler: ToolHandler = async (args) => {
   }
 
   // ── Step 2: Fetch the linked commit ──
-  const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+  const unifiedCommit = await getMcpRepositorySemanticCommit(db, leaf.project_id, leaf.commit_hash);
   if (!unifiedCommit) {
     return fail(
       `Source commit not found for leaf ${leafId}.\n` + `Commit hash: ${leaf.commit_hash}`
     );
   }
-  const knowledge = unifiedCommit.content;
+  const knowledge = unifiedCommit.semanticContent;
 
   const project = await findProjectById(db, leaf.project_id);
   if (!project) {

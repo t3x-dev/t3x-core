@@ -12,7 +12,6 @@ import type {
 } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
-import { CommittedCommitView } from './CommittedCommitView';
 import { ConversationView } from './ConversationView';
 import { PendingCommitView } from './PendingCommitView';
 
@@ -74,7 +73,6 @@ export function NodeModal({
   const isConversation =
     (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
   const isPendingCommit = isStagingUnit && showCommitConfig && viewMode !== 'conversation';
-  const isCommittedCommit = isCommittedUnit && viewMode !== 'conversation';
 
   if (isConversation) {
     return (
@@ -109,17 +107,10 @@ export function NodeModal({
     );
   }
 
-  if (isCommittedCommit) {
-    return (
-      <CommittedCommitView
-        node={node}
-        onClose={onClose}
-        onUpdate={onUpdate}
-        projectId={projectId || ''}
-        quickActions={quickActions}
-      />
-    );
-  }
+  // Committed versions are inspected directly on the Canvas. The legacy
+  // commit-mode modal is intentionally unavailable, while conversation mode
+  // remains usable when the node has source discussion.
+  if (isCommittedUnit) return null;
 
   // Fallback for unknown node types
   return (

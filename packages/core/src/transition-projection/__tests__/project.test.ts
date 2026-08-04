@@ -12,7 +12,6 @@ import {
   type StringClaim,
 } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
-import type { Commit } from '../../commit/types';
 import { createDecisionStatement } from '../../transition-decisions/decision';
 import type { StatementObservation } from '../../transition-decisions/evaluation';
 import {
@@ -436,41 +435,6 @@ describe('TransitionViewV1 product projection', () => {
     expect(view.capabilities.revert).toMatchObject({
       disposition: 'not_evaluated',
       reasons: [{ code: 'REPOSITORY_AUTHORIZATION_REQUIRED' }],
-    });
-  });
-
-  it('renders CommitV1 with explicit reduced assurance through the same versioned view', () => {
-    const legacy: Commit = {
-      hash: 'legacy:abc123',
-      schema: 't3x/commit',
-      parents: [],
-      author: { type: 'human', id: 'human:legacy' },
-      committed_at: '2025-01-01T00:00:00.000Z',
-      content: { trees: [], relations: [] },
-      project_id: 'project:legacy',
-      message: 'Legacy snapshot',
-      branch: 'main',
-      provenance: null,
-      yops_log_ids: [],
-    };
-    const view = projectTransitionView({ mode: 'legacy', commit: legacy });
-
-    expect(view).toMatchObject({
-      schema: 't3x.dev/transition-view/v1',
-      version: 1,
-      mode: 'legacy',
-      claims: { observation: 'unavailable', reason: 'legacy_v1' },
-      checks: { observation: 'unavailable', reason: 'legacy_v1' },
-      history: {
-        observation: 'committed',
-        commit: {
-          format: 'legacy_v1',
-          assurance: { mode: 'legacy_unavailable' },
-        },
-      },
-      capabilities: {
-        accept: { disposition: 'not_applicable', reasons: [{ code: 'LEGACY_HISTORY_READ_ONLY' }] },
-      },
     });
   });
 

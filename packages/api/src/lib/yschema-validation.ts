@@ -9,12 +9,16 @@ import {
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createYSchemaValidationRun,
-  getCommit,
-  getLatestCommit,
-  getYOpsForCommit,
+  getTransitionRefHead,
+  getYOpsForTransitionCommit,
+  listTransitionCommitProjectIds,
   type YSchemaValidationRunOutput,
 } from '@t3x-dev/storage';
 import { type ProvenanceIndex, validateTree, type YSchemaRelation } from '@t3x-dev/yschema';
+import {
+  getRepositorySemanticCommit,
+  type RepositorySemanticCommitProjection,
+} from './repository-state-transition';
 import { resolveBuiltInYSchema } from './yschema-registry';
 
 export const YSCHEMA_VALIDATOR_VERSION = 'yschema-p0@0.1';
@@ -44,23 +48,26 @@ export async function runYSchemaValidationForCommit(
   db: AnyDB,
   input: RunValidationInput
 ): Promise<YSchemaValidationRunView> {
-  const commit = input.commitHash
-    ? await getCommit(db, input.commitHash)
-    : await getLatestCommit(db, input.projectId, 'main');
+  const commitDigest = input.commitHash ?? (await resolveMainHead(db, input.projectId));
+  const commit =
+    commitDigest === null
+      ? null
+      : await getRepositorySemanticCommit(db, commitDigest, input.projectId);
   if (!commit) {
+    if (
+      input.commitHash !== undefined &&
+      (await listTransitionCommitProjectIds(db, input.commitHash)).length > 0
+    ) {
+      throw new YSchemaValidationError(
+        'COMMIT_PROJECT_MISMATCH',
+        `Commit ${input.commitHash} does not belong to project ${input.projectId}`
+      );
+    }
     throw new YSchemaValidationError('COMMIT_NOT_FOUND', 'Commit not found');
   }
-  if (commit.project_id !== input.projectId) {
-    throw new YSchemaValidationError(
-      'COMMIT_PROJECT_MISMATCH',
-      `Commit ${commit.hash} does not belong to project ${input.projectId}`
-    );
-  }
 
-  const commitSchemaRef = commit.provenance?.schema_ref;
-  const schemaName = input.schemaName ?? commitSchemaRef?.name ?? 't3x/prd';
-  const schemaVersion =
-    input.schemaVersion ?? (input.schemaName === undefined ? commitSchemaRef?.version : undefined);
+  const schemaName = input.schemaName ?? 't3x/prd';
+  const schemaVersion = input.schemaVersion;
   const schema = resolveBuiltInYSchema(schemaName, schemaVersion);
   if (!schema) {
     throw new YSchemaValidationError(
@@ -68,8 +75,8 @@ export async function runYSchemaValidationForCommit(
       `YSchema ${schemaName}${schemaVersion ? `@${schemaVersion}` : ''} is not available in the local runtime registry`
     );
   }
-  const candidate = semanticContentToCandidate(commit.content);
-  const relations = semanticContentToYSchemaRelations(commit.content);
+  const candidate = semanticContentToCandidate(commit.semanticContent);
+  const relations = semanticContentToYSchemaRelations(commit.semanticContent);
   const provenanceByPath = await buildCommitProvenance(db, commit, candidate);
   const structuralValidation = validateTree({
     schema,
@@ -103,7 +110,7 @@ export async function runYSchemaValidationForCommit(
 
   const run = await createYSchemaValidationRun(db, {
     project_id: input.projectId,
-    commit_hash: commit.hash,
+    commit_hash: commit.digest,
     schema_name: schema.name,
     schema_version: schema.version,
     schema_hash: stableHash(schema),
@@ -146,12 +153,12 @@ function semanticContentToYSchemaRelations(content: SemanticContent): YSchemaRel
 
 async function buildCommitProvenance(
   db: AnyDB,
-  commit: Awaited<ReturnType<typeof getCommit>> & {},
+  commit: RepositorySemanticCommitProjection,
   candidate: Record<string, unknown>
 ): Promise<ProvenanceIndex> {
   const leafPaths = candidateEvidencePaths(candidate);
   const provenance: ProvenanceIndex = {};
-  const logs = await getYOpsForCommit(db, commit.yops_log_ids ?? []);
+  const logs = await getYOpsForTransitionCommit(db, commit.projectId, commit.digest);
 
   for (const log of logs) {
     if (!Array.isArray(log.yops)) continue;
@@ -175,9 +182,9 @@ async function buildCommitProvenance(
     }
   }
 
-  const sourceRefs = (commit.sources ?? []).map((source) => ({
+  const sourceRefs = commit.evidence.map((evidence) => ({
     origin: 'user_evidence' as const,
-    sourceId: `${source.type}:${source.id}`,
+    sourceId: evidence.resource.uri,
   }));
   if (sourceRefs.length > 0) {
     for (const path of leafPaths) {
@@ -186,6 +193,11 @@ async function buildCommitProvenance(
   }
 
   return provenance;
+}
+
+async function resolveMainHead(db: AnyDB, projectId: string): Promise<string | null> {
+  const head = await getTransitionRefHead(db, { projectId, refName: 'main' });
+  return head.head;
 }
 
 function yopsOperationPath(operation: Record<string, unknown>): string | null {

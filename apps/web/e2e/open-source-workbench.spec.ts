@@ -179,11 +179,13 @@ test.describe('Open-source workbench visual smoke', () => {
           },
         },
         {
-          name: 'commit-audit',
-          path: () => `/project/${projectId}/commit/${encodeHash(promptTargetHash)}`,
+          name: 'canvas-focused-commit',
+          path: () =>
+            `/project/${projectId}?view=canvas&commit=${encodeHash(promptTargetHash)}`,
           ready: async (p) => {
-            await expect(p.getByText('Commit Audit')).toBeVisible({ timeout: 15000 });
-            await expect(p.getByText('assistant_prompt').first()).toBeVisible();
+            await expect(p.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 15000 });
+            await expect(p.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
+            await expect(p.getByText('Commit Audit', { exact: true })).toHaveCount(0);
           },
         },
         {

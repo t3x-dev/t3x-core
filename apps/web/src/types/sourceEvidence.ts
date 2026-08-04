@@ -1,9 +1,6 @@
-export type SourceAvailabilityMode = 'available' | 'partial' | 'legacy' | 'unavailable';
+export type SourceAvailabilityMode = 'available' | 'partial' | 'unavailable';
 
-export type SourceAvailabilityReason =
-  | 'SOURCE_RECORD_MISSING'
-  | 'TURN_PAGE_INCOMPLETE'
-  | 'LEGACY_COMMIT_SOURCE_REFERENCE';
+export type SourceAvailabilityReason = 'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE';
 
 export interface ConversationSourceEvidence {
   availability: {
@@ -62,15 +59,16 @@ export interface ConversationSourceEvidence {
     updated_at: string;
   }>;
   evidence_selection: {
-    mode: 'not_recorded';
+    mode: 'immutable_refs';
     turn_hashes: string[];
   };
   referring_commits: Array<{
-    format: 'legacy_v1';
-    commit_id: string;
-    branch: string;
-    message: string | null;
+    commit_digest: string;
     recorded_at: string;
-    source_title: string | null;
+    intent: string | null;
+    evidence_refs: Array<{
+      resource: { uri: string; mediaType: string; digest: string };
+      locator: { scheme: string; value: unknown };
+    }>;
   }>;
 }

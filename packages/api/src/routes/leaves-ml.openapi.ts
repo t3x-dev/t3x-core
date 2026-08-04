@@ -23,11 +23,11 @@ import {
   findEditsByLeafId,
   findLeafById,
   findLeavesByCommit,
-  getCommitUnified,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -310,11 +310,11 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
 
-    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+    const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const knowledge = unifiedCommit.content;
+    const knowledge = unifiedCommit.semanticContent;
 
     if (knowledge.trees.length === 0) {
       return c.json(
@@ -564,11 +564,11 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
 
-    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+    const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const rlKnowledge = unifiedCommit.content;
+    const rlKnowledge = unifiedCommit.semanticContent;
 
     // Collect lessons from failed assertions on this leaf and siblings
     const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -668,11 +668,11 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+    const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
-    const compareKnowledge = unifiedCommit.content;
+    const compareKnowledge = unifiedCommit.semanticContent;
 
     const registry = await getProviderRegistry();
     const additionalInstructions =

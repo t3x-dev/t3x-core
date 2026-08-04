@@ -431,12 +431,6 @@ export async function commitTransition(input: {
   if (workspace === null || workspace.revision !== graph.membership.workspaceRevision) {
     throw new TransitionReviewStaleError();
   }
-  if (head.format === 'legacy_v1') {
-    throw new TransitionDecisionMembershipError(
-      'CommitV2 cannot synthesize a parent from a legacy CommitV1 head'
-    );
-  }
-
   const parentObjects = head.format === 'transition_v2' ? [head.commit] : [];
   const parents = head.format === 'transition_v2' ? [describeCommitV2(head.commit)] : [];
   const objects: ProtocolObject[] = [

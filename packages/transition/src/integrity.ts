@@ -94,6 +94,9 @@ export async function verifyCommitIntegrity(
 
   const base = parseState(await resolveProtocolObject(resolver, effect.base));
   await resolveProtocolObject(resolver, parsedCommit.result);
+  for (const input of effect.inputs) {
+    await resolveProtocolObject(resolver, input.object);
+  }
   for (const considered of decision.predicate.considered) {
     const consideredObject = await resolveProtocolObject(resolver, considered);
     await verifyStatementSubjects(parseStatement(consideredObject), resolver);

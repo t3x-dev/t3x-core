@@ -1,4 +1,5 @@
-import { ConflictError } from '@t3x-dev/storage';
+import { describeTransitionObject } from '@t3x-dev/core';
+import { ConflictError, TransitionHeadConflictError } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,19 +10,6 @@ vi.mock('../lib/db', () => ({
 
 const storageMock = vi.hoisted(() => {
   let workspaceDraft: Record<string, unknown> | null = null;
-  const commitRecord = (hash: string, overrides: Record<string, unknown> = {}) => ({
-    hash,
-    schema: 't3x/commit',
-    parents: [],
-    author: { type: 'human', name: 'api' },
-    committed_at: '2026-07-03T00:00:00.000Z',
-    content: { trees: [], relations: [] },
-    project_id: 'proj_sources',
-    message: 'Existing commit',
-    branch: 'main',
-    provenance: { method: 'human_curation' },
-    ...overrides,
-  });
 
   return {
     reset: () => {
@@ -96,27 +84,27 @@ const storageMock = vi.hoisted(() => {
         });
       }
     ),
-    createCommit: vi.fn(() =>
-      Promise.resolve({
-        hash: 'sha256:workspace-commit',
-        schema: 't3x/commit',
-        parents: ['sha256:review-base'],
-        author: { type: 'human', name: 'api' },
-        committed_at: '2026-07-03T00:00:00.000Z',
-        content: { trees: [], relations: [] },
-        project_id: 'proj_sources',
-        message: 'Workspace commit: PRD audience handoff',
-        branch: 'feature/reviewed-prd',
-        provenance: { method: 'human_curation' },
-      })
-    ),
-    getCommit: vi.fn((_db, hash: string) =>
-      Promise.resolve(
-        hash === 'sha256:review-base' || hash === 'sha256:base' ? commitRecord(hash) : null
-      )
-    ),
-    getLatestCommit: vi.fn(() => Promise.resolve(null)),
-    updateBranchHead: vi.fn(() => Promise.resolve({ name: 'feature/reviewed-prd' })),
+    markWorkspaceCommitted: (
+      hash: string,
+      override?: { kind: string; reason: string; blockers: readonly string[] }
+    ) => {
+      if (workspaceDraft === null) throw new Error('Workspace fixture was not initialized');
+      workspaceDraft = {
+        ...workspaceDraft,
+        status: 'committed',
+        lastCommitHash: hash,
+        ...(override
+          ? {
+              commitOverride: {
+                ...override,
+                blockers: [...override.blockers],
+                confirmedAt: '2026-07-03T00:00:00.000Z',
+              },
+            }
+          : {}),
+      };
+      return { ...workspaceDraft, revision: 2 };
+    },
     insertYOpsLogEntry: vi.fn(() =>
       Promise.resolve({
         id: 'yl_workspace',
@@ -139,17 +127,51 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
-    getCommit: storageMock.getCommit,
-    getLatestCommit: storageMock.getLatestCommit,
-    updateBranchHead: storageMock.updateBranchHead,
-    createCommit: storageMock.createCommit,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
 });
 
+const transitionMock = vi.hoisted(() => ({
+  reviewWorkspaceTransition: vi.fn(),
+  decideWorkspaceTransition: vi.fn(),
+}));
+
+vi.mock('../lib/workspace-transition', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/workspace-transition')>();
+  return {
+    ...actual,
+    reviewWorkspaceTransition: transitionMock.reviewWorkspaceTransition,
+    decideWorkspaceTransition: transitionMock.decideWorkspaceTransition,
+  };
+});
+
 import { workspaceRoutes } from '../routes/workspaces.openapi';
+
+const mockCommitV2 = {
+  schema: 't3x/commit/v2' as const,
+  parents: [],
+  decision: {
+    kind: 'statement' as const,
+    schema: 't3x/statement/v1' as const,
+    digest: `sha256:${'d'.repeat(64)}` as const,
+  },
+  result: {
+    kind: 'state' as const,
+    schema: 't3x/state/v1' as const,
+    digest: `sha256:${'e'.repeat(64)}` as const,
+  },
+};
+const mockCommitDigest = describeTransitionObject(mockCommitV2).digest;
+const mockPrecondition = {
+  workspaceRevision: 1,
+  refHead: null,
+  effectDigest: `sha256:${'a'.repeat(64)}`,
+  proposalDigest: `sha256:${'b'.repeat(64)}`,
+  statementDigests: [`sha256:${'c'.repeat(64)}`],
+  policyDigest: `sha256:${'f'.repeat(64)}`,
+};
 
 // biome-ignore lint/suspicious/noExplicitAny: route responses are intentionally schema-flexible here.
 type ApiResponse = any;
@@ -183,13 +205,38 @@ describe('Workspace routes', () => {
     storageMock.findProjectById.mockClear();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
-    storageMock.createCommit.mockClear();
-    storageMock.updateBranchHead.mockClear();
-    storageMock.getCommit.mockClear();
-    storageMock.getLatestCommit.mockClear();
     storageMock.insertYOpsLogEntry.mockClear();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
+    transitionMock.reviewWorkspaceTransition.mockReset();
+    transitionMock.reviewWorkspaceTransition.mockResolvedValue({
+      transition: {},
+      precondition: mockPrecondition,
+    });
+    transitionMock.decideWorkspaceTransition.mockReset();
+    transitionMock.decideWorkspaceTransition.mockImplementation(
+      (
+        _db: unknown,
+        input: {
+          precondition: typeof mockPrecondition;
+          workspaceCommitOverride?: {
+            kind: string;
+            reason: string;
+            blockers: readonly string[];
+          };
+        }
+      ) =>
+        Promise.resolve({
+          transition: {},
+          precondition: input.precondition,
+          decisionDigest: mockCommitV2.decision.digest,
+          commit: mockCommitV2,
+          workspace: storageMock.markWorkspaceCommitted(
+            mockCommitDigest,
+            input.workspaceCommitOverride
+          ),
+        })
+    );
   });
 
   it('rejects client-supplied trust facts on Transition review requests', async () => {
@@ -620,7 +667,7 @@ describe('Workspace routes', () => {
         operation.path.startsWith('prompt/')
       )
     ).toBe(true);
-    expect(storageMock.createCommit).not.toHaveBeenCalled();
+    expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
   });
 
   it('merges complementary evidence for the same repeated requirement', async () => {
@@ -1190,8 +1237,8 @@ describe('Workspace routes', () => {
       expect.objectContaining({ error: expect.objectContaining({ code: 'CONFLICT' }) })
     );
     expect(storageMock.insertYOpsLogEntry).not.toHaveBeenCalled();
-    expect(storageMock.createCommit).not.toHaveBeenCalled();
-    expect(storageMock.updateBranchHead).not.toHaveBeenCalled();
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
+    expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
 
     const res = await app.request(commitPath, {
       method: 'POST',
@@ -1201,13 +1248,19 @@ describe('Workspace routes', () => {
 
     expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
-    expect(body.data.commit.hash).toBe('sha256:workspace-commit');
+    expect(body.data.commit).toEqual({
+      hash: mockCommitDigest,
+      schema: 't3x/commit/v2',
+      parents: [],
+      decision: mockCommitV2.decision.digest,
+      result: mockCommitV2.result.digest,
+    });
     expect(body.data.workspace).toEqual(
       expect.objectContaining({
         id: 'workspace_prd_handoff',
         projectId: 'proj_sources',
         status: 'committed',
-        lastCommitHash: 'sha256:workspace-commit',
+        lastCommitHash: mockCommitDigest,
       })
     );
     expect(storageMock.insertYOpsLogEntry).toHaveBeenCalledWith(
@@ -1223,41 +1276,27 @@ describe('Workspace routes', () => {
         ],
       })
     );
-    expect(storageMock.createCommit).toHaveBeenCalledWith(
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        author: { name: 'api', type: 'human' },
-        branch: 'feature/reviewed-prd',
+        actor: { id: 'human:local-user', kind: 'human' },
         content: {
           trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
           relations: [],
         },
-        enforceBranchLinearity: true,
-        message: 'Workspace commit: PRD audience handoff',
-        parents: ['sha256:review-base'],
-        project_id: 'proj_sources',
-        provenance: { method: 'human_curation', schema_ref: { name: 't3x/prd' } },
-        sources: [{ id: 'conv_prd', title: 'Reviewed source', type: 'conversation' }],
-        yops_log_ids: ['yl_workspace'],
+        expectedRevision: 1,
+        projectId: 'proj_sources',
+        why: 'Workspace commit: PRD audience handoff',
+        workspaceId: 'workspace_prd_handoff',
       })
     );
-    expect(storageMock.updateBranchHead).toHaveBeenCalledWith(
-      expect.anything(),
-      'proj_sources',
-      'feature/reviewed-prd',
-      'sha256:workspace-commit'
-    );
-    expect(storageMock.upsertWorkspaceDraft).toHaveBeenLastCalledWith(
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        project_id: 'proj_sources',
-        workspace_id: 'workspace_prd_handoff',
-        workspace_state: expect.objectContaining({
-          status: 'committed',
-          lastCommitHash: 'sha256:workspace-commit',
-        }),
-      }),
-      1
+        outcome: 'accepted',
+        precondition: mockPrecondition,
+        yopsLogIds: ['yl_workspace'],
+      })
     );
   });
 
@@ -1316,7 +1355,7 @@ describe('Workspace routes', () => {
         }),
       })
     );
-    expect(storageMock.createCommit).not.toHaveBeenCalled();
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
 
     const validationOverride = {
       kind: 'schema_review',
@@ -1332,18 +1371,17 @@ describe('Workspace routes', () => {
     expect(committed.status).toBe(200);
     const body: ApiResponse = await committed.json();
     expect(body.data.workspace.commitOverride).toEqual(expect.objectContaining(validationOverride));
-    expect(storageMock.createCommit).toHaveBeenCalledWith(
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        provenance: {
-          method: 'human_curation',
-          validation_override: validationOverride,
-        },
+        outcome: 'overridden',
+        decisionReason: validationOverride.reason,
+        workspaceCommitOverride: validationOverride,
       })
     );
   });
 
-  it('rejects a feature workspace base when committing to an empty main branch', async () => {
+  it('rejects the task commit when Transition review observes a stale ref', async () => {
     await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1361,19 +1399,9 @@ describe('Workspace routes', () => {
         },
       }),
     });
-    storageMock.getCommit.mockResolvedValueOnce({
-      hash: 'sha256:feature-base',
-      schema: 't3x/commit',
-      parents: [],
-      author: { type: 'human', name: 'api' },
-      committed_at: '2026-07-03T00:00:00.000Z',
-      content: { trees: [], relations: [] },
-      project_id: 'proj_sources',
-      message: 'Feature commit',
-      branch: 'feature/prd-audience',
-      provenance: { method: 'human_curation' },
-      yops_log_ids: [],
-    });
+    transitionMock.reviewWorkspaceTransition.mockRejectedValueOnce(
+      new TransitionHeadConflictError(`sha256:${'1'.repeat(64)}`, `sha256:${'2'.repeat(64)}`)
+    );
 
     const res = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
@@ -1395,20 +1423,14 @@ describe('Workspace routes', () => {
     expect(body).toEqual({
       success: false,
       error: {
-        code: 'WORKSPACE_BASE_BRANCH_MISMATCH',
-        message:
-          'Workspace base commit sha256:feature-base belongs to feature/prd-audience, but the commit target is main. Rebuild the workspace from main before committing.',
-        details: {
-          base_branch: 'feature/prd-audience',
-          base_commit_hash: 'sha256:feature-base',
-          target_branch: 'main',
-        },
+        code: 'STALE_REVIEW',
+        message: 'Workspace or ref facts changed; review again.',
       },
     });
-    expect(storageMock.createCommit).not.toHaveBeenCalled();
+    expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
   });
 
-  it('uses the current branch head instead of a stale workspace base commit', async () => {
+  it('rejects a ref change between task review and Decision instead of rebasing silently', async () => {
     await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1426,23 +1448,8 @@ describe('Workspace routes', () => {
         },
       }),
     });
-    storageMock.getLatestCommit.mockImplementation((_db, projectId: string, branch: string) =>
-      Promise.resolve(
-        projectId === 'proj_sources' && branch === 'feature/reviewed-prd'
-          ? {
-              hash: 'sha256:feature-head',
-              schema: 't3x/commit',
-              parents: ['sha256:review-base'],
-              author: { type: 'human', name: 'api' },
-              committed_at: '2026-07-03T00:00:00.000Z',
-              content: { trees: [{ key: 'old-prd' }], relations: [] },
-              project_id: 'proj_sources',
-              message: 'Previous workspace commit',
-              branch: 'feature/reviewed-prd',
-              provenance: { method: 'human_curation' },
-            }
-          : null
-      )
+    transitionMock.decideWorkspaceTransition.mockRejectedValueOnce(
+      new TransitionHeadConflictError(`sha256:${'1'.repeat(64)}`, `sha256:${'2'.repeat(64)}`)
     );
 
     const res = await app.request(
@@ -1460,17 +1467,19 @@ describe('Workspace routes', () => {
       }
     );
 
-    expect(res.status).toBe(200);
-    expect(storageMock.createCommit).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        branch: 'feature/reviewed-prd',
-        parents: ['sha256:feature-head'],
-      })
-    );
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      success: false,
+      error: {
+        code: 'STALE_REVIEW',
+        message: 'Workspace or ref facts changed; review again.',
+      },
+    });
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledTimes(1);
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledTimes(1);
   });
 
-  it('marks an already materialized branch head committed without creating another commit', async () => {
+  it('records a full Transition even when the proposed content matches prior content', async () => {
     const committedContent = {
       trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
       relations: [],
@@ -1492,26 +1501,6 @@ describe('Workspace routes', () => {
         },
       }),
     });
-    storageMock.createCommit.mockClear();
-    storageMock.getLatestCommit.mockImplementation((_db, projectId: string, branch: string) =>
-      Promise.resolve(
-        projectId === 'proj_sources' && branch === 'feature/reviewed-prd'
-          ? {
-              hash: 'sha256:feature-head',
-              schema: 't3x/commit',
-              parents: ['sha256:review-base'],
-              author: { type: 'human', name: 'api' },
-              committed_at: '2026-07-03T00:00:00.000Z',
-              content: committedContent,
-              project_id: 'proj_sources',
-              message: 'Previous workspace commit',
-              branch: 'feature/reviewed-prd',
-              provenance: { method: 'human_curation' },
-            }
-          : null
-      )
-    );
-
     const res = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
       {
@@ -1523,19 +1512,14 @@ describe('Workspace routes', () => {
 
     expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
-    expect(body.data.commit.hash).toBe('sha256:feature-head');
+    expect(body.data.commit.hash).toBe(mockCommitDigest);
     expect(body.data.workspace).toEqual(
       expect.objectContaining({
         status: 'committed',
-        lastCommitHash: 'sha256:feature-head',
+        lastCommitHash: mockCommitDigest,
       })
     );
-    expect(storageMock.createCommit).not.toHaveBeenCalled();
-    expect(storageMock.updateBranchHead).toHaveBeenCalledWith(
-      expect.anything(),
-      'proj_sources',
-      'feature/reviewed-prd',
-      'sha256:feature-head'
-    );
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledTimes(1);
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledTimes(1);
   });
 });

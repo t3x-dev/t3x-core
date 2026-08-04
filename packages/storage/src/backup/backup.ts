@@ -12,7 +12,7 @@ import {
   findPinsByProject,
   findProjectById,
   findTurnsByProject,
-  listCommits,
+  listCommitHistory,
 } from '../queries';
 
 export interface CfpackData {
@@ -58,7 +58,7 @@ export async function backupAsCfpack(db: AnyDB, projectId: string): Promise<Cfpa
 
   const conversations = await findConversationsByProject(db, { projectId, limit: 100000 });
   const turnRows = await findTurnsByProject(db, { projectId, limit: 100000 });
-  const commits = await listCommits(db, { projectId, limit: 100000 });
+  const commits = await listCommitHistory(db, projectId, { limit: 100000 });
   const leaves = await findLeavesByProject(db, projectId, { limit: 100000 });
   const pins = await findPinsByProject(db, projectId, { limit: 100000 });
 

@@ -70,7 +70,7 @@ export function readIntroDemoLocalCommit(
 export function toIntroDemoApiCommit(commit: IntroDemoLocalCommit): ApiCommit {
   return {
     hash: commit.hash,
-    schema: 't3x/commit',
+    schema: 't3x/commit/v2',
     parents: [],
     author: { type: 'system', name: 'Intro demo' },
     committed_at: commit.committedAt,
@@ -169,7 +169,7 @@ export function applyIntroDemoCommitToCanvasGraph({
         ],
         commit: {
           hash: nextId,
-          schema: 't3x/commit',
+          schema: 't3x/commit/v2',
           author: { type: 'system', name: 'Intro demo' },
           committed_at: commit.committedAt,
           content: commit.content,

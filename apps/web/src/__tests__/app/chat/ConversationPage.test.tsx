@@ -205,14 +205,14 @@ describe('ConversationPage', () => {
       branch: 'main',
       commit: 'sha256:commit-1',
       turn: 'sha256:turn-1',
-      returnTo: '/project/proj_1/commit/sha256%3Acommit-1',
+      returnTo: '/project/proj_1?view=canvas&commit=sha256%3Acommit-1',
     });
 
     render(<ConversationPage />);
 
     await waitFor(() =>
       expect(routerMock.replace).toHaveBeenCalledWith(
-        '/project/proj_1/sources/conversations/conv_123?branch=main&commit=sha256%3Acommit-1&turn=sha256%3Aturn-1&returnTo=%2Fproject%2Fproj_1%2Fcommit%2Fsha256%253Acommit-1'
+        '/project/proj_1/sources/conversations/conv_123?branch=main&commit=sha256%3Acommit-1&turn=sha256%3Aturn-1&returnTo=%2Fproject%2Fproj_1%3Fview%3Dcanvas%26commit%3Dsha256%253Acommit-1'
       )
     );
     expect(ChatWorkspace).not.toHaveBeenCalled();

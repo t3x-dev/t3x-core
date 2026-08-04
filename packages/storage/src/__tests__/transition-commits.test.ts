@@ -4,9 +4,6 @@ import {
   type CommitDescriptor,
   createAcceptancePolicyResource,
   createCommitV2,
-  createLegacyCommitBridgeSubject,
-  createStateImportEffect,
-  createYOpsState,
   describeCommitV2,
   describeTransitionObject,
   type Effect,
@@ -21,10 +18,9 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { ensureMainBranch, findBranchByName, insertBranch } from '../queries/branches';
-import { createCommit } from '../queries/commits';
+import { insertConversation } from '../queries/conversations';
 import { deleteProject, insertProject, permanentDeleteProject } from '../queries/projects';
 import {
-  createLegacyBridgeTransitionCommit,
   createTransitionCommit,
   DecisionNotAuthorizedError,
   DecisionRecordConflictError,
@@ -33,18 +29,31 @@ import {
   getTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
   listCommitHistory,
   listRepositoryDecisionAudit,
   listTransitionCommits,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
+  SupersededYOpsLogIdsError,
   TransitionHeadConflictError,
-  TransitionParentHeadMismatchError,
+  TransitionParentProjectMembershipError,
   TransitionProjectionAuthorizationInvalidError,
   TransitionRefHeadIntegrityError,
+  TransitionYOpsLogAlreadyConsumedError,
+  TransitionYOpsLogMembershipError,
 } from '../queries/transition-commits';
+import {
+  deleteYOpsLogEntry,
+  findCommitHashesByYOpsLogIds,
+  getYOpsForTransitionCommit,
+  getYOpsLogEntry,
+  insertYOpsLogEntry,
+  supersedeActiveUncommittedYOpsLogEntries,
+} from '../queries/yops-log';
 import { branches } from '../schema';
 import {
+  transitionCommits,
   transitionDecisionAuthorizations,
   transitionDecisionLedger,
   transitionObjects,
@@ -195,70 +204,6 @@ async function prepare(
   return { subject, issued, commit, objects };
 }
 
-async function prepareLegacyBridge(
-  projectId: string,
-  refName: string,
-  legacy: Awaited<ReturnType<typeof createCommit>>,
-  options: { includeEvidence?: boolean; imported?: State } = {}
-) {
-  const bridge = createLegacyCommitBridgeSubject({ projectId, commit: legacy });
-  const imported = options.imported ?? bridge.imported;
-  const effect =
-    options.imported === undefined
-      ? bridge.effect
-      : createStateImportEffect({ base: bridge.base, imported }).effect;
-  const proposal: ProposalStatement = {
-    schema: 't3x/statement/v1',
-    subjects: [describeTransitionObject(effect)],
-    actor: { kind: 'service', id: 'service:legacy-bridge' },
-    predicateType: 't3x.proposal/v1',
-    predicate: {
-      intent: {
-        mode: 'inferred',
-        value: 'Preserve the legacy branch state as a CommitV2 starting point',
-        evidence: options.includeEvidence === false ? [] : [bridge.evidence],
-      },
-      rationale: {
-        mode: 'authored',
-        value: 'Bridge immutable CommitV1 history without fabricating a parent',
-        evidence: [],
-      },
-    },
-  };
-  const replay = buildReplayVerificationStatement({
-    effect,
-    actor: { kind: 'service', id: 'service:replay' },
-    predicate: {
-      outcome: 'verified',
-      result: effect.result,
-      tool: { name: 'state-import-replay', version: '1' },
-      run: { id: `legacy-bridge:${legacy.hash}`, recordedAt: DECIDED_AT },
-      environment: { mode: 'unspecified' },
-    },
-  });
-  const subject = { base: bridge.base, result: imported, effect, proposal, replay };
-  const issued = await authorizeDecisionForRepository({
-    projectId,
-    refName,
-    proposal,
-    effect,
-    outcome: 'accepted',
-    rationale: { mode: 'unspecified' },
-    decidedAt: DECIDED_AT,
-    authority: authority(subject),
-  });
-  if (!issued.ok || issued.authorization === null) {
-    throw new Error('Fixture legacy bridge authorization failed');
-  }
-  const objects = [bridge.base, imported, ...issued.authorization.objects];
-  const commit = await createCommitV2({
-    parents: [],
-    decision: issued.decision,
-    resolver: new InMemoryTransitionObjectResolver(objects),
-  });
-  return { bridge, imported, issued, commit, objects };
-}
-
 let db: AnyDB;
 let cleanup: () => Promise<void>;
 
@@ -271,146 +216,31 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('CommitV2 repository', () => {
-  it('classifies empty and legacy ref heads without fabricating Transition assurance', async () => {
+  it('accepts empty refs and rejects non-CommitV2 heads after the hard cutover', async () => {
     const emptyProject = await insertProject(db, testData.project({ name: 'Empty Ref Project' }));
     await ensureMainBranch(db, emptyProject.projectId);
     await expect(
       getTransitionRefHead(db, { projectId: emptyProject.projectId, refName: 'main' })
     ).resolves.toEqual({ format: 'empty', refName: 'main', head: null });
 
-    const legacyProject = await insertProject(db, testData.project({ name: 'Legacy Ref Project' }));
-    await ensureMainBranch(db, legacyProject.projectId);
-    const legacy = await createCommit(db, {
-      project_id: legacyProject.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
-    await expect(
-      getTransitionRefHead(db, { projectId: legacyProject.projectId, refName: 'main' })
-    ).resolves.toEqual({ format: 'legacy_v1', refName: 'main', head: legacy.hash });
-  });
-
-  it('bridges one exact CommitV1 head into an authorized parentless CommitV2 import', async () => {
-    const project = await insertProject(db, testData.project({ name: 'Legacy Bridge Project' }));
-    await ensureMainBranch(db, project.projectId);
-    const legacy = await createCommit(db, {
-      project_id: project.projectId,
-      content: {
-        trees: [{ key: 'service', slots: { replicas: 3 }, children: [] }],
-        relations: [{ from: 'service', to: 'database', type: 'depends_on' }],
-      },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
-    const prepared = await prepareLegacyBridge(project.projectId, 'main', legacy);
-    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
-
-    await expect(
-      createTransitionCommit(db, {
-        projectId: project.projectId,
-        refName: 'main',
-        expectedHead: legacy.hash,
-        commit: prepared.commit,
-        objects: prepared.objects,
-      })
-    ).rejects.toBeInstanceOf(TransitionParentHeadMismatchError);
-
-    const created = await createLegacyBridgeTransitionCommit(db, {
-      projectId: project.projectId,
-      refName: 'main',
-      expectedLegacyHead: legacy.hash,
-      commit: prepared.commit,
-      objects: prepared.objects,
-    });
-
-    expect(created.commit.parents).toEqual([]);
-    await expect(
-      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
-    ).resolves.toMatchObject({
-      format: 'transition_v2',
-      head: created.digest,
-      state: prepared.bridge.imported,
-    });
-    expect(
-      (await listCommitHistory(db, project.projectId)).map((entry) => entry.format).sort()
-    ).toEqual(['legacy_v1', 'transition_v2']);
-  });
-
-  it('rejects a legacy bridge that changes the imported State or omits archive evidence', async () => {
-    const project = await insertProject(db, testData.project({ name: 'Strict Bridge Project' }));
-    await ensureMainBranch(db, project.projectId);
-    const legacy = await createCommit(db, {
-      project_id: project.projectId,
-      content: { trees: [{ key: 'version', slots: { value: 1 }, children: [] }], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
-
-    for (const prepared of [
-      await prepareLegacyBridge(project.projectId, 'main', legacy, {
-        imported: createYOpsState({ version: { value: 2 } }),
-      }),
-      await prepareLegacyBridge(project.projectId, 'main', legacy, { includeEvidence: false }),
-    ]) {
-      await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
-      await expect(
-        createLegacyBridgeTransitionCommit(db, {
-          projectId: project.projectId,
-          refName: 'main',
-          expectedLegacyHead: legacy.hash,
-          commit: prepared.commit,
-          objects: prepared.objects,
-        })
-      ).rejects.toMatchObject({ code: 'INTEGRITY_CHAIN_INVALID' });
-    }
-    expect((await findBranchByName(db, project.projectId, 'main'))?.headCommitHash).toBe(
-      legacy.hash
+    const corruptProject = await insertProject(
+      db,
+      testData.project({ name: 'Corrupt Ref Project' })
     );
-    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
-  });
-
-  it('fails the legacy bridge CAS when the CommitV1 head moved', async () => {
-    const project = await insertProject(db, testData.project({ name: 'Legacy Bridge Race' }));
-    await ensureMainBranch(db, project.projectId);
-    const observed = await createCommit(db, {
-      project_id: project.projectId,
-      content: { trees: [{ key: 'version', slots: { value: 1 }, children: [] }], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
-    const prepared = await prepareLegacyBridge(project.projectId, 'main', observed);
-    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
-    const moved = await createCommit(db, {
-      project_id: project.projectId,
-      parents: [observed.hash],
-      content: { trees: [{ key: 'version', slots: { value: 2 }, children: [] }], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'main',
-      enforceBranchLinearity: true,
-    });
-
+    await ensureMainBranch(db, corruptProject.projectId);
+    const unknownDigest = `sha256:${'9'.repeat(64)}`;
+    await db
+      .update(branches)
+      .set({ headCommitHash: unknownDigest })
+      .where(and(eq(branches.projectId, corruptProject.projectId), eq(branches.name, 'main')));
     await expect(
-      createLegacyBridgeTransitionCommit(db, {
-        projectId: project.projectId,
-        refName: 'main',
-        expectedLegacyHead: observed.hash,
-        commit: prepared.commit,
-        objects: prepared.objects,
-      })
+      getTransitionRefHead(db, { projectId: corruptProject.projectId, refName: 'main' })
     ).rejects.toMatchObject({
-      code: 'STALE_BASE',
-      expectedHead: observed.hash,
-      actualHead: moved.hash,
+      name: 'TransitionRefHeadIntegrityError',
+      projectId: corruptProject.projectId,
+      refName: 'main',
+      head: unknownDigest,
     });
-    expect((await findBranchByName(db, project.projectId, 'main'))?.headCommitHash).toBe(
-      moved.hash
-    );
-    expect(await listTransitionCommits(db, project.projectId)).toEqual([]);
   });
 
   it('returns only a verified CommitV2 result State as a ref base', async () => {
@@ -446,16 +276,26 @@ describe('CommitV2 repository', () => {
   it('fails closed when a ref points to a commit outside its project', async () => {
     const owner = await insertProject(db, testData.project({ name: 'Head Owner Project' }));
     await ensureMainBranch(db, owner.projectId);
-    const legacy = await createCommit(db, {
-      project_id: owner.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:owner' },
+    const prepared = await prepare(
+      owner.projectId,
+      'main',
+      state({}),
+      state({ owner: true }),
+      'owner-head'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const ownerCommit = await createTransitionCommit(db, {
+      projectId: owner.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
     });
     const other = await insertProject(db, testData.project({ name: 'Cross Project Head' }));
     await ensureMainBranch(db, other.projectId);
     await db
       .update(branches)
-      .set({ headCommitHash: legacy.hash })
+      .set({ headCommitHash: ownerCommit.digest })
       .where(and(eq(branches.projectId, other.projectId), eq(branches.name, 'main')));
 
     await expect(
@@ -741,6 +581,301 @@ describe('CommitV2 repository', () => {
     expect(refreshed?.headCommitHash).toBe(created.digest);
   });
 
+  it('rejects a parent CommitV2 that has no membership in the repository project', async () => {
+    const sourceProject = await insertProject(
+      db,
+      testData.project({ name: 'CommitV2 Source Membership Project' })
+    );
+    await ensureMainBranch(db, sourceProject.projectId);
+    const parent = await prepare(
+      sourceProject.projectId,
+      'main',
+      state({}),
+      state({ version: 1 }),
+      'membership-parent'
+    );
+    await recordRepositoryDecisionAuthorization(db, parent.issued.authorization);
+    const parentCreated = await createTransitionCommit(db, {
+      projectId: sourceProject.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: parent.commit,
+      objects: parent.objects,
+    });
+    const child = await prepare(
+      sourceProject.projectId,
+      'main',
+      parent.subject.result,
+      state({ version: 2 }),
+      'membership-child',
+      [describeCommitV2(parent.commit)]
+    );
+    await recordRepositoryDecisionAuthorization(db, child.issued.authorization);
+    const childCreated = await createTransitionCommit(db, {
+      projectId: sourceProject.projectId,
+      refName: 'main',
+      expectedHead: parentCreated.digest,
+      commit: child.commit,
+      objects: child.objects,
+    });
+
+    const targetProject = await insertProject(
+      db,
+      testData.project({ name: 'CommitV2 Target Membership Project' })
+    );
+    await ensureMainBranch(db, targetProject.projectId);
+    await db
+      .update(branches)
+      .set({ headCommitHash: parentCreated.digest })
+      .where(and(eq(branches.projectId, targetProject.projectId), eq(branches.name, 'main')));
+    await expect(
+      createTransitionCommit(db, {
+        projectId: targetProject.projectId,
+        refName: 'main',
+        expectedHead: parentCreated.digest,
+        commit: child.commit,
+        objects: child.objects,
+      })
+    ).rejects.toBeInstanceOf(TransitionParentProjectMembershipError);
+
+    await db.insert(transitionCommits).values({
+      projectId: targetProject.projectId,
+      digest: childCreated.digest,
+      mediaType: childCreated.mediaType,
+    });
+
+    await expect(
+      getVerifiedTransitionCommitGraph(db, targetProject.projectId, childCreated.digest)
+    ).rejects.toMatchObject({ code: 'OBJECT_NOT_FOUND' });
+  });
+
+  it('records CommitV2 YOps consumption atomically and protects the consumed rows', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'CommitV2 YOps Consumption Project' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const conversation = await insertConversation(db, {
+      projectId: project.projectId,
+      title: 'CommitV2 YOps source',
+    });
+    const yops = await insertYOpsLogEntry(db, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'device' },
+          source: { type: 'human', author: 'transition-test', at: DECIDED_AT },
+        },
+      ],
+    });
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ device: true }),
+      'yops-consumption'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+    const created = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: prepared.commit,
+      objects: prepared.objects,
+      yopsLogIds: [yops.id],
+    });
+
+    const commitByYOpsId = await findCommitHashesByYOpsLogIds(db, project.projectId, [yops.id]);
+    expect(commitByYOpsId.get(yops.id)).toEqual([created.digest]);
+    await expect(
+      getYOpsForTransitionCommit(db, project.projectId, created.digest)
+    ).resolves.toEqual([expect.objectContaining({ id: yops.id, supersededAt: null })]);
+    const child = await prepare(
+      project.projectId,
+      'main',
+      prepared.subject.result,
+      state({ device: 'updated' }),
+      'duplicate-yops-consumption',
+      [describeCommitV2(prepared.commit)]
+    );
+    await recordRepositoryDecisionAuthorization(db, child.issued.authorization);
+    await expect(
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: created.digest,
+        commit: child.commit,
+        objects: child.objects,
+        yopsLogIds: [yops.id],
+      })
+    ).rejects.toBeInstanceOf(TransitionYOpsLogAlreadyConsumedError);
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ format: 'transition_v2', head: created.digest });
+    await expect(
+      supersedeActiveUncommittedYOpsLogEntries(db, conversation.conversationId)
+    ).resolves.toEqual([]);
+    await expect(deleteYOpsLogEntry(db, yops.id)).resolves.toBeUndefined();
+    await expect(getYOpsLogEntry(db, yops.id)).resolves.toMatchObject({
+      id: yops.id,
+      supersededAt: null,
+    });
+  });
+
+  it('rejects CommitV2 consumption rows from another project without advancing the ref', async () => {
+    const sourceProject = await insertProject(
+      db,
+      testData.project({ name: 'Foreign YOps Source Project' })
+    );
+    const conversation = await insertConversation(db, {
+      projectId: sourceProject.projectId,
+      title: 'Foreign YOps source',
+    });
+    const yops = await insertYOpsLogEntry(db, {
+      projectId: sourceProject.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'foreign' },
+          source: { type: 'human', author: 'transition-test', at: DECIDED_AT },
+        },
+      ],
+    });
+    const targetProject = await insertProject(
+      db,
+      testData.project({ name: 'Foreign YOps Target Project' })
+    );
+    await ensureMainBranch(db, targetProject.projectId);
+    const prepared = await prepare(
+      targetProject.projectId,
+      'main',
+      state({}),
+      state({ accepted: false }),
+      'foreign-yops'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+
+    await expect(
+      createTransitionCommit(db, {
+        projectId: targetProject.projectId,
+        refName: 'main',
+        expectedHead: null,
+        commit: prepared.commit,
+        objects: prepared.objects,
+        yopsLogIds: [yops.id],
+      })
+    ).rejects.toBeInstanceOf(TransitionYOpsLogMembershipError);
+    await expect(
+      getTransitionRefHead(db, { projectId: targetProject.projectId, refName: 'main' })
+    ).resolves.toEqual({ format: 'empty', refName: 'main', head: null });
+  });
+
+  it('serializes CommitV2 consumption against superseding the same YOps row', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'CommitV2 YOps Concurrency Project' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const conversation = await insertConversation(db, {
+      projectId: project.projectId,
+      title: 'Contested YOps source',
+    });
+    const yops = await insertYOpsLogEntry(db, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'contested' },
+          source: { type: 'human', author: 'transition-test', at: DECIDED_AT },
+        },
+      ],
+    });
+    const prepared = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ contested: true }),
+      'contested-yops'
+    );
+    await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
+
+    const [commitResult, supersedeResult] = await Promise.allSettled([
+      createTransitionCommit(db, {
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: null,
+        commit: prepared.commit,
+        objects: prepared.objects,
+        yopsLogIds: [yops.id],
+      }),
+      supersedeActiveUncommittedYOpsLogEntries(db, conversation.conversationId),
+    ]);
+    const finalYOps = await getYOpsLogEntry(db, yops.id);
+
+    if (commitResult.status === 'fulfilled') {
+      expect(finalYOps?.supersededAt).toBeNull();
+      if (supersedeResult.status === 'fulfilled') {
+        expect(supersedeResult.value).not.toContain(yops.id);
+      }
+    } else {
+      expect(commitResult.reason).toBeInstanceOf(SupersededYOpsLogIdsError);
+      expect(finalYOps?.supersededAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it('recursively verifies every ancestor Transition graph', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'CommitV2 Recursive Integrity Project' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const parent = await prepare(
+      project.projectId,
+      'main',
+      state({}),
+      state({ version: 1 }),
+      'recursive-parent'
+    );
+    await recordRepositoryDecisionAuthorization(db, parent.issued.authorization);
+    const parentCreated = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      commit: parent.commit,
+      objects: parent.objects,
+    });
+    const child = await prepare(
+      project.projectId,
+      'main',
+      parent.subject.result,
+      state({ version: 2 }),
+      'recursive-child',
+      [describeCommitV2(parent.commit)]
+    );
+    await recordRepositoryDecisionAuthorization(db, child.issued.authorization);
+    const childCreated = await createTransitionCommit(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: parentCreated.digest,
+      commit: child.commit,
+      objects: child.objects,
+    });
+
+    await db
+      .delete(transitionObjects)
+      .where(
+        eq(transitionObjects.digest, describeTransitionObject(parent.subject.proposal).digest)
+      );
+
+    await expect(
+      getVerifiedTransitionCommitGraph(db, project.projectId, childCreated.digest)
+    ).rejects.toMatchObject({ code: 'OBJECT_NOT_FOUND' });
+  });
+
   it('derives a committed TransitionView from verified objects and trusted issuer facts', async () => {
     const project = await insertProject(db, testData.project({ name: 'Transition View Project' }));
     await ensureMainBranch(db, project.projectId);
@@ -947,15 +1082,9 @@ describe('CommitV2 repository', () => {
     }
   });
 
-  it('lists CommitV1 and CommitV2 together without promoting legacy assurance', async () => {
-    const project = await insertProject(db, testData.project({ name: 'Mixed History Project' }));
+  it('lists and resolves only verified CommitV2 history', async () => {
+    const project = await insertProject(db, testData.project({ name: 'CommitV2 History Project' }));
     await ensureMainBranch(db, project.projectId);
-    const legacy = await createCommit(db, {
-      project_id: project.projectId,
-      content: { trees: [], relations: [] },
-      author: { type: 'human', id: 'human:legacy' },
-      branch: 'legacy',
-    });
     const prepared = await prepare(
       project.projectId,
       'main',
@@ -964,7 +1093,7 @@ describe('CommitV2 repository', () => {
       'mixed'
     );
     await recordRepositoryDecisionAuthorization(db, prepared.issued.authorization);
-    await createTransitionCommit(db, {
+    const created = await createTransitionCommit(db, {
       projectId: project.projectId,
       refName: 'main',
       expectedHead: null,
@@ -973,30 +1102,29 @@ describe('CommitV2 repository', () => {
     });
 
     const history = await listCommitHistory(db, project.projectId);
-    const legacyEntry = history.find((entry) => entry.format === 'legacy_v1');
-    expect(history.map((entry) => entry.format).sort()).toEqual(['legacy_v1', 'transition_v2']);
-    expect(legacyEntry).toMatchObject({
-      id: legacy.hash,
-      assurance: { mode: 'legacy_unavailable' },
-    });
-    expect(legacyEntry).not.toHaveProperty('decision');
+    expect(history).toEqual([
+      expect.objectContaining({
+        format: 'transition_v2',
+        id: created.digest,
+        assurance: expect.objectContaining({ mode: 'decision_bound' }),
+      }),
+    ]);
 
-    const legacyView = await getTransitionViewForCommit(db, {
+    const transitionView = await getTransitionViewForCommit(db, {
       projectId: project.projectId,
-      refName: 'legacy',
-      commitId: legacy.hash,
+      refName: 'main',
+      commitId: created.digest,
     });
-    expect(legacyView).toMatchObject({
+    expect(transitionView).toMatchObject({
       schema: 't3x.dev/transition-view/v1',
-      mode: 'legacy',
-      claims: { observation: 'unavailable', reason: 'legacy_v1' },
-      checks: { observation: 'unavailable', reason: 'legacy_v1' },
+      mode: 'transition',
+      history: { observation: 'committed', commit: { id: created.digest } },
     });
     await expect(
       getTransitionViewForCommit(db, {
         projectId: project.projectId,
         refName: 'main',
-        commitId: legacy.hash,
+        commitId: `sha256:${'0'.repeat(64)}`,
       })
     ).resolves.toBeNull();
   });

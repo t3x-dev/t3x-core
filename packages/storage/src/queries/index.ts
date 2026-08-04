@@ -50,7 +50,6 @@ export {
   insertBranch,
   type ListBranchesOptions,
   switchBranch,
-  updateBranchHead,
 } from './branches';
 // Business Rules
 export {
@@ -58,34 +57,6 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commit Rewrites (append-only rewrite log)
-export {
-  getSupersededHashes,
-  type InsertRewriteInput,
-  insertRewrite,
-  isCommitSuperseded,
-  listRewrites,
-} from './commit-rewrites';
-// Commits (tree-based)
-export {
-  BranchLinearityError,
-  CommitParentIntegrityError,
-  type CreateCommitInput,
-  collectYOpsForCommitRange,
-  createCommit,
-  deleteCommit,
-  getCommit,
-  getCommitsByHashes,
-  getLatestCommit,
-  hasConversationCommitReferences,
-  type ListCommitsOptions,
-  listCommits,
-  SupersededYOpsLogIdsError,
-  updateCommitMessage,
-  updateCommitPosition,
-} from './commits';
-// Commits Unified (transition adapter)
-export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
@@ -412,11 +383,15 @@ export {
 } from './share-tokens';
 // Repository-owned source/evidence read projection
 export {
-  type ConversationSourceCommitReference,
   type ConversationSourceEvidenceRecord,
   type GetConversationSourceEvidenceInput,
   getConversationSourceEvidence,
 } from './source-evidence';
+export {
+  type ConversationSourceCommitReference,
+  hasConversationSourceCommitReferences,
+  listConversationCommitReferences,
+} from './source-evidence-references';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,
@@ -466,12 +441,10 @@ export {
 } from './topics';
 // Transition Decision/Commit command idempotency receipts
 export * from './transition-command-receipts';
-// CommitV2 repository path and mixed-history projections
+// CommitV2 repository path
 export {
   type CreatedTransitionCommit,
-  type CreateLegacyBridgeTransitionCommitInput,
   type CreateTransitionCommitInput,
-  createLegacyBridgeTransitionCommit,
   createTransitionCommit,
   DecisionAuthorizationConflictError,
   DecisionNotAuthorizedError,
@@ -479,22 +452,29 @@ export {
   DecisionRecordIntegrityError,
   getCommitHistoryEntry,
   getRepositoryDecisionAudit,
+  getRepositoryDecisionAuditByDigest,
   getTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
   listCommitHistory,
   listRepositoryDecisionAudit,
+  listTransitionCommitProjectIds,
   listTransitionCommits,
   type RepositoryDecisionAuditEntry,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
+  SupersededYOpsLogIdsError,
+  TransitionCommitGraphIntegrityError,
   TransitionHeadConflictError,
   TransitionParentHeadMismatchError,
+  TransitionParentProjectMembershipError,
   TransitionProjectionAuthorizationInvalidError,
   type TransitionRefHead,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
+  TransitionYOpsLogAlreadyConsumedError,
+  TransitionYOpsLogMembershipError,
   type VerifiedTransitionCommitGraph,
 } from './transition-commits';
 // Transition Proposal and Statement project memberships
@@ -591,6 +571,7 @@ export {
   deleteYOpsLogEntry,
   findCommitHashesByYOpsLogIds,
   getYOpsForCommit,
+  getYOpsForTransitionCommit,
   getYOpsLogEntry,
   type InsertYOpsLogInput,
   insertYOpsLogEntry,

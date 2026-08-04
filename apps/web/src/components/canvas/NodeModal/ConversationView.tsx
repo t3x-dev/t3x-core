@@ -179,8 +179,8 @@ export function ConversationView({
                     No linked conversation
                   </p>
                   <p className="text-xs text-[var(--text-tertiary)] max-w-[320px] leading-relaxed">
-                    This commit was created without a conversation source. Click{' '}
-                    <strong>Details</strong> on the commit card to view its content.
+                    This commit was created without a conversation source. Select the version on the
+                    canvas to view its available context and actions.
                   </p>
                 </div>
               );

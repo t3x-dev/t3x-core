@@ -40,7 +40,7 @@ const realCompareCandidate = {
   changed_nodes: 1,
   output_impacts: 0,
   source_refs: 0,
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   status: 'ready' as const,
   status_label: 'Available',
   open_pull_request_number: null,
@@ -167,6 +167,24 @@ describe('ProjectReviewsTab', () => {
       target_branch: 'main',
       title: 'Real feature',
     });
+  });
+
+  it('defaults the base to main while keeping every registered branch selectable', async () => {
+    pullRequestApi.fetchCompareCandidates.mockResolvedValue({
+      base_branches: ['main', 'release/2026-07', 'feature/prd-audience'],
+      compare_branches: [realCompareCandidate],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+
+    const baseSelect = await screen.findByRole('combobox', { name: 'base:' });
+    expect(baseSelect).toHaveTextContent('main');
+
+    fireEvent.keyDown(baseSelect, { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'main' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'release/2026-07' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'feature/prd-audience' })).toBeInTheDocument();
   });
 
   it('refreshes branch comparisons when a workspace commit is created', async () => {

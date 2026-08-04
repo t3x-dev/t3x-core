@@ -283,7 +283,7 @@ describe('route contract schemas', () => {
     expect(
       CommitResponse.parse({
         hash: 'sha256:test',
-        schema: 't3x/commit',
+        schema: 't3x/commit/v2',
         parents: [],
         author: { type: 'human', name: 'tester' },
         committed_at: '2026-06-18T00:00:00.000Z',
@@ -324,7 +324,7 @@ describe('route contract schemas', () => {
   it('rejects invalid relation keys in commit response contracts', () => {
     const response = {
       hash: 'sha256:test',
-      schema: 't3x/commit',
+      schema: 't3x/commit/v2',
       parents: [],
       author: { type: 'human' as const, name: 'tester' },
       committed_at: '2026-06-18T00:00:00.000Z',
@@ -367,6 +367,7 @@ describe('route contract schemas', () => {
     );
 
     const parsed = ExecuteMergeResponseSchema.parse({
+      schema: 't3x/commit/v2',
       hash: 'sha256:merge',
       parents: ['sha256:source', 'sha256:target'],
       author: { type: 'human', name: 'tester' },

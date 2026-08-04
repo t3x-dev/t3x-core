@@ -16,7 +16,7 @@ import {
   type StatementDescriptor,
   type StringClaim,
 } from '@t3x-dev/transition';
-import { projectCommitV2, projectLegacyCommit } from '../transition-commits/projection';
+import { projectCommitV2 } from '../transition-commits/projection';
 import { evaluateAcceptance, type PolicyFailure } from '../transition-decisions/evaluation';
 import { deriveAssuranceReport } from '../transition-statements/assurance';
 import { HUMAN_CONFIRMATION_PREDICATE_TYPE } from '../transition-statements/profiles';
@@ -24,7 +24,6 @@ import {
   type ActionCapabilityView,
   type ClaimOrigin,
   type ClaimView,
-  type LegacyTransitionViewV1,
   type ProjectionCapabilityReason,
   type ProjectTransitionGraphInput,
   type ProjectTransitionViewInput,
@@ -432,54 +431,6 @@ function projectModern(input: ProjectTransitionGraphInput): TransitionGraphViewV
   };
 }
 
-function legacyCapabilities(): TransitionCapabilitiesView {
-  const readOnly = reason(
-    'LEGACY_HISTORY_READ_ONLY',
-    'Legacy CommitV1 history has no Transition Proposal, Statements, or Decision authority'
-  );
-  return {
-    accept: disposition('not_applicable', [{ ...readOnly }]),
-    override: disposition('not_applicable', [{ ...readOnly }]),
-    reject: disposition('not_applicable', [{ ...readOnly }]),
-    commit: disposition('not_applicable', [{ ...readOnly }]),
-    revert: disposition('not_evaluated', [
-      reason(
-        'REPOSITORY_AUTHORIZATION_REQUIRED',
-        'A legacy revert must be proposed and authorized as a new Transition'
-      ),
-    ]),
-  };
-}
-
-function projectLegacy(
-  input: Extract<ProjectTransitionViewInput, { mode: 'legacy' }>
-): LegacyTransitionViewV1 {
-  const history = projectLegacyCommit(input.commit);
-  return {
-    schema: TRANSITION_VIEW_SCHEMA,
-    version: 1,
-    mode: 'legacy',
-    change: {
-      mode: 'legacy_content',
-      commitId: input.commit.hash,
-      content: structuredClone(input.commit.content),
-    },
-    claims: { observation: 'unavailable', reason: 'legacy_v1' },
-    checks: { observation: 'unavailable', reason: 'legacy_v1' },
-    decision: { observation: 'unavailable', reason: 'legacy_v1' },
-    history: {
-      observation: 'committed',
-      commit: history as Extract<typeof history, { format: 'legacy_v1' }>,
-    },
-    capabilities: legacyCapabilities(),
-    audit: {
-      format: 'legacy_v1',
-      commitId: input.commit.hash,
-      schema: input.commit.schema,
-    },
-  };
-}
-
 /**
  * Build a deterministic, non-authoritative product view from immutable graph
  * objects and trusted application context. The output can explain available
@@ -487,5 +438,5 @@ function projectLegacy(
  * revert; every mutating entry point must re-resolve its own trust facts.
  */
 export function projectTransitionView(input: ProjectTransitionViewInput): TransitionViewV1 {
-  return input.mode === 'legacy' ? projectLegacy(input) : projectModern(input);
+  return projectModern(input);
 }

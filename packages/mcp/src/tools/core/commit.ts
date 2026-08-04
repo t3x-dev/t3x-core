@@ -1,12 +1,19 @@
 /**
  * t3x_commit — snapshot a draft into an immutable commit.
  *
- * Reads the draft's tree data, computes a content hash,
- * creates an immutable commit record, and marks the draft
- * as committed.
+ * Reads the draft's tree data, runs the governed repository Transition,
+ * advances the ref with CAS, and marks the draft as committed.
  */
 
-import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  commitDraft,
+  ensureMainBranch,
+  findDraftById,
+  getTransitionRefHead,
+  TransitionHeadConflictError,
+  TransitionRefNotFoundError,
+} from '@t3x-dev/storage';
 
 import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
@@ -17,10 +24,10 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 export const commitDef: ToolDef = {
   name: 't3x_commit',
   description: [
-    'Snapshot a draft into an immutable commit with a hash-chained record.',
+    'Commit a draft through a verified state Transition and immutable CommitV2.',
     '',
     'Takes a draft_id (from a previous extract or edit), reads its tree data,',
-    'computes a content hash, creates the commit, and marks the draft as committed.',
+    'verifies deterministic replay, records the Decision, creates CommitV2, and marks the draft as committed.',
     '',
     'The draft must be in "editing" status and must contain at least one tree node.',
     '',
@@ -126,41 +133,75 @@ export const commitHandler: ToolHandler = async (args) => {
     return fail('Draft has no trees to commit.\nExtract or edit content before committing.');
   }
 
-  // Step 4: Resolve parent commit
-  const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
-
-  // Step 5: Convert draft nodes to commit trees
+  // Step 4: Convert draft nodes to repository trees.
   const commitTrees = draftNodes.map((node, i) => ({
     key: node.key || node.id || `s_${i}`,
     slots: node.slots || (node.text ? { text: node.text } : {}),
     children: (node.children ?? []) as never[],
   }));
 
-  // Step 6: Create the immutable commit
-  const commit = await createCommit(db, {
-    parents,
-    author: { type: 'human' as const, name: 'mcp' },
-    content: { trees: commitTrees, relations: [] },
-    project_id: projectId,
-    message,
-    branch,
-    provenance: { method: 'human_curation' },
-    enforceBranchLinearity: true,
-  });
+  try {
+    // Step 5: Resolve the exact CommitV2 head observed by this command.
+    if (branch === 'main') await ensureMainBranch(db, projectId);
+    const observedHead = await getTransitionRefHead(db, { projectId, refName: branch });
+    const expectedHead = draft.parent_commit_hash ?? observedHead.head;
+    if (draft.parent_commit_hash !== undefined && draft.parent_commit_hash !== observedHead.head) {
+      return fail('Draft parent does not match the target ref head. Refresh the draft and retry.');
+    }
 
-  // Step 7: Mark draft as committed
-  await commitDraft(db, draftId, commit.hash);
+    // Load the shared application use case only for the storage backend. The
+    // API backend already executes the same use case behind commitFromDraft.
+    const {
+      commitRepositoryYOpsState,
+      createRepositoryYOpsStateFromSemanticContent,
+      getRepositoryConversationEvidence,
+    } = await import('@t3x-dev/api/repository-state-transition');
+    const target = createRepositoryYOpsStateFromSemanticContent({
+      trees: commitTrees,
+      relations: [],
+    });
+    let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
+    const runner = db as unknown as {
+      transaction: <T>(fn: (tx: AnyDB) => Promise<T>) => Promise<T>;
+    };
+    await runner.transaction(async (tx) => {
+      const conversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+      const evidence = conversationId
+        ? await getRepositoryConversationEvidence(tx, projectId, conversationId)
+        : [];
+      created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId,
+        refName: branch,
+        expectedHead,
+        target,
+        actor: { kind: 'human', id: 'human:mcp-local' },
+        intent: message,
+        ...(evidence.length === 0 ? {} : { evidence }),
+      });
+      if (!(await commitDraft(tx, draftId, created.commitDigest))) {
+        throw new Error(`Draft ${draftId} was already committed by another request.`);
+      }
+    });
+    if (created === undefined) throw new Error('CommitV2 transaction did not return a result.');
 
-  return ok({
-    commit_hash: commit.hash,
-    branch: commit.branch ?? branch,
-    parents,
-    committed_at: commit.committed_at,
-    tree_count: commitTrees.length,
-    next_steps: [
-      'Use t3x_query { "target": "commit", "id": "<hash>" } to inspect the commit.',
-      'Use t3x_query { "target": "commits", "project_id": "..." } to list all commits.',
-      'Create a leaf from this commit, or continue editing with a new extract.',
-    ],
-  });
+    return ok({
+      commit_hash: created.commitDigest,
+      schema: created.commit.schema,
+      branch,
+      parents: created.commit.parents.map((parent) => parent.digest),
+      tree_count: commitTrees.length,
+      next_steps: [
+        'Use t3x_query { "target": "commit", "id": "<hash>" } to inspect the commit.',
+        'Use t3x_query { "target": "commits", "project_id": "..." } to list all commits.',
+        'Create a leaf from this commit, or continue editing with a new extract.',
+      ],
+    });
+  } catch (error) {
+    if (error instanceof TransitionHeadConflictError) {
+      return fail(`Draft parent does not match the target ref head. ${error.message}`);
+    }
+    if (error instanceof TransitionRefNotFoundError) return fail(error.message);
+    throw error;
+  }
 };

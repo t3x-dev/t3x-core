@@ -37,7 +37,7 @@ describe('useWorkspaceYOps', () => {
     vi.clearAllMocks();
     vi.mocked(fetchCommitByHash).mockResolvedValue({
       hash: baseCommitHash,
-      schema: 't3x/commit',
+      schema: 't3x/commit/v2',
       parents: [],
       author: { type: 'human', name: 'api' },
       committed_at: '2026-07-22T00:00:00.000Z',
@@ -73,7 +73,7 @@ describe('useWorkspaceYOps', () => {
       await result.current.validate();
     });
 
-    expect(fetchCommitByHash).toHaveBeenCalledWith(baseCommitHash);
+    expect(fetchCommitByHash).toHaveBeenCalledWith(baseCommitHash, 'proj_1');
     expect(validateWorkspaceYOps).toHaveBeenCalledWith(candidate, {
       trees: [{ key: 'prd', slots: { title: 'Inherited PRD' }, children: [] }],
       relations: [{ from: 'prd/summary', to: 'prd/requirements', type: 'depends_on' }],

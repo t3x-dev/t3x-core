@@ -7,8 +7,15 @@ const REPOSITORY_NAVIGATION_OWNERS = [
   'app/project/[projectId]/diff/page.tsx',
   'app/project/[projectId]/merge/[mergeId]/page.tsx',
   'components/chat/ChatSidebar.tsx',
-  'components/commit/CommitDetailPage.tsx',
   'components/diff/DiffPage.tsx',
+];
+
+const COMMIT_NAVIGATION_OWNERS = [
+  ...REPOSITORY_NAVIGATION_OWNERS,
+  'components/history/CommitHistoryPage.tsx',
+  'components/history/CommitHistoryRow.tsx',
+  'components/project/ProjectStateTab.tsx',
+  'components/sources/ConversationSourceEvidencePage.tsx',
 ];
 
 describe('repository Canvas and Outputs links', () => {
@@ -16,6 +23,15 @@ describe('repository Canvas and Outputs links', () => {
     const offenders = REPOSITORY_NAVIGATION_OWNERS.filter((relativePath) => {
       const source = readFileSync(join(__dirname, '..', '..', relativePath), 'utf8');
       return source.includes('/chat/project/');
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('does not link to the retired per-commit detail route', () => {
+    const offenders = COMMIT_NAVIGATION_OWNERS.filter((relativePath) => {
+      const source = readFileSync(join(__dirname, '..', '..', relativePath), 'utf8');
+      return source.includes('/commit/${');
     });
 
     expect(offenders).toEqual([]);

@@ -37,13 +37,14 @@ interface MergeCommitResult {
 
 export function useCanvasMergeActions() {
   const prepare = useCallback(async (sourceHash: string, targetHash: string): Promise<void> => {
-    const { notifyCallback } = useCanvasStore.getState();
+    const { notifyCallback, projectId } = useCanvasStore.getState();
+    if (!projectId) throw new Error('Project is required to prepare a merge');
 
     useCanvasStore.getState().setMergeLoading(true);
     useCanvasStore.getState().setMergeError(null);
 
     try {
-      const data = await prepareMerge(sourceHash, targetHash);
+      const data = await prepareMerge(projectId, sourceHash, targetHash);
       useCanvasStore.getState().setMergePrepared({ sourceHash, targetHash, prepared: data });
       notifyCallback?.('Merge prepared successfully', 'success');
     } catch (error) {
@@ -64,6 +65,7 @@ export function useCanvasMergeActions() {
       notifyCallback?.(errorMsg, 'error');
       throw new Error(errorMsg);
     }
+    if (!projectId) throw new Error('Project is required to execute a merge');
 
     useCanvasStore.getState().setMergeLoading(true);
     useCanvasStore.getState().setMergeError(null);
@@ -72,6 +74,7 @@ export function useCanvasMergeActions() {
       const targetBranch = mergeState.targetBranch || 'main';
 
       const mergeCommit = (await executeMerge({
+        project_id: projectId,
         source_hash: mergeState.sourceHash,
         target_hash: mergeState.targetHash,
         prepared: mergeState.prepared,
@@ -115,7 +118,7 @@ export function useCanvasMergeActions() {
           mustntHave: undefined,
           commit: {
             hash: mergeCommit.hash,
-            schema: 't3x/commit' as const,
+            schema: 't3x/commit/v2' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
             content: { trees: [], relations: [] },

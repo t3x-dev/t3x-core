@@ -52,36 +52,7 @@ export function TransitionReviewPanel({
   }
 
   if (!view) return null;
-  if (view.mode === 'legacy') return <LegacyTransitionReview view={view} />;
   return <VerifiedTransitionReview view={view} />;
-}
-
-function LegacyTransitionReview({ view }: { view: Extract<TransitionViewV1, { mode: 'legacy' }> }) {
-  return (
-    <section
-      aria-label="Saved change review"
-      className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
-    >
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Saved version</h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-            This version predates verifiable change records. Its content is available, but purpose,
-            checks, and approval evidence were not captured.
-          </p>
-        </div>
-        <Badge variant="outline">Legacy history</Badge>
-      </div>
-      <details className="mt-3 border-t border-[var(--stroke-divider)] pt-3 text-xs">
-        <summary className="cursor-pointer font-semibold text-[var(--text-secondary)]">
-          Advanced audit
-        </summary>
-        <p className="mt-2 break-all font-mono text-[var(--text-tertiary)]">
-          Version {view.audit.commitId}
-        </p>
-      </details>
-    </section>
-  );
 }
 
 function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {

@@ -275,12 +275,12 @@ export default function RunDetailPage() {
   // Fetch commit data for lineage chain (assertion → constraint → node → source_ref)
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getApiCommit(leaf.commit_hash)
+    getApiCommit(leaf.commit_hash, leaf.project_id)
       .then(setCommit)
       .catch(() => {
         // Commit fetch failure is non-fatal
       });
-  }, [leaf?.commit_hash]);
+  }, [leaf?.commit_hash, leaf?.project_id]);
 
   // Build map: constraint_id → source_ref (for lineage links)
   const constraintSourceRefMap = useMemo(() => {

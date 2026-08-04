@@ -10,6 +10,6 @@
 import { getApiCommit } from '@/infrastructure/commits';
 import type { ApiCommit } from '@/types/api';
 
-export function fetchCommitByHash(hash: string): Promise<ApiCommit> {
-  return getApiCommit(hash);
+export function fetchCommitByHash(hash: string, projectId?: string): Promise<ApiCommit> {
+  return getApiCommit(hash, projectId);
 }

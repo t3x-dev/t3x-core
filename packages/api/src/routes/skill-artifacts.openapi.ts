@@ -6,10 +6,10 @@ import {
   type TreeNode,
   validateSkillPolicy,
 } from '@t3x-dev/core';
-import { getCommit } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { SuccessResponseSchema } from '../schemas/common';
 
 const SkillBundleFileSchema = z.object({
@@ -89,14 +89,18 @@ skillArtifactRoutes.openapi(getSkillArtifactRoute, async (c) => {
   const accessResult = await assertProjectAccess(c, db, projectId);
   if (accessResult instanceof Response) return accessResult;
 
-  const commit = await getCommit(db, commitHash);
-  if (!commit || commit.project_id !== projectId) {
+  const commit = await getRepositorySemanticCommit(db, commitHash, projectId);
+  if (!commit) {
     return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${commitHash}`);
   }
 
   try {
-    const tree = semanticContentToCandidate(commit.content);
-    const relations = commit.content.relations.map(({ type, from, to }) => ({ type, from, to }));
+    const tree = semanticContentToCandidate(commit.semanticContent);
+    const relations = commit.semanticContent.relations.map(({ type, from, to }) => ({
+      type,
+      from,
+      to,
+    }));
     const policy = validateSkillPolicy(tree, relations);
     const bundle = compileSkillBundle({ tree, relations });
     const blockingCheckCount = bundle.checks.filter((check) => check.blocking).length;
@@ -105,7 +109,7 @@ skillArtifactRoutes.openapi(getSkillArtifactRoute, async (c) => {
       {
         success: true as const,
         data: {
-          commit_hash: commit.hash,
+          commit_hash: commit.digest,
           schema_name: 't3x/skill' as const,
           renderer_version: bundle.rendererVersion,
           generated_description: bundle.generatedDescription,

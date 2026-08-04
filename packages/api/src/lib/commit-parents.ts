@@ -1,4 +1,4 @@
-import { type AnyDB, getLatestCommit } from '@t3x-dev/storage';
+import { type AnyDB, getTransitionRefHead } from '@t3x-dev/storage';
 
 export async function resolveDefaultCommitParents(
   db: AnyDB,
@@ -8,6 +8,6 @@ export async function resolveDefaultCommitParents(
 ): Promise<string[]> {
   if (preferredParentHash) return [preferredParentHash];
 
-  const branchHead = await getLatestCommit(db, projectId, branch);
-  return branchHead ? [branchHead.hash] : [];
+  const branchHead = await getTransitionRefHead(db, { projectId, refName: branch });
+  return branchHead.head === null ? [] : [branchHead.head];
 }

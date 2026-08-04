@@ -10,7 +10,7 @@ import { expect, test } from '../fixtures/test';
 import { expandWorkspaceIfCollapsed } from '../fixtures/workspace';
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
-const COMMITS_URL = '**/api/v1/commits';
+const COMMITS_URL = '**/api/v1/commits**';
 const COMMIT_HASH = 'sha256:1234567890abcdef1234567890abcdef';
 const USER_CONTENT = 'Commit ceremony test: the release note must mention a stable hash chain.';
 
@@ -118,7 +118,7 @@ test.describe('commit ceremony', () => {
             data: {
               commit: {
                 hash: COMMIT_HASH,
-                schema: 't3x/commit',
+                schema: 't3x/commit/v2',
                 parents: [],
                 author: { type: 'human', name: 'E2E Tester' },
                 committed_at: new Date().toISOString(),

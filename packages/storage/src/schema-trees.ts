@@ -145,7 +145,7 @@ export const leaves = pgTable(
      * The commit this leaf uses for knowledge.
      *
      * Fix 14 (no-fk note): No foreign key is declared here intentionally.
-     * Leaves can reference commits from the commits table,
+     * Leaves can reference commits from the CommitV2 storage,
      * so a single FK to one table would be incorrect. Application-level
      * validation (in the leaves query layer) is responsible for confirming that
      * the referenced commit exists before creating or updating a leaf.
@@ -993,10 +993,9 @@ export const yopsLog = pgTable(
      * `supersedeYOpsLogEntryForRepair` on a Repair flow. The WebUI
      * staged-Extract Apply path no longer triggers supersede — it
      * appends. Never set on committed entries — once an id appears
-     * in some commit's `yops_log_ids` it is part of the immutable
-     * baseline and must stay `superseded_at = NULL` forever.
-     * `createCommit` defends this by rejecting any `yops_log_ids`
-     * whose `superseded_at IS NOT NULL` at insert time.
+     * in a CommitV2 application consumption record it is part of the
+     * immutable baseline and must stay `superseded_at = NULL` forever.
+     * The CommitV2 insert path rejects rows whose `superseded_at IS NOT NULL`.
      */
     supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },

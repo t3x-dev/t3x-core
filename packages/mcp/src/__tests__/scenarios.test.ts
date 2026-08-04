@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockState, resetMockState } = vi.hoisted(() => {
+const { mockDB, mockState, resetMockState } = vi.hoisted(() => {
   type Project = {
     projectId: string;
     name: string;
@@ -99,14 +99,19 @@ const { mockState, resetMockState } = vi.hoisted(() => {
     };
   };
 
+  const db: { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> } = {
+    transaction: (fn) => fn(db),
+  };
+
   return {
+    mockDB: db,
     mockState: state,
     resetMockState: reset,
   };
 });
 
 vi.mock('../db.js', () => ({
-  getDB: vi.fn(() => Promise.resolve({})),
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
@@ -121,6 +126,10 @@ vi.mock('@t3x-dev/core', () => ({
     'slack',
     'deploy_agent',
   ],
+  decodeRepositorySemanticState: vi.fn(
+    (repositoryState: { content: { trees: unknown[]; relations: unknown[] } }) =>
+      repositoryState.content
+  ),
   createDefaultProviderRegistry: vi.fn(() => ({
     getById: vi.fn((providerId: string) => ({ id: providerId })),
     getEntry: vi.fn((providerId: string) =>
@@ -293,6 +302,7 @@ vi.mock('../validate/pipeline.js', () => ({
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
+  ensureMainBranch: vi.fn(() => Promise.resolve()),
   findProjects: vi.fn(async () => [...mockState.projects.values()]),
   findProjectById: vi.fn(async (_db: unknown, id: string) => mockState.projects.get(id) ?? null),
   insertProject: vi.fn(async (_db: unknown, { name }: { name: string }) => {
@@ -378,6 +388,14 @@ vi.mock('@t3x-dev/storage', () => ({
     }
   ),
   findDraftById: vi.fn(async (_db: unknown, id: string) => mockState.drafts.get(id) ?? null),
+  getTransitionRefHead: vi.fn(
+    async (_db: unknown, input: { projectId: string; refName: string }) => {
+      const head = [...mockState.commits.values()]
+        .reverse()
+        .find((commit) => commit.project_id === input.projectId && commit.branch === input.refName);
+      return head ? { format: 'transition_v2', head: head.hash } : { format: 'empty', head: null };
+    }
+  ),
   listDraftsByProject: vi.fn(async (_db: unknown, projectId: string) =>
     [...mockState.drafts.values()].filter((draft) => draft.project_id === projectId)
   ),
@@ -409,7 +427,7 @@ vi.mock('@t3x-dev/storage', () => ({
       const hash = `sha256:commit${mockState.counters.commit++}`;
       const commit = {
         hash,
-        schema: 't3x/commit',
+        schema: 't3x/commit/v2',
         committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
         yops_log_ids: [],
         sources: null,
@@ -430,17 +448,37 @@ vi.mock('@t3x-dev/storage', () => ({
     }
     return true;
   }),
-  getCommit: vi.fn(async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null),
-  getCommitUnified: vi.fn(
-    async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null
-  ),
+  getVerifiedTransitionCommitGraph: vi.fn(async (_db: unknown, projectId: string, hash: string) => {
+    const commit = mockState.commits.get(hash);
+    if (!commit || commit.project_id !== projectId) return null;
+    return {
+      recordedAt: commit.committed_at,
+      state: { content: commit.content },
+      commit: {
+        schema: 't3x/commit/v2',
+        parents: commit.parents.map((digest) => ({
+          kind: 'commit',
+          schema: 't3x/commit/v2',
+          digest,
+        })),
+      },
+    };
+  }),
   getLatestCommit: vi.fn(async (_db: unknown, projectId: string, branch: string) =>
     [...mockState.commits.values()]
       .reverse()
       .find((commit) => commit.project_id === projectId && commit.branch === branch)
   ),
-  listCommits: vi.fn(async (_db: unknown, { projectId }: { projectId: string }) =>
-    [...mockState.commits.values()].filter((commit) => commit.project_id === projectId)
+  listCommitHistory: vi.fn(
+    async (_db: unknown, projectId: string, { limit = 50, offset = 0 } = {}) =>
+      [...mockState.commits.values()]
+        .filter((commit) => commit.project_id === projectId)
+        .slice(offset, offset + limit)
+        .map((commit) => ({
+          digest: commit.hash,
+          recordedAt: commit.committed_at,
+          parents: commit.parents,
+        }))
   ),
   createMergeDraft: vi.fn(
     async (
@@ -526,6 +564,114 @@ vi.mock('@t3x-dev/storage', () => ({
     default_provider: 'openai',
     default_model: 'gpt-5.4',
   })),
+  TransitionHeadConflictError: class TransitionHeadConflictError extends Error {},
+  TransitionRefNotFoundError: class TransitionRefNotFoundError extends Error {},
+}));
+
+vi.mock('@t3x-dev/api/repository-state-transition', () => ({
+  createRepositoryYOpsStateFromSemanticContent: vi.fn((content: unknown) => ({ content })),
+  getRepositoryConversationEvidence: vi.fn(() => Promise.resolve([])),
+  prepareRepositoryYOpsMerge: vi.fn(
+    async (input: { sourceDigest: string; targetDigest: string }) => {
+      const source = mockState.commits.get(input.sourceDigest);
+      const target = mockState.commits.get(input.targetDigest);
+      if (!source || !target) throw new Error('CommitV2 merge input not found');
+      return {
+        autoKept: [],
+        conflicts: [{ path: 'trip', slotConflicts: [] }],
+        onlyInSource: [],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      };
+    }
+  ),
+  commitRepositoryYOpsMerge: vi.fn(
+    async (input: {
+      projectId: string;
+      refName: string;
+      sourceDigest: string;
+      targetDigest: string;
+      message: string;
+    }) => {
+      const source = mockState.commits.get(input.sourceDigest);
+      const target = mockState.commits.get(input.targetDigest);
+      if (!source || !target) throw new Error('CommitV2 merge input not found');
+      const hash = `sha256:commit${mockState.counters.commit++}`;
+      const recordedAt = new Date('2026-04-22T00:00:00.000Z').toISOString();
+      const parents = [input.targetDigest, input.sourceDigest];
+      mockState.commits.set(hash, {
+        hash,
+        schema: 't3x/commit/v2',
+        parents,
+        author: { type: 'human', name: 'mcp' },
+        committed_at: recordedAt,
+        content: source.content,
+        project_id: input.projectId,
+        message: input.message,
+        branch: input.refName,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: [],
+        sources: null,
+      });
+      return {
+        commitDigest: hash,
+        recordedAt,
+        commit: {
+          schema: 't3x/commit/v2',
+          parents: parents.map((digest) => ({
+            kind: 'commit',
+            schema: 't3x/commit/v2',
+            digest,
+          })),
+        },
+      };
+    }
+  ),
+  commitRepositoryYOpsState: vi.fn(
+    async (input: {
+      projectId: string;
+      refName: string;
+      expectedHead: string | null;
+      target: {
+        content: {
+          trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+          relations: unknown[];
+        };
+      };
+      intent?: string;
+    }) => {
+      const hash = `sha256:commit${mockState.counters.commit++}`;
+      const parents = input.expectedHead ? [input.expectedHead] : [];
+      mockState.commits.set(hash, {
+        hash,
+        schema: 't3x/commit/v2',
+        parents,
+        author: { type: 'human', name: 'mcp' },
+        committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
+        content: input.target.content,
+        project_id: input.projectId,
+        message: input.intent ?? '',
+        branch: input.refName,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: [],
+        sources: null,
+      });
+      return {
+        commitDigest: hash,
+        commit: {
+          schema: 't3x/commit/v2',
+          parents: parents.map((digest) => ({
+            kind: 'commit',
+            schema: 't3x/commit/v2',
+            digest,
+          })),
+        },
+        transition: {},
+      };
+    }
+  ),
 }));
 
 import { createMcpServer } from '../server.js';
@@ -627,7 +773,7 @@ describe('mcp audit scenarios', () => {
         message: 'Follow-up snapshot',
       })
     );
-    expect(secondCommit.parents).toEqual([]);
+    expect(secondCommit.parents).toEqual([firstCommit.commit_hash]);
 
     const legacyDiff = await callTool('t3x_diff', {
       source: firstCommit.commit_hash,
@@ -640,6 +786,7 @@ describe('mcp audit scenarios', () => {
       await callTool('t3x_diff', {
         base: firstCommit.commit_hash,
         target: secondCommit.commit_hash,
+        project_id: project.project_id,
       })
     );
     expect(diff.base).toBe(firstCommit.commit_hash);
@@ -688,6 +835,8 @@ describe('mcp audit scenarios', () => {
         project_id: project.project_id,
         source_hash: firstCommit.commit_hash,
         target_hash: secondCommit.commit_hash,
+        source_branch: 'main',
+        target_branch: 'main',
       })
     );
     expect(prepared.summary.conflicts).toBe(1);

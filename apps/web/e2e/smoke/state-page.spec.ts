@@ -3,6 +3,7 @@ import {
   API_BASE,
   cleanupProject,
   createTestCommitFromTrees,
+  createTestConversation,
   createTestProject,
 } from '../fixtures/api-helpers';
 
@@ -15,7 +16,7 @@ const PRD_TREE = [
         key: 'summary',
         slots: {
           problem: 'You: i need food and drink',
-          audience: '',
+          audience: 'Office workers',
           outcome: 'Office workers',
         },
         children: [],
@@ -51,15 +52,18 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       branch: 'feature/prd-audience',
       message: 'Workspace commit: PRD audience handoff',
     });
-
+    const conversationId = await createTestConversation(
+      request,
+      projectId,
+      'State page smoke source'
+    );
     const workspaceResponse = await request.patch(
       `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff`,
       {
         data: {
           workspace: {
-            baseCommitHash: null,
+            baseCommitHash: commitHash,
             id: 'workspace_prd_handoff',
-            lastCommitHash: commitHash,
             outputTargets: [],
             projectId,
             schemaBindings: [{ mode: 'pinned', schemaName: 'PRD Schema', version: 'v2' }],
@@ -67,10 +71,17 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
             schemaReview: {
               gaps: [],
               summary: 'The staged state is ready for the smoke test commit.',
-              verdict: 'ready',
+              verdict: 'needs_review',
             },
-            sourceBundle: [],
-            status: 'committed',
+            sourceBundle: [
+              {
+                conversationId,
+                id: `source:${conversationId}`,
+                title: 'State page smoke source',
+                type: 'chat',
+              },
+            ],
+            status: 'schema_review',
             summary: 'Reviewed PRD workspace',
             targetBranch: 'feature/prd-audience',
             title: 'PRD audience handoff',
@@ -89,12 +100,19 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
                   afterValue: 'Office workers',
                   id: 'op_backend_2',
                   op: 'set',
+                  path: 'prd/summary/audience',
+                  summary: 'Set summary.audience',
+                },
+                {
+                  afterValue: 'Office workers',
+                  id: 'op_backend_3',
+                  op: 'set',
                   path: 'prd/summary/outcome',
                   summary: 'Set summary.outcome',
                 },
                 {
                   afterValue: 'Find food and drinks',
-                  id: 'op_backend_3',
+                  id: 'op_backend_4',
                   op: 'set',
                   path: 'prd/requirements/you_i_need_food_and_drink/title',
                   summary: 'Set requirements title',
@@ -109,17 +127,23 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     const workspaceResponseBody = await workspaceResponse.json();
     const workspaceRevision = workspaceResponseBody.data.workspace.revision;
     expect(workspaceRevision).toBeGreaterThan(0);
-    const workspaceCommitResponse = await request.post(
+    const commitResponse = await request.post(
       `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff/commit`,
       {
         data: {
-          content: { trees: PRD_TREE, relations: [] },
+          content: { relations: [], trees: PRD_TREE },
           if_revision: workspaceRevision,
           message: 'Workspace commit: PRD audience handoff',
+          validationOverride: {
+            blockers: ['Resolve schema review before committing.'],
+            kind: 'schema_review',
+            reason: 'E2E fixture accepted for State page workflow coverage.',
+          },
         },
       }
     );
-    expect(workspaceCommitResponse.status()).toBe(200);
+    const commitResponseBody = await commitResponse.json();
+    expect(commitResponse.status(), JSON.stringify(commitResponseBody)).toBe(200);
 
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push('pageerror: ' + error.message));
@@ -163,7 +187,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await expect(
       page.getByRole('heading', { exact: true, name: 'PRD audience handoff' })
     ).toBeVisible();
-    await expect(page.getByText('This field is required by the schema.')).toBeVisible();
+    await expect(page.getByText('Office workers').first()).toBeVisible();
 
     await page.getByRole('tab', { name: /Code/ }).click();
     const codeView = page.getByRole('region', { name: 'YAML code view' });

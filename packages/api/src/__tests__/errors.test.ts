@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 80 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(80);
+  it('has 81 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(81);
   });
 
   it('key equals value for every code', () => {
@@ -78,6 +78,7 @@ describe('ErrorCodes', () => {
         "PROVIDER_UNAVAILABLE": "PROVIDER_UNAVAILABLE",
         "RATE_LIMITED": "RATE_LIMITED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
+        "REF_HEAD_INTEGRITY_INVALID": "REF_HEAD_INTEGRITY_INVALID",
         "RESTORE_FAILED": "RESTORE_FAILED",
         "REVIEW_ACTION_FAILED": "REVIEW_ACTION_FAILED",
         "REVIEW_REQUIRED": "REVIEW_REQUIRED",
@@ -136,6 +137,7 @@ describe('ErrorStatusCodes', () => {
     expect(ErrorStatusCodes.BRANCH_NOT_HEAD).toBe(409);
     expect(ErrorStatusCodes.BRANCH_ROOT_EXISTS).toBe(409);
     expect(ErrorStatusCodes.REVIEW_REQUIRED).toBe(409);
+    expect(ErrorStatusCodes.REF_HEAD_INTEGRITY_INVALID).toBe(409);
   });
 
   it('maps operation failures to 500', () => {

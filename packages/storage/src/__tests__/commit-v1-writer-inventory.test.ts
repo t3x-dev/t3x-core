@@ -3,21 +3,16 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import inventoryJson from '../../contracts/commit-v1-writer-inventory.json';
 
-type WriterDisposition = 'migrate_to_transition' | 'retire' | 'restrict_to_archive_reader';
 type WriterInventory = {
   schema_version: number;
+  purpose: string;
   target: {
     writable_format: string;
     legacy_v1: string;
     tracking_issue: string;
   };
-  dispositions: WriterDisposition[];
-  writers: Array<{
-    file: string;
-    owner: string;
-    disposition: WriterDisposition;
-    replacement: string;
-  }>;
+  dispositions: unknown[];
+  writers: unknown[];
 };
 
 const inventory = inventoryJson as WriterInventory;
@@ -45,29 +40,18 @@ function repositoryPath(absolute: string): string {
 }
 
 describe('CommitV1 writer inventory', () => {
-  it('pins the V2-only write target and a complete migration disposition', () => {
+  it('pins the CommitV2 hard cut and an empty writer inventory', () => {
     expect(inventory.schema_version).toBe(1);
     expect(inventory.target).toEqual({
       writable_format: 't3x/commit/v2',
-      legacy_v1: 'read_only_history',
-      tracking_issue: '#1305',
+      legacy_v1: 'unsupported',
+      tracking_issue: '#1308',
     });
-    expect(inventory.dispositions).toEqual([
-      'migrate_to_transition',
-      'retire',
-      'restrict_to_archive_reader',
-    ]);
-
-    const paths = inventory.writers.map((writer) => writer.file);
-    expect(new Set(paths).size).toBe(paths.length);
-    for (const writer of inventory.writers) {
-      expect(writer.owner.length).toBeGreaterThan(0);
-      expect(inventory.dispositions).toContain(writer.disposition);
-      expect(writer.replacement.length).toBeGreaterThan(0);
-    }
+    expect(inventory.dispositions).toEqual([]);
+    expect(inventory.writers).toEqual([]);
   });
 
-  it('fails when an unowned CommitV1 writer appears or an inventoried writer disappears', async () => {
+  it('fails when any production CommitV1 writer appears', async () => {
     const files = (
       await Promise.all(scannedRoots.map((root) => sourceFiles(`${repositoryRoot}/${root}`)))
     ).flat();
@@ -77,6 +61,6 @@ describe('CommitV1 writer inventory', () => {
         discovered.push(repositoryPath(file));
       }
     }
-    expect(discovered.sort()).toEqual(inventory.writers.map((writer) => writer.file).sort());
+    expect(discovered.sort()).toEqual([]);
   });
 });

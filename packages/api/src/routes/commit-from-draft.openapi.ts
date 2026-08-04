@@ -12,11 +12,23 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: draft commit route adapts mixed node payload shapes pending stricter request schemas */
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
-import { resolveDefaultCommitParents } from '../lib/commit-parents';
+import {
+  type AnyDB,
+  commitDraft,
+  ensureMainBranch,
+  findDraftById,
+  getTransitionRefHead,
+  TransitionHeadConflictError,
+  TransitionRefNotFoundError,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
+} from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -25,6 +37,15 @@ import { CommitFromDraftRequest, CommitFromDraftResponse } from '../schemas/inte
 export const commitFromDraftRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
+
+class DraftCommitClaimConflictError extends Error {
+  constructor(readonly draftId: string) {
+    super(`Draft ${draftId} was already committed by another request`);
+    this.name = 'DraftCommitClaimConflictError';
+  }
+}
 
 // ============================================================
 // Route Definition
@@ -94,6 +115,8 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, project_id);
+    if (access instanceof Response) return access;
 
     // Step 1: Find the draft and verify ownership
     const draft = await findDraftById(db, draft_id);
@@ -127,13 +150,16 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       return errorResponse(c, 'INVALID_REQUEST', 'Draft has no trees to commit');
     }
 
-    // Step 4: Resolve parent commit (from draft or branch HEAD)
-    const parents = await resolveDefaultCommitParents(
-      db,
-      project_id,
-      targetBranch,
-      draft.parent_commit_hash
-    );
+    // Step 4: Resolve the exact CommitV2 ref head observed by this command.
+    if (targetBranch === 'main') await ensureMainBranch(db, project_id);
+    const observedHead = await getTransitionRefHead(db, {
+      projectId: project_id,
+      refName: targetBranch,
+    });
+    const expectedHead = draft.parent_commit_hash ?? observedHead.head;
+    if (draft.parent_commit_hash !== undefined && draft.parent_commit_hash !== observedHead.head) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', 'Draft parent does not match the target ref head');
+    }
 
     // Step 5: Convert draft nodes to commit trees
     const commitTrees = draftNodes.map((node, i) => ({
@@ -154,20 +180,36 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     // forward — the empty array is correct here, not a placeholder. If
     // draft-side relations land in a follow-up, replace this with the
     // draft's persisted relations.
-    const commit = await createCommit(db, {
-      parents,
-      author: { type: 'human' as const, name: 'api' },
-      content: { trees: commitTrees, relations: [] },
-      project_id,
-      message: message ?? `Draft: ${draft.title}`,
-      branch: targetBranch,
-      provenance: { method: 'human_curation' },
-      yops_log_ids: yopsLogIds,
-      enforceBranchLinearity: true,
+    const target = createRepositoryYOpsStateFromSemanticContent({
+      trees: commitTrees,
+      relations: [],
     });
-
-    // Step 6: Mark draft as committed
-    await commitDraft(db, draft_id, commit.hash);
+    const userId = getUserId(c);
+    let commitDigest: string | undefined;
+    await (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      const evidence = conversationId
+        ? await getRepositoryConversationEvidence(tx, project_id, conversationId)
+        : [];
+      const created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId: project_id,
+        refName: targetBranch,
+        expectedHead,
+        target,
+        actor: {
+          kind: 'human',
+          id: userId ? `user:${userId}` : 'human:local-user',
+        },
+        intent: message ?? `Draft: ${draft.title}`,
+        ...(evidence.length === 0 ? {} : { evidence }),
+        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
+      });
+      const claimed = await commitDraft(tx, draft_id, created.commitDigest);
+      if (!claimed) throw new DraftCommitClaimConflictError(draft_id);
+      commitDigest = created.commitDigest;
+    });
+    if (commitDigest === undefined) throw new Error('CommitV2 transaction did not return a digest');
 
     // Step 7: Fire commit.created webhook
     const treeCount = commitTrees.length;
@@ -175,9 +217,9 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       'commit.created',
       {
         project_id,
-        commit_hash: commit.hash,
+        commit_hash: commitDigest,
         tree_count: treeCount,
-        branch: commit.branch ?? targetBranch,
+        branch: targetBranch,
       },
       project_id
     );
@@ -187,16 +229,23 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       {
         success: true as const,
         data: {
-          commit_hash: commit.hash,
+          commit_hash: commitDigest,
           tree_count: treeCount,
-          branch: commit.branch ?? targetBranch,
+          branch: targetBranch,
         },
       },
       201
     );
   } catch (err) {
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
+    if (err instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
+    }
+    if (err instanceof TransitionRefNotFoundError) {
+      return errorResponse(c, 'NOT_FOUND', err.message);
+    }
+    if (err instanceof DraftCommitClaimConflictError) {
+      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
     // Suggestion-vs-baseline: if a concurrent re-extract superseded
     // any of the candidate yops_log_ids between findUncommittedYOpsIds
     // and createCommit, surface as 409 retryable conflict instead of

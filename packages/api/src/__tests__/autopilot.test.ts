@@ -10,13 +10,15 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
+  branches,
+  ensureMainBranch,
   findDraftById,
   insertDraft,
   insertProject,
   updateAutopilotConfig,
   updateDraft,
 } from '@t3x-dev/storage';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -302,7 +304,7 @@ describe('Autopilot Routes', () => {
       expect(json.data.nodes_skipped).toBeGreaterThanOrEqual(1);
     });
 
-    it('keeps the draft editable when commit creation fails after claiming', async () => {
+    it('keeps the draft editable when a corrupt ref head blocks CommitV2 creation', async () => {
       const isolatedProject = await insertProject(
         mockDB,
         testData.project({ name: 'Autopilot Rollback Test' })
@@ -313,14 +315,11 @@ describe('Autopilot Routes', () => {
         target_branch: 'main',
       });
 
-      await createCommit(mockDB, {
-        parents: [],
-        author: { type: 'human', name: 'setup' },
-        content: { trees: [{ key: 'existing', slots: {}, children: [] }], relations: [] },
-        project_id: isolatedProject.projectId,
-        branch: 'main',
-        message: 'Existing root',
-      });
+      await ensureMainBranch(mockDB, isolatedProject.projectId);
+      await mockDB
+        .update(branches)
+        .set({ headCommitHash: `sha256:${'f'.repeat(64)}` })
+        .where(and(eq(branches.projectId, isolatedProject.projectId), eq(branches.name, 'main')));
 
       const draft = await insertDraft(mockDB, {
         project_id: isolatedProject.projectId,
@@ -351,7 +350,7 @@ describe('Autopilot Routes', () => {
         method: 'POST',
       });
 
-      expect(res.status).toBe(409);
+      expect(res.status).toBe(500);
       const reloaded = await findDraftById(mockDB, draft.id);
       expect(reloaded?.status).toBe('editing');
       expect(reloaded?.committed_as).toBeUndefined();

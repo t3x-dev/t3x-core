@@ -34,6 +34,20 @@ export function getProjectIdCanvasPath(projectId: string): string {
   return `${getProjectIdRepoPath(projectId)}?view=canvas`;
 }
 
+export function getProjectIdCanvasCommitPath(projectId: string, commitHash: string): string {
+  const params = new URLSearchParams({ view: 'canvas', commit: commitHash });
+  return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;
+}
+
+export function getProjectIdDiffPath(
+  projectId: string,
+  baseHash: string,
+  targetHash: string
+): string {
+  const params = new URLSearchParams({ base: baseHash, target: targetHash });
+  return `${getProjectIdRepoPath(projectId)}/diff?${params.toString()}`;
+}
+
 export function getProjectIdOutputsPath(projectId: string, leafId?: string): string {
   const params = new URLSearchParams({ tab: 'outputs' });
   if (leafId) params.set('leaf', leafId);

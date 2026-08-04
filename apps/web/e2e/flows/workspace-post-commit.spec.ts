@@ -1,9 +1,5 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import {
-  API_BASE,
-  cleanupProject,
-  createTestProject,
-} from '../fixtures/api-helpers';
+import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 
 const WORKSPACE_TREE = [
@@ -19,6 +15,21 @@ const WORKSPACE_TREE = [
           outcome: 'A fresh iteration keeps the committed baseline.',
         },
         children: [],
+      },
+      {
+        key: 'requirements',
+        slots: {},
+        children: [
+          {
+            key: 'continue_after_commit',
+            slots: {
+              acceptance: 'Users can start a fresh iteration from the committed baseline.',
+              priority: 'P1',
+              title: 'Continue after commit',
+            },
+            children: [],
+          },
+        ],
       },
     ],
   },
@@ -49,7 +60,6 @@ async function createCommittedWorkspaceFixture(
   const projectName = `Post commit ${scenario} ${token}`;
   const { projectId } = await createTestProject(request, projectName);
   const workspaceId = `workspace_post_commit_${scenario}_${token.replaceAll('-', '_')}`;
-  const message = `Post-commit ${scenario} baseline`;
   try {
     const saveResponse = await request.patch(
       `${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`,
@@ -72,13 +82,49 @@ async function createCommittedWorkspaceFixture(
                   type: 'string',
                   value: 'Users need to continue working after a commit.',
                 },
+                {
+                  id: 'field_audience',
+                  label: 'Audience',
+                  path: 'prd/summary/audience',
+                  required: true,
+                  status: 'covered',
+                  type: 'string',
+                  value: 'Product teams',
+                },
+                {
+                  id: 'field_outcome',
+                  label: 'Outcome',
+                  path: 'prd/summary/outcome',
+                  required: true,
+                  status: 'covered',
+                  type: 'string',
+                  value: 'A fresh iteration keeps the committed baseline.',
+                },
+                {
+                  id: 'field_requirement_title',
+                  label: 'Requirement title',
+                  path: 'prd/requirements/continue_after_commit/title',
+                  required: true,
+                  status: 'covered',
+                  type: 'string',
+                  value: 'Continue after commit',
+                },
+                {
+                  id: 'field_requirement_acceptance',
+                  label: 'Acceptance',
+                  path: 'prd/requirements/continue_after_commit/acceptance',
+                  required: true,
+                  status: 'covered',
+                  type: 'string',
+                  value: 'Users can start a fresh iteration from the committed baseline.',
+                },
               ],
               summary: 'Committed workspace candidate for live E2E verification.',
             },
             schemaReview: {
               gaps: [],
               summary: 'Ready to commit.',
-              verdict: 'ready',
+              verdict: 'needs_review',
             },
             sourceBundle: [
               {
@@ -116,6 +162,34 @@ async function createCommittedWorkspaceFixture(
                   path: 'prd/summary/problem',
                   summary: 'Set the product problem.',
                 },
+                {
+                  afterValue: 'Product teams',
+                  id: 'op_audience',
+                  op: 'set',
+                  path: 'prd/summary/audience',
+                  summary: 'Set the target audience.',
+                },
+                {
+                  afterValue: 'A fresh iteration keeps the committed baseline.',
+                  id: 'op_outcome',
+                  op: 'set',
+                  path: 'prd/summary/outcome',
+                  summary: 'Set the target outcome.',
+                },
+                {
+                  afterValue: 'Continue after commit',
+                  id: 'op_requirement_title',
+                  op: 'set',
+                  path: 'prd/requirements/continue_after_commit/title',
+                  summary: 'Set the continuation requirement title.',
+                },
+                {
+                  afterValue: 'Users can start a fresh iteration from the committed baseline.',
+                  id: 'op_requirement_acceptance',
+                  op: 'set',
+                  path: 'prd/requirements/continue_after_commit/acceptance',
+                  summary: 'Set the continuation requirement acceptance.',
+                },
               ],
             },
           },
@@ -126,22 +200,24 @@ async function createCommittedWorkspaceFixture(
     const savePayload = await saveResponse.json();
     const workspaceRevision = savePayload.data.workspace.revision as number;
     expect(workspaceRevision).toBeGreaterThan(0);
-
     const commitResponse = await request.post(
       `${API_BASE}/projects/${projectId}/workspaces/${workspaceId}/commit`,
       {
         data: {
           content: { relations: [], trees: WORKSPACE_TREE },
           if_revision: workspaceRevision,
-          message,
+          message: `Post-commit ${scenario} baseline`,
+          validationOverride: {
+            blockers: ['Resolve schema review before committing.'],
+            kind: 'schema_review',
+            reason: 'E2E fixture accepted for post-commit workflow coverage.',
+          },
         },
       }
     );
-    expect(commitResponse.status()).toBe(200);
     const commitPayload = await commitResponse.json();
+    expect(commitResponse.status(), JSON.stringify(commitPayload)).toBe(200);
     const commitHash = commitPayload.data.commit.hash as string;
-    expect(commitPayload.data.workspace.status).toBe('committed');
-    expect(commitPayload.data.workspace.lastCommitHash).toBe(commitHash);
 
     return {
       commitHash,

@@ -66,7 +66,7 @@ describe('YOpsDraftTab Transition write path', () => {
     vi.restoreAllMocks();
   });
 
-  it('fails closed on a legacy head and never falls back to the legacy commit route', async () => {
+  it('fails closed on a non-transition head and never falls back to a removed commit route', async () => {
     const validate = vi.fn().mockResolvedValue({
       ok: true,
       applied: 1,
@@ -104,7 +104,7 @@ describe('YOpsDraftTab Transition write path', () => {
             success: false,
             error: {
               code: 'LEGACY_HEAD_READ_ONLY',
-              message: 'Legacy CommitV1 heads are read-only until migration is defined',
+              message: 'Non-transition heads are read-only until migration is defined',
             },
           }),
           { status: 409, headers: { 'Content-Type': 'application/json' } }

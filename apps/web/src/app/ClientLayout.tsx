@@ -17,10 +17,6 @@ import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
-export function isCommitDetailRoute(pathname: string): boolean {
-  return /^\/project\/[^/]+\/commit\/[^/]+(?:\/)?$/.test(pathname);
-}
-
 export function isProjectDiffRoute(pathname: string): boolean {
   return /^\/project\/[^/]+\/diff(?:\/)?$/.test(pathname);
 }
@@ -30,9 +26,7 @@ export function isProjectMergeRoute(pathname: string): boolean {
 }
 
 export function isShelllessDetailRoute(pathname: string): boolean {
-  return (
-    isCommitDetailRoute(pathname) || isProjectDiffRoute(pathname) || isProjectMergeRoute(pathname)
-  );
+  return isProjectDiffRoute(pathname) || isProjectMergeRoute(pathname);
 }
 
 export function isSettingsRoute(pathname: string): boolean {

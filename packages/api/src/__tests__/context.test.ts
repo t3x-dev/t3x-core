@@ -5,9 +5,13 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertProject } from '@t3x-dev/storage';
+import { ensureMainBranch, insertBranch, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
@@ -46,11 +50,16 @@ describe('Context Routes', () => {
     );
     emptyProjectId = emptyProject.projectId;
 
-    // Create commits on main branch
-    await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
+    await ensureMainBranch(mockDB, testProjectId);
+    await ensureMainBranch(mockDB, emptyProjectId);
+
+    const first = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: testProjectId,
+      refName: 'main',
+      expectedHead: null,
+      actor: { kind: 'human', id: 'user:user_1' },
+      target: createRepositoryYOpsStateFromSemanticContent({
         trees: [
           {
             key: 'preference',
@@ -59,18 +68,17 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-        // biome-ignore lint/suspicious/noExplicitAny: test data cast
-      } as any,
-      project_id: testProjectId,
-      message: 'First commit',
-      branch: 'main',
+      }),
+      intent: 'First commit',
     });
 
-    // Create a newer commit on main (this should be the latest)
-    await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
+    const second = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: testProjectId,
+      refName: 'main',
+      expectedHead: first.commitDigest,
+      actor: { kind: 'human', id: 'user:user_1' },
+      target: createRepositoryYOpsStateFromSemanticContent({
         trees: [
           {
             key: 'preference',
@@ -84,18 +92,22 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-        // biome-ignore lint/suspicious/noExplicitAny: test data cast
-      } as any,
-      project_id: testProjectId,
-      message: 'Second commit on main',
-      branch: 'main',
+      }),
+      intent: 'Second commit on main',
     });
 
-    // Create a commit on a different branch
-    await createCommit(mockDB, {
-      parents: [],
-      author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
+    await insertBranch(mockDB, {
+      projectId: testProjectId,
+      name: 'dev',
+      parentBranch: 'main',
+    });
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: testProjectId,
+      refName: 'dev',
+      expectedHead: second.commitDigest,
+      actor: { kind: 'human', id: 'user:user_1' },
+      target: createRepositoryYOpsStateFromSemanticContent({
         trees: [
           {
             key: 'opinion',
@@ -104,11 +116,8 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-        // biome-ignore lint/suspicious/noExplicitAny: test data cast
-      } as any,
-      project_id: testProjectId,
-      message: 'Commit on dev branch',
-      branch: 'dev',
+      }),
+      intent: 'Commit on dev branch',
     });
   });
 

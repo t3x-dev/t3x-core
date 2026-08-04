@@ -142,7 +142,7 @@ const STATE_COMMIT: ApiCommit = {
   parents: [],
   project_id: 'proj_test',
   provenance: { method: 'workspace' },
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   sources: [],
   yops_log_ids: [],
 };
@@ -311,6 +311,43 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
       expect(canvasSurfaceMocks.fetchPins).toHaveBeenCalledWith('proj_test');
     });
+  });
+
+  it('stops automatic Canvas reloads for an unverifiable CommitV2 ref but keeps manual retry', async () => {
+    searchParamsValue = new URLSearchParams('view=canvas&branch=main');
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    useCanvasStore.setState({
+      nodes: [],
+      edges: [],
+      loading: false,
+      loadError: Object.assign(new Error('Ref main points to an unverifiable commit'), {
+        code: 'REF_HEAD_INTEGRITY_INVALID',
+      }),
+      projectId: 'proj_test',
+    });
+
+    renderProjectContent();
+
+    expect(
+      await screen.findByText(
+        "This repository's branch head cannot be verified as CommitV2. For a pre-cut local database, use a fresh database or reset local development data."
+      )
+    ).toBeInTheDocument();
+    await waitFor(() => expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test'));
+    canvasSurfaceMocks.loadCanvas.mockClear();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
+    expect(intervalSpy.mock.calls.some(([, delay]) => delay === 30_000)).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
+    intervalSpy.mockRestore();
   });
 
   it('renders a verified YSchema badge from the latest validation run', async () => {
@@ -551,6 +588,32 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
+    expect(useCanvasStore.getState().openNodeId).toBeNull();
+    expect(useCanvasStore.getState().modalViewMode).toBeNull();
+  });
+
+  it('does not revive commit details from a retired selected-node deep link', async () => {
+    searchParamsValue = new URLSearchParams('view=canvas&selected=sha256%3Aabc123');
+    useCanvasStore.setState({
+      nodes: [
+        {
+          id: 'sha256:abc123',
+          type: 'unit',
+          position: { x: 0, y: 0 },
+          data: { kind: 'unit', commitStatus: 'committed' },
+        },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+      openNodeId: null,
+      modalViewMode: null,
+    });
+
+    renderProjectContent();
+
+    expect(await screen.findByTestId('canvas-workspace')).toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
   });

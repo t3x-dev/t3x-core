@@ -25,7 +25,6 @@ import {
   createLeafHistory,
   findLeafById,
   findProjectById,
-  getCommitUnified,
   updateLeaf,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
@@ -34,6 +33,7 @@ import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { getUserId } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
@@ -552,8 +552,8 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
       if (accessResult instanceof Response) return accessResult;
     }
 
-    // 1. Verify commit exists (unified, auto-upgrades V4)
-    const unifiedCommit = await getCommitUnified(db, decodedHash);
+    // 1. Verify the CommitV2 graph and decode its semantic State explicitly.
+    const unifiedCommit = await getRepositorySemanticCommit(db, decodedHash, body.project_id);
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
@@ -580,7 +580,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
         // 3a. Create leaf (auto-generate title from commit message if not provided)
         const leafTitle =
           leafConfig.title ||
-          `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
+          `${unifiedCommit.rationale || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
         const leaf = await createLeaf(db, {
           commit_hash: decodedHash,
           type: leafConfig.type,

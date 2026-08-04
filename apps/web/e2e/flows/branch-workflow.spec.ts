@@ -123,7 +123,7 @@ test.describe('Branch Workflow', () => {
     const branchCommit = canvas.getByRole('treeitem', {
       name: new RegExp(`Committed on branch ${escapeRegExp(featureBranchName)}`),
     });
-    await expect(branchCommit).toBeVisible({ timeout: 15000 });
+    await expect(branchCommit.first()).toBeVisible({ timeout: 15000 });
   });
 
   // BR-08: Switch back to main

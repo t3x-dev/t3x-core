@@ -87,8 +87,8 @@ export function useChatInit({
 
     // ── 3. Hydrate state (regular replay, or parent inheritance as fallback) ──
     // Pure queries return data; the hook performs the store writes.
-    const runInheritance = async (hash: string) => {
-      const data = await fetchParentCommitData(hash);
+    const runInheritance = async (hash: string, projectId?: string) => {
+      const data = await fetchParentCommitData(hash, projectId);
       if (data.parentConversationId) setParentConversationId(data.parentConversationId);
       if (data.fetched && data.hasTrees && data.lastCommitHash) {
         useCommitStore.setState({
@@ -116,7 +116,7 @@ export function useChatInit({
         })
         .catch((err) => {
           if (inheritFromCommitHash) {
-            void runInheritance(inheritFromCommitHash);
+            void runInheritance(inheritFromCommitHash, projectIdForConversation);
             return;
           }
           const store = useWorkspaceStore.getState();
@@ -125,7 +125,7 @@ export function useChatInit({
         });
     } else if (inheritFromCommitHash) {
       useCommitStore.getState().setProjectId(projectIdForConversation || null);
-      void runInheritance(inheritFromCommitHash);
+      void runInheritance(inheritFromCommitHash, projectIdForConversation || undefined);
     }
   }, [
     conversationId,

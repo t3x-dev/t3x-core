@@ -3,6 +3,7 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export interface CommitMeta {
   hash: string;
+  digest?: string;
   message: string | null;
   author: { type: string; name?: string };
   committed_at: string;

@@ -8,7 +8,6 @@ import { generateBranchId } from '@t3x-dev/core';
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Branch, branches } from '../schema';
-import { getLatestCommit } from './commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateBranchInput {
@@ -204,26 +203,6 @@ export async function switchBranch(
 }
 
 /**
- * Update branch head commit
- */
-export async function updateBranchHead(
-  db: AnyDB,
-  projectId: string,
-  branchName: string,
-  commitHash: string
-): Promise<Branch | null> {
-  const now = new Date();
-
-  const [updated] = await db
-    .update(branches)
-    .set({ headCommitHash: commitHash, updatedAt: now })
-    .where(and(eq(branches.projectId, projectId), eq(branches.name, branchName)))
-    .returning();
-
-  return updated ?? null;
-}
-
-/**
  * Delete a branch
  *
  * Fix 8: Wrap in transaction. The existence/currency check and the DELETE are
@@ -256,18 +235,8 @@ export async function ensureMainBranch(db: AnyDB, projectId: string): Promise<Br
   return db.transaction(async (tx) => {
     const transactionDB = tx as AnyDB;
     const existing = await findBranchByName(transactionDB, projectId, 'main');
-    const latestMainCommit = await getLatestCommit(transactionDB, projectId, 'main');
 
     if (existing) {
-      if (!existing.headCommitHash && latestMainCommit) {
-        const repaired = await updateBranchHead(
-          transactionDB,
-          projectId,
-          'main',
-          latestMainCommit.hash
-        );
-        if (repaired) return repaired;
-      }
       return existing;
     }
 
@@ -283,7 +252,7 @@ export async function ensureMainBranch(db: AnyDB, projectId: string): Promise<Br
         projectId,
         name: 'main',
         parentBranch: null,
-        headCommitHash: latestMainCommit?.hash ?? null,
+        headCommitHash: null,
         description: null,
         isCurrent: Number(countResult?.count ?? 0) === 0 ? 1 : 0,
         createdAt: now,

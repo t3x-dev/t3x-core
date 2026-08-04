@@ -1,5 +1,5 @@
 -- Migration: Add triggers for cross-process realtime sync.
--- Fires commit.created / draft.changed / yops.applied / conversation.renamed events.
+-- Fires draft.changed / yops.applied / conversation.renamed events.
 
 BEGIN;
 
@@ -20,25 +20,6 @@ BEGIN
   RETURN new_id;
 END;
 $$ LANGUAGE plpgsql;
-
--- commits INSERT → commit.created
-CREATE OR REPLACE FUNCTION t3x_trg_commit_created() RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.project_id IS NULL THEN RETURN NEW; END IF;
-  PERFORM t3x_emit_event(
-    'commit.created',
-    NEW.project_id,
-    NULL,
-    jsonb_build_object('hash', NEW.hash, 'branch', NEW.branch)
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_commits_event ON commits;
-CREATE TRIGGER trg_commits_event
-  AFTER INSERT ON commits
-  FOR EACH ROW EXECUTE FUNCTION t3x_trg_commit_created();
 
 -- drafts UPDATE → draft.changed (only when updated_at moves)
 CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$

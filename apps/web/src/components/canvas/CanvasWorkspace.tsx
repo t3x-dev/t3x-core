@@ -7,11 +7,10 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
-import { GitCommit, HelpCircle } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
-import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
@@ -60,7 +59,7 @@ import { MergePanel } from '../merge/MergePanel';
 import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
-import { NodeModal, type NodeQuickAction } from './NodeModal';
+import { NodeModal } from './NodeModal';
 
 const GRID_SIZE = 16;
 const CANVAS_MINIMAP_WIDTH = 176;
@@ -154,7 +153,6 @@ function CanvasWorkspaceInner({
     openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
-  const { addConversationFromCommit } = useCanvasCommitActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -369,7 +367,6 @@ function CanvasWorkspaceInner({
     focusedCommitAppliedRef.current = focusKey;
 
     setHighlight({ mode: 'node', nodeId: targetNode.id });
-    openNodeModal(targetNode.id, 'commit');
     const currentNodes = getNodes();
     setNodes(
       currentNodes.map((node) => ({
@@ -393,7 +390,6 @@ function CanvasWorkspaceInner({
     getNodes,
     initialLayoutDone,
     nodes,
-    openNodeModal,
     projectId,
     setCenter,
     setHighlight,
@@ -401,6 +397,13 @@ function CanvasWorkspaceInner({
   ]);
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
+
+  useEffect(() => {
+    if (modalNode?.data.commitStatus === 'committed' && modalViewMode !== 'conversation') {
+      closeNodeModal();
+    }
+  }, [closeNodeModal, modalNode, modalViewMode]);
+
   const pendingCommitBranchMode = useCanvasStore((state) => {
     if (!openNodeId) {
       return undefined;
@@ -436,37 +439,6 @@ function CanvasWorkspaceInner({
     return hasDownstreamPendingCommits(openNodeId);
   }, [openNodeId, modalNode, hasDownstreamPendingCommits]);
 
-  const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {
-    if (!modalNode) {
-      return undefined;
-    }
-    // Only show quick actions for committed units, not staging ones
-    if (modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'committed') {
-      return [
-        {
-          key: 'add-unit',
-          label: 'Create Unit',
-          icon: <GitCommit size={14} />,
-          onClick: async () => {
-            await addConversationFromCommit(modalNode.id);
-            // Find the newly created node (last node with staging status)
-            const nodes = useCanvasStore.getState().nodes;
-            const newNode = nodes.find(
-              (n) =>
-                n.data.kind === 'unit' &&
-                n.data.commitStatus === 'staging' &&
-                n.data.sourceCommitHash === modalNode.data.commitHash
-            );
-            if (newNode) {
-              useCanvasStore.getState().openNodeModal(newNode.id, 'conversation');
-            }
-          },
-        },
-      ];
-    }
-    return undefined;
-  }, [modalNode, addConversationFromCommit]);
-
   const selectedUnitNode = useMemo<CanvasUnitNode | null>(() => {
     const actionNode = actionPanel
       ? nodes.find((node) => node.id === actionPanel.nodeId)
@@ -499,9 +471,6 @@ function CanvasWorkspaceInner({
 
     return {
       actions: buildCommitActions({
-        onViewDetails: () => {
-          openNodeModal(node.id, 'commit');
-        },
         onOpenLeaf:
           firstLeaf?.id && projectId
             ? () => {
@@ -611,7 +580,8 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Committed nodes: single click = action panel. Details opens inline.
+              // Committed nodes: single click selects the version and exposes
+              // the actions that remain on the Canvas.
               if (!compactViewport) {
                 if (data.branchType === 'branch') {
                   setHighlight({ branch: data.branchName, mode: 'branch' });
@@ -764,48 +734,49 @@ function CanvasWorkspaceInner({
         projectId && (
           <DraftQuickSheet open onClose={closeNodeModal} draftId={modalNode.data.draftId} />
         )}
-      {modalNode && modalNode.data.commitStatus !== 'draft' && (
-        <NodeModal
-          node={modalNode}
-          onClose={closeNodeModal}
-          onUpdate={(patch) => updateNode(modalNode.id, patch)}
-          viewMode={modalViewMode || 'commit'}
-          onConvertDraft={
-            modalNode.data.kind === 'unit' &&
-            modalNode.data.commitStatus === 'staging' &&
-            pendingCommitBranchMode !== 'blocked'
-              ? () => {
-                  commitPendingCommit(modalNode.id);
-                  closeNodeModal();
-                  notify?.('Unit committed successfully', 'success');
-                }
-              : undefined
-          }
-          onBranchChange={
-            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-              ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
-              : undefined
-          }
-          onBranchNameChange={
-            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-              ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
-              : undefined
-          }
-          quickActions={modalQuickActions}
-          onSaveConstraints={
-            modalNode.data.kind === 'unit'
-              ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
-              : undefined
-          }
-          effectiveConstraints={effectiveConstraints}
-          onUpdateConstraintOverrides={
-            modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-              ? (overrides) => updatePendingCommitConstraintOverrides(modalNode.id, overrides)
-              : undefined
-          }
-          isConversationLocked={isConversationLocked}
-        />
-      )}
+      {modalNode &&
+        modalNode.data.commitStatus !== 'draft' &&
+        (modalNode.data.commitStatus !== 'committed' || modalViewMode === 'conversation') && (
+          <NodeModal
+            node={modalNode}
+            onClose={closeNodeModal}
+            onUpdate={(patch) => updateNode(modalNode.id, patch)}
+            viewMode={modalViewMode || 'commit'}
+            onConvertDraft={
+              modalNode.data.kind === 'unit' &&
+              modalNode.data.commitStatus === 'staging' &&
+              pendingCommitBranchMode !== 'blocked'
+                ? () => {
+                    commitPendingCommit(modalNode.id);
+                    closeNodeModal();
+                    notify?.('Unit committed successfully', 'success');
+                  }
+                : undefined
+            }
+            onBranchChange={
+              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
+                ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
+                : undefined
+            }
+            onBranchNameChange={
+              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
+                ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
+                : undefined
+            }
+            onSaveConstraints={
+              modalNode.data.kind === 'unit'
+                ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
+                : undefined
+            }
+            effectiveConstraints={effectiveConstraints}
+            onUpdateConstraintOverrides={
+              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
+                ? (overrides) => updatePendingCommitConstraintOverrides(modalNode.id, overrides)
+                : undefined
+            }
+            isConversationLocked={isConversationLocked}
+          />
+        )}
       <LeafPanel projectName={projectName} />
       <MergePanel />
       <DeletionConfirmDialog />
