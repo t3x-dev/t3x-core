@@ -1,5 +1,7 @@
 # @t3x-dev/api-client
 
+## 1.0.0
+
 ## Unreleased
 
 - Add `client.generation` for complete and streaming model invocation and provider discovery.

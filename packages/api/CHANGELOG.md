@@ -1,5 +1,14 @@
 # @t3x-dev/api
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`9cd8d53`](https://github.com/t3x-dev/t3x-core/commit/9cd8d534840f679d5bff4face8cdd35db6566f80)]:
+  - @t3x-dev/yschema@1.0.0
+  - @t3x-dev/core@1.0.0
+  - @t3x-dev/storage@1.0.0
+
 ## 0.6.0
 
 ### Patch Changes
