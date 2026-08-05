@@ -86,6 +86,7 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  workspaceExtractionProposalRoutes,
   workspaceRoutes,
   workspaceValidationRoutes,
   yopsLogRoutes,
@@ -229,6 +230,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);
   api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
+  api.route('/', workspaceExtractionProposalRoutes);
   api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)

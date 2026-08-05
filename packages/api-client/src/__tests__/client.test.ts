@@ -396,6 +396,33 @@ describe('T3xClient', () => {
         expect.objectContaining({ method: 'GET' })
       );
     });
+
+    it('creates a server-owned extraction proposal from immutable Source turns', async () => {
+      const data = {
+        candidate_id: 'candidate:abc',
+        proposal: {
+          schema: 't3x.dev/workspace-extraction-proposal/v1',
+          operations: [],
+        },
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 5 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        source: { type: 'conversation' as const, id: 'conv_1', turn_hashes: ['turn_1'] },
+        if_revision: 4,
+      };
+
+      expect(
+        await client.workspaces.createExtractionProposal('proj/1', 'workspace/1', input)
+      ).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/proj%2F1/workspaces/workspace%2F1/extraction-proposals'
+        ),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
   });
 
   // =========================================================================

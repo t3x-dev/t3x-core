@@ -12,6 +12,7 @@ import {
   createYOpsState,
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
+  decodeRepositorySemanticState,
   describeCommitV2,
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
@@ -259,6 +260,15 @@ interface ResolvedWorkspaceTransitionContext {
   workspaceUpdatedAt: string;
 }
 
+export interface WorkspaceExtractionContext {
+  baseline: SemanticContent;
+  refHead: string | null;
+  refName: string;
+  workspace: Record<string, unknown>;
+  workspaceRevision: number;
+  workspaceUpdatedAt: string;
+}
+
 function asCanonicalTimestamp(value: string): CanonicalTimestamp {
   return new Date(value).toISOString() as CanonicalTimestamp;
 }
@@ -385,6 +395,25 @@ async function resolveWorkspaceTransitionContext(
     workspaceId: input.workspaceId,
     workspaceRevision: draft.revision,
     workspaceUpdatedAt: draft.updated_at,
+  };
+}
+
+/** Resolve the server-owned Repository baseline used by Workspace extraction proposals. */
+export async function resolveWorkspaceExtractionContext(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; expectedRevision?: number }
+): Promise<WorkspaceExtractionContext> {
+  const context = await resolveWorkspaceTransitionContext(db, input);
+  return {
+    baseline:
+      context.head.format === 'empty'
+        ? { trees: [], relations: [] }
+        : decodeRepositorySemanticState(context.base),
+    refHead: context.head.head,
+    refName: context.targetBranch,
+    workspace: context.workspace,
+    workspaceRevision: context.workspaceRevision,
+    workspaceUpdatedAt: context.workspaceUpdatedAt,
   };
 }
 

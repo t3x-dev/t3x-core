@@ -600,10 +600,35 @@ export interface RepositoryWorkspaceEnvelope {
   workspace: RepositoryWorkspace;
 }
 
-/** Authenticated Repository Review Workspace reads. */
+export interface CreateWorkspaceExtractionProposalInput {
+  source: {
+    type: 'conversation';
+    id: string;
+    turn_hashes: string[];
+  };
+  provider?: string;
+  model?: string;
+  if_revision?: number;
+}
+
+export interface WorkspaceExtractionProposalEnvelope {
+  candidate_id: string;
+  proposal: Record<string, unknown> & {
+    schema: 't3x.dev/workspace-extraction-proposal/v1';
+    operations: unknown[];
+  };
+  workspace: RepositoryWorkspace;
+}
+
+/** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
+  createExtractionProposal(
+    projectId: string,
+    workspaceId: string,
+    input: CreateWorkspaceExtractionProposalInput
+  ): Promise<WorkspaceExtractionProposalEnvelope>;
 }
 
 /** @deprecated Use GenerationMessage. */

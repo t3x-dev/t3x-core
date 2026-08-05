@@ -32,6 +32,7 @@ import type {
   CreateShareTokenInput,
   CreateTurnInput,
   CreateWebhookInput,
+  CreateWorkspaceExtractionProposalInput,
   DiffResult,
   Draft,
   ExportCfpackInput,
@@ -87,6 +88,7 @@ import type {
   VerifyTransitionInput,
   VerifyTransitionResult,
   Webhook,
+  WorkspaceExtractionProposalEnvelope,
 } from './types.js';
 
 export interface T3xClientConfig {
@@ -148,6 +150,8 @@ export class T3xClient {
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
+      createExtractionProposal: (projectId, workspaceId, input) =>
+        this.createWorkspaceExtractionProposal(projectId, workspaceId, input),
     });
   }
 
@@ -844,6 +848,18 @@ export class T3xClient {
     return this.request<RepositoryWorkspaceEnvelope>(
       'GET',
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
+  }
+
+  async createWorkspaceExtractionProposal(
+    projectId: string,
+    workspaceId: string,
+    input: CreateWorkspaceExtractionProposalInput
+  ): Promise<WorkspaceExtractionProposalEnvelope> {
+    return this.request<WorkspaceExtractionProposalEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/extraction-proposals`,
+      input
     );
   }
 
