@@ -36,7 +36,21 @@ export function SchemaModuleRegistry({
   const artifacts = (registryArtifacts ?? registry.artifacts).filter(
     (artifact) => artifact.family === family
   );
-  const core = artifacts.find((artifact) => artifact.kind === 'core');
+  const activeComposition =
+    workspace?.composition?.family === family ? workspace.composition : undefined;
+  const cores = artifacts.filter((artifact) => artifact.kind === 'core');
+  const persistedCore = activeComposition
+    ? cores.find(
+        (artifact) =>
+          artifact.canonicalName === activeComposition.core.canonicalName &&
+          artifact.version === activeComposition.core.version
+      )
+    : undefined;
+  const core =
+    persistedCore ??
+    cores.find((artifact) => artifact.source === 'official' && artifact.status === 'active') ??
+    cores.find((artifact) => artifact.source === 'official') ??
+    cores[0];
   const availableModules = artifacts
     .filter((artifact) => artifact.kind === 'module')
     .sort(
@@ -50,8 +64,6 @@ export function SchemaModuleRegistry({
   const selectedArtifact =
     artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ?? core;
   const [compositionModules, setCompositionModules] = useState<SchemaArtifactPreview[]>([]);
-  const activeComposition =
-    workspace?.composition?.family === family ? workspace.composition : undefined;
   const [compositionRevision, setCompositionRevision] = useState(
     workspace?.composition?.revision ?? 0
   );

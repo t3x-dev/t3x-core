@@ -15,6 +15,7 @@ import {
   type ProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
+  workspaceSchemaBindingsEqual,
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectSchemaDefault } from '@/hooks/projects/useProjectSchemaDefault';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
@@ -33,6 +34,10 @@ interface ProjectSchemasTabProps {
 interface BindingFeedback {
   message: string;
   tone: SchemaBindingFeedbackTone;
+}
+
+interface WorkspaceBindingResult {
+  regenerationError?: string;
 }
 
 export function ProjectSchemasTab({
@@ -70,6 +75,44 @@ export function ProjectSchemasTab({
     ? (schemaBindings?.byWorkspaceId[workspaceTarget.id] ?? workspaceTarget.schemaBindings[0])
     : undefined;
 
+  const applyReleaseToWorkspace = useCallback(
+    async (release: SchemaReleasePreview): Promise<WorkspaceBindingResult> => {
+      if (!workspaceTarget) return {};
+      const binding = schemaReleaseToWorkspaceBinding(release, 'pinned');
+      const staleWorkspace = rebindWorkspaceCandidate(
+        workspaceTarget,
+        binding,
+        new Date().toISOString()
+      );
+      const saved = await saveDraft(staleWorkspace);
+      bindSchema({
+        binding,
+        projectId,
+        scope: 'current_workspace',
+        workspaceId: workspaceTarget.id,
+      });
+
+      try {
+        const extracted = await extractCandidate(saved.workspace);
+        const extractedBinding = extracted.workspace.schemaBindings[0] ?? binding;
+        bindSchema({
+          binding: extractedBinding,
+          projectId,
+          scope: 'current_workspace',
+          workspaceId: workspaceTarget.id,
+        });
+        return {};
+      } catch (error) {
+        return {
+          regenerationError: formatUserFacingError(error, 'Unknown error'),
+        };
+      } finally {
+        await projectWorkspaces.refresh();
+      }
+    },
+    [bindSchema, extractCandidate, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
+  );
+
   const handleSetProjectDefault = useCallback(
     async (release: SchemaReleasePreview) => {
       const binding = schemaReleaseToWorkspaceBinding(release, 'project_default');
@@ -77,66 +120,79 @@ export function ProjectSchemasTab({
       setFeedback(undefined);
 
       try {
-        await setProjectDefault(projectId, projectMetadata, binding);
-        setFeedback({
-          message: `${release.name} ${release.version} will be used by new Workspaces.`,
-          tone: 'success',
-        });
+        if (!workspaceSchemaBindingsEqual(defaultBinding, binding)) {
+          await setProjectDefault(projectId, projectMetadata, binding);
+        }
       } catch (error) {
         setFeedback({
           message: formatUserFacingError(error, 'Failed to update the project Schema default.'),
           tone: 'error',
         });
-      } finally {
         setPending(null);
+        return;
       }
+
+      if (!workspaceTarget || workspaceSchemaBindingsEqual(workspaceBinding, binding)) {
+        setFeedback({
+          message: `${release.name} ${release.version} will be used by new Workspaces.`,
+          tone: 'success',
+        });
+        setPending(null);
+        return;
+      }
+
+      try {
+        const result = await applyReleaseToWorkspace(release);
+        setFeedback(
+          result.regenerationError
+            ? {
+                message: `${release.name} ${release.version} is now the project default and was saved to ${workspaceTarget.title}, but candidate regeneration failed: ${result.regenerationError}`,
+                tone: 'warning',
+              }
+            : {
+                message: `${release.name} ${release.version} is now the project default and ${workspaceTarget.title} was regenerated with it.`,
+                tone: 'success',
+              }
+        );
+      } catch (error) {
+        setFeedback({
+          message: `${release.name} ${release.version} is now the project default, but updating ${workspaceTarget.title} failed: ${formatUserFacingError(error, 'Unknown error')}`,
+          tone: 'warning',
+        });
+      }
+
+      setPending(null);
     },
-    [projectId, projectMetadata, setProjectDefault]
+    [
+      applyReleaseToWorkspace,
+      defaultBinding,
+      projectId,
+      projectMetadata,
+      setProjectDefault,
+      workspaceBinding,
+      workspaceTarget,
+    ]
   );
 
   const handleApplyToWorkspace = useCallback(
     async (release: SchemaReleasePreview) => {
       if (!workspaceTarget) return;
-      const mode = release.status === 'draft' ? 'draft_override' : 'pinned';
-      const binding = schemaReleaseToWorkspaceBinding(release, mode);
-      const staleWorkspace = rebindWorkspaceCandidate(
-        workspaceTarget,
-        binding,
-        new Date().toISOString()
-      );
       setPending('workspace');
       setFeedback(undefined);
 
       try {
-        const saved = await saveDraft(staleWorkspace);
-        bindSchema({
-          binding,
-          projectId,
-          scope: 'current_workspace',
-          workspaceId: workspaceTarget.id,
-        });
-
-        try {
-          const extracted = await extractCandidate(saved.workspace);
-          const extractedBinding = extracted.workspace.schemaBindings[0] ?? binding;
-          bindSchema({
-            binding: extractedBinding,
-            projectId,
-            scope: 'current_workspace',
-            workspaceId: workspaceTarget.id,
-          });
-          setFeedback({
-            message: `${workspaceTarget.title} now uses ${release.name} ${release.version}; its candidate was regenerated.`,
-            tone: 'success',
-          });
-        } catch (error) {
-          setFeedback({
-            message: `${release.name} ${release.version} was saved, but candidate regeneration failed: ${formatUserFacingError(error, 'Unknown error')}`,
-            tone: 'warning',
-          });
-        }
-
-        await projectWorkspaces.refresh();
+        const result = await applyReleaseToWorkspace(release);
+        setFeedback(
+          result.regenerationError
+            ? {
+                message: `${release.name} ${release.version} was saved, but candidate regeneration failed: ${result.regenerationError}`,
+                tone: 'warning',
+              }
+            : {
+                message: `${workspaceTarget.title} now uses ${release.name} ${release.version}; its candidate was regenerated.`,
+                tone: 'success',
+              }
+        );
       } catch (error) {
         setFeedback({
           message: formatUserFacingError(error, 'Failed to bind the Schema to this Workspace.'),
@@ -146,7 +202,7 @@ export function ProjectSchemasTab({
         setPending(null);
       }
     },
-    [bindSchema, extractCandidate, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
+    [applyReleaseToWorkspace, workspaceTarget]
   );
 
   return (

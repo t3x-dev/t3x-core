@@ -170,7 +170,7 @@ describe('SchemaRegistry', () => {
     );
 
     expect(screen.getByRole('region', { name: 'Schema binding actions' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Use for new Workspaces' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use in current & new Workspaces' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     const currentPrd = preview.families[0].releases.find(
@@ -181,7 +181,7 @@ describe('SchemaRegistry', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
     expect(screen.getByText('view only')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Use for new Workspaces' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Use in current & new Workspaces' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Apply to Main workspace' })).toBeDisabled();
   });
 

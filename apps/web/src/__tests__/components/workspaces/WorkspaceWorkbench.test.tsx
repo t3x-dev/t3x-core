@@ -420,6 +420,12 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByLabelText('Sort workspaces')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Collect source evidence, then generate a schema-aligned proposal. If no model is configured, T3X uses a deterministic scaffold that you can review and refine.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Production proposal steps use LLMs/)).not.toBeInTheDocument();
 
     activateTab(/Validation/);
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();

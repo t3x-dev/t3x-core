@@ -33,7 +33,17 @@ export function SchemaBindingActions({ actions, selectedRelease }: SchemaBinding
   const isRuntimeRelease = isSchemaReleaseBindable(selectedRelease);
   const defaultMatches = bindingMatchesRelease(actions.defaultBinding, selectedRelease);
   const workspaceMatches = bindingMatchesRelease(actions.workspaceTarget?.binding, selectedRelease);
+  const defaultActionComplete = defaultMatches && (!actions.workspaceTarget || workspaceMatches);
   const busy = actions.pending !== null;
+  const defaultActionLabel = actions.workspaceTarget
+    ? defaultActionComplete
+      ? 'Used in current & new Workspaces'
+      : defaultMatches
+        ? `Use in ${actions.workspaceTarget.title}`
+        : 'Use in current & new Workspaces'
+    : defaultMatches
+      ? 'Default for new Workspaces'
+      : 'Use for new Workspaces';
 
   return (
     <section
@@ -67,11 +77,13 @@ export function SchemaBindingActions({ actions, selectedRelease }: SchemaBinding
       <div className="flex flex-none flex-col gap-2 min-[481px]:flex-row min-[961px]:justify-end">
         <Button
           className="h-8 px-3 text-xs"
-          disabled={!isRuntimeRelease || defaultMatches || busy}
+          disabled={!isRuntimeRelease || defaultActionComplete || busy}
           onClick={() => void actions.onSetProjectDefault(selectedRelease)}
           title={
             isRuntimeRelease
-              ? 'Use this Schema for newly created Workspaces.'
+              ? actions.workspaceTarget
+                ? `Use this Schema for newly created Workspaces and ${actions.workspaceTarget.title}.`
+                : 'Use this Schema for newly created Workspaces.'
               : 'This preview does not have a runtime contract available for binding.'
           }
           type="button"
@@ -79,10 +91,10 @@ export function SchemaBindingActions({ actions, selectedRelease }: SchemaBinding
         >
           {actions.pending === 'project_default' ? (
             <Loader2 aria-hidden="true" className="animate-spin" />
-          ) : defaultMatches ? (
+          ) : defaultActionComplete ? (
             <CheckCircle2 aria-hidden="true" />
           ) : null}
-          {defaultMatches ? 'Default for new Workspaces' : 'Use for new Workspaces'}
+          {defaultActionLabel}
         </Button>
         <Button
           className="h-8 px-3 text-xs"

@@ -51,6 +51,48 @@ describe('SchemaModuleRegistry', () => {
     expect(screen.getByRole('button', { name: 'Publish unavailable' })).toBeDisabled();
   });
 
+  it('keeps the official Core pinned when a newer project Schema is listed first', async () => {
+    const projectSchema = {
+      ...PRD_CORE_ARTIFACT,
+      canonicalName: 'projects/proj_modules/prd',
+      version: '1.0.1',
+      source: 'team' as const,
+      title: 'Project PRD',
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              report: { valid: true, issues: [] },
+              compiledSchemaHash: `sha256:${'1'.repeat(64)}`,
+              compositionHash: `sha256:${'2'.repeat(64)}`,
+              renderPlan: [],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <SchemaModuleRegistry
+        registryArtifacts={[projectSchema, PRD_CORE_ARTIFACT, ...PRD_MODULE_ARTIFACTS]}
+      />
+    );
+
+    expect(screen.getByRole('tablist', { name: 'PRD Core details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Compile preview' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(request.core).toEqual({
+      canonicalName: 't3x/prd-core',
+      version: '1.1.0',
+    });
+  });
+
   it('scopes Core, Modules, Domains, and Render to the selected family', () => {
     render(
       <SchemaModuleRegistry
