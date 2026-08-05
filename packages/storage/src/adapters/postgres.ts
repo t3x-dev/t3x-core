@@ -1733,6 +1733,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
     CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
       ON transition_proposal_memberships(project_id, created_at, transition_id);
+    CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_workspace_revision_created
+      ON transition_proposal_memberships(
+        project_id, workspace_id, workspace_revision, created_at, transition_id
+      );
 
     CREATE TABLE IF NOT EXISTS transition_statement_memberships (
       transition_id TEXT NOT NULL

@@ -7,7 +7,7 @@ import {
   type State,
   sha256,
 } from '@t3x-dev/core';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type TransitionProposalMembershipRecord,
@@ -339,6 +339,30 @@ export async function getTransitionProposalMembership(
     )
     .limit(1);
   return row === undefined ? null : proposalMembership(row);
+}
+
+/** List newest durable Proposals derived from one exact Workspace revision. */
+export async function listTransitionProposalsForWorkspaceRevision(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; workspaceRevision: number; limit?: number }
+): Promise<TransitionProposalMembership[]> {
+  const limit = Math.max(1, Math.min(input.limit ?? 100, 1000));
+  const rows = await db
+    .select()
+    .from(transitionProposalMemberships)
+    .where(
+      and(
+        eq(transitionProposalMemberships.projectId, input.projectId),
+        eq(transitionProposalMemberships.workspaceId, input.workspaceId),
+        eq(transitionProposalMemberships.workspaceRevision, input.workspaceRevision)
+      )
+    )
+    .orderBy(
+      desc(transitionProposalMemberships.createdAt),
+      desc(transitionProposalMemberships.transitionId)
+    )
+    .limit(limit);
+  return rows.map(proposalMembership);
 }
 
 async function loadObject(

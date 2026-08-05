@@ -18,6 +18,18 @@ export interface WorkspaceSaveResponse {
   workspace: WorkspaceCandidate;
 }
 
+export interface WorkspaceExtractionTransitionLink {
+  transition_id: string;
+  candidate_id: string;
+  workspace_revision: number;
+  created_at: string;
+}
+
+export interface WorkspaceControlPlaneTransitionResponse {
+  transition_id: string;
+  view: { transition: TransitionViewV1 };
+}
+
 export interface WorkspaceCommitResponse extends WorkspaceSaveResponse {
   commit: { hash: string };
 }
@@ -108,6 +120,34 @@ export async function listProjectWorkspaces(projectId: string): Promise<Workspac
   );
   const data = await handleResponse<ProjectWorkspacesResponse>(res);
   return data.workspaces;
+}
+
+export async function getWorkspaceExtractionTransitionLink(
+  projectId: string,
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceExtractionTransitionLink> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+      workspaceId
+    )}/extraction-transition`,
+    { signal }
+  );
+  return handleResponse<WorkspaceExtractionTransitionLink>(res);
+}
+
+export async function getWorkspaceControlPlaneTransition(
+  projectId: string,
+  transitionId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceControlPlaneTransitionResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(
+      transitionId
+    )}`,
+    { signal }
+  );
+  return handleResponse<WorkspaceControlPlaneTransitionResponse>(res);
 }
 
 export async function saveProjectWorkspace(

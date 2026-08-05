@@ -99,6 +99,13 @@ export const transitionProposalMemberships = pgTable(
       table.createdAt,
       table.transitionId
     ),
+    index('idx_transition_proposal_memberships_workspace_revision_created').on(
+      table.projectId,
+      table.workspaceId,
+      table.workspaceRevision,
+      table.createdAt,
+      table.transitionId
+    ),
     check(
       'transition_proposal_memberships_actor_kind_check',
       sql`${table.actorKind} IN ('human', 'agent', 'service')`

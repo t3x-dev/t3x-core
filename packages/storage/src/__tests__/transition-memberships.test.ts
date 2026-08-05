@@ -12,6 +12,7 @@ import {
   createTransitionProposalMembership,
   digestTransitionRequestCanonicalJson,
   getTransitionProposalMembership,
+  listTransitionProposalsForWorkspaceRevision,
   listTransitionStatementMemberships,
   recordTransitionStatementMembership,
   resolveTransitionProposalGraph,
@@ -146,6 +147,27 @@ describe('Transition proposal and Statement memberships', () => {
         requestDigest: digestTransitionRequestCanonicalJson(changedCanonicalJson),
       })
     ).rejects.toBeInstanceOf(TransitionRequestConflictError);
+  });
+
+  it('lists only Proposals bound to the exact Workspace revision', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Workspace Revision List' }));
+    const first = membershipInput(project.projectId, 'workspace-list-first');
+    const secondFacts = membershipInput(project.projectId, 'workspace-list-second');
+    const second = {
+      ...secondFacts,
+      workspaceId: first.workspaceId,
+      workspaceRevision: 2,
+    };
+    const createdFirst = await createTransitionProposalMembership(db, first);
+    await createTransitionProposalMembership(db, second);
+
+    await expect(
+      listTransitionProposalsForWorkspaceRevision(db, {
+        projectId: project.projectId,
+        workspaceId: first.workspaceId,
+        workspaceRevision: 1,
+      })
+    ).resolves.toEqual([createdFirst.membership]);
   });
 
   it('does not resolve a Transition through another project membership', async () => {

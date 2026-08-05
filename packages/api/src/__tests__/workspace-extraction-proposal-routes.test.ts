@@ -2,10 +2,16 @@ import type { ApiKey } from '@t3x-dev/core';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const storageMock = vi.hoisted(() => ({
+  findWorkspaceDraft: vi.fn(),
+  listTransitionProposalsForWorkspaceRevision: vi.fn(),
+}));
+
 vi.mock('../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve({})) }));
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
   findProjectById: vi.fn((_db, projectId: string) => Promise.resolve({ projectId, ownerId: null })),
+  ...storageMock,
 }));
 
 const proposalMock = vi.hoisted(() => ({ createWorkspaceExtractionProposal: vi.fn() }));
@@ -43,6 +49,7 @@ function app(apiKey: ApiKey) {
 }
 
 const path = '/v1/projects/proj_1/workspaces/workspace_1/extraction-proposals';
+const linkPath = '/v1/projects/proj_1/workspaces/workspace_1/extraction-transition';
 const body = {
   source: { type: 'conversation', id: 'conv_1', turn_hashes: ['turn_1'] },
   if_revision: 2,
@@ -66,6 +73,24 @@ describe('Workspace extraction proposal routes', () => {
       },
       workspace: { id: 'workspace_1', projectId: 'proj_1', revision: 3 },
     });
+    storageMock.findWorkspaceDraft.mockResolvedValue({
+      revision: 3,
+      workspace_state: { backendCandidateId: 'candidate:abc' },
+    });
+    storageMock.listTransitionProposalsForWorkspaceRevision.mockResolvedValue([
+      {
+        transitionId: `trn_${'a'.repeat(32)}`,
+        workspaceRevision: 3,
+        createdAt: '2026-08-05T00:01:00.000Z',
+        requestCanonicalJson: JSON.stringify({
+          kind: 'structured_yops',
+          source: {
+            type: 'workspace_extraction_proposal',
+            candidate_id: 'candidate:abc',
+          },
+        }),
+      },
+    ]);
   });
 
   it('derives the proposal actor from an authenticated scoped agent key', async () => {
@@ -112,5 +137,33 @@ describe('Workspace extraction proposal routes', () => {
 
     expect(response.status).toBe(400);
     expect(proposalMock.createWorkspaceExtractionProposal).not.toHaveBeenCalled();
+  });
+
+  it('resolves the durable Transition for the current Workspace candidate', async () => {
+    const response = await app(key(['transition:inspect'])).request(linkPath);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        transition_id: `trn_${'a'.repeat(32)}`,
+        candidate_id: 'candidate:abc',
+        workspace_revision: 3,
+      },
+    });
+    expect(storageMock.listTransitionProposalsForWorkspaceRevision).toHaveBeenCalledWith(
+      expect.anything(),
+      { projectId: 'proj_1', workspaceId: 'workspace_1', workspaceRevision: 3 }
+    );
+  });
+
+  it('does not link a Transition created for a replaced extraction candidate', async () => {
+    storageMock.findWorkspaceDraft.mockResolvedValueOnce({
+      revision: 3,
+      workspace_state: { backendCandidateId: 'candidate:replaced' },
+    });
+
+    const response = await app(key(['transition:inspect'])).request(linkPath);
+
+    expect(response.status).toBe(404);
   });
 });
