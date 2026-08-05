@@ -365,6 +365,39 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('repository workspaces', () => {
+    it('exposes authenticated Workspace reads through a frozen capability', async () => {
+      const data = {
+        workspaces: [{ id: 'workspace_1', projectId: 'proj/1', revision: 3 }],
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.list('proj/1')).toEqual(data);
+      expect(Object.isFrozen(client.workspaces)).toBe(true);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('gets one project-scoped Workspace projection', async () => {
+      const data = {
+        candidate_id: 'candidate_1',
+        yops_draft_id: 'draft:1',
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 4 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.get('proj/1', 'workspace/1')).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+  });
+
   // =========================================================================
   // Turns
   // =========================================================================

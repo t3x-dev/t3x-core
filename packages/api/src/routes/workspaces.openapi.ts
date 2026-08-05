@@ -9,6 +9,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  type ApiKey,
   type Draft,
   describeTransitionObject,
   type Material,
@@ -558,6 +559,8 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+  if (humanRequired) return humanRequired;
 
   try {
     const reviewed = await reviewWorkspaceTransition(db, {
@@ -592,6 +595,8 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+  if (humanRequired) return humanRequired;
 
   try {
     const decided = await decideWorkspaceTransition(db, {
@@ -719,6 +724,8 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     const db = await getDB();
     const access = await assertProjectAccess(c, db, projectId);
     if (access instanceof Response) return access;
+    const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+    if (humanRequired) return humanRequired;
     const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
@@ -1127,6 +1134,14 @@ function workspaceHumanActor(c: Parameters<typeof getUserId>[0]) {
     kind: 'human' as const,
     id: userId ? `user:${userId}` : 'human:local-user',
   };
+}
+
+function rejectNonHumanWorkspaceReviewer(c: Parameters<typeof getUserId>[0]): Response | null {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Workspace review and commit require a human principal');
+  }
+  return null;
 }
 
 function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondition) {

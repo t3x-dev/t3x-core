@@ -58,6 +58,7 @@ import type {
   ListLeavesResponse,
   ListPinsResponse,
   ListProjectsResponse,
+  ListRepositoryWorkspacesResponse,
   ListTurnsResponse,
   MergeDraft,
   MergeDraftCommitInput,
@@ -71,6 +72,8 @@ import type {
   ProposeTransitionResult,
   RenameConversationInput,
   RenameConversationResult,
+  RepositoryWorkspaceCapability,
+  RepositoryWorkspaceEnvelope,
   ShareToken,
   SourceThreadCapability,
   SourceThreadMemory,
@@ -113,6 +116,8 @@ export class T3xClient {
   readonly generation: GenerationCapability;
   /** Durable source metadata, immutable turns, context, and evidence. */
   readonly sourceThreads: SourceThreadCapability;
+  /** Persisted Repository Review Workspace projections. */
+  readonly workspaces: RepositoryWorkspaceCapability;
 
   constructor(config: T3xClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -139,6 +144,10 @@ export class T3xClient {
       memory: (id) => this.getSourceThreadMemory(id),
       evidence: (projectId, conversationId, params) =>
         this.getSourceThreadEvidence(projectId, conversationId, params),
+    });
+    this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
+      list: (projectId) => this.listRepositoryWorkspaces(projectId),
+      get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
     });
   }
 
@@ -819,6 +828,23 @@ export class T3xClient {
 
   async extract(input: ExtractInput): Promise<ExtractResult> {
     return this.request<ExtractResult>('POST', '/v1/extract', input);
+  }
+
+  async listRepositoryWorkspaces(projectId: string): Promise<ListRepositoryWorkspacesResponse> {
+    return this.request<ListRepositoryWorkspacesResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces`
+    );
+  }
+
+  async getRepositoryWorkspace(
+    projectId: string,
+    workspaceId: string
+  ): Promise<RepositoryWorkspaceEnvelope> {
+    return this.request<RepositoryWorkspaceEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
   }
 
   async check(input: CheckInput): Promise<CheckResult> {

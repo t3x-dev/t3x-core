@@ -583,6 +583,29 @@ export interface SourceThreadCapability {
   ): Promise<SourceThreadEvidence>;
 }
 
+/** Persisted Repository Review Workspace projection. */
+export type RepositoryWorkspace = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  revision?: number;
+};
+
+export interface ListRepositoryWorkspacesResponse {
+  workspaces: RepositoryWorkspace[];
+}
+
+export interface RepositoryWorkspaceEnvelope {
+  candidate_id: string;
+  yops_draft_id?: string;
+  workspace: RepositoryWorkspace;
+}
+
+/** Authenticated Repository Review Workspace reads. */
+export interface RepositoryWorkspaceCapability {
+  list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
+  get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
+}
+
 /** @deprecated Use GenerationMessage. */
 export type ChatMessage = GenerationMessage;
 /** @deprecated Use GenerationRequest. */

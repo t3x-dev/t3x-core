@@ -1,4 +1,4 @@
-import { describeTransitionObject } from '@t3x-dev/core';
+import { type ApiKey, describeTransitionObject } from '@t3x-dev/core';
 import { ConflictError, TransitionHeadConflictError } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -199,6 +199,16 @@ describe('Workspace routes', () => {
 
   app.route('/', workspaceRoutes);
 
+  function appWithApiKey(apiKey: ApiKey) {
+    const authenticatedApp = new Hono();
+    authenticatedApp.use('*', async (context, next) => {
+      context.set('apiKey', apiKey);
+      await next();
+    });
+    authenticatedApp.route('/', workspaceRoutes);
+    return authenticatedApp;
+  }
+
   beforeEach(() => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
@@ -254,6 +264,44 @@ describe('Workspace routes', () => {
 
     expect(res.status).toBe(400);
     expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
+  });
+
+  it('allows agent principals to inspect Workspaces but not impersonate human review', async () => {
+    const agentApp = appWithApiKey({
+      id: 'ak_workspace_agent',
+      key_prefix: 't3xk_test',
+      key_hash: 'test-hash',
+      name: 'Workspace agent',
+      project_id: 'proj_sources',
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: ['transition:inspect', 'transition:propose'],
+      created_at: '2026-08-05T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    });
+
+    const listed = await agentApp.request('/v1/projects/proj_sources/workspaces');
+    expect(listed.status).toBe(200);
+
+    const reviewed = await agentApp.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: { trees: [], relations: [] } }),
+      }
+    );
+    expect(reviewed.status).toBe(403);
+    await expect(reviewed.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'FORBIDDEN',
+          message: 'Workspace review and commit require a human principal',
+        }),
+      })
+    );
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {

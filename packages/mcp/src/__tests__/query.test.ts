@@ -11,6 +11,10 @@ const mockApiClient = {
     list: vi.fn(),
     evidence: vi.fn(),
   },
+  workspaces: {
+    get: vi.fn(),
+    list: vi.fn(),
+  },
 };
 
 vi.mock('../db.js', () => ({
@@ -310,6 +314,50 @@ describe('t3x_query handler', () => {
     const result = await queryHandler({
       target: 'source_evidence',
       id: 'conv_test1',
+      project_id: 'proj_test1',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
+  });
+
+  it('reads a project-scoped Workspace only through the authenticated API capability', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.get.mockResolvedValueOnce({
+      candidate_id: 'candidate_1',
+      workspace: { id: 'workspace_1', projectId: 'proj_api1', revision: 2 },
+    });
+
+    const result = await queryHandler({
+      target: 'workspace',
+      id: 'workspace_1',
+      project_id: 'proj_api1',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.get).toHaveBeenCalledWith('proj_api1', 'workspace_1');
+  });
+
+  it('lists persisted Workspaces only through the authenticated API capability', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.list.mockResolvedValueOnce({
+      workspaces: [{ id: 'workspace_1', projectId: 'proj_api1', revision: 2 }],
+    });
+
+    const result = await queryHandler({
+      target: 'workspaces',
+      project_id: 'proj_api1',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.list).toHaveBeenCalledWith('proj_api1');
+    expect(JSON.parse(result.content[0].text)).toHaveLength(1);
+  });
+
+  it('refuses direct-storage Workspace reads', async () => {
+    const result = await queryHandler({
+      target: 'workspace',
+      id: 'workspace_1',
       project_id: 'proj_test1',
     });
 
