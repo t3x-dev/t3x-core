@@ -1,10 +1,13 @@
 import { describeProtocolObject, type State } from '@t3x-dev/transition';
 import { validateTree, type YSchema } from '@t3x-dev/yschema';
 import { describe, expect, it } from 'vitest';
+import { yvalueToTrees } from '../../t3x-yops/convert';
+import { createRepositorySemanticState } from '../semanticMergeDriver';
 import { createYOpsState, yopsStateCodec } from '../stateCodec';
 import {
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
+  runRepositorySemanticYSchemaStatementProvider,
   runYSchemaStatementProvider,
   YSCHEMA_NATIVE_PROFILE,
 } from '../yschemaStatementProvider';
@@ -51,6 +54,83 @@ describe('YSchema Statement provider', () => {
       schemaResource,
       profile: YSCHEMA_NATIVE_PROFILE,
     });
+  });
+
+  it('validates one bound root while attaching the result to the full repository State', () => {
+    const state = createRepositorySemanticState({
+      trees: yvalueToTrees({
+        document: { device: { name: 'Kitchen sensor', enabled: true } },
+        unrelated: { note: 'Preserved but not validated by this schema.' },
+      }),
+      relations: [],
+    });
+    const context = {
+      mode: 'bound' as const,
+      resource: createYSchemaContextDescriptor('urn:t3x:test:context:semantic-device', {
+        rootKey: 'document',
+      }),
+    };
+    const statement = runRepositorySemanticYSchemaStatementProvider({
+      state,
+      rootKey: 'document',
+      schema,
+      ...metadata,
+      context,
+    });
+
+    expect(statement.subjects).toEqual([describeProtocolObject(state)]);
+    expect(statement.predicate).toMatchObject({
+      outcome: 'passed',
+      valid: true,
+      ready: true,
+      context,
+    });
+  });
+
+  it('rejects tampered or missing repository semantic root selection', () => {
+    const state = createRepositorySemanticState({
+      trees: yvalueToTrees({
+        document: { device: { name: 'Kitchen sensor', enabled: true } },
+      }),
+      relations: [],
+    });
+    const documentContext = {
+      mode: 'bound' as const,
+      resource: createYSchemaContextDescriptor('urn:t3x:test:context:semantic-tamper', {
+        rootKey: 'document',
+      }),
+    };
+
+    expect(() =>
+      runRepositorySemanticYSchemaStatementProvider({
+        state,
+        rootKey: 'other',
+        schema,
+        ...metadata,
+        context: documentContext,
+      })
+    ).toThrowError(expect.objectContaining({ code: 'SCHEMA_INVALID' }));
+
+    const missingContext = {
+      mode: 'bound' as const,
+      resource: createYSchemaContextDescriptor('urn:t3x:test:context:semantic-missing', {
+        rootKey: 'missing',
+      }),
+    };
+    expect(() =>
+      runRepositorySemanticYSchemaStatementProvider({
+        state,
+        rootKey: 'missing',
+        schema,
+        ...metadata,
+        context: missingContext,
+      })
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'SCHEMA_INVALID',
+        path: '$.state.value.content.trees',
+      })
+    );
   });
 
   it('preserves every native finding array without changing its order', () => {

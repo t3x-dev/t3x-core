@@ -6,7 +6,9 @@ import {
   createAcceptancePolicyResource,
   createCommitV2,
   createHumanProposalDraft,
+  createRepositorySemanticState,
   createYOpsEffect,
+  createYOpsReplacementEffect,
   createYOpsState,
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
@@ -18,12 +20,12 @@ import {
   parseAcceptancePolicy,
   projectTransitionView,
   type RepositoryDecisionAuthority,
-  runYSchemaStatementProvider,
+  repositorySemanticYSchemaTree,
+  runRepositorySemanticYSchemaStatementProvider,
   type SemanticContent,
   type State,
   type StatementObservation,
   type TransitionViewV1,
-  treesToYValue,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -40,6 +42,7 @@ import {
 } from '@t3x-dev/storage';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
+import { schemaRootKeyFromBinding } from './yschema-registry';
 
 type ActorRef = ProposalStatement['actor'];
 type CanonicalTimestamp = Parameters<typeof authorizeDecisionForRepository>[0]['decidedAt'];
@@ -162,6 +165,12 @@ export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitio
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceTransitionPrecondition;
+  yopsLogIds?: readonly string[];
+  workspaceCommitOverride?: {
+    kind: 'schema_review';
+    reason: string;
+    blockers: readonly string[];
+  };
 }
 
 export interface DecideWorkspaceTransitionResult extends ReviewWorkspaceTransitionResult {
@@ -183,7 +192,7 @@ export class WorkspaceTransitionLegacyHeadError extends Error {
   readonly code = 'LEGACY_HEAD_READ_ONLY';
 
   constructor(readonly head: string) {
-    super('Legacy CommitV1 heads are read-only until an explicit migration bridge is defined');
+    super('Non-transition heads are read-only until an explicit migration bridge is defined');
     this.name = 'WorkspaceTransitionLegacyHeadError';
   }
 }
@@ -197,7 +206,7 @@ export class WorkspaceTransitionSchemaUnavailableError extends Error {
   ) {
     super(
       schemaName === null
-        ? 'Workspace Transition review requires one explicit built-in YSchema binding'
+        ? 'Workspace Transition review requires one explicit YSchema binding'
         : `Bound YSchema ${schemaName}${version ? ` ${version}` : ''} is unavailable`
     );
     this.name = 'WorkspaceTransitionSchemaUnavailableError';
@@ -227,7 +236,7 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
   base: State;
   content: SemanticContent;
   effect: ReturnType<typeof createYOpsEffect>['effect'];
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   observations: StatementObservation[];
   proposal: Extract<ReturnType<typeof compileProposalDraft>, { ok: true }>['proposal'];
   result: State;
@@ -238,7 +247,7 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
 
 interface ResolvedWorkspaceTransitionContext {
   base: State;
-  head: Exclude<TransitionRefHead, { format: 'legacy_v1' }>;
+  head: TransitionRefHead;
   targetBranch: string;
   workspace: Record<string, unknown>;
   workspaceId: string;
@@ -254,52 +263,18 @@ function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue>
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function sameProtocolValue(left: ProtocolValue, right: ProtocolValue): boolean {
-  // YOps States have already passed through the RFC 8785-normalizing codec,
-  // so their parsed key order and number representation are stable here.
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-/** Build an exact, base-sensitive top-level replacement without trusting client YOps. */
-function exactTargetOperations(base: State, target: State): ProtocolValue[] {
-  if (!isMapping(base.value) || !isMapping(target.value)) {
-    throw new TypeError('Workspace Transition state must be a top-level mapping');
-  }
-  const operations: ProtocolValue[] = [];
-  const keys = [...new Set([...Object.keys(base.value), ...Object.keys(target.value)])].sort();
-  for (const key of keys) {
-    if (key.length === 0 || key.includes('/')) {
-      throw new TypeError(
-        `Workspace root key ${JSON.stringify(key)} cannot be addressed by YOps v1`
-      );
-    }
-    const inBase = Object.hasOwn(base.value, key);
-    const inTarget = Object.hasOwn(target.value, key);
-    const before = base.value[key];
-    const after = target.value[key];
-    if (inBase && inTarget && sameProtocolValue(before!, after!)) continue;
-    operations.push(
-      inBase
-        ? { assert: { path: key, equals: before as ProtocolValue } }
-        : { assert: { path: key, exists: false } }
-    );
-    operations.push(
-      inTarget ? { set: { path: key, value: after as ProtocolValue } } : { unset: { path: key } }
-    );
-  }
-  return operations;
-}
-
 async function resolveWorkspaceSchema(
   workspace: Record<string, unknown>,
   db: AnyDB,
   projectId: string
 ): Promise<{
   canonicalName: string;
+  rootKey: string;
   schema: YSchema;
 }> {
   const bindings = Array.isArray(workspace.schemaBindings) ? workspace.schemaBindings : [];
   if (bindings.length !== 1) throw new WorkspaceTransitionSchemaUnavailableError(null);
+  const binding = bindings[0];
   const { canonicalName, schema, version } = await resolveWorkspaceYSchema(
     workspace,
     db,
@@ -308,7 +283,7 @@ async function resolveWorkspaceSchema(
   if (canonicalName === null || schema === null) {
     throw new WorkspaceTransitionSchemaUnavailableError(canonicalName, version);
   }
-  return { canonicalName, schema };
+  return { canonicalName, rootKey: schemaRootKeyFromBinding(binding), schema };
 }
 
 function protocolLeafPaths(value: ProtocolValue, prefix = ''): string[] {
@@ -323,7 +298,7 @@ async function workspaceProvenance(
   db: AnyDB,
   projectId: string,
   workspace: Record<string, unknown>,
-  target: State
+  validationTree: ProtocolValue
 ): Promise<ProvenanceIndex> {
   const sources = Array.isArray(workspace.sourceBundle) ? workspace.sourceBundle : [];
   const requested = sources.flatMap((source) => {
@@ -357,7 +332,7 @@ async function workspaceProvenance(
   );
   if (refs.length === 0) return {};
   return Object.fromEntries(
-    protocolLeafPaths(target.value).map((path) => [path, refs.map((ref) => ({ ...ref }))])
+    protocolLeafPaths(validationTree).map((path) => [path, refs.map((ref) => ({ ...ref }))])
   );
 }
 
@@ -404,7 +379,6 @@ async function resolveWorkspaceTransitionContext(
     projectId: input.projectId,
     refName: targetBranch,
   });
-  if (head.format === 'legacy_v1') throw new WorkspaceTransitionLegacyHeadError(head.head);
   return {
     base: head.format === 'empty' ? createYOpsState({}) : head.state,
     head,
@@ -468,18 +442,25 @@ async function prepareWorkspaceTransition(
   }
   const context = await resolveWorkspaceTransitionContext(db, input);
   const base = context.base;
-  const target = createYOpsState(treesToYValue(input.content.trees));
-  const built = buildWorkspaceYOpsProposalFromContext(context, {
-    operations: exactTargetOperations(base, target),
-    why: input.why,
+  const target = createRepositorySemanticState(input.content);
+  const { effect, result } = createYOpsReplacementEffect({
+    base,
+    target,
+    expectedBase: describeTransitionObject(base),
+  });
+  const compiled = compileProposalDraft({
+    draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
+    effect,
     actor: input.actor,
   });
-  const { effect, proposal, result } = built;
-  if (describeTransitionObject(result).digest !== describeTransitionObject(target).digest) {
-    throw new TypeError('Workspace operations did not replay to the exact proposed target');
+  if (!compiled.ok) {
+    throw new TypeError(
+      `Workspace Proposal compilation failed: ${JSON.stringify(compiled.issues)}`
+    );
   }
+  const proposal = compiled.proposal;
 
-  const { canonicalName, schema } = await resolveWorkspaceSchema(
+  const { canonicalName, rootKey, schema } = await resolveWorkspaceSchema(
     context.workspace,
     db,
     input.projectId
@@ -494,14 +475,15 @@ async function prepareWorkspaceTransition(
     db,
     input.projectId,
     context.workspace,
-    result
+    repositorySemanticYSchemaTree(result, rootKey) as ProtocolValue
   );
   const contextResource = createYSchemaContextDescriptor(
     `t3x://projects/${encodeURIComponent(input.projectId)}/workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/yschema-context`,
-    { relations, provenanceByPath }
+    { relations, provenanceByPath, rootKey }
   );
-  const validation = runYSchemaStatementProvider({
+  const validation = runRepositorySemanticYSchemaStatementProvider({
     state: result,
+    rootKey,
     schema,
     schemaResource,
     context: { mode: 'bound', resource: contextResource },
@@ -668,6 +650,7 @@ export async function decideWorkspaceTransition(
       expectedHead: prepared.precondition.refHead,
       commit,
       objects,
+      yopsLogIds: input.yopsLogIds,
     });
     const committedWorkspace = {
       ...prepared.workspace,
@@ -676,6 +659,15 @@ export async function decideWorkspaceTransition(
       lastCommitHash: created.digest,
       status: 'committed',
       updatedAt: decidedAt,
+      ...(input.workspaceCommitOverride
+        ? {
+            commitOverride: {
+              ...input.workspaceCommitOverride,
+              blockers: [...input.workspaceCommitOverride.blockers],
+              confirmedAt: decidedAt,
+            },
+          }
+        : {}),
     };
     const draft = await upsertWorkspaceDraft(
       tx,

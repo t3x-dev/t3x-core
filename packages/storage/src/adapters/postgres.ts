@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 59;
+const SCHEMA_VERSION = 60;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -346,7 +346,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON pull_request_activity(pull_request_id, created_at);
 
     -- ═══════════════════════════════════════════════════════════════════════════
-    -- V4 Architecture Tables (commits_v4 RETIRED — use 'commits' table)
+    -- Semantic projection tables
     -- ═══════════════════════════════════════════════════════════════════════════
 
     -- Leaves table (application layer - owns constraints, output, validation)
@@ -1265,57 +1265,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS default_model TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS default_extraction_style JSONB;
 
-    -- ═══════════════════════════════════════════════════════════════
-    -- Frame-Based Commits (commits + frame_lineage)
-    -- ═══════════════════════════════════════════════════════════════
-
-    -- Auto-migrate: rename legacy commits_v5 table if it exists
-    ALTER TABLE IF EXISTS commits_v5 RENAME TO commits;
-    ALTER INDEX IF EXISTS idx_commits_v5_project RENAME TO idx_commits_project;
-    ALTER INDEX IF EXISTS idx_commits_v5_branch RENAME TO idx_commits_branch;
-    ALTER INDEX IF EXISTS idx_commits_v5_committed_at RENAME TO idx_commits_committed_at;
-
-    CREATE TABLE IF NOT EXISTS commits (
-      -- First class (in hash)
-      hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 't3x/commit',
-      parents JSONB NOT NULL DEFAULT '[]',
-      author JSONB NOT NULL,
-      committed_at TIMESTAMPTZ NOT NULL,
-      content JSONB NOT NULL,
-
-      -- Second class (not in hash)
-      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-      message TEXT,
-      branch TEXT DEFAULT 'main',
-      sources JSONB,
-      provenance JSONB,
-      yops_log_ids JSONB DEFAULT '[]',
-      position_x REAL,
-      position_y REAL,
-
-      -- Timestamps
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_project ON commits(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_branch ON commits(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_committed_at ON commits(committed_at);
-
-    -- Migration: add yops_log_ids to existing commits table
-    ALTER TABLE commits ADD COLUMN IF NOT EXISTS yops_log_ids JSONB DEFAULT '[]';
-    CREATE INDEX IF NOT EXISTS commits_yops_log_ids_gin
-      ON commits USING gin (yops_log_ids jsonb_path_ops);
-
-    CREATE TABLE IF NOT EXISTS frame_lineage (
-      id TEXT PRIMARY KEY,
-      commit_hash TEXT NOT NULL,
-      frame_id TEXT NOT NULL,
-      slot_sources JSONB,
-      meta JSONB
-    );
-    CREATE INDEX IF NOT EXISTS idx_frame_lineage_commit ON frame_lineage(commit_hash);
-    CREATE INDEX IF NOT EXISTS idx_frame_lineage_frame ON frame_lineage(frame_id);
-
     -- Token Usage table (LLM token metering)
     CREATE TABLE IF NOT EXISTS token_usage (
       id TEXT PRIMARY KEY,
@@ -1514,25 +1463,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       RETURN new_id;
     END;
     $$ LANGUAGE plpgsql;
-
-    -- commits INSERT → commit.created
-    CREATE OR REPLACE FUNCTION t3x_trg_commit_created() RETURNS TRIGGER AS $$
-    BEGIN
-      IF NEW.project_id IS NULL THEN RETURN NEW; END IF;
-      PERFORM t3x_emit_event(
-        'commit.created',
-        NEW.project_id,
-        NULL,
-        jsonb_build_object('hash', NEW.hash, 'branch', NEW.branch)
-      );
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    DROP TRIGGER IF EXISTS trg_commits_event ON commits;
-    CREATE TRIGGER trg_commits_event
-      AFTER INSERT ON commits
-      FOR EACH ROW EXECUTE FUNCTION t3x_trg_commit_created();
 
     -- drafts UPDATE → draft.changed (only when updated_at moves)
     CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$
@@ -1913,6 +1843,45 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_transition_command_receipts_result
       ON transition_command_receipts(project_id, transition_id, result_digest);
+  `);
+
+  // ── Schema v59: application-owned YOps consumption for CommitV2 ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_yops_log_consumptions (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      yops_log_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, yops_log_id, commit_digest),
+      CONSTRAINT transition_yops_log_consumptions_commit_fk
+        FOREIGN KEY (project_id, commit_digest)
+        REFERENCES transition_commits(project_id, digest) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_commit
+      ON transition_yops_log_consumptions(project_id, commit_digest);
+    CREATE INDEX IF NOT EXISTS idx_transition_yops_log_consumptions_log
+      ON transition_yops_log_consumptions(project_id, yops_log_id);
+  `);
+
+  // ── Schema v60: one durable YOps row may be consumed by only one commit ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM transition_yops_log_consumptions
+        GROUP BY project_id, yops_log_id
+        HAVING COUNT(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'Cannot migrate multiply-consumed YOps log rows';
+      END IF;
+    END $$;
+
+    ALTER TABLE transition_yops_log_consumptions
+      DROP CONSTRAINT IF EXISTS transition_yops_log_consumptions_pkey;
+    ALTER TABLE transition_yops_log_consumptions
+      ADD CONSTRAINT transition_yops_log_consumptions_pkey
+      PRIMARY KEY (project_id, yops_log_id);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

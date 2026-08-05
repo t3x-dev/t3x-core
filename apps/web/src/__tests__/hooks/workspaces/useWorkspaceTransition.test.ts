@@ -207,7 +207,7 @@ describe('useWorkspaceTransition', () => {
     });
   });
 
-  it('surfaces a legacy migration boundary without calling Decide or legacy commit', async () => {
+  it('surfaces a non-transition migration boundary without calling Decide or a removed commit path', async () => {
     vi.mocked(reviewWorkspaceTransition).mockRejectedValue(
       new ApiError('LEGACY_HEAD_READ_ONLY', 'Legacy heads are read-only')
     );

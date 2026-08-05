@@ -21,6 +21,7 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
@@ -28,7 +29,8 @@ import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';
-import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
+import { CommitHistoryDiffView } from './CommitHistoryDiffView';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -111,18 +113,22 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null);
+  const [parentCommit, setParentCommit] = useState<ApiCommit | null>(null);
+  const [parentLoading, setParentLoading] = useState(false);
+  const [parentError, setParentError] = useState<string | null>(null);
   const { loadBranches } = useBranchesList();
+  const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadDiff } = useDiffRaw();
-  const currentReturnTo = useMemo(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (selectedBranch === 'all') params.delete('branch');
-    else params.set('branch', selectedBranch);
-    return buildReturnTo(pathname, params);
-  }, [pathname, searchParams, selectedBranch]);
+  const selectedCommit = useMemo(
+    () => commits.find((item) => item.commit.hash === selectedCommitHash)?.commit ?? null,
+    [commits, selectedCommitHash]
+  );
 
   const handleBranchChange = useCallback(
     (branch: string) => {
+      setSelectedCommitHash(null);
       const params = new URLSearchParams(searchParams.toString());
       if (branch === 'all') params.delete('branch');
       else params.set('branch', branch);
@@ -205,20 +211,58 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     };
   }, [projectId, selectedBranch, loadCommits, loadDiff]);
 
+  // Resolve a selected commit's first parent when it is not present in the
+  // current branch-filtered history result. Root commits intentionally diff
+  // against an empty state.
+  useEffect(() => {
+    let cancelled = false;
+    const parentHash = selectedCommit?.parents?.[0];
+
+    setParentError(null);
+    if (!parentHash) {
+      setParentCommit(null);
+      setParentLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const listedParent = commits.find((item) => item.commit.hash === parentHash)?.commit;
+    if (listedParent) {
+      setParentCommit(listedParent);
+      setParentLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setParentCommit(null);
+    setParentLoading(true);
+    void loadCommit(parentHash, projectId)
+      .then((commit) => {
+        if (!cancelled) setParentCommit(commit);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setParentError(formatUserFacingError(err, 'Failed to load the parent commit.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setParentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [commits, loadCommit, projectId, selectedCommit]);
+
   // Keyboard navigation
   const commitHashes = useMemo(() => commits.map((c) => c.commit.hash), [commits]);
 
-  const handleNavOpen = useCallback(
-    (hash: string) => {
-      router.push(
-        withReturnTo(
-          `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : '?view=diff'}`,
-          currentReturnTo
-        )
-      );
-    },
-    [currentReturnTo, router, projectId, introDemoRequested]
-  );
+  const handleNavOpen = useCallback((hash: string) => {
+    setSelectedCommitHash(hash);
+    setTourOpen(false);
+  }, []);
 
   useEffect(() => {
     if (introDemoRequested) setTourOpen(true);
@@ -233,8 +277,17 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       }
     },
     onAction: handleNavOpen,
-    enabled: !loading,
+    enabled: !loading && !selectedCommit,
   });
+
+  useEffect(() => {
+    if (!selectedCommit) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedCommitHash(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [selectedCommit]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -296,70 +349,98 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
       {/* ═══════ SCROLLABLE CONTENT ═══════ */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 py-6">
-          {/* Loading */}
-          {loading && (
+        {selectedCommit ? (
+          parentLoading ? (
             <div className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-                <span className="text-sm text-[var(--text-tertiary)]">Loading history...</span>
+                <span className="text-sm text-[var(--text-tertiary)]">
+                  Loading parent commit...
+                </span>
               </div>
             </div>
-          )}
-
-          {/* Error */}
-          {error && !loading && (
-            <div className="text-center py-8">
-              <p className="text-sm text-[var(--status-error)]">{error}</p>
+          ) : parentError ? (
+            <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+              <p className="text-sm text-[var(--status-error)]">{parentError}</p>
+              <button
+                type="button"
+                onClick={() => setSelectedCommitHash(null)}
+                className="mt-3 text-xs text-[var(--status-info)] hover:underline"
+              >
+                Back to history
+              </button>
             </div>
-          )}
+          ) : (
+            <CommitHistoryDiffView
+              commit={selectedCommit}
+              onBack={() => setSelectedCommitHash(null)}
+              parentCommit={parentCommit}
+            />
+          )
+        ) : (
+          <div className="max-w-3xl mx-auto px-6 py-6">
+            {/* Loading */}
+            {loading && (
+              <div className="flex items-center justify-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+                  <span className="text-sm text-[var(--text-tertiary)]">Loading history...</span>
+                </div>
+              </div>
+            )}
 
-          {/* Empty state */}
-          {!loading && !error && commits.length === 0 && (
-            <div className="text-center py-16">
-              <History
-                size={32}
-                className="mx-auto mb-3 text-[var(--text-tertiary)]"
-                strokeWidth={1}
-              />
-              <p className="text-sm text-[var(--text-tertiary)]">No commits found</p>
-              {selectedBranch !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => handleBranchChange('all')}
-                  className="mt-2 text-xs text-[var(--status-info)] hover:underline"
-                >
-                  Show all branches
-                </button>
-              )}
-            </div>
-          )}
+            {/* Error */}
+            {error && !loading && (
+              <div className="text-center py-8">
+                <p className="text-sm text-[var(--status-error)]">{error}</p>
+              </div>
+            )}
 
-          {/* Commit timeline */}
-          {!loading && !error && commits.length > 0 && (
-            <div className="space-y-0" data-intro-target="history-timeline">
-              {commits.map((item, index) => (
-                <CommitHistoryRow
-                  key={item.commit.hash}
-                  projectId={projectId}
-                  hash={item.commit.hash}
-                  message={item.commit.message}
-                  author={item.commit.author}
-                  committedAt={item.commit.committed_at}
-                  branch={item.commit.branch}
-                  parentCount={(item.commit.parents ?? []).length}
-                  diffStats={item.diffStats}
-                  nodeCount={item.nodeCount}
-                  isFirst={index === 0}
-                  isLast={index === commits.length - 1}
-                  isActive={activeHash === item.commit.hash}
-                  introDemo={introDemoRequested}
-                  returnTo={currentReturnTo}
+            {/* Empty state */}
+            {!loading && !error && commits.length === 0 && (
+              <div className="text-center py-16">
+                <History
+                  size={32}
+                  className="mx-auto mb-3 text-[var(--text-tertiary)]"
+                  strokeWidth={1}
                 />
-              ))}
-            </div>
-          )}
-        </div>
+                <p className="text-sm text-[var(--text-tertiary)]">No commits found</p>
+                {selectedBranch !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => handleBranchChange('all')}
+                    className="mt-2 text-xs text-[var(--status-info)] hover:underline"
+                  >
+                    Show all branches
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Commit timeline */}
+            {!loading && !error && commits.length > 0 && (
+              <div className="space-y-0" data-intro-target="history-timeline">
+                {commits.map((item, index) => (
+                  <CommitHistoryRow
+                    key={item.commit.hash}
+                    hash={item.commit.hash}
+                    message={item.commit.message}
+                    author={item.commit.author}
+                    committedAt={item.commit.committed_at}
+                    branch={item.commit.branch}
+                    parentCount={(item.commit.parents ?? []).length}
+                    diffStats={item.diffStats}
+                    nodeCount={item.nodeCount}
+                    isFirst={index === 0}
+                    isLast={index === commits.length - 1}
+                    isActive={activeHash === item.commit.hash}
+                    onOpen={handleNavOpen}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <FeatureTourOverlay
         open={tourOpen}

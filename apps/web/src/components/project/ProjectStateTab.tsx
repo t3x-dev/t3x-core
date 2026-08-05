@@ -18,7 +18,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
-import { StateGenericReader } from '@/components/project/StateGenericReader';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -27,7 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectIdDiffPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -119,6 +118,7 @@ export function ProjectStateTab({
   routeQueryRef.current = routeQuery;
   const routeView = parseStateView(searchParams.get('view'), initialView);
   const [activeView, setActiveView] = useState<ProjectStateView>(routeView);
+  const snapshotEnabled = activeView !== 'canvas';
   const [lastSnapshotView, setLastSnapshotView] = useState<ProjectSnapshotView>(
     routeView === 'canvas' ? 'structure' : routeView
   );
@@ -135,6 +135,7 @@ export function ProjectStateTab({
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
     create: createBranch,
+    loading: branchesLoading,
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -193,6 +194,8 @@ export function ProjectStateTab({
   );
 
   useEffect(() => {
+    if (!snapshotEnabled) return;
+
     let cancelled = false;
     const load = async () => {
       setSnapshot({
@@ -212,7 +215,7 @@ export function ProjectStateTab({
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
-          headCommit = await loadCommit(branchHeadHash);
+          headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
@@ -234,7 +237,7 @@ export function ProjectStateTab({
 
         if (headCommit) {
           try {
-            operations = (await loadOperations(headCommit.hash)).operations;
+            operations = (await loadOperations(headCommit.hash, projectId)).operations;
           } catch {
             auxiliaryErrors.push('YOps log unavailable.');
           }
@@ -243,7 +246,7 @@ export function ProjectStateTab({
           if (parentHash) {
             try {
               parentCommit = commits.find((commit) => commit.hash === parentHash) ?? null;
-              if (!parentCommit) parentCommit = await loadCommit(parentHash);
+              if (!parentCommit) parentCommit = await loadCommit(parentHash, projectId);
               if (parentCommit.project_id !== projectId || parentCommit.hash !== parentHash) {
                 throw new Error('Parent commit response does not match the selected project.');
               }
@@ -293,6 +296,7 @@ export function ProjectStateTab({
     loadCommits,
     loadOperations,
     projectId,
+    snapshotEnabled,
     snapshotRefreshVersion,
   ]);
 
@@ -332,7 +336,7 @@ export function ProjectStateTab({
   const readerKind = resolveStateReaderKind(schemaName);
   const prdRenderModel = useMemo(
     () =>
-      headCommit && readerKind === 'prd'
+      headCommit && (readerKind === 'prd' || readerKind === 'generic')
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
@@ -388,13 +392,22 @@ export function ProjectStateTab({
     `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
     currentStateReturnTo
   );
-  const commitHref = headCommit
-    ? withReturnTo(
-        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}?view=diff`,
-        currentStateReturnTo
-      )
+  const repositoryPath = getProjectRepoPath({ id: projectId, name: projectName });
+  const commitCanvasHref = headCommit
+    ? `${repositoryPath}?${new URLSearchParams({
+        view: 'canvas',
+        branch: branchFocus,
+        commit: headCommit.hash,
+      }).toString()}`
     : null;
-  const workspaceBasePath = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
+  const diffHref =
+    headCommit?.parents?.[0] && headCommit.hash
+      ? withReturnTo(
+          getProjectIdDiffPath(projectId, headCommit.parents[0], headCommit.hash),
+          currentStateReturnTo
+        )
+      : null;
+  const workspaceBasePath = `${repositoryPath}/workspaces`;
   const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;
   const mainHeadCommitHash = branchHeads.main ?? null;
   const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
@@ -529,14 +542,14 @@ export function ProjectStateTab({
               ) : null}
               <StateCommitRow
                 author={headCommit?.author?.name ?? headCommit?.author?.type ?? 'W'}
-                commitHref={commitHref}
+                commitCanvasHref={commitCanvasHref}
                 hash={headCommit?.hash ?? null}
                 relativeTime={formatRelativeTime(headCommit?.committed_at)}
                 title={commitTitle}
                 yopsCount={yopsCount}
               />
               <StateObjectLine
-                commitHref={commitHref}
+                diffHref={diffHref}
                 diffCount={committedDiffChanges.length}
                 headCommit={headCommit}
                 onRunValidation={
@@ -613,13 +626,6 @@ export function ProjectStateTab({
                       yamlText={yamlText}
                     />
                   ) : null}
-                  {activeView === 'render' && readerKind === 'generic' ? (
-                    <StateGenericReader
-                      rows={pointRows}
-                      schemaName={schemaName}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
                   {activeView === 'code' ? <StateCodeView yamlText={yamlText} /> : null}
                 </>
               ) : null}
@@ -627,11 +633,11 @@ export function ProjectStateTab({
           ) : (
             <StateCanvasView
               branch={branchFocus || 'main'}
-              branchHeadHash={headCommit?.hash ?? null}
+              branchHeadHash={branchHeads[branchFocus] ?? null}
               focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}
-              snapshotLoading={snapshot.loading}
+              snapshotLoading={branchesLoading}
             />
           )}
         </main>
@@ -750,14 +756,14 @@ function StateUpdateBanner({
 
 function StateCommitRow({
   author,
-  commitHref,
+  commitCanvasHref,
   hash,
   relativeTime,
   title,
   yopsCount,
 }: {
   author: string;
-  commitHref: string | null;
+  commitCanvasHref: string | null;
   hash: string | null;
   relativeTime: string;
   title: string;
@@ -780,10 +786,10 @@ function StateCommitRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
-        {commitHref && hash ? (
+        {commitCanvasHref && hash ? (
           <Link
             className="font-mono hover:text-[var(--accent-commit)] hover:underline"
-            href={commitHref}
+            href={commitCanvasHref}
           >
             {shortHash(hash)}
           </Link>
@@ -797,7 +803,7 @@ function StateCommitRow({
 }
 
 function StateObjectLine({
-  commitHref,
+  diffHref,
   diffCount,
   headCommit,
   onRunValidation,
@@ -809,7 +815,7 @@ function StateObjectLine({
   validationRunning,
   workspaceHref,
 }: {
-  commitHref: string | null;
+  diffHref: string | null;
   diffCount: number;
   headCommit: ApiCommit | null;
   onRunValidation?: () => Promise<void> | void;
@@ -838,10 +844,10 @@ function StateObjectLine({
               {headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
             </span>
           </span>
-          {diffCount > 0 && commitHref ? (
+          {diffCount > 0 && diffHref ? (
             <Link
               className="font-semibold text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
-              href={commitHref}
+              href={diffHref}
             >
               {diffCount} changed paths
             </Link>

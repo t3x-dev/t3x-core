@@ -1,5 +1,11 @@
 # @t3x-dev/yops
 
+## 1.0.0
+
+### Major Changes
+
+- [#1310](https://github.com/t3x-dev/t3x-core/pull/1310) [`8496a99`](https://github.com/t3x-dev/t3x-core/commit/8496a992ce524be79297d7fa76b0abba479a3833) Thanks [@jjy0230](https://github.com/jjy0230)! - Release the YOps package as part of the T3X 1.0.0 public release train.
+
 ## 0.6.0
 
 ### Minor Changes

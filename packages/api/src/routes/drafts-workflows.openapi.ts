@@ -21,22 +21,30 @@ import {
   isGenerationConfigured,
 } from '@t3x-dev/core';
 import {
+  type AnyDB,
   commitDraft,
-  createCommit,
   createLeaf,
+  ensureMainBranch,
   findDraftById,
   findMembersByNode,
   forkDraft,
+  getTransitionRefHead,
   searchKnowledgeNodes,
+  TransitionHeadConflictError,
+  TransitionRefNotFoundError,
   updateDraftPreview,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
-import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
+} from '../lib/repository-state-transition';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -60,6 +68,33 @@ export const draftsWorkflowRoutes = new OpenAPIHono({
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEBOUNCE_MS = 1000; // 1 second
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
+
+class DraftWorkflowCommitConflictError extends Error {
+  constructor(readonly draftId: string) {
+    super(`Draft ${draftId} was already committed by another request`);
+    this.name = 'DraftWorkflowCommitConflictError';
+  }
+}
+
+async function observeDraftCommitHead(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    targetBranch: string;
+    draftParent: string | null | undefined;
+  }
+): Promise<string | null> {
+  if (input.targetBranch === 'main') await ensureMainBranch(db, input.projectId);
+  const observed = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: input.targetBranch,
+  });
+  if (input.draftParent != null && input.draftParent !== observed.head) {
+    throw new TransitionHeadConflictError(input.draftParent, observed.head);
+  }
+  return input.draftParent ?? observed.head;
+}
 
 // ============================================================
 // Route Definitions
@@ -217,7 +252,6 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
-
     // 2. Validate state
     if (draft.status !== 'editing') {
       return errorResponse(
@@ -300,7 +334,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 7. Build virtual commit + leaf for generation
     const virtualCommit = {
       hash: 'virtual:preview',
-      schema: 't3x/commit' as const,
+      schema: 't3x/commit/v2' as const,
       parents: [],
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),
@@ -391,6 +425,9 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
+    const access = await assertProjectAccess(c, db, draft.project_id);
+    if (access instanceof Response) return access;
+    const userId = getUserId(c);
 
     // 2. Validate state
     if (draft.status !== 'editing') {
@@ -403,56 +440,59 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
 
     if (draft.goal === DEMO_WORKSPACE_REPLAY_GOAL) {
       const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
-      const parents = await resolveDefaultCommitParents(
-        db,
-        draft.project_id,
+      const expectedHead = await observeDraftCommitHead(db, {
+        projectId: draft.project_id,
         targetBranch,
-        draft.parent_commit_hash
-      );
-
-      const commit = await createCommit(db, {
-        parents,
-        author: DEMO_WORKSPACE_FIXTURE.commit.author,
-        content: {
-          trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
-          relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
-        },
-        project_id: draft.project_id,
-        message: body?.message ?? DEMO_WORKSPACE_FIXTURE.commit.message,
-        branch: targetBranch,
-        provenance: DEMO_WORKSPACE_FIXTURE.commit.provenance,
-        yops_log_ids: [],
-        enforceBranchLinearity: true,
+        draftParent: draft.parent_commit_hash,
       });
-
-      const createdLeaf = await createLeaf(db, {
-        commit_hash: commit.hash,
-        type: DEMO_WORKSPACE_FIXTURE.leaf.type,
-        title: DEMO_WORKSPACE_FIXTURE.leaf.title,
-        constraints: DEMO_WORKSPACE_FIXTURE.leaf.constraints,
-        config: DEMO_WORKSPACE_FIXTURE.leaf.config,
-        project_id: draft.project_id,
-        created_by: 'fixture-replay',
-      });
-      const leaf =
-        (await updateLeafAtomic(db, createdLeaf.id, {
-          output: DEMO_WORKSPACE_FIXTURE.leaf.output,
-          assertions: DEMO_WORKSPACE_FIXTURE.leaf.assertions,
-        })) ?? createdLeaf;
-
-      await commitDraft(db, id, commit.hash, leaf.id);
+      const content = {
+        trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
+        relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
+      };
+      const target = createRepositoryYOpsStateFromSemanticContent(content);
+      const intent = body?.message ?? DEMO_WORKSPACE_FIXTURE.commit.message;
+      const written = (await (db as unknown as TxRunner).transaction(async (rawTx) => {
+        const tx = rawTx as AnyDB;
+        const created = await commitRepositoryYOpsState({
+          db: tx,
+          projectId: draft.project_id,
+          refName: targetBranch,
+          expectedHead,
+          target,
+          actor: { kind: 'service', id: 'service:demo-fixture-replay' },
+          intent,
+        });
+        const createdLeaf = await createLeaf(tx, {
+          commit_hash: created.commitDigest,
+          type: DEMO_WORKSPACE_FIXTURE.leaf.type,
+          title: DEMO_WORKSPACE_FIXTURE.leaf.title,
+          constraints: DEMO_WORKSPACE_FIXTURE.leaf.constraints,
+          config: DEMO_WORKSPACE_FIXTURE.leaf.config,
+          project_id: draft.project_id,
+          created_by: 'fixture-replay',
+        });
+        const leaf =
+          (await updateLeafAtomic(tx, createdLeaf.id, {
+            output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+            assertions: DEMO_WORKSPACE_FIXTURE.leaf.assertions,
+          })) ?? createdLeaf;
+        const claimed = await commitDraft(tx, id, created.commitDigest, leaf.id);
+        if (!claimed) throw new DraftWorkflowCommitConflictError(id);
+        return { created, leaf };
+      })) as {
+        created: Awaited<ReturnType<typeof commitRepositoryYOpsState>>;
+        leaf: Awaited<ReturnType<typeof createLeaf>>;
+      };
 
       const commitResponse = {
-        hash: commit.hash,
-        schema: commit.schema,
-        parents: commit.parents,
-        author: commit.author,
-        committed_at: commit.committed_at,
-        content: commit.content,
-        project_id: commit.project_id ?? null,
-        message: commit.message ?? null,
-        branch: commit.branch ?? null,
-        provenance: commit.provenance ?? null,
+        hash: written.created.commitDigest,
+        schema: 't3x/commit/v2' as const,
+        parents: written.created.commit.parents.map((parent) => parent.digest),
+        committed_at: written.created.transition.recordedAt,
+        content,
+        project_id: draft.project_id,
+        message: intent,
+        branch: targetBranch,
       };
 
       return c.json(
@@ -461,18 +501,18 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           data: {
             commit: commitResponse,
             leaf: {
-              id: leaf.id,
-              commit_hash: leaf.commit_hash,
-              type: leaf.type,
-              title: leaf.title ?? null,
-              constraints: leaf.constraints ?? [],
-              config: leaf.config ?? {},
-              output: leaf.output ?? null,
-              generated_at: leaf.generated_at ?? null,
-              assertions: leaf.assertions ?? null,
-              project_id: leaf.project_id,
-              created_at: leaf.created_at,
-              created_by: leaf.created_by ?? null,
+              id: written.leaf.id,
+              commit_hash: written.leaf.commit_hash,
+              type: written.leaf.type,
+              title: written.leaf.title ?? null,
+              constraints: written.leaf.constraints ?? [],
+              config: written.leaf.config ?? {},
+              output: written.leaf.output ?? null,
+              generated_at: written.leaf.generated_at ?? null,
+              assertions: written.leaf.assertions ?? null,
+              project_id: written.leaf.project_id,
+              created_at: written.leaf.created_at,
+              created_by: written.leaf.created_by ?? null,
             },
             draft_status: 'committed' as const,
           },
@@ -565,48 +605,30 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }
 
     const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
-
-    // 4. Set parents
-    const parents = await resolveDefaultCommitParents(
-      db,
-      draft.project_id,
+    const expectedHead = await observeDraftCommitHead(db, {
+      projectId: draft.project_id,
       targetBranch,
-      draft.parent_commit_hash
-    );
+      draftParent: draft.parent_commit_hash,
+    });
 
-    // 5. Create commit (convert nodes to frames)
+    // 4. Build the exact target repository state.
     const commitFrames = nodes.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
       slots: { text: s.text },
     }));
+    const content = {
+      trees: commitFrames.map((frame) => ({
+        key: frame.id,
+        slots: frame.slots,
+        children: [] as any[],
+      })),
+      relations: [],
+    };
+    const target = createRepositoryYOpsStateFromSemanticContent(content);
+    const intent = body?.message ?? `Draft: ${draft.title}`;
 
-    // Find uncommitted yops for this conversation
-    const draftConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
-    const yopsLogIds = draftConversationId
-      ? await findUncommittedYOpsIds(db, draftConversationId, draft.project_id)
-      : [];
-
-    const commit = await createCommit(db, {
-      parents,
-      author: { type: 'human' as const, name: 'workbench' },
-      content: {
-        trees: commitFrames.map((f: any) => ({
-          key: f.id,
-          slots: f.slots,
-          children: [] as any[],
-        })),
-        relations: [],
-      },
-      project_id: draft.project_id,
-      message: body?.message ?? `Draft: ${draft.title}`,
-      branch: targetBranch,
-      provenance: { method: 'human_curation' },
-      yops_log_ids: yopsLogIds,
-      enforceBranchLinearity: true,
-    });
-
-    // 5b. Best-effort: populate node vectors (skip on failure)
+    // 5. Best-effort: populate node vectors (skip on failure)
     const embedder = getEmbedder();
     if (embedder) {
       try {
@@ -617,58 +639,82 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       }
     }
 
-    // 6. Optionally create Leaf (if constraints or preview_type exist)
-    let leaf = null;
-    if (draft.constraints.length > 0 || draft.preview_type) {
-      const leafConstraints = draft.constraints.map((dc) => ({
-        id: dc.id.replace(/^dc_/, 'cst_'),
-        type: dc.type as 'require' | 'exclude',
-        match_mode: dc.match_mode as 'exact' | 'semantic',
-        value: dc.value,
-        reason: dc.reason,
-      }));
-
-      leaf = await createLeaf(db, {
-        commit_hash: commit.hash,
-        type: (draft.preview_type ?? 'tweet') as 'tweet',
-        title: draft.title,
-        constraints: leafConstraints,
-        config: {},
-        project_id: draft.project_id,
+    // 6. Persist CommitV2, optional Leaf, and draft claim atomically.
+    const written = (await (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      const draftConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+      const yopsLogIds = draftConversationId
+        ? await findUncommittedYOpsIds(tx, draftConversationId, draft.project_id)
+        : [];
+      const evidence = draftConversationId
+        ? await getRepositoryConversationEvidence(tx, draft.project_id, draftConversationId)
+        : [];
+      const created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId: draft.project_id,
+        refName: targetBranch,
+        expectedHead,
+        target,
+        actor: {
+          kind: 'human',
+          id: userId ? `user:${userId}` : 'human:local-user',
+        },
+        intent,
+        ...(evidence.length === 0 ? {} : { evidence }),
+        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
-    }
-
-    // 7. Update draft status
-    await commitDraft(db, id, commit.hash, leaf?.id);
-
-    // 8. Build response
-    const commitResponse = {
-      hash: commit.hash,
-      schema: commit.schema,
-      parents: commit.parents,
-      author: commit.author,
-      committed_at: commit.committed_at,
-      content: commit.content,
-      project_id: commit.project_id ?? null,
-      message: commit.message ?? null,
-      branch: commit.branch ?? null,
-      provenance: commit.provenance ?? null,
+      let leaf: Awaited<ReturnType<typeof createLeaf>> | null = null;
+      if (draft.constraints.length > 0 || draft.preview_type) {
+        const leafConstraints = draft.constraints.map((constraint) => ({
+          id: constraint.id.replace(/^dc_/, 'cst_'),
+          type: constraint.type as 'require' | 'exclude',
+          match_mode: constraint.match_mode as 'exact' | 'semantic',
+          value: constraint.value,
+          reason: constraint.reason,
+        }));
+        leaf = await createLeaf(tx, {
+          commit_hash: created.commitDigest,
+          type: (draft.preview_type ?? 'tweet') as 'tweet',
+          title: draft.title,
+          constraints: leafConstraints,
+          config: {},
+          project_id: draft.project_id,
+        });
+      }
+      const claimed = await commitDraft(tx, id, created.commitDigest, leaf?.id);
+      if (!claimed) throw new DraftWorkflowCommitConflictError(id);
+      return { created, leaf };
+    })) as {
+      created: Awaited<ReturnType<typeof commitRepositoryYOpsState>>;
+      leaf: Awaited<ReturnType<typeof createLeaf>> | null;
     };
 
-    const leafResponse = leaf
+    // 7. Build the task-oriented CommitV2 projection.
+    const commitResponse = {
+      hash: written.created.commitDigest,
+      schema: 't3x/commit/v2' as const,
+      parents: written.created.commit.parents.map((parent) => parent.digest),
+      committed_at: written.created.transition.recordedAt,
+      content,
+      project_id: draft.project_id,
+      message: intent,
+      branch: targetBranch,
+    };
+
+    const leafResponse = written.leaf
       ? {
-          id: leaf.id,
-          commit_hash: leaf.commit_hash,
-          type: leaf.type,
-          title: leaf.title ?? null,
-          constraints: leaf.constraints ?? [],
-          config: leaf.config ?? {},
-          output: leaf.output ?? null,
-          generated_at: leaf.generated_at ?? null,
-          assertions: leaf.assertions ?? null,
-          project_id: leaf.project_id,
-          created_at: leaf.created_at,
-          created_by: leaf.created_by ?? null,
+          id: written.leaf.id,
+          commit_hash: written.leaf.commit_hash,
+          type: written.leaf.type,
+          title: written.leaf.title ?? null,
+          constraints: written.leaf.constraints ?? [],
+          config: written.leaf.config ?? {},
+          output: written.leaf.output ?? null,
+          generated_at: written.leaf.generated_at ?? null,
+          assertions: written.leaf.assertions ?? null,
+          project_id: written.leaf.project_id,
+          created_at: written.leaf.created_at,
+          created_by: written.leaf.created_by ?? null,
         }
       : null;
 
@@ -684,8 +730,15 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (err) {
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
+    if (err instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
+    }
+    if (err instanceof TransitionRefNotFoundError) {
+      return errorResponse(c, 'NOT_FOUND', err.message);
+    }
+    if (err instanceof DraftWorkflowCommitConflictError) {
+      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500.
     const conflict = mapSupersededError(c, err);

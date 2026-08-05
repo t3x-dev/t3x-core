@@ -7,31 +7,31 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  findCommitHashesByYOpsLogIds,
   listActiveYOpsLogByConversation,
-  listCommits,
   SupersededYOpsLogIdsError,
+  TransitionYOpsLogAlreadyConsumedError,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { errorJson } from './errors';
 
 /**
  * Find yops_log entry IDs that should land in the next commit:
- * **active** (non-superseded) entries that aren't already referenced
- * by an existing commit.
+ * **active** (non-superseded) entries that aren't already consumed
+ * by a CommitV2 application transition.
  *
  * Reads from the active slice — never the full log. Without this
  * filter a re-extract that produced a fresh suggestion (and marked
  * the prior LLM batch superseded) would still see the prior batch
- * as a commit candidate. The commit would freeze those replaced
- * entries into `commits.yops_log_ids`, and on the next extract
+ * as a commit candidate. The transition would freeze those replaced
+ * entries into consumption records, and on the next extract
  * `replayCommittedBaseline` would resurrect the replaced facts as
  * permanent baseline.
  *
  * Concurrency note: this read is point-in-time. A re-extract landing
- * between this call and the eventual `createCommit` could supersede
- * an id we returned. `createCommit` defends against this directly by
- * rejecting any `yops_log_ids` whose `superseded_at IS NOT NULL`
- * at insert time.
+ * between this call and the eventual CommitV2 transition could supersede
+ * or consume an id we returned. The write transaction defends against
+ * those races before advancing the ref.
  */
 export async function findUncommittedYOpsIds(
   db: AnyDB,
@@ -39,14 +39,14 @@ export async function findUncommittedYOpsIds(
   projectId: string
 ): Promise<string[]> {
   const activeYops = await listActiveYOpsLogByConversation(db, conversationId);
-  const allCommits = await listCommits(db, { projectId });
-  const usedIds = new Set(allCommits.flatMap((c) => c.yops_log_ids));
-  return activeYops.filter((y) => !usedIds.has(y.id)).map((y) => y.id);
+  const activeIds = activeYops.map((entry) => entry.id);
+  const committedBy = await findCommitHashesByYOpsLogIds(db, projectId, activeIds);
+  return activeIds.filter((id) => !committedBy.has(id));
 }
 
 /**
- * Map `SupersededYOpsLogIdsError` (thrown by `createCommit` when a
- * concurrent re-extract superseded one of the input ids) to a 409
+ * Map `SupersededYOpsLogIdsError` (thrown when a concurrent re-extract
+ * superseded one of the input ids) to a 409
  * `YOPS_LOG_SUPERSEDED` response with the offending ids in `details`.
  * Returns `null` for any other error so the caller can keep its
  * existing fallback (typically `COMMIT_FAILED` → 500).
@@ -59,6 +59,11 @@ export function mapSupersededError(c: Context, err: unknown): ReturnType<typeof 
   if (err instanceof SupersededYOpsLogIdsError) {
     return errorJson(c, 'YOPS_LOG_SUPERSEDED', err.message, 409, {
       superseded_ids: err.supersededIds,
+    });
+  }
+  if (err instanceof TransitionYOpsLogAlreadyConsumedError) {
+    return errorJson(c, 'YOPS_LOG_ALREADY_COMMITTED', err.message, 409, {
+      consumptions: err.consumptions,
     });
   }
   return null;

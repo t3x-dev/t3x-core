@@ -40,13 +40,14 @@ test.describe('Leaf Semantic Points', () => {
         author: { type: 'human', name: 'E2E Tester' },
         branch: 'main',
         message: 'Leaf semantic points audit commit',
+        expected_head: null,
       },
     });
     const commitJson = await commitResponse.json();
     if (!commitJson.success) {
       throw new Error(`Failed to create commit: ${commitJson.error?.message}`);
     }
-    const commitHash = commitJson.data.commit.hash;
+    const commitHash = commitJson.data.commit.digest;
 
     const leafResponse = await request.post(`${API_BASE}/leaves`, {
       data: {

@@ -250,21 +250,19 @@ export async function replacePullRequestChecks(
   pullRequestId: string,
   checks: ReplacePullRequestCheckInput[]
 ): Promise<PullRequestCheck[]> {
-  return db.transaction(async (tx) => {
-    await tx.delete(pullRequestChecks).where(eq(pullRequestChecks.pullRequestId, pullRequestId));
-    if (checks.length === 0) return [];
-    const rows: NewPullRequestCheck[] = checks.map((check) => ({
-      checkId: `prcheck_${randomUUID().replaceAll('-', '')}`,
-      pullRequestId,
-      kind: check.kind,
-      status: check.status,
-      title: check.title,
-      message: check.message ?? null,
-      startedAt: check.startedAt ?? null,
-      completedAt: check.completedAt ?? null,
-    }));
-    return tx.insert(pullRequestChecks).values(rows).returning();
-  });
+  await db.delete(pullRequestChecks).where(eq(pullRequestChecks.pullRequestId, pullRequestId));
+  if (checks.length === 0) return [];
+  const rows: NewPullRequestCheck[] = checks.map((check) => ({
+    checkId: `prcheck_${randomUUID().replaceAll('-', '')}`,
+    pullRequestId,
+    kind: check.kind,
+    status: check.status,
+    title: check.title,
+    message: check.message ?? null,
+    startedAt: check.startedAt ?? null,
+    completedAt: check.completedAt ?? null,
+  }));
+  return db.insert(pullRequestChecks).values(rows).returning();
 }
 
 export async function listPullRequestChecks(

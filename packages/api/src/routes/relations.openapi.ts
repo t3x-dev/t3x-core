@@ -8,10 +8,10 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const relationsRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -62,16 +62,14 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await getCommitUnified(db, decodedHash);
+    const commit = await getRepositorySemanticCommit(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
     // Verify project ownership
-    if (commit.project_id) {
-      const accessResult = await assertProjectAccess(c, db, commit.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
-    const relations = commit.content?.relations ?? [];
+    const accessResult = await assertProjectAccess(c, db, commit.projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const relations = commit.semanticContent.relations;
     return c.json({ success: true as const, data: { relations } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

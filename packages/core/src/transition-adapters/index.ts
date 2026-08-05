@@ -14,6 +14,22 @@ export {
   type UnsupportedEspHomeSourceInputs,
 } from './esphomeSourceInputs';
 export {
+  type CreatedSemanticMergeEffect,
+  type CreateSemanticMergeEffectInput,
+  createRepositorySemanticState,
+  createSemanticMergeEffect,
+  decodeRepositorySemanticState,
+  REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+  REPOSITORY_SEMANTIC_CONTENT_VERSION,
+  SEMANTIC_MERGE_DRIVER_PROTOCOL,
+  SEMANTIC_MERGE_DRIVER_PROTOCOL_VERSION,
+  SEMANTIC_MERGE_DRIVER_SPEC_DIGEST,
+  SEMANTIC_MERGE_MUTATION_DRIVER_REF,
+  SEMANTIC_MERGE_OPERATION_SCHEMA,
+  semanticMergeMutationDriver,
+  semanticMergeMutationDrivers,
+} from './semanticMergeDriver';
+export {
   createYOpsState,
   YOPS_STATE_CODEC_VERSION,
   YOPS_STATE_MEDIA_TYPE,
@@ -53,7 +69,9 @@ export {
 export {
   type CreatedYOpsEffect,
   type CreateYOpsEffectInput,
+  type CreateYOpsReplacementEffectInput,
   createYOpsEffect,
+  createYOpsReplacementEffect,
   YOPS_DRIVER_PROTOCOL,
   YOPS_DRIVER_PROTOCOL_VERSION,
   YOPS_MUTATION_DRIVER_REF,
@@ -66,6 +84,9 @@ export {
 export {
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
+  type RepositorySemanticYSchemaStatementProviderInput,
+  repositorySemanticYSchemaTree,
+  runRepositorySemanticYSchemaStatementProvider,
   runYSchemaStatementProvider,
   YSCHEMA_CONTEXT_MEDIA_TYPE,
   YSCHEMA_NATIVE_PROFILE,

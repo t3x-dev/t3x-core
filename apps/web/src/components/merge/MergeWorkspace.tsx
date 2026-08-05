@@ -19,7 +19,6 @@ import { buildMergeDecisionLabels, buildMergeVoices } from '@/domain/merge/voice
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
-import { useCreateMergeCommit } from '@/hooks/commits/useCreateMergeCommit';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -35,12 +34,7 @@ import { MergeNavigator } from './MergeNavigator';
 import { MergePreview } from './MergePreview';
 import { MergeReadyStrip } from './MergeReadyStrip';
 import { MergeReviewDialog } from './MergeReviewDialog';
-import {
-  buildMergeDecision,
-  buildMergedContent,
-  findNode,
-  findNodeByPath,
-} from './mergeWorkspaceHelpers';
+import { buildMergeDecision, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
 import { useMergeKeyboard } from './useMergeKeyboard';
 
 interface MergeWorkspaceProps {
@@ -61,7 +55,6 @@ export function MergeWorkspace({
   onMergeCommitted,
   pullRequestNumber,
 }: MergeWorkspaceProps) {
-  const { create: createMergeCommit } = useCreateMergeCommit();
   const { load: loadCanvas } = useCanvasNodeActions();
   const { mergePullRequest: mergeProjectPullRequest } = useProjectPullRequestsApi();
   const {
@@ -90,7 +83,11 @@ export function MergeWorkspace({
     getTreeMergeChecks,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
-  const { save: saveDraft, cancel: cancelMerge } = useMergeWorkspaceActions();
+  const {
+    save: saveDraft,
+    cancel: cancelMerge,
+    commit: commitMergeDraft,
+  } = useMergeWorkspaceActions();
   const { loadCommit } = useCommitByHash();
 
   // Timer-driven saveStatus->idle transition (v2 §2.5 — store pure).
@@ -125,7 +122,7 @@ export function MergeWorkspace({
     setTreeLoading(true);
     setTreeError(null);
 
-    Promise.all([loadCommit(sh), loadCommit(th)])
+    Promise.all([loadCommit(sh, projectId), loadCommit(th, projectId)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
@@ -156,7 +153,7 @@ export function MergeWorkspace({
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            loadCommit(baseParent)
+            loadCommit(baseParent, projectId)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
@@ -195,7 +192,7 @@ export function MergeWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [sourceHash, targetHash, setTreeMergeResult, loadCommit]);
+  }, [sourceHash, targetHash, projectId, setTreeMergeResult, loadCommit]);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -280,7 +277,7 @@ export function MergeWorkspace({
         return;
       }
 
-      const mergedContent = buildMergedContent(
+      const decisions = buildMergeDecision(
         treeMergeResult,
         treeResolutions,
         keepSourceNodes,
@@ -289,26 +286,15 @@ export function MergeWorkspace({
         semanticData.target
       );
 
-      const result = await createMergeCommit({
-        projectId,
-        content: {
-          trees: mergedContent.trees,
-          relations: mergedContent.relations,
-        },
-        branch: targetBranch || 'main',
-        message: message || 'Tree merge',
-        parents: [targetHash, sourceHash],
-        author: { type: 'human', name: 'User' },
-        provenance: { method: 'merge' },
-      });
+      const result = await commitMergeDraft(targetBranch || 'main', decisions);
 
       // Reload canvas data to show the new merge commit
       void loadCanvas(projectId);
 
       // Navigate to the new merge commit detail page
-      if (result?.commit?.hash) {
+      if (result?.hash) {
         setShowReviewDialog(false);
-        setMergeCeremonyHash(result.commit.hash);
+        setMergeCeremonyHash(result.hash);
       } else {
         onClose();
       }
@@ -330,9 +316,9 @@ export function MergeWorkspace({
     targetBranch,
     message,
     onClose,
-    onMergeCommitted,
     semanticData,
     loadCanvas,
+    commitMergeDraft,
     mergeProjectPullRequest,
     pullRequestNumber,
   ]);

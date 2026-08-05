@@ -8,8 +8,8 @@ import { generateConversationId } from '@t3x-dev/core';
 import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
-import { commits } from '../schema-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+import { hasConversationSourceCommitReferences } from './source-evidence-references';
 
 export class ConversationHistoryReferencedError extends Error {
   readonly code = 'CONVERSATION_HISTORY_REFERENCED';
@@ -348,31 +348,25 @@ export async function updateConversation(
  * erasure deliberately uses the project lifecycle instead of this function.
  */
 export async function deleteConversation(db: AnyDB, conversationId: string): Promise<boolean> {
-  const sourceRef = JSON.stringify([{ type: 'conversation', id: conversationId }]);
-  const result = await db
-    .delete(conversations)
-    .where(
-      and(
-        eq(conversations.conversationId, conversationId),
-        isNull(conversations.committedAs),
-        sql`NOT EXISTS (
-          SELECT 1
-          FROM ${commits}
-          WHERE ${commits.sources} @> ${sourceRef}::jsonb
-        )`
-      )
-    )
-    .returning();
-
-  if (result.length > 0) return true;
-
-  const [remaining] = await db
-    .select({ committedAs: conversations.committedAs })
+  const [existing] = await db
+    .select({ projectId: conversations.projectId, committedAs: conversations.committedAs })
     .from(conversations)
     .where(eq(conversations.conversationId, conversationId))
     .limit(1);
-  if (remaining === undefined) return false;
+  if (existing === undefined) return false;
+  if (
+    existing.committedAs ||
+    (await hasConversationSourceCommitReferences(db, existing.projectId, conversationId))
+  ) {
+    throw new ConversationHistoryReferencedError(conversationId);
+  }
 
+  const result = await db
+    .delete(conversations)
+    .where(and(eq(conversations.conversationId, conversationId), isNull(conversations.committedAs)))
+    .returning();
+
+  if (result.length > 0) return true;
   throw new ConversationHistoryReferencedError(conversationId);
 }
 

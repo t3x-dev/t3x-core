@@ -107,11 +107,8 @@ export interface ListTurnsResponse {
 }
 
 // Repository source/evidence types
-export type SourceAvailabilityMode = 'available' | 'partial' | 'legacy' | 'unavailable';
-export type SourceAvailabilityReason =
-  | 'SOURCE_RECORD_MISSING'
-  | 'TURN_PAGE_INCOMPLETE'
-  | 'LEGACY_COMMIT_SOURCE_REFERENCE';
+export type SourceAvailabilityMode = 'available' | 'partial' | 'unavailable';
+export type SourceAvailabilityReason = 'SOURCE_RECORD_MISSING' | 'TURN_PAGE_INCOMPLETE';
 
 export interface ConversationSource {
   type: 'conversation';
@@ -162,12 +159,13 @@ export interface SourceEvidenceRevision {
 }
 
 export interface SourceCommitReference {
-  format: 'legacy_v1';
-  commit_id: string;
-  branch: string;
-  message: string | null;
+  commit_digest: string;
   recorded_at: string;
-  source_title: string | null;
+  intent: string | null;
+  evidence_refs: Array<{
+    resource: { uri: string; mediaType: string; digest: string };
+    locator: { scheme: string; value: unknown };
+  }>;
 }
 
 export interface ConversationSourceEvidence {
@@ -185,54 +183,67 @@ export interface ConversationSourceEvidence {
   };
   revisions: SourceEvidenceRevision[];
   evidence_selection: {
-    mode: 'not_recorded';
+    mode: 'immutable_refs';
     turn_hashes: string[];
   };
   referring_commits: SourceCommitReference[];
 }
 
-// Commit types
-export interface Commit {
-  commit_hash: string;
-  parent_hashes: string[];
-  project_id: string;
-  branch: string;
-  message: string;
-  turn_window: {
-    start_turn_hash: string;
-    end_turn_hash: string;
-  };
-  facet_snapshot: unknown[];
-  pipeline_config: Record<string, unknown> | null;
-  created_at: string;
+export interface CommitDescriptorV2 {
+  kind: 'commit';
+  schema: 't3x/commit/v2';
+  digest: string;
 }
 
-export interface CreateCommitInput {
+export interface RepositoryCommitV2 {
+  schema: 't3x/commit/v2';
+  parents: CommitDescriptorV2[];
+  decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  result: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+}
+
+export interface CreatedRepositoryCommit {
+  digest: string;
+  ref_name: string;
+  object: RepositoryCommitV2;
+}
+
+export interface StoredRepositoryCommit {
+  digest: string;
+  recorded_at: string;
+  object: RepositoryCommitV2;
+}
+
+export interface CommitHistoryProjectionV2 {
+  format: 'transition_v2';
+  id: string;
+  schema: 't3x/commit/v2';
+  parents: string[];
+  recordedAt: string;
+  result: {
+    mode: 'state_descriptor';
+    descriptor: { kind: 'state'; schema: 't3x/state/v1'; digest: string };
+  };
+  assurance: {
+    mode: 'decision_bound';
+    decision: { kind: 'statement'; schema: 't3x/statement/v1'; digest: string };
+  };
+}
+
+export interface CommitRepositoryStateInput {
   project_id: string;
   content: {
     trees: unknown[];
     relations?: unknown[];
   };
   branch?: string;
-  parents?: string[];
+  expected_head: string | null;
   message?: string;
   source_conversation_id?: string;
-  author?: {
-    type: 'human' | 'agent' | 'system';
-    id?: string;
-    name?: string;
-  };
-  provenance?: {
-    method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
-    model?: string;
-    extracted_at?: string;
-  };
 }
 
 export interface ListCommitsResponse {
-  commits: Commit[];
-  limit: number;
-  offset: number;
+  commits: CommitHistoryProjectionV2[];
 }
 
 // Branch types
@@ -322,7 +333,7 @@ export interface CreateMergeDraftInput {
   source_hash: string;
   target_hash: string;
   source_branch?: string;
-  target_branch?: string;
+  target_branch: string;
 }
 
 export interface MergeDraftPrepared {
@@ -919,20 +930,7 @@ export interface TransitionGraphViewV1 {
   audit: TransitionProtocolValue;
 }
 
-export interface LegacyTransitionViewV1 {
-  schema: 't3x.dev/transition-view/v1';
-  version: 1;
-  mode: 'legacy';
-  change: TransitionProtocolValue;
-  claims: TransitionProtocolValue;
-  checks: TransitionProtocolValue;
-  decision: TransitionProtocolValue;
-  history: TransitionProtocolValue;
-  capabilities: TransitionGraphViewV1['capabilities'];
-  audit: TransitionProtocolValue;
-}
-
-export type TransitionViewV1 = TransitionGraphViewV1 | LegacyTransitionViewV1;
+export type TransitionViewV1 = TransitionGraphViewV1;
 
 export interface TransitionStatementMembershipView {
   digest: string;

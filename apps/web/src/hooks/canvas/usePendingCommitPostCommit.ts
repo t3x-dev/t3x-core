@@ -25,7 +25,7 @@ interface UsePendingCommitPostCommitProps {
 export interface UsePendingCommitPostCommitReturn {
   openingAsDraft: boolean;
   handleSuccessClose: () => void;
-  handleViewCommitDetails: () => void;
+  handleBackToCanvas: () => void;
   handleCreateOutput: () => void;
   handleOpenAsDraft: () => Promise<void>;
 }
@@ -46,10 +46,14 @@ export function usePendingCommitPostCommit({
     onClose();
   }, [projectId, onClose, loadCanvas]);
 
-  const handleViewCommitDetails = useCallback(() => {
+  const handleBackToCanvas = useCallback(() => {
     void loadCanvas(projectId);
-    onConvertDraft?.();
-  }, [projectId, onConvertDraft, loadCanvas]);
+    if (onConvertDraft) {
+      onConvertDraft();
+    } else {
+      onClose();
+    }
+  }, [projectId, onConvertDraft, onClose, loadCanvas]);
 
   const handleCreateOutput = useCallback(() => {
     void loadCanvas(projectId);
@@ -87,7 +91,7 @@ export function usePendingCommitPostCommit({
   return {
     openingAsDraft,
     handleSuccessClose,
-    handleViewCommitDetails,
+    handleBackToCanvas,
     handleCreateOutput,
     handleOpenAsDraft,
   };

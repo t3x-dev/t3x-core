@@ -14,17 +14,17 @@ import type {
   Branch,
   CheckInput,
   CheckResult,
-  Commit,
   CommitFromDraftInput,
   CommitFromDraftResult,
+  CommitRepositoryStateInput,
   ContextParams,
   ContextResult,
   Conversation,
   ConversationSourceEvidence,
   CreateBranchInput,
-  CreateCommitInput,
   CreateConversationInput,
   CreateDraftInput,
+  CreatedRepositoryCommit,
   CreateLeafInput,
   CreateMergeDraftInput,
   CreatePinInput,
@@ -78,6 +78,7 @@ import type {
   SourceThreadCapability,
   SourceThreadMemory,
   StatusResponse,
+  StoredRepositoryCommit,
   Turn,
   TwoWayDiffInput,
   UpdateMergeDraftInput,
@@ -409,25 +410,26 @@ export class T3xClient {
   // Commits
   // ============================================
 
-  async listCommits(
-    projectId: string,
-    branch?: string,
-    params?: PaginationParams
-  ): Promise<ListCommitsResponse> {
+  async listCommits(projectId: string, params?: PaginationParams): Promise<ListCommitsResponse> {
     return this.request<ListCommitsResponse>(
       'GET',
       `/v1/projects/${projectId}/commits`,
       undefined,
-      { branch, ...params }
+      { ...params }
     );
   }
 
-  async getCommit(hash: string): Promise<Commit> {
-    return this.request<Commit>('GET', `/v1/commits/${hash}`);
+  async getCommit(projectId: string, digest: string): Promise<StoredRepositoryCommit> {
+    return this.request<StoredRepositoryCommit>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}`,
+      undefined,
+      { project_id: projectId }
+    );
   }
 
-  async createCommit(input: CreateCommitInput): Promise<Commit> {
-    return this.request<Commit>('POST', '/v1/commits', input);
+  async commitRepositoryState(input: CommitRepositoryStateInput): Promise<CreatedRepositoryCommit> {
+    return this.request<CreatedRepositoryCommit>('POST', '/v1/commits', input);
   }
 
   // ============================================
@@ -504,17 +506,22 @@ export class T3xClient {
   // Merge
   // ============================================
 
-  async prepareMerge(input: { source_hash: string; target_hash: string }): Promise<unknown> {
+  async prepareMerge(input: {
+    project_id: string;
+    source_hash: string;
+    target_hash: string;
+  }): Promise<unknown> {
     return this.request<unknown>('POST', '/v1/merge/prepare', input);
   }
 
   async executeMerge(input: {
+    project_id: string;
     source_hash: string;
     target_hash: string;
     prepared: unknown;
     decisions: unknown;
     message: string;
-    branch?: string;
+    branch: string;
   }): Promise<unknown> {
     return this.request<unknown>('POST', '/v1/merge/execute', input);
   }

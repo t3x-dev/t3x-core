@@ -35,7 +35,5 @@ export {
 } from './commit';
 export {
   type CommitHistoryProjection,
-  LEGACY_ASSURANCE_UNAVAILABLE,
   projectCommitV2,
-  projectLegacyCommit,
 } from './projection';

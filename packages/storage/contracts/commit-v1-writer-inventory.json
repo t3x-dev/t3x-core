@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "purpose": "Prove that production source contains no CommitV1 writer after the CommitV2 hard cutover.",
+  "target": {
+    "writable_format": "t3x/commit/v2",
+    "legacy_v1": "unsupported",
+    "tracking_issue": "#1308"
+  },
+  "dispositions": [],
+  "writers": []
+}

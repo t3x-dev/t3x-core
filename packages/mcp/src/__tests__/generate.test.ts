@@ -151,6 +151,9 @@ vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
+    decodeRepositorySemanticState: vi.fn(
+      (repositoryState: { content: typeof MOCK_COMMIT.content }) => repositoryState.content
+    ),
     generateLeafOutput: mockGenerateLeafOutput,
     createDefaultProviderRegistry: vi.fn(() => ({
       getById: (...args: unknown[]) => mockRegistryGetById(...args),
@@ -183,8 +186,14 @@ vi.mock('@t3x-dev/storage', () => ({
     if (id === 'leaf_test2') return Promise.resolve(MOCK_LEAF_NO_CONSTRAINTS);
     return Promise.resolve(null);
   }),
-  getCommitUnified: vi.fn((_db: unknown, hash: string) => {
-    if (hash === 'sha256:commit1') return Promise.resolve(MOCK_COMMIT);
+  getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) => {
+    if (hash === MOCK_COMMIT.hash && projectId === MOCK_COMMIT.project_id) {
+      return Promise.resolve({
+        recordedAt: '2026-04-13T00:00:00.000Z',
+        state: { content: MOCK_COMMIT.content },
+        commit: { schema: 't3x/commit/v2', parents: [] },
+      });
+    }
     return Promise.resolve(null);
   }),
   findLeavesByCommit: vi.fn(() => Promise.resolve(MOCK_HISTORICAL_LEAVES)),

@@ -26,7 +26,6 @@ repository.
 - [Stability summary](stability.md)
 - [Stability policy](release/stability-policy.md)
 - [Transition conformance](../packages/transition/conformance/README.md)
-- [Mixed-history retention](mixed-history-retention.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
 

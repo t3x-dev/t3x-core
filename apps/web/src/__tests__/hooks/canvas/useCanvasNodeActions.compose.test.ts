@@ -5,7 +5,7 @@ import type { ApiCommit, Conversation } from '@/types/api';
 function commit(input: Partial<ApiCommit> & Pick<ApiCommit, 'hash' | 'branch'>): ApiCommit {
   return {
     hash: input.hash,
-    schema: 't3x/commit',
+    schema: 't3x/commit/v2',
     parents: input.parents ?? [],
     author: { type: 'human' },
     committed_at: input.committed_at ?? '2026-05-28T00:00:00.000Z',

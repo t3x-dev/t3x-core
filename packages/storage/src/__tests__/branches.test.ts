@@ -17,9 +17,7 @@ import {
   findCurrentBranch,
   insertBranch,
   switchBranch,
-  updateBranchHead,
 } from '../queries/branches';
-import { createCommit } from '../queries/commits';
 import { insertProject } from '../queries/projects';
 import { branches } from '../schema';
 import { createTestDB, testData } from './setup';
@@ -231,25 +229,6 @@ describe('Branches Storage', () => {
     });
   });
 
-  describe('updateBranchHead', () => {
-    it('updates branch head commit hash', async () => {
-      const newProject = await insertProject(db, testData.project({ name: 'Head Update Project' }));
-      await insertBranch(db, { projectId: newProject.projectId, name: 'main' });
-
-      const commitHash = 'sha256:abc123';
-      const updated = await updateBranchHead(db, newProject.projectId, 'main', commitHash);
-
-      expect(updated).toBeDefined();
-      expect(updated!.headCommitHash).toBe(commitHash);
-    });
-
-    it('returns null when branch does not exist', async () => {
-      const result = await updateBranchHead(db, testProjectId, 'nonexistent', 'sha256:xyz');
-
-      expect(result).toBeNull();
-    });
-  });
-
   describe('deleteBranch', () => {
     it('deletes a non-current branch', async () => {
       const newProject = await insertProject(
@@ -303,27 +282,6 @@ describe('Branches Storage', () => {
       const main = await ensureMainBranch(db, newProject.projectId);
 
       expect(main.branchId).toBe(created.branchId);
-    });
-
-    it('backfills the head from legacy main commits', async () => {
-      const newProject = await insertProject(
-        db,
-        testData.project({ name: 'Legacy Main Commit Project' })
-      );
-      const legacyCommit = await createCommit(db, {
-        author: { type: 'human', name: 'test' },
-        branch: 'main',
-        content: {
-          trees: [{ key: 'legacy', slots: { value: 'state' }, children: [] }],
-          relations: [],
-        },
-        project_id: newProject.projectId,
-      });
-
-      const main = await ensureMainBranch(db, newProject.projectId);
-
-      expect(main.headCommitHash).toBe(legacyCommit.hash);
-      expect(main.isCurrent).toBe(1);
     });
   });
 });

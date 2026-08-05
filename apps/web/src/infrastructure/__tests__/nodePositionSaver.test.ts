@@ -5,7 +5,7 @@ import { cancelAllPositionSaves, saveNodePosition } from '../nodePositionSaver';
 
 // Regression test for Bug 5 (deep-walk, 2026-04-15): saveNodePosition must
 // not PATCH /v1/commits/{draft_*}/position — that route looks up a sha256
-// hash in the commits table and returns 404 for draft_* ids.
+// hash in the CommitV2 storage and returns 404 for draft_* ids.
 
 beforeEach(() => {
   vi.useFakeTimers();

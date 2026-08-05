@@ -8,26 +8,27 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Draft, Material, SemanticContent, SourcedYOp } from '@t3x-dev/core';
+import {
+  type Draft,
+  describeTransitionObject,
+  type Material,
+  type SemanticContent,
+  type SourcedYOp,
+} from '@t3x-dev/core';
 import {
   type AnyDB,
   ConflictError,
-  createCommit,
   findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
-  getCommit,
-  getLatestCommit,
   insertYOpsLogEntry,
   listWorkspaceDrafts,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
-  updateBranchHead,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -46,7 +47,7 @@ import {
   isEsphomeDeviceWorkspace,
 } from '../lib/workspace-validation/esphome-workspace-profile';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
-import { canonicalSchemaNameFromBinding, schemaRootKeyFromBinding } from '../lib/yschema-registry';
+import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -161,7 +162,15 @@ const WorkspaceResponseSchema = z.object({
 });
 
 const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
-  commit: z.any(),
+  commit: z
+    .object({
+      hash: TransitionDigestSchema,
+      schema: z.literal('t3x/commit/v2'),
+      parents: z.array(TransitionDigestSchema),
+      decision: TransitionDigestSchema,
+      result: TransitionDigestSchema,
+    })
+    .strict(),
 });
 
 const WorkspaceTransitionReviewResponseSchema = z.object({
@@ -182,19 +191,6 @@ const ListWorkspacesResponseSchema = z.object({
 const REVIEW_SAVE_STATUSES = new Set(['draft', 'ready_for_yops', 'schema_review']);
 
 type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
-
-class WorkspaceBaseBranchMismatchError extends Error {
-  constructor(
-    readonly targetBranch: string,
-    readonly baseCommitHash: string,
-    readonly baseBranch: string
-  ) {
-    super(
-      `Workspace base commit ${baseCommitHash} belongs to ${baseBranch}, but the commit target is ${targetBranch}. Rebuild the workspace from ${targetBranch} before committing.`
-    );
-    this.name = 'WorkspaceBaseBranchMismatchError';
-  }
-}
 
 const projectWorkspacesParams = z.object({
   projectId: z.string(),
@@ -726,17 +722,11 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         return null;
       }
 
-      if (storedDraft.revision !== ifRevision) {
+      if (ifRevision !== undefined && storedDraft.revision !== ifRevision) {
         throw new ConflictError(storedDraft.id, ifRevision);
       }
 
       const storedWorkspace = storedDraft.workspace_state;
-      const targetBranch = stringFromWorkspace(storedWorkspace, 'targetBranch', 'main');
-      if (!(await findBranchByName(txOrDb, projectId, targetBranch))) {
-        return {
-          reviewRequired: errorResponse(c, 'NOT_FOUND', `Target branch not found: ${targetBranch}`),
-        };
-      }
       const commitContent = workspaceCommitContent(content);
       const schemaReviewBlockers = workspaceSchemaReviewBlockers(storedWorkspace, commitContent);
       if (schemaReviewBlockers.length > 0 && !validationOverride) {
@@ -759,80 +749,50 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
           ),
         };
       }
-      const branchHead = await getLatestCommit(txOrDb, projectId, targetBranch);
-      const commit = contentMatches(branchHead?.content, commitContent)
-        ? branchHead
-        : await createCommit(txOrDb, {
-            author: { type: 'human' as const, name: 'api' },
-            branch: targetBranch,
-            content: commitContent,
-            enforceBranchLinearity: true,
-            message:
-              message ??
-              `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`,
-            parents: await resolveWorkspaceCommitParents(
-              txOrDb,
-              projectId,
-              targetBranch,
-              nullableStringFromWorkspace(storedWorkspace, 'baseCommitHash') ?? undefined,
-              branchHead
-            ),
-            project_id: projectId,
-            provenance: {
-              method: 'human_curation',
-              ...(workspaceSchemaRef(storedWorkspace)
-                ? { schema_ref: workspaceSchemaRef(storedWorkspace) ?? undefined }
-                : {}),
-              ...(validationOverride
-                ? {
-                    validation_override: {
-                      kind: validationOverride.kind,
-                      reason: validationOverride.reason,
-                      blockers: validationOverride.blockers,
-                    },
-                  }
-                : {}),
-            },
-            sources: commitSourcesFromWorkspace(storedWorkspace),
-            yops_log_ids: await materializeWorkspaceYOpsLog(
-              txOrDb,
-              projectId,
-              workspaceId,
-              storedWorkspace
-            ),
-          });
-      await updateBranchHead(txOrDb, projectId, targetBranch, commit.hash);
-      const committedAt = new Date().toISOString();
-      const committedWorkspace = {
-        ...storedWorkspace,
-        id: workspaceId,
+      const why =
+        message ??
+        `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`;
+      const actor = workspaceHumanActor(c);
+      const reviewed = await reviewWorkspaceTransition(txOrDb, {
         projectId,
-        lastCommitHash: commit.hash,
-        status: 'committed',
-        updatedAt: committedAt,
-        ...(validationOverride
-          ? {
-              commitOverride: {
-                ...validationOverride,
-                confirmedAt: committedAt,
-              },
-            }
-          : {}),
-      };
-      const draft = await upsertWorkspaceDraft(
+        workspaceId,
+        content: commitContent,
+        why,
+        expectedRevision: ifRevision,
+        actor,
+      });
+      const yopsLogIds = await materializeWorkspaceYOpsLog(
         txOrDb,
-        {
-          project_id: projectId,
-          workspace_id: workspaceId,
-          title: stringFromWorkspace(committedWorkspace, 'title', workspaceId),
-          parent_commit_hash: nullableStringFromWorkspace(committedWorkspace, 'baseCommitHash'),
-          target_branch: targetBranch,
-          workspace_state: workspaceStateForPersistence(committedWorkspace),
-        },
-        ifRevision
+        projectId,
+        workspaceId,
+        storedWorkspace
       );
-
-      return { commit, draft };
+      const decided = await decideWorkspaceTransition(txOrDb, {
+        projectId,
+        workspaceId,
+        content: commitContent,
+        why,
+        outcome: validationOverride ? 'overridden' : 'accepted',
+        decisionReason: validationOverride?.reason,
+        precondition: reviewed.precondition,
+        actor,
+        yopsLogIds,
+        workspaceCommitOverride: validationOverride,
+      });
+      if (decided.commit === undefined || decided.workspace === undefined) {
+        throw new TypeError('Accepted workspace Decision did not create a CommitV2');
+      }
+      const descriptor = describeTransitionObject(decided.commit);
+      return {
+        commit: {
+          hash: descriptor.digest,
+          schema: decided.commit.schema,
+          parents: decided.commit.parents.map((parent) => parent.digest),
+          decision: decided.commit.decision.digest,
+          result: decided.commit.result.digest,
+        },
+        workspace: decided.workspace,
+      };
     };
     const runner = db as unknown as Partial<TxRunner>;
     const result =
@@ -848,7 +808,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
-        ...envelopeFromDraft(result.draft, workspaceId),
+        ...envelopeFromWorkspace(result.workspace, workspaceId),
         commit: result.commit,
       },
     });
@@ -860,17 +820,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         'Workspace changed since it was loaded. Refresh and retry.'
       );
     }
-    if (err instanceof WorkspaceBaseBranchMismatchError) {
-      return errorResponse(c, 'WORKSPACE_BASE_BRANCH_MISMATCH', err.message, {
-        base_branch: err.baseBranch,
-        base_commit_hash: err.baseCommitHash,
-        target_branch: err.targetBranch,
-      });
-    }
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
-    const message_ = err instanceof Error ? err.message : 'Failed to commit workspace';
-    return errorResponse(c, 'COMMIT_FAILED', message_);
+    return workspaceTransitionErrorResponse(c, err);
   }
 });
 
@@ -978,46 +928,6 @@ function sameStringSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
   const rightSet = new Set(right);
   return left.every((value) => rightSet.has(value));
-}
-
-async function resolveWorkspaceCommitParents(
-  db: AnyDB,
-  projectId: string,
-  targetBranch: string,
-  preferredParentHash: string | undefined,
-  branchHead: { hash: string } | null
-): Promise<string[]> {
-  if (branchHead) return [branchHead.hash];
-
-  if (preferredParentHash) {
-    const preferredParent = await getCommit(db, preferredParentHash);
-    if (preferredParent?.project_id === projectId) {
-      if (preferredParent.branch === targetBranch) return [preferredParent.hash];
-
-      const registeredBranch = await findBranchByName(db, projectId, targetBranch);
-      const allowedParentBranch =
-        registeredBranch?.parentBranch ?? (targetBranch === 'main' ? null : 'main');
-      if (allowedParentBranch === preferredParent.branch) return [preferredParent.hash];
-
-      throw new WorkspaceBaseBranchMismatchError(
-        targetBranch,
-        preferredParent.hash,
-        preferredParent.branch
-      );
-    }
-  }
-
-  if (targetBranch !== 'main') {
-    const mainHead = await getLatestCommit(db, projectId, 'main');
-    if (mainHead) return [mainHead.hash];
-  }
-
-  return [];
-}
-
-function contentMatches(left: unknown, right: unknown): boolean {
-  if (!left) return false;
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
@@ -1141,6 +1051,13 @@ interface WorkspaceEnvelope {
 
 function envelopeFromDraft(draft: Draft, workspaceId: string): WorkspaceEnvelope {
   const workspace = workspaceFromDraft(draft, workspaceId);
+  return envelopeFromWorkspace(workspace, workspaceId);
+}
+
+function envelopeFromWorkspace(
+  workspace: Record<string, unknown>,
+  workspaceId: string
+): WorkspaceEnvelope {
   const yopsDraft = workspace.yopsDraft as { id?: unknown } | undefined;
 
   return {
@@ -1295,24 +1212,6 @@ function hasWorkspaceUniqueConstraint(error: unknown, constraint: string): boole
   return false;
 }
 
-type CommitSourceRef = { type: 'conversation' | 'import' | 'leaf'; id: string; title?: string };
-
-function commitSourcesFromWorkspace(workspace: Record<string, unknown>): CommitSourceRef[] {
-  const sources = workspace.sourceBundle;
-  if (!Array.isArray(sources)) return [];
-
-  return sources.flatMap((source): CommitSourceRef[] => {
-    if (!isRecord(source)) return [];
-    const id = commitSourceId(source);
-    if (!id) return [];
-    const type =
-      source.type === 'chat' ? 'conversation' : source.type === 'leaf' ? 'leaf' : 'import';
-    const title =
-      typeof source.title === 'string' && source.title.trim() ? source.title : undefined;
-    return [{ type, id, ...(title ? { title } : {}) }];
-  });
-}
-
 async function materializeWorkspaceYOpsLog(
   db: AnyDB,
   projectId: string,
@@ -1400,14 +1299,6 @@ function workspaceDraftOperationToSourcedYOp(
   if (opName === 'delete' || opName === 'drop') return [{ drop: { path }, source } as SourcedYOp];
   if (opName === 'unset') return [{ unset: { path }, source } as SourcedYOp];
   return [];
-}
-
-function commitSourceId(source: Record<string, unknown>): string | null {
-  for (const key of ['conversationId', 'materialId', 'contentHash', 'id']) {
-    const value = source[key];
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1805,31 +1696,6 @@ function schemaPathToYOpsPath(workspace: Record<string, unknown>, path: string) 
   if (segments[0] === rootKey) return segments.join('/');
 
   return [rootKey, ...segments].join('/');
-}
-
-function workspaceSchemaRef(workspace: Record<string, unknown>) {
-  const binding = (workspace.schemaBindings as unknown[] | undefined)?.[0];
-  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return null;
-  const record = binding as Record<string, unknown>;
-  const compositionId =
-    typeof record.compositionId === 'string' && record.compositionId.trim()
-      ? record.compositionId.trim()
-      : null;
-  const compositionRevision =
-    typeof record.compositionRevision === 'number' && Number.isInteger(record.compositionRevision)
-      ? record.compositionRevision
-      : null;
-  const name = compositionId ?? canonicalSchemaNameFromBinding(binding);
-  if (!name) return null;
-  return {
-    name,
-    ...(compositionId && compositionRevision !== null
-      ? { version: `r${compositionRevision}` }
-      : typeof record.version === 'string'
-        ? { version: record.version }
-        : {}),
-    ...(typeof record.schemaHash === 'string' ? { hash: record.schemaHash } : {}),
-  };
 }
 
 function extractWorkspaceSourceRefs(workspace: Record<string, unknown>): string[] {

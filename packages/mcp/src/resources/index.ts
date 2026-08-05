@@ -3,13 +3,12 @@ import {
   findDraftById,
   findLeafById,
   findProjectById,
-  getCommit,
   getMergeDraft,
+  getVerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
 import { getApiClient, isApiBackend } from '../backend.js';
 import { getDB } from '../db.js';
 import {
-  toCommitReadModel,
   toConversationReadModel,
   toLeafReadModel,
   toMergeDraftReadModel,
@@ -28,6 +27,7 @@ type ResourceKind =
 interface ParsedResourceUri {
   kind: ResourceKind;
   id: string;
+  projectId?: string;
 }
 
 export const RESOURCE_TEMPLATES = [
@@ -39,8 +39,8 @@ export const RESOURCE_TEMPLATES = [
   },
   {
     name: 'commit',
-    uriTemplate: 't3x://commits/{commit_hash}',
-    description: 'Read a structured-state commit by hash.',
+    uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
+    description: 'Read a verified CommitV2 by project membership and digest.',
     mimeType: 'application/json',
   },
   {
@@ -88,16 +88,20 @@ function parseResourceUri(uri: string): ParsedResourceUri {
   }
 
   const resourceType = parsed.hostname;
-  const id = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  const path = parsed.pathname.replace(/^\/+/, '');
+  const id = decodeURIComponent(path);
   if (!id) {
     throw new Error(`Resource URI is missing an identifier: ${uri}`);
   }
 
   switch (resourceType) {
-    case 'projects':
+    case 'projects': {
+      const segments = path.split('/').map(decodeURIComponent);
+      if (segments.length === 3 && segments[1] === 'commits') {
+        return { kind: 'commit', projectId: segments[0], id: segments[2] };
+      }
       return { kind: 'project', id };
-    case 'commits':
-      return { kind: 'commit', id };
+    }
     case 'workbench-drafts':
       return { kind: 'workbench_draft', id };
     case 'source-threads':
@@ -136,9 +140,10 @@ export async function readResource(uri: string) {
           ...(await client.getProject(parsed.id)),
         });
       case 'commit':
+        if (!parsed.projectId) throw new Error(`Commit resource is missing project scope: ${uri}`);
         return jsonTextContent(uri, {
           kind: 'commit',
-          ...(await client.getCommit(parsed.id)),
+          ...(await client.getCommit(parsed.projectId, parsed.id)),
         });
       case 'workbench_draft':
         return jsonTextContent(uri, {
@@ -178,11 +183,16 @@ export async function readResource(uri: string) {
       return jsonTextContent(uri, toProjectReadModel(project));
     }
     case 'commit': {
-      const commit = await getCommit(db, parsed.id);
+      if (!parsed.projectId) throw new Error(`Commit resource is missing project scope: ${uri}`);
+      const commit = await getVerifiedTransitionCommitGraph(db, parsed.projectId, parsed.id);
       if (!commit) {
         throw new Error(`Commit not found: ${parsed.id}`);
       }
-      return jsonTextContent(uri, toCommitReadModel(commit));
+      return jsonTextContent(uri, {
+        digest: parsed.id,
+        recorded_at: commit.recordedAt,
+        object: commit.commit,
+      });
     }
     case 'workbench_draft': {
       const draft = await findDraftById(db, parsed.id);

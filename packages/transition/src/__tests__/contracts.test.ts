@@ -229,7 +229,7 @@ describe('Transition protocol contract', () => {
   it('freezes compatibility ownership without pretending legacy records are protocol objects', () => {
     expect(compatibility.schema).toBe('t3x/transition-compatibility/v1');
     expect(compatibility.mappings.map((mapping) => mapping.source)).toEqual([
-      'CommitV1',
+      'ExternalCommit',
       'SourcedYOp',
       'ExtractionDraft',
       'WorkspaceDraft',

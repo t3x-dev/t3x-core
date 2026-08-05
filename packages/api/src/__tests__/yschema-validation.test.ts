@@ -1,11 +1,15 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use compact response casts */
 
-import { yamlToTree } from '@t3x-dev/core';
+import { type SemanticContent, sha256, yamlToTree } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import { deleteProject, ensureMainBranch, findProjects, insertProject } from '@t3x-dev/storage';
 import { t3xPromptP0Fixtures, t3xSkillP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../lib/repository-state-transition';
 import { setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
@@ -18,6 +22,41 @@ vi.mock('../lib/db', () => ({
 import { yschemaValidationRoutes } from '../routes/yschema-validation.openapi';
 
 type ApiResponse = any;
+
+const ACTOR = { kind: 'human' as const, id: 'user:yschema-validation-test' };
+
+async function createSemanticCommit(
+  projectId: string,
+  content: SemanticContent,
+  evidenceUri?: string
+) {
+  await ensureMainBranch(mockDB, projectId);
+  return commitRepositoryYOpsState({
+    db: mockDB,
+    projectId,
+    refName: 'main',
+    expectedHead: null,
+    target: createRepositoryYOpsStateFromSemanticContent(content),
+    actor: ACTOR,
+    intent: 'Validate schema-backed structured state',
+    evidence:
+      evidenceUri === undefined
+        ? []
+        : [
+            {
+              resource: {
+                uri: evidenceUri,
+                mediaType: 'application/octet-stream',
+                digest: `sha256:${sha256(evidenceUri)}`,
+              },
+              locator: {
+                scheme: 't3x.resource/v1',
+                value: { uri: evidenceUri },
+              },
+            },
+          ],
+  });
+}
 
 describe('YSchema validation routes', () => {
   let cleanup: () => Promise<void>;
@@ -43,9 +82,9 @@ describe('YSchema validation routes', () => {
 
   it('runs YSchema validation for a commit and persists the latest result', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Validation Project' }));
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'YX' },
-      content: {
+    const commit = await createSemanticCommit(
+      project.projectId,
+      {
         trees: [
           {
             key: 'summary',
@@ -74,17 +113,15 @@ describe('YSchema validation routes', () => {
         ],
         relations: [],
       },
-      message: 'Validated PRD candidate',
-      project_id: project.projectId,
-      sources: [{ type: 'import', id: 'mat_prd_complete' }],
-    });
+      't3x://materials/mat_prd_complete'
+    );
 
     const createRes = await app.request(
       `/v1/projects/${project.projectId}/yschema-validation/runs`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commit_hash: commit.hash }),
+        body: JSON.stringify({ commit_hash: commit.commitDigest }),
       }
     );
 
@@ -93,7 +130,7 @@ describe('YSchema validation routes', () => {
     expect(created.success).toBe(true);
     expect(created.data).toMatchObject({
       project_id: project.projectId,
-      commit_hash: commit.hash,
+      commit_hash: commit.commitDigest,
       schema_name: 't3x/prd',
       status: 'passed',
       valid: true,
@@ -106,7 +143,7 @@ describe('YSchema validation routes', () => {
 
     const latestRes = await app.request(
       `/v1/projects/${project.projectId}/yschema-validation/latest?commit_hash=${encodeURIComponent(
-        commit.hash
+        commit.commitDigest
       )}`
     );
 
@@ -119,9 +156,9 @@ describe('YSchema validation routes', () => {
 
   it('reports readiness gaps as a failed validation run', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Validation Gaps' }));
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'YX' },
-      content: {
+    const commit = await createSemanticCommit(
+      project.projectId,
+      {
         trees: [
           {
             key: 'summary',
@@ -134,15 +171,13 @@ describe('YSchema validation routes', () => {
         ],
         relations: [],
       },
-      message: 'Incomplete PRD candidate',
-      project_id: project.projectId,
-      sources: [{ type: 'import', id: 'mat_prd_incomplete' }],
-    });
+      't3x://materials/mat_prd_incomplete'
+    );
 
     const res = await app.request(`/v1/projects/${project.projectId}/yschema-validation/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commit_hash: commit.hash }),
+      body: JSON.stringify({ commit_hash: commit.commitDigest }),
     });
 
     expect(res.status).toBe(201);
@@ -160,23 +195,24 @@ describe('YSchema validation routes', () => {
   it('runs structural and policy validation for a Skill commit', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Skill Validation' }));
     const candidate = t3xSkillP0Fixtures.validCandidateTree;
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'YX' },
-      content: {
+    const commit = await createSemanticCommit(
+      project.projectId,
+      {
         trees: Object.entries(candidate).map(([key, value]) => yamlToTree(key, value)),
         relations: [...t3xSkillP0Fixtures.validRelations],
       },
-      message: 'Validated Skill candidate',
-      project_id: project.projectId,
-      sources: [{ type: 'import', id: 'mat_skill_complete' }],
-    });
+      't3x://materials/mat_skill_complete'
+    );
 
     const response = await app.request(
       `/v1/projects/${project.projectId}/yschema-validation/runs`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commit_hash: commit.hash, schema_name: 't3x/skill' }),
+        body: JSON.stringify({
+          commit_hash: commit.commitDigest,
+          schema_name: 't3x/skill',
+        }),
       }
     );
 
@@ -198,7 +234,7 @@ describe('YSchema validation routes', () => {
     });
     expect(body.data.result.provenance_by_path['manifest/name']).toContainEqual({
       origin: 'user_evidence',
-      sourceId: 'import:mat_skill_complete',
+      sourceId: 't3x://materials/mat_skill_complete',
     });
 
     const latestResponse = await app.request(
@@ -212,16 +248,14 @@ describe('YSchema validation routes', () => {
   it('runs structural and Prompt policy validation through the shared commit path', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Prompt Validation' }));
     const candidate = t3xPromptP0Fixtures.validCandidateTree;
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'YX' },
-      content: {
+    const commit = await createSemanticCommit(
+      project.projectId,
+      {
         trees: Object.entries(candidate).map(([key, value]) => yamlToTree(key, value)),
         relations: [...t3xPromptP0Fixtures.validRelations],
       },
-      message: 'Validated Prompt candidate',
-      project_id: project.projectId,
-      sources: [{ type: 'import', id: 'mat_prompt_complete' }],
-    });
+      't3x://materials/mat_prompt_complete'
+    );
 
     const response = await app.request(
       `/v1/projects/${project.projectId}/yschema-validation/runs`,
@@ -229,7 +263,7 @@ describe('YSchema validation routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commit_hash: commit.hash,
+          commit_hash: commit.commitDigest,
           schema_name: 't3x/prompt',
           schema_version: 'v1',
         }),

@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/mcp",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "T3X MCP Server — structured-state tools for AI agents",
   "license": "Apache-2.0",
   "repository": {
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@t3x-dev/api": "workspace:*",
     "@t3x-dev/mcp-lib": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.3.0-beta.17",

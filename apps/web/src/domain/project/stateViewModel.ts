@@ -94,6 +94,7 @@ export interface PrdRenderModel {
   outcome: string;
   problem: string;
   requirements: PrdRenderRequirement[];
+  rootKey?: string;
   schemaVersion: string;
   sections: PrdRenderSection[];
   target: string;
@@ -412,10 +413,11 @@ export function selectPrdRenderModel(
   const plain = semanticContentToPlain(content);
   const rootKey = Object.hasOwn(plain, 'prd') ? 'prd' : Object.keys(plain)[0];
   const root = toRecord(rootKey ? plain[rootKey] : null);
+  const isPrdRoot = rootKey === 'prd';
   const summary = toRecord(root.summary);
   const metadata = toRecord(root.metadata);
   const gapPaths = buildGapPathSet(options.gaps ?? [], rootKey ? [rootKey] : []);
-  const audience = valueToStringList(summary.audience).join(' · ');
+  const audience = valueToStringList(isPrdRoot ? summary.audience : root.audience).join(' · ');
   const { changes, evidence } = buildPrdRenderTrace(options.operations ?? []);
   const excludedSectionKeys = new Set([
     'description',
@@ -429,6 +431,7 @@ export function selectPrdRenderModel(
     'target',
     'title',
   ]);
+  if (!isPrdRoot) excludedSectionKeys.add('objective');
 
   return {
     audience,
@@ -441,6 +444,7 @@ export function selectPrdRenderModel(
       firstScalar(
         root.lede,
         root.description,
+        isPrdRoot ? undefined : root.objective,
         summary.description,
         summary.outcome,
         summary.problem
@@ -450,11 +454,14 @@ export function selectPrdRenderModel(
     outcome: scalarToString(summary.outcome),
     problem: scalarToString(summary.problem),
     requirements: requirementsToRenderModel(root.requirements),
+    rootKey,
     schemaVersion:
       firstScalar(root.schema, metadata.schema, metadata.schema_version, metadata.version) || '',
     sections: buildPrdSections(root, excludedSectionKeys),
     target: scalarToString(root.target) || scalarToString(metadata.target),
-    title: scalarToString(root.title) || 'State document',
+    title:
+      scalarToString(root.title) ||
+      (!isPrdRoot && rootKey ? humanizeKey(rootKey) : 'State document'),
   };
 }
 

@@ -12,7 +12,6 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
@@ -22,6 +21,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateSourcedYOpsStructure } from '../routes/yops-log.openapi';
 import { setupTestDB, testData } from './setup';
+import { commitSemanticFixture } from './transition-fixture';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
@@ -333,8 +333,8 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
       mockDB,
       testData.project({ name: 'Draft Inherited Parent' })
     );
-    const parent = await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
+    const parent = await commitSemanticFixture(mockDB, {
+      projectId: project.projectId,
       content: {
         trees: [
           {
@@ -345,14 +345,12 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
         ],
         relations: [],
       },
-      project_id: project.projectId,
-      message: 'Parent trip baseline',
-      yops_log_ids: [],
+      intent: 'Parent trip baseline',
     });
     const conversation = await insertConversation(mockDB, {
       projectId: project.projectId,
       title: 'Draft Inherited Parent Conv',
-      parentCommitHash: parent.hash,
+      parentCommitHash: parent.commitDigest,
     });
 
     await insertYOpsLogEntry(mockDB, {
@@ -413,12 +411,11 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
       source: 'manual',
       yops: testYOps('active_node'),
     });
-    const commit = await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
+    const commit = await commitSemanticFixture(mockDB, {
+      projectId: project.projectId,
       content: testContent('committed_node'),
-      project_id: project.projectId,
-      message: 'Commit one yops row',
-      yops_log_ids: [committedEntry.id],
+      intent: 'Commit one yops row',
+      yopsLogIds: [committedEntry.id],
     });
 
     const res = await app.request(
@@ -433,7 +430,7 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
       id: committedEntry.id,
       superseded_at: null,
       is_committed: true,
-      committed_by: [commit.hash],
+      committed_by: [commit.commitDigest],
       superseded_ids: [],
     });
     expect(rowsById.get(activeEntry.id)).toMatchObject({
@@ -445,11 +442,11 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
     });
   });
 
-  it('returns every commit hash that references the same yops row', async () => {
-    const project = await insertProject(mockDB, testData.project({ name: 'YOps Multi Commit' }));
+  it('returns the CommitV2 digest that consumed a yops row', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'YOps CommitV2 Fact' }));
     const conversation = await insertConversation(
       mockDB,
-      testData.conversation(project.projectId, { title: 'YOps Multi Commit Conv' })
+      testData.conversation(project.projectId, { title: 'YOps CommitV2 Fact Conv' })
     );
     const entry = await insertYOpsLogEntry(mockDB, {
       conversationId: conversation.conversationId,
@@ -457,19 +454,11 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
       source: 'manual',
       yops: testYOps('shared_row'),
     });
-    const first = await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
+    const commit = await commitSemanticFixture(mockDB, {
+      projectId: project.projectId,
       content: testContent('first_commit'),
-      project_id: project.projectId,
-      message: 'First commit',
-      yops_log_ids: [entry.id],
-    });
-    const second = await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
-      content: testContent('second_commit'),
-      project_id: project.projectId,
-      message: 'Second commit',
-      yops_log_ids: [entry.id],
+      intent: 'Consume yops row once',
+      yopsLogIds: [entry.id],
     });
 
     const res = await app.request(
@@ -481,7 +470,7 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
     const row = body.data.find((candidate: { id: string }) => candidate.id === entry.id);
 
     expect(row.is_committed).toBe(true);
-    expect(new Set(row.committed_by)).toEqual(new Set([first.hash, second.hash]));
+    expect(row.committed_by).toEqual([commit.commitDigest]);
   });
 
   it('returns superseded_at for audit rows when listing the full yops log', async () => {

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockFindProjectById,
-  mockGetCommit,
+  mockGetVerifiedTransitionCommitGraph,
   mockFindDraftById,
   mockFindConversationById,
   mockFindLeafById,
@@ -12,7 +12,7 @@ const {
   mockApiClient,
 } = vi.hoisted(() => ({
   mockFindProjectById: vi.fn(),
-  mockGetCommit: vi.fn(),
+  mockGetVerifiedTransitionCommitGraph: vi.fn(),
   mockFindDraftById: vi.fn(),
   mockFindConversationById: vi.fn(),
   mockFindLeafById: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock('@t3x-dev/storage', () => ({
   findLeavesByProject: vi.fn(),
   findPinById: vi.fn(),
   findPinsByProject: vi.fn(),
-  getCommit: mockGetCommit,
+  getVerifiedTransitionCommitGraph: mockGetVerifiedTransitionCommitGraph,
   getMergeDraft: mockGetMergeDraft,
   listCommits: vi.fn(),
   insertProject: vi.fn(),
@@ -156,7 +156,7 @@ describe('MCP resources', () => {
       }),
       expect.objectContaining({
         name: 'commit',
-        uriTemplate: 't3x://commits/{commit_hash}',
+        uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
       }),
       expect.objectContaining({
         name: 'workbench_draft',
@@ -220,35 +220,25 @@ describe('MCP resources', () => {
   });
 
   it('reads a commit resource from a stable URI', async () => {
-    mockGetCommit.mockResolvedValue({
-      hash: 'sha256:commit123',
-      schema: 't3x/commit',
-      parents: ['sha256:parent'],
-      author: { type: 'human', name: 'Test' },
-      committed_at: '2026-04-21T11:00:00.000Z',
-      content: {
-        trees: [{ key: 'budget', slots: { amount: '5000' }, children: [] }],
-        relations: [],
+    mockGetVerifiedTransitionCommitGraph.mockResolvedValue({
+      recordedAt: '2026-04-21T11:00:00.000Z',
+      commit: {
+        schema: 't3x/commit/v2',
+        parents: [{ kind: 'commit', schema: 't3x/commit/v2', digest: 'sha256:parent' }],
+        decision: { kind: 'decision', schema: 't3x/decision/v1', digest: 'sha256:decision' },
+        result: { kind: 'state', schema: 't3x/state/v1', digest: 'sha256:state' },
       },
-      project_id: 'proj_123',
-      message: 'Initial structured-state commit',
-      branch: 'main',
-      provenance: { method: 'llm_extraction' },
-      yops_log_ids: ['yl_1'],
-      sources: [{ type: 'conversation', id: 'conv_1', title: 'Trip plan' }],
     });
     const { client } = await connectClientAndServer();
 
-    const result = await client.readResource({ uri: 't3x://commits/sha256:commit123' });
+    const result = await client.readResource({
+      uri: 't3x://projects/proj_123/commits/sha256%3Acommit123',
+    });
 
     expect(JSON.parse(result.contents[0].text)).toMatchObject({
-      kind: 'commit',
-      hash: 'sha256:commit123',
-      project_id: 'proj_123',
-      branch: 'main',
-      message: 'Initial structured-state commit',
-      tree_count: 1,
-      relation_count: 0,
+      digest: 'sha256:commit123',
+      recorded_at: '2026-04-21T11:00:00.000Z',
+      object: { schema: 't3x/commit/v2' },
     });
 
     await client.close();

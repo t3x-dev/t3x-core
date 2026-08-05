@@ -1,20 +1,25 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
+  ensureMainBranch,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
   supersedeActiveLLMSuggestions,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../../lib/repository-state-transition';
 import { findUncommittedYOpsIds } from '../../lib/yops-commit-link';
 import { setupTestDB, testData } from '../setup';
+import { commitSemanticFixture } from '../transition-fixture';
 
 /**
  * P1 from the review on PR #890: `findUncommittedYOpsIds` previously
  * read the full yops_log, which meant superseded LLM suggestions could
  * still be picked up as commit candidates. Once committed, those
- * stale entries land in `commits.yops_log_ids` and `replayCommittedBaseline`
+ * stale entries gain CommitV2 consumption records and `replayCommittedBaseline`
  * resurrects the replaced facts on every subsequent re-extract — a
  * silent, permanent contamination of the immutable baseline.
  *
@@ -118,16 +123,49 @@ describe('findUncommittedYOpsIds (post supersede integration)', () => {
       source: 'manual',
       yops: [humanOp('draft_only')],
     });
-    await createCommit(mockDB, {
-      author: { type: 'human', name: 'test' },
+    await commitSemanticFixture(mockDB, {
+      projectId,
       content: { trees: [], relations: [] },
-      project_id: projectId,
-      message: 'baseline',
-      yops_log_ids: [committedEntry.id],
+      intent: 'baseline',
+      yopsLogIds: [committedEntry.id],
     });
 
     const ids = await findUncommittedYOpsIds(mockDB, convId, projectId);
 
     expect(ids).toEqual([draftEntry.id]);
+  });
+
+  it('excludes entries already consumed by CommitV2', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'commit-link CommitV2 consumption' })
+    );
+    await ensureMainBranch(mockDB, project.projectId);
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'CommitV2 consumed YOps' })
+    );
+    const consumed = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: [humanOp('committed_v2')],
+    });
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [{ key: 'committed_v2', slots: {}, children: [] }],
+        relations: [],
+      }),
+      actor: { kind: 'human', id: 'human:yops-link-test' },
+      yopsLogIds: [consumed.id],
+    });
+
+    await expect(
+      findUncommittedYOpsIds(mockDB, conversation.conversationId, project.projectId)
+    ).resolves.toEqual([]);
   });
 });

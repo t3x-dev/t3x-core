@@ -4,7 +4,7 @@
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
  * hooks. This hook owns the two async flows previously on
  * `commitStore`:
- *   - commit(message)  → @/commands/commits.createCommit, enrich trees with source_ref,
+ *   - commit(message)  → @/commands/commits.commitRepositoryState, enrich trees with source_ref,
  *                        sanitize slot values, write result via setters
  *   - init(projectId, branch) → fetchCommits (HEAD), seed lastCommitHash +
  *                        committedNodeIds/Snapshot for the chat-panel UI
@@ -17,10 +17,10 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { useCallback } from 'react';
-import { createCommit } from '@/commands/commits';
+import { commitRepositoryState } from '@/commands/commits';
 import { enrichTreesWithSourceRefs } from '@/domain/enrichSourceRefs';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -107,19 +107,17 @@ export function useCommitActions() {
         }
       }
 
-      const result = await createCommit(
+      const result = await commitRepositoryState(
         projectId,
         {
           trees: sanitizedTrees,
           relations: draft.relations,
         },
         {
-          parents: lastCommitHash ? [lastCommitHash] : [],
+          expectedHead: lastCommitHash,
           branch: commitBranch,
           message: message || undefined,
-          sources: sources.length > 0 ? sources : undefined,
-          source_conversation_id: conversationId ?? undefined,
-          provenance: { method: 'llm_extraction' },
+          sourceConversationId: conversationId ?? undefined,
         }
       );
 
@@ -133,14 +131,16 @@ export function useCommitActions() {
         newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
+      const commitHash = result.commit.hash ?? result.commit.digest;
+
       useCommitStore.getState().setCommitSuccess({
-        lastCommitHash: result.commit.hash,
+        lastCommitHash: commitHash,
         committedNodeIds: newCommittedIds,
         committedNodeSnapshot: newSnapshot,
       });
 
       return {
-        hash: result.commit.hash,
+        hash: commitHash,
         projectId,
         conversationId,
         branch: commitBranch,

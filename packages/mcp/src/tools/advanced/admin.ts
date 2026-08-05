@@ -20,7 +20,7 @@ import {
   createLeaf,
   createPin,
   deletePin,
-  getCommit,
+  getVerifiedTransitionCommitGraph,
   insertBranch,
   insertProject,
 } from '@t3x-dev/storage';
@@ -253,14 +253,10 @@ async function handleCreateLeaf(args: Record<string, unknown>) {
   }
 
   const db = await getDB();
-  const commit = await getCommit(db, commitHash);
+  const commit = await getVerifiedTransitionCommitGraph(db, projectId, commitHash);
   if (!commit) {
     return fail(`Commit not found: ${commitHash}`);
   }
-  if (commit.project_id && commit.project_id !== projectId) {
-    return fail(`Commit ${commitHash} does not belong to project ${projectId}.`);
-  }
-
   const leaf = await createLeaf(db, {
     commit_hash: commitHash,
     type: leafType as AnyLeafType,

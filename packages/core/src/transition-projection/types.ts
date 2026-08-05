@@ -16,7 +16,6 @@ import type {
   StatementDescriptor,
   StringClaim,
 } from '@t3x-dev/transition';
-import type { Commit } from '../commit/types';
 import type { CommitHistoryProjection } from '../transition-commits/projection';
 import type {
   ActorContext,
@@ -72,7 +71,6 @@ export type ProjectionCapabilityReasonCode =
   | 'DECISION_ALREADY_SUPPLIED'
   | 'DECISION_REJECTED'
   | 'DECISION_REQUIRED'
-  | 'LEGACY_HISTORY_READ_ONLY'
   | 'OVERRIDE_NOT_REQUIRED'
   | 'POLICY_CONTEXT_REQUIRED'
   | 'REPOSITORY_AUTHORIZATION_REQUIRED';
@@ -107,7 +105,7 @@ export type TransitionHistoryView =
   | { observation: 'not_committed' }
   | {
       observation: 'committed';
-      commit: Extract<CommitHistoryProjection, { format: 'transition_v2' }>;
+      commit: CommitHistoryProjection;
     };
 
 export interface TransitionGraphViewV1 {
@@ -140,31 +138,7 @@ export interface TransitionGraphViewV1 {
   };
 }
 
-export interface LegacyTransitionViewV1 {
-  schema: typeof TRANSITION_VIEW_SCHEMA;
-  version: 1;
-  mode: 'legacy';
-  change: {
-    mode: 'legacy_content';
-    commitId: string;
-    content: Commit['content'];
-  };
-  claims: { observation: 'unavailable'; reason: 'legacy_v1' };
-  checks: { observation: 'unavailable'; reason: 'legacy_v1' };
-  decision: { observation: 'unavailable'; reason: 'legacy_v1' };
-  history: {
-    observation: 'committed';
-    commit: Extract<CommitHistoryProjection, { format: 'legacy_v1' }>;
-  };
-  capabilities: TransitionCapabilitiesView;
-  audit: {
-    format: 'legacy_v1';
-    commitId: string;
-    schema: Commit['schema'];
-  };
-}
-
-export type TransitionViewV1 = TransitionGraphViewV1 | LegacyTransitionViewV1;
+export type TransitionViewV1 = TransitionGraphViewV1;
 
 export interface ProjectionCapabilityContext {
   /** Trusted authenticated actor; never populated from request-shaped actor fields. */
@@ -190,9 +164,4 @@ export interface ProjectTransitionGraphInput {
   capabilityContext?: ProjectionCapabilityContext;
 }
 
-export interface ProjectLegacyTransitionInput {
-  mode: 'legacy';
-  commit: Commit;
-}
-
-export type ProjectTransitionViewInput = ProjectTransitionGraphInput | ProjectLegacyTransitionInput;
+export type ProjectTransitionViewInput = ProjectTransitionGraphInput;

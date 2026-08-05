@@ -101,6 +101,7 @@ test.describe('Source Context Fix Verification', () => {
         project_id: projectId,
         branch: 'main',
         message: 'Test commit with source context',
+        expected_head: null,
         content: {
           trees: [
             {
@@ -140,10 +141,10 @@ test.describe('Source Context Fix Verification', () => {
 
     expect(commitRes.ok()).toBe(true);
     const commitData = await commitRes.json();
-    const commitHash = commitData.data.commit.hash;
+    const commitHash = commitData.data.commit.digest;
 
     // Fetch the commit and verify source_ref
-    const getRes = await request.get(`${API_BASE}/commits/${commitHash}`);
+    const getRes = await request.get(`${API_BASE}/commits/${commitHash}?project_id=${projectId}`);
     expect(getRes.ok()).toBe(true);
     const getData = await getRes.json();
 

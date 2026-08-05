@@ -14,7 +14,7 @@ import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
 import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
-import { fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/infrastructure/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';

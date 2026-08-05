@@ -14,12 +14,12 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  findCommitHashesByYOpsLogIds,
   findConversationById,
-  getCommit,
   listActiveYOpsLogByConversation,
-  listCommits,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
+import { getRepositorySemanticCommit } from './repository-state-transition';
 
 /** Storage YOpsLogRecord shape (subset of fields we need) */
 interface YOpsLogRecord {
@@ -65,10 +65,10 @@ export async function getParentCommitContent(
 ): Promise<SemanticContent> {
   if (!parentCommitHash) return EMPTY_CONTENT;
 
-  const commit = await getCommit(db, parentCommitHash);
-  if (!commit || commit.project_id !== projectId) return EMPTY_CONTENT;
+  const commit = await getRepositorySemanticCommit(db, parentCommitHash, projectId);
+  if (!commit) return EMPTY_CONTENT;
 
-  return commit.content;
+  return commit.semanticContent;
 }
 
 function replayEntriesOnBaseline(
@@ -129,7 +129,7 @@ export async function replayActiveDraftOnBaseline(
 
 /**
  * Replay only the *committed* yops_log entries for a conversation —
- * i.e. those whose ids appear in some `commits.yops_log_ids` for the
+ * i.e. those with a CommitV2 application-consumption record for the
  * conversation's project. Returns the immutable baseline that
  * Extract should compute incrementally against. Active draft entries
  * (uncommitted, regardless of `superseded_at`) are intentionally
@@ -156,23 +156,12 @@ export async function replayCommittedBaseline(
   const allEntries = await listYOpsLogByConversation(db, conversationId);
   if (allEntries.length === 0) return inheritedBaseline;
 
-  // The committed-id set is per-project, not per-conversation: a commit
-  // never holds yops from another project, but it may hold yops from
-  // multiple conversations within the same project. We still filter by
-  // conversation_id at the entry level above, so the union of project
-  // commit ids is safe to intersect against.
-  //
-  // `limit: 10_000` matches the `listCommits` pagination ceiling and is
-  // far above any realistic per-project commit count today; bump if a
-  // project ever exceeds it.
-  const projectCommits = await listCommits(db, {
-    projectId: conv.projectId,
-    limit: 10_000,
-  });
-  const committedIds = new Set<string>();
-  for (const commit of projectCommits) {
-    for (const id of commit.yops_log_ids ?? []) committedIds.add(id);
-  }
+  const committedBy = await findCommitHashesByYOpsLogIds(
+    db,
+    conv.projectId,
+    allEntries.map((entry) => entry.id)
+  );
+  const committedIds = new Set(committedBy.keys());
 
   const committedEntries = allEntries.filter((entry) => committedIds.has(entry.id));
   if (committedEntries.length === 0) return inheritedBaseline;

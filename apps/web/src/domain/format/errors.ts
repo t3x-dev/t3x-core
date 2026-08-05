@@ -57,6 +57,10 @@ function rawCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null;
 }
 
+export function isRefHeadIntegrityInvalid(error: unknown): boolean {
+  return rawCode(error) === 'REF_HEAD_INTEGRITY_INVALID';
+}
+
 function compact(message: string): string {
   return message.replace(/\s+/g, ' ').trim();
 }
@@ -67,6 +71,10 @@ export function formatUserFacingError(
 ): string {
   const message = compact(rawMessage(error));
   const code = rawCode(error);
+
+  if (code === 'REF_HEAD_INTEGRITY_INVALID') {
+    return "This repository's branch head cannot be verified as CommitV2. For a pre-cut local database, use a fresh database or reset local development data.";
+  }
 
   if (code === 'PROVIDER_KEY_MISSING') {
     return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';

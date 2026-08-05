@@ -19,17 +19,22 @@ import {
 import {
   type AnyDB,
   commitDraft,
-  createCommit,
-  drafts,
+  ensureMainBranch,
   findDraftById,
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
+  getTransitionRefHead,
+  TransitionHeadConflictError,
+  TransitionRefNotFoundError,
   updateAutopilotConfig,
 } from '@t3x-dev/storage';
-import { eq } from 'drizzle-orm';
-import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
+} from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -38,6 +43,13 @@ import { pushNotification } from './notifications.openapi';
 export const autopilotRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
+
+class AutoCommitClaimConflictError extends Error {
+  constructor(readonly draftId: string) {
+    super(`Draft ${draftId} was already committed by another request`);
+    this.name = 'AutoCommitClaimConflictError';
+  }
+}
 
 // ── Shared Schemas ──────────────────────────────────────────
 
@@ -389,58 +401,47 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       children: [] as import('@t3x-dev/core').TreeNode[],
     }));
 
-    // 8. Claim, commit, and replace the provisional hash in one DB
-    // transaction. If commit creation fails, the claim rolls back and the
-    // draft remains editable instead of getting stuck at committed/pending.
-    const runner = db as unknown as Partial<TxRunner>;
+    // 8. Persist one full CommitV2 graph and claim the draft in the same
+    // transaction. A failed CAS or claim rolls the graph back.
+    if (config.target_branch === 'main') await ensureMainBranch(db, draft.project_id);
+    const observedHead = await getTransitionRefHead(db, {
+      projectId: draft.project_id,
+      refName: config.target_branch,
+    });
+    const expectedHead = draft.parent_commit_hash ?? observedHead.head;
+    if (draft.parent_commit_hash !== undefined && draft.parent_commit_hash !== observedHead.head) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', 'Draft parent does not match the target ref head');
+    }
+    const target = createRepositoryYOpsStateFromSemanticContent({
+      trees: autoTrees,
+      relations: [],
+    });
     const writeAutoCommit = async (tx: AnyDB) => {
-      const provisionalHash = 'pending';
-      const claimed = await commitDraft(tx, draftId, provisionalHash);
-      if (!claimed) {
-        return { claimed: false as const, commit: null };
-      }
-
       const autoConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
       const yopsLogIds = autoConversationId
         ? await findUncommittedYOpsIds(tx, autoConversationId, draft.project_id)
         : [];
-
-      const commit = await createCommit(tx, {
-        parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
-        author: { type: 'agent' as const, name: 'autopilot' },
-        content: { trees: autoTrees, relations: [] },
-        project_id: draft.project_id,
-        message: `Auto-commit: ${qualifyingSPs.length} node(s)`,
-        branch: config.target_branch,
-        provenance: { method: 'human_curation' },
-        yops_log_ids: yopsLogIds,
-        enforceBranchLinearity: true,
+      const evidence = autoConversationId
+        ? await getRepositoryConversationEvidence(tx, draft.project_id, autoConversationId)
+        : [];
+      const created = await commitRepositoryYOpsState({
+        db: tx,
+        projectId: draft.project_id,
+        refName: config.target_branch,
+        expectedHead,
+        target,
+        actor: { kind: 'agent', id: 'agent:autopilot' },
+        intent: `Auto-commit: ${qualifyingSPs.length} node(s)`,
+        ...(evidence.length === 0 ? {} : { evidence }),
+        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
-
-      await tx
-        .update(drafts)
-        .set({ committedAs: commit.hash, updatedAt: new Date() })
-        .where(eq(drafts.id, draftId));
-
-      return { claimed: true as const, commit };
+      const claimed = await commitDraft(tx, draftId, created.commitDigest);
+      if (!claimed) throw new AutoCommitClaimConflictError(draftId);
+      return created;
     };
-
-    const writeResult =
-      typeof runner.transaction === 'function'
-        ? ((await runner.transaction((tx) => writeAutoCommit(tx as AnyDB))) as Awaited<
-            ReturnType<typeof writeAutoCommit>
-          >)
-        : await writeAutoCommit(db);
-
-    if (!writeResult.claimed || !writeResult.commit) {
-      return errorResponse(
-        c,
-        'ALREADY_COMMITTED',
-        'Draft was already committed by another request'
-      );
-    }
-
-    const { commit } = writeResult;
+    const created = (await (db as unknown as TxRunner).transaction((tx) =>
+      writeAutoCommit(tx as AnyDB)
+    )) as Awaited<ReturnType<typeof writeAutoCommit>>;
 
     // 9. Push notification (fire-and-forget)
     pushNotification({
@@ -448,14 +449,14 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       type: 'commit.created',
       title: 'Auto-commit completed',
       message: `Autopilot committed ${qualifyingSPs.length} node(s) from draft "${draft.title}"`,
-      ref_id: commit.hash,
+      ref_id: created.commitDigest,
     });
 
     // 10. Dispatch webhook (fire-and-forget)
     webhookDispatcher.dispatch(
       'commit.created',
       {
-        commit_hash: commit.hash,
+        commit_hash: created.commitDigest,
         project_id: draft.project_id,
         nodes_count: qualifyingSPs.length,
         source: 'autopilot',
@@ -469,9 +470,9 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
         data: {
           auto_committed: true,
           commit: {
-            hash: commit.hash,
-            branch: commit.branch ?? undefined,
-            committed_at: commit.committed_at,
+            hash: created.commitDigest,
+            branch: config.target_branch,
+            committed_at: created.transition.recordedAt,
           },
           nodes_committed: qualifyingSPs.length,
           nodes_skipped: plan.skipped.length,
@@ -481,8 +482,15 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       200
     );
   } catch (err) {
-    const linearity = mapBranchLinearityError(c, err);
-    if (linearity) return linearity;
+    if (err instanceof TransitionHeadConflictError) {
+      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
+    }
+    if (err instanceof TransitionRefNotFoundError) {
+      return errorResponse(c, 'NOT_FOUND', err.message);
+    }
+    if (err instanceof AutoCommitClaimConflictError) {
+      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500.
     const conflict = mapSupersededError(c, err);

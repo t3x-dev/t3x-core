@@ -39,6 +39,7 @@ export const ErrorCodes = {
   // Reference errors
   PARENT_NOT_FOUND: 'PARENT_NOT_FOUND',
   REFERENCE_NOT_FOUND: 'REFERENCE_NOT_FOUND',
+  REF_HEAD_INTEGRITY_INVALID: 'REF_HEAD_INTEGRITY_INVALID',
 
   // Not found errors
   NOT_FOUND: 'NOT_FOUND',
@@ -216,6 +217,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   DECISION_NOT_PERMITTED: 409,
   ALIAS_TAKEN: 409,
   YOPS_LOG_SUPERSEDED: 409,
+  REF_HEAD_INTEGRITY_INVALID: 409,
 
   // 500 Server Error
   CREATE_FAILED: 500,

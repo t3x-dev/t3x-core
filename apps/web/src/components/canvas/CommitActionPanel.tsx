@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, GitCompareArrows, GitMerge, Leaf, Plus } from 'lucide-react';
+import { GitCompareArrows, GitMerge, Leaf, Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { cn } from '@/utils/cn';
 
@@ -103,7 +103,6 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
-  if (action.label === 'Details') return 'canvas-floating-action-details';
   if (action.label === 'Open Leaf') return 'canvas-floating-action-open-leaf';
   if (action.label === 'New Leaf') return 'canvas-floating-action-new-leaf';
   if (action.label === 'Merge') return 'canvas-floating-action-merge';
@@ -112,7 +111,6 @@ function introTargetForAction(action: CommitAction): string | undefined {
 
 /** Build standard actions for a committed node */
 export function buildCommitActions(opts: {
-  onViewDetails?: () => void;
   onViewDiff?: () => void;
   onOpenLeaf?: () => void;
   onCreateLeaf: () => void;
@@ -120,15 +118,6 @@ export function buildCommitActions(opts: {
   onMerge?: () => void;
 }): CommitAction[] {
   const actions: CommitAction[] = [];
-
-  if (opts.onViewDetails) {
-    actions.push({
-      label: 'Details',
-      icon: <Eye size={14} />,
-      onClick: opts.onViewDetails,
-      tone: 'primary',
-    });
-  }
 
   if (opts.onViewDiff) {
     actions.push({

@@ -102,4 +102,22 @@ test.describe('Error Scenarios', () => {
       ).toHaveLength(0);
     }
   });
+
+  // ES-08: Retired commit-detail URLs stay unavailable even when addressed directly.
+  test('ES-08: Retired commit details return 404', async ({ page }) => {
+    const retiredPaths = [
+      '/project/proj_retired/commit',
+      '/project/proj_retired/commit/sha256%3Adeadbeef',
+      '/project/proj_retired/commit/sha256%3Adeadbeef/extra',
+    ];
+
+    for (const path of retiredPaths) {
+      const response = await page.goto(path, { waitUntil: 'domcontentloaded' });
+
+      expect(response?.status(), path).toBe(404);
+      await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Create Leaf from This Commit', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Commit Audit', { exact: true })).toHaveCount(0);
+    }
+  });
 });

@@ -5,19 +5,24 @@
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 import type { DiffResult, DiffResultRaw } from './types';
 
-export async function diff(baseCommitHash: string, targetCommitHash: string): Promise<DiffResult> {
+export async function diff(
+  baseCommitHash: string,
+  targetCommitHash: string,
+  projectId?: string
+): Promise<DiffResult> {
   const res = await fetchWithTimeout(`${API_V1}/diff/two-way`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       base_commit_hash: baseCommitHash,
       target_commit_hash: targetCommitHash,
+      project_id: projectId,
     }),
   });
   const raw = await handleResponse<DiffResultRaw>(res);
 
   // Transform backend response to frontend format
-  const segmentChanges = raw.segmentDiffs.map((seg) => ({
+  const segmentChanges = (raw.segmentDiffs ?? []).map((seg) => ({
     segment_id: seg.segmentId,
     change_type: seg.diffType as 'added' | 'removed' | 'modified' | 'same',
     text: seg.text,
@@ -86,7 +91,8 @@ export async function diff(baseCommitHash: string, targetCommitHash: string): Pr
  */
 export async function diffRaw(
   baseCommitHash: string,
-  targetCommitHash: string
+  targetCommitHash: string,
+  projectId?: string
 ): Promise<DiffResultRaw> {
   const res = await fetchWithTimeout(`${API_V1}/diff/two-way`, {
     method: 'POST',
@@ -94,6 +100,7 @@ export async function diffRaw(
     body: JSON.stringify({
       base_commit_hash: baseCommitHash,
       target_commit_hash: targetCommitHash,
+      project_id: projectId,
     }),
   });
   return handleResponse<DiffResultRaw>(res);

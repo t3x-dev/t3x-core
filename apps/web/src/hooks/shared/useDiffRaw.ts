@@ -10,7 +10,8 @@ import { diffRaw } from '@/infrastructure/diff';
 
 export function useDiffRaw() {
   const loadDiff = useCallback(
-    async (baseHash: string, targetHash: string) => diffRaw(baseHash, targetHash),
+    async (baseHash: string, targetHash: string, projectId?: string) =>
+      diffRaw(baseHash, targetHash, projectId),
     []
   );
   return { loadDiff };

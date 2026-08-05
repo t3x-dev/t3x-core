@@ -127,7 +127,7 @@ function makeCommit(overrides: Partial<ApiCommit> = {}): ApiCommit {
     committed_at: '2026-07-13T08:00:00.000Z',
     hash: 'sha256:latest123456789',
     project_id: 'proj_1',
-    schema: 't3x/commit',
+    schema: 't3x/commit/v2',
     ...overrides,
   } as ApiCommit;
 }

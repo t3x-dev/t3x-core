@@ -7,7 +7,6 @@ export interface KeyboardHint {
 
 /**
  * Compact row of `<kbd>` hints, right-aligned by default.
- * Matches the style established in CommitDetailPage's lineage bar.
  */
 export function KeyboardHintBar({ hints }: { hints: KeyboardHint[] }) {
   return (

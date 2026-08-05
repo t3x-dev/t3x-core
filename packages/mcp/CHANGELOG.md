@@ -1,5 +1,15 @@
 # @t3x-dev/mcp-lib
 
+## 0.1.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/api@1.0.0
+  - @t3x-dev/core@1.0.0
+  - @t3x-dev/storage@1.0.0
+  - @t3x-dev/api-client@1.0.0
+
 ## Unreleased
 
 - Route API-backed resources and Source queries through authenticated API capabilities.

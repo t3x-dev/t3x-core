@@ -6,10 +6,10 @@
  */
 
 import { diffCommits } from '@t3x-dev/core';
-import { getCommit } from '@t3x-dev/storage';
 
 import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
+import { getMcpRepositorySemanticCommit } from '../../repository-semantic-commit.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // -- Tool definition --
@@ -38,10 +38,10 @@ export const diffDef: ToolDef = {
       },
       project_id: {
         type: 'string',
-        description: 'Project ID (optional, for validation).',
+        description: 'Project ID required to resolve CommitV2 membership.',
       },
     },
-    required: ['base', 'target'],
+    required: ['base', 'target', 'project_id'],
   },
   annotations: {
     readOnlyHint: true,
@@ -54,12 +54,16 @@ export const diffDef: ToolDef = {
 export const diffHandler: ToolHandler = async (args) => {
   const base = args.base as string | undefined;
   const target = args.target as string | undefined;
+  const projectId = args.project_id as string | undefined;
 
   if (!base) {
     return fail('"base" is required.\nProvide the commit hash of the base (older) commit.');
   }
   if (!target) {
     return fail('"target" is required.\nProvide the commit hash of the target (newer) commit.');
+  }
+  if (!projectId) {
+    return fail('"project_id" is required to resolve CommitV2 membership.');
   }
 
   if (isApiBackend()) {
@@ -68,6 +72,7 @@ export const diffHandler: ToolHandler = async (args) => {
       await client.twoWayDiff({
         base_commit_hash: base,
         target_commit_hash: target,
+        project_id: projectId,
       })
     );
   }
@@ -75,8 +80,8 @@ export const diffHandler: ToolHandler = async (args) => {
   const db = await getDB();
 
   const [baseCommit, targetCommit] = await Promise.all([
-    getCommit(db, base),
-    getCommit(db, target),
+    getMcpRepositorySemanticCommit(db, projectId, base),
+    getMcpRepositorySemanticCommit(db, projectId, target),
   ]);
 
   if (!baseCommit) {
@@ -86,8 +91,8 @@ export const diffHandler: ToolHandler = async (args) => {
     return fail(`Target commit not found: ${target}`);
   }
 
-  const baseContent = baseCommit.content as { trees: unknown[]; relations: unknown[] };
-  const targetContent = targetCommit.content as { trees: unknown[]; relations: unknown[] };
+  const baseContent = baseCommit.semanticContent;
+  const targetContent = targetCommit.semanticContent;
 
   const diff = diffCommits(
     baseContent as Parameters<typeof diffCommits>[0],

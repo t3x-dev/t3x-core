@@ -143,6 +143,9 @@ export const SemanticContentSchema = z.object({
  * POST /v1/merge/prepare request body
  */
 export const PrepareMergeRequestSchema = z.object({
+  project_id: z.string().min(1).openapi({
+    description: 'Repository project scope',
+  }),
   source_hash: z.string().min(1).openapi({
     description: 'Source commit hash (sha256:...)',
     example: 'sha256:abc123...',
@@ -157,6 +160,9 @@ export const PrepareMergeRequestSchema = z.object({
  * POST /v1/merge/execute request body
  */
 export const ExecuteMergeRequestSchema = z.object({
+  project_id: z.string().min(1).openapi({
+    description: 'Repository project scope',
+  }),
   source_hash: z.string().min(1).openapi({
     description: 'Source commit hash',
     example: 'sha256:abc123...',
@@ -175,8 +181,8 @@ export const ExecuteMergeRequestSchema = z.object({
     description: 'Merge commit message',
     example: 'Merge feature-branch into main',
   }),
-  branch: z.string().trim().min(1).optional().openapi({
-    description: 'Target branch name (optional)',
+  branch: z.string().trim().min(1).openapi({
+    description: 'Target ref name',
     example: 'main',
   }),
 });
@@ -207,6 +213,7 @@ export const CommitAuthorSchema = z.object({
  * Merge commit schema (response from execute)
  */
 export const MergeCommitSchema = z.object({
+  schema: z.literal('t3x/commit/v2'),
   hash: z.string().openapi({
     description: 'Commit hash (sha256:...)',
     example: 'sha256:merge789...',

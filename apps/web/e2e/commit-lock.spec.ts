@@ -141,7 +141,7 @@ test.describe('Commit-lock flow', () => {
             data: {
               commit: {
                 hash: 'sha256:mock_commit_hash_lock01',
-                schema: 't3x/commit',
+                schema: 't3x/commit/v2',
                 parents: [],
                 author: { type: 'human', name: 'E2E Tester' },
                 committed_at: new Date().toISOString(),

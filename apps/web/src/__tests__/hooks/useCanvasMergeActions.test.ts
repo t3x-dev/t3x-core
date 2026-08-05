@@ -21,6 +21,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 
 function resetStore() {
   useCanvasStore.setState({
+    projectId: 'proj_1',
     nodes: [],
     edges: [],
     mergeState: null,

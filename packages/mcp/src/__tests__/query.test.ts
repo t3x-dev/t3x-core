@@ -42,13 +42,6 @@ const MOCK_DRAFT = {
   revision: 3,
 };
 
-const MOCK_COMMIT = {
-  hash: 'sha256:abc',
-  schema: 't3x/commit/v4',
-  parents: [],
-  content: { trees: [], relations: [] },
-};
-
 const MOCK_LEAF = {
   id: 'leaf_test1',
   commit_hash: 'sha256:abc',
@@ -84,10 +77,25 @@ vi.mock('@t3x-dev/storage', () => ({
     Promise.resolve(id === 'draft_test1' ? MOCK_DRAFT : null)
   ),
   listDraftsByProject: vi.fn(() => Promise.resolve([MOCK_DRAFT])),
-  getCommit: vi.fn((_db: unknown, hash: string) =>
-    Promise.resolve(hash === 'sha256:abc' ? MOCK_COMMIT : null)
+  getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) =>
+    Promise.resolve(
+      projectId === 'proj_test1' && hash === 'sha256:abc'
+        ? {
+            recordedAt: '2026-01-01T00:00:00.000Z',
+            commit: { schema: 't3x/commit/v2', parents: [] },
+          }
+        : null
+    )
   ),
-  listCommits: vi.fn(() => Promise.resolve([MOCK_COMMIT])),
+  listCommitHistory: vi.fn(() =>
+    Promise.resolve([
+      {
+        digest: 'sha256:abc',
+        recordedAt: '2026-01-01T00:00:00.000Z',
+        parents: [],
+      },
+    ])
+  ),
   findLeafById: vi.fn((_db: unknown, id: string) =>
     Promise.resolve(id === 'leaf_test1' ? MOCK_LEAF : null)
   ),
@@ -179,10 +187,15 @@ describe('t3x_query handler', () => {
   });
 
   it('returns a commit by hash', async () => {
-    const result = await queryHandler({ target: 'commit', id: 'sha256:abc' });
+    const result = await queryHandler({
+      target: 'commit',
+      id: 'sha256:abc',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
-    expect(data.hash).toBe('sha256:abc');
+    expect(data.digest).toBe('sha256:abc');
+    expect(data.object.schema).toBe('t3x/commit/v2');
   });
 
   it('returns a leaf by id', async () => {
@@ -335,7 +348,7 @@ describe('t3x_query handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(Array.isArray(data)).toBe(true);
-    expect(data[0].hash).toBe('sha256:abc');
+    expect(data[0].digest).toBe('sha256:abc');
   });
 
   it('lists leaves by project', async () => {
@@ -376,22 +389,27 @@ describe('t3x_query handler', () => {
   // ── Edge cases ──
 
   it('returns not-found for missing commit', async () => {
-    const result = await queryHandler({ target: 'commit', id: 'sha256:missing' });
+    const result = await queryHandler({
+      target: 'commit',
+      id: 'sha256:missing',
+      project_id: 'proj_test1',
+    });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Commit not found');
   });
 
-  it('passes branch filter to commits query', async () => {
-    const { listCommits } = await import('@t3x-dev/storage');
-    const mock = listCommits as ReturnType<typeof vi.fn>;
+  it('passes pagination to CommitV2 history queries', async () => {
+    const { listCommitHistory } = await import('@t3x-dev/storage');
+    const mock = listCommitHistory as ReturnType<typeof vi.fn>;
     mock.mockClear();
 
     await queryHandler({
       target: 'commits',
       project_id: 'proj_test1',
-      branch: 'feature-x',
+      limit: 5,
+      offset: 10,
     });
 
-    expect(mock).toHaveBeenCalledWith(mockDB, expect.objectContaining({ branch: 'feature-x' }));
+    expect(mock).toHaveBeenCalledWith(mockDB, 'proj_test1', { limit: 5, offset: 10 });
   });
 });

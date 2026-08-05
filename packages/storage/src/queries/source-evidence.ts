@@ -2,10 +2,11 @@
  * Repository-owned source evidence reads.
  *
  * This projection deliberately reuses durable conversation, turn, revision,
- * and commit-source records. It does not create a second source truth.
+ * and immutable Transition EvidenceRefs. It does not create a second source
+ * truth or scan deprecated commit metadata.
  */
 
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type Conversation,
@@ -14,17 +15,12 @@ import {
   sourceTextRevisions,
   type Turn,
 } from '../schema';
-import { commits } from '../schema-commits';
 import { getConversationTurnCount } from './conversations';
+import {
+  type ConversationSourceCommitReference,
+  listConversationCommitReferences,
+} from './source-evidence-references';
 import { findTurnsByConversation } from './turns';
-
-export interface ConversationSourceCommitReference {
-  commitHash: string;
-  branch: string;
-  message: string | null;
-  recordedAt: Date;
-  sourceTitle: string | null;
-}
 
 export interface ConversationSourceEvidenceRecord {
   conversation: Conversation | null;
@@ -43,50 +39,12 @@ export interface GetConversationSourceEvidenceInput {
   offset?: number;
 }
 
-type StoredCommitSource = {
-  type: 'conversation' | 'import' | 'leaf';
-  id: string;
-  title?: string;
-};
-
-async function listConversationCommitReferences(
-  db: AnyDB,
-  projectId: string,
-  conversationId: string
-): Promise<ConversationSourceCommitReference[]> {
-  const sourceRef = JSON.stringify([{ type: 'conversation', id: conversationId }]);
-  const rows = await db
-    .select({
-      commitHash: commits.hash,
-      branch: commits.branch,
-      message: commits.message,
-      recordedAt: commits.committedAt,
-      sources: commits.sources,
-    })
-    .from(commits)
-    .where(and(eq(commits.projectId, projectId), sql`${commits.sources} @> ${sourceRef}::jsonb`))
-    .orderBy(desc(commits.committedAt), desc(commits.hash));
-
-  return rows.map((row) => {
-    const source = ((row.sources ?? []) as StoredCommitSource[]).find(
-      (candidate) => candidate.type === 'conversation' && candidate.id === conversationId
-    );
-    return {
-      commitHash: row.commitHash,
-      branch: row.branch ?? 'main',
-      message: row.message ?? null,
-      recordedAt: row.recordedAt,
-      sourceTitle: source?.title ?? null,
-    };
-  });
-}
-
 /**
  * Resolve a conversation source inside one project.
  *
- * A missing conversation can still produce a record when legacy commit JSON
- * references its ID. That is an explicit unavailable source, not a 404 and
- * never a fabricated conversation.
+ * A missing conversation can still produce a record when an immutable
+ * EvidenceRef references its ID. That is an explicit unavailable source, not
+ * a 404 and never a fabricated conversation.
  */
 export async function getConversationSourceEvidence(
   db: AnyDB,

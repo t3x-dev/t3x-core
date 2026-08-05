@@ -393,7 +393,7 @@ describe('CanvasWorkspace initial fit view', () => {
     });
   });
 
-  it('selects and centers the commit requested by a State deep link', async () => {
+  it('selects and centers the commit requested by a State deep link without opening a modal', async () => {
     const focusedNode = {
       ...unitNode('sha256:focused'),
       position: { x: 120, y: 80 },
@@ -415,8 +415,8 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(flowMocks.setNodes).toHaveBeenLastCalledWith([
       expect.objectContaining({ id: 'sha256:focused', selected: true }),
     ]);
-    expect(useCanvasStore.getState().openNodeId).toBe('sha256:focused');
-    expect(screen.getByTestId('node-modal')).toBeInTheDocument();
+    expect(useCanvasStore.getState().openNodeId).toBeNull();
+    expect(screen.queryByTestId('node-modal')).not.toBeInTheDocument();
   });
 
   it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {
@@ -550,17 +550,50 @@ describe('CanvasWorkspace initial fit view', () => {
     });
 
     expect(screen.queryByTestId('commit-action-panel')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute(
-      'data-intro-target',
-      'canvas-action-details'
-    );
-    screen.getByRole('button', { name: 'Details' }).click();
-    expect(useCanvasStore.getState().openNodeId).toBe(node.id);
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Create Leaf From This Version' })).toHaveAttribute(
       'data-intro-target',
       'canvas-action-new-leaf'
     );
+  });
+
+  it('closes stale commit-mode state for a committed node without rendering the modal', async () => {
+    const node = useCanvasStore.getState().nodes[0];
+    useCanvasStore.setState({
+      modalViewMode: 'commit',
+      openNodeId: node.id,
+    });
+    layoutMocks.getLayoutedElements.mockResolvedValue([node]);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    expect(screen.queryByTestId('node-modal')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(useCanvasStore.getState().openNodeId).toBeNull();
+    });
+  });
+
+  it('keeps the staging commit workflow modal available', () => {
+    const pendingNode = {
+      ...unitNode('pending_modal'),
+      data: {
+        ...unitNode('pending_modal').data,
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending_modal',
+      },
+    };
+    useCanvasStore.setState({
+      modalViewMode: 'commit',
+      nodes: [pendingNode],
+      openNodeId: pendingNode.id,
+    });
+    layoutMocks.getLayoutedElements.mockResolvedValue([pendingNode]);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    expect(screen.getByTestId('node-modal')).toBeInTheDocument();
   });
 
   it('keeps a pending conversation on the canvas when the node is selected', () => {

@@ -1085,7 +1085,7 @@ describe('ChatSidebar', () => {
     fireEvent.click(commitButton);
 
     expect(mocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_smoke/commit/sha256%3Aabcdef123456?returnTo=%2Fchat%2Fproject%2Fproj_smoke%2Fcanvas'
+      '/project/proj_smoke?view=canvas&commit=sha256%3Aabcdef123456'
     );
   });
 

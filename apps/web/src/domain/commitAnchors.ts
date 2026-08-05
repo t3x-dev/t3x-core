@@ -8,7 +8,7 @@
  * dragging an @/infrastructure dependency through @/queries.
  *
  * Previously lived in @/infrastructure/leaves.ts; the canvasStoreUtils
- * consumer used to reach it via @/queries/commits re-export — that path
+ * consumer used to reach it via @/infrastructure/commits re-export — that path
  * was a doc §2.5 violation (store -> queries) covered only by a biome
  * exempt list. Moving here lets that exemption shrink.
  */

@@ -6,9 +6,8 @@
  * Other endpoints work with regular graph tables.
  */
 
-import type { Commit } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertProject } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -41,6 +40,7 @@ import {
   insertNodeMembers,
 } from '@t3x-dev/storage';
 import { knowledgeGraphRoutes, listProjectGraphCommits } from '../routes/knowledge-graph.openapi';
+import { commitSemanticFixture } from './transition-fixture';
 
 describe('State Index Routes', () => {
   let cleanup: () => Promise<void>;
@@ -66,31 +66,30 @@ describe('State Index Routes', () => {
 
   describe('POST /build', () => {
     it('paginates all commits used for graph rebuilds', async () => {
-      const commitA = { hash: 'sha256:a' } as Commit;
-      const commitB = { hash: 'sha256:b' } as Commit;
-      const commitC = { hash: 'sha256:c' } as Commit;
-      const fetchCommits = vi
+      const fetchHistory = vi
         .fn()
-        .mockResolvedValueOnce([commitA, commitB])
-        .mockResolvedValueOnce([commitC]);
+        .mockResolvedValueOnce([{ id: 'sha256:a' }, { id: 'sha256:b' }])
+        .mockResolvedValueOnce([{ id: 'sha256:c' }]);
+      const resolveCommit = vi.fn(async (_db: AnyDB, digest: string, projectId: string) => ({
+        digest,
+        projectId,
+        semanticContent: { trees: [], relations: [] },
+      }));
 
       const commits = await listProjectGraphCommits(
         {} as AnyDB,
         'proj_paginated_graph',
         2,
-        fetchCommits
+        fetchHistory,
+        resolveCommit
       );
 
       expect(commits.map((commit) => commit.hash)).toEqual(['sha256:a', 'sha256:b', 'sha256:c']);
-      expect(fetchCommits).toHaveBeenNthCalledWith(1, {} as AnyDB, {
-        projectId: 'proj_paginated_graph',
-        includeSuperseded: true,
+      expect(fetchHistory).toHaveBeenNthCalledWith(1, {} as AnyDB, 'proj_paginated_graph', {
         limit: 2,
         offset: 0,
       });
-      expect(fetchCommits).toHaveBeenNthCalledWith(2, {} as AnyDB, {
-        projectId: 'proj_paginated_graph',
-        includeSuperseded: true,
+      expect(fetchHistory).toHaveBeenNthCalledWith(2, {} as AnyDB, 'proj_paginated_graph', {
         limit: 2,
         offset: 2,
       });
@@ -98,10 +97,9 @@ describe('State Index Routes', () => {
 
     it('rebuilds graph nodes and edges from committed tree content', async () => {
       const project = await insertProject(mockDB, testData.project({ name: 'KG Build Test' }));
-      await createCommit(mockDB, {
-        project_id: project.projectId,
-        author: { type: 'human', name: 'Tester' },
-        message: 'Add release readiness knowledge',
+      await commitSemanticFixture(mockDB, {
+        projectId: project.projectId,
+        intent: 'Add release readiness knowledge',
         content: {
           trees: [
             {

@@ -1,14 +1,21 @@
 import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommit,
+  conversations,
+  ensureMainBranch,
   insertConversation,
   insertProject,
   insertSourceTextRevision,
   insertTurn,
 } from '@t3x-dev/storage';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+  getRepositoryConversationEvidence,
+} from '../lib/repository-state-transition';
 import { setupTestDB } from './setup';
 
 let mockDB: AnyDB;
@@ -26,7 +33,7 @@ interface SourceEvidenceTestBody {
     turns: { total: number; completeness: string };
     revisions: unknown[];
     evidence_selection: { mode: string; turn_hashes: string[] };
-    referring_commits: Array<{ format: string; commit_id: string }>;
+    referring_commits: Array<{ commit_digest: string; evidence_refs: unknown[] }>;
   };
 }
 
@@ -58,6 +65,21 @@ function app(apiKey?: ApiKey) {
   return instance;
 }
 
+async function commitConversation(projectId: string, conversationId: string, intent: string) {
+  await ensureMainBranch(mockDB, projectId);
+  const evidence = await getRepositoryConversationEvidence(mockDB, projectId, conversationId);
+  return commitRepositoryYOpsState({
+    db: mockDB,
+    projectId,
+    refName: 'main',
+    expectedHead: null,
+    target: createRepositoryYOpsStateFromSemanticContent({ trees: [], relations: [] }),
+    actor: { kind: 'human', id: 'human:test-maintainer' },
+    intent,
+    evidence,
+  });
+}
+
 describe('source evidence routes', () => {
   let cleanup: () => Promise<void>;
 
@@ -69,7 +91,7 @@ describe('source evidence routes', () => {
 
   afterAll(async () => cleanup());
 
-  it('returns legacy source facts and marks a paginated turn view partial', async () => {
+  it('returns CommitV2 evidence and marks a paginated turn view partial', async () => {
     const project = await insertProject(mockDB, { name: 'Source API' });
     const conversation = await insertConversation(mockDB, {
       projectId: project.projectId,
@@ -101,13 +123,11 @@ describe('source evidence routes', () => {
       content: 'Move rollout to 20 percent.',
       spans: [],
     });
-    const commit = await createCommit(mockDB, {
-      project_id: project.projectId,
-      author: { type: 'human', id: 'human:maintainer' },
-      content: { trees: [], relations: [] },
-      message: 'Raise rollout',
-      sources: [{ type: 'conversation', id: conversation.conversationId }],
-    });
+    const commit = await commitConversation(
+      project.projectId,
+      conversation.conversationId,
+      'Raise rollout'
+    );
 
     const response = await app().request(
       `/v1/projects/${project.projectId}/sources/conversations/${conversation.conversationId}?limit=1`
@@ -117,27 +137,43 @@ describe('source evidence routes', () => {
     expect(response.status).toBe(200);
     expect(body.data.availability).toEqual({
       mode: 'partial',
-      reasons: ['TURN_PAGE_INCOMPLETE', 'LEGACY_COMMIT_SOURCE_REFERENCE'],
+      reasons: ['TURN_PAGE_INCOMPLETE'],
     });
     expect(body.data.turns).toMatchObject({ total: 2, completeness: 'partial' });
     expect(body.data.revisions).toHaveLength(1);
-    expect(body.data.evidence_selection).toEqual({ mode: 'not_recorded', turn_hashes: [] });
+    expect(body.data.evidence_selection).toEqual({
+      mode: 'immutable_refs',
+      turn_hashes: expect.arrayContaining([turn.turnHash]),
+    });
     expect(body.data.referring_commits).toEqual([
-      expect.objectContaining({ format: 'legacy_v1', commit_id: commit.hash }),
+      expect.objectContaining({
+        commit_digest: commit.commitDigest,
+        evidence_refs: expect.arrayContaining([expect.any(Object)]),
+      }),
     ]);
   });
 
-  it('does not claim a missing legacy source is available', async () => {
+  it('does not claim a missing source referenced by immutable evidence is available', async () => {
     const project = await insertProject(mockDB, { name: 'Missing Source API' });
-    await createCommit(mockDB, {
-      project_id: project.projectId,
-      author: { type: 'agent', id: 'agent:legacy' },
-      content: { trees: [], relations: [] },
-      sources: [{ type: 'conversation', id: 'conv_missing' }],
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Ephemeral source',
     });
+    await insertTurn(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      role: 'user',
+      content: 'This source will be removed after its evidence is committed.',
+    });
+    await commitConversation(project.projectId, conversation.conversationId, 'Record source');
+    // Bypass the public deletion guard to simulate externally missing source
+    // rows while retaining immutable CommitV2 evidence references.
+    await mockDB
+      .delete(conversations)
+      .where(eq(conversations.conversationId, conversation.conversationId));
 
     const response = await app().request(
-      `/v1/projects/${project.projectId}/sources/conversations/conv_missing`
+      `/v1/projects/${project.projectId}/sources/conversations/${conversation.conversationId}`
     );
     const body = (await response.json()) as SourceEvidenceTestBody;
 
@@ -145,7 +181,7 @@ describe('source evidence routes', () => {
     expect(body.data.source).toBeNull();
     expect(body.data.availability).toEqual({
       mode: 'unavailable',
-      reasons: ['SOURCE_RECORD_MISSING', 'LEGACY_COMMIT_SOURCE_REFERENCE'],
+      reasons: ['SOURCE_RECORD_MISSING'],
     });
   });
 

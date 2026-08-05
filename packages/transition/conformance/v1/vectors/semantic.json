@@ -173,11 +173,11 @@
     "id": "mixed-commit-history-preserves-v1-identity",
     "operation": "project-mixed-history",
     "input": {
-      "commitV1Before": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "commitV1After": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "externalCommitBefore": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "externalCommitAfter": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "nextSchema": "t3x/commit/v2"
     },
-    "rule": "CommitV1 bytes and hashes remain unchanged when projected beside CommitV2",
+    "rule": "External commit bytes and hashes remain unchanged when projected beside CommitV2",
     "expected": "legacy-digest-unchanged"
   },
   {

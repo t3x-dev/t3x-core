@@ -177,7 +177,7 @@ const PRD_COMMIT: ApiCommit = {
   parents: ['sha256:base-prd'],
   project_id: 'proj_test',
   provenance: { method: 'workspace' },
-  schema: 't3x/commit',
+  schema: 't3x/commit/v2',
   sources: [{ type: 'conversation', id: 'conv_d4d239f3' }],
   yops_log_ids: ['op_1', 'op_2', 'op_3'],
 };
@@ -531,7 +531,7 @@ describe('ProjectStateTab', () => {
       PRD_COMMIT.parents[0]
     );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
@@ -542,12 +542,12 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'cb5813f' })).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/t3x-dev/test-project?view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
     );
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '2 changed paths' })).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -582,6 +582,22 @@ describe('ProjectStateTab', () => {
     expect(
       screen.queryByRole('separator', { name: 'Resize state details' })
     ).not.toBeInTheDocument();
+  });
+
+  it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
+    navigationMocks.search = 'view=canvas&branch=main';
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+
+    renderStateTab();
+
+    expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
+      'data-focused-branch',
+      'main'
+    );
+    expect(screen.queryByText('main has no HEAD commit.')).not.toBeInTheDocument();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    expect(hookMocks.loadOperations).not.toHaveBeenCalled();
   });
 
   it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
@@ -740,7 +756,7 @@ describe('ProjectStateTab', () => {
     const changedPaths = await screen.findByRole('link', { name: '2 changed paths' });
     expect(changedPaths).toHaveAttribute(
       'href',
-      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?view=diff&returnTo=%2Ft3x-dev%2Ftest-project`
+      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
     );
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
@@ -954,7 +970,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('Source Chat')).toBeInTheDocument();
   });
 
-  it('keeps an inspectable generic reader for unregistered schemas', async () => {
+  it('renders unregistered schemas as an inspectable document instead of a generic card', async () => {
     const genericCommit: ApiCommit = {
       ...PRD_COMMIT,
       content: {
@@ -984,16 +1000,13 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('Add device state');
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(screen.getByRole('region', { name: 'Schema render' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Device' })).toBeInTheDocument();
+    expect(screen.getAllByText('Platform')).not.toHaveLength(0);
+    expect(screen.getByText('esphome')).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'Generic structured state render' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'No specialized reader is registered; committed nodes remain fully inspectable.'
-      )
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('device')).not.toHaveLength(0);
-    expect(screen.queryByRole('region', { name: 'Schema render' })).not.toBeInTheDocument();
+      screen.queryByRole('region', { name: 'Generic structured state render' })
+    ).not.toBeInTheDocument();
   });
 
   it('initializes a new branch from main without inventing a schema binding', async () => {
@@ -1243,7 +1256,7 @@ describe('ProjectStateTab', () => {
 
     expect(await screen.findByText('Actual branch tip')).toBeInTheDocument();
     expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash);
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
   });
 
   it('rejects commit rows that do not belong to the selected project', async () => {
@@ -1311,7 +1324,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash);
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash, 'proj_test');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
 
@@ -1347,7 +1360,7 @@ describe('ProjectStateTab', () => {
     );
   });
 
-  it('clears old commit actions while a newly selected branch is loading', async () => {
+  it('clears stale commit actions while a newly selected branch is loading', async () => {
     const view = renderStateTab();
 
     await screen.findByText('PRD audience handoff committed');

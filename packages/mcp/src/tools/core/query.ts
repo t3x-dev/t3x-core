@@ -16,8 +16,8 @@ import {
   findPinsByProject,
   findProjectById,
   findProjects,
-  getCommit,
-  listCommits,
+  getVerifiedTransitionCommitGraph,
+  listCommitHistory,
   listDraftsByProject,
 } from '@t3x-dev/storage';
 
@@ -73,7 +73,7 @@ export const queryDef: ToolDef = {
     '  { "target": "projects" }',
     '  { "target": "project", "id": "proj_abc" }',
     '  { "target": "commits", "project_id": "proj_abc", "limit": 10 }',
-    '  { "target": "commit", "id": "sha256:..." }',
+    '  { "target": "commit", "id": "sha256:...", "project_id": "proj_abc" }',
   ].join('\n'),
   inputSchema: {
     type: 'object',
@@ -90,10 +90,6 @@ export const queryDef: ToolDef = {
       project_id: {
         type: 'string',
         description: 'Project scope (required for plural targets except `projects`).',
-      },
-      branch: {
-        type: 'string',
-        description: 'Filter commits by branch name.',
       },
       limit: {
         type: 'number',
@@ -127,7 +123,6 @@ export const queryHandler: ToolHandler = async (args) => {
   const projectId = args.project_id as string | undefined;
   const limit = (args.limit as number | undefined) ?? 20;
   const offset = (args.offset as number | undefined) ?? 0;
-  const branch = args.branch as string | undefined;
 
   if (isApiBackend()) {
     const client = getApiClient();
@@ -145,7 +140,10 @@ export const queryHandler: ToolHandler = async (args) => {
         case 'draft':
           return ok((await client.getDraft(id)) as Record<string, unknown>);
         case 'commit':
-          return ok(await client.getCommit(id));
+          if (!projectId) {
+            return fail('"project_id" is required for target="commit".');
+          }
+          return ok(await client.getCommit(projectId, id));
         case 'leaf':
           return ok(await client.getLeaf(id));
         case 'pin':
@@ -179,10 +177,7 @@ export const queryHandler: ToolHandler = async (args) => {
         );
       case 'commits':
         return ok(
-          unwrapListPayload(
-            await client.listCommits(projectId!, branch, { limit, offset }),
-            'commits'
-          )
+          unwrapListPayload(await client.listCommits(projectId!, { limit, offset }), 'commits')
         );
       case 'leaves':
         return ok(unwrapListPayload(await client.listLeaves(projectId!), 'leaves'));
@@ -232,8 +227,13 @@ export const queryHandler: ToolHandler = async (args) => {
         return draft ? ok(draft) : fail(`Draft not found: ${id}`);
       }
       case 'commit': {
-        const commit = await getCommit(db, id);
-        return commit ? ok(commit) : fail(`Commit not found: ${id}`);
+        if (!projectId) {
+          return fail('"project_id" is required for target="commit".');
+        }
+        const commit = await getVerifiedTransitionCommitGraph(db, projectId, id);
+        return commit
+          ? ok({ digest: id, recorded_at: commit.recordedAt, object: commit.commit })
+          : fail(`Commit not found: ${id}`);
       }
       case 'leaf': {
         const leaf = await findLeafById(db, id);
@@ -273,12 +273,7 @@ export const queryHandler: ToolHandler = async (args) => {
       return ok(rows);
     }
     case 'commits': {
-      const rows = await listCommits(db, {
-        projectId: projectId!,
-        branch,
-        limit,
-        offset,
-      });
+      const rows = await listCommitHistory(db, projectId!, { limit, offset });
       return ok(rows);
     }
     case 'leaves': {
