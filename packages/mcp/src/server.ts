@@ -97,7 +97,7 @@ Additional capabilities (if advanced toolset enabled):
 7. t3x_admin — manage projects, branches, pins
 
 Transition lifecycle (only if the opt-in transition toolset and API backend are enabled):
-8. propose_transition — prepare a replayable change without deciding or committing
+8. propose_transition — prepare a replayable change without deciding or committing; pass the extraction_candidate_id returned by t3x_extract to load canonical Workspace SourcedYOps on the server
 9. inspect_transition — inspect task state, assurance, and immutable preconditions
 10. verify_transition — run mandatory Replay plus configured external checks
 11. attach_statement — attach an allowlisted claim through authenticated API authority

@@ -17,6 +17,7 @@ vi.mock('../lib/workspace-transition', () => transitionMock);
 
 import {
   createWorkspaceExtractionProposal,
+  resolveWorkspaceExtractionTransitionSource,
   type WorkspaceExtractionProposalError,
 } from '../lib/workspace-extraction-proposal';
 
@@ -51,10 +52,9 @@ describe('Workspace extraction proposal service', () => {
           set: { path: 'prd/title', value: 'Audit log' },
           source: {
             type: 'llm',
-            provider: 'test',
             model: 'test',
-            turn_hash: 'turn_a',
-            quote: 'audit log',
+            at: '2026-08-05T00:00:00.000Z',
+            turn_ref: { turn_hash: 'turn_a', quote: 'audit log' },
           },
         },
       ],
@@ -95,7 +95,9 @@ describe('Workspace extraction proposal service', () => {
       actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
       operations: [
         expect.objectContaining({
-          source: expect.objectContaining({ turn_hash: 'turn_a', quote: 'audit log' }),
+          source: expect.objectContaining({
+            turn_ref: { turn_hash: 'turn_a', quote: 'audit log' },
+          }),
         }),
       ],
     });
@@ -146,5 +148,66 @@ describe('Workspace extraction proposal service', () => {
       details: { missing_turn_hashes: ['turn_missing'] },
     });
     expect(extractionMock.runApiExtractionV2).not.toHaveBeenCalled();
+  });
+
+  it('resolves a persisted candidate only after checking its canonical identity', async () => {
+    const created = await createWorkspaceExtractionProposal({} as never, {
+      projectId: 'proj_1',
+      workspaceId: 'workspace_1',
+      source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+    });
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
+      baseline: { trees: [], relations: [] },
+      refHead: null,
+      refName: 'main',
+      workspace: created.workspace,
+      workspaceRevision: 4,
+      workspaceUpdatedAt: '2026-08-05T00:00:01.000Z',
+    });
+
+    await expect(
+      resolveWorkspaceExtractionTransitionSource({} as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        candidateId: created.candidateId,
+      })
+    ).resolves.toMatchObject({
+      candidateId: created.candidateId,
+      baseCommitHash: null,
+      workspaceRevision: 4,
+      operations: [{ set: { path: 'prd/title', value: 'Audit log' } }],
+    });
+  });
+
+  it('rejects a stored candidate whose Source selector digest was altered', async () => {
+    const created = await createWorkspaceExtractionProposal({} as never, {
+      projectId: 'proj_1',
+      workspaceId: 'workspace_1',
+      source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+    });
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
+      baseline: { trees: [], relations: [] },
+      refHead: null,
+      refName: 'main',
+      workspace: {
+        ...created.workspace,
+        extractionProposal: {
+          ...created.proposal,
+          sourceSelectorDigest: `sha256:${'0'.repeat(64)}`,
+        },
+      },
+      workspaceRevision: 4,
+      workspaceUpdatedAt: '2026-08-05T00:00:01.000Z',
+    });
+
+    await expect(
+      resolveWorkspaceExtractionTransitionSource({} as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        candidateId: created.candidateId,
+      })
+    ).rejects.toThrow('source selector failed integrity checking');
   });
 });

@@ -35,12 +35,16 @@ import {
   type Statement,
   verifyEffect,
 } from '@t3x-dev/transition';
+import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
   buildWorkspaceSourceRevertProposal,
   type WorkspaceSourceArtifactSelector,
 } from '../workspace-source-transition';
-import { buildWorkspaceYOpsProposal } from '../workspace-transition';
+import {
+  buildWorkspaceYOpsProposal,
+  WorkspaceTransitionReviewStaleError,
+} from '../workspace-transition';
 
 type ActorRef = ProposalStatement['actor'];
 export type TransitionSubjectRole = 'effect' | 'result' | 'proposal';
@@ -68,6 +72,18 @@ export type TransitionProposeRequest =
       kind: 'structured_yops';
       workspaceId: string;
       operations: ProtocolValue[];
+      source?: never;
+      why?: string;
+      ifRevision?: number;
+    }
+  | {
+      kind: 'structured_yops';
+      workspaceId: string;
+      source: {
+        type: 'workspace_extraction_proposal';
+        candidateId: string;
+      };
+      operations?: never;
       why?: string;
       ifRevision?: number;
     }
@@ -196,7 +212,14 @@ function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolVa
     return {
       kind: request.kind,
       workspace_id: request.workspaceId,
-      operations: structuredClone(request.operations),
+      ...('source' in request && request.source !== undefined
+        ? {
+            source: {
+              type: request.source.type,
+              candidate_id: request.source.candidateId,
+            },
+          }
+        : { operations: structuredClone(request.operations) }),
       ...(request.why === undefined ? {} : { why: request.why }),
       ...(request.ifRevision === undefined ? {} : { if_revision: request.ifRevision }),
     };
@@ -255,10 +278,24 @@ async function buildProposal(
     actor: input.actor,
   };
   if (input.request.kind === 'structured_yops') {
-    return buildWorkspaceYOpsProposal(db, {
-      ...common,
-      operations: input.request.operations,
-    });
+    if ('source' in input.request && input.request.source !== undefined) {
+      const source = await resolveWorkspaceExtractionTransitionSource(db, {
+        projectId: input.projectId,
+        workspaceId: input.request.workspaceId,
+        candidateId: input.request.source.candidateId,
+        expectedRevision: input.request.ifRevision,
+      });
+      const built = await buildWorkspaceYOpsProposal(db, {
+        ...common,
+        expectedRevision: source.workspaceRevision,
+        operations: source.operations,
+      });
+      if (built.refHead !== source.baseCommitHash) {
+        throw new WorkspaceTransitionReviewStaleError();
+      }
+      return built;
+    }
+    return buildWorkspaceYOpsProposal(db, { ...common, operations: input.request.operations });
   }
   if (input.request.kind === 'exact_source_revert') {
     return buildWorkspaceSourceRevertProposal(db, {

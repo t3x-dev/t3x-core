@@ -109,6 +109,52 @@ describe('Transition MCP tools', () => {
     expect(parse(result)).toMatchObject({ transition_id: 'trn_1', reused: false });
   });
 
+  it('promotes a server-owned extraction candidate without forwarding operations', async () => {
+    apiClient.proposeTransition.mockResolvedValue({
+      transition_id: 'trn_2',
+      reused: false,
+      view: { transition: { mode: 'transition' } },
+    });
+
+    const result = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:extraction:1',
+      workspace_id: 'ws_1',
+      kind: 'structured_yops',
+      extraction_candidate_id: 'candidate:abc',
+      if_revision: 4,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(apiClient.proposeTransition).toHaveBeenCalledWith('proj_1', {
+      request_id: 'proposal:extraction:1',
+      workspace_id: 'ws_1',
+      kind: 'structured_yops',
+      extraction_candidate_id: 'candidate:abc',
+      if_revision: 4,
+    });
+  });
+
+  it('rejects ambiguous structured_yops input with both operations and a candidate', async () => {
+    const result = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:ambiguous',
+      workspace_id: 'ws_1',
+      kind: 'structured_yops',
+      extraction_candidate_id: 'candidate:abc',
+      operations: [{ set: { path: 'device/name', value: 'spoofed' } }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parse(result)).toMatchObject({
+      error: {
+        code: 'INVALID_ARGUMENT',
+        message: expect.stringContaining('exactly one'),
+      },
+    });
+    expect(apiClient.proposeTransition).not.toHaveBeenCalled();
+  });
+
   it('maps inspect and verify without collapsing the task-oriented view', async () => {
     apiClient.inspectTransition.mockResolvedValue({
       transition_id: 'trn_1',

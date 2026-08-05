@@ -910,6 +910,12 @@ export type ProposeTransitionInput =
   | (TransitionProposalRequestCommon & {
       kind: 'structured_yops';
       operations: TransitionProtocolValue[];
+      extraction_candidate_id?: never;
+    })
+  | (TransitionProposalRequestCommon & {
+      kind: 'structured_yops';
+      extraction_candidate_id: string;
+      operations?: never;
     })
   | (TransitionProposalRequestCommon & {
       kind: 'exact_source_import';

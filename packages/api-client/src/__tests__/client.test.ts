@@ -854,6 +854,25 @@ describe('T3xClient', () => {
       );
     });
 
+    it('proposes from a server-owned Workspace extraction candidate', async () => {
+      const data = { transition_id: 'trn_extract', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'structured_yops' as const,
+        request_id: 'request:proposal:extract',
+        workspace_id: 'ws_1',
+        extraction_candidate_id: 'candidate:abc',
+        if_revision: 4,
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('inspects one project-scoped Transition', async () => {
       const data = { transition_id: 'trn_abc', view: {} };
       const fn = mockFetch(successResponse(data));
