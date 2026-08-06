@@ -208,6 +208,14 @@ CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_workspace_revisio
     project_id, workspace_id, workspace_revision, created_at, transition_id
   );
 
+CREATE TABLE IF NOT EXISTS transition_proposal_preparations (
+  transition_id TEXT PRIMARY KEY
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  canonical_json TEXT NOT NULL,
+  digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS transition_statement_memberships (
   transition_id TEXT NOT NULL
     REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,

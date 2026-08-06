@@ -38,6 +38,7 @@ import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extract
 import {
   buildWorkspaceSourceProposal,
   buildWorkspaceSourceRevertProposal,
+  WORKSPACE_SOURCE_ARTIFACT_FORMAT,
   type WorkspaceSourceArtifactSelector,
 } from '../workspace-source-transition';
 import {
@@ -167,6 +168,7 @@ export interface TransitionNativeStatementProvider {
     workspaceId: string;
     requestKind: TransitionRequestKind;
     requestFacts: ProtocolValue;
+    preparationFacts: ProtocolValue | null;
     effect: Effect;
     base: State;
     result: State;
@@ -227,6 +229,10 @@ function comparePortable(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolValue {
   if (request.kind === 'structured_yops') {
     return {
@@ -280,6 +286,38 @@ function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolVa
     ...(request.why === undefined ? {} : { why: request.why }),
     ...(request.ifRevision === undefined ? {} : { if_revision: request.ifRevision }),
   } as ProtocolValue;
+}
+
+function normalizedSourcePreparation(sourceArtifact: unknown): ProtocolValue {
+  if (
+    !isRecord(sourceArtifact) ||
+    sourceArtifact.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT ||
+    typeof sourceArtifact.rootPath !== 'string' ||
+    !Array.isArray(sourceArtifact.resources)
+  ) {
+    throw new TypeError('Server-resolved exact-source preparation is malformed');
+  }
+  return {
+    artifact: {
+      format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+      root_path: sourceArtifact.rootPath,
+      resources: sourceArtifact.resources.map((resource) => {
+        if (
+          !isRecord(resource) ||
+          typeof resource.path !== 'string' ||
+          typeof resource.materialId !== 'string' ||
+          typeof resource.contentHash !== 'string'
+        ) {
+          throw new TypeError('Server-resolved exact-source resource is malformed');
+        }
+        return {
+          path: resource.path,
+          material_id: resource.materialId,
+          content_hash: resource.contentHash,
+        };
+      }),
+    },
+  };
 }
 
 async function buildProposal(
@@ -363,6 +401,13 @@ export async function proposeTransition(input: {
   }
 
   const built = await buildProposal(input.db, input);
+  let preparationFacts: ProtocolValue | undefined;
+  if (input.request.kind === 'exact_source_revert') {
+    if (!('sourceArtifact' in built)) {
+      throw new TypeError('Exact-source revert did not produce preparation facts');
+    }
+    preparationFacts = normalizedSourcePreparation(built.sourceArtifact);
+  }
   const created = await materializeTransitionProposal({
     db: input.db,
     projectId: input.projectId,
@@ -372,6 +417,7 @@ export async function proposeTransition(input: {
     refHead: built.refHead,
     requestKind: input.request.kind,
     requestFacts,
+    ...(preparationFacts === undefined ? {} : { preparationFacts }),
     requestId: input.requestId,
     actor: input.actor,
     base: built.base,
@@ -603,6 +649,10 @@ export async function verifyTransition(input: {
   const { providers, nativeProviders, allowed } = configuredProviders(input.options);
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
   const requestFacts = JSON.parse(graph.membership.requestCanonicalJson) as ProtocolValue;
+  const preparationFacts =
+    graph.preparation === null
+      ? null
+      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
   const recordedAt = new Date().toISOString();
   let replayPredicate:
     | {
@@ -689,6 +739,7 @@ export async function verifyTransition(input: {
           db: input.db,
           requestKind: graph.membership.requestKind,
           requestFacts,
+          preparationFacts,
         });
         if (result.outcome === 'not_applicable') return { provider, result } as const;
         if (result.outcome === 'no_statement') {

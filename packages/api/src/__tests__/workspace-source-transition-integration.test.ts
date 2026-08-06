@@ -196,6 +196,35 @@ describe('Workspace source Transition durable review', () => {
       expectedRevision: editedRevision,
       actor,
     };
+    const canonicalRevert = await proposeTransition({
+      db,
+      projectId: project.projectId,
+      requestId: 'proposal:canonical-source-revert',
+      actor,
+      request: {
+        kind: 'exact_source_revert',
+        workspaceId,
+        commitId: revertInput.commitId,
+        ifRevision: editedRevision,
+      },
+    });
+    const verifiedRevert = await verifyTransition({
+      db,
+      projectId: project.projectId,
+      transitionId: canonicalRevert.view.transitionId,
+      requestId: 'verify:canonical-source-revert',
+      actor,
+      options: {
+        nativeProviders: [createWorkspaceSourceRunnerProvider(capabilities)],
+      },
+    });
+    expect(verifiedRevert.operationalResults).toEqual([]);
+    expect(verifiedRevert.statements.map((statement) => statement.source).sort()).toEqual([
+      'provider:workspace-esphome-runner',
+      'server:replay',
+    ]);
+    expect(verifiedRevert.view.transition.checks.runner.outcomes).toEqual(['passed']);
+
     const revertReview = await reviewWorkspaceSourceRevert(db, revertInput, capabilities);
     const revertDecisionInput = {
       ...revertInput,

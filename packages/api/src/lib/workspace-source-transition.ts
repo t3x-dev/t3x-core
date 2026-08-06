@@ -456,16 +456,14 @@ function sourceArtifactFromWorkspace(
 
 async function resolveSourceArtifact(
   db: AnyDB,
-  input: Pick<BuildWorkspaceSourceProposalInput, 'projectId' | 'artifact' | 'change'>
+  input: Pick<BuildWorkspaceSourceProposalInput, 'projectId' | 'artifact'> & {
+    root?: { materialId: string; contentHash?: string };
+  }
 ): Promise<ResolvedSourceArtifact> {
   if (input.artifact.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT) {
     throw new WorkspaceSourceArtifactError('Unsupported source-artifact selector format');
   }
   const rootPath = assertNonEmpty(input.artifact.rootPath, 'artifact.rootPath');
-  if (input.change.mode === 'edit' && input.change.operations.length === 0) {
-    throw new WorkspaceSourceArtifactError('Exact-source edit requires at least one operation');
-  }
-
   const selectedPaths = new Set([rootPath]);
   input.artifact.resources.forEach((resource, index) => {
     const resourcePath = assertNonEmpty(resource.path, `artifact.resources[${index}].path`);
@@ -478,13 +476,13 @@ async function resolveSourceArtifact(
   });
 
   const selected = [
-    ...(input.change.mode === 'import'
+    ...(input.root !== undefined
       ? [
           {
             role: 'root' as const,
             path: rootPath,
-            materialId: assertNonEmpty(input.change.root.materialId, 'change.root.materialId'),
-            claimedHash: input.change.root.contentHash,
+            materialId: assertNonEmpty(input.root.materialId, 'change.root.materialId'),
+            claimedHash: input.root.contentHash,
           },
         ]
       : []),
@@ -658,14 +656,13 @@ async function bindSourceInputs(
   return { ready: rebound, secretValues, unavailableSecrets: null };
 }
 
-function sourceProviderSelection(input: {
-  requestKind: 'exact_source_import' | 'exact_source_edit';
-  requestFacts: ProtocolValue;
-}): Pick<BuildWorkspaceSourceProposalInput, 'artifact' | 'change'> {
-  if (!isRecord(input.requestFacts) || !isRecord(input.requestFacts.artifact)) {
-    throw new TypeError('Stored exact-source request facts are malformed');
+function sourceProviderArtifact(
+  requestFacts: ProtocolValue | null
+): WorkspaceSourceArtifactSelector {
+  if (!isRecord(requestFacts) || !isRecord(requestFacts.artifact)) {
+    throw new TypeError('Stored exact-source artifact facts are malformed');
   }
-  const artifactFacts = input.requestFacts.artifact;
+  const artifactFacts = requestFacts.artifact;
   if (
     artifactFacts.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT ||
     typeof artifactFacts.root_path !== 'string' ||
@@ -673,7 +670,7 @@ function sourceProviderSelection(input: {
   ) {
     throw new TypeError('Stored exact-source artifact facts are malformed');
   }
-  const artifact: WorkspaceSourceArtifactSelector = {
+  return {
     format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
     rootPath: artifactFacts.root_path,
     resources: artifactFacts.resources.map((resource) => {
@@ -692,8 +689,19 @@ function sourceProviderSelection(input: {
       };
     }),
   };
+}
+
+function sourceProviderSelection(input: {
+  requestKind: 'exact_source_import' | 'exact_source_edit';
+  requestFacts: ProtocolValue;
+}): Pick<BuildWorkspaceSourceProposalInput, 'artifact' | 'change'> {
+  if (!isRecord(input.requestFacts)) {
+    throw new TypeError('Stored exact-source request facts are malformed');
+  }
+  const requestFacts = input.requestFacts;
+  const artifact = sourceProviderArtifact(input.requestFacts);
   if (input.requestKind === 'exact_source_import') {
-    const root = input.requestFacts.root;
+    const root = requestFacts.root;
     if (
       !isRecord(root) ||
       typeof root.material_id !== 'string' ||
@@ -712,14 +720,14 @@ function sourceProviderSelection(input: {
       },
     };
   }
-  if (!Array.isArray(input.requestFacts.operations)) {
+  if (!Array.isArray(requestFacts.operations)) {
     throw new TypeError('Stored exact-source edit facts are malformed');
   }
   return {
     artifact,
     change: {
       mode: 'edit',
-      operations: input.requestFacts.operations.map((operation) => {
+      operations: requestFacts.operations.map((operation) => {
         if (
           !isRecord(operation) ||
           operation.op !== 'replace_scalar' ||
@@ -759,13 +767,6 @@ export function createWorkspaceSourceRunnerProvider(
       ) {
         return { outcome: 'not_applicable' };
       }
-      if (input.requestKind === 'exact_source_revert') {
-        return {
-          outcome: 'no_statement',
-          code: 'SOURCE_PREPARATION_UNAVAILABLE',
-          message: 'The canonical revert request does not yet retain its exact source selector.',
-        };
-      }
       if (capabilities.runner === undefined) {
         return {
           outcome: 'no_statement',
@@ -773,13 +774,17 @@ export function createWorkspaceSourceRunnerProvider(
           message: 'The ESPHome Runner is not configured.',
         };
       }
-      const selected = sourceProviderSelection({
-        requestKind: input.requestKind,
-        requestFacts: input.requestFacts,
-      });
+      const selected =
+        input.requestKind === 'exact_source_revert'
+          ? { artifact: sourceProviderArtifact(input.preparationFacts), change: null }
+          : sourceProviderSelection({
+              requestKind: input.requestKind,
+              requestFacts: input.requestFacts,
+            });
       const artifact = await resolveSourceArtifact(input.db, {
         projectId: input.projectId,
-        ...selected,
+        artifact: selected.artifact,
+        ...(selected.change?.mode === 'import' ? { root: selected.change.root } : {}),
       });
       const bound = await bindSourceInputs(input, artifact, input.result, capabilities);
       if (bound.unavailableSecrets !== null) {
@@ -924,7 +929,14 @@ async function buildWorkspaceSourceProposalInternal(
     throw new WorkspaceTransitionReviewStaleError();
   }
 
-  const sourceArtifact = await resolveSourceArtifact(db, input);
+  if (input.change.mode === 'edit' && input.change.operations.length === 0) {
+    throw new WorkspaceSourceArtifactError('Exact-source edit requires at least one operation');
+  }
+  const sourceArtifact = await resolveSourceArtifact(db, {
+    projectId: input.projectId,
+    artifact: input.artifact,
+    ...(input.change.mode === 'import' ? { root: input.change.root } : {}),
+  });
   if (
     expectedPrecondition !== undefined &&
     sourceArtifact.selectorDigest !== expectedPrecondition.sourceSelectorDigest

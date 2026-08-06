@@ -201,10 +201,18 @@
         {
           "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
           "token": "const revertedRetry = await decideWorkspaceSourceRevert("
+        },
+        {
+          "file": "packages/storage/src/schema-transition-commits.ts",
+          "token": "transitionProposalPreparations"
+        },
+        {
+          "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
+          "token": "const verifiedRevert = await verifyTransition("
         }
       ],
-      "progress": "Exact-source import, edit, and revert reviews materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity. Their compatibility decide/commit paths delegate Decision receipts, audit writes, CommitV2 creation, ref CAS, and sourceArtifact Workspace projection to the shared lifecycle; real database tests cover runner Statements and post-commit retry reuse for all three request kinds. All four routes emit structured compatibility-route telemetry, but are intentionally not marked deprecated yet.",
-      "remaining_gap": "The canonical proposal path does not yet receive the legacy route's Runner capabilities or return its operational runner projection, canonical Decision requires an explicit policy binding, and canonical Decision/Commit do not yet reproduce the Web adapter's conditional commit and sourceArtifact projection as one task flow. Operational runner no-Statement details are not protocol facts. Deprecation metadata, successor links, Sunset, and a removal window must wait for parity and first-party caller migration.",
+      "progress": "Exact-source import, edit, and revert reviews materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity. Canonical Verify runs the native ESPHome provider for all three request kinds; revert stores server-resolved source preparation separately from client request identity. Compatibility decide/commit paths delegate Decision receipts, audit writes, CommitV2 creation, ref CAS, and sourceArtifact Workspace projection to the shared lifecycle; real database tests cover Runner Statements and post-commit retry reuse for all three request kinds. All four routes emit structured compatibility-route telemetry, but are intentionally not marked deprecated yet.",
+      "remaining_gap": "Canonical Decision still requires an explicit policy binding, and separate canonical Decision/Commit actions do not yet reproduce the Web adapter's conditional commit, sourceArtifact projection, and operational Runner status as one task flow. Operational runner no-Statement details are not protocol facts. Deprecation metadata, successor links, Sunset, and a removal window must wait for parity and first-party caller migration.",
       "replacement": "Create or resolve an exact-source Transition, retain source-specific preparation, and delegate governance to the canonical actions.",
       "removal_gate": "Remove only after import, edit, and revert retain exact-source parity through canonical actions and all first-party callers have migrated."
     },

@@ -10,6 +10,7 @@ import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
 import {
   createTransitionProposalMembership,
+  digestTransitionPreparationCanonicalJson,
   digestTransitionRequestCanonicalJson,
   getTransitionProposalMembership,
   listTransitionProposalsForWorkspaceRevision,
@@ -148,6 +149,70 @@ describe('Transition proposal and Statement memberships', () => {
         requestDigest: digestTransitionRequestCanonicalJson(changedCanonicalJson),
       })
     ).rejects.toBeInstanceOf(TransitionRequestConflictError);
+  });
+
+  it('binds immutable server preparation without changing client request identity', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Project' }));
+    const input = membershipInput(project.projectId, 'preparation');
+    const preparationCanonicalJson =
+      '{"artifact":{"format":"example/source/v1","root_path":"device.yaml"}}';
+    const prepared = {
+      ...input,
+      preparationCanonicalJson,
+      preparationDigest: digestTransitionPreparationCanonicalJson(preparationCanonicalJson),
+    };
+
+    const first = await createTransitionProposalMembership(db, prepared);
+    const second = await createTransitionProposalMembership(db, prepared);
+    expect(second).toEqual({ membership: first.membership, reused: true });
+
+    const resolved = await resolveTransitionProposalGraph(
+      db,
+      project.projectId,
+      first.membership.transitionId
+    );
+    expect(resolved.preparation).toMatchObject({
+      transitionId: first.membership.transitionId,
+      canonicalJson: preparationCanonicalJson,
+      digest: prepared.preparationDigest,
+    });
+
+    const changedPreparation = '{"artifact":{"root_path":"changed.yaml"}}';
+    await expect(
+      createTransitionProposalMembership(db, {
+        ...input,
+        preparationCanonicalJson: changedPreparation,
+        preparationDigest: digestTransitionPreparationCanonicalJson(changedPreparation),
+      })
+    ).rejects.toBeInstanceOf(TransitionRequestConflictError);
+  });
+
+  it('keeps only the winning preparation under a concurrent request conflict', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Race' }));
+    const input = membershipInput(project.projectId, 'preparation-race');
+    const preparations = ['device-a.yaml', 'device-b.yaml'].map((rootPath) => {
+      const canonicalJson = `{"artifact":{"root_path":"${rootPath}"}}`;
+      return {
+        ...input,
+        preparationCanonicalJson: canonicalJson,
+        preparationDigest: digestTransitionPreparationCanonicalJson(canonicalJson),
+      };
+    });
+
+    const runs = await Promise.allSettled(
+      preparations.map((prepared) => createTransitionProposalMembership(db, prepared))
+    );
+    expect(runs.map((run) => run.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const winner = runs.find((run) => run.status === 'fulfilled');
+    if (winner?.status !== 'fulfilled') throw new Error('Concurrent preparation had no winner');
+    const resolved = await resolveTransitionProposalGraph(
+      db,
+      project.projectId,
+      winner.value.membership.transitionId
+    );
+    expect(preparations.map((prepared) => prepared.preparationCanonicalJson)).toContain(
+      resolved.preparation?.canonicalJson
+    );
   });
 
   it('lists only Proposals bound to the exact Workspace revision', async () => {
@@ -401,12 +466,37 @@ describe('Transition proposal and Statement memberships', () => {
     ).rejects.toBeInstanceOf(TransitionMembershipIntegrityError);
   });
 
+  it('rejects tampered server preparation before a provider can consume it', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Tamper' }));
+    const input = membershipInput(project.projectId, 'preparation-tamper');
+    const preparationCanonicalJson = '{"artifact":{"root_path":"device.yaml"}}';
+    const created = await createTransitionProposalMembership(db, {
+      ...input,
+      preparationCanonicalJson,
+      preparationDigest: digestTransitionPreparationCanonicalJson(preparationCanonicalJson),
+    });
+
+    await sql`
+      UPDATE transition_proposal_preparations
+      SET canonical_json = ${'{"artifact":{"root_path":"tampered.yaml"}}'}
+      WHERE transition_id = ${created.membership.transitionId}
+    `;
+
+    await expect(
+      resolveTransitionProposalGraph(db, project.projectId, created.membership.transitionId)
+    ).rejects.toBeInstanceOf(TransitionMembershipIntegrityError);
+  });
+
   it('stores no mutable lifecycle status in either membership table', async () => {
     const columns = await sql<{ table_name: string; column_name: string }[]>`
       SELECT table_name, column_name
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name IN ('transition_proposal_memberships', 'transition_statement_memberships')
+        AND table_name IN (
+          'transition_proposal_memberships',
+          'transition_proposal_preparations',
+          'transition_statement_memberships'
+        )
     `;
     expect(columns.map((column) => column.column_name)).not.toContain('status');
     expect(columns.map((column) => column.column_name)).not.toContain('outcome');

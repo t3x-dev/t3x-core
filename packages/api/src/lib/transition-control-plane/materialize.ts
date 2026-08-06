@@ -2,6 +2,7 @@ import type { ProposalStatement } from '@t3x-dev/core';
 import {
   type AnyDB,
   createTransitionProposalMembership,
+  digestTransitionPreparationCanonicalJson,
   digestTransitionRequestCanonicalJson,
   recordTransitionStatementMembership,
   type TransitionRequestKind,
@@ -27,6 +28,17 @@ export function canonicalTransitionRequest(value: ProtocolValue): {
   };
 }
 
+function canonicalTransitionPreparation(value: ProtocolValue): {
+  canonicalJson: string;
+  digest: `sha256:${string}`;
+} {
+  const canonicalJson = canonicalizeProtocolValue(value);
+  return {
+    canonicalJson,
+    digest: digestTransitionPreparationCanonicalJson(canonicalJson),
+  };
+}
+
 /** Persist one immutable Proposal graph behind a stable application request identity. */
 export async function materializeTransitionProposal(input: {
   db: AnyDB;
@@ -37,6 +49,7 @@ export async function materializeTransitionProposal(input: {
   refHead: string | null;
   requestKind: TransitionRequestKind;
   requestFacts: ProtocolValue;
+  preparationFacts?: ProtocolValue;
   requestId: string;
   actor: ActorRef;
   base: State;
@@ -45,6 +58,10 @@ export async function materializeTransitionProposal(input: {
   proposal: ProposalStatement;
 }) {
   const request = canonicalTransitionRequest(input.requestFacts);
+  const preparation =
+    input.preparationFacts === undefined
+      ? undefined
+      : canonicalTransitionPreparation(input.preparationFacts);
   return createTransitionProposalMembership(input.db, {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
@@ -54,6 +71,12 @@ export async function materializeTransitionProposal(input: {
     requestKind: input.requestKind,
     requestCanonicalJson: request.canonicalJson,
     requestDigest: request.digest,
+    ...(preparation === undefined
+      ? {}
+      : {
+          preparationCanonicalJson: preparation.canonicalJson,
+          preparationDigest: preparation.digest,
+        }),
     requestId: input.requestId,
     actor: input.actor,
     base: input.base,

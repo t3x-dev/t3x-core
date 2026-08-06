@@ -118,6 +118,21 @@ export const transitionProposalMemberships = pgTable(
 );
 
 /**
+ * Immutable server-resolved preparation facts for one Proposal membership.
+ *
+ * These bytes are deliberately separate from the client request identity so an
+ * exact retry remains reusable even after mutable application state changes.
+ */
+export const transitionProposalPreparations = pgTable('transition_proposal_preparations', {
+  transitionId: text('transition_id')
+    .primaryKey()
+    .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+  canonicalJson: text('canonical_json').notNull(),
+  digest: text('digest').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Append-only trusted issuer membership for an observed Statement.
  * Array ordering and derived assurance are deliberately absent from storage.
  */
@@ -350,6 +365,8 @@ export const transitionDecisionLedger = pgTable(
 
 export type TransitionObjectRecord = typeof transitionObjects.$inferSelect;
 export type TransitionProposalMembershipRecord = typeof transitionProposalMemberships.$inferSelect;
+export type TransitionProposalPreparationRecord =
+  typeof transitionProposalPreparations.$inferSelect;
 export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
