@@ -9,6 +9,7 @@ import { TransitionProtocolError } from '@t3x-dev/transition';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { transitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import {
   decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
@@ -200,6 +201,8 @@ const reviewRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/review',
   tags: ['Workspaces'],
   summary: 'Review an exact-source Workspace Transition',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-source-governance.review'),
   request: {
     params: WorkspaceSourceTransitionParamsSchema,
     body: {
@@ -243,6 +246,8 @@ const decideRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/decide',
   tags: ['Workspaces'],
   summary: 'Decide and optionally commit an exact-source Workspace Transition',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-source-governance.decide'),
   request: {
     params: WorkspaceSourceTransitionParamsSchema,
     body: {
@@ -286,6 +291,8 @@ const reviewRevertRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/review',
   tags: ['Workspaces'],
   summary: 'Review a server-derived revert of the current exact-source edit',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-source-governance.revert-review'),
   request: {
     params: WorkspaceSourceTransitionParamsSchema,
     body: {
@@ -329,6 +336,8 @@ const decideRevertRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/decide',
   tags: ['Workspaces'],
   summary: 'Decide and optionally commit a reviewed exact-source revert',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-source-governance.revert-decide'),
   request: {
     params: WorkspaceSourceTransitionParamsSchema,
     body: {

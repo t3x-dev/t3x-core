@@ -33,6 +33,7 @@ import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { transitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -454,6 +455,8 @@ const reviewWorkspaceTransitionRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review',
   tags: ['Workspaces'],
   summary: 'Build a verified Transition review from persisted Workspace state',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-structured-governance.review'),
   request: {
     params: workspaceParams,
     body: {
@@ -499,6 +502,8 @@ const decideWorkspaceTransitionRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide',
   tags: ['Workspaces'],
   summary: 'Re-derive, decide, audit, and conditionally commit a Workspace Transition',
+  deprecated: true,
+  middleware: transitionCompatibilityRoute('workspace-structured-governance.decide'),
   request: {
     params: workspaceParams,
     body: {
