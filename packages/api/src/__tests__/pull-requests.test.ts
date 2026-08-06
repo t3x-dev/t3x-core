@@ -149,7 +149,7 @@ describe('Pull request routes', () => {
         actor,
       })
     ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
-    const decided = await decideWorkspaceTransition(mockDB, {
+    const decisionInput = {
       projectId: input.projectId,
       workspaceId: input.workspaceId,
       transitionId: reviewed.transitionId,
@@ -158,8 +158,13 @@ describe('Pull request routes', () => {
       outcome: 'accepted',
       precondition: reviewed.precondition,
       actor,
-    });
+    } as const;
+    const decided = await decideWorkspaceTransition(mockDB, decisionInput);
     if (!decided.commit) throw new Error('Workspace fixture did not create a CommitV2');
+    const retried = await decideWorkspaceTransition(mockDB, decisionInput);
+    expect(retried.commit).toEqual(decided.commit);
+    expect(retried.decisionDigest).toBe(decided.decisionDigest);
+    expect(retried.workspace).toEqual(decided.workspace);
     return decided;
   }
 

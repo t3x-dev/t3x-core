@@ -57,6 +57,21 @@ export interface TransitionReviewPrecondition {
   policyDigest: string;
 }
 
+export interface TransitionDecisionAuthoritySelection {
+  policyDigest: string;
+  authority: RepositoryDecisionAuthority;
+}
+
+export interface TransitionWorkspaceCommitProjection {
+  requestFacts: ProtocolValue;
+  yopsLogIds?: readonly string[];
+  apply(input: {
+    workspace: Record<string, unknown>;
+    commitDigest: string;
+    committedAt: string;
+  }): Record<string, unknown>;
+}
+
 export class TransitionReviewStaleError extends Error {
   readonly code = 'TRANSITION_REVIEW_STALE';
 
@@ -127,7 +142,12 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
   return orderedLeft.every((value, index) => value === orderedRight[index]);
 }
 
-async function resolveReviewFacts(db: AnyDB, projectId: string, transitionId: string) {
+async function resolveReviewFacts(
+  db: AnyDB,
+  projectId: string,
+  transitionId: string,
+  authoritySelection?: TransitionDecisionAuthoritySelection
+) {
   const graph = await resolveTransitionProposalGraph(db, projectId, transitionId);
   const [workspace, head, policyBinding] = await Promise.all([
     findWorkspaceDraft(db, projectId, graph.membership.workspaceId),
@@ -135,10 +155,20 @@ async function resolveReviewFacts(db: AnyDB, projectId: string, transitionId: st
       projectId,
       refName: graph.membership.refName,
     }),
-    getTransitionPolicyBinding(db, projectId, graph.membership.refName),
+    authoritySelection === undefined
+      ? getTransitionPolicyBinding(db, projectId, graph.membership.refName)
+      : Promise.resolve(null),
   ]);
-  if (workspace === null || policyBinding === null) throw new TransitionReviewStaleError();
-  return { graph, workspace, head, policyBinding };
+  if (workspace === null || (authoritySelection === undefined && policyBinding === null)) {
+    throw new TransitionReviewStaleError();
+  }
+  return {
+    graph,
+    workspace,
+    head,
+    policyBinding,
+    policyDigest: authoritySelection?.policyDigest ?? policyBinding!.resource.digest,
+  };
 }
 
 function assertReviewPrecondition(
@@ -156,7 +186,7 @@ function assertReviewPrecondition(
     input.refHead !== facts.head.head ||
     input.effectDigest !== facts.graph.membership.effectDigest ||
     input.proposalDigest !== facts.graph.membership.proposalDigest ||
-    input.policyDigest !== facts.policyBinding.resource.digest ||
+    input.policyDigest !== facts.policyDigest ||
     !sameStringSet(input.statementDigests, statementDigests)
   ) {
     throw new TransitionReviewStaleError();
@@ -252,6 +282,7 @@ export async function decideTransition(input: {
   outcome: RequestedDecisionOutcome;
   rationale?: string;
   precondition: TransitionReviewPrecondition;
+  authoritySelection?: TransitionDecisionAuthoritySelection;
 }): Promise<DecideTransitionResult> {
   if (input.outcome === 'overridden' && input.actor.kind !== 'human') {
     throw new TransitionAutomatedOverrideDeniedError();
@@ -266,15 +297,20 @@ export async function decideTransition(input: {
   const prior = await resolveDecisionRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
 
-  const facts = await resolveReviewFacts(input.db, input.projectId, input.transitionId);
+  const facts = await resolveReviewFacts(
+    input.db,
+    input.projectId,
+    input.transitionId,
+    input.authoritySelection
+  );
   assertReviewPrecondition(input.precondition, facts);
-  const authority: RepositoryDecisionAuthority = {
+  const authority: RepositoryDecisionAuthority = input.authoritySelection?.authority ?? {
     async resolve() {
       return {
         actorContext: { actor: input.actor },
         observationScope: REPOSITORY_SCOPE,
-        policy: facts.policyBinding.policy,
-        policyResource: facts.policyBinding.resource,
+        policy: facts.policyBinding!.policy,
+        policyResource: facts.policyBinding!.resource,
         statements: facts.graph.observations.map((observation) => ({
           statement: observation.statement,
           issuerContext: observation.issuerContext,
@@ -355,7 +391,10 @@ async function resolveCommitRetry(input: {
     throw new TransitionCommandConflictError(input.requestId);
   }
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
-  const stored = await getTransitionCommit(input.db, input.projectId, receipt.resultDigest);
+  const [stored, workspace] = await Promise.all([
+    getTransitionCommit(input.db, input.projectId, receipt.resultDigest),
+    findWorkspaceDraft(input.db, input.projectId, graph.membership.workspaceId),
+  ]);
   if (stored === null || stored.commit.decision.digest !== input.decisionDigest) {
     throw new TransitionDecisionMembershipError('Commit receipt has no matching CommitV2');
   }
@@ -372,6 +411,9 @@ async function resolveCommitRetry(input: {
     commit: stored.commit,
     commitDigest: receipt.resultDigest,
     reused: true,
+    ...(workspace?.workspace_state?.lastCommitHash === receipt.resultDigest
+      ? { workspace: { ...workspace.workspace_state, revision: workspace.revision } }
+      : {}),
   };
 }
 
@@ -393,11 +435,15 @@ export async function commitTransition(input: {
   requestId: string;
   decisionDigest: string;
   expectedHead: string | null;
+  workspaceProjection?: TransitionWorkspaceCommitProjection;
 }): Promise<CommitTransitionResult> {
   const requestDigest = commandDigest({
     operation: 'commit',
     decision_digest: input.decisionDigest,
     expected_head: input.expectedHead,
+    ...(input.workspaceProjection === undefined
+      ? {}
+      : { workspace_projection: input.workspaceProjection.requestFacts }),
   });
   const prior = await resolveCommitRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
@@ -460,6 +506,9 @@ export async function commitTransition(input: {
         expectedHead: input.expectedHead,
         commit,
         objects,
+        ...(input.workspaceProjection?.yopsLogIds === undefined
+          ? {}
+          : { yopsLogIds: input.workspaceProjection.yopsLogIds }),
       });
       const currentWorkspace = await findWorkspaceDraft(
         tx,
@@ -472,7 +521,7 @@ export async function commitTransition(input: {
       ) {
         throw new TransitionReviewStaleError();
       }
-      const nextWorkspace = {
+      const baseWorkspace = {
         ...(currentWorkspace.workspace_state ?? {}),
         id: graph.membership.workspaceId,
         projectId: input.projectId,
@@ -480,6 +529,14 @@ export async function commitTransition(input: {
         status: 'committed',
         updatedAt: committedAt,
       };
+      const nextWorkspace =
+        input.workspaceProjection === undefined
+          ? baseWorkspace
+          : input.workspaceProjection.apply({
+              workspace: baseWorkspace,
+              commitDigest,
+              committedAt,
+            });
       const draft = await upsertWorkspaceDraft(
         tx,
         {

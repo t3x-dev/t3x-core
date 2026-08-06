@@ -8,6 +8,10 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inspectTransition } from '../lib/transition-control-plane';
 import { reviewWorkspaceSourceTransition } from '../lib/workspace-source-transition';
+import {
+  decideWorkspaceTransition,
+  WorkspaceTransitionReviewStaleError,
+} from '../lib/workspace-transition';
 import { setupTestDB, testData } from './setup';
 
 describe('Workspace source Transition durable review', () => {
@@ -79,5 +83,23 @@ describe('Workspace source Transition durable review', () => {
     expect(durable.requestKind).toBe('exact_source_import');
     expect(durable.precondition.effectDigest).toBe(first.precondition.effectDigest);
     expect(durable.precondition.statementDigests).toEqual(first.precondition.statementDigests);
+    await expect(
+      decideWorkspaceTransition(db, {
+        projectId: project.projectId,
+        workspaceId,
+        transitionId: first.transitionId,
+        content: { trees: [], relations: [] },
+        outcome: 'accepted',
+        precondition: {
+          workspaceRevision: first.precondition.workspaceRevision,
+          refHead: first.precondition.refHead,
+          effectDigest: first.precondition.effectDigest,
+          proposalDigest: first.precondition.proposalDigest,
+          statementDigests: [...first.precondition.statementDigests],
+          policyDigest: first.precondition.policyDigest,
+        },
+        actor,
+      })
+    ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
   });
 });

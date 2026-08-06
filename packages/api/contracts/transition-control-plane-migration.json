@@ -83,7 +83,7 @@
         "packages/api/src/lib/transition-control-plane/materialize.ts",
         "packages/api/src/lib/workspace-transition.ts"
       ],
-      "writer_sources": ["packages/api/src/lib/workspace-transition.ts"],
+      "writer_sources": [],
       "consumers": [
         {
           "file": "apps/web/src/queries/workspaces.ts",
@@ -110,10 +110,22 @@
         {
           "file": "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
           "token": "transitionId: reviewed.transition_id"
+        },
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "const decided = await decideTransition("
+        },
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "const committed = await commitTransition("
+        },
+        {
+          "file": "packages/api/src/__tests__/pull-requests.test.ts",
+          "token": "const retried = await decideWorkspaceTransition(mockDB, decisionInput)"
         }
       ],
-      "progress": "Structured Workspace review now materializes a durable Proposal and replay/YSchema Statement memberships, returns transition_id, and binds Web decide calls to that identity.",
-      "remaining_gap": "Workspace decide and commit still use the compatibility policy, Decision record, and CommitV2 writer until canonical policy binding and request-receipt parity are implemented.",
+      "progress": "Structured Workspace review materializes a durable Proposal and replay/YSchema Statement memberships, returns transition_id, and binds Web decide calls to that identity. Its compatibility decide/commit path now delegates Decision receipts, Decision audit writes, CommitV2 creation, ref CAS, Workspace projection, and retry reuse to the shared lifecycle use cases.",
+      "remaining_gap": "The legacy Workspace wire routes, first-party Web consumers, and compatibility policy selection remain. They require contract parity, deprecation metadata/window, caller migration, and observability before route removal.",
       "replacement": "Resolve a durable transition_id, then use canonical inspect/verify, decisions, and commits while preserving the task-oriented Workspace projection.",
       "removal_gate": "Remove only after Web callers use canonical actions, contract parity and adversarial tests pass, and the route has completed its documented deprecation window."
     },
