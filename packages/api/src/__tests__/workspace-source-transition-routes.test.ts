@@ -28,7 +28,7 @@ describe('exact-source Workspace Transition route boundary', () => {
       '/v1/projects/project/workspaces/workspace/source-transition/revert/decide',
       'workspace-source-governance.revert-decide',
     ],
-  ])('marks compatibility calls before request validation: %s', async (path, routeId) => {
+  ])('observes compatibility calls without premature retirement metadata: %s', async (path, routeId) => {
     const log = vi.spyOn(pinoLogger, 'info').mockImplementation(() => undefined);
     const response = await app.request(path, {
       method: 'POST',
@@ -37,16 +37,13 @@ describe('exact-source Workspace Transition route boundary', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.headers.get('Deprecation')).toBe('true');
-    expect(response.headers.get('Link')).toBe(
-      '</v1/projects/project/transitions>; rel="successor-version"'
-    );
+    expect(response.headers.has('Deprecation')).toBe(false);
+    expect(response.headers.has('Link')).toBe(false);
     expect(response.headers.has('Sunset')).toBe(false);
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'compatibility_route.called',
         compatibility_route: routeId,
-        successor: '/v1/projects/project/transitions',
         method: 'POST',
         path,
       }),

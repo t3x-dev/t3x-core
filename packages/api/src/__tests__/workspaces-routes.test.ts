@@ -256,7 +256,7 @@ describe('Workspace routes', () => {
   it.each([
     '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
     '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/decide',
-  ])('marks compatibility calls before request validation: %s', async (path) => {
+  ])('does not publish retirement metadata before canonical parity: %s', async (path) => {
     const response = await app.request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,10 +264,8 @@ describe('Workspace routes', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.headers.get('Deprecation')).toBe('true');
-    expect(response.headers.get('Link')).toBe(
-      '</v1/projects/proj_sources/transitions>; rel="successor-version"'
-    );
+    expect(response.headers.has('Deprecation')).toBe(false);
+    expect(response.headers.has('Link')).toBe(false);
     expect(response.headers.has('Sunset')).toBe(false);
   });
 

@@ -8,7 +8,7 @@ const documentConfig = {
 };
 
 describe('Transition compatibility OpenAPI policy', () => {
-  it('marks only the Workspace routes with proven canonical governance coverage', () => {
+  it('blocks deprecation until the canonical task replacement reaches parity', () => {
     const workspaceDocument = workspaceRoutes.getOpenAPIDocument(documentConfig);
     const sourceDocument =
       createWorkspaceSourceTransitionRoutes().getOpenAPIDocument(documentConfig);
@@ -16,11 +16,11 @@ describe('Transition compatibility OpenAPI policy', () => {
     expect(
       workspaceDocument.paths['/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review']
         ?.post?.deprecated
-    ).toBe(true);
+    ).not.toBe(true);
     expect(
       workspaceDocument.paths['/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide']
         ?.post?.deprecated
-    ).toBe(true);
+    ).not.toBe(true);
     expect(
       workspaceDocument.paths['/v1/projects/{projectId}/workspaces/{workspaceId}/commit']?.post
         ?.deprecated
@@ -32,7 +32,7 @@ describe('Transition compatibility OpenAPI policy', () => {
       '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/review',
       '/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/decide',
     ]) {
-      expect(sourceDocument.paths[path]?.post?.deprecated, path).toBe(true);
+      expect(sourceDocument.paths[path]?.post?.deprecated, path).not.toBe(true);
     }
   });
 });
