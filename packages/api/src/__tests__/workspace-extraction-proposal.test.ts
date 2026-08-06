@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMock = vi.hoisted(() => ({
   findConversationById: vi.fn(),
-  findTurnsByConversation: vi.fn(),
+  findTurnsByHashes: vi.fn(),
   upsertWorkspaceDraft: vi.fn(),
 }));
 const extractionMock = vi.hoisted(() => ({ runApiExtractionV2: vi.fn() }));
@@ -36,7 +36,7 @@ describe('Workspace extraction proposal service', () => {
       conversationId: 'conv_1',
       projectId: 'proj_1',
     });
-    storageMock.findTurnsByConversation.mockResolvedValue([
+    storageMock.findTurnsByHashes.mockResolvedValue([
       { turnHash: 'turn_a', role: 'user', content: 'Build an audit log.' },
       { turnHash: 'turn_b', role: 'assistant', content: 'Use immutable events.' },
     ]);
@@ -85,6 +85,10 @@ describe('Workspace extraction proposal service', () => {
         baselineSnapshot: { trees: [], relations: [] },
       })
     );
+    expect(storageMock.findTurnsByHashes).toHaveBeenCalledWith(expect.anything(), {
+      conversationId: 'conv_1',
+      turnHashes: ['turn_b', 'turn_a'],
+    });
     expect(result.proposal).toMatchObject({
       schema: 't3x.dev/workspace-extraction-proposal/v1',
       sourceSelector: {

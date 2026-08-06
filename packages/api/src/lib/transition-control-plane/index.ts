@@ -13,10 +13,12 @@ import {
   type AnyDB,
   findTransitionProposalByRequest,
   findTransitionStatementsByRequest,
+  findTransitionVerificationReceipt,
   getTransitionPolicyBinding,
   type RecordTransitionStatementMembershipInput,
   recordTransitionStatementMembership,
   recordTransitionStatementMemberships,
+  recordTransitionVerificationReceipt,
   resolveTransitionProposalGraph,
   TransitionRequestConflictError,
   type TransitionRequestKind,
@@ -654,10 +656,20 @@ export async function verifyTransition(input: {
     requestDigest: request.digest,
   });
   if (prior.length > 0) {
+    const receipt = await findTransitionVerificationReceipt(input.db, {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      requestId: input.requestId,
+    });
+    if (receipt !== null && receipt.requestDigest !== request.digest) {
+      throw new TransitionRequestConflictError(input.requestId);
+    }
     return {
       view: await inspectTransition(input),
       statements: prior,
-      operationalResults: [],
+      // Receipts were introduced after Statement memberships. Older completed
+      // requests remain readable but cannot recover diagnostics never stored.
+      operationalResults: receipt?.operationalResults ?? [],
       reused: true,
     };
   }
@@ -830,15 +842,27 @@ export async function verifyTransition(input: {
       requestDigest: request.digest,
     });
   }
-  const statements = (await recordTransitionStatementMemberships(input.db, statementInputs)).map(
-    (recorded) => recorded.membership
-  );
-  statements.sort((left, right) => comparePortable(left.statementDigest, right.statementDigest));
   operationalResults.sort((left, right) => comparePortable(left.source, right.source));
+  const recorded = await input.db.transaction(async (tx) => {
+    const statements = (
+      await recordTransitionStatementMemberships(tx as AnyDB, statementInputs)
+    ).map((item) => item.membership);
+    const receipt = await recordTransitionVerificationReceipt(tx as AnyDB, {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      requestId: input.requestId,
+      requestDigest: request.digest,
+      operationalResults,
+    });
+    return { statements, operationalResults: receipt.receipt.operationalResults };
+  });
+  recorded.statements.sort((left, right) =>
+    comparePortable(left.statementDigest, right.statementDigest)
+  );
   return {
     view: await inspectTransition(input),
-    statements,
-    operationalResults,
+    statements: recorded.statements,
+    operationalResults: recorded.operationalResults,
     reused: false,
   };
 }

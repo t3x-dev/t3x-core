@@ -174,6 +174,39 @@ export const transitionStatementMemberships = pgTable(
 );
 
 /**
+ * Application receipt for one completed Verify request.
+ *
+ * Provider failures and no-statement outcomes are operational diagnostics, not
+ * protocol Statements. Persisting them here makes an idempotent retry return
+ * the same application facts without promoting diagnostics into the kernel.
+ */
+export const transitionVerificationReceipts = pgTable(
+  'transition_verification_receipts',
+  {
+    transitionId: text('transition_id')
+      .notNull()
+      .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    operationalResults: jsonb('operational_results')
+      .$type<
+        Array<{
+          source: string;
+          outcome: 'no_statement' | 'failed';
+          code: string;
+          message: string;
+        }>
+      >()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.transitionId, table.requestId] })]
+);
+
+/**
  * Append-only idempotency receipt for trusted Transition commands.
  *
  * A receipt binds an authenticated application request to the immutable object
@@ -369,6 +402,8 @@ export type TransitionProposalPreparationRecord =
   typeof transitionProposalPreparations.$inferSelect;
 export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
+export type TransitionVerificationReceiptRecord =
+  typeof transitionVerificationReceipts.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionYOpsLogConsumptionRecord = typeof transitionYOpsLogConsumptions.$inferSelect;

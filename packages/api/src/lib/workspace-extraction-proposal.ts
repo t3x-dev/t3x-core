@@ -8,7 +8,7 @@ import {
 import {
   type AnyDB,
   findConversationById,
-  findTurnsByConversation,
+  findTurnsByHashes,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
@@ -187,9 +187,9 @@ export async function resolveWorkspaceExtractionTransitionSource(
   if (conversation === null || conversation.projectId !== input.projectId) {
     throw new TypeError('Workspace extraction candidate Source is unavailable in this project');
   }
-  const turns = await findTurnsByConversation(db, {
+  const turns = await findTurnsByHashes(db, {
     conversationId: conversation.conversationId,
-    limit: 500,
+    turnHashes: proposal.sourceSelector.turnHashes,
   });
   const selectedHashes = new Set(proposal.sourceSelector.turnHashes);
   const selectedTurns = turns
@@ -290,9 +290,9 @@ export async function createWorkspaceExtractionProposal(
     );
   }
 
-  const turns = await findTurnsByConversation(db, {
+  const turns = await findTurnsByHashes(db, {
     conversationId: conversation.conversationId,
-    limit: 500,
+    turnHashes: selectedHashes,
   });
   const availableHashes = new Set(turns.map((turn) => turn.turnHash));
   const missingHashes = selectedHashes.filter((hash) => !availableHashes.has(hash)).sort();

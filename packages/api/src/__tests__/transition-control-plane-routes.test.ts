@@ -366,10 +366,15 @@ describe('Transition control-plane routes', () => {
     );
     expect(repeated.status).toBe(200);
     const repeatedPayload = (await repeated.json()) as {
-      data: { reused: boolean; statements: unknown[] };
+      data: {
+        reused: boolean;
+        statements: unknown[];
+        operational_results: Array<{ source: string; outcome: string }>;
+      };
     };
     expect(repeatedPayload.data).toMatchObject({ reused: true });
     expect(repeatedPayload.data.statements).toHaveLength(2);
+    expect(repeatedPayload.data.operational_results).toEqual(firstPayload.data.operational_results);
 
     const nextRun = await jsonRequest(
       instance,

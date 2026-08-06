@@ -4,6 +4,7 @@ import {
   deleteYOpsLogEntry,
   findConversationById,
   findTurnsByConversation,
+  findTurnsByHashes,
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
@@ -58,28 +59,29 @@ export async function runApiExtractionV2(
     };
   }
 
-  const allTurns = await findTurnsByConversation(input.db, {
-    conversationId: input.conversationId,
-    limit: 500,
-  });
-
-  if (allTurns.length === 0) {
-    return {
-      ok: false,
-      kind: 'conversation_not_found',
-      message: 'No turns found for this conversation',
-    };
-  }
-
   const selectedTurns = input.turnHashes
-    ? allTurns.filter((turn) => input.turnHashes?.includes(turn.turnHash))
-    : allTurns;
+    ? await findTurnsByHashes(input.db, {
+        conversationId: input.conversationId,
+        turnHashes: input.turnHashes,
+      })
+    : await findTurnsByConversation(input.db, {
+        conversationId: input.conversationId,
+        limit: 500,
+      });
 
-  if (selectedTurns.length === 0) {
+  if (selectedTurns.length === 0 && input.turnHashes !== undefined) {
     return {
       ok: false,
       kind: 'invalid_request',
       message: 'None of the specified turn_hashes were found',
+    };
+  }
+
+  if (selectedTurns.length === 0) {
+    return {
+      ok: false,
+      kind: 'conversation_not_found',
+      message: 'No turns found for this conversation',
     };
   }
 

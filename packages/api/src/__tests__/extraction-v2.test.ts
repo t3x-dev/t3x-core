@@ -5,6 +5,7 @@ const storageMock = vi.hoisted(() => ({
   deleteYOpsLogEntry: vi.fn(),
   findConversationById: vi.fn(),
   findTurnsByConversation: vi.fn(),
+  findTurnsByHashes: vi.fn(),
   listActiveYOpsLogByConversation: vi.fn(),
 }));
 const providerMock = vi.hoisted(() => ({ resolveProviderAndModel: vi.fn() }));
@@ -31,6 +32,9 @@ describe('runApiExtractionV2', () => {
     vi.clearAllMocks();
     storageMock.findConversationById.mockResolvedValue({ conversationId: 'conv_1' });
     storageMock.findTurnsByConversation.mockResolvedValue([
+      { turnHash: 'turn_1', role: 'user', content: 'Keep the audit trail.' },
+    ]);
+    storageMock.findTurnsByHashes.mockResolvedValue([
       { turnHash: 'turn_1', role: 'user', content: 'Keep the audit trail.' },
     ]);
     providerMock.resolveProviderAndModel.mockResolvedValue({
@@ -63,6 +67,11 @@ describe('runApiExtractionV2', () => {
     });
 
     expect(result.ok).toBe(true);
+    expect(storageMock.findTurnsByHashes).toHaveBeenCalledWith(expect.anything(), {
+      conversationId: 'conv_1',
+      turnHashes: ['turn_1'],
+    });
+    expect(storageMock.findTurnsByConversation).not.toHaveBeenCalled();
     expect(storageMock.listActiveYOpsLogByConversation).not.toHaveBeenCalled();
     expect(replayMock.getConversationInheritedBaseline).not.toHaveBeenCalled();
     expect(coreMock.extractAndApply).toHaveBeenCalledWith(

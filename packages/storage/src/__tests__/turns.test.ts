@@ -16,6 +16,7 @@ import {
   findTurnByHash,
   findTurnChain,
   findTurnsByConversation,
+  findTurnsByHashes,
   findTurnsByProject,
   findTurnsInWindow,
   insertTurn,
@@ -278,6 +279,39 @@ describe('Turns Storage', () => {
 
       expect(asc[0].content).toBe('First');
       expect(desc[0].content).toBe('Second');
+    });
+  });
+
+  describe('findTurnsByHashes', () => {
+    it('resolves the exact hashes in chronological order and stays conversation-scoped', async () => {
+      const selectedConversation = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Exact Turn Selection' })
+      );
+      const otherConversation = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Other Turn Selection' })
+      );
+      const first = await insertTurn(
+        db,
+        testData.turn(testProjectId, selectedConversation.conversationId, { content: 'First' })
+      );
+      await sleep(2);
+      const second = await insertTurn(
+        db,
+        testData.turn(testProjectId, selectedConversation.conversationId, { content: 'Second' })
+      );
+      const foreign = await insertTurn(
+        db,
+        testData.turn(testProjectId, otherConversation.conversationId, { content: 'Foreign' })
+      );
+
+      const results = await findTurnsByHashes(db, {
+        conversationId: selectedConversation.conversationId,
+        turnHashes: [second.turnHash, foreign.turnHash, first.turnHash],
+      });
+
+      expect(results.map((turn) => turn.turnHash)).toEqual([first.turnHash, second.turnHash]);
     });
   });
 
