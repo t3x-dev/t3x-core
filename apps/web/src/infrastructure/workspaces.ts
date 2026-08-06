@@ -1,3 +1,4 @@
+import { T3xApiError } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import type {
   WorkspaceCandidate,
@@ -6,7 +7,8 @@ import type {
   WorkspaceValidationOverride,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
-import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
+import { getSharedApiClient } from './sharedApiClient';
 
 interface ProjectWorkspacesResponse {
   workspaces: WorkspaceCandidate[];
@@ -141,13 +143,14 @@ export async function getWorkspaceControlPlaneTransition(
   transitionId: string,
   signal?: AbortSignal
 ): Promise<WorkspaceControlPlaneTransitionResponse> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(
-      transitionId
-    )}`,
-    { signal }
-  );
-  return handleResponse<WorkspaceControlPlaneTransitionResponse>(res);
+  try {
+    return await getSharedApiClient().inspectTransition(projectId, transitionId, { signal });
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      throw new ApiError(error.code, error.message, error.details);
+    }
+    throw error;
+  }
 }
 
 export async function saveProjectWorkspace(

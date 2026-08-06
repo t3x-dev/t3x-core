@@ -925,6 +925,87 @@ describe('T3xClient', () => {
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
       );
     });
+
+    it('creates a Decision from an immutable review precondition', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        decision_digest: 'sha256:decision',
+        decision: {},
+        view: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:decision:1',
+        outcome: 'accepted' as const,
+        precondition: {
+          workspace_revision: 4,
+          ref_name: 'main',
+          ref_head: null,
+          effect_digest: 'sha256:effect',
+          proposal_digest: 'sha256:proposal',
+          statement_digests: ['sha256:statement'],
+          policy_digest: 'sha256:policy',
+        },
+      };
+
+      expect(await client.decideTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/decisions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('creates a Commit only from a recorded Decision and expected head', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        commit_digest: 'sha256:commit',
+        commit: {},
+        transition: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:commit:1',
+        decision_digest: 'sha256:decision',
+        expected_head: null,
+      };
+
+      expect(await client.commitTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/commits'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('encodes project and Transition ids in control-plane paths', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+
+      await client.inspectTransition('project/with space', 'transition/with space');
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/project%2Fwith%20space/transitions/transition%2Fwith%20space'
+        ),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('passes AbortSignal through Transition inspection', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+      const controller = new AbortController();
+
+      await client.inspectTransition('proj_1', 'trn_abc', { signal: controller.signal });
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: controller.signal })
+      );
+    });
   });
 
   // =========================================================================

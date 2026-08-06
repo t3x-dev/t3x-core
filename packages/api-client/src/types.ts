@@ -2,6 +2,12 @@
  * T3X API Client Types
  */
 
+import type {
+  ActionCapabilityView,
+  ClaimView,
+  TransitionGraphViewV1 as CoreTransitionGraphViewV1,
+} from '@t3x-dev/core';
+
 // Common types
 export interface PaginationParams {
   limit?: number;
@@ -932,59 +938,10 @@ export type ProposeTransitionInput =
       commit_id: string;
     });
 
-export interface TransitionClaimView {
-  mode: 'stated' | 'inferred' | 'authored' | 'unspecified';
-  origin: 'request_source' | 'inferred' | 'actor_authored' | 'not_provided';
-  value?: string;
-  evidence: Array<{
-    resource: { uri: string; mediaType: string; digest: string };
-    locator: { scheme: string; value: TransitionProtocolValue };
-  }>;
-}
-
-export interface TransitionActionCapabilityView {
-  disposition: 'allowed' | 'denied' | 'not_applicable' | 'not_evaluated';
-  reasons: Array<{ code: string; message: string }>;
-}
-
-export interface TransitionGraphViewV1 {
-  schema: 't3x.dev/transition-view/v1';
-  version: 1;
-  mode: 'transition';
-  change: {
-    effect: TransitionObjectDescriptor;
-    base: TransitionObjectDescriptor;
-    result: TransitionObjectDescriptor;
-    driver: { protocol: string; protocolVersion: string; specDigest: string };
-    operations: TransitionProtocolValue[];
-  };
-  claims: {
-    proposal: TransitionObjectDescriptor;
-    actor: TransitionActorRef;
-    intent: TransitionClaimView;
-    rationale: TransitionClaimView;
-  };
-  checks: {
-    objectIntegrity: 'verified' | 'not_checked';
-    observationScope: { completeness: 'complete' | 'partial'; sources: string[] };
-    replay: TransitionProtocolValue;
-    validation: TransitionProtocolValue;
-    runner: TransitionProtocolValue;
-    humanConfirmation: TransitionProtocolValue;
-  };
-  decision: TransitionProtocolValue;
-  history: TransitionProtocolValue;
-  capabilities: {
-    accept: TransitionActionCapabilityView;
-    override: TransitionActionCapabilityView;
-    reject: TransitionActionCapabilityView;
-    commit: TransitionActionCapabilityView;
-    revert: TransitionActionCapabilityView;
-  };
-  audit: TransitionProtocolValue;
-}
-
-export type TransitionViewV1 = TransitionGraphViewV1;
+export type TransitionClaimView = ClaimView;
+export type TransitionActionCapabilityView = ActionCapabilityView;
+export type TransitionGraphViewV1 = CoreTransitionGraphViewV1;
+export type TransitionViewV1 = CoreTransitionGraphViewV1;
 
 export interface TransitionStatementMembershipView {
   digest: string;
@@ -1063,4 +1020,44 @@ export interface AttachTransitionStatementResult {
   transition_id: string;
   reused: boolean;
   view: TransitionControlPlaneView;
+}
+
+export interface TransitionReviewPrecondition {
+  workspace_revision: number;
+  ref_name: string;
+  ref_head: string | null;
+  effect_digest: string;
+  proposal_digest: string;
+  statement_digests: string[];
+  policy_digest: string;
+}
+
+export interface DecideTransitionInput {
+  request_id: string;
+  outcome: 'accepted' | 'overridden' | 'rejected';
+  rationale?: string;
+  precondition: TransitionReviewPrecondition;
+}
+
+export interface DecideTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  decision_digest: string;
+  decision: TransitionProtocolValue;
+  view: TransitionControlPlaneView;
+}
+
+export interface CommitTransitionInput {
+  request_id: string;
+  decision_digest: string;
+  expected_head: string | null;
+}
+
+export interface CommitTransitionResult {
+  transition_id: string;
+  reused: boolean;
+  commit_digest: string;
+  commit: TransitionProtocolValue;
+  transition: TransitionViewV1;
+  workspace?: Record<string, unknown>;
 }

@@ -17,6 +17,8 @@ import type {
   CommitFromDraftInput,
   CommitFromDraftResult,
   CommitRepositoryStateInput,
+  CommitTransitionInput,
+  CommitTransitionResult,
   ContextParams,
   ContextResult,
   Conversation,
@@ -33,6 +35,8 @@ import type {
   CreateTurnInput,
   CreateWebhookInput,
   CreateWorkspaceExtractionProposalInput,
+  DecideTransitionInput,
+  DecideTransitionResult,
   DiffResult,
   Draft,
   ExportCfpackInput,
@@ -97,6 +101,10 @@ export interface T3xClientConfig {
   fetch?: typeof fetch;
 }
 
+export interface T3xRequestOptions {
+  signal?: AbortSignal;
+}
+
 export class T3xApiError extends Error {
   constructor(
     public code: string,
@@ -159,7 +167,8 @@ export class T3xClient {
     method: string,
     path: string,
     body?: unknown,
-    query?: Record<string, string | number | undefined>
+    query?: Record<string, string | number | undefined>,
+    options?: T3xRequestOptions
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
 
@@ -175,6 +184,7 @@ export class T3xClient {
       method,
       headers: this.headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: options?.signal,
     });
 
     const data = (await response.json()) as ApiResponse<T>;
@@ -890,18 +900,22 @@ export class T3xClient {
   ): Promise<ProposeTransitionResult> {
     return this.request<ProposeTransitionResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions`,
       input
     );
   }
 
   async inspectTransition(
     projectId: string,
-    transitionId: string
+    transitionId: string,
+    options?: T3xRequestOptions
   ): Promise<InspectTransitionResult> {
     return this.request<InspectTransitionResult>(
       'GET',
-      `/v1/projects/${projectId}/transitions/${transitionId}`
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}`,
+      undefined,
+      undefined,
+      options
     );
   }
 
@@ -912,7 +926,7 @@ export class T3xClient {
   ): Promise<VerifyTransitionResult> {
     return this.request<VerifyTransitionResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions/${transitionId}/verify`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/verify`,
       input
     );
   }
@@ -924,7 +938,31 @@ export class T3xClient {
   ): Promise<AttachTransitionStatementResult> {
     return this.request<AttachTransitionStatementResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions/${transitionId}/statements`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/statements`,
+      input
+    );
+  }
+
+  async decideTransition(
+    projectId: string,
+    transitionId: string,
+    input: DecideTransitionInput
+  ): Promise<DecideTransitionResult> {
+    return this.request<DecideTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/decisions`,
+      input
+    );
+  }
+
+  async commitTransition(
+    projectId: string,
+    transitionId: string,
+    input: CommitTransitionInput
+  ): Promise<CommitTransitionResult> {
+    return this.request<CommitTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/commits`,
       input
     );
   }

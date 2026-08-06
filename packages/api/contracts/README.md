@@ -22,3 +22,9 @@ Known mismatches between a typed client and the implemented API are recorded as 
 `compatibility` means the route still has a named consumer or external compatibility obligation. `removal_candidate` means no product behavior is allowed to depend on the route; an exported adapter alone is not evidence of a live consumer.
 
 This inventory controls migration, not runtime authority. Authentication, project access, evidence verification, and repository decisions remain server-owned.
+
+## Transition control-plane migration
+
+`transition-control-plane-migration.json` freezes the six canonical governance actions and classifies every production caller of the CommitV2 storage primitive. It also records the current Workspace, exact-source, repository shortcut, Merge, MCP, Web, and demo adapters with an explicit replacement or removal gate.
+
+The contract test fails when a canonical route, action scope, typed-client method, classified consumer, or direct CommitV2 writer changes without updating the ledger. The ledger does not make compatibility routes canonical: those routes remain adapters until they delegate governance to the shared application use cases and pass their retirement gates.
