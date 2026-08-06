@@ -356,6 +356,103 @@ export const builtInPrdModules: YSchemaModuleManifest[] = [
       starCount: 58,
     },
   },
+  {
+    ...compatiblePrdModule,
+    canonicalName: 't3x/prd-security-privacy',
+    version: '1.0.0',
+    title: 'Security & Privacy',
+    description:
+      'Threats, access controls, data classification, privacy constraints, and abuse cases.',
+    domain: 'Security',
+    provides: ['security-controls'],
+    requires: ['system-boundaries'],
+    defaultPlacement: { slot: 'quality-gates' },
+    contribution: {
+      nodes: {
+        security_privacy: structuredNode(
+          'Security and privacy controls that constrain product delivery.',
+          {
+            threats: { type: 'array' },
+            access_controls: { type: 'array' },
+            data_classification: { type: 'array' },
+            privacy_constraints: { type: 'array' },
+            abuse_cases: { type: 'array' },
+          },
+          ['threats', 'access_controls']
+        ),
+      },
+    },
+    registry: {
+      icon: 'blocks',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
+  {
+    ...compatiblePrdModule,
+    canonicalName: 't3x/prd-quality-strategy',
+    version: '1.0.0',
+    title: 'Quality Strategy',
+    description: 'Test levels, quality budgets, release gates, and required verification evidence.',
+    domain: 'Quality',
+    provides: ['quality-strategy'],
+    requires: ['acceptance-contract'],
+    defaultPlacement: { slot: 'quality-gates' },
+    contribution: {
+      nodes: {
+        quality_strategy: structuredNode(
+          'Quality expectations and evidence required before release.',
+          {
+            test_levels: { type: 'array' },
+            quality_budgets: { type: 'array' },
+            release_gates: { type: 'array' },
+            evidence: { type: 'array' },
+          },
+          ['test_levels', 'release_gates']
+        ),
+      },
+    },
+    registry: {
+      icon: 'monitor',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+      recommended: true,
+    },
+  },
+  {
+    ...compatiblePrdModule,
+    canonicalName: 't3x/prd-rollout-operations',
+    version: '1.0.0',
+    title: 'Rollout & Operations',
+    description: 'Rollout, migration, monitoring, rollback, and operational runbook requirements.',
+    domain: 'Operations',
+    provides: ['operational-readiness'],
+    requires: ['implementation-stack'],
+    defaultPlacement: { slot: 'operations' },
+    contribution: {
+      nodes: {
+        rollout_operations: structuredNode(
+          'Delivery and operational readiness contract.',
+          {
+            rollout_strategy: { type: 'string', maxWords: 120 },
+            migrations: { type: 'array' },
+            monitoring: { type: 'array' },
+            rollback: { type: 'string', maxWords: 120 },
+            runbooks: { type: 'array' },
+          },
+          ['rollout_strategy', 'rollback']
+        ),
+      },
+    },
+    registry: {
+      icon: 'server',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
 ];
 
 const compatibleSkillModule = compatibleModule('skill', builtInSkillCoreArtifact);
@@ -452,6 +549,71 @@ export const builtInSkillModules: YSchemaModuleManifest[] = [
       starCount: 0,
     },
   },
+  {
+    ...compatibleSkillModule,
+    canonicalName: 't3x/skill-runtime-environment',
+    version: '1.0.0',
+    title: 'Runtime Environment',
+    description:
+      'Runtime, dependency, environment reference, filesystem, and network requirements.',
+    domain: 'Runtime',
+    provides: ['runtime-contract'],
+    requires: ['workflow-contract'],
+    defaultPlacement: { slot: 'tooling' },
+    contribution: {
+      nodes: {
+        runtime_environment: structuredNode(
+          'Execution environment required by the Skill workflow.',
+          {
+            runtimes: { type: 'array' },
+            dependencies: { type: 'array' },
+            environment_references: { type: 'array' },
+            filesystem_policy: { type: 'string' },
+            network_policy: { type: 'string' },
+          },
+          ['runtimes']
+        ),
+      },
+    },
+    registry: {
+      icon: 'cpu',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
+  {
+    ...compatibleSkillModule,
+    canonicalName: 't3x/skill-evaluation-suite',
+    version: '1.0.0',
+    title: 'Evaluation Suite',
+    description: 'Fixtures, evaluation cases, assertions, and acceptance thresholds for a Skill.',
+    domain: 'Evaluation',
+    provides: ['evaluation-suite'],
+    requires: ['delivery-checks'],
+    defaultPlacement: { slot: 'before.validation' },
+    contribution: {
+      nodes: {
+        evaluation_suite: structuredNode(
+          'Deterministic and scored evaluations applied before Skill delivery.',
+          {
+            cases: { type: 'array' },
+            fixtures: { type: 'array' },
+            assertions: { type: 'array' },
+            thresholds: { type: 'array' },
+          },
+          ['cases', 'assertions']
+        ),
+      },
+    },
+    registry: {
+      icon: 'monitor',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+      recommended: true,
+    },
+  },
 ];
 
 const compatiblePromptModule = compatibleModule('prompt', builtInPromptCoreArtifact);
@@ -544,6 +706,72 @@ export const builtInPromptModules: YSchemaModuleManifest[] = [
       updatedAt: '2026-08-04',
       usageCount: 0,
       starCount: 0,
+    },
+  },
+  {
+    ...compatiblePromptModule,
+    canonicalName: 't3x/prompt-context-policy',
+    version: '1.0.0',
+    title: 'Context Policy',
+    description:
+      'Context sources, trust levels, freshness, token budgets, and conflict resolution.',
+    domain: 'Context',
+    provides: ['context-policy'],
+    requires: ['prompt-root'],
+    defaultPlacement: { slot: 'guardrails' },
+    contribution: {
+      nodes: {
+        context_policy: structuredNode(
+          'Selection and trust policy for context supplied to the Prompt.',
+          {
+            sources: { type: 'array' },
+            trust_levels: { type: 'array' },
+            freshness_policy: { type: 'string' },
+            token_budget: { type: 'integer', minimum: 1 },
+            conflict_resolution: { type: 'string' },
+          },
+          ['sources', 'conflict_resolution']
+        ),
+      },
+    },
+    registry: {
+      icon: 'file',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
+  {
+    ...compatiblePromptModule,
+    canonicalName: 't3x/prompt-evaluation-suite',
+    version: '1.0.0',
+    title: 'Evaluation Suite',
+    description:
+      'Regression cases, graders, quality metrics, and acceptance thresholds for a Prompt.',
+    domain: 'Evaluation',
+    provides: ['evaluation-suite'],
+    requires: ['output-contract'],
+    defaultPlacement: { slot: 'before.validation' },
+    contribution: {
+      nodes: {
+        evaluation_suite: structuredNode(
+          'Repeatable evaluations for Prompt behavior and output quality.',
+          {
+            cases: { type: 'array' },
+            graders: { type: 'array' },
+            metrics: { type: 'array' },
+            thresholds: { type: 'array' },
+          },
+          ['cases', 'metrics']
+        ),
+      },
+    },
+    registry: {
+      icon: 'monitor',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+      recommended: true,
     },
   },
 ];
@@ -642,6 +870,100 @@ export const builtInEsphomeDeviceModules: YSchemaModuleManifest[] = [
       starCount: 0,
     },
   },
+  {
+    ...compatibleEsphomeModule,
+    canonicalName: 't3x/esphome-hardware-buses',
+    version: '1.0.0',
+    title: 'Hardware Buses',
+    description: 'I2C, SPI, UART, OneWire, and shared pin reservation contracts.',
+    domain: 'Hardware',
+    provides: ['hardware-buses'],
+    requires: ['hardware-platform'],
+    defaultPlacement: { slot: 'hardware' },
+    contribution: {
+      nodes: {
+        hardware_buses: structuredNode(
+          'Shared device buses and pin ownership.',
+          {
+            i2c: { type: 'array' },
+            spi: { type: 'array' },
+            uart: { type: 'array' },
+            one_wire: { type: 'array' },
+            pin_reservations: { type: 'array' },
+          },
+          []
+        ),
+      },
+    },
+    registry: {
+      icon: 'cpu',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
+  {
+    ...compatibleEsphomeModule,
+    canonicalName: 't3x/esphome-network-services',
+    version: '1.0.0',
+    title: 'Network Services',
+    description: 'Network transports, discovery, local services, and fallback access behavior.',
+    domain: 'Connectivity',
+    provides: ['network-services'],
+    requires: ['connectivity-base'],
+    defaultPlacement: { slot: 'connectivity' },
+    contribution: {
+      nodes: {
+        network_services: structuredNode(
+          'Connectivity and local network service contract.',
+          {
+            transports: { type: 'array' },
+            services: { type: 'array' },
+            discovery: { type: 'array' },
+            fallback_access: { type: 'string' },
+          },
+          ['transports']
+        ),
+      },
+    },
+    registry: {
+      icon: 'server',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
+  {
+    ...compatibleEsphomeModule,
+    canonicalName: 't3x/esphome-power-management',
+    version: '1.0.0',
+    title: 'Power Management',
+    description: 'Power modes, wake sources, power domains, and device energy budgets.',
+    domain: 'Power',
+    provides: ['power-management'],
+    requires: ['hardware-platform'],
+    defaultPlacement: { slot: 'operations' },
+    contribution: {
+      nodes: {
+        power_management: structuredNode(
+          'Device power behavior and operational energy constraints.',
+          {
+            modes: { type: 'array' },
+            wake_sources: { type: 'array' },
+            power_domains: { type: 'array' },
+            energy_budget: { type: 'string' },
+          },
+          ['modes']
+        ),
+      },
+    },
+    registry: {
+      icon: 'blocks',
+      updatedAt: '2026-08-06',
+      usageCount: 0,
+      starCount: 0,
+    },
+  },
 ];
 
 export const builtInYSchemaCores: YSchemaCoreArtifact[] = [
@@ -667,12 +989,18 @@ export const defaultPrdCompositionModuleOrder = [
   't3x/prd-api-contract',
 ] as const;
 
-export const defaultSkillCompositionModuleOrder = builtInSkillModules.map(
-  (module) => module.canonicalName
-);
-export const defaultPromptCompositionModuleOrder = builtInPromptModules.map(
-  (module) => module.canonicalName
-);
-export const defaultEsphomeDeviceCompositionModuleOrder = builtInEsphomeDeviceModules.map(
-  (module) => module.canonicalName
-);
+export const defaultSkillCompositionModuleOrder = [
+  't3x/skill-tool-policy',
+  't3x/skill-safety-gates',
+  't3x/skill-delivery-targets',
+] as const;
+export const defaultPromptCompositionModuleOrder = [
+  't3x/prompt-few-shot-examples',
+  't3x/prompt-guardrails',
+  't3x/prompt-observability',
+] as const;
+export const defaultEsphomeDeviceCompositionModuleOrder = [
+  't3x/esphome-sensors',
+  't3x/esphome-actuators',
+  't3x/esphome-automations',
+] as const;

@@ -48,6 +48,7 @@ export interface YSchemaModuleManifest {
     updatedAt: string;
     usageCount: number;
     starCount: number;
+    recommended?: boolean;
   };
 }
 

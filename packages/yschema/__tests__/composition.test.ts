@@ -8,8 +8,12 @@ import {
   builtInPromptModules,
   builtInSkillCoreArtifact,
   builtInSkillModules,
+  builtInYSchemaModules,
   compileYSchemaComposition,
+  defaultEsphomeDeviceCompositionModuleOrder,
   defaultPrdCompositionModuleOrder,
+  defaultPromptCompositionModuleOrder,
+  defaultSkillCompositionModuleOrder,
   type YSchemaCompositionDraft,
   type YSchemaModuleManifest,
 } from '../src';
@@ -162,5 +166,35 @@ describe('compileYSchemaComposition', () => {
         modules.map((module) => module.canonicalName)
       );
     }
+  });
+
+  it('registers focused optional Modules without expanding existing default compositions', () => {
+    expect(builtInYSchemaModules.map((module) => module.canonicalName)).toEqual(
+      expect.arrayContaining([
+        't3x/prd-security-privacy',
+        't3x/prd-quality-strategy',
+        't3x/prd-rollout-operations',
+        't3x/skill-runtime-environment',
+        't3x/skill-evaluation-suite',
+        't3x/prompt-context-policy',
+        't3x/prompt-evaluation-suite',
+        't3x/esphome-hardware-buses',
+        't3x/esphome-network-services',
+        't3x/esphome-power-management',
+      ])
+    );
+    expect(defaultPrdCompositionModuleOrder).toHaveLength(6);
+    expect(defaultSkillCompositionModuleOrder).toHaveLength(3);
+    expect(defaultPromptCompositionModuleOrder).toHaveLength(3);
+    expect(defaultEsphomeDeviceCompositionModuleOrder).toHaveLength(3);
+    expect(
+      builtInYSchemaModules
+        .filter((module) => module.registry?.recommended)
+        .map((module) => module.canonicalName)
+    ).toEqual([
+      't3x/prd-quality-strategy',
+      't3x/skill-evaluation-suite',
+      't3x/prompt-evaluation-suite',
+    ]);
   });
 });

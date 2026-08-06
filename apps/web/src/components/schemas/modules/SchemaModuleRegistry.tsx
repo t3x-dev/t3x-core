@@ -271,8 +271,9 @@ export function SchemaModuleRegistry({
                     <span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-[var(--text-secondary)]">
                       {module.description}
                     </span>
-                    <span className="mt-2 flex items-center gap-2 font-mono text-[10px] text-[var(--text-tertiary)]">
+                    <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] text-[var(--text-tertiary)]">
                       <Badge variant="outline">{module.domain}</Badge>
+                      {module.recommended ? <Badge variant="commit">Recommended</Badge> : null}
                       <span>{module.version}</span>
                       <span>·</span>
                       <span>{module.usageCount.toLocaleString()} uses</span>
@@ -340,13 +341,13 @@ function familyLabel(family: YSchemaArtifactFamily): string {
 
 function familyDescription(family: YSchemaArtifactFamily): string {
   if (family === 'skill') {
-    return 'Core owns executable workflow invariants. Modules extend tooling, safety, and delivery.';
+    return 'Core owns executable workflow invariants. Modules extend tooling, safety, delivery, runtime, and evaluation.';
   }
   if (family === 'prompt') {
-    return 'Core owns messages and output contracts. Modules extend examples, guardrails, and runtime signals.';
+    return 'Core owns messages and output contracts. Modules extend context, examples, guardrails, evaluation, and runtime signals.';
   }
   if (family === 'esphome-device') {
-    return 'Core owns device identity and platform. Modules add entities and local automations.';
+    return 'Core owns device identity and platform. Modules add hardware, connectivity, entities, power, and local automations.';
   }
   return 'Core owns product invariants. Modules add focused engineering structure through declared slots.';
 }
@@ -355,7 +356,11 @@ function modulesFromComposition(
   composition: SchemaCompositionDraft | undefined,
   availableModules: SchemaArtifactPreview[]
 ): SchemaArtifactPreview[] {
-  if (!composition) return availableModules.slice(0, 6);
+  if (!composition) {
+    return availableModules.filter((module) =>
+      DEFAULT_COMPOSITION_MODULES.has(module.canonicalName)
+    );
+  }
   const artifactsByKey = new Map(
     availableModules.map((artifact) => [`${artifact.canonicalName}@${artifact.version}`, artifact])
   );
@@ -366,6 +371,24 @@ function modulesFromComposition(
       return artifact ? [artifact] : [];
     });
 }
+
+const DEFAULT_COMPOSITION_MODULES = new Set([
+  't3x/prd-system-architecture',
+  't3x/prd-technology-stack',
+  't3x/prd-frontend-design',
+  't3x/prd-backend-design',
+  't3x/prd-database-design',
+  't3x/prd-api-contract',
+  't3x/skill-tool-policy',
+  't3x/skill-safety-gates',
+  't3x/skill-delivery-targets',
+  't3x/prompt-few-shot-examples',
+  't3x/prompt-guardrails',
+  't3x/prompt-observability',
+  't3x/esphome-sensors',
+  't3x/esphome-actuators',
+  't3x/esphome-automations',
+]);
 
 function compositionSignature(modules: SchemaArtifactPreview[]): string {
   return modules

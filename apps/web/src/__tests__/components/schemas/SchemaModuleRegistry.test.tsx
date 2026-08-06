@@ -49,6 +49,13 @@ describe('SchemaModuleRegistry', () => {
     expect(screen.getByRole('button', { name: 'Compile preview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No Workspace' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Publish unavailable' })).toBeDisabled();
+    expect(screen.getByText('Recommended')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add Quality Strategy to composition' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Drag Quality Strategy to reorder' })
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the official Core pinned when a newer project Schema is listed first', async () => {
@@ -60,7 +67,7 @@ describe('SchemaModuleRegistry', () => {
       title: 'Project PRD',
     };
     const fetchMock = vi.fn(
-      async () =>
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(
           JSON.stringify({
             success: true,

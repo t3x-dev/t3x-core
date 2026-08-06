@@ -34,7 +34,7 @@ describe('YSchema Composition routes', () => {
   app.route('/', yschemaCompositionRoutes);
 
   it('lists built-in Core and Module artifacts', async () => {
-    const response = await app.request('/v1/yschema/artifacts');
+    const response = await app.request('/v1/yschema/artifacts?limit=100');
     expect(response.status).toBe(200);
     const body: any = await response.json();
     const cores = body.data.items.filter(
@@ -58,7 +58,9 @@ describe('YSchema Composition routes', () => {
     expect(response.status).toBe(200);
     const body: any = await response.json();
 
-    expect(body.data.items).toHaveLength(4);
+    expect(body.data.items).toHaveLength(
+      1 + builtInYSchemaModules.filter((module) => module.family === 'esphome-device').length
+    );
     expect(new Set(body.data.items.map((item: any) => item.family))).toEqual(
       new Set(['esphome-device'])
     );

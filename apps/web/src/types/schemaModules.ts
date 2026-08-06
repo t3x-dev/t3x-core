@@ -30,6 +30,7 @@ export interface SchemaArtifactPreview {
   starCount: number;
   sortOrder: number;
   icon: 'blocks' | 'braces' | 'cpu' | 'database' | 'file' | 'monitor' | 'server';
+  recommended?: boolean;
 }
 
 export interface SchemaCompositionIssuePreview {

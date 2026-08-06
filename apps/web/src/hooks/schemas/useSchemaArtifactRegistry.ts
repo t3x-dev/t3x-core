@@ -137,6 +137,7 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
     starCount: numberValue(registry.starCount),
     sortOrder: numberValue(registry.sortOrder) || recommendedSortOrder(canonicalName),
     icon: isIcon(icon) ? icon : module ? 'blocks' : 'file',
+    recommended: registry.recommended === true,
   };
 }
 
@@ -158,15 +159,25 @@ const RECOMMENDED_MODULE_ORDER: Record<string, number> = {
   't3x/prd-backend-design': 40,
   't3x/prd-database-design': 50,
   't3x/prd-api-contract': 60,
+  't3x/prd-security-privacy': 70,
+  't3x/prd-quality-strategy': 80,
+  't3x/prd-rollout-operations': 90,
   't3x/skill-tool-policy': 10,
   't3x/skill-safety-gates': 20,
   't3x/skill-delivery-targets': 30,
+  't3x/skill-runtime-environment': 40,
+  't3x/skill-evaluation-suite': 50,
   't3x/prompt-few-shot-examples': 10,
   't3x/prompt-guardrails': 20,
   't3x/prompt-observability': 30,
+  't3x/prompt-context-policy': 40,
+  't3x/prompt-evaluation-suite': 50,
   't3x/esphome-sensors': 10,
   't3x/esphome-actuators': 20,
   't3x/esphome-automations': 30,
+  't3x/esphome-hardware-buses': 40,
+  't3x/esphome-network-services': 50,
+  't3x/esphome-power-management': 60,
 };
 
 function recommendedSortOrder(canonicalName: string): number {
