@@ -372,7 +372,7 @@ describe('Transition Decision and Commit routes', () => {
     expect(conflictingCommit.status).toBe(409);
   });
 
-  it('commits a canonical exact-source import with its server-resolved projection', async () => {
+  it('commits canonical exact-source import, edit, and revert with trusted projections', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Exact Source Commit' }));
     const draft = await createWorkspace(project.projectId, 'ws_exact_source_commit');
     await bindPolicy(project.projectId, 'exact-source-commit/v1');
@@ -397,6 +397,58 @@ describe('Transition Decision and Commit routes', () => {
       'transition:commit:create',
       'transition:ref:advance',
     ]);
+    let runnerCalls = 0;
+    const executor: LocalOciCommandExecutor = async () => {
+      runnerCalls += 1;
+      return { exit_code: 0, stdout: '', stderr: '' };
+    };
+    const runAcceptedTransition = async (input: {
+      transitionId: string;
+      suffix: string;
+      expectedHead: string | null;
+    }) => {
+      const precondition = await verify({
+        projectId: project.projectId,
+        transitionId: input.transitionId,
+        requestId: `verify:${input.suffix}`,
+        apiKey: writer,
+        options: {
+          nativeProviders: [createWorkspaceSourceRunnerProvider({ runner: { executor } })],
+        },
+      });
+      const accepted = await decide({
+        projectId: project.projectId,
+        transitionId: input.transitionId,
+        requestId: `decision:${input.suffix}`,
+        outcome: 'accepted',
+        precondition,
+        apiKey: reviewer,
+      });
+      expect(accepted.status).toBe(200);
+      const acceptedPayload = (await accepted.json()) as {
+        data: { decision_digest: string };
+      };
+      const committed = await commit({
+        projectId: project.projectId,
+        transitionId: input.transitionId,
+        requestId: `commit:${input.suffix}`,
+        decisionDigest: acceptedPayload.data.decision_digest,
+        expectedHead: input.expectedHead,
+        apiKey: committer,
+      });
+      expect(committed.status).toBe(200);
+      const payload = (await committed.json()) as {
+        data: {
+          commit_digest: string;
+          workspace: {
+            revision: number;
+            status: string;
+            sourceArtifact: Record<string, unknown>;
+          };
+        };
+      };
+      return { decisionDigest: acceptedPayload.data.decision_digest, payload };
+    };
     const proposedResponse = await post(
       app(writer),
       `/v1/projects/${project.projectId}/transitions`,
@@ -418,52 +470,13 @@ describe('Transition Decision and Commit routes', () => {
     const proposedPayload = (await proposedResponse.json()) as {
       data: { transition_id: string };
     };
-    let runnerCalls = 0;
-    const executor: LocalOciCommandExecutor = async () => {
-      runnerCalls += 1;
-      return { exit_code: 0, stdout: '', stderr: '' };
-    };
-    const precondition = await verify({
-      projectId: project.projectId,
+    const imported = await runAcceptedTransition({
       transitionId: proposedPayload.data.transition_id,
-      requestId: 'verify:exact-source-commit',
-      apiKey: writer,
-      options: {
-        nativeProviders: [createWorkspaceSourceRunnerProvider({ runner: { executor } })],
-      },
+      suffix: 'exact-source-import',
+      expectedHead: null,
     });
     expect(runnerCalls).toBe(2);
-    const accepted = await decide({
-      projectId: project.projectId,
-      transitionId: proposedPayload.data.transition_id,
-      requestId: 'decision:exact-source-commit',
-      outcome: 'accepted',
-      precondition,
-      apiKey: reviewer,
-    });
-    expect(accepted.status).toBe(200);
-    const acceptedPayload = (await accepted.json()) as {
-      data: { decision_digest: string };
-    };
-    const committed = await commit({
-      projectId: project.projectId,
-      transitionId: proposedPayload.data.transition_id,
-      requestId: 'commit:exact-source-commit',
-      decisionDigest: acceptedPayload.data.decision_digest,
-      expectedHead: null,
-      apiKey: committer,
-    });
-    expect(committed.status).toBe(200);
-    const committedPayload = (await committed.json()) as {
-      data: {
-        commit_digest: string;
-        workspace: {
-          status: string;
-          sourceArtifact: Record<string, unknown>;
-        };
-      };
-    };
-    expect(committedPayload.data.workspace).toMatchObject({
+    expect(imported.payload.data.workspace).toMatchObject({
       status: 'committed',
       sourceArtifact: {
         format: 't3x.dev/workspace-source-artifact/v1',
@@ -478,8 +491,8 @@ describe('Transition Decision and Commit routes', () => {
     const retried = await commit({
       projectId: project.projectId,
       transitionId: proposedPayload.data.transition_id,
-      requestId: 'commit:exact-source-commit',
-      decisionDigest: acceptedPayload.data.decision_digest,
+      requestId: 'commit:exact-source-import',
+      decisionDigest: imported.decisionDigest,
       expectedHead: null,
       apiKey: committer,
     });
@@ -489,8 +502,74 @@ describe('Transition Decision and Commit routes', () => {
     };
     expect(retriedPayload.data).toMatchObject({
       reused: true,
-      commit_digest: committedPayload.data.commit_digest,
-      workspace: committedPayload.data.workspace,
+      commit_digest: imported.payload.data.commit_digest,
+      workspace: imported.payload.data.workspace,
+    });
+
+    const editResponse = await post(app(writer), `/v1/projects/${project.projectId}/transitions`, {
+      kind: 'exact_source_edit',
+      request_id: 'proposal:exact-source-edit',
+      workspace_id: 'ws_exact_source_commit',
+      artifact: {
+        format: 't3x.dev/workspace-source-artifact/v1',
+        root_path: 'device.yaml',
+        resources: [],
+      },
+      operations: [
+        {
+          op: 'replace_scalar',
+          path: ['esphome', 'name'],
+          expect: 'canonical-commit',
+          value: 'canonical-edited',
+        },
+      ],
+      why: 'Edit the committed exact source.',
+      if_revision: imported.payload.data.workspace.revision,
+    });
+    expect(editResponse.status).toBe(200);
+    const editProposal = (await editResponse.json()) as { data: { transition_id: string } };
+    const edited = await runAcceptedTransition({
+      transitionId: editProposal.data.transition_id,
+      suffix: 'exact-source-edit',
+      expectedHead: imported.payload.data.commit_digest,
+    });
+    expect(runnerCalls).toBe(4);
+    expect(edited.payload.data.workspace).toMatchObject({
+      status: 'committed',
+      sourceArtifact: {
+        format: 't3x.dev/workspace-source-artifact/v1',
+        rootPath: 'device.yaml',
+        resources: [],
+      },
+    });
+
+    const revertResponse = await post(
+      app(writer),
+      `/v1/projects/${project.projectId}/transitions`,
+      {
+        kind: 'exact_source_revert',
+        request_id: 'proposal:exact-source-revert',
+        workspace_id: 'ws_exact_source_commit',
+        commit_id: edited.payload.data.commit_digest,
+        why: 'Revert the committed exact-source edit.',
+        if_revision: edited.payload.data.workspace.revision,
+      }
+    );
+    expect(revertResponse.status).toBe(200);
+    const revertProposal = (await revertResponse.json()) as { data: { transition_id: string } };
+    const reverted = await runAcceptedTransition({
+      transitionId: revertProposal.data.transition_id,
+      suffix: 'exact-source-revert',
+      expectedHead: edited.payload.data.commit_digest,
+    });
+    expect(runnerCalls).toBe(6);
+    expect(reverted.payload.data.workspace).toMatchObject({
+      status: 'committed',
+      sourceArtifact: {
+        format: 't3x.dev/workspace-source-artifact/v1',
+        rootPath: 'device.yaml',
+        resources: [],
+      },
     });
   });
 
