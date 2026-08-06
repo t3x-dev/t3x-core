@@ -15,6 +15,7 @@ import {
   listTransitionProposalsForWorkspaceRevision,
   listTransitionStatementMemberships,
   recordTransitionStatementMembership,
+  recordTransitionStatementMemberships,
   resolveTransitionProposalGraph,
   TransitionMembershipIntegrityError,
   TransitionMembershipNotFoundError,
@@ -229,6 +230,124 @@ describe('Transition proposal and Statement memberships', () => {
     expect(memberships.map((item) => item.statementDigest)).toEqual(
       [...memberships.map((item) => item.statementDigest)].sort()
     );
+  });
+
+  it('prevalidates a Statement batch before exposing any new membership', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Statement batch' }));
+    const input = membershipInput(project.projectId, 'statement-batch');
+    const created = await createTransitionProposalMembership(db, input);
+    const requestId = 'verify:statement-batch';
+    const requestDigest = digestTransitionRequestCanonicalJson('{"operation":"verify"}');
+    await recordTransitionStatementMembership(db, {
+      projectId: project.projectId,
+      transitionId: created.membership.transitionId,
+      statement: externalStatement(input),
+      source: 'provider:existing',
+      issuer: ISSUER,
+      requestId,
+      requestDigest,
+    });
+    const newIssuer = { kind: 'service' as const, id: 'service:new-verifier' };
+    const newStatement = parseStatement({
+      schema: 't3x/statement/v1',
+      subjects: [input.effect.result],
+      actor: newIssuer,
+      predicateType: 'example.test/new-validation/v1',
+      predicate: { outcome: 'passed' },
+    });
+
+    await expect(
+      recordTransitionStatementMemberships(db, [
+        {
+          projectId: project.projectId,
+          transitionId: created.membership.transitionId,
+          statement: newStatement,
+          source: 'provider:new',
+          issuer: newIssuer,
+          requestId,
+          requestDigest,
+        },
+        {
+          projectId: project.projectId,
+          transitionId: created.membership.transitionId,
+          statement: externalStatement(input, 'failed'),
+          source: 'provider:existing',
+          issuer: ISSUER,
+          requestId,
+          requestDigest,
+        },
+      ])
+    ).rejects.toBeInstanceOf(TransitionStatementConflictError);
+
+    const memberships = await listTransitionStatementMemberships(
+      db,
+      project.projectId,
+      created.membership.transitionId
+    );
+    expect(memberships.map((membership) => membership.source)).toEqual(['provider:existing']);
+  });
+
+  it('rolls back the losing concurrent Statement batch without exposing its unique member', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Concurrent batch' }));
+    const input = membershipInput(project.projectId, 'concurrent-statement-batch');
+    const created = await createTransitionProposalMembership(db, input);
+    const requestId = 'verify:concurrent-statement-batch';
+    const requestDigest = digestTransitionRequestCanonicalJson('{"operation":"verify"}');
+    const statement = (issuer: Statement['actor'], predicateType: string, outcome: string) =>
+      parseStatement({
+        schema: 't3x/statement/v1',
+        subjects: [input.effect.result],
+        actor: issuer,
+        predicateType,
+        predicate: { outcome },
+      });
+    const shared = {
+      projectId: project.projectId,
+      transitionId: created.membership.transitionId,
+      source: 'provider:shared',
+      issuer: ISSUER,
+      requestId,
+      requestDigest,
+    };
+    const issuerA = { kind: 'service' as const, id: 'service:batch-a' };
+    const issuerB = { kind: 'service' as const, id: 'service:batch-b' };
+    const runs = await Promise.allSettled([
+      recordTransitionStatementMemberships(db, [
+        {
+          ...shared,
+          statement: statement(ISSUER, 'example.test/shared/v1', 'passed'),
+        },
+        {
+          ...shared,
+          statement: statement(issuerA, 'example.test/unique-a/v1', 'passed'),
+          source: 'provider:unique-a',
+          issuer: issuerA,
+        },
+      ]),
+      recordTransitionStatementMemberships(db, [
+        {
+          ...shared,
+          statement: statement(ISSUER, 'example.test/shared/v1', 'failed'),
+        },
+        {
+          ...shared,
+          statement: statement(issuerB, 'example.test/unique-b/v1', 'passed'),
+          source: 'provider:unique-b',
+          issuer: issuerB,
+        },
+      ]),
+    ]);
+
+    expect(runs.map((run) => run.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const memberships = await listTransitionStatementMemberships(
+      db,
+      project.projectId,
+      created.membership.transitionId
+    );
+    const sources = memberships.map((membership) => membership.source).sort();
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toBe('provider:shared');
+    expect(['provider:unique-a', 'provider:unique-b']).toContain(sources[1]);
   });
 
   it('rejects claimed issuer spoofing and subjects outside the Transition graph', async () => {

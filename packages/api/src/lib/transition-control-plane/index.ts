@@ -14,7 +14,9 @@ import {
   findTransitionProposalByRequest,
   findTransitionStatementsByRequest,
   getTransitionPolicyBinding,
+  type RecordTransitionStatementMembershipInput,
   recordTransitionStatementMembership,
+  recordTransitionStatementMemberships,
   resolveTransitionProposalGraph,
   TransitionRequestConflictError,
   type TransitionRequestKind,
@@ -569,20 +571,6 @@ function validateNativeStatement(input: {
   return statement;
 }
 
-async function recordStatement(input: {
-  db: AnyDB;
-  projectId: string;
-  transitionId: string;
-  statement: Statement;
-  source: string;
-  issuer: ActorRef;
-  requestId: string;
-  requestDigest: string;
-}): Promise<TransitionStatementMembership> {
-  const recorded = await recordTransitionStatementMembership(input.db, input);
-  return recorded.membership;
-}
-
 export async function verifyTransition(input: {
   db: AnyDB;
   projectId: string;
@@ -662,14 +650,16 @@ export async function verifyTransition(input: {
     actor: REPLAY_ACTOR,
     predicate: replayPredicate,
   });
-  const statements: TransitionStatementMembership[] = [
-    await recordStatement({
-      ...input,
+  const statementInputs: RecordTransitionStatementMembershipInput[] = [
+    {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
       statement: replay,
       source: 'server:replay',
       issuer: REPLAY_ACTOR,
+      requestId: input.requestId,
       requestDigest: request.digest,
-    }),
+    },
   ];
 
   const operationalResults: TransitionOperationalResult[] = [];
@@ -763,16 +753,19 @@ export async function verifyTransition(input: {
     if (!('statement' in value) || value.statement === undefined) {
       throw new TypeError('Conclusive provider result is missing its Statement');
     }
-    statements.push(
-      await recordStatement({
-        ...input,
-        statement: value.statement,
-        source: provider.source,
-        issuer: provider.issuer,
-        requestDigest: request.digest,
-      })
-    );
+    statementInputs.push({
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      statement: value.statement,
+      source: provider.source,
+      issuer: provider.issuer,
+      requestId: input.requestId,
+      requestDigest: request.digest,
+    });
   }
+  const statements = (await recordTransitionStatementMemberships(input.db, statementInputs)).map(
+    (recorded) => recorded.membership
+  );
   statements.sort((left, right) => comparePortable(left.statementDigest, right.statementDigest));
   operationalResults.sort((left, right) => comparePortable(left.source, right.source));
   return {

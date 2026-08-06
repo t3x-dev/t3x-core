@@ -445,16 +445,10 @@ function statementFactsEqual(
   );
 }
 
-export async function recordTransitionStatementMembership(
-  db: AnyDB,
+function assertStatementMembershipInput(
+  graph: ResolvedTransitionProposalGraph,
   input: RecordTransitionStatementMembershipInput
-): Promise<{ membership: TransitionStatementMembership; reused: boolean }> {
-  const graph = await resolveTransitionProposalGraph(
-    db,
-    input.projectId,
-    input.transitionId,
-    false
-  );
+): void {
   assertActor(input.issuer, 'issuer');
   if (input.source.trim().length === 0 || input.requestId.trim().length === 0) {
     throw new TypeError('Statement source and requestId must be non-empty');
@@ -485,53 +479,114 @@ export async function recordTransitionStatementMembership(
       'Statement subjects must belong to the project-scoped Transition graph'
     );
   }
+}
 
-  const digest = describeTransitionObject(input.statement).digest;
-  const current = await listTransitionStatementMemberships(db, input.projectId, input.transitionId);
-  const sameDigest = current.find((row) => row.statementDigest === digest);
-  const sameRequest = current.find(
-    (row) =>
-      row.source === input.source &&
-      sameActor(row.issuer, input.issuer) &&
-      row.requestId === input.requestId
+/**
+ * Atomically persist one complete application observation batch. Either every
+ * new Statement membership becomes visible or none do.
+ */
+export async function recordTransitionStatementMemberships(
+  db: AnyDB,
+  inputs: readonly RecordTransitionStatementMembershipInput[]
+): Promise<Array<{ membership: TransitionStatementMembership; reused: boolean }>> {
+  if (inputs.length === 0) return [];
+  const first = inputs[0]!;
+  if (
+    inputs.some(
+      (input) => input.projectId !== first.projectId || input.transitionId !== first.transitionId
+    )
+  ) {
+    throw new TypeError('Statement membership batches require one project-scoped Transition');
+  }
+  const graph = await resolveTransitionProposalGraph(
+    db,
+    first.projectId,
+    first.transitionId,
+    false
   );
-  for (const existing of [sameDigest, sameRequest]) {
-    if (existing !== undefined) {
-      if (!statementFactsEqual(existing, input)) {
+  inputs.forEach((input) => assertStatementMembershipInput(graph, input));
+
+  const digests = inputs.map((input) => describeTransitionObject(input.statement).digest);
+  const requestKeys = inputs.map(
+    (input) => `${input.source}\0${input.issuer.kind}\0${input.issuer.id}\0${input.requestId}`
+  );
+  if (
+    new Set(digests).size !== digests.length ||
+    new Set(requestKeys).size !== requestKeys.length
+  ) {
+    throw new TypeError('Statement membership batches cannot repeat a Statement or issuer request');
+  }
+
+  const current = await listTransitionStatementMemberships(db, first.projectId, first.transitionId);
+  const reused = inputs.map((input, index) => {
+    const sameDigest = current.find((row) => row.statementDigest === digests[index]);
+    const sameRequest = current.find(
+      (row) =>
+        row.source === input.source &&
+        sameActor(row.issuer, input.issuer) &&
+        row.requestId === input.requestId
+    );
+    for (const existing of [sameDigest, sameRequest]) {
+      if (existing !== undefined && !statementFactsEqual(existing, input)) {
         throw new TransitionStatementConflictError(input.requestId);
       }
-      return { membership: existing, reused: true };
     }
-  }
-
-  await (
-    db as unknown as {
-      transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
-    }
-  ).transaction(async (rawTx) => {
-    const tx = rawTx as AnyDB;
-    await persistTransitionObjects(tx, [input.statement]);
-    await tx
-      .insert(transitionStatementMemberships)
-      .values({
-        transitionId: input.transitionId,
-        statementDigest: digest,
-        source: input.source,
-        issuerKind: input.issuer.kind,
-        issuerId: input.issuer.id,
-        requestId: input.requestId,
-        requestDigest: input.requestDigest,
-      })
-      .onConflictDoNothing();
+    return sameDigest ?? sameRequest ?? null;
   });
+  const pending = inputs.filter((_input, index) => reused[index] === null);
 
-  const stored = (
-    await listTransitionStatementMemberships(db, input.projectId, input.transitionId)
-  ).find((row) => row.statementDigest === digest);
-  if (stored === undefined || !statementFactsEqual(stored, input)) {
-    throw new TransitionStatementConflictError(input.requestId);
-  }
-  return { membership: stored, reused: false };
+  const verifyStoredBatch = (stored: TransitionStatementMembership[]) => {
+    inputs.forEach((input, index) => {
+      const membership = stored.find((row) => row.statementDigest === digests[index]);
+      if (membership === undefined || !statementFactsEqual(membership, input)) {
+        throw new TransitionStatementConflictError(input.requestId);
+      }
+    });
+    return stored;
+  };
+  const stored =
+    pending.length === 0
+      ? verifyStoredBatch(current)
+      : await (
+          db as unknown as {
+            transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+          }
+        ).transaction(async (rawTx) => {
+          const tx = rawTx as AnyDB;
+          await persistTransitionObjects(
+            tx,
+            pending.map((input) => input.statement)
+          );
+          await tx
+            .insert(transitionStatementMemberships)
+            .values(
+              pending.map((input) => ({
+                transitionId: input.transitionId,
+                statementDigest: describeTransitionObject(input.statement).digest,
+                source: input.source,
+                issuerKind: input.issuer.kind,
+                issuerId: input.issuer.id,
+                requestId: input.requestId,
+                requestDigest: input.requestDigest,
+              }))
+            )
+            .onConflictDoNothing();
+          return verifyStoredBatch(
+            await listTransitionStatementMemberships(tx, first.projectId, first.transitionId)
+          );
+        });
+
+  return digests.map((digest, index) => {
+    const membership = stored.find((row) => row.statementDigest === digest)!;
+    return { membership, reused: reused[index] !== null };
+  });
+}
+
+export async function recordTransitionStatementMembership(
+  db: AnyDB,
+  input: RecordTransitionStatementMembershipInput
+): Promise<{ membership: TransitionStatementMembership; reused: boolean }> {
+  return (await recordTransitionStatementMemberships(db, [input]))[0]!;
 }
 
 export async function resolveTransitionProposalGraph(
