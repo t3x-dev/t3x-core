@@ -32,7 +32,7 @@ function createRegistry(overrides?: {
   const defaultModels = {
     anthropic: 'claude-sonnet-4-20250514',
     openai: 'gpt-5.4',
-    'google-ai': 'gemini-2.5-pro',
+    'google-ai': 'gemini-3.1-flash-lite',
     ...overrides?.defaultModels,
   };
 

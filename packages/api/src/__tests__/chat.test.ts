@@ -286,6 +286,75 @@ describe('Chat Routes', () => {
       delete process.env.OPENAI_API_KEY;
     });
 
+    it('returns 429 when the configured provider reports a rate limit', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'google',
+        apiKey: 'google-local-key',
+      });
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response('{"error":{"code":429,"message":"Quota exceeded"}}', {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      );
+
+      const res = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          model: 'gemini-2.5-pro',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(429);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error).toEqual({
+        code: 'RATE_LIMITED',
+        message: 'Rate limited. Please try again later.',
+      });
+    });
+
+    it('returns 401 when the configured provider rejects its API key', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'invalid-local-key',
+      });
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response('{"error":{"message":"Invalid API key"}}', {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      );
+
+      const res = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(401);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error).toEqual({
+        code: 'AUTH_ERROR',
+        message: 'Provider authentication failed.',
+      });
+    });
+
     it('strips the provider prefix and normalizes legacy OpenAI model ids', async () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'openai',

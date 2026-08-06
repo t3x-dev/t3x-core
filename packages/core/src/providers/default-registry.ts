@@ -106,12 +106,8 @@ export function registerDefaultProviders(
     const config = applyOverride(
       'google-ai',
       {
-        defaultModel: 'gemini-2.5-pro',
-        availableModels: [
-          'gemini-2.5-pro',
-          'gemini-3-flash-preview',
-          'gemini-3.1-flash-lite-preview',
-        ],
+        defaultModel: 'gemini-3.1-flash-lite',
+        availableModels: ['gemini-2.5-pro', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'],
       },
       providerOverrides
     );
