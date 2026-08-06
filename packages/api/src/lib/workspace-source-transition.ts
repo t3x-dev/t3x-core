@@ -52,6 +52,7 @@ import {
   decideTransition,
   TransitionDecisionDeniedError,
   TransitionReviewStaleError,
+  type TransitionWorkspaceCommitProjection,
 } from './transition-control-plane/lifecycle';
 import {
   canonicalTransitionRequest,
@@ -688,6 +689,81 @@ function sourceProviderArtifact(
         ...(resource.content_hash === undefined ? {} : { contentHash: resource.content_hash }),
       };
     }),
+  };
+}
+
+function sourceArtifactFromPreparation(preparationFacts: ProtocolValue): Record<string, unknown> {
+  if (!isRecord(preparationFacts) || !isRecord(preparationFacts.artifact)) {
+    throw new TypeError('Stored exact-source preparation facts are malformed');
+  }
+  const artifactFacts = preparationFacts.artifact;
+  const selector = sourceProviderArtifact(preparationFacts);
+  const root = artifactFacts.root;
+  if (
+    root !== undefined &&
+    (!isRecord(root) ||
+      typeof root.material_id !== 'string' ||
+      typeof root.content_hash !== 'string')
+  ) {
+    throw new TypeError('Stored exact-source preparation root is malformed');
+  }
+  return {
+    format: selector.format,
+    rootPath: selector.rootPath,
+    ...(root === undefined
+      ? {}
+      : {
+          root: {
+            materialId: root.material_id,
+            contentHash: root.content_hash,
+          },
+        }),
+    resources: selector.resources.map((resource) => {
+      if (resource.contentHash === undefined) {
+        throw new TypeError('Stored exact-source preparation resource is not content-addressed');
+      }
+      return {
+        path: resource.path,
+        materialId: resource.materialId,
+        contentHash: resource.contentHash,
+      };
+    }),
+  };
+}
+
+/**
+ * Derive the canonical API's task projection from immutable server preparation.
+ * Protocol Commit remains projection-agnostic; the route composes this adapter.
+ */
+export async function resolveCanonicalWorkspaceSourceCommitProjection(input: {
+  db: AnyDB;
+  projectId: string;
+  transitionId: string;
+}): Promise<TransitionWorkspaceCommitProjection | undefined> {
+  const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
+  if (
+    graph.membership.requestKind !== 'exact_source_import' &&
+    graph.membership.requestKind !== 'exact_source_edit' &&
+    graph.membership.requestKind !== 'exact_source_revert'
+  ) {
+    return undefined;
+  }
+  if (graph.preparation === null) {
+    throw new WorkspaceTransitionReviewStaleError();
+  }
+  const sourceArtifact = sourceArtifactFromPreparation(
+    JSON.parse(graph.preparation.canonicalJson) as ProtocolValue
+  );
+  const requestFacts: ProtocolValue = {
+    adapter: 'canonical_transition_exact_source',
+    request_kind: graph.membership.requestKind,
+    preparation_digest: graph.preparation.digest,
+  };
+  return {
+    requestFacts,
+    apply({ workspace }) {
+      return { ...workspace, sourceArtifact };
+    },
   };
 }
 

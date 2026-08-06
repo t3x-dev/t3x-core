@@ -9,6 +9,7 @@ import {
   type ProposalStatement,
   type RepositoryDecisionAuthority,
   type RequestedDecisionOutcome,
+  type StatementObservation,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -334,7 +335,7 @@ export async function decideTransition(input: {
         policy: facts.policyBinding!.policy,
         policyResource: facts.policyBinding!.resource,
         statements: facts.graph.observations.map((observation) => ({
-          statement: observation.statement,
+          statement: observation.statement as StatementObservation['statement'],
           issuerContext: observation.issuerContext,
         })),
       };

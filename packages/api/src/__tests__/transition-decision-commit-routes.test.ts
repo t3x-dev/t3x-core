@@ -2,6 +2,7 @@ import { type ApiKey, parseAcceptancePolicy } from '@t3x-dev/core';
 import {
   type AnyDB,
   bindTransitionPolicy,
+  createMaterial,
   digestTransitionRequestCanonicalJson,
   ensureMainBranch,
   findWorkspaceDraft,
@@ -21,6 +22,9 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
+import { createWorkspaceSourceRunnerProvider } from '../lib/workspace-source-transition';
+import type { LocalOciCommandExecutor } from '../lib/workspace-validation/local-oci-provider';
 import { createTransitionControlPlaneRoutes } from '../routes/transition-control-plane.openapi';
 
 type WirePrecondition = {
@@ -54,13 +58,13 @@ function key(
   };
 }
 
-function app(apiKey: ApiKey) {
+function app(apiKey: ApiKey, options?: TransitionControlPlaneOptions) {
   const instance = new Hono();
   instance.use('*', async (context, next) => {
     context.set('apiKey', apiKey);
     await next();
   });
-  instance.route('/', createTransitionControlPlaneRoutes());
+  instance.route('/', createTransitionControlPlaneRoutes(options));
   return instance;
 }
 
@@ -170,9 +174,10 @@ async function verify(input: {
   transitionId: string;
   requestId: string;
   apiKey: ApiKey;
+  options?: TransitionControlPlaneOptions;
 }) {
   const response = await post(
-    app(input.apiKey),
+    app(input.apiKey, input.options),
     `/v1/projects/${input.projectId}/transitions/${input.transitionId}/verify`,
     { request_id: input.requestId }
   );
@@ -365,6 +370,128 @@ describe('Transition Decision and Commit routes', () => {
       apiKey: committer,
     });
     expect(conflictingCommit.status).toBe(409);
+  });
+
+  it('commits a canonical exact-source import with its server-resolved projection', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Exact Source Commit' }));
+    const draft = await createWorkspace(project.projectId, 'ws_exact_source_commit');
+    await bindPolicy(project.projectId, 'exact-source-commit/v1');
+    const source = ['esphome:', '  name: canonical-commit', 'esp32:', '  board: esp32dev'].join(
+      '\n'
+    );
+    const material = await createMaterial(mockDB, {
+      project_id: project.projectId,
+      source_type: 'document',
+      title: 'canonical-commit.yaml',
+      content_text: source,
+      content_hash: 'sha256:canonical-exact-source-commit',
+    });
+    const writer = key(project.projectId, 'source-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(project.projectId, 'source-reviewer', 'human', [
+      'transition:decide:accept',
+    ]);
+    const committer = key(project.projectId, 'source-committer', 'service', [
+      'transition:commit:create',
+      'transition:ref:advance',
+    ]);
+    const proposedResponse = await post(
+      app(writer),
+      `/v1/projects/${project.projectId}/transitions`,
+      {
+        kind: 'exact_source_import',
+        request_id: 'proposal:exact-source-commit',
+        workspace_id: 'ws_exact_source_commit',
+        artifact: {
+          format: 't3x.dev/workspace-source-artifact/v1',
+          root_path: 'device.yaml',
+          resources: [],
+        },
+        root: { material_id: material.id },
+        why: 'Import the server-resolved exact source.',
+        if_revision: draft.revision,
+      }
+    );
+    expect(proposedResponse.status).toBe(200);
+    const proposedPayload = (await proposedResponse.json()) as {
+      data: { transition_id: string };
+    };
+    let runnerCalls = 0;
+    const executor: LocalOciCommandExecutor = async () => {
+      runnerCalls += 1;
+      return { exit_code: 0, stdout: '', stderr: '' };
+    };
+    const precondition = await verify({
+      projectId: project.projectId,
+      transitionId: proposedPayload.data.transition_id,
+      requestId: 'verify:exact-source-commit',
+      apiKey: writer,
+      options: {
+        nativeProviders: [createWorkspaceSourceRunnerProvider({ runner: { executor } })],
+      },
+    });
+    expect(runnerCalls).toBe(2);
+    const accepted = await decide({
+      projectId: project.projectId,
+      transitionId: proposedPayload.data.transition_id,
+      requestId: 'decision:exact-source-commit',
+      outcome: 'accepted',
+      precondition,
+      apiKey: reviewer,
+    });
+    expect(accepted.status).toBe(200);
+    const acceptedPayload = (await accepted.json()) as {
+      data: { decision_digest: string };
+    };
+    const committed = await commit({
+      projectId: project.projectId,
+      transitionId: proposedPayload.data.transition_id,
+      requestId: 'commit:exact-source-commit',
+      decisionDigest: acceptedPayload.data.decision_digest,
+      expectedHead: null,
+      apiKey: committer,
+    });
+    expect(committed.status).toBe(200);
+    const committedPayload = (await committed.json()) as {
+      data: {
+        commit_digest: string;
+        workspace: {
+          status: string;
+          sourceArtifact: Record<string, unknown>;
+        };
+      };
+    };
+    expect(committedPayload.data.workspace).toMatchObject({
+      status: 'committed',
+      sourceArtifact: {
+        format: 't3x.dev/workspace-source-artifact/v1',
+        rootPath: 'device.yaml',
+        root: {
+          materialId: material.id,
+          contentHash: material.content_hash,
+        },
+        resources: [],
+      },
+    });
+    const retried = await commit({
+      projectId: project.projectId,
+      transitionId: proposedPayload.data.transition_id,
+      requestId: 'commit:exact-source-commit',
+      decisionDigest: acceptedPayload.data.decision_digest,
+      expectedHead: null,
+      apiKey: committer,
+    });
+    expect(retried.status).toBe(200);
+    const retriedPayload = (await retried.json()) as {
+      data: { reused: boolean; commit_digest: string; workspace: Record<string, unknown> };
+    };
+    expect(retriedPayload.data).toMatchObject({
+      reused: true,
+      commit_digest: committedPayload.data.commit_digest,
+      workspace: committedPayload.data.workspace,
+    });
   });
 
   it('keeps outcome and Commit/ref scopes independent and rejected Decisions non-authorizing', async () => {

@@ -40,6 +40,7 @@ import {
   TransitionReviewStaleError,
 } from '../lib/transition-control-plane/lifecycle';
 import {
+  resolveCanonicalWorkspaceSourceCommitProjection,
   WorkspaceSourceArtifactError,
   WorkspaceSourceInputsError,
   WorkspaceSourceRevertUnavailableError,
@@ -781,6 +782,11 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         projectId,
         scope: 'transition:ref:advance',
       });
+      const workspaceProjection = await resolveCanonicalWorkspaceSourceCommitProjection({
+        db,
+        projectId,
+        transitionId,
+      });
       const result = await commitTransition({
         db,
         projectId,
@@ -789,6 +795,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         decisionDigest: body.decision_digest,
         expectedHead: body.expected_head,
+        ...(workspaceProjection === undefined ? {} : { workspaceProjection }),
       });
       return c.json(
         {

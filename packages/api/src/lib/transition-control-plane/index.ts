@@ -297,10 +297,26 @@ function normalizedSourcePreparation(sourceArtifact: unknown): ProtocolValue {
   ) {
     throw new TypeError('Server-resolved exact-source preparation is malformed');
   }
+  const root = sourceArtifact.root;
+  let normalizedRoot: ProtocolValue | undefined;
+  if (root !== undefined) {
+    if (
+      !isRecord(root) ||
+      typeof root.materialId !== 'string' ||
+      typeof root.contentHash !== 'string'
+    ) {
+      throw new TypeError('Server-resolved exact-source root is malformed');
+    }
+    normalizedRoot = {
+      material_id: root.materialId,
+      content_hash: root.contentHash,
+    };
+  }
   return {
     artifact: {
       format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
       root_path: sourceArtifact.rootPath,
+      ...(normalizedRoot === undefined ? {} : { root: normalizedRoot }),
       resources: sourceArtifact.resources.map((resource) => {
         if (
           !isRecord(resource) ||
@@ -402,9 +418,9 @@ export async function proposeTransition(input: {
 
   const built = await buildProposal(input.db, input);
   let preparationFacts: ProtocolValue | undefined;
-  if (input.request.kind === 'exact_source_revert') {
+  if (input.request.kind !== 'structured_yops') {
     if (!('sourceArtifact' in built)) {
-      throw new TypeError('Exact-source revert did not produce preparation facts');
+      throw new TypeError('Exact-source Proposal did not produce preparation facts');
     }
     preparationFacts = normalizedSourcePreparation(built.sourceArtifact);
   }
