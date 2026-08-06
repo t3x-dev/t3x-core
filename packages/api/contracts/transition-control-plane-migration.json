@@ -158,7 +158,7 @@
         "packages/api/src/lib/transition-control-plane/materialize.ts",
         "packages/api/src/lib/workspace-source-transition.ts"
       ],
-      "writer_sources": ["packages/api/src/lib/workspace-source-transition.ts"],
+      "writer_sources": [],
       "consumers": [
         {
           "file": "apps/web/src/queries/workspaces.ts",
@@ -189,10 +189,22 @@
         {
           "file": "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
           "token": "transitionId: reviewed.transition_id"
+        },
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "const decided = await decideTransition("
+        },
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "const committed = await commitTransition("
+        },
+        {
+          "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
+          "token": "const revertedRetry = await decideWorkspaceSourceRevert("
         }
       ],
-      "progress": "Exact-source import, edit, and revert review now materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity.",
-      "remaining_gap": "Source decide and commit still use the compatibility policy, Decision record, CommitV2 writer, and sourceArtifact Workspace projection until the compatibility command boundary preserves retries and atomic side effects through shared lifecycle use cases.",
+      "progress": "Exact-source import, edit, and revert reviews materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity. Their compatibility decide/commit paths now delegate Decision receipts, audit writes, CommitV2 creation, ref CAS, and sourceArtifact Workspace projection to the shared lifecycle; real database tests cover runner Statements and post-commit retry reuse for all three request kinds.",
+      "remaining_gap": "The legacy source-transition wire routes, first-party Web consumers, and compatibility policy selection remain. Operational runner no-Statement details are not protocol facts; route retirement still requires canonical task projection parity, deprecation metadata/window, caller migration, and observability.",
       "replacement": "Create or resolve an exact-source Transition, retain source-specific preparation, and delegate governance to the canonical actions.",
       "removal_gate": "Remove only after import, edit, and revert retain exact-source parity through canonical actions and all first-party callers have migrated."
     },
