@@ -124,6 +124,11 @@ export type TransitionExternalProviderResult =
   | { outcome: 'statement'; statement: TransitionExternalStatementDraft }
   | { outcome: 'no_statement'; code: string; message: string };
 
+export type TransitionNativeProviderResult =
+  | { outcome: 'statement'; statement: Statement }
+  | { outcome: 'no_statement'; code: string; message: string }
+  | { outcome: 'not_applicable' };
+
 export interface TransitionExternalStatementProvider {
   /** Stable server-owned key persisted as Statement membership source. */
   source: string;
@@ -143,8 +148,34 @@ export interface TransitionExternalStatementProvider {
   }): Promise<TransitionExternalProviderResult>;
 }
 
+/**
+ * Trusted application adapter for a native Statement profile. Unlike external
+ * providers, it must construct the complete Statement through the profile's
+ * parser/builder; the control plane still revalidates its authority and graph
+ * subjects before persistence.
+ */
+export interface TransitionNativeStatementProvider {
+  source: string;
+  issuer: ActorRef;
+  predicateTypes: readonly string[];
+  verify(input: {
+    db: AnyDB;
+    transitionId: string;
+    projectId: string;
+    workspaceId: string;
+    requestKind: TransitionRequestKind;
+    requestFacts: ProtocolValue;
+    effect: Effect;
+    base: State;
+    result: State;
+    proposal: ProposalStatement;
+    run: { id: string; recordedAt: string };
+  }): Promise<TransitionNativeProviderResult>;
+}
+
 export interface TransitionControlPlaneOptions {
   providers?: readonly TransitionExternalStatementProvider[];
+  nativeProviders?: readonly TransitionNativeStatementProvider[];
   allowedExternalPredicateTypes?: readonly string[];
 }
 
@@ -449,12 +480,19 @@ function assertExternalPredicate(
 
 function configuredProviders(options: TransitionControlPlaneOptions | undefined): {
   providers: TransitionExternalStatementProvider[];
+  nativeProviders: TransitionNativeStatementProvider[];
   allowed: Set<string>;
 } {
   const providers = [...(options?.providers ?? [])];
+  const nativeProviders = [...(options?.nativeProviders ?? [])];
   const allowed = new Set(options?.allowedExternalPredicateTypes ?? []);
   const sources = new Set<string>();
-  for (const provider of providers) {
+  const configured = [
+    ...providers.map((provider) => ({ kind: 'external' as const, provider })),
+    ...nativeProviders.map((provider) => ({ kind: 'native' as const, provider })),
+  ];
+  for (const entry of configured) {
+    const { provider } = entry;
     if (
       provider.source.length === 0 ||
       provider.source !== provider.source.trim() ||
@@ -470,10 +508,14 @@ function configuredProviders(options: TransitionControlPlaneOptions | undefined)
       throw new TypeError(`Transition provider ${provider.source} repeats a predicate type`);
     }
     for (const predicateType of provider.predicateTypes) {
-      assertExternalPredicate(predicateType, allowed);
+      if (entry.kind === 'native') {
+        assertExternalPredicate(predicateType, new Set([predicateType]));
+      } else {
+        assertExternalPredicate(predicateType, allowed);
+      }
     }
   }
-  return { providers, allowed };
+  return { providers, nativeProviders, allowed };
 }
 
 function createExternalStatement(input: {
@@ -494,6 +536,37 @@ function createExternalStatement(input: {
     predicateType: input.draft.predicateType,
     predicate: input.draft.predicate,
   });
+}
+
+function sameActor(left: ActorRef, right: ActorRef): boolean {
+  return left.kind === right.kind && left.id === right.id;
+}
+
+function descriptorKey(value: { kind: string; schema: string; digest: string }): string {
+  return `${value.kind}\0${value.schema}\0${value.digest}`;
+}
+
+function validateNativeStatement(input: {
+  graph: Awaited<ReturnType<typeof resolveTransitionProposalGraph>>;
+  provider: TransitionNativeStatementProvider;
+  statement: Statement;
+}): Statement {
+  const statement = parseStatement(input.statement);
+  if (!sameActor(statement.actor, input.provider.issuer)) {
+    throw new TypeError(`Native provider ${input.provider.source} issued as another actor`);
+  }
+  if (!input.provider.predicateTypes.includes(statement.predicateType)) {
+    throw new TransitionPredicateNotAllowedError(statement.predicateType);
+  }
+  const allowedSubjects = new Set([
+    descriptorKey(describeTransitionObject(input.graph.effect)),
+    descriptorKey(input.graph.effect.result),
+    descriptorKey(describeTransitionObject(input.graph.proposal)),
+  ]);
+  if (statement.subjects.some((subject) => !allowedSubjects.has(descriptorKey(subject)))) {
+    throw new TypeError(`Native provider ${input.provider.source} issued for another graph`);
+  }
+  return statement;
 }
 
 async function recordStatement(input: {
@@ -539,8 +612,9 @@ export async function verifyTransition(input: {
     };
   }
 
-  const { providers, allowed } = configuredProviders(input.options);
+  const { providers, nativeProviders, allowed } = configuredProviders(input.options);
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
+  const requestFacts = JSON.parse(graph.membership.requestCanonicalJson) as ProtocolValue;
   const recordedAt = new Date().toISOString();
   let replayPredicate:
     | {
@@ -599,9 +673,14 @@ export async function verifyTransition(input: {
   ];
 
   const operationalResults: TransitionOperationalResult[] = [];
+  const allProviders = [
+    ...providers.map((provider) => ({ kind: 'external' as const, provider })),
+    ...nativeProviders.map((provider) => ({ kind: 'native' as const, provider })),
+  ];
   const providerRuns = await Promise.allSettled(
-    providers.map(async (provider) => {
-      const result = await provider.verify({
+    allProviders.map(async (entry) => {
+      const { provider } = entry;
+      const common = {
         transitionId: input.transitionId,
         projectId: input.projectId,
         workspaceId: graph.membership.workspaceId,
@@ -613,7 +692,32 @@ export async function verifyTransition(input: {
           id: `transition:${input.transitionId}:verify:${input.requestId}:${provider.source}`,
           recordedAt,
         },
-      });
+      };
+      if (entry.kind === 'native') {
+        const result = await entry.provider.verify({
+          ...common,
+          db: input.db,
+          requestKind: graph.membership.requestKind,
+          requestFacts,
+        });
+        if (result.outcome === 'not_applicable') return { provider, result } as const;
+        if (result.outcome === 'no_statement') {
+          if (result.code.trim().length === 0 || result.message.trim().length === 0) {
+            throw new TypeError('Operational provider results require a code and message');
+          }
+          return { provider, result } as const;
+        }
+        return {
+          provider,
+          result,
+          statement: validateNativeStatement({
+            graph,
+            provider: entry.provider,
+            statement: result.statement,
+          }),
+        } as const;
+      }
+      const result = await entry.provider.verify(common);
       if (result.outcome === 'no_statement') {
         if (result.code.trim().length === 0 || result.message.trim().length === 0) {
           throw new TypeError('Operational provider results require a code and message');
@@ -634,7 +738,7 @@ export async function verifyTransition(input: {
     })
   );
   for (let index = 0; index < providerRuns.length; index += 1) {
-    const provider = providers[index]!;
+    const provider = allProviders[index]!.provider;
     const settled = providerRuns[index]!;
     if (settled.status === 'rejected') {
       operationalResults.push({
@@ -646,6 +750,7 @@ export async function verifyTransition(input: {
       continue;
     }
     const value = settled.value;
+    if (value.result.outcome === 'not_applicable') continue;
     if (value.result.outcome === 'no_statement') {
       operationalResults.push({
         source: provider.source,

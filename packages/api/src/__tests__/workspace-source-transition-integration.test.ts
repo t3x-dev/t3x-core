@@ -7,8 +7,13 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { inspectTransition } from '../lib/transition-control-plane';
 import {
+  inspectTransition,
+  proposeTransition,
+  verifyTransition,
+} from '../lib/transition-control-plane';
+import {
+  createWorkspaceSourceRunnerProvider,
   decideWorkspaceSourceRevert,
   decideWorkspaceSourceTransition,
   reviewWorkspaceSourceRevert,
@@ -202,5 +207,70 @@ describe('Workspace source Transition durable review', () => {
     const revertedRetry = await decideWorkspaceSourceRevert(db, revertDecisionInput, capabilities);
     expect(revertedRetry.commit).toEqual(reverted.commit);
     expect(revertedRetry.workspace).toEqual(reverted.workspace);
+  });
+
+  it('runs the native ESPHome provider from canonical exact-source Verify', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Canonical source Verify' }));
+    await ensureMainBranch(db, project.projectId);
+    const workspaceId = 'workspace_canonical_source_verify';
+    const source = ['esphome:', '  name: canonical-source', 'esp32:', '  board: esp32dev'].join(
+      '\n'
+    );
+    const material = await createMaterial(db, {
+      project_id: project.projectId,
+      source_type: 'document',
+      title: 'canonical-device.yaml',
+      content_text: source,
+      content_hash: 'sha256:canonical-source-verify',
+    });
+    const draft = await upsertWorkspaceDraft(db, {
+      project_id: project.projectId,
+      workspace_id: workspaceId,
+      title: 'Canonical source Verify Workspace',
+      target_branch: 'main',
+      workspace_state: {
+        id: workspaceId,
+        projectId: project.projectId,
+        title: 'Canonical source Verify Workspace',
+        targetBranch: 'main',
+      },
+    });
+    const actor = { kind: 'agent' as const, id: 'agent:canonical-source-test' };
+    const proposed = await proposeTransition({
+      db,
+      projectId: project.projectId,
+      requestId: 'proposal:canonical-source-verify',
+      actor,
+      request: {
+        kind: 'exact_source_import',
+        workspaceId,
+        artifact: {
+          format: 't3x.dev/workspace-source-artifact/v1',
+          rootPath: 'device.yaml',
+          resources: [],
+        },
+        root: { materialId: material.id, contentHash: material.content_hash },
+        ifRevision: draft.revision,
+      },
+    });
+    const verified = await verifyTransition({
+      db,
+      projectId: project.projectId,
+      transitionId: proposed.view.transitionId,
+      requestId: 'verify:canonical-source',
+      actor,
+      options: {
+        nativeProviders: [
+          createWorkspaceSourceRunnerProvider({ runner: { executor: runnerExecutor } }),
+        ],
+      },
+    });
+
+    expect(verified.operationalResults).toEqual([]);
+    expect(verified.statements.map((statement) => statement.source).sort()).toEqual([
+      'provider:workspace-esphome-runner',
+      'server:replay',
+    ]);
+    expect(verified.view.transition.checks.runner.outcomes).toEqual(['passed']);
   });
 });

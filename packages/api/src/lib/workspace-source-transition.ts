@@ -19,6 +19,7 @@ import {
   parseAcceptancePolicy,
   projectTransitionView,
   type ReadyEspHomeSourceInputs,
+  RUNNER_VALIDATION_PREDICATE_TYPE,
   type State,
   type StatementObservation,
   stateImportMutationDrivers,
@@ -45,6 +46,7 @@ import {
   TransitionProtocolError,
   verifyEffect,
 } from '@t3x-dev/transition';
+import type { TransitionNativeStatementProvider } from './transition-control-plane';
 import {
   commitTransition,
   decideTransition,
@@ -79,6 +81,7 @@ const RUNNER_ACTOR = Object.freeze({
   kind: 'service' as const,
   id: 'service:t3x-workspace-esphome-runner',
 });
+export const WORKSPACE_SOURCE_RUNNER_PROVIDER_SOURCE = 'provider:workspace-esphome-runner' as const;
 const REPLAY_TOOL = Object.freeze({
   name: '@t3x-dev/transition/replay',
   version: '1',
@@ -453,7 +456,7 @@ function sourceArtifactFromWorkspace(
 
 async function resolveSourceArtifact(
   db: AnyDB,
-  input: BuildWorkspaceSourceProposalInput
+  input: Pick<BuildWorkspaceSourceProposalInput, 'projectId' | 'artifact' | 'change'>
 ): Promise<ResolvedSourceArtifact> {
   if (input.artifact.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT) {
     throw new WorkspaceSourceArtifactError('Unsupported source-artifact selector format');
@@ -653,6 +656,170 @@ async function bindSourceInputs(
   const rebound = bind(names);
   if (rebound.outcome !== 'ready') throw new WorkspaceSourceInputsError(rebound.issues);
   return { ready: rebound, secretValues, unavailableSecrets: null };
+}
+
+function sourceProviderSelection(input: {
+  requestKind: 'exact_source_import' | 'exact_source_edit';
+  requestFacts: ProtocolValue;
+}): Pick<BuildWorkspaceSourceProposalInput, 'artifact' | 'change'> {
+  if (!isRecord(input.requestFacts) || !isRecord(input.requestFacts.artifact)) {
+    throw new TypeError('Stored exact-source request facts are malformed');
+  }
+  const artifactFacts = input.requestFacts.artifact;
+  if (
+    artifactFacts.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT ||
+    typeof artifactFacts.root_path !== 'string' ||
+    !Array.isArray(artifactFacts.resources)
+  ) {
+    throw new TypeError('Stored exact-source artifact facts are malformed');
+  }
+  const artifact: WorkspaceSourceArtifactSelector = {
+    format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+    rootPath: artifactFacts.root_path,
+    resources: artifactFacts.resources.map((resource) => {
+      if (
+        !isRecord(resource) ||
+        typeof resource.path !== 'string' ||
+        typeof resource.material_id !== 'string' ||
+        (resource.content_hash !== undefined && typeof resource.content_hash !== 'string')
+      ) {
+        throw new TypeError('Stored exact-source resource facts are malformed');
+      }
+      return {
+        path: resource.path,
+        materialId: resource.material_id,
+        ...(resource.content_hash === undefined ? {} : { contentHash: resource.content_hash }),
+      };
+    }),
+  };
+  if (input.requestKind === 'exact_source_import') {
+    const root = input.requestFacts.root;
+    if (
+      !isRecord(root) ||
+      typeof root.material_id !== 'string' ||
+      (root.content_hash !== undefined && typeof root.content_hash !== 'string')
+    ) {
+      throw new TypeError('Stored exact-source root facts are malformed');
+    }
+    return {
+      artifact,
+      change: {
+        mode: 'import',
+        root: {
+          materialId: root.material_id,
+          ...(root.content_hash === undefined ? {} : { contentHash: root.content_hash }),
+        },
+      },
+    };
+  }
+  if (!Array.isArray(input.requestFacts.operations)) {
+    throw new TypeError('Stored exact-source edit facts are malformed');
+  }
+  return {
+    artifact,
+    change: {
+      mode: 'edit',
+      operations: input.requestFacts.operations.map((operation) => {
+        if (
+          !isRecord(operation) ||
+          operation.op !== 'replace_scalar' ||
+          !Array.isArray(operation.path) ||
+          operation.path.some(
+            (part) => typeof part !== 'string' && (!Number.isInteger(part) || Number(part) < 0)
+          ) ||
+          typeof operation.expect !== 'string' ||
+          typeof operation.value !== 'string'
+        ) {
+          throw new TypeError('Stored exact-source edit operation facts are malformed');
+        }
+        return {
+          op: 'replace_scalar' as const,
+          path: operation.path as Array<string | number>,
+          expect: operation.expect,
+          value: operation.value,
+        };
+      }),
+    },
+  };
+}
+
+/** Native adapter that binds canonical exact-source requests to the ESPHome Runner profile. */
+export function createWorkspaceSourceRunnerProvider(
+  capabilities: WorkspaceSourceTransitionCapabilities
+): TransitionNativeStatementProvider {
+  return {
+    source: WORKSPACE_SOURCE_RUNNER_PROVIDER_SOURCE,
+    issuer: RUNNER_ACTOR,
+    predicateTypes: [RUNNER_VALIDATION_PREDICATE_TYPE],
+    async verify(input) {
+      if (
+        input.requestKind !== 'exact_source_import' &&
+        input.requestKind !== 'exact_source_edit' &&
+        input.requestKind !== 'exact_source_revert'
+      ) {
+        return { outcome: 'not_applicable' };
+      }
+      if (input.requestKind === 'exact_source_revert') {
+        return {
+          outcome: 'no_statement',
+          code: 'SOURCE_PREPARATION_UNAVAILABLE',
+          message: 'The canonical revert request does not yet retain its exact source selector.',
+        };
+      }
+      if (capabilities.runner === undefined) {
+        return {
+          outcome: 'no_statement',
+          code: 'RUNNER_NOT_CONFIGURED',
+          message: 'The ESPHome Runner is not configured.',
+        };
+      }
+      const selected = sourceProviderSelection({
+        requestKind: input.requestKind,
+        requestFacts: input.requestFacts,
+      });
+      const artifact = await resolveSourceArtifact(input.db, {
+        projectId: input.projectId,
+        ...selected,
+      });
+      const bound = await bindSourceInputs(input, artifact, input.result, capabilities);
+      if (bound.unavailableSecrets !== null) {
+        return {
+          outcome: 'no_statement',
+          code:
+            bound.unavailableSecrets.reason === 'secret_resolver_unavailable'
+              ? 'SECRET_RESOLVER_UNAVAILABLE'
+              : 'SECRET_RESOLUTION_FAILED',
+          message: 'The exact-source secret references could not be resolved by the server.',
+        };
+      }
+      if (bound.ready === null || bound.secretValues === null) {
+        throw new TypeError('Ready exact-source inputs are missing their transient bindings');
+      }
+      const executed = await runEsphomeRunnerStatement({
+        state: input.result,
+        sourceInputs: bound.ready,
+        actor: RUNNER_ACTOR,
+        run: { id: input.run.id, recordedAt: asCanonicalTimestamp(input.run.recordedAt) },
+        secretValues: bound.secretValues,
+        image: capabilities.runner.image,
+        executor: capabilities.runner.executor,
+        tempRoot: capabilities.runner.tempRoot,
+        preflightTimeoutMs: capabilities.runner.preflightTimeoutMs,
+        configTimeoutMs: capabilities.runner.configTimeoutMs,
+      });
+      if (executed.outcome === 'no_statement') {
+        return {
+          outcome: 'no_statement',
+          code:
+            executed.reason === 'environment_required'
+              ? 'RUNNER_ENVIRONMENT_REQUIRED'
+              : 'RUNNER_TIMED_OUT',
+          message: 'The ESPHome Runner did not produce a configuration-validity conclusion.',
+        };
+      }
+      return { outcome: 'statement', statement: executed.statement };
+    },
+  };
 }
 
 function buildEffect(input: {

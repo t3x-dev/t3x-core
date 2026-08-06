@@ -16,7 +16,7 @@ import {
   insertTurn,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
-import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
+import { canonicalizeProtocolValue, type ProtocolValue, parseStatement } from '@t3x-dev/transition';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
@@ -424,6 +424,116 @@ describe('Transition control-plane routes', () => {
       }
     );
     expect(unallowed.status).toBe(400);
+  });
+
+  it('accepts native profile Statements but rejects forged authority and foreign subjects', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Native providers' }));
+    await createWorkspace(project.projectId, 'ws_native_provider');
+    const predicateType = 'example.test/native-validation/v1';
+    const nativeIssuer = { kind: 'service' as const, id: 'service:native-validation' };
+    const options: TransitionControlPlaneOptions = {
+      nativeProviders: [
+        {
+          source: 'native:valid',
+          issuer: nativeIssuer,
+          predicateTypes: [predicateType],
+          async verify(input) {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(input.result)],
+                actor: nativeIssuer,
+                predicateType,
+                predicate: { outcome: 'passed', run: input.run },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:forged-issuer',
+          issuer: { kind: 'service', id: 'service:expected' },
+          predicateTypes: [predicateType],
+          async verify(input) {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(input.result)],
+                actor: { kind: 'service', id: 'service:forged' },
+                predicateType,
+                predicate: { outcome: 'passed' },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:foreign-subject',
+          issuer: { kind: 'service', id: 'service:foreign-subject' },
+          predicateTypes: [predicateType],
+          async verify() {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(createYOpsState({ foreign: true }))],
+                actor: { kind: 'service', id: 'service:foreign-subject' },
+                predicateType,
+                predicate: { outcome: 'passed' },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:not-applicable',
+          issuer: { kind: 'service', id: 'service:not-applicable' },
+          predicateTypes: [predicateType],
+          async verify() {
+            return { outcome: 'not_applicable' };
+          },
+        },
+      ],
+    };
+    const instance = app({
+      apiKey: key(project.projectId, [
+        'transition:propose',
+        'transition:inspect',
+        'transition:verify',
+      ]),
+      options,
+    });
+    const proposed = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions`,
+      proposeBody('proposal:native-provider', 'ws_native_provider')
+    );
+    const proposal = (await proposed.json()) as { data: { transition_id: string } };
+    const verified = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions/${proposal.data.transition_id}/verify`,
+      { request_id: 'verify:native-provider' }
+    );
+    expect(verified.status).toBe(200);
+    const payload = (await verified.json()) as {
+      data: {
+        statements: Array<{ source: string }>;
+        operational_results: Array<{ source: string; outcome: string; message: string }>;
+      };
+    };
+    expect(payload.data.statements.map((statement) => statement.source).sort()).toEqual([
+      'native:valid',
+      'server:replay',
+    ]);
+    expect(payload.data.operational_results).toEqual([
+      expect.objectContaining({ source: 'native:foreign-subject', outcome: 'failed' }),
+      expect.objectContaining({ source: 'native:forged-issuer', outcome: 'failed' }),
+    ]);
+    expect(
+      payload.data.operational_results.some((result) => result.message.includes('another actor'))
+    ).toBe(true);
+    expect(
+      payload.data.operational_results.some((result) => result.message.includes('another graph'))
+    ).toBe(true);
   });
 
   it('denies every cross-scope operation and a wrong-project credential', async () => {
