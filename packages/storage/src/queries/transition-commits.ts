@@ -787,6 +787,10 @@ export interface CreateTransitionCommitInput {
   yopsLogIds?: readonly string[];
 }
 
+export interface CreateAuthorizedTransitionCommitInput extends CreateTransitionCommitInput {
+  authorization: RepositoryDecisionAuthorization;
+}
+
 export interface CreatedTransitionCommit {
   commit: CommitV2;
   digest: string;
@@ -989,6 +993,23 @@ export async function createTransitionCommit(
       throw new TransitionHeadConflictError(input.expectedHead, actual.head);
     }
     return { commit: verified.commit, digest: descriptor.digest, mediaType: COMMIT_V2_MEDIA_TYPE };
+  });
+  return result as CreatedTransitionCommit;
+}
+
+/**
+ * Persist trusted Decision authorization and its CommitV2 in one transaction.
+ * Fixture/application writers use this boundary instead of sequencing the
+ * authorization ledger and the low-level Commit primitive themselves.
+ */
+export async function createAuthorizedTransitionCommit(
+  db: AnyDB,
+  input: CreateAuthorizedTransitionCommitInput
+): Promise<CreatedTransitionCommit> {
+  const result = await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    await recordRepositoryDecisionAuthorization(tx, input.authorization);
+    return createTransitionCommit(tx, input);
   });
   return result as CreatedTransitionCommit;
 }

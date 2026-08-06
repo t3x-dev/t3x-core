@@ -318,8 +318,20 @@
       "state": "internal_compatibility",
       "routes": [],
       "application_sources": ["packages/storage/src/queries/seed-demo-workspace.ts"],
-      "writer_sources": ["packages/storage/src/queries/seed-demo-workspace.ts"],
+      "writer_sources": [],
       "consumers": [],
+      "migration_proofs": [
+        {
+          "file": "packages/storage/src/queries/seed-demo-workspace.ts",
+          "token": "const created = await createAuthorizedTransitionCommit(db, {"
+        },
+        {
+          "file": "packages/storage/src/__tests__/seed-demo-workspace.test.ts",
+          "token": "rolls back every fixture row and marker when a late seed step fails"
+        }
+      ],
+      "progress": "The demo fixture now runs inside one outer transaction and persists trusted Decision authorization plus CommitV2 through the storage authorized-transition boundary. A late leaf failure rolls back project, source, YOps, audit, CommitV2, ref, leaf, and marker rows together.",
+      "remaining_gap": "The demo seed remains an internal fixture application service and intentionally owns its bundled fixture policy and projections. It is not a public canonical Transition API and should not be reused for product writes.",
       "replacement": "Seed a valid canonical Transition graph through a fixture-specific application boundary.",
       "removal_gate": "The seed must not call the storage Commit primitive directly after a fixture/application boundary exists."
     }
