@@ -43,6 +43,10 @@ import {
 } from '@t3x-dev/storage';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
 import {
+  materializeTransitionProposal,
+  materializeTransitionStatement,
+} from './transition-control-plane/materialize';
+import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
   schemaRootKeyFromBinding,
@@ -139,6 +143,7 @@ export interface ReviewWorkspaceTransitionInput {
 }
 
 export interface ReviewWorkspaceTransitionResult {
+  transitionId: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
 }
@@ -167,6 +172,7 @@ export interface BuiltWorkspaceYOpsProposal {
 }
 
 export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitionInput {
+  transitionId?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceTransitionPrecondition;
@@ -236,7 +242,8 @@ export class WorkspaceTransitionDecisionDeniedError extends Error {
   }
 }
 
-interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
+interface PreparedWorkspaceTransition
+  extends Omit<ReviewWorkspaceTransitionResult, 'transitionId'> {
   actor: ActorRef & { kind: 'human' };
   base: State;
   content: SemanticContent;
@@ -244,6 +251,7 @@ interface PreparedWorkspaceTransition extends ReviewWorkspaceTransitionResult {
   head: TransitionRefHead;
   observations: StatementObservation[];
   proposal: Extract<ReturnType<typeof compileProposalDraft>, { ok: true }>['proposal'];
+  projectId: string;
   result: State;
   targetBranch: string;
   workspace: Record<string, unknown>;
@@ -571,6 +579,7 @@ async function prepareWorkspaceTransition(
     observations,
     precondition,
     proposal,
+    projectId: input.projectId,
     result,
     targetBranch: context.targetBranch,
     transition,
@@ -584,7 +593,71 @@ export async function reviewWorkspaceTransition(
   input: ReviewWorkspaceTransitionInput
 ): Promise<ReviewWorkspaceTransitionResult> {
   const prepared = await prepareWorkspaceTransition(db, input);
-  return { transition: prepared.transition, precondition: prepared.precondition };
+  const transitionId = await materializePreparedWorkspaceTransition(db, prepared);
+  return { transitionId, transition: prepared.transition, precondition: prepared.precondition };
+}
+
+async function materializePreparedWorkspaceTransition(
+  db: AnyDB,
+  prepared: PreparedWorkspaceTransition
+): Promise<string> {
+  const proposalDigest = describeTransitionObject(prepared.proposal).digest;
+  const requestId = [
+    'compat:workspace-transition-review',
+    prepared.workspaceId,
+    prepared.precondition.workspaceRevision,
+    proposalDigest,
+  ].join(':');
+  const created = await materializeTransitionProposal({
+    db,
+    projectId: prepared.projectId,
+    workspaceId: prepared.workspaceId,
+    workspaceRevision: prepared.precondition.workspaceRevision,
+    refName: prepared.targetBranch,
+    refHead: prepared.precondition.refHead,
+    requestKind: 'structured_yops',
+    requestFacts: {
+      adapter: 'workspace_transition_review',
+      workspace_id: prepared.workspaceId,
+      workspace_revision: prepared.precondition.workspaceRevision,
+      ref_name: prepared.targetBranch,
+      ref_head: prepared.precondition.refHead,
+      effect_digest: prepared.precondition.effectDigest,
+      proposal_digest: proposalDigest,
+    },
+    requestId,
+    actor: prepared.actor,
+    base: prepared.base,
+    result: prepared.result,
+    effect: prepared.effect,
+    proposal: prepared.proposal,
+  });
+  const statementDigests = prepared.observations.map(
+    (observation) => describeTransitionObject(observation.statement).digest
+  );
+  const statementRequestId = `${requestId}:verify`;
+  const requestFacts: ProtocolValue = {
+    operation: 'workspace_transition_review_verify',
+    effect_digest: prepared.precondition.effectDigest,
+    statement_digests: [...statementDigests].sort(),
+  };
+  const durableObservations = [
+    { observation: prepared.observations[0]!, source: 'server:workspace-replay' },
+    { observation: prepared.observations[1]!, source: 'server:workspace-yschema' },
+  ] as const;
+  for (const { observation, source } of durableObservations) {
+    await materializeTransitionStatement({
+      db,
+      projectId: created.membership.projectId,
+      transitionId: created.membership.transitionId,
+      statement: observation.statement,
+      source,
+      issuer: observation.issuerContext.actor,
+      requestId: statementRequestId,
+      requestFacts,
+    });
+  }
+  return created.membership.transitionId;
 }
 
 function authorityFor(prepared: PreparedWorkspaceTransition): RepositoryDecisionAuthority {
@@ -614,6 +687,10 @@ export async function decideWorkspaceTransition(
   if (!samePrecondition(input.precondition, prepared.precondition)) {
     throw new WorkspaceTransitionReviewStaleError();
   }
+  const transitionId = await materializePreparedWorkspaceTransition(db, prepared);
+  if (input.transitionId !== undefined && input.transitionId !== transitionId) {
+    throw new WorkspaceTransitionReviewStaleError();
+  }
 
   const decidedAt = new Date().toISOString() as CanonicalTimestamp;
   const issued = await authorizeDecisionForRepository({
@@ -634,6 +711,7 @@ export async function decideWorkspaceTransition(
   if (issued.authorization === null) {
     await recordRepositoryDecision(db, issued.record);
     return {
+      transitionId,
       transition: projectTransitionView({
         mode: 'transition',
         effect: prepared.effect,
@@ -721,6 +799,7 @@ export async function decideWorkspaceTransition(
   });
   if (transition === null) throw new TypeError('Committed Transition view could not be resolved');
   return {
+    transitionId,
     transition,
     precondition: prepared.precondition,
     decisionDigest,

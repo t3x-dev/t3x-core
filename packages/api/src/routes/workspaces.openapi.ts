@@ -152,6 +152,10 @@ const ReviewWorkspaceTransitionRequestSchema = z
 
 const DecideWorkspaceTransitionRequestSchema = z
   .object({
+    transition_id: z
+      .string()
+      .regex(/^trn_[0-9a-f]{32}$/)
+      .optional(),
     content: TransitionContentSchema,
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
@@ -179,6 +183,7 @@ const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
 });
 
 const WorkspaceTransitionReviewResponseSchema = z.object({
+  transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
   transition: z.any(),
   precondition: WorkspaceTransitionPreconditionSchema,
 });
@@ -574,6 +579,7 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
+        transition_id: reviewed.transitionId,
         transition: reviewed.transition,
         precondition: transitionPreconditionToWire(reviewed.precondition),
       },
@@ -589,6 +595,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
     content,
     why,
     outcome,
+    transition_id: transitionId,
     decision_reason: decisionReason,
     precondition,
   } = c.req.valid('json');
@@ -602,6 +609,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
     const decided = await decideWorkspaceTransition(db, {
       projectId,
       workspaceId,
+      transitionId,
       content,
       why,
       outcome,
@@ -612,6 +620,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
+        transition_id: decided.transitionId,
         transition: decided.transition,
         precondition: transitionPreconditionToWire(decided.precondition),
         decision_digest: decided.decisionDigest,
@@ -781,6 +790,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       const decided = await decideWorkspaceTransition(txOrDb, {
         projectId,
         workspaceId,
+        transitionId: reviewed.transitionId,
         content: commitContent,
         why,
         outcome: validationOverride ? 'overridden' : 'accepted',

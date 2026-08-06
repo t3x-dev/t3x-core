@@ -53,6 +53,7 @@ export interface WorkspaceTransitionPrecondition {
 }
 
 export interface WorkspaceTransitionReviewResponse {
+  transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
 }
@@ -96,6 +97,7 @@ export type WorkspaceSourceRunnerStatus =
   | { mode: 'statement'; statementDigest: string; outcome: 'passed' | 'failed' };
 
 export interface WorkspaceSourceTransitionReviewResponse {
+  transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
   runner: WorkspaceSourceRunnerStatus;
@@ -227,6 +229,7 @@ export async function decideProjectWorkspaceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     content: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
@@ -240,6 +243,7 @@ export async function decideProjectWorkspaceTransition(
     )}/transition/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         content: input.content,
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,
@@ -287,6 +291,7 @@ export async function decideProjectWorkspaceSourceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     artifact: WorkspaceSourceArtifact;
     change: WorkspaceSourceChange;
     why?: string;
@@ -301,6 +306,7 @@ export async function decideProjectWorkspaceSourceTransition(
     )}/source-transition/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         artifact: sourceArtifactToWire(input.artifact),
         change: sourceChangeToWire(input.change),
         ...(input.why ? { why: input.why } : {}),
@@ -347,6 +353,7 @@ export async function decideProjectWorkspaceSourceRevert(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     commitId: string;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
@@ -360,6 +367,7 @@ export async function decideProjectWorkspaceSourceRevert(
     )}/source-transition/revert/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         commit_id: input.commitId,
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,

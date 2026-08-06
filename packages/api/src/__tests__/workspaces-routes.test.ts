@@ -164,6 +164,7 @@ const mockCommitV2 = {
   },
 };
 const mockCommitDigest = describeTransitionObject(mockCommitV2).digest;
+const mockTransitionId = `trn_${'1'.repeat(32)}`;
 const mockPrecondition = {
   workspaceRevision: 1,
   refHead: null,
@@ -220,6 +221,7 @@ describe('Workspace routes', () => {
     storageMock.upsertWorkspaceDraft.mockClear();
     transitionMock.reviewWorkspaceTransition.mockReset();
     transitionMock.reviewWorkspaceTransition.mockResolvedValue({
+      transitionId: mockTransitionId,
       transition: {},
       precondition: mockPrecondition,
     });
@@ -228,6 +230,7 @@ describe('Workspace routes', () => {
       (
         _db: unknown,
         input: {
+          transitionId?: string;
           precondition: typeof mockPrecondition;
           workspaceCommitOverride?: {
             kind: string;
@@ -237,6 +240,7 @@ describe('Workspace routes', () => {
         }
       ) =>
         Promise.resolve({
+          transitionId: input.transitionId ?? mockTransitionId,
           transition: {},
           precondition: input.precondition,
           decisionDigest: mockCommitV2.decision.digest,
@@ -302,6 +306,61 @@ describe('Workspace routes', () => {
       })
     );
     expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
+  });
+
+  it('returns and binds the durable Transition identity across review and decide', async () => {
+    const content = { trees: [], relations: [] };
+    const reviewed = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, if_revision: 1 }),
+      }
+    );
+    expect(reviewed.status).toBe(200);
+    await expect(reviewed.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ transition_id: mockTransitionId }),
+      })
+    );
+    transitionMock.decideWorkspaceTransition.mockResolvedValueOnce({
+      transitionId: mockTransitionId,
+      transition: {},
+      precondition: mockPrecondition,
+      decisionDigest: mockCommitV2.decision.digest,
+    });
+
+    const decided = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/decide',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transition_id: mockTransitionId,
+          content,
+          outcome: 'accepted',
+          precondition: {
+            workspace_revision: mockPrecondition.workspaceRevision,
+            ref_head: mockPrecondition.refHead,
+            effect_digest: mockPrecondition.effectDigest,
+            proposal_digest: mockPrecondition.proposalDigest,
+            statement_digests: mockPrecondition.statementDigests,
+            policy_digest: mockPrecondition.policyDigest,
+          },
+        }),
+      }
+    );
+    expect(decided.status).toBe(200);
+    await expect(decided.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ transition_id: mockTransitionId }),
+      })
+    );
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ transitionId: mockTransitionId })
+    );
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {

@@ -48,6 +48,10 @@ import {
 } from '@t3x-dev/storage';
 import { type ProtocolValue, TransitionProtocolError, verifyEffect } from '@t3x-dev/transition';
 import {
+  materializeTransitionProposal,
+  materializeTransitionStatement,
+} from './transition-control-plane/materialize';
+import {
   WorkspaceTransitionDecisionDeniedError,
   WorkspaceTransitionNotFoundError,
   WorkspaceTransitionReviewStaleError,
@@ -251,12 +255,14 @@ export interface BuiltWorkspaceSourceProposal {
 }
 
 export interface ReviewWorkspaceSourceTransitionResult {
+  transitionId: string;
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
   runner: WorkspaceSourceRunnerStatus;
 }
 
 export interface DecideWorkspaceSourceTransitionInput extends ReviewWorkspaceSourceTransitionInput {
+  transitionId?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceSourceTransitionPrecondition;
@@ -288,6 +294,7 @@ export interface BuildWorkspaceSourceRevertProposalInput {
 }
 
 export interface DecideWorkspaceSourceRevertInput extends ReviewWorkspaceSourceRevertInput {
+  transitionId?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceSourceTransitionPrecondition;
@@ -351,17 +358,21 @@ interface BoundSourceInputs {
   } | null;
 }
 
-interface PreparedWorkspaceSourceTransition extends ReviewWorkspaceSourceTransitionResult {
+interface PreparedWorkspaceSourceTransition
+  extends Omit<ReviewWorkspaceSourceTransitionResult, 'transitionId'> {
   actor: ActorRef;
   base: State;
   effect: ReturnType<typeof createStateImportEffect>['effect'];
   head: TransitionRefHead;
   observations: StatementObservation[];
+  projectId: string;
   proposal: Extract<ReturnType<typeof compileProposalDraft>, { ok: true }>['proposal'];
   result: State;
+  requestKind: 'exact_source_import' | 'exact_source_edit' | 'exact_source_revert';
   sourceArtifact: Record<string, unknown>;
   targetBranch: string;
   workspace: Record<string, unknown>;
+  workspaceId: string;
 }
 
 function asCanonicalTimestamp(value: string): CanonicalTimestamp {
@@ -808,7 +819,8 @@ export async function buildWorkspaceSourceProposal(
 async function completeWorkspaceSourceTransition(
   input: { projectId: string; workspaceId: string },
   capabilities: WorkspaceSourceTransitionCapabilities,
-  built: BuiltWorkspaceSourceProposalInternal
+  built: BuiltWorkspaceSourceProposalInternal,
+  requestKind: PreparedWorkspaceSourceTransition['requestKind']
 ): Promise<PreparedWorkspaceSourceTransition> {
   const {
     actor,
@@ -899,13 +911,16 @@ async function completeWorkspaceSourceTransition(
     head,
     observations,
     precondition,
+    projectId: input.projectId,
     proposal,
+    requestKind,
     result,
     runner,
     sourceArtifact: sourceArtifact.persistedSelector,
     targetBranch: built.refName,
     transition,
     workspace,
+    workspaceId: input.workspaceId,
   };
 }
 
@@ -916,7 +931,12 @@ async function prepareWorkspaceSourceTransition(
   expectedPrecondition?: WorkspaceSourceTransitionPrecondition
 ): Promise<PreparedWorkspaceSourceTransition> {
   const built = await buildWorkspaceSourceProposalInternal(db, input, expectedPrecondition);
-  return completeWorkspaceSourceTransition(input, capabilities, built);
+  return completeWorkspaceSourceTransition(
+    input,
+    capabilities,
+    built,
+    input.change.mode === 'import' ? 'exact_source_import' : 'exact_source_edit'
+  );
 }
 
 function sameObjectDescriptor(
@@ -1012,7 +1032,74 @@ async function prepareWorkspaceSourceRevert(
   expectedPrecondition?: WorkspaceSourceTransitionPrecondition
 ): Promise<PreparedWorkspaceSourceTransition> {
   const built = await buildWorkspaceSourceRevertProposalInternal(db, input, expectedPrecondition);
-  return completeWorkspaceSourceTransition(input, capabilities, built);
+  return completeWorkspaceSourceTransition(input, capabilities, built, 'exact_source_revert');
+}
+
+async function materializePreparedWorkspaceSourceTransition(
+  db: AnyDB,
+  prepared: PreparedWorkspaceSourceTransition
+): Promise<string> {
+  const proposalDigest = describeTransitionObject(prepared.proposal).digest;
+  const requestId = [
+    'compat:workspace-source-transition-review',
+    prepared.requestKind,
+    prepared.workspaceId,
+    prepared.precondition.workspaceRevision,
+    proposalDigest,
+  ].join(':');
+  const created = await materializeTransitionProposal({
+    db,
+    projectId: prepared.projectId,
+    workspaceId: prepared.workspaceId,
+    workspaceRevision: prepared.precondition.workspaceRevision,
+    refName: prepared.targetBranch,
+    refHead: prepared.precondition.refHead,
+    requestKind: prepared.requestKind,
+    requestFacts: {
+      adapter: 'workspace_source_transition_review',
+      request_kind: prepared.requestKind,
+      workspace_id: prepared.workspaceId,
+      workspace_revision: prepared.precondition.workspaceRevision,
+      ref_name: prepared.targetBranch,
+      ref_head: prepared.precondition.refHead,
+      source_selector_digest: prepared.precondition.sourceSelectorDigest,
+      source_input_manifest_digest: prepared.precondition.sourceInputManifestDigest,
+      effect_digest: prepared.precondition.effectDigest,
+      proposal_digest: proposalDigest,
+    },
+    requestId,
+    actor: prepared.actor,
+    base: prepared.base,
+    result: prepared.result,
+    effect: prepared.effect,
+    proposal: prepared.proposal,
+  });
+  const statementDigests = prepared.observations.map(
+    (observation) => describeTransitionObject(observation.statement).digest
+  );
+  const statementRequestId = `${requestId}:verify`;
+  const requestFacts: ProtocolValue = {
+    operation: 'workspace_source_transition_review_verify',
+    effect_digest: prepared.precondition.effectDigest,
+    statement_digests: [...statementDigests].sort(comparePortable),
+  };
+  for (const observation of prepared.observations) {
+    const source =
+      observation.issuerContext.actor.id === REPLAY_ACTOR.id
+        ? 'server:workspace-source-replay'
+        : 'server:workspace-esphome-runner';
+    await materializeTransitionStatement({
+      db,
+      projectId: created.membership.projectId,
+      transitionId: created.membership.transitionId,
+      statement: observation.statement,
+      source,
+      issuer: observation.issuerContext.actor,
+      requestId: statementRequestId,
+      requestFacts,
+    });
+  }
+  return created.membership.transitionId;
 }
 
 export async function reviewWorkspaceSourceTransition(
@@ -1021,7 +1108,9 @@ export async function reviewWorkspaceSourceTransition(
   capabilities: WorkspaceSourceTransitionCapabilities = {}
 ): Promise<ReviewWorkspaceSourceTransitionResult> {
   const prepared = await prepareWorkspaceSourceTransition(db, input, capabilities);
+  const transitionId = await materializePreparedWorkspaceSourceTransition(db, prepared);
   return {
+    transitionId,
     transition: prepared.transition,
     precondition: prepared.precondition,
     runner: prepared.runner,
@@ -1034,7 +1123,9 @@ export async function reviewWorkspaceSourceRevert(
   capabilities: WorkspaceSourceTransitionCapabilities = {}
 ): Promise<ReviewWorkspaceSourceTransitionResult> {
   const prepared = await prepareWorkspaceSourceRevert(db, input, capabilities);
+  const transitionId = await materializePreparedWorkspaceSourceTransition(db, prepared);
   return {
+    transitionId,
     transition: prepared.transition,
     precondition: prepared.precondition,
     runner: prepared.runner,
@@ -1062,12 +1153,17 @@ async function decidePreparedWorkspaceSourceTransition(
   input: {
     projectId: string;
     workspaceId: string;
+    transitionId?: string;
     outcome: 'accepted' | 'overridden' | 'rejected';
     decisionReason?: string;
     precondition: WorkspaceSourceTransitionPrecondition;
   },
   prepared: PreparedWorkspaceSourceTransition
 ): Promise<DecideWorkspaceSourceTransitionResult> {
+  const transitionId = await materializePreparedWorkspaceSourceTransition(db, prepared);
+  if (input.transitionId !== undefined && input.transitionId !== transitionId) {
+    throw new WorkspaceTransitionReviewStaleError();
+  }
   const decidedAt = new Date().toISOString() as CanonicalTimestamp;
   const issued = await authorizeDecisionForRepository({
     projectId: input.projectId,
@@ -1087,6 +1183,7 @@ async function decidePreparedWorkspaceSourceTransition(
   if (issued.authorization === null) {
     await recordRepositoryDecision(db, issued.record);
     return {
+      transitionId,
       transition: projectTransitionView({
         mode: 'transition',
         effect: prepared.effect,
@@ -1164,6 +1261,7 @@ async function decidePreparedWorkspaceSourceTransition(
   });
   if (transition === null) throw new TypeError('Committed Transition view could not be resolved');
   return {
+    transitionId,
     transition,
     precondition: prepared.precondition,
     runner: prepared.runner,

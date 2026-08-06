@@ -117,6 +117,10 @@ const ReviewWorkspaceSourceTransitionRequestSchema = z
 
 const DecideWorkspaceSourceTransitionRequestSchema = z
   .object({
+    transition_id: z
+      .string()
+      .regex(/^trn_[0-9a-f]{32}$/)
+      .optional(),
     artifact: SourceArtifactSelectorSchema,
     change: SourceChangeSchema,
     why: z.string().trim().min(1).max(2000).optional(),
@@ -136,6 +140,10 @@ const ReviewWorkspaceSourceRevertRequestSchema = z
 
 const DecideWorkspaceSourceRevertRequestSchema = z
   .object({
+    transition_id: z
+      .string()
+      .regex(/^trn_[0-9a-f]{32}$/)
+      .optional(),
     commit_id: TransitionDigestSchema,
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
@@ -169,6 +177,7 @@ const WorkspaceSourceRunnerStatusSchema = z.discriminatedUnion('mode', [
 ]);
 
 const WorkspaceSourceTransitionReviewResponseSchema = z.object({
+  transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
   transition: z.any(),
   precondition: WorkspaceSourceTransitionPreconditionSchema,
   runner: WorkspaceSourceRunnerStatusSchema,
@@ -510,6 +519,7 @@ export function createWorkspaceSourceTransitionRoutes(
       return c.json({
         success: true as const,
         data: {
+          transition_id: reviewed.transitionId,
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
@@ -533,6 +543,7 @@ export function createWorkspaceSourceTransitionRoutes(
         {
           projectId,
           workspaceId,
+          transitionId: request.transition_id,
           artifact: artifactFromWire(request.artifact),
           change: changeFromWire(request.change),
           why: request.why,
@@ -546,6 +557,7 @@ export function createWorkspaceSourceTransitionRoutes(
       return c.json({
         success: true as const,
         data: {
+          transition_id: decided.transitionId,
           transition: decided.transition,
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
@@ -582,6 +594,7 @@ export function createWorkspaceSourceTransitionRoutes(
       return c.json({
         success: true as const,
         data: {
+          transition_id: reviewed.transitionId,
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
@@ -605,6 +618,7 @@ export function createWorkspaceSourceTransitionRoutes(
         {
           projectId,
           workspaceId,
+          transitionId: request.transition_id,
           commitId: request.commit_id,
           why: request.why,
           outcome: request.outcome,
@@ -617,6 +631,7 @@ export function createWorkspaceSourceTransitionRoutes(
       return c.json({
         success: true as const,
         data: {
+          transition_id: decided.transitionId,
           transition: decided.transition,
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,

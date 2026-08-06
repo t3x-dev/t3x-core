@@ -12,6 +12,7 @@ type CompatibilityContract = {
   application_sources: string[];
   writer_sources: string[];
   consumers: FileToken[];
+  migration_proofs?: FileToken[];
   replacement: string;
   removal_gate: string;
 };
@@ -20,7 +21,7 @@ const inventory = inventoryJson as {
   schema_version: number;
   canonical: {
     route_source: string;
-    application_source: string;
+    application_sources: string[];
     writer_sources: string[];
     actions: Array<{
       id: string;
@@ -72,6 +73,9 @@ describe('Transition control-plane migration inventory', () => {
 
     const routeSource = await repositoryFile(inventory.canonical.route_source);
     const clientSource = await repositoryFile('packages/api-client/src/client.ts');
+    for (const source of inventory.canonical.application_sources) {
+      expect((await repositoryFile(source)).length, source).toBeGreaterThan(0);
+    }
     for (const action of inventory.canonical.actions) {
       expect(routeSource, action.id).toContain(`method: '${action.method.toLowerCase()}'`);
       expect(routeSource, action.id).toContain(`path: '${action.path}'`);
@@ -99,6 +103,11 @@ describe('Transition control-plane migration inventory', () => {
       for (const consumer of contract.consumers) {
         expect(await repositoryFile(consumer.file), `${contract.id}:${consumer.file}`).toContain(
           consumer.token
+        );
+      }
+      for (const proof of contract.migration_proofs ?? []) {
+        expect(await repositoryFile(proof.file), `${contract.id}:${proof.file}`).toContain(
+          proof.token
         );
       }
     }

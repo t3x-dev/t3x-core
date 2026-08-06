@@ -11,8 +11,6 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
-  createTransitionProposalMembership,
-  digestTransitionRequestCanonicalJson,
   findTransitionProposalByRequest,
   findTransitionStatementsByRequest,
   getTransitionPolicyBinding,
@@ -24,7 +22,6 @@ import {
 } from '@t3x-dev/storage';
 import {
   CORE_PREDICATE_TYPES,
-  canonicalizeProtocolValue,
   type DecisionStatement,
   type Effect,
   EffectClaimFalseError,
@@ -45,6 +42,7 @@ import {
   buildWorkspaceYOpsProposal,
   WorkspaceTransitionReviewStaleError,
 } from '../workspace-transition';
+import { canonicalTransitionRequest, materializeTransitionProposal } from './materialize';
 
 type ActorRef = ProposalStatement['actor'];
 export type TransitionSubjectRole = 'effect' | 'result' | 'proposal';
@@ -196,17 +194,6 @@ function comparePortable(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function canonicalRequest(value: ProtocolValue): {
-  canonicalJson: string;
-  digest: string;
-} {
-  const canonicalJson = canonicalizeProtocolValue(value);
-  return {
-    canonicalJson,
-    digest: digestTransitionRequestCanonicalJson(canonicalJson),
-  };
-}
-
 function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolValue {
   if (request.kind === 'structured_yops') {
     return {
@@ -320,7 +307,8 @@ export async function proposeTransition(input: {
   actor: ActorRef;
   request: TransitionProposeRequest;
 }): Promise<{ view: TransitionControlPlaneView; reused: boolean }> {
-  const normalized = canonicalRequest(normalizedProposeRequest(input.request));
+  const requestFacts = normalizedProposeRequest(input.request);
+  const normalized = canonicalTransitionRequest(requestFacts);
   const existing = await findTransitionProposalByRequest(input.db, {
     projectId: input.projectId,
     actor: input.actor,
@@ -342,15 +330,15 @@ export async function proposeTransition(input: {
   }
 
   const built = await buildProposal(input.db, input);
-  const created = await createTransitionProposalMembership(input.db, {
+  const created = await materializeTransitionProposal({
+    db: input.db,
     projectId: input.projectId,
     workspaceId: built.workspaceId,
     workspaceRevision: built.workspaceRevision,
     refName: built.refName,
     refHead: built.refHead,
     requestKind: input.request.kind,
-    requestCanonicalJson: normalized.canonicalJson,
-    requestDigest: normalized.digest,
+    requestFacts,
     requestId: input.requestId,
     actor: input.actor,
     base: built.base,
@@ -535,7 +523,7 @@ export async function verifyTransition(input: {
   operationalResults: TransitionOperationalResult[];
   reused: boolean;
 }> {
-  const request = canonicalRequest({ operation: 'verify' });
+  const request = canonicalTransitionRequest({ operation: 'verify' });
   const prior = await findTransitionStatementsByRequest(input.db, {
     projectId: input.projectId,
     transitionId: input.transitionId,
@@ -703,7 +691,7 @@ export async function attachTransitionStatement(input: {
   membership: TransitionStatementMembership;
   reused: boolean;
 }> {
-  const normalized = canonicalRequest({
+  const normalized = canonicalTransitionRequest({
     operation: 'attach_statement',
     predicate_type: input.statement.predicateType,
     predicate: input.statement.predicate,

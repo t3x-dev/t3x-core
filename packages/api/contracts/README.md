@@ -28,3 +28,5 @@ This inventory controls migration, not runtime authority. Authentication, projec
 `transition-control-plane-migration.json` freezes the six canonical governance actions and classifies every production caller of the CommitV2 storage primitive. It also records the current Workspace, exact-source, repository shortcut, Merge, MCP, Web, and demo adapters with an explicit replacement or removal gate.
 
 The contract test fails when a canonical route, action scope, typed-client method, classified consumer, or direct CommitV2 writer changes without updating the ledger. The ledger does not make compatibility routes canonical: those routes remain adapters until they delegate governance to the shared application use cases and pass their retirement gates.
+
+Compatibility entries may record incremental `progress` and a `remaining_gap`. A durable `transition_id` is migration progress, but it does not by itself prove that policy binding, Decision issuance, or Commit creation has moved to the canonical lifecycle.

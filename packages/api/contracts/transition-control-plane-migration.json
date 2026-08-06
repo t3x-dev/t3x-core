@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "purpose": "Keep one Transition control plane while first-party compatibility routes migrate to the canonical lifecycle.",
-  "tracking": {
-    "primary_issue": "#1305",
-    "commit_v2_hard_cut": "#1308"
-  },
   "canonical": {
     "route_source": "packages/api/src/routes/transition-control-plane.openapi.ts",
-    "application_source": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
+    "application_sources": [
+      "packages/api/src/lib/transition-control-plane/index.ts",
+      "packages/api/src/lib/transition-control-plane/lifecycle.ts",
+      "packages/api/src/lib/transition-control-plane/materialize.ts"
+    ],
     "writer_sources": ["packages/api/src/lib/transition-control-plane/lifecycle.ts"],
     "actions": [
       {
@@ -79,7 +79,10 @@
           "source": "packages/api/src/routes/workspaces.openapi.ts"
         }
       ],
-      "application_sources": ["packages/api/src/lib/workspace-transition.ts"],
+      "application_sources": [
+        "packages/api/src/lib/transition-control-plane/materialize.ts",
+        "packages/api/src/lib/workspace-transition.ts"
+      ],
       "writer_sources": ["packages/api/src/lib/workspace-transition.ts"],
       "consumers": [
         {
@@ -95,6 +98,22 @@
           "token": "commitProjectWorkspace"
         }
       ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "materializePreparedWorkspaceTransition("
+        },
+        {
+          "file": "packages/api/src/routes/workspaces.openapi.ts",
+          "token": "transition_id: reviewed.transitionId"
+        },
+        {
+          "file": "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
+          "token": "transitionId: reviewed.transition_id"
+        }
+      ],
+      "progress": "Structured Workspace review now materializes a durable Proposal and replay/YSchema Statement memberships, returns transition_id, and binds Web decide calls to that identity.",
+      "remaining_gap": "Workspace decide and commit still use the compatibility policy, Decision record, and CommitV2 writer until canonical policy binding and request-receipt parity are implemented.",
       "replacement": "Resolve a durable transition_id, then use canonical inspect/verify, decisions, and commits while preserving the task-oriented Workspace projection.",
       "removal_gate": "Remove only after Web callers use canonical actions, contract parity and adversarial tests pass, and the route has completed its documented deprecation window."
     },
@@ -123,7 +142,10 @@
           "source": "packages/api/src/routes/workspace-source-transition.openapi.ts"
         }
       ],
-      "application_sources": ["packages/api/src/lib/workspace-source-transition.ts"],
+      "application_sources": [
+        "packages/api/src/lib/transition-control-plane/materialize.ts",
+        "packages/api/src/lib/workspace-source-transition.ts"
+      ],
       "writer_sources": ["packages/api/src/lib/workspace-source-transition.ts"],
       "consumers": [
         {
@@ -143,6 +165,22 @@
           "token": "export function decideWorkspaceSourceRevert("
         }
       ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "materializePreparedWorkspaceSourceTransition("
+        },
+        {
+          "file": "packages/api/src/routes/workspace-source-transition.openapi.ts",
+          "token": "transition_id: reviewed.transitionId"
+        },
+        {
+          "file": "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
+          "token": "transitionId: reviewed.transition_id"
+        }
+      ],
+      "progress": "Exact-source import, edit, and revert review now materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity.",
+      "remaining_gap": "Source decide and commit still use the compatibility policy, Decision record, CommitV2 writer, and sourceArtifact Workspace projection until the compatibility command boundary preserves retries and atomic side effects through shared lifecycle use cases.",
       "replacement": "Create or resolve an exact-source Transition, retain source-specific preparation, and delegate governance to the canonical actions.",
       "removal_gate": "Remove only after import, edit, and revert retain exact-source parity through canonical actions and all first-party callers have migrated."
     },

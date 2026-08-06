@@ -32,7 +32,12 @@ import {
   commitRepositoryYOpsState,
   getRepositorySemanticCommit,
 } from '../lib/repository-state-transition';
-import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
+import { inspectTransition } from '../lib/transition-control-plane';
+import {
+  decideWorkspaceTransition,
+  reviewWorkspaceTransition,
+  WorkspaceTransitionReviewStaleError,
+} from '../lib/workspace-transition';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
@@ -123,9 +128,31 @@ describe('Pull request routes', () => {
       expectedRevision: draft.revision,
       actor,
     });
+    const durable = await inspectTransition({
+      db: mockDB,
+      projectId: input.projectId,
+      transitionId: reviewed.transitionId,
+      actor,
+    });
+    expect(durable.transitionId).toBe(reviewed.transitionId);
+    expect(durable.precondition.effectDigest).toBe(reviewed.precondition.effectDigest);
+    expect(durable.precondition.statementDigests).toEqual(reviewed.precondition.statementDigests);
+    await expect(
+      decideWorkspaceTransition(mockDB, {
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+        transitionId: `trn_${'0'.repeat(32)}`,
+        content,
+        why: `Commit ${input.workspaceId}`,
+        outcome: 'accepted',
+        precondition: reviewed.precondition,
+        actor,
+      })
+    ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
     const decided = await decideWorkspaceTransition(mockDB, {
       projectId: input.projectId,
       workspaceId: input.workspaceId,
+      transitionId: reviewed.transitionId,
       content,
       why: `Commit ${input.workspaceId}`,
       outcome: 'accepted',
