@@ -6,6 +6,7 @@ import {
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
   type PolicyFailure,
+  type ProposalStatement,
   type RepositoryDecisionAuthority,
   type RequestedDecisionOutcome,
 } from '@t3x-dev/core';
@@ -70,6 +71,27 @@ export interface TransitionWorkspaceCommitProjection {
     commitDigest: string;
     committedAt: string;
   }): Record<string, unknown>;
+}
+
+export interface CommitPreparedRepositoryTransitionInput {
+  db: AnyDB;
+  projectId: string;
+  refName: string;
+  expectedHead: string | null;
+  proposal: ProposalStatement;
+  effect: Extract<ProtocolObject, { schema: 't3x/effect/v1' }>;
+  rationale: StringClaim;
+  decidedAt: CanonicalTimestamp;
+  authority: RepositoryDecisionAuthority;
+  parents: readonly CommitV2[];
+  objects: readonly ProtocolObject[];
+  yopsLogIds?: readonly string[];
+}
+
+export interface CommitPreparedRepositoryTransitionResult {
+  commit: CommitV2;
+  commitDigest: string;
+  transition: Exclude<Awaited<ReturnType<typeof getTransitionViewForCommit>>, null>;
 }
 
 export class TransitionReviewStaleError extends Error {
@@ -427,6 +449,82 @@ export interface CommitTransitionResult {
   workspace?: Record<string, unknown>;
 }
 
+async function persistTransitionCommitGraph(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    refName: string;
+    expectedHead: string | null;
+    commit: CommitV2;
+    objects: readonly ProtocolObject[];
+    yopsLogIds?: readonly string[];
+  }
+) {
+  return createTransitionCommit(db, {
+    projectId: input.projectId,
+    refName: input.refName,
+    expectedHead: input.expectedHead,
+    commit: input.commit,
+    objects: [...input.objects],
+    ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+  });
+}
+
+/**
+ * Execute the shared Decision -> Commit portion for a task adapter that has
+ * already prepared and verified an immutable Proposal graph.
+ *
+ * Unlike the review-oriented canonical API, this compatibility boundary does
+ * not invent Workspace membership or command receipts. It does centralize the
+ * authorization, CommitV2 construction, atomic audit persistence, and ref CAS.
+ */
+export async function commitPreparedRepositoryTransition(
+  input: CommitPreparedRepositoryTransitionInput
+): Promise<CommitPreparedRepositoryTransitionResult> {
+  const issued = await authorizeDecisionForRepository({
+    projectId: input.projectId,
+    refName: input.refName,
+    proposal: input.proposal,
+    effect: input.effect,
+    outcome: 'accepted',
+    rationale: input.rationale,
+    decidedAt: input.decidedAt,
+    authority: input.authority,
+  });
+  if (!issued.ok || issued.authorization === null) {
+    throw new TransitionDecisionDeniedError(issued.ok ? [] : issued.failures);
+  }
+  const authorization = issued.authorization;
+
+  const objects: ProtocolObject[] = [...input.objects, ...authorization.objects];
+  const commit = await createCommitV2({
+    parents: input.parents.map(describeCommitV2),
+    decision: issued.decision,
+    resolver: new InMemoryTransitionObjectResolver(objects),
+  });
+  const created = await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    await recordRepositoryDecisionAuthorization(tx, authorization);
+    return persistTransitionCommitGraph(tx, {
+      projectId: input.projectId,
+      refName: input.refName,
+      expectedHead: input.expectedHead,
+      commit,
+      objects,
+      ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+    });
+  });
+  const transition = await getTransitionViewForCommit(input.db, {
+    projectId: input.projectId,
+    refName: input.refName,
+    commitId: created.digest,
+  });
+  if (transition === null) {
+    throw new TransitionDecisionMembershipError('Committed repository Transition is unavailable');
+  }
+  return { commit, commitDigest: created.digest, transition };
+}
+
 export async function commitTransition(input: {
   db: AnyDB;
   projectId: string;
@@ -500,7 +598,7 @@ export async function commitTransition(input: {
   try {
     await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
-      await createTransitionCommit(tx, {
+      await persistTransitionCommitGraph(tx, {
         projectId: input.projectId,
         refName: graph.membership.refName,
         expectedHead: input.expectedHead,

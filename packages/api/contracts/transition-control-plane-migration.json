@@ -234,7 +234,7 @@
         }
       ],
       "application_sources": ["packages/api/src/lib/repository-state-transition.ts"],
-      "writer_sources": ["packages/api/src/lib/repository-state-transition.ts"],
+      "writer_sources": [],
       "consumers": [
         {
           "file": "packages/api-client/src/client.ts",
@@ -249,6 +249,22 @@
           "token": "client.commitFromDraft("
         }
       ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/repository-state-transition.ts",
+          "token": "const created = await commitPreparedRepositoryTransition({"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "creates a first-parent CommitV2 chain and rejects a stale observed head"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "rolls back Decision audit, CommitV2, and ref when commit persistence fails"
+        }
+      ],
+      "progress": "Repository State task adapters retain their input preparation and projections, but accepted Decision authorization, audit persistence, CommitV2 construction, ref CAS, and YOps log linking now execute through the shared repository lifecycle boundary in one transaction.",
+      "remaining_gap": "These shortcuts remain one-shot compatibility commands without durable transition_id review or request receipts. Route retirement still requires explicit canonical replacements, caller migration, deprecation metadata, and observability.",
       "replacement": "Preserve each task input adapter but execute Propose, Verify, Decide, and Commit through the same canonical application use cases.",
       "removal_gate": "Do not delete a task shortcut until its semantics and first-party callers have an explicit canonical replacement; no shortcut may remain solely to preserve a deprecated writer."
     },
@@ -282,6 +298,18 @@
           "token": "commitRepositoryYOpsMerge({"
         }
       ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/repository-state-transition.ts",
+          "token": "created = await commitPreparedRepositoryTransition({"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "recomputes and commits a deterministic two-parent merge with source evidence"
+        }
+      ],
+      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary.",
+      "remaining_gap": "Merge remains a task adapter and does not yet expose durable canonical review or command receipts. Retiring governance ownership requires canonical merge lifecycle parity and first-party caller migration.",
       "replacement": "Keep Merge as a task-level adapter while its deterministic multi-parent Effect, Statements, Decision, and Commit use the canonical lifecycle.",
       "removal_gate": "The task endpoint may remain, but it must stop owning governance orchestration once canonical merge lifecycle parity is covered."
     },
