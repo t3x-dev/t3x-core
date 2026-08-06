@@ -968,6 +968,8 @@ export interface TransitionControlPlaneView {
     ref_head: string | null;
     effect_digest: string;
     proposal_digest: string;
+    statement_digests: string[];
+    policy_digest: string | null;
   };
   transition: TransitionViewV1;
   statements: TransitionStatementMembershipView[];
