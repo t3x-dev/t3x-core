@@ -1,0 +1,233 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const storageMock = vi.hoisted(() => ({
+  findConversationById: vi.fn(),
+  findTurnsByHashes: vi.fn(),
+  recordEvent: vi.fn(),
+  upsertWorkspaceDraft: vi.fn(),
+}));
+const extractionMock = vi.hoisted(() => ({ runApiExtractionV2: vi.fn() }));
+const transitionMock = vi.hoisted(() => ({ resolveWorkspaceExtractionContext: vi.fn() }));
+const dbMock = {
+  transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
+};
+
+vi.mock('@t3x-dev/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
+  ...storageMock,
+}));
+vi.mock('../lib/extraction-v2', () => extractionMock);
+vi.mock('../lib/workspace-transition', () => transitionMock);
+
+import {
+  createWorkspaceExtractionProposal,
+  resolveWorkspaceExtractionTransitionSource,
+  type WorkspaceExtractionProposalError,
+} from '../lib/workspace-extraction-proposal';
+
+describe('Workspace extraction proposal service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValue({
+      baseline: { trees: [], relations: [] },
+      refHead: null,
+      refName: 'main',
+      workspace: { id: 'workspace_1', projectId: 'proj_1', title: 'Reviewed PRD' },
+      workspaceRevision: 3,
+      workspaceUpdatedAt: '2026-08-05T00:00:00.000Z',
+    });
+    storageMock.findConversationById.mockResolvedValue({
+      conversationId: 'conv_1',
+      projectId: 'proj_1',
+    });
+    storageMock.findTurnsByHashes.mockResolvedValue([
+      { turnHash: 'turn_a', role: 'user', content: 'Build an audit log.' },
+      { turnHash: 'turn_b', role: 'assistant', content: 'Use immutable events.' },
+    ]);
+    extractionMock.runApiExtractionV2.mockResolvedValue({
+      ok: true,
+      mode: 'bootstrap',
+      snapshot: {
+        trees: [{ key: 'prd', slots: { title: 'Audit log' }, children: [] }],
+        relations: [],
+      },
+      ops: [
+        {
+          set: { path: 'prd/title', value: 'Audit log' },
+          source: {
+            type: 'llm',
+            model: 'test',
+            at: '2026-08-05T00:00:00.000Z',
+            turn_ref: { turn_hash: 'turn_a', quote: 'audit log' },
+          },
+        },
+      ],
+      lastTurnHash: 'turn_b',
+    });
+    storageMock.upsertWorkspaceDraft.mockImplementation((_db, input) =>
+      Promise.resolve({ workspace_state: input.workspace_state, revision: 4 })
+    );
+    storageMock.recordEvent.mockResolvedValue(1n);
+  });
+
+  it('re-resolves immutable turns and persists full SourcedYOps against the ref baseline', async () => {
+    const result = await createWorkspaceExtractionProposal(dbMock as never, {
+      projectId: 'proj_1',
+      workspaceId: 'workspace_1',
+      source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_b', 'turn_a'] },
+      expectedRevision: 3,
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+    });
+
+    expect(transitionMock.resolveWorkspaceExtractionContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ expectedRevision: 3 })
+    );
+    expect(extractionMock.runApiExtractionV2).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv_1',
+        turnHashes: ['turn_b', 'turn_a'],
+        baselineSnapshot: { trees: [], relations: [] },
+      })
+    );
+    expect(storageMock.findTurnsByHashes).toHaveBeenCalledWith(expect.anything(), {
+      conversationId: 'conv_1',
+      turnHashes: ['turn_b', 'turn_a'],
+    });
+    expect(result.proposal).toMatchObject({
+      schema: 't3x.dev/workspace-extraction-proposal/v1',
+      sourceSelector: {
+        type: 'conversation',
+        id: 'conv_1',
+        turnHashes: ['turn_a', 'turn_b'],
+      },
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      operations: [
+        expect.objectContaining({
+          source: expect.objectContaining({
+            turn_ref: { turn_hash: 'turn_a', quote: 'audit log' },
+          }),
+        }),
+      ],
+    });
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        project_id: 'proj_1',
+        workspace_id: 'workspace_1',
+        workspace_state: expect.objectContaining({ extractionProposal: result.proposal }),
+      }),
+      3
+    );
+    expect(storageMock.recordEvent).toHaveBeenCalledWith(expect.anything(), {
+      type: 'extraction.done',
+      projectId: 'proj_1',
+      conversationId: 'conv_1',
+      payload: {
+        source: 'workspace-extraction-proposal',
+        workspace_id: 'workspace_1',
+        candidate_id: result.candidateId,
+        revision: 4,
+      },
+    });
+  });
+
+  it('rejects a Source conversation from another project before calling the LLM', async () => {
+    storageMock.findConversationById.mockResolvedValueOnce({
+      conversationId: 'conv_other',
+      projectId: 'proj_other',
+    });
+
+    await expect(
+      createWorkspaceExtractionProposal(dbMock as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        source: { type: 'conversation', id: 'conv_other', turnHashes: ['turn_a'] },
+        actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      })
+    ).rejects.toMatchObject<Partial<WorkspaceExtractionProposalError>>({
+      kind: 'source_project_mismatch',
+    });
+    expect(extractionMock.runApiExtractionV2).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when any selected immutable turn hash cannot be resolved', async () => {
+    await expect(
+      createWorkspaceExtractionProposal(dbMock as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        source: {
+          type: 'conversation',
+          id: 'conv_1',
+          turnHashes: ['turn_a', 'turn_missing'],
+        },
+        actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      })
+    ).rejects.toMatchObject<Partial<WorkspaceExtractionProposalError>>({
+      kind: 'source_selector_invalid',
+      details: { missing_turn_hashes: ['turn_missing'] },
+    });
+    expect(extractionMock.runApiExtractionV2).not.toHaveBeenCalled();
+  });
+
+  it('resolves a persisted candidate only after checking its canonical identity', async () => {
+    const created = await createWorkspaceExtractionProposal(dbMock as never, {
+      projectId: 'proj_1',
+      workspaceId: 'workspace_1',
+      source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+    });
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
+      baseline: { trees: [], relations: [] },
+      refHead: null,
+      refName: 'main',
+      workspace: created.workspace,
+      workspaceRevision: 4,
+      workspaceUpdatedAt: '2026-08-05T00:00:01.000Z',
+    });
+
+    await expect(
+      resolveWorkspaceExtractionTransitionSource(dbMock as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        candidateId: created.candidateId,
+      })
+    ).resolves.toMatchObject({
+      candidateId: created.candidateId,
+      baseCommitHash: null,
+      workspaceRevision: 4,
+      operations: [{ set: { path: 'prd/title', value: 'Audit log' } }],
+    });
+  });
+
+  it('rejects a stored candidate whose Source selector digest was altered', async () => {
+    const created = await createWorkspaceExtractionProposal(dbMock as never, {
+      projectId: 'proj_1',
+      workspaceId: 'workspace_1',
+      source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
+      actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+    });
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
+      baseline: { trees: [], relations: [] },
+      refHead: null,
+      refName: 'main',
+      workspace: {
+        ...created.workspace,
+        extractionProposal: {
+          ...created.proposal,
+          sourceSelectorDigest: `sha256:${'0'.repeat(64)}`,
+        },
+      },
+      workspaceRevision: 4,
+      workspaceUpdatedAt: '2026-08-05T00:00:01.000Z',
+    });
+
+    await expect(
+      resolveWorkspaceExtractionTransitionSource(dbMock as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        candidateId: created.candidateId,
+      })
+    ).rejects.toThrow('source selector failed integrity checking');
+  });
+});

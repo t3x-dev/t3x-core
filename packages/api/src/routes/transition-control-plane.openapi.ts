@@ -40,6 +40,7 @@ import {
   TransitionReviewStaleError,
 } from '../lib/transition-control-plane/lifecycle';
 import {
+  resolveCanonicalWorkspaceSourceCommitProjection,
   WorkspaceSourceArtifactError,
   WorkspaceSourceInputsError,
   WorkspaceSourceRevertUnavailableError,
@@ -108,50 +109,63 @@ const SourceReplaceScalarOperationSchema = z
   })
   .strict();
 
-const ProposeRequestSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('structured_yops'),
-      request_id: RequestIdSchema,
-      workspace_id: WorkspaceIdSchema,
-      operations: z.array(ProtocolValueSchema).min(1).max(1000),
-      why: z.string().trim().min(1).max(2000).optional(),
-      if_revision: z.number().int().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('exact_source_import'),
-      request_id: RequestIdSchema,
-      workspace_id: WorkspaceIdSchema,
-      artifact: SourceArtifactSelectorSchema,
-      root: SourceMaterialSelectorSchema,
-      why: z.string().trim().min(1).max(2000).optional(),
-      if_revision: z.number().int().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('exact_source_edit'),
-      request_id: RequestIdSchema,
-      workspace_id: WorkspaceIdSchema,
-      artifact: SourceArtifactSelectorSchema,
-      operations: z.array(SourceReplaceScalarOperationSchema).min(1).max(100),
-      why: z.string().trim().min(1).max(2000).optional(),
-      if_revision: z.number().int().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('exact_source_revert'),
-      request_id: RequestIdSchema,
-      workspace_id: WorkspaceIdSchema,
-      commit_id: DigestSchema,
-      why: z.string().trim().min(1).max(2000).optional(),
-      if_revision: z.number().int().min(1).optional(),
-    })
-    .strict(),
-]);
+const ProposeRequestSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('structured_yops'),
+        request_id: RequestIdSchema,
+        workspace_id: WorkspaceIdSchema,
+        operations: z.array(ProtocolValueSchema).min(1).max(1000).optional(),
+        extraction_candidate_id: z.string().trim().min(1).max(200).optional(),
+        why: z.string().trim().min(1).max(2000).optional(),
+        if_revision: z.number().int().min(1).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('exact_source_import'),
+        request_id: RequestIdSchema,
+        workspace_id: WorkspaceIdSchema,
+        artifact: SourceArtifactSelectorSchema,
+        root: SourceMaterialSelectorSchema,
+        why: z.string().trim().min(1).max(2000).optional(),
+        if_revision: z.number().int().min(1).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('exact_source_edit'),
+        request_id: RequestIdSchema,
+        workspace_id: WorkspaceIdSchema,
+        artifact: SourceArtifactSelectorSchema,
+        operations: z.array(SourceReplaceScalarOperationSchema).min(1).max(100),
+        why: z.string().trim().min(1).max(2000).optional(),
+        if_revision: z.number().int().min(1).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('exact_source_revert'),
+        request_id: RequestIdSchema,
+        workspace_id: WorkspaceIdSchema,
+        commit_id: DigestSchema,
+        why: z.string().trim().min(1).max(2000).optional(),
+        if_revision: z.number().int().min(1).optional(),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.kind === 'structured_yops' &&
+      (value.operations === undefined) === (value.extraction_candidate_id === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Provide exactly one of operations or extraction_candidate_id',
+      });
+    }
+  });
 
 const VerifyRequestSchema = z.object({ request_id: RequestIdSchema }).strict();
 const AttachStatementRequestSchema = z
@@ -274,7 +288,16 @@ function wireRequest(body: z.infer<typeof ProposeRequestSchema>) {
     ifRevision: body.if_revision,
   };
   if (body.kind === 'structured_yops') {
-    return { ...common, kind: body.kind, operations: body.operations } as const;
+    return body.extraction_candidate_id === undefined
+      ? { ...common, kind: body.kind, operations: body.operations! }
+      : {
+          ...common,
+          kind: body.kind,
+          source: {
+            type: 'workspace_extraction_proposal' as const,
+            candidateId: body.extraction_candidate_id,
+          },
+        };
   }
   if (body.kind === 'exact_source_revert') {
     return { ...common, kind: body.kind, commitId: body.commit_id } as const;
@@ -759,6 +782,11 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         projectId,
         scope: 'transition:ref:advance',
       });
+      const workspaceProjection = await resolveCanonicalWorkspaceSourceCommitProjection({
+        db,
+        projectId,
+        transitionId,
+      });
       const result = await commitTransition({
         db,
         projectId,
@@ -767,6 +795,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         decisionDigest: body.decision_digest,
         expectedHead: body.expected_head,
+        ...(workspaceProjection === undefined ? {} : { workspaceProjection }),
       });
       return c.json(
         {

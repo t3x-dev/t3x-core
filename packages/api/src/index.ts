@@ -22,7 +22,18 @@ export type {
   TransitionControlPlaneOptions,
   TransitionExternalProviderResult,
   TransitionExternalStatementProvider,
+  TransitionNativeProviderResult,
+  TransitionNativeStatementProvider,
 } from './lib/transition-control-plane';
+export type {
+  WorkspaceSourceRunnerCapability,
+  WorkspaceSourceSecretResolver,
+  WorkspaceSourceTransitionCapabilities,
+} from './lib/workspace-source-transition';
+export {
+  createWorkspaceSourceRunnerProvider,
+  WORKSPACE_SOURCE_RUNNER_PROVIDER_SOURCE,
+} from './lib/workspace-source-transition';
 // Logger
 export { pinoLogger } from './middleware/logger';
 

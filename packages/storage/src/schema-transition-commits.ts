@@ -99,6 +99,13 @@ export const transitionProposalMemberships = pgTable(
       table.createdAt,
       table.transitionId
     ),
+    index('idx_transition_proposal_memberships_workspace_revision_created').on(
+      table.projectId,
+      table.workspaceId,
+      table.workspaceRevision,
+      table.createdAt,
+      table.transitionId
+    ),
     check(
       'transition_proposal_memberships_actor_kind_check',
       sql`${table.actorKind} IN ('human', 'agent', 'service')`
@@ -109,6 +116,21 @@ export const transitionProposalMemberships = pgTable(
     ),
   ]
 );
+
+/**
+ * Immutable server-resolved preparation facts for one Proposal membership.
+ *
+ * These bytes are deliberately separate from the client request identity so an
+ * exact retry remains reusable even after mutable application state changes.
+ */
+export const transitionProposalPreparations = pgTable('transition_proposal_preparations', {
+  transitionId: text('transition_id')
+    .primaryKey()
+    .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+  canonicalJson: text('canonical_json').notNull(),
+  digest: text('digest').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /**
  * Append-only trusted issuer membership for an observed Statement.
@@ -149,6 +171,39 @@ export const transitionStatementMemberships = pgTable(
       sql`${table.issuerKind} IN ('human', 'agent', 'service')`
     ),
   ]
+);
+
+/**
+ * Application receipt for one completed Verify request.
+ *
+ * Provider failures and no-statement outcomes are operational diagnostics, not
+ * protocol Statements. Persisting them here makes an idempotent retry return
+ * the same application facts without promoting diagnostics into the kernel.
+ */
+export const transitionVerificationReceipts = pgTable(
+  'transition_verification_receipts',
+  {
+    transitionId: text('transition_id')
+      .notNull()
+      .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    operationalResults: jsonb('operational_results')
+      .$type<
+        Array<{
+          source: string;
+          outcome: 'no_statement' | 'failed';
+          code: string;
+          message: string;
+        }>
+      >()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.transitionId, table.requestId] })]
 );
 
 /**
@@ -343,8 +398,12 @@ export const transitionDecisionLedger = pgTable(
 
 export type TransitionObjectRecord = typeof transitionObjects.$inferSelect;
 export type TransitionProposalMembershipRecord = typeof transitionProposalMemberships.$inferSelect;
+export type TransitionProposalPreparationRecord =
+  typeof transitionProposalPreparations.$inferSelect;
 export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
+export type TransitionVerificationReceiptRecord =
+  typeof transitionVerificationReceipts.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionYOpsLogConsumptionRecord = typeof transitionYOpsLogConsumptions.$inferSelect;

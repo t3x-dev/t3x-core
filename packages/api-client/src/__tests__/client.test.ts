@@ -365,6 +365,66 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('repository workspaces', () => {
+    it('exposes authenticated Workspace reads through a frozen capability', async () => {
+      const data = {
+        workspaces: [{ id: 'workspace_1', projectId: 'proj/1', revision: 3 }],
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.list('proj/1')).toEqual(data);
+      expect(Object.isFrozen(client.workspaces)).toBe(true);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('gets one project-scoped Workspace projection', async () => {
+      const data = {
+        candidate_id: 'candidate_1',
+        yops_draft_id: 'draft:1',
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 4 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.get('proj/1', 'workspace/1')).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('creates a server-owned extraction proposal from immutable Source turns', async () => {
+      const data = {
+        candidate_id: 'candidate:abc',
+        proposal: {
+          schema: 't3x.dev/workspace-extraction-proposal/v1',
+          operations: [],
+        },
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 5 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        source: { type: 'conversation' as const, id: 'conv_1', turn_hashes: ['turn_1'] },
+        if_revision: 4,
+      };
+
+      expect(
+        await client.workspaces.createExtractionProposal('proj/1', 'workspace/1', input)
+      ).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/proj%2F1/workspaces/workspace%2F1/extraction-proposals'
+        ),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+  });
+
   // =========================================================================
   // Turns
   // =========================================================================
@@ -794,6 +854,25 @@ describe('T3xClient', () => {
       );
     });
 
+    it('proposes from a server-owned Workspace extraction candidate', async () => {
+      const data = { transition_id: 'trn_extract', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'structured_yops' as const,
+        request_id: 'request:proposal:extract',
+        workspace_id: 'ws_1',
+        extraction_candidate_id: 'candidate:abc',
+        if_revision: 4,
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('inspects one project-scoped Transition', async () => {
       const data = { transition_id: 'trn_abc', view: {} };
       const fn = mockFetch(successResponse(data));
@@ -844,6 +923,87 @@ describe('T3xClient', () => {
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/statements'),
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('creates a Decision from an immutable review precondition', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        decision_digest: 'sha256:decision',
+        decision: {},
+        view: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:decision:1',
+        outcome: 'accepted' as const,
+        precondition: {
+          workspace_revision: 4,
+          ref_name: 'main',
+          ref_head: null,
+          effect_digest: 'sha256:effect',
+          proposal_digest: 'sha256:proposal',
+          statement_digests: ['sha256:statement'],
+          policy_digest: 'sha256:policy',
+        },
+      };
+
+      expect(await client.decideTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/decisions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('creates a Commit only from a recorded Decision and expected head', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        commit_digest: 'sha256:commit',
+        commit: {},
+        transition: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:commit:1',
+        decision_digest: 'sha256:decision',
+        expected_head: null,
+      };
+
+      expect(await client.commitTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/commits'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('encodes project and Transition ids in control-plane paths', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+
+      await client.inspectTransition('project/with space', 'transition/with space');
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/project%2Fwith%20space/transitions/transition%2Fwith%20space'
+        ),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('passes AbortSignal through Transition inspection', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+      const controller = new AbortController();
+
+      await client.inspectTransition('proj_1', 'trn_abc', { signal: controller.signal });
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: controller.signal })
       );
     });
   });

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock() factories run BEFORE top-level `const` declarations due to
 // Vitest's hoisting. Use vi.hoisted to move spy creation above the mocks.
-const { mockVerify, joinSpy, leaveSpy, getPresenceSpy, touchSpy, findApiKeySpy } = vi.hoisted(
-  () => {
+const { mockVerify, joinSpy, leaveSpy, getPresenceSpy, touchSpy, findApiKeySpy, findProjectSpy } =
+  vi.hoisted(() => {
     return {
       mockVerify: vi.fn(),
       joinSpy: vi.fn(),
@@ -11,9 +11,9 @@ const { mockVerify, joinSpy, leaveSpy, getPresenceSpy, touchSpy, findApiKeySpy }
       getPresenceSpy: vi.fn(() => []),
       touchSpy: vi.fn(() => Promise.resolve()),
       findApiKeySpy: vi.fn(),
+      findProjectSpy: vi.fn(),
     };
-  }
-);
+  });
 
 // Mock auth verification BEFORE importing the route.
 vi.mock('../middleware/auth', async () => {
@@ -46,6 +46,7 @@ vi.mock('../lib/room-manager', () => ({
 vi.mock('@t3x-dev/storage', () => ({
   touchLastUsed: touchSpy,
   findApiKeyByValue: findApiKeySpy,
+  findProjectById: findProjectSpy,
 }));
 
 import { createWsRoute } from '../routes/ws';
@@ -83,6 +84,10 @@ describe('ws route — query parameter validation', () => {
     leaveSpy.mockClear();
     getPresenceSpy.mockClear();
     touchSpy.mockClear();
+    findProjectSpy.mockReset();
+    findProjectSpy.mockImplementation((_db, projectId: string) =>
+      Promise.resolve({ projectId, ownerId: 'u1' })
+    );
     mockVerify.mockReset();
   });
 
@@ -166,6 +171,27 @@ describe('ws route — query parameter validation', () => {
     // We don't assert it was awaited, just that it was called.
     await Promise.resolve();
     expect(touchSpy).toHaveBeenCalledWith(expect.anything(), 'k_abc');
+  });
+
+  it('rejects a project-scoped agent key subscribing to another project', async () => {
+    delete process.env.AUTH_DISABLED;
+    mockVerify.mockResolvedValue({
+      userId: null,
+      projectId: 'proj_allowed',
+      keyId: 'k_agent',
+      principalKind: 'agent',
+      transitionScopes: [],
+    });
+    const { fakeUpgrade } = makeFakeUpgrade();
+    const route = createWsRoute(fakeUpgrade as never);
+
+    const response = await route.fetch(
+      new Request('http://localhost/ws?project_id=proj_denied&token=good_token')
+    );
+
+    expect(response.status).toBe(403);
+    expect(fakeUpgrade).not.toHaveBeenCalled();
+    expect(findProjectSpy).not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,9 @@ const { mockClient, createClientMock } = vi.hoisted(() => ({
     getDraft: vi.fn(),
     applyYOps: vi.fn(),
     commitFromDraft: vi.fn(),
+    workspaces: {
+      createExtractionProposal: vi.fn(),
+    },
     createLeaf: vi.fn(),
     generateLeaf: vi.fn(),
   },
@@ -268,5 +271,53 @@ describe('minimal main path smoke', () => {
         headers: { Authorization: 'Bearer t3xk_test' },
       });
     }
+  });
+
+  it('persists Source-backed extraction into the same Workspace contract as MCP', async () => {
+    mockClient.workspaces.createExtractionProposal.mockResolvedValue({
+      candidate_id: 'candidate:abc',
+      proposal: {
+        schema: 't3x.dev/workspace-extraction-proposal/v1',
+        operations: [{ set: { path: 'device/name', value: 'sensor' } }],
+      },
+      workspace: { id: 'workspace_1', projectId: 'proj_abc', revision: 4 },
+    });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'extract',
+      '-p',
+      'proj_abc',
+      '--workspace',
+      'workspace_1',
+      '--source-thread',
+      'conv_abc',
+      '--turn-hash',
+      'sha256:turn-1',
+      'sha256:turn-2',
+      '--if-revision',
+      '3',
+      '--provider',
+      'google',
+      '--model',
+      'gemini-3.1-flash-lite-preview',
+    ]);
+
+    expect(mockClient.workspaces.createExtractionProposal).toHaveBeenCalledWith(
+      'proj_abc',
+      'workspace_1',
+      {
+        source: {
+          type: 'conversation',
+          id: 'conv_abc',
+          turn_hashes: ['sha256:turn-1', 'sha256:turn-2'],
+        },
+        if_revision: 3,
+        provider: 'google',
+        model: 'gemini-3.1-flash-lite-preview',
+      }
+    );
+    expect(mockClient.extract).not.toHaveBeenCalled();
   });
 });

@@ -22,8 +22,8 @@ describe('Model Catalog', () => {
     ]);
     expect(getModelsByProvider('google').map((model) => model.id)).toEqual([
       'gemini-2.5-pro',
-      'gemini-3-flash-preview',
-      'gemini-3.1-flash-lite-preview',
+      'gemini-3.6-flash',
+      'gemini-3.1-flash-lite',
     ]);
   });
 
@@ -42,6 +42,12 @@ describe('Model Catalog', () => {
         expect(model.capabilities.length).toBeGreaterThan(0);
         expect(model.maxOutputTokens).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('advertises structured outputs for every model that uses the native schema path', () => {
+    for (const model of getAllModels()) {
+      expect(model.capabilities).toContain('structured_output');
     }
   });
 
@@ -83,7 +89,9 @@ describe('Model Catalog', () => {
     expect(getModelInfo('gpt-4o')?.id).toBe('gpt-5.4');
 
     expect(normalizeModelId('gemini-3.1-pro-preview')).toBe('gemini-2.5-pro');
-    expect(getCanonicalModelId('gemini-2.5-flash')).toBe('gemini-3-flash-preview');
+    expect(getCanonicalModelId('gemini-2.5-flash')).toBe('gemini-3.6-flash');
+    expect(getCanonicalModelId('gemini-3-flash-preview')).toBe('gemini-3.6-flash');
+    expect(getCanonicalModelId('gemini-3.1-flash-lite-preview')).toBe('gemini-3.1-flash-lite');
     expect(getModelInfo('gemini-3.1-pro-preview')?.id).toBe('gemini-2.5-pro');
   });
 });

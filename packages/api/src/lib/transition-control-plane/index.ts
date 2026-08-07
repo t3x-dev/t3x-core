@@ -11,12 +11,14 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
-  createTransitionProposalMembership,
-  digestTransitionRequestCanonicalJson,
   findTransitionProposalByRequest,
   findTransitionStatementsByRequest,
+  findTransitionVerificationReceipt,
   getTransitionPolicyBinding,
+  type RecordTransitionStatementMembershipInput,
   recordTransitionStatementMembership,
+  recordTransitionStatementMemberships,
+  recordTransitionVerificationReceipt,
   resolveTransitionProposalGraph,
   TransitionRequestConflictError,
   type TransitionRequestKind,
@@ -24,7 +26,6 @@ import {
 } from '@t3x-dev/storage';
 import {
   CORE_PREDICATE_TYPES,
-  canonicalizeProtocolValue,
   type DecisionStatement,
   type Effect,
   EffectClaimFalseError,
@@ -35,12 +36,18 @@ import {
   type Statement,
   verifyEffect,
 } from '@t3x-dev/transition';
+import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
   buildWorkspaceSourceRevertProposal,
+  WORKSPACE_SOURCE_ARTIFACT_FORMAT,
   type WorkspaceSourceArtifactSelector,
 } from '../workspace-source-transition';
-import { buildWorkspaceYOpsProposal } from '../workspace-transition';
+import {
+  buildWorkspaceYOpsProposal,
+  WorkspaceTransitionReviewStaleError,
+} from '../workspace-transition';
+import { canonicalTransitionRequest, materializeTransitionProposal } from './materialize';
 
 type ActorRef = ProposalStatement['actor'];
 export type TransitionSubjectRole = 'effect' | 'result' | 'proposal';
@@ -68,6 +75,18 @@ export type TransitionProposeRequest =
       kind: 'structured_yops';
       workspaceId: string;
       operations: ProtocolValue[];
+      source?: never;
+      why?: string;
+      ifRevision?: number;
+    }
+  | {
+      kind: 'structured_yops';
+      workspaceId: string;
+      source: {
+        type: 'workspace_extraction_proposal';
+        candidateId: string;
+      };
+      operations?: never;
       why?: string;
       ifRevision?: number;
     }
@@ -110,6 +129,11 @@ export type TransitionExternalProviderResult =
   | { outcome: 'statement'; statement: TransitionExternalStatementDraft }
   | { outcome: 'no_statement'; code: string; message: string };
 
+export type TransitionNativeProviderResult =
+  | { outcome: 'statement'; statement: Statement }
+  | { outcome: 'no_statement'; code: string; message: string }
+  | { outcome: 'not_applicable' };
+
 export interface TransitionExternalStatementProvider {
   /** Stable server-owned key persisted as Statement membership source. */
   source: string;
@@ -129,8 +153,35 @@ export interface TransitionExternalStatementProvider {
   }): Promise<TransitionExternalProviderResult>;
 }
 
+/**
+ * Trusted application adapter for a native Statement profile. Unlike external
+ * providers, it must construct the complete Statement through the profile's
+ * parser/builder; the control plane still revalidates its authority and graph
+ * subjects before persistence.
+ */
+export interface TransitionNativeStatementProvider {
+  source: string;
+  issuer: ActorRef;
+  predicateTypes: readonly string[];
+  verify(input: {
+    db: AnyDB;
+    transitionId: string;
+    projectId: string;
+    workspaceId: string;
+    requestKind: TransitionRequestKind;
+    requestFacts: ProtocolValue;
+    preparationFacts: ProtocolValue | null;
+    effect: Effect;
+    base: State;
+    result: State;
+    proposal: ProposalStatement;
+    run: { id: string; recordedAt: string };
+  }): Promise<TransitionNativeProviderResult>;
+}
+
 export interface TransitionControlPlaneOptions {
   providers?: readonly TransitionExternalStatementProvider[];
+  nativeProviders?: readonly TransitionNativeStatementProvider[];
   allowedExternalPredicateTypes?: readonly string[];
 }
 
@@ -180,15 +231,8 @@ function comparePortable(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function canonicalRequest(value: ProtocolValue): {
-  canonicalJson: string;
-  digest: string;
-} {
-  const canonicalJson = canonicalizeProtocolValue(value);
-  return {
-    canonicalJson,
-    digest: digestTransitionRequestCanonicalJson(canonicalJson),
-  };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolValue {
@@ -196,7 +240,14 @@ function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolVa
     return {
       kind: request.kind,
       workspace_id: request.workspaceId,
-      operations: structuredClone(request.operations),
+      ...('source' in request && request.source !== undefined
+        ? {
+            source: {
+              type: request.source.type,
+              candidate_id: request.source.candidateId,
+            },
+          }
+        : { operations: structuredClone(request.operations) }),
       ...(request.why === undefined ? {} : { why: request.why }),
       ...(request.ifRevision === undefined ? {} : { if_revision: request.ifRevision }),
     };
@@ -239,6 +290,54 @@ function normalizedProposeRequest(request: TransitionProposeRequest): ProtocolVa
   } as ProtocolValue;
 }
 
+function normalizedSourcePreparation(sourceArtifact: unknown): ProtocolValue {
+  if (
+    !isRecord(sourceArtifact) ||
+    sourceArtifact.format !== WORKSPACE_SOURCE_ARTIFACT_FORMAT ||
+    typeof sourceArtifact.rootPath !== 'string' ||
+    !Array.isArray(sourceArtifact.resources)
+  ) {
+    throw new TypeError('Server-resolved exact-source preparation is malformed');
+  }
+  const root = sourceArtifact.root;
+  let normalizedRoot: ProtocolValue | undefined;
+  if (root !== undefined) {
+    if (
+      !isRecord(root) ||
+      typeof root.materialId !== 'string' ||
+      typeof root.contentHash !== 'string'
+    ) {
+      throw new TypeError('Server-resolved exact-source root is malformed');
+    }
+    normalizedRoot = {
+      material_id: root.materialId,
+      content_hash: root.contentHash,
+    };
+  }
+  return {
+    artifact: {
+      format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
+      root_path: sourceArtifact.rootPath,
+      ...(normalizedRoot === undefined ? {} : { root: normalizedRoot }),
+      resources: sourceArtifact.resources.map((resource) => {
+        if (
+          !isRecord(resource) ||
+          typeof resource.path !== 'string' ||
+          typeof resource.materialId !== 'string' ||
+          typeof resource.contentHash !== 'string'
+        ) {
+          throw new TypeError('Server-resolved exact-source resource is malformed');
+        }
+        return {
+          path: resource.path,
+          material_id: resource.materialId,
+          content_hash: resource.contentHash,
+        };
+      }),
+    },
+  };
+}
+
 async function buildProposal(
   db: AnyDB,
   input: {
@@ -255,10 +354,24 @@ async function buildProposal(
     actor: input.actor,
   };
   if (input.request.kind === 'structured_yops') {
-    return buildWorkspaceYOpsProposal(db, {
-      ...common,
-      operations: input.request.operations,
-    });
+    if ('source' in input.request && input.request.source !== undefined) {
+      const source = await resolveWorkspaceExtractionTransitionSource(db, {
+        projectId: input.projectId,
+        workspaceId: input.request.workspaceId,
+        candidateId: input.request.source.candidateId,
+        expectedRevision: input.request.ifRevision,
+      });
+      const built = await buildWorkspaceYOpsProposal(db, {
+        ...common,
+        expectedRevision: source.workspaceRevision,
+        operations: source.operations,
+      });
+      if (built.refHead !== source.baseCommitHash) {
+        throw new WorkspaceTransitionReviewStaleError();
+      }
+      return built;
+    }
+    return buildWorkspaceYOpsProposal(db, { ...common, operations: input.request.operations });
   }
   if (input.request.kind === 'exact_source_revert') {
     return buildWorkspaceSourceRevertProposal(db, {
@@ -283,7 +396,8 @@ export async function proposeTransition(input: {
   actor: ActorRef;
   request: TransitionProposeRequest;
 }): Promise<{ view: TransitionControlPlaneView; reused: boolean }> {
-  const normalized = canonicalRequest(normalizedProposeRequest(input.request));
+  const requestFacts = normalizedProposeRequest(input.request);
+  const normalized = canonicalTransitionRequest(requestFacts);
   const existing = await findTransitionProposalByRequest(input.db, {
     projectId: input.projectId,
     actor: input.actor,
@@ -305,15 +419,23 @@ export async function proposeTransition(input: {
   }
 
   const built = await buildProposal(input.db, input);
-  const created = await createTransitionProposalMembership(input.db, {
+  let preparationFacts: ProtocolValue | undefined;
+  if (input.request.kind !== 'structured_yops') {
+    if (!('sourceArtifact' in built)) {
+      throw new TypeError('Exact-source Proposal did not produce preparation facts');
+    }
+    preparationFacts = normalizedSourcePreparation(built.sourceArtifact);
+  }
+  const created = await materializeTransitionProposal({
+    db: input.db,
     projectId: input.projectId,
     workspaceId: built.workspaceId,
     workspaceRevision: built.workspaceRevision,
     refName: built.refName,
     refHead: built.refHead,
     requestKind: input.request.kind,
-    requestCanonicalJson: normalized.canonicalJson,
-    requestDigest: normalized.digest,
+    requestFacts,
+    ...(preparationFacts === undefined ? {} : { preparationFacts }),
     requestId: input.requestId,
     actor: input.actor,
     base: built.base,
@@ -424,12 +546,19 @@ function assertExternalPredicate(
 
 function configuredProviders(options: TransitionControlPlaneOptions | undefined): {
   providers: TransitionExternalStatementProvider[];
+  nativeProviders: TransitionNativeStatementProvider[];
   allowed: Set<string>;
 } {
   const providers = [...(options?.providers ?? [])];
+  const nativeProviders = [...(options?.nativeProviders ?? [])];
   const allowed = new Set(options?.allowedExternalPredicateTypes ?? []);
   const sources = new Set<string>();
-  for (const provider of providers) {
+  const configured = [
+    ...providers.map((provider) => ({ kind: 'external' as const, provider })),
+    ...nativeProviders.map((provider) => ({ kind: 'native' as const, provider })),
+  ];
+  for (const entry of configured) {
+    const { provider } = entry;
     if (
       provider.source.length === 0 ||
       provider.source !== provider.source.trim() ||
@@ -445,10 +574,14 @@ function configuredProviders(options: TransitionControlPlaneOptions | undefined)
       throw new TypeError(`Transition provider ${provider.source} repeats a predicate type`);
     }
     for (const predicateType of provider.predicateTypes) {
-      assertExternalPredicate(predicateType, allowed);
+      if (entry.kind === 'native') {
+        assertExternalPredicate(predicateType, new Set([predicateType]));
+      } else {
+        assertExternalPredicate(predicateType, allowed);
+      }
     }
   }
-  return { providers, allowed };
+  return { providers, nativeProviders, allowed };
 }
 
 function createExternalStatement(input: {
@@ -471,18 +604,35 @@ function createExternalStatement(input: {
   });
 }
 
-async function recordStatement(input: {
-  db: AnyDB;
-  projectId: string;
-  transitionId: string;
+function sameActor(left: ActorRef, right: ActorRef): boolean {
+  return left.kind === right.kind && left.id === right.id;
+}
+
+function descriptorKey(value: { kind: string; schema: string; digest: string }): string {
+  return `${value.kind}\0${value.schema}\0${value.digest}`;
+}
+
+function validateNativeStatement(input: {
+  graph: Awaited<ReturnType<typeof resolveTransitionProposalGraph>>;
+  provider: TransitionNativeStatementProvider;
   statement: Statement;
-  source: string;
-  issuer: ActorRef;
-  requestId: string;
-  requestDigest: string;
-}): Promise<TransitionStatementMembership> {
-  const recorded = await recordTransitionStatementMembership(input.db, input);
-  return recorded.membership;
+}): Statement {
+  const statement = parseStatement(input.statement);
+  if (!sameActor(statement.actor, input.provider.issuer)) {
+    throw new TypeError(`Native provider ${input.provider.source} issued as another actor`);
+  }
+  if (!input.provider.predicateTypes.includes(statement.predicateType)) {
+    throw new TransitionPredicateNotAllowedError(statement.predicateType);
+  }
+  const allowedSubjects = new Set([
+    descriptorKey(describeTransitionObject(input.graph.effect)),
+    descriptorKey(input.graph.effect.result),
+    descriptorKey(describeTransitionObject(input.graph.proposal)),
+  ]);
+  if (statement.subjects.some((subject) => !allowedSubjects.has(descriptorKey(subject)))) {
+    throw new TypeError(`Native provider ${input.provider.source} issued for another graph`);
+  }
+  return statement;
 }
 
 export async function verifyTransition(input: {
@@ -498,7 +648,7 @@ export async function verifyTransition(input: {
   operationalResults: TransitionOperationalResult[];
   reused: boolean;
 }> {
-  const request = canonicalRequest({ operation: 'verify' });
+  const request = canonicalTransitionRequest({ operation: 'verify' });
   const prior = await findTransitionStatementsByRequest(input.db, {
     projectId: input.projectId,
     transitionId: input.transitionId,
@@ -506,16 +656,31 @@ export async function verifyTransition(input: {
     requestDigest: request.digest,
   });
   if (prior.length > 0) {
+    const receipt = await findTransitionVerificationReceipt(input.db, {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      requestId: input.requestId,
+    });
+    if (receipt !== null && receipt.requestDigest !== request.digest) {
+      throw new TransitionRequestConflictError(input.requestId);
+    }
     return {
       view: await inspectTransition(input),
       statements: prior,
-      operationalResults: [],
+      // Receipts were introduced after Statement memberships. Older completed
+      // requests remain readable but cannot recover diagnostics never stored.
+      operationalResults: receipt?.operationalResults ?? [],
       reused: true,
     };
   }
 
-  const { providers, allowed } = configuredProviders(input.options);
+  const { providers, nativeProviders, allowed } = configuredProviders(input.options);
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
+  const requestFacts = JSON.parse(graph.membership.requestCanonicalJson) as ProtocolValue;
+  const preparationFacts =
+    graph.preparation === null
+      ? null
+      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
   const recordedAt = new Date().toISOString();
   let replayPredicate:
     | {
@@ -563,20 +728,27 @@ export async function verifyTransition(input: {
     actor: REPLAY_ACTOR,
     predicate: replayPredicate,
   });
-  const statements: TransitionStatementMembership[] = [
-    await recordStatement({
-      ...input,
+  const statementInputs: RecordTransitionStatementMembershipInput[] = [
+    {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
       statement: replay,
       source: 'server:replay',
       issuer: REPLAY_ACTOR,
+      requestId: input.requestId,
       requestDigest: request.digest,
-    }),
+    },
   ];
 
   const operationalResults: TransitionOperationalResult[] = [];
+  const allProviders = [
+    ...providers.map((provider) => ({ kind: 'external' as const, provider })),
+    ...nativeProviders.map((provider) => ({ kind: 'native' as const, provider })),
+  ];
   const providerRuns = await Promise.allSettled(
-    providers.map(async (provider) => {
-      const result = await provider.verify({
+    allProviders.map(async (entry) => {
+      const { provider } = entry;
+      const common = {
         transitionId: input.transitionId,
         projectId: input.projectId,
         workspaceId: graph.membership.workspaceId,
@@ -588,7 +760,33 @@ export async function verifyTransition(input: {
           id: `transition:${input.transitionId}:verify:${input.requestId}:${provider.source}`,
           recordedAt,
         },
-      });
+      };
+      if (entry.kind === 'native') {
+        const result = await entry.provider.verify({
+          ...common,
+          db: input.db,
+          requestKind: graph.membership.requestKind,
+          requestFacts,
+          preparationFacts,
+        });
+        if (result.outcome === 'not_applicable') return { provider, result } as const;
+        if (result.outcome === 'no_statement') {
+          if (result.code.trim().length === 0 || result.message.trim().length === 0) {
+            throw new TypeError('Operational provider results require a code and message');
+          }
+          return { provider, result } as const;
+        }
+        return {
+          provider,
+          result,
+          statement: validateNativeStatement({
+            graph,
+            provider: entry.provider,
+            statement: result.statement,
+          }),
+        } as const;
+      }
+      const result = await entry.provider.verify(common);
       if (result.outcome === 'no_statement') {
         if (result.code.trim().length === 0 || result.message.trim().length === 0) {
           throw new TypeError('Operational provider results require a code and message');
@@ -609,7 +807,7 @@ export async function verifyTransition(input: {
     })
   );
   for (let index = 0; index < providerRuns.length; index += 1) {
-    const provider = providers[index]!;
+    const provider = allProviders[index]!.provider;
     const settled = providerRuns[index]!;
     if (settled.status === 'rejected') {
       operationalResults.push({
@@ -621,6 +819,7 @@ export async function verifyTransition(input: {
       continue;
     }
     const value = settled.value;
+    if (value.result.outcome === 'not_applicable') continue;
     if (value.result.outcome === 'no_statement') {
       operationalResults.push({
         source: provider.source,
@@ -633,22 +832,37 @@ export async function verifyTransition(input: {
     if (!('statement' in value) || value.statement === undefined) {
       throw new TypeError('Conclusive provider result is missing its Statement');
     }
-    statements.push(
-      await recordStatement({
-        ...input,
-        statement: value.statement,
-        source: provider.source,
-        issuer: provider.issuer,
-        requestDigest: request.digest,
-      })
-    );
+    statementInputs.push({
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      statement: value.statement,
+      source: provider.source,
+      issuer: provider.issuer,
+      requestId: input.requestId,
+      requestDigest: request.digest,
+    });
   }
-  statements.sort((left, right) => comparePortable(left.statementDigest, right.statementDigest));
   operationalResults.sort((left, right) => comparePortable(left.source, right.source));
+  const recorded = await input.db.transaction(async (tx) => {
+    const statements = (
+      await recordTransitionStatementMemberships(tx as AnyDB, statementInputs)
+    ).map((item) => item.membership);
+    const receipt = await recordTransitionVerificationReceipt(tx as AnyDB, {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      requestId: input.requestId,
+      requestDigest: request.digest,
+      operationalResults,
+    });
+    return { statements, operationalResults: receipt.receipt.operationalResults };
+  });
+  recorded.statements.sort((left, right) =>
+    comparePortable(left.statementDigest, right.statementDigest)
+  );
   return {
     view: await inspectTransition(input),
-    statements,
-    operationalResults,
+    statements: recorded.statements,
+    operationalResults: recorded.operationalResults,
     reused: false,
   };
 }
@@ -666,7 +880,7 @@ export async function attachTransitionStatement(input: {
   membership: TransitionStatementMembership;
   reused: boolean;
 }> {
-  const normalized = canonicalRequest({
+  const normalized = canonicalTransitionRequest({
     operation: 'attach_statement',
     predicate_type: input.statement.predicateType,
     predicate: input.statement.predicate,

@@ -1,10 +1,55 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pinoLogger } from '../middleware/logger';
 import { createWorkspaceSourceTransitionRoutes } from '../routes/workspace-source-transition.openapi';
 
 describe('exact-source Workspace Transition route boundary', () => {
   const app = new Hono();
   app.route('/', createWorkspaceSourceTransitionRoutes());
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    [
+      '/v1/projects/project/workspaces/workspace/source-transition/review',
+      'workspace-source-governance.review',
+    ],
+    [
+      '/v1/projects/project/workspaces/workspace/source-transition/decide',
+      'workspace-source-governance.decide',
+    ],
+    [
+      '/v1/projects/project/workspaces/workspace/source-transition/revert/review',
+      'workspace-source-governance.revert-review',
+    ],
+    [
+      '/v1/projects/project/workspaces/workspace/source-transition/revert/decide',
+      'workspace-source-governance.revert-decide',
+    ],
+  ])('observes compatibility calls without premature retirement metadata: %s', async (path, routeId) => {
+    const log = vi.spyOn(pinoLogger, 'info').mockImplementation(() => undefined);
+    const response = await app.request(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.has('Deprecation')).toBe(false);
+    expect(response.headers.has('Link')).toBe(false);
+    expect(response.headers.has('Sunset')).toBe(false);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'compatibility_route.called',
+        compatibility_route: routeId,
+        method: 'POST',
+        path,
+      }),
+      'Compatibility API route called'
+    );
+  });
 
   it('rejects client-supplied source bytes, secret values, and authority facts before storage', async () => {
     const response = await app.request(

@@ -175,6 +175,47 @@ describe('GeminiProvider.generateStructured', () => {
     expect(body.systemInstruction).toEqual({ parts: [{ text: 'Extract structured data.' }] });
   });
 
+  it('lowers boolean literals without an invalid boolean enum', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('{"ok":true}'))),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Return true' }] },
+      z.object({ ok: z.literal(true) }),
+      { model: 'gemini-3.1-flash-lite' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.generationConfig.responseSchema.properties.ok).toEqual({ type: 'boolean' });
+  });
+
+  it('omits legacy generation config for Gemini 3.5+ models', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('{"name":"Bob"}'))),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      z.object({ name: z.string() }),
+      { model: 'gemini-3.5-flash-lite', temperature: 0.1 }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.generationConfig.temperature).toBeUndefined();
+    expect(body.generationConfig.thinkingConfig).toBeUndefined();
+  });
+
   it('uses a low thinking budget for Gemini 3.1 Pro structured extraction', async () => {
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({

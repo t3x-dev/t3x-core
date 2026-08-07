@@ -114,11 +114,25 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config: GeminiProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'gemini-2.5-pro';
+    this.model = config.model ?? 'gemini-3.1-flash-lite';
     this.baseUrl = config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
   }
 
+  /** Gemini 3.5+ uses a reduced generationConfig surface. */
+  private supportsLegacyGenerationConfig(model: string): boolean {
+    const match = /^gemini-(\d+)(?:\.(\d+))?/.exec(model);
+    if (!match) return true;
+
+    const major = Number(match[1]);
+    const minor = Number(match[2] ?? 0);
+    return major < 3 || (major === 3 && minor < 5);
+  }
+
   private buildThinkingConfig(model: string): Record<string, unknown> | undefined {
+    if (!this.supportsLegacyGenerationConfig(model)) {
+      return undefined;
+    }
+
     if (model.includes('flash-lite') || model.includes('flash-preview')) {
       return { thinkingBudget: 0 };
     }
@@ -153,7 +167,7 @@ export class GeminiProvider implements LLMProvider {
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature,
+            ...(this.supportsLegacyGenerationConfig(this.model) && { temperature }),
             maxOutputTokens: maxTokens,
             ...(thinkingConfig && { thinkingConfig }),
             ...(options?.stopSequences && { stopSequences: options.stopSequences }),
@@ -227,7 +241,7 @@ export class GeminiProvider implements LLMProvider {
     const requestBody: Record<string, unknown> = {
       contents,
       generationConfig: {
-        temperature,
+        ...(this.supportsLegacyGenerationConfig(model) && { temperature }),
         maxOutputTokens: maxTokens,
         ...(thinkingConfig && { thinkingConfig }),
         ...(options.stopSequences && { stopSequences: options.stopSequences }),
@@ -319,7 +333,7 @@ export class GeminiProvider implements LLMProvider {
     const requestBody: Record<string, unknown> = {
       contents,
       generationConfig: {
-        temperature,
+        ...(this.supportsLegacyGenerationConfig(model) && { temperature }),
         maxOutputTokens: maxTokens,
         responseSchema: jsonSchema,
         responseMimeType: 'application/json',

@@ -13,7 +13,8 @@
  * Authentication:
  *   - Required by default: clients must supply `token=<api_key>` as a query
  *     parameter. The token is validated via `verifyBearerToken`, which looks
- *     up the hashed key in storage.
+ *     up the hashed key in storage. Project subscriptions also enforce the
+ *     same project scope and owner checks as HTTP routes.
  *   - Skipped only when `AUTH_DISABLED=true` (case-insensitive) in the env.
  *     Mirrors the case-insensitive gate used by `authMiddleware`.
  *
@@ -76,6 +77,23 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
         const principal = await verifyBearerToken(db, token);
         if (!principal) {
           return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
+        }
+        if (projectId) {
+          if (
+            principal.principalKind !== 'human' &&
+            principal.projectId !== null &&
+            principal.projectId !== projectId
+          ) {
+            return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+          }
+          const { findProjectById } = await import('@t3x-dev/storage');
+          const project = await findProjectById(db, projectId);
+          if (!project) {
+            return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
+          }
+          if (principal.userId && project.ownerId && project.ownerId !== principal.userId) {
+            return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+          }
         }
         // Fire-and-forget: update last_used_at on the API key.
         // `verifyBearerToken` is intentionally side-effect-free, so we mirror

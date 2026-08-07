@@ -20,6 +20,7 @@ vi.mock('@/queries/workspaces', () => ({
 }));
 
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}`;
+const transitionId = `trn_${'1'.repeat(32)}`;
 
 const candidate = {
   id: 'workspace_prd_handoff',
@@ -67,6 +68,7 @@ describe('useWorkspaceTransition', () => {
       workspace: { ...candidate, revision: 7 },
     });
     vi.mocked(reviewWorkspaceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('pending'),
       precondition,
     });
@@ -80,6 +82,7 @@ describe('useWorkspaceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('committed'),
       precondition,
       decision_digest: digest('f'),
@@ -110,6 +113,7 @@ describe('useWorkspaceTransition', () => {
     });
 
     expect(decideWorkspaceTransition).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', {
+      transitionId,
       content,
       why: 'Keep the audience current.',
       outcome: 'accepted',
@@ -138,6 +142,7 @@ describe('useWorkspaceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('rejected'),
       precondition,
       decision_digest: digest('f'),
@@ -177,6 +182,7 @@ describe('useWorkspaceTransition', () => {
 
   it('does not restore a review invalidated while the request was in flight', async () => {
     let resolveReview!: (value: {
+      transition_id: string;
       transition: TransitionViewV1;
       precondition: typeof precondition;
     }) => void;
@@ -195,7 +201,11 @@ describe('useWorkspaceTransition', () => {
     expect(reviewWorkspaceTransition).toHaveBeenCalledOnce();
     act(() => result.current.reset());
     await act(async () => {
-      resolveReview({ transition: transitionView('pending'), precondition });
+      resolveReview({
+        transition_id: transitionId,
+        transition: transitionView('pending'),
+        precondition,
+      });
       await reviewPromise;
     });
 

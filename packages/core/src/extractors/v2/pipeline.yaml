@@ -207,8 +207,8 @@ providers:
       - id: gemini-2.5-pro
         known_issues:
           - "(resolved by F4) Default implicit thinking budget exhausted maxOutputTokens before content. Now capped at 256 via buildThinkingConfig."
-      - id: gemini-3-flash-preview
-      - id: gemini-3.1-flash-lite-preview
+      - id: gemini-3.6-flash
+      - id: gemini-3.1-flash-lite
 
 # Five-layer framework abstraction (extracted from F1–F13).
 # This is the pattern the pipeline has converged on. New work should slot

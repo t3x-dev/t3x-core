@@ -20,7 +20,10 @@ import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
-import type { WorkspaceSourceTransitionCapabilities } from './lib/workspace-source-transition';
+import {
+  createWorkspaceSourceRunnerProvider,
+  type WorkspaceSourceTransitionCapabilities,
+} from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
@@ -86,6 +89,7 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  workspaceExtractionProposalRoutes,
   workspaceRoutes,
   workspaceValidationRoutes,
   yopsLogRoutes,
@@ -120,6 +124,16 @@ export interface CreateAppResult {
 
 export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
+  const transitionControlPlane =
+    options?.workspaceSourceTransition?.runner === undefined
+      ? options?.transitionControlPlane
+      : {
+          ...options.transitionControlPlane,
+          nativeProviders: [
+            ...(options.transitionControlPlane?.nativeProviders ?? []),
+            createWorkspaceSourceRunnerProvider(options.workspaceSourceTransition),
+          ],
+        };
 
   // Global middleware (order: RequestId → CORS → Logger → L1 Rate Limit → [extensions] → L2 Rate Limit)
   app.use('*', requestIdMiddleware);
@@ -198,7 +212,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
   api.route('/', transitionPolicyBindingRoutes);
-  api.route('/', createTransitionControlPlaneRoutes(options?.transitionControlPlane));
+  api.route('/', createTransitionControlPlaneRoutes(transitionControlPlane));
   api.route('/', shareRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', sourceEvidenceRoutes);
@@ -229,6 +243,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);
   api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
+  api.route('/', workspaceExtractionProposalRoutes);
   api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)

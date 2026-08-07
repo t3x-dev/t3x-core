@@ -75,8 +75,13 @@ const TOOLSET_MAP: Record<McpToolset, readonly ToolEntry[]> = {
 const SERVER_INSTRUCTIONS = `T3X is version control for structured state — like Git, but for
 schema-backed YAML changed through deterministic YOps.
 
+Repository Workspace workflow (API backend):
+1. t3x_query source_evidence — select immutable Source turn hashes
+2. t3x_extract — create a v2 SourcedYOps proposal in an existing Workspace
+3. t3x_query workspace — inspect the persisted proposal
+
 Legacy compatibility workflow:
-1. t3x_extract — turn text into structured YAML state (creates a draft)
+1. t3x_extract with raw text — create a workbench draft
 2. t3x_query — inspect what was extracted (or any other resource)
 3. t3x_edit — refine the draft with YOps (YAML operations)
 4. t3x_commit — save a snapshot
@@ -92,7 +97,7 @@ Additional capabilities (if advanced toolset enabled):
 7. t3x_admin — manage projects, branches, pins
 
 Transition lifecycle (only if the opt-in transition toolset and API backend are enabled):
-8. propose_transition — prepare a replayable change without deciding or committing
+8. propose_transition — prepare a replayable change without deciding or committing; pass the extraction_candidate_id returned by t3x_extract to load canonical Workspace SourcedYOps on the server
 9. inspect_transition — inspect task state, assurance, and immutable preconditions
 10. verify_transition — run mandatory Replay plus configured external checks
 11. attach_statement — attach an allowlisted claim through authenticated API authority
