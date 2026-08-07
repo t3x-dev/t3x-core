@@ -98,8 +98,8 @@ configured providers in WebUI/API settings, MCP reuses them automatically.
 Environment variables remain available as a local fallback.
 
 For local development inside this repo, the committed root `.mcp.json` already points at
-`apps/mcp/dist/index.js` and defaults to the `api` backend so MCP follows the same
-API path as CLI.
+`apps/mcp/dist/index.js`, enables the Transition toolset, and defaults to the
+`api` backend so MCP follows the same persisted Workspace path as CLI and WebUI.
 
 ## Runtime Model
 

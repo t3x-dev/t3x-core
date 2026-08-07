@@ -4,6 +4,7 @@
  * Integration tests for POST /v1/extract endpoint.
  */
 
+import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -81,6 +82,41 @@ describe('Extract Routes', () => {
   });
 
   describe('POST /v1/extract', () => {
+    it('rejects a project-scoped key before extracting into another project', async () => {
+      const other = await insertProject(
+        mockDB,
+        testData.project({ name: 'Other Extract Project' })
+      );
+      const restricted = new Hono();
+      restricted.use('*', async (context, next) => {
+        const apiKey: ApiKey = {
+          id: 'ak_extract_project_scope',
+          key_prefix: 't3xk_test',
+          key_hash: 'test-hash',
+          name: 'Project-scoped extract key',
+          project_id: testProjectId,
+          user_id: null,
+          principal_kind: 'agent',
+          transition_scopes: [],
+          created_at: '2026-08-07T00:00:00.000Z',
+          last_used_at: null,
+          revoked_at: null,
+        };
+        context.set('apiKey', apiKey);
+        await next();
+      });
+      restricted.route('/', extractRoutes);
+
+      const res = await restricted.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: other.projectId, text: 'Do not extract this.' }),
+      });
+
+      expect(res.status).toBe(403);
+      expect(mockRunApiExtractionV2).not.toHaveBeenCalled();
+    });
+
     it('one-shot: creates conversation, extracts trees, returns draft', async () => {
       const res = await app.request('/v1/extract', {
         method: 'POST',

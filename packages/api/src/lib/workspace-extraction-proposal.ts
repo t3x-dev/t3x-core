@@ -9,6 +9,7 @@ import {
   type AnyDB,
   findConversationById,
   findTurnsByHashes,
+  recordEvent,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
@@ -351,18 +352,32 @@ export async function createWorkspaceExtractionProposal(
     extractionProposal: proposal,
     updatedAt: createdAt,
   };
-  const draft = await upsertWorkspaceDraft(
-    db,
-    {
-      project_id: input.projectId,
-      workspace_id: input.workspaceId,
-      title: workspaceTitle(nextWorkspace, input.workspaceId),
-      parent_commit_hash: context.refHead,
-      target_branch: context.refName,
-      workspace_state: nextWorkspace,
-    },
-    context.workspaceRevision
-  );
+  const draft = await db.transaction(async (tx) => {
+    const persisted = await upsertWorkspaceDraft(
+      tx,
+      {
+        project_id: input.projectId,
+        workspace_id: input.workspaceId,
+        title: workspaceTitle(nextWorkspace, input.workspaceId),
+        parent_commit_hash: context.refHead,
+        target_branch: context.refName,
+        workspace_state: nextWorkspace,
+      },
+      context.workspaceRevision
+    );
+    await recordEvent(tx, {
+      type: 'extraction.done',
+      projectId: input.projectId,
+      conversationId: conversation.conversationId,
+      payload: {
+        source: 'workspace-extraction-proposal',
+        workspace_id: input.workspaceId,
+        candidate_id: candidateId,
+        revision: persisted.revision,
+      },
+    });
+    return persisted;
+  });
 
   return {
     candidateId,

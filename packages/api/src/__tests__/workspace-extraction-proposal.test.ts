@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const storageMock = vi.hoisted(() => ({
   findConversationById: vi.fn(),
   findTurnsByHashes: vi.fn(),
+  recordEvent: vi.fn(),
   upsertWorkspaceDraft: vi.fn(),
 }));
 const extractionMock = vi.hoisted(() => ({ runApiExtractionV2: vi.fn() }));
 const transitionMock = vi.hoisted(() => ({ resolveWorkspaceExtractionContext: vi.fn() }));
+const dbMock = {
+  transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
+};
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
@@ -63,10 +67,11 @@ describe('Workspace extraction proposal service', () => {
     storageMock.upsertWorkspaceDraft.mockImplementation((_db, input) =>
       Promise.resolve({ workspace_state: input.workspace_state, revision: 4 })
     );
+    storageMock.recordEvent.mockResolvedValue(1n);
   });
 
   it('re-resolves immutable turns and persists full SourcedYOps against the ref baseline', async () => {
-    const result = await createWorkspaceExtractionProposal({} as never, {
+    const result = await createWorkspaceExtractionProposal(dbMock as never, {
       projectId: 'proj_1',
       workspaceId: 'workspace_1',
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_b', 'turn_a'] },
@@ -114,6 +119,17 @@ describe('Workspace extraction proposal service', () => {
       }),
       3
     );
+    expect(storageMock.recordEvent).toHaveBeenCalledWith(expect.anything(), {
+      type: 'extraction.done',
+      projectId: 'proj_1',
+      conversationId: 'conv_1',
+      payload: {
+        source: 'workspace-extraction-proposal',
+        workspace_id: 'workspace_1',
+        candidate_id: result.candidateId,
+        revision: 4,
+      },
+    });
   });
 
   it('rejects a Source conversation from another project before calling the LLM', async () => {
@@ -123,7 +139,7 @@ describe('Workspace extraction proposal service', () => {
     });
 
     await expect(
-      createWorkspaceExtractionProposal({} as never, {
+      createWorkspaceExtractionProposal(dbMock as never, {
         projectId: 'proj_1',
         workspaceId: 'workspace_1',
         source: { type: 'conversation', id: 'conv_other', turnHashes: ['turn_a'] },
@@ -137,7 +153,7 @@ describe('Workspace extraction proposal service', () => {
 
   it('fails closed when any selected immutable turn hash cannot be resolved', async () => {
     await expect(
-      createWorkspaceExtractionProposal({} as never, {
+      createWorkspaceExtractionProposal(dbMock as never, {
         projectId: 'proj_1',
         workspaceId: 'workspace_1',
         source: {
@@ -155,7 +171,7 @@ describe('Workspace extraction proposal service', () => {
   });
 
   it('resolves a persisted candidate only after checking its canonical identity', async () => {
-    const created = await createWorkspaceExtractionProposal({} as never, {
+    const created = await createWorkspaceExtractionProposal(dbMock as never, {
       projectId: 'proj_1',
       workspaceId: 'workspace_1',
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
@@ -171,7 +187,7 @@ describe('Workspace extraction proposal service', () => {
     });
 
     await expect(
-      resolveWorkspaceExtractionTransitionSource({} as never, {
+      resolveWorkspaceExtractionTransitionSource(dbMock as never, {
         projectId: 'proj_1',
         workspaceId: 'workspace_1',
         candidateId: created.candidateId,
@@ -185,7 +201,7 @@ describe('Workspace extraction proposal service', () => {
   });
 
   it('rejects a stored candidate whose Source selector digest was altered', async () => {
-    const created = await createWorkspaceExtractionProposal({} as never, {
+    const created = await createWorkspaceExtractionProposal(dbMock as never, {
       projectId: 'proj_1',
       workspaceId: 'workspace_1',
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
@@ -207,7 +223,7 @@ describe('Workspace extraction proposal service', () => {
     });
 
     await expect(
-      resolveWorkspaceExtractionTransitionSource({} as never, {
+      resolveWorkspaceExtractionTransitionSource(dbMock as never, {
         projectId: 'proj_1',
         workspaceId: 'workspace_1',
         candidateId: created.candidateId,
