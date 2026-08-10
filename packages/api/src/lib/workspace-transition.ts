@@ -46,12 +46,8 @@ import {
   materializeTransitionProposal,
   materializeTransitionStatement,
 } from './transition-control-plane/materialize';
-import {
-  canonicalSchemaNameFromBinding,
-  resolveBuiltInYSchema,
-  schemaRootKeyFromBinding,
-  schemaVersionFromBinding,
-} from './yschema-registry';
+import { resolveWorkspaceYSchema } from './workspace-yschema';
+import { schemaRootKeyFromBinding } from './yschema-registry';
 
 type ActorRef = ProposalStatement['actor'];
 type ProtocolValue = State['value'];
@@ -216,7 +212,7 @@ export class WorkspaceTransitionSchemaUnavailableError extends Error {
   ) {
     super(
       schemaName === null
-        ? 'Workspace Transition review requires one explicit built-in YSchema binding'
+        ? 'Workspace Transition review requires one explicit YSchema binding'
         : `Bound YSchema ${schemaName}${version ? ` ${version}` : ''} is unavailable`
     );
     this.name = 'WorkspaceTransitionSchemaUnavailableError';
@@ -284,17 +280,23 @@ function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue>
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function resolveWorkspaceSchema(workspace: Record<string, unknown>): {
+async function resolveWorkspaceSchema(
+  workspace: Record<string, unknown>,
+  db: AnyDB,
+  projectId: string
+): Promise<{
   canonicalName: string;
   rootKey: string;
   schema: YSchema;
-} {
+}> {
   const bindings = Array.isArray(workspace.schemaBindings) ? workspace.schemaBindings : [];
   if (bindings.length !== 1) throw new WorkspaceTransitionSchemaUnavailableError(null);
   const binding = bindings[0];
-  const canonicalName = canonicalSchemaNameFromBinding(binding);
-  const version = schemaVersionFromBinding(binding);
-  const schema = canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null;
+  const { canonicalName, schema, version } = await resolveWorkspaceYSchema(
+    workspace,
+    db,
+    projectId
+  );
   if (canonicalName === null || schema === null) {
     throw new WorkspaceTransitionSchemaUnavailableError(canonicalName, version);
   }
@@ -484,7 +486,11 @@ async function prepareWorkspaceTransition(
   }
   const proposal = compiled.proposal;
 
-  const { canonicalName, rootKey, schema } = resolveWorkspaceSchema(context.workspace);
+  const { canonicalName, rootKey, schema } = await resolveWorkspaceSchema(
+    context.workspace,
+    db,
+    input.projectId
+  );
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,

@@ -1,6 +1,8 @@
 'use client';
 
+import { ArrowLeft, FilePlus2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { SchemaModuleRegistry } from '@/components/schemas/modules/SchemaModuleRegistry';
 import {
   SchemaBindingActions,
   type SchemaBindingActionsState,
@@ -13,15 +15,28 @@ import {
 import { SchemaReleaseList } from '@/components/schemas/SchemaReleaseList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { publishedSchemaReleaseId } from '@/domain/schemas/publishedSchemaVersions';
+import type {
+  PublishedSchemaVersionManifest,
+  SchemaCompositionWorkspaceContext,
+  YSchemaArtifactFamily,
+} from '@/types/schemaModules';
 import type { SchemaFamilyPreview, SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaRegistryProps {
   bindingActions?: SchemaBindingActionsState;
+  compositionWorkspace?: SchemaCompositionWorkspaceContext;
   defaultFamilyId: string;
   families: SchemaFamilyPreview[];
 }
 
-export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: SchemaRegistryProps) {
+export function SchemaRegistry({
+  bindingActions,
+  compositionWorkspace,
+  defaultFamilyId,
+  families,
+}: SchemaRegistryProps) {
+  const [registryView, setRegistryView] = useState<'compose' | 'versions'>('versions');
   const initialFamily =
     families.find((family) => family.id === defaultFamilyId) ?? families[0] ?? null;
   const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? '');
@@ -58,6 +73,17 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
     setActiveView('yaml');
   }
 
+  async function handleVersionPublished(version: PublishedSchemaVersionManifest) {
+    await compositionWorkspace?.onPublished?.(version);
+    setSelectedFamilyId(version.family);
+    setSelectedReleaseIds((releaseIds) => ({
+      ...releaseIds,
+      [version.family]: publishedSchemaReleaseId(version.canonicalName, version.version),
+    }));
+    setActiveView('structure');
+    setRegistryView('versions');
+  }
+
   return (
     <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
       <div className="mx-auto w-full max-w-[1480px]">
@@ -67,43 +93,48 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
         >
           <SchemaRegistryHeader
             onOpenCanonicalYaml={handleOpenCanonicalYaml}
+            onViewChange={setRegistryView}
+            registryView={registryView}
             selectedRelease={selectedRelease}
           />
 
-          {selectedFamily ? (
-            <SchemaFamilyTabs
-              activeFamilyId={selectedFamily.id}
-              families={families}
-              onSelectFamily={handleSelectFamily}
-            />
-          ) : null}
-
-          {selectedFamily && selectedRelease ? (
+          {registryView === 'versions' ? (
             <>
-              <SchemaRegistryFacts
-                currentRelease={currentRelease}
-                family={selectedFamily}
-                familyCount={families.length}
-                selectedRelease={selectedRelease}
-              />
-              {bindingActions ? (
-                <SchemaBindingActions
-                  actions={bindingActions}
-                  currentRelease={currentRelease}
-                  selectedRelease={selectedRelease}
+              {selectedFamily ? (
+                <SchemaFamilyTabs
+                  activeFamilyId={selectedFamily.id}
+                  families={families}
+                  onSelectFamily={handleSelectFamily}
                 />
               ) : null}
+
+              {selectedFamily && selectedRelease ? (
+                <>
+                  <SchemaRegistryFacts
+                    currentRelease={currentRelease}
+                    family={selectedFamily}
+                    familyCount={families.length}
+                    selectedRelease={selectedRelease}
+                  />
+                  {bindingActions ? (
+                    <SchemaBindingActions
+                      actions={bindingActions}
+                      selectedRelease={selectedRelease}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
+                  {selectedFamily
+                    ? `No versions are available for ${selectedFamily.name}.`
+                    : 'No schema families are available for this project.'}
+                </div>
+              )}
             </>
-          ) : (
-            <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
-              {selectedFamily
-                ? `No versions are available for ${selectedFamily.name}.`
-                : 'No schema families are available for this project.'}
-            </div>
-          )}
+          ) : null}
         </section>
 
-        {selectedFamily && selectedRelease ? (
+        {registryView === 'versions' && selectedFamily && selectedRelease ? (
           <section
             aria-label="Schema version browser"
             className="mt-4 grid min-h-[650px] gap-4 min-[961px]:grid-cols-[280px_minmax(0,1fr)]"
@@ -124,6 +155,18 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
           </section>
         ) : null}
 
+        {registryView === 'compose' ? (
+          <SchemaModuleRegistry
+            family={schemaArtifactFamily(selectedFamily?.id)}
+            nextVersion={suggestNextVersion(selectedFamily?.releases ?? [])}
+            workspace={
+              compositionWorkspace
+                ? { ...compositionWorkspace, onPublished: handleVersionPublished }
+                : undefined
+            }
+          />
+        ) : null}
+
         <p className="mx-0.5 mt-[14px] text-[11px] text-[var(--text-tertiary)]">
           Preview data — one repository can use multiple Schema families; each family keeps an
           independent, immutable version history.
@@ -131,6 +174,10 @@ export function SchemaRegistry({ bindingActions, defaultFamilyId, families }: Sc
       </div>
     </section>
   );
+}
+
+function schemaArtifactFamily(value?: string): YSchemaArtifactFamily {
+  return value === 'skill' || value === 'prompt' || value === 'esphome-device' ? value : 'prd';
 }
 
 function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePreview | null {
@@ -143,9 +190,13 @@ function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePre
 
 function SchemaRegistryHeader({
   onOpenCanonicalYaml,
+  onViewChange,
+  registryView,
   selectedRelease,
 }: {
   onOpenCanonicalYaml: () => void;
+  onViewChange: (view: 'compose' | 'versions') => void;
+  registryView: 'compose' | 'versions';
   selectedRelease: SchemaReleasePreview | null;
 }) {
   return (
@@ -161,26 +212,54 @@ function SchemaRegistryHeader({
           Schemas
         </h2>
         <p className="mt-0.5 max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
-          Schema families define different kinds of structured state. Choose a family to inspect its
-          current contract, deterministic rules, typed relations, and canonical YAML.
+          {registryView === 'versions'
+            ? 'Choose an immutable version to inspect, reuse, or apply. Create a new version by composing Core with ordered Modules.'
+            : 'Assemble Core and Modules, verify the result, save the draft, then publish an immutable version for later reuse.'}
         </p>
       </div>
-      <Button
-        aria-label={
-          selectedRelease
-            ? `Open ${selectedRelease.name} ${selectedRelease.version} canonical YAML`
-            : 'Open canonical YAML'
-        }
-        className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
-        disabled={!selectedRelease}
-        onClick={onOpenCanonicalYaml}
-        type="button"
-        variant="canvas-outline"
-      >
-        Open canonical YAML
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          className="h-[34px] rounded-[var(--radius-md)] px-3 text-[13px]"
+          onClick={() => onViewChange(registryView === 'versions' ? 'compose' : 'versions')}
+          type="button"
+          variant={registryView === 'versions' ? 'commit' : 'canvas-outline'}
+        >
+          {registryView === 'versions' ? (
+            <FilePlus2 aria-hidden="true" className="size-3.5" />
+          ) : (
+            <ArrowLeft aria-hidden="true" className="size-3.5" />
+          )}
+          {registryView === 'versions' ? 'Compose with modules' : 'Back to version history'}
+        </Button>
+        {registryView === 'versions' ? (
+          <Button
+            aria-label={
+              selectedRelease
+                ? `Open ${selectedRelease.name} ${selectedRelease.version} canonical YAML`
+                : 'Open canonical YAML'
+            }
+            className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
+            disabled={!selectedRelease}
+            onClick={onOpenCanonicalYaml}
+            type="button"
+            variant="canvas-outline"
+          >
+            Open canonical YAML
+          </Button>
+        ) : null}
+      </div>
     </header>
   );
+}
+
+function suggestNextVersion(releases: SchemaReleasePreview[]): string {
+  const semanticVersions = releases
+    .map((release) => /^(\d+)\.(\d+)\.(\d+)$/.exec(release.version))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => [Number(match[1]), Number(match[2]), Number(match[3])] as const)
+    .sort((left, right) => right[0] - left[0] || right[1] - left[1] || right[2] - left[2]);
+  const latest = semanticVersions[0];
+  return latest ? `${latest[0]}.${latest[1]}.${latest[2] + 1}` : '1.0.0';
 }
 
 function SchemaRegistryFacts({

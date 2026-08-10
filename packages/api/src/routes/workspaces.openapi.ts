@@ -48,12 +48,8 @@ import {
   buildEsphomeDeviceWorkspace,
   isEsphomeDeviceWorkspace,
 } from '../lib/workspace-validation/esphome-workspace-profile';
-import {
-  canonicalSchemaNameFromBinding,
-  resolveBuiltInYSchema,
-  schemaRootKeyFromBinding,
-  schemaVersionFromBinding,
-} from '../lib/yschema-registry';
+import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
+import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -965,7 +961,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const extractedWorkspace = isEsphomeDeviceWorkspace(workspace)
     ? buildEsphomeDeviceWorkspace(workspace, projectId, sourceTexts, candidateId)
-    : buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
+    : await buildGenericExtractedWorkspace(db, workspace, projectId, sourceTexts);
   if (!extractedWorkspace.ok) {
     return errorResponse(c, 'INVALID_REQUEST', extractedWorkspace.message);
   }
@@ -1004,12 +1000,13 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   });
 });
 
-function buildGenericExtractedWorkspace(
+async function buildGenericExtractedWorkspace(
+  db: AnyDB,
   workspace: Record<string, unknown>,
   projectId: string,
   sourceTexts: WorkspaceSourceText[]
-): { ok: true; workspace: Record<string, unknown> } | { ok: false; message: string } {
-  const schemaResolution = resolveWorkspaceYSchema(workspace);
+): Promise<{ ok: true; workspace: Record<string, unknown> } | { ok: false; message: string }> {
+  const schemaResolution = await resolveWorkspaceYSchema(workspace, db, projectId);
   if (schemaResolution.canonicalName && !schemaResolution.schema) {
     const releaseLabel = schemaResolution.version
       ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
@@ -1421,22 +1418,6 @@ function buildExtractedWorkspace(
           : 'Add source material before YOps handoff.',
       gaps: sourceTexts.length > 0 ? gaps : ['No source material.'],
     },
-  };
-}
-
-function resolveWorkspaceYSchema(workspace: Record<string, unknown>): {
-  canonicalName: string | null;
-  schema: YSchema | null;
-  version?: string;
-} {
-  const bindings = workspace.schemaBindings as unknown[] | undefined;
-  const binding = bindings?.[0];
-  const canonicalName = canonicalSchemaNameFromBinding(binding);
-  const version = schemaVersionFromBinding(binding);
-  return {
-    canonicalName,
-    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
-    ...(version ? { version } : {}),
   };
 }
 

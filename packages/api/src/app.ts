@@ -94,6 +94,7 @@ import {
   workspaceValidationRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
+  yschemaCompositionRoutes,
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
@@ -203,6 +204,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', yschemaCompositionRoutes); // /v1/yschema/artifacts and /v1/yschema/compositions/preview
   api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke

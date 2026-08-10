@@ -65,6 +65,7 @@ import type {
   ListProjectsResponse,
   ListRepositoryWorkspacesResponse,
   ListTurnsResponse,
+  ListYSchemaArtifactsParams,
   MergeDraft,
   MergeDraftCommitInput,
   MergeDraftCommitResult,
@@ -73,8 +74,10 @@ import type {
   PlatformImportResult,
   Project,
   ProjectWithStats,
+  ProjectYSchemaVersionHistory,
   ProposeTransitionInput,
   ProposeTransitionResult,
+  PublishWorkspaceYSchemaCompositionInput,
   RenameConversationInput,
   RenameConversationResult,
   RepositoryWorkspaceCapability,
@@ -93,6 +96,11 @@ import type {
   VerifyTransitionResult,
   Webhook,
   WorkspaceExtractionProposalEnvelope,
+  WorkspaceYSchemaCompositionResult,
+  YSchemaArtifactManifest,
+  YSchemaArtifactRegistryPage,
+  YSchemaCompositionDraft,
+  YSchemaCompositionPreview,
 } from './types.js';
 
 export interface T3xClientConfig {
@@ -964,6 +972,114 @@ export class T3xClient {
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/commits`,
       input
+    );
+  }
+
+  // ============================================
+  // YSchema Composition Registry
+  // ============================================
+
+  async listYSchemaArtifacts(
+    params: ListYSchemaArtifactsParams = {}
+  ): Promise<YSchemaArtifactRegistryPage> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
+      : '/v1/yschema/artifacts';
+    return this.request<YSchemaArtifactRegistryPage>(
+      'GET',
+      path,
+      undefined,
+      query as Record<string, string | number | undefined>
+    );
+  }
+
+  async listProjectYSchemaVersions(
+    projectId: string,
+    family?: 'esphome-device' | 'prd' | 'prompt' | 'skill'
+  ): Promise<ProjectYSchemaVersionHistory> {
+    return this.request<ProjectYSchemaVersionHistory>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/yschema/versions`,
+      undefined,
+      { family }
+    );
+  }
+
+  async previewYSchemaComposition(
+    composition: YSchemaCompositionDraft,
+    projectId?: string
+  ): Promise<YSchemaCompositionPreview> {
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/compositions/preview`
+      : '/v1/yschema/compositions/preview';
+    return this.request<YSchemaCompositionPreview>('POST', path, composition);
+  }
+
+  async getWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition`
+    );
+  }
+
+  async saveWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    composition: YSchemaCompositionDraft,
+    workspaceRevision: number
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'PUT',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition`,
+      { composition, if_revision: workspaceRevision }
+    );
+  }
+
+  async applyWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    input: { workspaceRevision: number; compositionRevision: number; compositionHash: string }
+  ): Promise<WorkspaceYSchemaCompositionResult> {
+    return this.request<WorkspaceYSchemaCompositionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition/apply`,
+      {
+        if_revision: input.workspaceRevision,
+        composition_revision: input.compositionRevision,
+        composition_hash: input.compositionHash,
+      }
+    );
+  }
+
+  async publishWorkspaceYSchemaComposition(
+    projectId: string,
+    workspaceId: string,
+    input: PublishWorkspaceYSchemaCompositionInput
+  ): Promise<YSchemaArtifactManifest> {
+    return this.request<YSchemaArtifactManifest>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/schema-composition/publish`,
+      {
+        composition_revision: input.compositionRevision,
+        composition_hash: input.compositionHash,
+        canonical_name: input.canonicalName,
+        version: input.version,
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+      }
     );
   }
 

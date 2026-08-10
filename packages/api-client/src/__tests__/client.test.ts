@@ -1008,6 +1008,112 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('YSchema Composition Registry', () => {
+    const composition = {
+      apiVersion: 't3x.dev/yschema-composition/v1' as const,
+      id: 'composition:prd',
+      revision: 2,
+      family: 'prd' as const,
+      status: 'draft' as const,
+      core: { canonicalName: 't3x/prd-core', version: '1.1.0' },
+      modules: [
+        {
+          canonicalName: 't3x/prd-frontend-design',
+          version: '1.0.0',
+          order: 10,
+        },
+      ],
+    };
+
+    it('lists the project-visible Registry with encoded filters', async () => {
+      const fn = mockFetch(successResponse({ items: [], next_cursor: null, has_more: false }));
+      const client = createTestClient(fn);
+
+      await client.listYSchemaArtifacts({
+        projectId: 'project/a',
+        family: 'prd',
+        kind: 'module',
+        limit: 12,
+      });
+
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/projects/project%2Fa/yschema/artifacts');
+      expect(url).toContain('family=prd');
+      expect(url).toContain('kind=module');
+      expect(url).toContain('limit=12');
+    });
+
+    it('previews and applies an exact saved Composition revision', async () => {
+      const fn = mockFetch(successResponse({ composition, workspaceRevision: 8 }));
+      const client = createTestClient(fn);
+
+      await client.previewYSchemaComposition(composition, 'proj_1');
+      await client.applyWorkspaceYSchemaComposition('proj_1', 'workspace/1', {
+        workspaceRevision: 7,
+        compositionRevision: 2,
+        compositionHash: 'sha256:composition',
+      });
+
+      expect(fn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/v1/projects/proj_1/yschema/compositions/preview'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(composition) })
+      );
+      expect(fn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          '/v1/projects/proj_1/workspaces/workspace%2F1/schema-composition/apply'
+        ),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            if_revision: 7,
+            composition_revision: 2,
+            composition_hash: 'sha256:composition',
+          }),
+        })
+      );
+    });
+
+    it('lists and publishes immutable project Schema versions', async () => {
+      const fn = mockFetch(successResponse({ items: [] }));
+      const client = createTestClient(fn);
+
+      await client.listProjectYSchemaVersions('project/a', 'prd');
+      await client.publishWorkspaceYSchemaComposition('project/a', 'workspace/1', {
+        compositionRevision: 2,
+        compositionHash: 'sha256:composition',
+        canonicalName: 'projects/project-a/prd',
+        version: '1.0.0',
+        title: 'Project A PRD',
+        releaseNotes: 'Initial composed contract.',
+      });
+
+      expect(fn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/v1/projects/project%2Fa/yschema/versions?family=prd'),
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          '/v1/projects/project%2Fa/workspaces/workspace%2F1/schema-composition/publish'
+        ),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            composition_revision: 2,
+            composition_hash: 'sha256:composition',
+            canonical_name: 'projects/project-a/prd',
+            version: '1.0.0',
+            title: 'Project A PRD',
+            release_notes: 'Initial composed contract.',
+          }),
+        })
+      );
+    });
+  });
+
   // =========================================================================
   // createClient helper
   // =========================================================================

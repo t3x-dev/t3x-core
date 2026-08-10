@@ -1,3 +1,4 @@
+export { SchemaModuleRegistry } from '@/components/schemas/modules/SchemaModuleRegistry';
 export type {
   SchemaBindingActionKind,
   SchemaBindingActionsState,

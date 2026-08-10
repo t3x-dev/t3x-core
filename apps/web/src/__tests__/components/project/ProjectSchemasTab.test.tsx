@@ -72,7 +72,7 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Schema families define different kinds of structured state. Choose a family to inspect its current contract, deterministic rules, typed relations, and canonical YAML.'
+        'Choose an immutable version to inspect, reuse, or apply. Create a new version by composing Core with ordered Modules.'
       )
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'PRD Schema v2' })).toHaveAttribute(
@@ -120,6 +120,52 @@ describe('ProjectSchemasTab', () => {
       });
     });
     expect(screen.getByText(/will be used by new Workspaces/)).toBeInTheDocument();
+  });
+
+  it('updates and regenerates the current persisted Workspace with the new project default', async () => {
+    workspaces = [{ ...workspace, revision: 125 }];
+    saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
+      candidate_id: candidate.id,
+      workspace: { ...candidate, revision: 126 },
+    }));
+    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
+      candidate_id: candidate.id,
+      workspace: {
+        ...candidate,
+        revision: 127,
+        schemaCandidate: { summary: 'Regenerated with project default', fields: [] },
+      },
+    }));
+
+    render(<ProjectSchemasTab projectId="proj_test" />);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Use in current & new Workspaces' }));
+
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+    expect(saveDraft.mock.calls[0][0]).toMatchObject({
+      id: 'workspace_main',
+      revision: 125,
+      schemaBindings: [
+        {
+          canonicalName: 't3x/prompt',
+          schemaHash: PROMPT_SCHEMA_HASH,
+          schemaName: 'Prompt Schema',
+          version: 'v1',
+          mode: 'pinned',
+        },
+      ],
+      schemaReview: { verdict: 'needs_review' },
+      yopsDraft: { operations: [] },
+    });
+    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
+    expect(updateProject).toHaveBeenCalledTimes(1);
+    expect(refreshWorkspaces).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText(/is now the project default and Main workspace was regenerated/)
+    ).toBeInTheDocument();
   });
 
   it('saves a stale binding before regenerating the current Workspace candidate', async () => {

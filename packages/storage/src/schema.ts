@@ -588,6 +588,109 @@ export const yschemaValidationRuns = pgTable(
   ]
 );
 
+/** Immutable YSchema Core/Module registry identities. */
+export const yschemaArtifacts = pgTable(
+  'yschema_artifacts',
+  {
+    artifactId: text('artifact_id').primaryKey(),
+    canonicalName: text('canonical_name').notNull().unique(),
+    family: text('family').notNull(),
+    kind: text('kind').notNull(),
+    ownerProjectId: text('owner_project_id').references(() => projects.projectId, {
+      onDelete: 'cascade',
+    }),
+    visibility: text('visibility').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_yschema_artifacts_family_kind_visibility').on(
+      table.family,
+      table.kind,
+      table.visibility
+    ),
+    index('idx_yschema_artifacts_owner').on(table.ownerProjectId),
+  ]
+);
+
+/** Published Artifact versions are immutable; changes require a new version. */
+export const yschemaArtifactVersions = pgTable(
+  'yschema_artifact_versions',
+  {
+    artifactVersionId: text('artifact_version_id').primaryKey(),
+    artifactId: text('artifact_id')
+      .notNull()
+      .references(() => yschemaArtifacts.artifactId, { onDelete: 'cascade' }),
+    version: text('version').notNull(),
+    status: text('status').notNull(),
+    manifestJson: jsonb('manifest_json').notNull().$type<Record<string, unknown>>(),
+    artifactHash: text('artifact_hash').notNull(),
+    pathCount: integer('path_count').notNull(),
+    createdBy: text('created_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('uq_yschema_artifact_version').on(table.artifactId, table.version),
+    unique('uq_yschema_artifact_hash').on(table.artifactId, table.artifactHash),
+    uniqueIndex('uq_yschema_artifact_active_version')
+      .on(table.artifactId)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_yschema_artifact_versions_status').on(table.status, table.createdAt),
+  ]
+);
+
+export const yschemaArtifactCapabilities = pgTable(
+  'yschema_artifact_capabilities',
+  {
+    artifactVersionId: text('artifact_version_id')
+      .notNull()
+      .references(() => yschemaArtifactVersions.artifactVersionId, { onDelete: 'cascade' }),
+    direction: text('direction').notNull(),
+    capability: text('capability').notNull(),
+  },
+  (table) => [
+    unique('uq_yschema_artifact_capability').on(
+      table.artifactVersionId,
+      table.direction,
+      table.capability
+    ),
+    index('idx_yschema_artifact_capabilities_lookup').on(table.direction, table.capability),
+  ]
+);
+
+/**
+ * Exact immutable compiled contract used to revalidate a Commit after its
+ * originating Workspace has moved on or been removed.
+ */
+export const yschemaCompositionSnapshots = pgTable(
+  'yschema_composition_snapshots',
+  {
+    snapshotId: text('snapshot_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    compositionId: text('composition_id').notNull(),
+    compositionRevision: integer('composition_revision').notNull(),
+    compositionHash: text('composition_hash').notNull(),
+    compiledSchemaHash: text('compiled_schema_hash').notNull(),
+    compilerVersion: text('compiler_version').notNull(),
+    manifestJson: jsonb('manifest_json').notNull().$type<Record<string, unknown>>(),
+    schemaJson: jsonb('schema_json').notNull().$type<Record<string, unknown>>(),
+    renderPlanJson: jsonb('render_plan_json').notNull().$type<unknown[]>(),
+    originsJson: jsonb('origins_json').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('uq_yschema_composition_revision').on(
+      table.projectId,
+      table.compositionId,
+      table.compositionRevision
+    ),
+    unique('uq_yschema_composition_hash').on(table.projectId, table.compositionHash),
+    index('idx_yschema_composition_schema_hash').on(table.projectId, table.compiledSchemaHash),
+  ]
+);
+
 /**
  * Workspace Validation Runs - Candidate-level validation workflow records
  *
@@ -742,6 +845,10 @@ export type NewSavedComparison = typeof savedComparisons.$inferInsert;
 
 export type YSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferSelect;
 export type NewYSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferInsert;
+export type YSchemaArtifactRecord = typeof yschemaArtifacts.$inferSelect;
+export type YSchemaArtifactVersionRecord = typeof yschemaArtifactVersions.$inferSelect;
+export type YSchemaArtifactCapabilityRecord = typeof yschemaArtifactCapabilities.$inferSelect;
+export type YSchemaCompositionSnapshotRecord = typeof yschemaCompositionSnapshots.$inferSelect;
 
 export type ValidationRunRecord = typeof validationRuns.$inferSelect;
 export type NewValidationRunRecord = typeof validationRuns.$inferInsert;

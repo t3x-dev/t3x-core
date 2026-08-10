@@ -42,6 +42,7 @@
     "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/storage": "workspace:*",
+    "@t3x-dev/transition": "workspace:*",
     "@xyflow/react": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

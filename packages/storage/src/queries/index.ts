@@ -584,6 +584,23 @@ export {
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+export {
+  type FindYSchemaArtifactVersionInput,
+  findYSchemaArtifactVersion,
+  findYSchemaCompositionSnapshot,
+  type ListProjectYSchemaVersionHistoryOptions,
+  type ListYSchemaArtifactsOptions,
+  listProjectYSchemaVersionHistory,
+  listYSchemaArtifactVersions,
+  type PublishYSchemaArtifactVersionInput,
+  publishYSchemaArtifactVersion,
+  type SaveYSchemaCompositionSnapshotInput,
+  saveYSchemaCompositionSnapshot,
+  type UpsertYSchemaArtifactVersionInput,
+  upsertYSchemaArtifactVersion,
+  type YSchemaArtifactVersionView,
+  type YSchemaArtifactVisibility,
+} from './yschema-registry';
 // YSchema Validation Runs
 export {
   type CreateYSchemaValidationRunInput,

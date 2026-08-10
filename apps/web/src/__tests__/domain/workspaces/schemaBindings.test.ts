@@ -62,7 +62,7 @@ describe('workspace schema bindings', () => {
     });
   });
 
-  it('rejects releases that are not active and runtime available', () => {
+  it('rejects draft or runtime-unavailable releases', () => {
     expect(() => schemaReleaseToWorkspaceBinding(draftRelease, 'draft_override')).toThrow(
       'is not available for binding'
     );
