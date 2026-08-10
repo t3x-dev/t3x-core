@@ -26,15 +26,18 @@ function readChangedFiles() {
   return [];
 }
 
+const releaseSurface = validateReleaseSurfaceOrThrow({
+  rootDir: new URL('..', import.meta.url),
+});
+
 const result = validateReleasePr({
   baseBranch: process.env.T3X_PR_BASE ?? '',
   headBranch: process.env.T3X_PR_HEAD ?? '',
   body: process.env.T3X_PR_BODY ?? '',
   changesetFiles: readChangesetFiles(),
   changedFiles: readChangedFiles(),
-  releaseSurfacePackages: validateReleaseSurfaceOrThrow({
-    rootDir: new URL('..', import.meta.url),
-  }).npmPublishPackages,
+  pausedReleaseSurfacePackages: releaseSurface.pausedReleaseTrainPackages,
+  releaseSurfacePackages: releaseSurface.releaseTrainPackages,
 });
 
 if (result.errors.length > 0) {

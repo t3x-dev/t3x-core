@@ -25,10 +25,19 @@ export function normalizeVersionInput(value) {
   return normalized.replace(/^v(?=\d)/i, '');
 }
 
+export function normalizePackageSelectionInput(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return 'auto';
+  }
+  return value.trim();
+}
+
 function parseArgs(argv) {
   const options = {
     apply: false,
     mode: 'auto',
+    packageBump: 'patch',
+    packages: 'auto',
     version: 'auto',
   };
 
@@ -56,12 +65,16 @@ function parseArgs(argv) {
   }
 
   options.version = normalizeVersionInput(options.version);
+  options.packages = normalizePackageSelectionInput(options.packages);
 
   if (!options.version || (options.version !== 'auto' && !semverPattern.test(options.version))) {
     throw new Error('--version must be "auto" or a semantic version like 1.1.0');
   }
   if (!['auto', 'code-only', 'package'].includes(options.mode)) {
     throw new Error('--mode must be auto, code-only, or package');
+  }
+  if (!['patch', 'minor', 'major'].includes(options.packageBump)) {
+    throw new Error('--package-bump must be patch, minor, or major');
   }
 
   return options;
@@ -140,21 +153,6 @@ function bumpForTargetVersion(currentVersion, targetVersion) {
   );
 }
 
-function currentFixedVersion({ releaseSurface, readVersion }) {
-  const versions = releaseSurface.npmPublishPackages.map((name) => {
-    const entry = releaseSurface.packagesByName.get(name);
-    if (!entry) {
-      throw new Error(`release surface is missing package metadata for ${name}`);
-    }
-    return readVersion(entry.path);
-  });
-  const uniqueVersions = [...new Set(versions)];
-  if (uniqueVersions.length !== 1) {
-    throw new Error(`npm publish package versions are not fixed together: ${versions.join(', ')}`);
-  }
-  return uniqueVersions[0];
-}
-
 function highestBump(entries) {
   let selected = null;
   for (const entry of entries) {
@@ -173,62 +171,87 @@ export function readChangesetConfig({ rootDir = rootPath } = {}) {
   return JSON.parse(readFileSync(configPath, 'utf8'));
 }
 
-export function releaseTrainPackageNames({ changesetConfig, releaseSurface }) {
-  const npmPublishPackageSet = new Set(releaseSurface.npmPublishPackages);
-  const trainPackageSet = new Set(releaseSurface.npmPublishPackages);
-
-  for (const fixedGroup of changesetConfig?.fixed ?? []) {
-    if (!Array.isArray(fixedGroup)) {
-      continue;
-    }
-    if (fixedGroup.some((packageName) => npmPublishPackageSet.has(packageName))) {
-      for (const packageName of fixedGroup) {
-        trainPackageSet.add(packageName);
-      }
-    }
-  }
-
-  return [...trainPackageSet];
-}
-
-function desiredReleaseBump({
-  changesets,
-  hasReleaseChanges,
-  mode,
-  releaseTrainPackages,
-  releaseSurface,
-  requestedVersion,
-  readVersion,
-}) {
-  const releaseTrainPackageSet = new Set(releaseTrainPackages);
-  const trainEntries = changesets
-    .flatMap((changeset) => changeset.entries)
-    .filter((entry) => releaseTrainPackageSet.has(entry.packageName));
-
-  if (requestedVersion !== 'auto') {
-    return bumpForTargetVersion(
-      currentFixedVersion({ readVersion, releaseSurface }),
-      requestedVersion
-    );
-  }
-
-  if (trainEntries.length > 0) {
-    return highestBump(trainEntries);
-  }
-
-  if (mode === 'package' || hasReleaseChanges) {
-    return 'patch';
-  }
-
-  return null;
+export function releaseTrainPackageNames({ releaseSurface }) {
+  return [
+    ...(releaseSurface.releaseTrainPackages ??
+      releaseSurface.packages
+        ?.filter((entry) => entry.npm_publish === true && entry.release_train !== 'paused')
+        .map((entry) => entry.name) ??
+      releaseSurface.npmPublishPackages ??
+      []),
+  ];
 }
 
 function packageSlug(packageName) {
   return packageName.replace(/^@t3x-dev\//, '').replace(/[^a-z0-9]+/g, '-');
 }
 
+function normalizedPackageName(token, releaseSurface) {
+  const activePackageNames = releaseTrainPackageNames({ releaseSurface });
+  const activeByName = new Map(activePackageNames.map((name) => [name, name]));
+  const activeBySlug = new Map(activePackageNames.map((name) => [packageSlug(name), name]));
+  const pausedPackageNames = new Set(releaseSurface.pausedReleaseTrainPackages ?? []);
+
+  const trimmed = token.trim();
+  const packageName = trimmed.startsWith('@t3x-dev/') ? trimmed : `@t3x-dev/${trimmed}`;
+  const resolved = activeByName.get(packageName) ?? activeBySlug.get(trimmed);
+  if (resolved) {
+    return resolved;
+  }
+
+  if (pausedPackageNames.has(packageName) || pausedPackageNames.has(`@t3x-dev/${trimmed}`)) {
+    throw new Error(`${packageName} is paused in the release train`);
+  }
+
+  throw new Error(`${packageName} is not an active release-train package`);
+}
+
+export function resolveSelectedPackageNames({
+  changesets = [],
+  mode,
+  packageSelection = 'auto',
+  releaseSurface,
+} = {}) {
+  const normalizedSelection = normalizePackageSelectionInput(packageSelection).toLowerCase();
+  const activePackageNames = releaseTrainPackageNames({ releaseSurface });
+  const activePackageSet = new Set(activePackageNames);
+
+  if (mode === 'code-only' || normalizedSelection === 'none') {
+    return [];
+  }
+
+  if (['all', 'all-active'].includes(normalizedSelection)) {
+    return activePackageNames;
+  }
+
+  if (normalizedSelection === 'auto') {
+    const selectedFromChangesets = [
+      ...new Set(
+        changesets
+          .flatMap((changeset) => changeset.entries)
+          .filter((entry) => activePackageSet.has(entry.packageName))
+          .map((entry) => entry.packageName)
+      ),
+    ];
+    if (selectedFromChangesets.length > 0) {
+      return selectedFromChangesets;
+    }
+    return mode === 'package' ? activePackageNames : [];
+  }
+
+  return [
+    ...new Set(
+      packageSelection
+        .split(',')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .map((token) => normalizedPackageName(token, releaseSurface))
+    ),
+  ];
+}
+
 function generatedChangesetContent({ bump, packageName, targetVersion }) {
-  return `---\n"${packageName}": ${bump}\n---\n\nPrepare ${packageName} for the ${targetVersion} release train.\n`;
+  return `---\n"${packageName}": ${bump}\n---\n\nPrepare ${packageName} for ${targetVersion}.\n`;
 }
 
 function existingBumpForPackage(changesets, packageName) {
@@ -239,64 +262,96 @@ function existingBumpForPackage(changesets, packageName) {
   );
 }
 
+function targetForPackage({ currentVersion, packageBump, requestedVersion }) {
+  if (requestedVersion === 'auto') {
+    return {
+      bump: packageBump,
+      targetVersion: bumpVersion(currentVersion, packageBump),
+    };
+  }
+
+  const bump = bumpForTargetVersion(currentVersion, requestedVersion);
+  return {
+    bump,
+    targetVersion: requestedVersion,
+  };
+}
+
 export function planMissingChangesets({
-  changesetConfig = readChangesetConfig(),
   changesets,
   hasReleaseChanges = false,
   mode,
+  packageBump = 'patch',
+  packageSelection = 'auto',
   readVersion,
   releaseSurface,
   requestedVersion,
 } = {}) {
-  const releaseTrainPackages = releaseTrainPackageNames({ changesetConfig, releaseSurface });
+  if (!['patch', 'minor', 'major'].includes(packageBump)) {
+    throw new Error('packageBump must be patch, minor, or major');
+  }
+
+  const selectedPackageNames = resolveSelectedPackageNames({
+    changesets,
+    mode,
+    packageSelection,
+    releaseSurface,
+  });
+  const selectedPackageSet = new Set(selectedPackageNames);
+  const activeChangesetExists = changesets.some((changeset) =>
+    changeset.entries.some((entry) => selectedPackageSet.has(entry.packageName))
+  );
   const shouldGenerate =
     mode === 'package' ||
     (mode === 'auto' &&
-      (hasReleaseChanges ||
-        changesets.some((changeset) =>
-          changeset.entries.some((entry) => releaseTrainPackages.includes(entry.packageName))
-        )));
+      selectedPackageNames.length > 0 &&
+      (hasReleaseChanges || activeChangesetExists));
 
   if (!shouldGenerate || mode === 'code-only') {
     return {
       changesets,
       generatedChangesets: [],
+      selectedPackageNames,
     };
   }
 
-  const currentVersion = currentFixedVersion({ readVersion, releaseSurface });
-  const bump = desiredReleaseBump({
-    changesets,
-    hasReleaseChanges,
-    mode,
-    readVersion,
-    releaseTrainPackages,
-    releaseSurface,
-    requestedVersion,
-  });
-  const targetVersion =
-    requestedVersion === 'auto' ? bumpVersion(currentVersion, bump) : requestedVersion;
   const generatedChangesets = [];
 
-  for (const packageName of releaseSurface.npmPublishPackages) {
+  for (const packageName of selectedPackageNames) {
+    const entry = releaseSurface.packagesByName.get(packageName);
+    if (!entry) {
+      throw new Error(`release surface is missing package metadata for ${packageName}`);
+    }
+
+    const currentVersion = readVersion(entry.path);
+    const desired = targetForPackage({
+      currentVersion,
+      packageBump,
+      requestedVersion,
+    });
     const existingBump = existingBumpForPackage(changesets, packageName);
-    if (existingBump && bumpRank.get(existingBump) > bumpRank.get(bump)) {
+
+    if (existingBump && bumpRank.get(existingBump) > bumpRank.get(desired.bump)) {
       throw new Error(
-        `${packageName} already has a ${existingBump} changeset, which exceeds requested ${bump} target ${targetVersion}`
+        `${packageName} already has a ${existingBump} changeset, which exceeds requested ${desired.bump} target ${desired.targetVersion}`
       );
     }
-    if (existingBump && bumpRank.get(existingBump) >= bumpRank.get(bump)) {
+    if (existingBump && bumpRank.get(existingBump) >= bumpRank.get(desired.bump)) {
       continue;
     }
 
-    const name = `.changeset/release-train-${packageSlug(packageName)}-${targetVersion.replace(
+    const name = `.changeset/release-train-${packageSlug(packageName)}-${desired.targetVersion.replace(
       /\./g,
       '-'
     )}.md`;
-    const content = generatedChangesetContent({ bump, packageName, targetVersion });
+    const content = generatedChangesetContent({
+      bump: desired.bump,
+      packageName,
+      targetVersion: desired.targetVersion,
+    });
     generatedChangesets.push({
       content,
-      entries: [{ packageName, bump }],
+      entries: [{ packageName, bump: desired.bump }],
       generated: true,
       name,
       packages: [packageName],
@@ -310,7 +365,7 @@ export function planMissingChangesets({
   return {
     changesets: [...changesets, ...generatedChangesets],
     generatedChangesets,
-    targetVersion,
+    selectedPackageNames,
   };
 }
 
@@ -338,6 +393,8 @@ function main() {
   const plan = planMissingChangesets({
     changesets,
     mode: options.mode,
+    packageBump: options.packageBump,
+    packageSelection: options.packages,
     readVersion: (packagePath) => readPackageVersion(packagePath, rootPath),
     releaseSurface,
     requestedVersion: options.version,
@@ -348,9 +405,7 @@ function main() {
     return;
   }
 
-  console.log(
-    `Release train will generate ${plan.generatedChangesets.length} changeset(s) for ${plan.targetVersion}.`
-  );
+  console.log(`Release train will generate ${plan.generatedChangesets.length} changeset(s).`);
   for (const changeset of plan.generatedChangesets) {
     console.log(
       `- ${changeset.name}: ${changeset.entries[0].packageName} ${changeset.entries[0].bump}`

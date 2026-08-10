@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { validateReleasePr } from '../lib/releasePr.mjs';
 import { validateReleaseSurfaceOrThrow } from '../lib/releaseSurface.mjs';
 import {
+  normalizePackageSelectionInput,
   planMissingChangesets,
-  readChangesetConfig,
   readChangesets,
   releaseTrainPackageNames,
   writeGeneratedChangesets,
@@ -68,6 +68,10 @@ function parseArgs(argv) {
     dryRun: true,
     headRef: 'origin/dev',
     mode: 'auto',
+    packageBump: 'patch',
+    packages: 'auto',
+    packageVersion: 'auto',
+    version: 'auto',
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -104,12 +108,23 @@ function parseArgs(argv) {
   }
 
   options.version = normalizeVersionInput(options.version);
+  options.packageVersion = normalizeVersionInput(options.packageVersion);
+  options.packages = normalizePackageSelectionInput(options.packages);
 
   if (!options.version || (options.version !== 'auto' && !semverPattern.test(options.version))) {
     throw new Error('--version must be "auto" or a semantic version like 1.0.1');
   }
+  if (
+    !options.packageVersion ||
+    (options.packageVersion !== 'auto' && !semverPattern.test(options.packageVersion))
+  ) {
+    throw new Error('--package-version must be "auto" or a semantic version like 1.0.1');
+  }
   if (!['auto', 'code-only', 'package'].includes(options.mode)) {
     throw new Error('--mode must be auto, code-only, or package');
+  }
+  if (!['patch', 'minor', 'major'].includes(options.packageBump)) {
+    throw new Error('--package-bump must be patch, minor, or major');
   }
   if (options.apply && options.allowPolicyFailures) {
     throw new Error('--allow-policy-failures is only allowed for dry runs');
@@ -322,45 +337,46 @@ function buildIncludedChanges(commits, baseRef, headRef) {
 }
 
 export function buildPackagePlan({
-  changesetConfig = readChangesetConfig(),
   changesets,
   mode,
   releaseSurface,
   readVersion = readPackageVersion,
 }) {
-  const npmPackages = releaseSurface.npmPublishPackages;
   const packageEntries = changesets.flatMap((changeset) => changeset.entries);
-  const packageNames = new Set(packageEntries.map((entry) => entry.packageName));
-  const releaseTrainPackageSet = new Set(
-    releaseTrainPackageNames({ changesetConfig, releaseSurface })
-  );
-  const surfaceEntries = npmPackages.map((name) => releaseSurface.packagesByName.get(name));
-  const trainBumps = packageEntries.filter((entry) =>
+  const releaseTrainPackages = releaseTrainPackageNames({ releaseSurface });
+  const releaseTrainPackageSet = new Set(releaseTrainPackages);
+  const pausedReleaseTrainPackageSet = new Set(releaseSurface.pausedReleaseTrainPackages ?? []);
+  const activePackageEntries = packageEntries.filter((entry) =>
     releaseTrainPackageSet.has(entry.packageName)
   );
+  const pausedPackageEntries = packageEntries.filter((entry) =>
+    pausedReleaseTrainPackageSet.has(entry.packageName)
+  );
   const hasChangesets = changesets.length > 0;
-  const resolvedMode = mode === 'auto' ? (hasChangesets ? 'package' : 'code-only') : mode;
+  const hasActivePackageChangesets = activePackageEntries.length > 0;
+  const resolvedMode =
+    mode === 'auto' ? (hasActivePackageChangesets ? 'package' : 'code-only') : mode;
   const diagnostics = [];
 
-  if (resolvedMode === 'code-only' && hasChangesets) {
+  if (pausedPackageEntries.length > 0) {
     diagnostics.push(
-      `mode code-only is invalid because changeset files exist: ${changesets
-        .map((changeset) => changeset.name)
-        .join(', ')}`
+      `changesets target paused release-train package(s): ${[
+        ...new Set(pausedPackageEntries.map((entry) => entry.packageName)),
+      ].join(', ')}`
+    );
+  }
+
+  if (resolvedMode === 'code-only' && hasActivePackageChangesets) {
+    diagnostics.push(
+      `mode code-only is invalid because active package changesets exist: ${[
+        ...new Set(activePackageEntries.map((entry) => entry.packageName)),
+      ].join(', ')}`
     );
   }
 
   if (resolvedMode === 'package') {
-    if (!hasChangesets) {
-      diagnostics.push('mode package requires at least one .changeset/*.md file');
-    }
-    const missingChangesetPackages = npmPackages.filter((name) => !packageNames.has(name));
-    if (missingChangesetPackages.length > 0) {
-      diagnostics.push(
-        `release policy requires changesets for the complete npm publish surface; missing: ${missingChangesetPackages.join(
-          ', '
-        )}`
-      );
+    if (!hasChangesets || !hasActivePackageChangesets) {
+      diagnostics.push('mode package requires at least one active package .changeset/*.md file');
     }
   }
 
@@ -372,13 +388,20 @@ export function buildPackagePlan({
     };
   }
 
-  const bump = highestBump(trainBumps) ?? 'patch';
-  const packageReleases = surfaceEntries
-    .map((entry) => {
+  const packageReleases = releaseTrainPackages
+    .map((packageName) => {
+      const entry = releaseSurface.packagesByName.get(packageName);
+      const bump = highestBump(
+        activePackageEntries.filter((packageEntry) => packageEntry.packageName === packageName)
+      );
+      if (!entry || !bump) {
+        return null;
+      }
       const currentVersion = readVersion(entry.path);
       const nextVersion = bumpVersion(currentVersion, bump);
       return {
         name: entry.name,
+        bump,
         version: nextVersion,
         line: `- \`${entry.name}\`: ${nextVersion}`,
       };
@@ -386,7 +409,6 @@ export function buildPackagePlan({
     .filter(Boolean);
 
   return {
-    bump,
     diagnostics,
     mode: resolvedMode,
     packageReleases: packageReleases.map((entry) => entry.line).join('\n'),
@@ -407,7 +429,6 @@ function readProductReleaseVersions() {
 }
 
 export function resolveVersion({
-  packagePlan,
   readProductVersions = readProductReleaseVersions,
   readVersion = readPackageVersion,
   releaseSurface,
@@ -419,7 +440,7 @@ export function resolveVersion({
 
   const latestProductVersion = highestVersion(readProductVersions());
 
-  const firstPackage = releaseSurface.npmPublishPackages
+  const firstPackage = (releaseSurface.releaseTrainPackages ?? releaseSurface.npmPublishPackages)
     .map((name) => releaseSurface.packagesByName.get(name))
     .find(Boolean);
   if (!firstPackage) {
@@ -427,15 +448,9 @@ export function resolveVersion({
   }
 
   const fallbackPackageNextVersion = bumpVersion(readVersion(firstPackage.path), 'patch');
-  const nextProductVersion = latestProductVersion
+  return latestProductVersion
     ? bumpVersion(latestProductVersion, 'patch')
     : fallbackPackageNextVersion;
-  const packageTargetVersion =
-    packagePlan.mode === 'package' && packagePlan.packageVersions?.length > 0
-      ? packagePlan.packageVersions[0].version
-      : null;
-
-  return highestVersion([nextProductVersion, packageTargetVersion]) ?? fallbackPackageNextVersion;
 }
 
 function changedSurfaceFiles(changedFiles) {
@@ -458,7 +473,7 @@ function packageVisibleWarnings({ changedFiles, changesets, releaseSurface }) {
   const changesetPackages = new Set(
     changesets.flatMap((changeset) => changeset.entries).map((entry) => entry.packageName)
   );
-  const npmEntries = releaseSurface.npmPublishPackages
+  const npmEntries = releaseSurface.releaseTrainPackages
     .map((name) => releaseSurface.packagesByName.get(name))
     .filter(Boolean);
 
@@ -486,23 +501,6 @@ function packageVisibleWarnings({ changedFiles, changesets, releaseSurface }) {
   }
 
   return warnings;
-}
-
-function versionWarnings({ requestedVersion, resolvedVersion, packagePlan }) {
-  if (requestedVersion === 'auto' || packagePlan.mode !== 'package') {
-    return [];
-  }
-  const mismatchedPackages = (packagePlan.packageVersions ?? []).filter(
-    (entry) => entry.version !== resolvedVersion
-  );
-  if (mismatchedPackages.length === 0) {
-    return [];
-  }
-  return [
-    `product release version ${resolvedVersion} differs from package target version(s): ${mismatchedPackages
-      .map((entry) => `${entry.name}@${entry.version}`)
-      .join(', ')}.`,
-  ];
 }
 
 function renderWarnings(warnings) {
@@ -559,8 +557,9 @@ ${packagePlan.packageReleases}
 
 - Product release version is independent from npm package versions.
 - Package publish is optional and happens only through Changesets/version PRs.
-- Scheduled Release Train runs default to code-only; package release mode must be selected explicitly.
-- \`@t3x-dev/local\` is paused for scheduled package publishing and requires runtime/install smoke review when package mode is selected.
+- Scheduled Release Train runs default to code-only; package release mode and packages must be selected explicitly.
+- Package releases may publish an active package subset; versions are derived per package from its changeset bump.
+- \`@t3x-dev/local\` is paused in the release train and is not published by the scheduled flow.
 - Release train mode: \`${packagePlan.mode}\`.
 - Changesets included: ${changesets.length > 0 ? changesets.map((item) => `\`${item.name}\``).join(', ') : 'None'}.
 - Changed files compared with \`${baseRef}...${headRef}\`: ${changedFiles.length}.
@@ -580,18 +579,18 @@ function buildPlan(options) {
   ensureGitRef(options.baseRef);
   ensureGitRef(options.headRef);
   const releaseSurface = validateReleaseSurfaceOrThrow({ rootDir: rootUrl });
-  const changesetConfig = readChangesetConfig({ rootDir: rootPath });
   const initialChangesets = readChangesets({ rootDir: rootPath });
   const commits = readCommits(options.baseRef, options.headRef);
   const changedFiles = readChangedFiles(options.baseRef, options.headRef);
   const changesetPlan = planMissingChangesets({
-    changesetConfig,
     changesets: initialChangesets,
     hasReleaseChanges: changedFiles.length > 0,
     mode: options.mode,
+    packageBump: options.packageBump,
+    packageSelection: options.packages,
     readVersion: readPackageVersion,
     releaseSurface,
-    requestedVersion: options.version,
+    requestedVersion: options.packageVersion,
   });
   const changesets = changesetPlan.changesets;
   const effectiveChangedFiles = [
@@ -601,27 +600,22 @@ function buildPlan(options) {
     ]),
   ].sort();
   const packagePlan = buildPackagePlan({
-    changesetConfig,
     changesets,
     mode: options.mode,
     releaseSurface,
   });
   const noOp = changesets.length === 0 && effectiveChangedFiles.length === 0;
   const version = resolveVersion({
-    packagePlan,
     releaseSurface,
     requestedVersion: options.version,
   });
   const branch = `release/${version}`;
   const title = `release: ${version}`;
-  const warnings = [
-    ...packageVisibleWarnings({ changedFiles: effectiveChangedFiles, changesets, releaseSurface }),
-    ...versionWarnings({
-      packagePlan,
-      requestedVersion: options.version,
-      resolvedVersion: version,
-    }),
-  ];
+  const warnings = packageVisibleWarnings({
+    changedFiles: effectiveChangedFiles,
+    changesets,
+    releaseSurface,
+  });
   const body = buildPullRequestBody({
     baseRef: options.baseRef,
     changesets,
@@ -643,7 +637,8 @@ function buildPlan(options) {
           name: changeset.name.replace(/^\.changeset\//, ''),
           packages: changeset.entries.map((entry) => entry.packageName),
         })),
-        releaseSurfacePackages: releaseSurface.npmPublishPackages,
+        pausedReleaseSurfacePackages: releaseSurface.pausedReleaseTrainPackages,
+        releaseSurfacePackages: releaseSurface.releaseTrainPackages,
       }).errors.map((error) => `generated release PR body failed policy: ${error}`);
 
   return {
@@ -654,6 +649,9 @@ function buildPlan(options) {
     generatedChangesets: changesetPlan.generatedChangesets,
     noOp,
     packagePlan,
+    packageSelection: options.packages,
+    packageBump: options.packageBump,
+    packageVersion: options.packageVersion,
     requestedVersion: options.version,
     title,
     version,
@@ -751,6 +749,9 @@ function printDryRun(options, plan) {
   console.log(`requested version: ${plan.requestedVersion}`);
   console.log(`resolved version: ${plan.version}`);
   console.log(`mode: ${plan.packagePlan.mode}`);
+  console.log(`packages: ${plan.packageSelection}`);
+  console.log(`package bump: ${plan.packageBump}`);
+  console.log(`package target version: ${plan.packageVersion}`);
   console.log(`branch: ${plan.branch}`);
   console.log(`base: ${options.baseBranch}`);
   console.log(`draft PR: ${options.draft ? 'yes' : 'no'}`);

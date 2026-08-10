@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { detectPublishPackages } from '../detect-publish-packages.mjs';
 import {
   buildPackageReleaseAssetUploadPlan,
   buildReleaseAssetUploadPlan,
@@ -155,6 +156,27 @@ test('builds a yschema package release asset upload plan', () => {
   ]);
 });
 
+test('builds a transition package release asset upload plan', () => {
+  const plan = buildPackageReleaseAssetUploadPlan({
+    packageRecord: { name: '@t3x-dev/transition', version: '0.7.0' },
+    assetPaths: ['/tmp/t3x-dev-transition-0.7.0.tgz', '/tmp/checksums.txt'],
+    env: {
+      GITHUB_TOKEN: 'github-token',
+    },
+  });
+
+  assert.equal(plan.releaseTag, 't3x-transition-v0.7.0');
+  assert.equal(plan.releaseTitle, 't3x-transition v0.7.0');
+  assert.deepEqual(plan.uploadArgs, [
+    'release',
+    'upload',
+    't3x-transition-v0.7.0',
+    '/tmp/t3x-dev-transition-0.7.0.tgz',
+    '/tmp/checksums.txt',
+    '--clobber',
+  ]);
+});
+
 test('builds a local package release asset upload plan', () => {
   const plan = buildPackageReleaseAssetUploadPlan({
     packageRecord: { name: '@t3x-dev/local', version: '0.4.2' },
@@ -216,6 +238,51 @@ test('release workflow waits for the product release before uploading package as
     /needs:\n\s+- changeset-state\n\s+- product-release-record\n\s+- build-runtime/
   );
   assert.match(workflow, /needs\.product-release-record\.result == 'success'/);
+  assert.match(workflow, /T3X_PACKAGE_RELEASES/);
+  assert.match(workflow, /needs\.changeset-state\.outputs\.publishes_local != 'true'/);
+});
+
+test('detects selected active publish packages from version package changes', () => {
+  const result = detectPublishPackages({
+    changedFiles: [
+      'packages/yops/package.json',
+      'packages/transition/package.json',
+      'apps/local/package.json',
+      'packages/core/package.json',
+    ],
+    releaseSurface: {
+      packages: [
+        {
+          name: '@t3x-dev/local',
+          path: 'apps/local',
+          npm_publish: true,
+          release_train: 'paused',
+        },
+        {
+          name: '@t3x-dev/yops',
+          path: 'packages/yops',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/transition',
+          path: 'packages/transition',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/core',
+          path: 'packages/core',
+          npm_publish: false,
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(result.packageNames, ['@t3x-dev/yops', '@t3x-dev/transition']);
+  assert.deepEqual(result.packageSlugs, ['yops', 'transition']);
+  assert.equal(result.hasPublishPackages, true);
+  assert.equal(result.publishesLocal, false);
 });
 
 function readText(relativePath) {
