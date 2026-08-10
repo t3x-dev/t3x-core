@@ -17,6 +17,7 @@ import {
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { parseDocument } from '../lib/import';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -93,6 +94,8 @@ const listMaterialsRoute = createRoute({
 materialsRoutes.openapi(listMaterialsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const db = await getDB();
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
   const materials = await findMaterialsByProject(db, projectId, { limit: 500 });
   return c.json({
     success: true as const,
@@ -144,6 +147,8 @@ materialsRoutes.openapi(getMaterialRoute, async (c) => {
       404
     );
   }
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
 
   return c.json({
     success: true as const,
@@ -196,6 +201,8 @@ materialsRoutes.openapi(archiveMaterialRoute, async (c) => {
       404
     );
   }
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
 
   const archived = await archiveMaterial(db, materialId);
   if (!archived) {
@@ -257,6 +264,10 @@ const uploadDocumentMaterialRoute = createRoute({
 materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
   try {
     const { projectId } = c.req.valid('param');
+    const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const body = await c.req.parseBody();
     const file = body.file;
 
@@ -283,7 +294,6 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
       );
     }
 
-    const db = await getDB();
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseDocument(buffer, file.name, file.type);
     const parsedTextLength = parsed.raw_text.trim().length;

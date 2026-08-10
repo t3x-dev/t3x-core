@@ -8,6 +8,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { searchKnowledgeNodes } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -84,6 +85,8 @@ searchRoutes.openapi(searchRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
     const nodes = await searchKnowledgeNodes(db, project_id, query, { limit });
 
     return c.json(
