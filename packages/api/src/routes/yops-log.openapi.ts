@@ -26,6 +26,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { readDraftFromTrees, rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import {
   getConversationInheritedBaseline,
@@ -386,6 +387,8 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
         `Conversation not found: ${conversationId}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const ctx = await buildPipelineContext(c, conversation.projectId);
     const result = await collectResult(
@@ -428,6 +431,8 @@ yopsLogRoutes.openapi(listYOpsRoute, async (c) => {
         `Conversation not found: ${conversationId}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const activeOnly = isTruthyQueryFlag(active_only);
     const records = activeOnly
@@ -474,6 +479,8 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
         `Conversation not found: ${conversationId}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Read from trees table (source-of-truth with full metadata)
     let draft = await readDraftFromTrees(db, conversationId, topic_id);
@@ -509,6 +516,8 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
     if (!existing || existing.conversationId !== conversationId) {
       return errorResponse(c, 'NOT_FOUND', `YOps log entry not found: ${yopsId}`);
     }
+    const accessResult = await assertProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Undo: delete yops entry + rebuild trees atomically
     await (db as any).transaction(async (tx: any) => {

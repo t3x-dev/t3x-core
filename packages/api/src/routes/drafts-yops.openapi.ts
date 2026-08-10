@@ -11,6 +11,7 @@ import { applyYOps } from '@t3x-dev/core';
 import { ConflictError, findDraftById, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const draftsYopsRoutes = new OpenAPIHono({
@@ -112,6 +113,8 @@ draftsYopsRoutes.openapi(applyYOpsRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'DRAFT_NOT_FOUND', `Draft not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Check status — only 'editing' or 'auto' drafts can be modified
     if (draft.status === 'committed') {

@@ -17,6 +17,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { DraftResponse, ReviewActionRequest, ReviewActionResponse } from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
@@ -98,6 +99,10 @@ draftsSpecialRoutes.openapi(promoteDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const draft = await findDraftById(db, id);
+    if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
     const promoted = await promoteDraft(db, id);
 
     return c.json({ success: true as const, data: toApiDraft(promoted) }, 200);
@@ -124,6 +129,8 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
     const db = await getDB();
     const draft = await findDraftById(db, draftId);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // SemanticPoint type is no longer exported; use structural typing
     const sps = [

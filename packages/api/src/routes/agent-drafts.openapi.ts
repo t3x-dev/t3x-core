@@ -12,13 +12,13 @@ import { createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/c
 import {
   findAgentDraftById,
   findConversationById,
-  findProjectById,
   findTurnsByConversation,
   insertAgentDraft,
   updateAgentDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
@@ -564,35 +564,35 @@ const createAgentDraftRoute = createRoute({
 agentDraftRoutes.openapi(createAgentDraftRoute, async (c) => {
   const body = c.req.valid('json');
 
-  // Get LLM provider from registry (preferred) or fall back to direct Anthropic
-  let llmProviderInstance = await getLLMProvider();
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!llmProviderInstance && !anthropicApiKey) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PROVIDER_ERROR',
-          message: 'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.',
-        },
-      },
-      400
-    );
-  }
-
   try {
     const db = await getDB();
 
-    // Verify project exists
-    const project = await findProjectById(db, body.project_id);
-    if (!project) {
-      return errorResponse(c, 'NOT_FOUND', `Project ${body.project_id} not found`);
-    }
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Verify conversation exists
     const conversation = await findConversationById(db, body.conversation_id);
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${body.conversation_id} not found`);
+    }
+    if (conversation.projectId !== body.project_id) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Conversation does not belong to project');
+    }
+
+    // Resolve a provider only after project authorization succeeds.
+    let llmProviderInstance = await getLLMProvider();
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!llmProviderInstance && !anthropicApiKey) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'PROVIDER_ERROR',
+            message: 'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.',
+          },
+        },
+        400
+      );
     }
 
     // Get conversation turns (or use pre-selected text if provided)
@@ -759,6 +759,8 @@ agentDraftRoutes.openapi(getAgentDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft ${draftId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, draft.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Parse JSON fields
     const bridgePayload = draft.bridgePayloadJson ? JSON.parse(draft.bridgePayloadJson) : {};
@@ -841,6 +843,8 @@ agentDraftRoutes.openapi(patchAgentDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft ${draftId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, draft.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Parse existing data
     const bridgePayload = draft.bridgePayloadJson ? JSON.parse(draft.bridgePayloadJson) : {};

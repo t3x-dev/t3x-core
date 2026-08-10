@@ -30,6 +30,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
@@ -102,6 +103,8 @@ autopilotRoutes.openapi(getConfigRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const stored = await getAutopilotConfig(db, projectId);
     const config = stored ?? { ...DEFAULT_AUTOPILOT_CONFIG };
 
@@ -165,6 +168,8 @@ autopilotRoutes.openapi(updateConfigRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const config = await updateAutopilotConfig(db, projectId, body);
 
     return c.json({ success: true as const, data: { config } }, 200);
@@ -224,6 +229,8 @@ autopilotRoutes.openapi(getAdaptiveRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const stats = await getAdaptiveFeedbackStats(db, projectId);
 
     if (stats.overall.total < 10) {
@@ -333,6 +340,8 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'DRAFT_NOT_FOUND', `Draft not found: ${draftId}`);
     }
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Validate status
     if (draft.status !== 'editing') {
