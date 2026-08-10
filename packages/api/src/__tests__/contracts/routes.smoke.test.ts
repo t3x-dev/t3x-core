@@ -12,6 +12,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
+import { ensureMainBranch, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from '../setup';
@@ -24,14 +25,20 @@ vi.mock('../../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { generationRoutes } from '../../routes/chat.openapi';
+import { contextRoutes } from '../../routes/context.openapi';
 import { deployAgentRoutes } from '../../routes/deploy-agents.openapi';
+import { knowledgeGraphRoutes } from '../../routes/knowledge-graph.openapi';
+import { materialsRoutes } from '../../routes/materials.openapi';
 import { projectRoutes } from '../../routes/projects.openapi';
 // Import all route modules
 import { runsRoutes } from '../../routes/runs.openapi';
+import { searchRoutes } from '../../routes/search.openapi';
 import { statusRoutes } from '../../routes/status.openapi';
 
 describe('Critical Routes Smoke Tests', () => {
   let cleanup: () => Promise<void>;
+  let smokeProjectId: string;
   const app = new Hono();
 
   // Mount all routes
@@ -39,11 +46,19 @@ describe('Critical Routes Smoke Tests', () => {
   app.route('/', deployAgentRoutes);
   app.route('/', statusRoutes);
   app.route('/', projectRoutes);
+  app.route('/', generationRoutes);
+  app.route('/', contextRoutes);
+  app.route('/', knowledgeGraphRoutes);
+  app.route('/', materialsRoutes);
+  app.route('/', searchRoutes);
 
   beforeAll(async () => {
     const setup = await setupTestDB();
     mockDB = setup.db;
     cleanup = setup.cleanup;
+    smokeProjectId = (await insertProject(mockDB, { name: 'Query surface smoke project' }))
+      .projectId;
+    await ensureMainBranch(mockDB, smokeProjectId);
   });
 
   afterAll(async () => {
@@ -139,6 +154,42 @@ describe('Critical Routes Smoke Tests', () => {
     it.each(coreRoutes)('$method $path exists ($description)', async ({ method, path }) => {
       const res = await app.request(path, { method });
       expect(res.status).not.toBe(404);
+    });
+  });
+
+  describe('Project query and generation surfaces', () => {
+    it('serves context, graph, material, and search reads through their mounted routes', async () => {
+      const requests = [
+        app.request(`/v1/projects/${smokeProjectId}/context`),
+        app.request(`/v1/projects/${smokeProjectId}/knowledge-graph/nodes`),
+        app.request(`/v1/projects/${smokeProjectId}/materials`),
+        app.request('/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: smokeProjectId, query: 'smoke' }),
+        }),
+      ];
+
+      for (const response of await Promise.all(requests)) {
+        expect(response.status).toBe(200);
+      }
+    });
+
+    it('mounts both generation routes before provider work', async () => {
+      const invalidBody = JSON.stringify({});
+      const nonStreaming = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: invalidBody,
+      });
+      const streaming = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: invalidBody,
+      });
+
+      expect(nonStreaming.status).toBe(400);
+      expect(streaming.status).toBe(400);
     });
   });
 

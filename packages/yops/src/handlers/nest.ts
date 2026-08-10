@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, deleteAtPath, resolvePath, setAtPath } from '../paths';
+import { deepClone, deleteAtPath, hasOwnKey, resolvePath, setAtPath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -27,7 +27,7 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
   const targetMap = target as { [key: string]: YValue };
 
   for (const key of keys) {
-    if (!(key in targetMap)) {
+    if (!hasOwnKey(targetMap, key)) {
       return {
         doc,
         error: yopsError(
@@ -40,7 +40,7 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
   }
 
   const keysSet = new Set(keys);
-  if (under in targetMap && !keysSet.has(under)) {
+  if (hasOwnKey(targetMap, under) && !keysSet.has(under)) {
     return {
       doc,
       error: yopsError(
@@ -53,7 +53,7 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
 
   const nested: { [key: string]: YValue } = {};
   for (const key of keys) {
-    nested[key] = deepClone(targetMap[key]);
+    setOwnKey(nested, key, deepClone(targetMap[key]));
   }
 
   let cloned = deepClone(doc);

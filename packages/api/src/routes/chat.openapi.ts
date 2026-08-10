@@ -20,7 +20,7 @@ import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
@@ -644,6 +644,10 @@ generationRoutes.openapi(generationRoute, async (c) => {
   }
 
   const db = await getDB();
+  if (body.project_id) {
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+  }
   const target = await resolveChatRequestTarget({
     db,
     provider: body.provider,
@@ -770,6 +774,10 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
   }
 
   const db = await getDB();
+  if (body.project_id) {
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+  }
   const target = await resolveChatRequestTarget({
     db,
     provider: body.provider,

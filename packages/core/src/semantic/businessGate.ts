@@ -2,7 +2,7 @@
  * Business Gate (Gate 3) — Configurable rule system
  *
  * Supports:
- * - Deterministic rules: JavaScript expressions evaluated against trees/relations
+ * - Legacy deterministic rules: rejected until a declarative evaluator is available
  * - LLM-based checks: Prompt-based evaluation using an LLM provider
  *
  * @see docs/plans/core-engine/09-gate-and-ci.md §Gate 3
@@ -44,45 +44,25 @@ export function parseGatesConfig(rules: BusinessRuleConfig[]): BusinessRuleConfi
 }
 
 /**
- * Evaluate a single deterministic rule expression against state content.
+ * Reject a legacy executable rule.
  *
- * The expression has access to `trees` and `relations` variables.
- * It should return a truthy value to pass.
+ * Rule strings used to be passed to `new Function`, which allowed untrusted
+ * callers to execute arbitrary code in the API process. A keyword blacklist
+ * cannot make JavaScript evaluation safe, so executable rules now fail closed
+ * until they can be replaced by a bounded declarative rule format.
  */
 export function evaluateRule(
   rule: BusinessRuleConfig,
-  content: SemanticContent
+  _content: SemanticContent
 ): { passed: boolean; message?: string } {
   if (rule.type !== 'rule' || !rule.rule) {
     return { passed: false, message: 'Not a deterministic rule' };
   }
 
-  try {
-    // Validate rule expression: reject dangerous patterns (code injection mitigation)
-    const expr = rule.rule;
-    const forbidden =
-      /\b(import|require|eval|Function|process|global|window|fetch|XMLHttpRequest)\b/;
-    if (forbidden.test(expr)) {
-      return {
-        passed: false,
-        message: `Rule "${rule.id}" contains forbidden keyword in expression`,
-      };
-    }
-
-    // Create a sandboxed function that only exposes trees and relations
-    const fn = new Function('trees', 'relations', `"use strict"; return (${expr});`);
-    const result = fn(content.trees, content.relations);
-    if (result) {
-      return { passed: true };
-    }
-    return { passed: false, message: rule.message ?? `Rule "${rule.id}" failed` };
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return {
-      passed: false,
-      message: `Rule "${rule.id}" threw an error: ${errMsg}`,
-    };
-  }
+  return {
+    passed: false,
+    message: `Rule "${rule.id}" was not evaluated: executable business rules are disabled`,
+  };
 }
 
 /**
@@ -101,7 +81,7 @@ export class BusinessGate {
   /**
    * Evaluate all rules against the given state content.
    *
-   * - `type: 'rule'` — deterministic JS expression
+   * - `type: 'rule'` — legacy executable rule; rejected fail-closed
    * - `type: 'llm'` — LLM prompt (requires provider; skipped with warning if absent)
    *
    * `passed` is true when no rule with severity 'error' has failed.

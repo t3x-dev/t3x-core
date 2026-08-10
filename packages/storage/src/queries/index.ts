@@ -245,6 +245,7 @@ export {
 export {
   type CreateNotificationInput,
   deleteOldNotifications,
+  findNotificationById,
   getUnreadCount,
   insertNotification,
   type ListNotificationsOptions,

@@ -61,7 +61,7 @@ export interface WorkspaceTransitionReviewResponse {
 export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransitionReviewResponse {
   decision_digest: string;
   commit?: unknown;
-  workspace?: Record<string, unknown>;
+  workspace?: WorkspaceCandidate;
 }
 
 export interface WorkspaceSourceReplaceScalarOperation {

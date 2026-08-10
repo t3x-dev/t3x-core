@@ -7,6 +7,7 @@
  */
 
 import { resolveOpName } from './opShape';
+import { hasOwnKey } from './paths';
 import type { OpSpec, PathFields, YOpsSpec } from './spec';
 import type { YOpsError, YValue } from './types';
 
@@ -32,7 +33,7 @@ export class OpRegistry {
    * Throws if opName is not present in spec.operations.
    */
   register(opName: string, handler: OpHandler): void {
-    if (!(opName in this.spec.operations)) {
+    if (!hasOwnKey(this.spec.operations, opName)) {
       throw new Error(`Cannot register handler for unknown op "${opName}": not defined in spec`);
     }
     this.handlers.set(opName, handler);

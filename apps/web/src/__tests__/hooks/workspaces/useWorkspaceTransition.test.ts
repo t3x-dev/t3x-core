@@ -87,6 +87,7 @@ describe('useWorkspaceTransition', () => {
       precondition,
       decision_digest: digest('f'),
       commit: {},
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('e') },
     });
     const { result } = renderHook(() => useWorkspaceTransition(candidate));
 
@@ -107,9 +108,9 @@ describe('useWorkspaceTransition', () => {
     );
     expect(result.current.state.phase).toBe('reviewed');
 
-    let commitId: string | null = null;
+    let committed: { commitId: string; workspace: WorkspaceCandidate } | null = null;
     await act(async () => {
-      commitId = await result.current.decide('accepted');
+      committed = await result.current.decide('accepted');
     });
 
     expect(decideWorkspaceTransition).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', {
@@ -120,7 +121,10 @@ describe('useWorkspaceTransition', () => {
       decisionReason: undefined,
       precondition,
     });
-    expect(commitId).toBe(digest('e'));
+    expect(committed).toEqual({
+      commitId: digest('e'),
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('e') },
+    });
     expect(commitCreated).toHaveBeenCalledOnce();
     expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail.payload.hash).toBe(digest('e'));
     window.removeEventListener('t3x:commit-created', commitCreated);

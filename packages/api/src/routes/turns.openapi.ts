@@ -21,6 +21,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, HashParamSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const turnRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -298,6 +299,12 @@ turnRoutes.openapi(listTurnsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
+    }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -404,6 +411,8 @@ turnRoutes.openapi(createTurnRoute, async (c) => {
         'conversation does not belong to the specified project'
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
     if (conversation.committedAs) {
       return errorResponse(
         c,
@@ -458,6 +467,8 @@ turnRoutes.openapi(getTurnRoute, async (c) => {
     if (!turn) {
       return errorResponse(c, 'NOT_FOUND', `Turn ${turnHash} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, turn.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const apiTurn = {
       turn_hash: turn.turnHash,
@@ -489,6 +500,12 @@ turnRoutes.openapi(getTurnChainRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const targetTurn = await findTurnByHash(db, turnHash);
+    if (!targetTurn) {
+      return errorResponse(c, 'NOT_FOUND', `Turn ${turnHash} not found`);
+    }
+    const accessResult = await assertProjectAccess(c, db, targetTurn.projectId);
+    if (accessResult instanceof Response) return accessResult;
     const chain = await findTurnChain(db, turnHash, limit);
 
     const apiChain = chain.map((t) => ({
@@ -545,6 +562,8 @@ turnRoutes.openapi(getTurnContextRoute, async (c) => {
     if (!targetTurn) {
       return errorResponse(c, 'NOT_FOUND', `Turn ${turnHash} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, targetTurn.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Get conversation info
     const conversation = await findConversationById(db, targetTurn.conversationId);

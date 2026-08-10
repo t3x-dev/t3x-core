@@ -28,6 +28,7 @@ import {
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { CreatePinRequest, PinResponse, UpdatePinAssertionsRequest } from '../schemas/contracts';
 
@@ -289,6 +290,8 @@ pinsRoutes.openapi(createPinRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const pin = await createPin(db, {
       project_id: projectId,
@@ -323,6 +326,9 @@ pinsRoutes.openapi(listPinsByProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     // Use findPinsByType when type filter is specified, otherwise findPinsByProject
     const pins = type
       ? await findPinsByType(db, projectId, type, { limit, offset })
@@ -347,6 +353,9 @@ pinsRoutes.openapi(getPinRoute, async (c) => {
       return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
     }
 
+    const accessResult = await assertProjectAccess(c, db, pin.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     return c.json({ success: true as const, data: toApiPin(pin) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -361,6 +370,13 @@ pinsRoutes.openapi(updatePinAssertionsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findPinById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const pin = await updatePinAssertions(db, id, body.selected_assertion_ids);
 
     if (!pin) {
@@ -380,6 +396,13 @@ pinsRoutes.openapi(deletePinRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findPinById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'PIN_NOT_FOUND', `Pin not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const deleted = await deletePin(db, id);
 
     if (!deleted) {

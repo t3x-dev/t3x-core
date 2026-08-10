@@ -32,7 +32,7 @@ export function SourceTransitionTab({
 }: {
   active: boolean;
   candidate: WorkspaceCandidate;
-  onCommitted?: (commitHash: string, branch: string) => void;
+  onCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   view: WorkspaceYOpsFlowView;
 }) {
@@ -83,8 +83,8 @@ export function SourceTransitionTab({
     outcome: 'accepted' | 'overridden' | 'rejected',
     reason?: string
   ) => {
-    const commitHash = await sourceTransition.decide(outcome, reason);
-    if (commitHash) onCommitted?.(commitHash, candidate.targetBranch);
+    const result = await sourceTransition.decide(outcome, reason);
+    if (result) onCommitted?.(result.commitId, candidate.targetBranch, result.workspace);
   };
 
   const pendingReview = sourceTransition.state.view;

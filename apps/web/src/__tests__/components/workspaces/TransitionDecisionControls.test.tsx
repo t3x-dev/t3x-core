@@ -65,7 +65,7 @@ describe('TransitionDecisionControls', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('requires an override reason before exposing an actionable override', () => {
+  it('explains and focuses the required override reason before invoking the action', () => {
     const onDecide = vi.fn();
     const onOverrideReasonChange = vi.fn();
     const { rerender } = render(
@@ -79,8 +79,19 @@ describe('TransitionDecisionControls', () => {
     );
 
     const override = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(override).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Why continue despite the failed check?'), {
+    const reason = screen.getByLabelText('Why continue despite the failed check?');
+    expect(override).toBeEnabled();
+    expect(reason).toBeRequired();
+    expect(screen.getByText(/Required for the audit history/)).toBeInTheDocument();
+
+    fireEvent.click(override);
+    expect(onDecide).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a reason before continuing with this failed check.'
+    );
+    expect(reason).toHaveFocus();
+
+    fireEvent.change(reason, {
       target: { value: 'Known gap is acceptable.' },
     });
     expect(onOverrideReasonChange).toHaveBeenCalledWith('Known gap is acceptable.');

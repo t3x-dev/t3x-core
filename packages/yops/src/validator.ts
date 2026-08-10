@@ -30,7 +30,7 @@
  */
 
 import { isMappingObject, OP_METADATA_KEYS, resolveOpName } from './opShape';
-import { tryParsePath } from './paths';
+import { hasOwnKey, tryParsePath } from './paths';
 import { parseSpec, type YOpsSpec } from './spec';
 import { SPEC_YAML } from './specData';
 import { parseYamlDeclaration, YOPS_YAML_PROFILE_UNSUPPORTED } from './yamlProfile';
@@ -389,7 +389,7 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
   // discriminated union on `type`). Apply-time rejects malformed
   // sources (e.g. `{ source: { type: 'human', author: '' } }`); the
   // validator must too.
-  if ('source' in op) {
+  if (hasOwnKey(op, 'source')) {
     out.push(...validateSource(op.source, op_index));
   }
 
@@ -419,7 +419,7 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
 
   // Required fields present
   for (const [fieldName, fieldSpec] of Object.entries(opSpec.fields)) {
-    if (fieldSpec.required && !(fieldName in payload)) {
+    if (fieldSpec.required && !hasOwnKey(payload, fieldName)) {
       out.push(
         diagnostic(
           'error',
@@ -433,7 +433,7 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
 
   // No unknown fields
   for (const fieldName of Object.keys(payload)) {
-    if (!(fieldName in opSpec.fields)) {
+    if (!hasOwnKey(opSpec.fields, fieldName)) {
       out.push(
         diagnostic(
           'error',
@@ -447,7 +447,7 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
 
   // Per-field type / enum / path checks
   for (const [fieldName, fieldSpec] of Object.entries(opSpec.fields)) {
-    if (!(fieldName in payload)) continue;
+    if (!hasOwnKey(payload, fieldName)) continue;
     const value = payload[fieldName];
 
     if (!runtimeMatchesSpecType(value, fieldSpec.type)) {

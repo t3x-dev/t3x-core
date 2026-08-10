@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, parsePath, resolvePath } from '../paths';
+import { deepClone, hasOwnKey, parsePath, resolvePath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -58,7 +58,7 @@ export const defineHandler: OpHandler = (doc, fields, index) => {
     };
   }
 
-  if (finalKey in (parent as Record<string, YValue>)) {
+  if (hasOwnKey(parent, finalKey)) {
     return {
       doc,
       error: yopsError(YOPS_ERRORS.ALREADY_EXISTS, `Path "${path}" already exists`, index),
@@ -67,6 +67,6 @@ export const defineHandler: OpHandler = (doc, fields, index) => {
 
   const cloned = deepClone(doc);
   const clonedParent = parentKeys.length === 0 ? cloned : resolvePath(cloned, parentPath);
-  (clonedParent as Record<string, YValue>)[finalKey] = {};
+  setOwnKey(clonedParent as Record<string, YValue>, finalKey, {});
   return { doc: cloned };
 };

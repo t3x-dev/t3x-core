@@ -89,6 +89,15 @@ export async function listNotifications(
     .limit(limit);
 }
 
+/** Find one notification so API authorization can be checked before mutation. */
+export async function findNotificationById(
+  db: AnyDB,
+  id: string
+): Promise<NotificationRecord | null> {
+  const [result] = await db.select().from(notifications).where(eq(notifications.id, id)).limit(1);
+  return result ?? null;
+}
+
 /**
  * Mark a single notification as read.
  */

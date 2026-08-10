@@ -36,6 +36,11 @@ interface ReviewSession {
   why?: string;
 }
 
+export interface WorkspaceTransitionCommitResult {
+  commitId: string;
+  workspace: WorkspaceCandidate;
+}
+
 const INITIAL_STATE: WorkspaceTransitionState = {
   error: null,
   errorCode: null,
@@ -104,7 +109,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
     async (
       outcome: WorkspaceTransitionOutcome,
       decisionReasonInput?: string
-    ): Promise<string | null> => {
+    ): Promise<WorkspaceTransitionCommitResult | null> => {
       const session = sessionRef.current;
       if (!session) {
         setState({
@@ -138,6 +143,9 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
         });
         sessionRef.current = null;
         const commitId = committedTransitionId(decided.transition);
+        if (commitId && !decided.workspace) {
+          throw new Error('Committed Workspace response did not include the latest revision.');
+        }
         setState({
           error: null,
           errorCode: null,
@@ -151,7 +159,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
             branch: candidate.targetBranch,
           });
         }
-        return commitId;
+        return commitId && decided.workspace ? { commitId, workspace: decided.workspace } : null;
       } catch (error) {
         const stale = error instanceof ApiError && error.code === 'STALE_REVIEW';
         if (stale) sessionRef.current = null;

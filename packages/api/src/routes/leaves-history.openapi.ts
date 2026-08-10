@@ -19,6 +19,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   DeleteLeafHistoryResponse,
@@ -186,6 +187,8 @@ leavesHistoryRoutes.openapi(listLeafHistoryRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Get history entries
     const history = await findHistoryByLeafId(db, id, { limit, offset });
@@ -210,6 +213,8 @@ leavesHistoryRoutes.openapi(restoreLeafOutputRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Get the history entry
     const history = await findLeafHistoryById(db, history_id);
@@ -245,6 +250,17 @@ leavesHistoryRoutes.openapi(deleteLeafHistoryRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    const history = await findLeafHistoryById(db, id);
+    if (!history) {
+      return errorResponse(c, 'HISTORY_NOT_FOUND', `History entry not found: ${id}`);
+    }
+    const leaf = await findLeafById(db, history.leaf_id);
+    if (!leaf) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${history.leaf_id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Delete the history entry
     const deleted = await deleteLeafHistory(db, id);

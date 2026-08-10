@@ -31,6 +31,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -125,6 +126,8 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const result = await rebuildKnowledgeGraph(db, projectId);
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
@@ -425,6 +428,8 @@ knowledgeGraphRoutes.openapi(listNodesRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const nodes = await findKnowledgeNodesByProject(db, projectId, { limit });
 
     return c.json({ success: true as const, data: { nodes, count: nodes.length } }, 200);
@@ -471,6 +476,8 @@ knowledgeGraphRoutes.openapi(getNodeRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const node = await findKnowledgeNodeById(db, nodeId);
     if (!node || node.project_id !== projectId) {
       return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
@@ -522,6 +529,8 @@ knowledgeGraphRoutes.openapi(getNeighborsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const node = await findKnowledgeNodeById(db, nodeId);
     if (!node || node.project_id !== projectId) {
       return errorResponse(c, 'GRAPH_NODE_NOT_FOUND', `Knowledge node not found: ${nodeId}`);
@@ -583,6 +592,8 @@ knowledgeGraphRoutes.openapi(searchNodesRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const nodes = await searchKnowledgeNodes(db, projectId, q, { limit });
 
     return c.json({ success: true as const, data: { nodes, count: nodes.length } }, 200);
@@ -625,6 +636,8 @@ knowledgeGraphRoutes.openapi(deleteGraphRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
     const result = await deleteKnowledgeGraphByProject(db, projectId);
 
     return c.json({ success: true as const, data: result }, 200);

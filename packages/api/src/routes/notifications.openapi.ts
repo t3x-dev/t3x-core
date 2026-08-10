@@ -12,6 +12,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   type CreateNotificationInput,
+  findNotificationById,
   insertNotification,
   listNotificationsFromDB,
   markAllNotificationsRead,
@@ -19,6 +20,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -98,6 +100,8 @@ const listNotificationsRoute = createRoute({
 notificationsRoutes.openapi(listNotificationsRoute, async (c) => {
   const { project_id, unread_only } = c.req.valid('query');
   const db = await getDB();
+  const accessResult = await assertResourceProjectAccess(c, db, project_id);
+  if (accessResult instanceof Response) return accessResult;
 
   const rows = await listNotificationsFromDB(db, {
     project_id,
@@ -157,6 +161,19 @@ notificationsRoutes.openapi(markReadRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
 
+  const existing = await findNotificationById(db, id);
+  if (!existing) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Notification not found: ${id}` },
+      },
+      404
+    );
+  }
+  const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+  if (accessResult instanceof Response) return accessResult;
+
   const updated = await markNotificationRead(db, id);
   if (!updated) {
     return c.json(
@@ -199,6 +216,8 @@ const markAllReadRoute = createRoute({
 notificationsRoutes.openapi(markAllReadRoute, async (c) => {
   const { project_id } = c.req.valid('query');
   const db = await getDB();
+  const accessResult = await assertResourceProjectAccess(c, db, project_id);
+  if (accessResult instanceof Response) return accessResult;
 
   const count = await markAllNotificationsRead(db, project_id);
   return c.json({ success: true as const, data: { count } }, 200);

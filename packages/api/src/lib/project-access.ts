@@ -60,6 +60,27 @@ export async function assertProjectAccess(c: Context, db: AnyDB, projectId: stri
 }
 
 /**
+ * Assert access to a resource whose project binding may be null.
+ *
+ * Authenticated callers must have a concrete project boundary. The current
+ * identity model has no server-operator role that can safely own global child
+ * resources, so null-project resources remain available only in the explicit
+ * AUTH_DISABLED local-development mode.
+ */
+export async function assertResourceProjectAccess(
+  c: Context,
+  db: AnyDB,
+  projectId: string | null | undefined
+) {
+  if (projectId) return assertProjectAccess(c, db, projectId);
+
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (!apiKey) return null;
+
+  return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
+}
+
+/**
  * Assert access to a project that may be soft-deleted.
  * Used by restore and permanent-delete routes where `findProjectById()`
  * would return null for deleted projects.

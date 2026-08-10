@@ -20,7 +20,6 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createLeafHistory,
   findLeafById,
-  findProjectById,
   getConfigurationStats,
   getRun,
   getRunByRunnerRunId,
@@ -34,6 +33,7 @@ import { randomUUID } from 'crypto';
 import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess, assertResourceProjectAccess } from '../lib/project-access';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -104,18 +104,11 @@ runsRoutes.openapi(createRunRoute, async (c) => {
     const input = c.req.valid('json');
     const run_id = `run_${randomUUID().slice(0, 8)}`;
     const db = await getDB();
+    let resolvedProjectId = input.project_id;
 
     if (input.project_id) {
-      const project = await findProjectById(db, input.project_id);
-      if (!project) {
-        return c.json(
-          {
-            success: false as const,
-            error: { code: 'PROJECT_NOT_FOUND', message: `Project ${input.project_id} not found` },
-          },
-          400
-        );
-      }
+      const accessResult = await assertProjectAccess(c, db, input.project_id);
+      if (accessResult instanceof Response) return accessResult;
     }
 
     let resolvedLeaf = input.leaf;
@@ -144,6 +137,12 @@ runsRoutes.openapi(createRunRoute, async (c) => {
           400
         );
       }
+      if (resolvedProjectId && resolvedProjectId !== leaf.project_id) {
+        return errorResponse(c, 'INVALID_REQUEST', 'leaf_id does not belong to project_id');
+      }
+      resolvedProjectId = leaf.project_id;
+      const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
+      if (accessResult instanceof Response) return accessResult;
       resolvedLeaf = {
         id: input.leaf?.id || leaf.id,
         type: input.leaf?.type || 'deploy',
@@ -152,9 +151,12 @@ runsRoutes.openapi(createRunRoute, async (c) => {
       };
     }
 
+    const resourceAccess = await assertResourceProjectAccess(c, db, resolvedProjectId);
+    if (resourceAccess instanceof Response) return resourceAccess;
+
     await insertRun(db, {
       run_id,
-      project_id: input.project_id || null,
+      project_id: resolvedProjectId || null,
       runner_run_id: null,
       commit_ref: input.commit_ref || null,
       leaf_id: leafId,
@@ -413,6 +415,9 @@ runsRoutes.openapi(listRunsRoute, async (c) => {
   try {
     const { project_id, status, model, prompt_version, limit, offset } = c.req.valid('query');
     const db = await getDB();
+    const accessResult = await assertResourceProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const result = await listRuns(db, {
       projectId: project_id,
       status: status as 'queued' | 'running' | 'completed' | 'failed' | undefined,
@@ -472,6 +477,9 @@ runsRoutes.openapi(getRunByRunnerIdRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Run not found for runner_run_id: ${runnerRunId}`);
     }
 
+    const accessResult = await assertResourceProjectAccess(c, db, run.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     return c.json({ success: true as const, data: run });
   } catch (error) {
     return errorResponse(
@@ -492,6 +500,9 @@ const getRunFiltersRoute = createRoute({
   tags: ['Runner'],
   summary: 'Get run filter options',
   description: 'Returns distinct model and prompt_version values for filter dropdowns.',
+  request: {
+    query: z.object({ project_id: z.string().min(1).optional() }),
+  },
   responses: {
     200: {
       description: 'Filter options',
@@ -507,7 +518,10 @@ const getRunFiltersRoute = createRoute({
 runsRoutes.openapi(getRunFiltersRoute, async (c) => {
   try {
     const db = await getDB();
-    const options = await getRunFilterOptions(db);
+    const { project_id } = c.req.valid('query');
+    const accessResult = await assertResourceProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
+    const options = await getRunFilterOptions(db, project_id);
     return c.json({ success: true as const, data: options });
   } catch (error) {
     return errorResponse(
@@ -550,6 +564,8 @@ runsRoutes.openapi(getConfigurationsRoute, async (c) => {
   try {
     const { project_id } = c.req.valid('query');
     const db = await getDB();
+    const accessResult = await assertResourceProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
     const configurations = await getConfigurationStats(db, project_id || undefined);
     return c.json({ success: true as const, data: { configurations } });
   } catch (error) {
@@ -596,6 +612,9 @@ runsRoutes.openapi(getRunRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Run not found: ${id}`);
     }
 
+    const accessResult = await assertResourceProjectAccess(c, db, run.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     return c.json({ success: true as const, data: run });
   } catch (error) {
     return errorResponse(
@@ -639,6 +658,13 @@ runsRoutes.openapi(deleteRunRoute, async (c) => {
   try {
     const { id } = c.req.valid('param');
     const db = await getDB();
+    const existing = await getRun(db, id);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Run not found: ${id}`);
+    }
+    const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const { deleteRun } = await import('@t3x-dev/storage');
     const deleted = await deleteRun(db, id);
 
@@ -711,6 +737,8 @@ runsRoutes.openapi(updateRunRoute, async (c) => {
     if (!existing) {
       return errorResponse(c, 'NOT_FOUND', `Run not found: ${id}`);
     }
+    const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const updated = await updateRun(db, id, {
       title: input.title,
@@ -764,6 +792,8 @@ runsRoutes.openapi(compareRunsRoute, async (c) => {
   try {
     const input = c.req.valid('json');
     const db = await getDB();
+    const accessResult = await assertResourceProjectAccess(c, db, input.project_id);
+    if (accessResult instanceof Response) return accessResult;
     const allStats = await getConfigurationStats(db, input.project_id || undefined);
 
     const control = allStats.find(

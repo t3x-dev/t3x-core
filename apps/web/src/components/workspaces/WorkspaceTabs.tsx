@@ -139,7 +139,7 @@ export function WorkspaceTabs({
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onSendToYOps?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
-  onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
@@ -193,7 +193,7 @@ interface RenderWorkspaceTabOptions {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
-  onYOpsCommitted?: (commitHash: string, branch: string) => void;
+  onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
