@@ -182,8 +182,8 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     const db = await getDB();
     let resolvedProjectId = projectId;
 
-    // If conversation_id provided and no turns, fetch turns from DB
-    if (conversationId && (!turns || turns.length === 0)) {
+    // Resolve the conversation's project before reading any child records.
+    if (conversationId) {
       const conversation = await findConversationById(db, conversationId);
       if (!conversation) {
         return errorResponse(
@@ -193,21 +193,30 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
         );
       }
 
-      // Derive project_id from conversation if not explicitly provided
-      if (!resolvedProjectId) {
-        resolvedProjectId = conversation.projectId;
+      if (resolvedProjectId && resolvedProjectId !== conversation.projectId) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          'conversation_id does not belong to the supplied project_id'
+        );
       }
+      resolvedProjectId = conversation.projectId;
 
-      const dbTurns = await findTurnsByConversation(db, {
-        conversationId,
-        limit: 500,
-      });
+      const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
+      if (accessResult instanceof Response) return accessResult;
 
-      if (dbTurns.length > 0) {
-        turns = dbTurns.map((t) => ({
-          role: t.role,
-          content: t.content,
-        }));
+      if (!turns || turns.length === 0) {
+        const dbTurns = await findTurnsByConversation(db, {
+          conversationId,
+          limit: 500,
+        });
+
+        if (dbTurns.length > 0) {
+          turns = dbTurns.map((t) => ({
+            role: t.role,
+            content: t.content,
+          }));
+        }
       }
     }
 
@@ -215,6 +224,14 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     if (resolvedProjectId) {
       const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
       if (accessResult instanceof Response) return accessResult;
+    }
+
+    if (!resolvedProjectId && (gates.includes('business') || gates.includes('semantic'))) {
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        'project_id is required for semantic or business gate checks'
+      );
     }
 
     // Auto-load business rules from project if none provided

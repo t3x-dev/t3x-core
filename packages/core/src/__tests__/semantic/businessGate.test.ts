@@ -109,61 +109,59 @@ describe('parseGatesConfig', () => {
 // ── evaluateRule ──
 
 describe('evaluateRule', () => {
-  it('returns passed: true for passing expression', () => {
+  it('fails closed instead of executing a passing expression', () => {
     const result = evaluateRule(passingRule, content);
-    expect(result.passed).toBe(true);
-    expect(result.message).toBeUndefined();
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('executable business rules are disabled');
   });
 
-  it('returns passed: false for failing expression', () => {
+  it('does not use the caller-provided failure message as evidence of evaluation', () => {
     const result = evaluateRule(failingRule, content);
     expect(result.passed).toBe(false);
-    expect(result.message).toBe('Need more than 100 trees');
+    expect(result.message).toContain('was not evaluated');
   });
 
-  it('returns passed: false with error message for invalid expression', () => {
+  it('does not parse invalid expressions', () => {
     const result = evaluateRule(invalidExprRule, content);
     expect(result.passed).toBe(false);
-    expect(result.message).toContain('threw an error');
+    expect(result.message).toContain('executable business rules are disabled');
   });
 
-  it('evaluates complex relation checks', () => {
+  it('never executes expressions that reconstruct access to the host runtime', () => {
     const rule: BusinessRuleConfig = {
-      id: 'decision_needs_basis',
+      id: 'host_runtime_escape',
       type: 'rule',
-      rule: `trees.filter(t => t.key.includes('decision'))
-        .every(t => relations.some(r => r.to === t.key &&
-          (r.type === 'causes' || r.type === 'depends')))`,
-      message: 'Every decision must have causes or depends',
+      rule: `({}).constructor.constructor('return pro' + 'cess')().cwd()`,
       severity: 'error',
     };
     const result = evaluateRule(rule, content);
-    expect(result.passed).toBe(true);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('executable business rules are disabled');
   });
 });
 
 // ── BusinessGate.evaluate ──
 
 describe('BusinessGate.evaluate', () => {
-  it('passes when all rules pass', async () => {
+  it('fails closed for legacy executable rules', async () => {
     const gate = new BusinessGate();
     const result = await gate.evaluate([passingRule, warningRule], content);
-    expect(result.passed).toBe(true);
+    expect(result.passed).toBe(false);
     expect(result.results).toHaveLength(2);
-    expect(result.results.every((r) => r.passed)).toBe(true);
+    expect(result.results.every((r) => !r.passed)).toBe(true);
   });
 
-  it('handles mixed results correctly', async () => {
+  it('fails closed for every executable rule regardless of expression result', async () => {
     const gate = new BusinessGate();
     const result = await gate.evaluate([passingRule, failingRule], content);
     expect(result.passed).toBe(false);
-    expect(result.results[0].passed).toBe(true);
+    expect(result.results[0].passed).toBe(false);
     expect(result.results[1].passed).toBe(false);
   });
 
   it('warning-only failures do not block (passed: true)', async () => {
     const gate = new BusinessGate();
-    const result = await gate.evaluate([passingRule, failingWarningRule], content);
+    const result = await gate.evaluate([failingWarningRule], content);
     expect(result.passed).toBe(true);
     const warningResult = result.results.find((r) => r.rule_id === 'all_have_budget');
     expect(warningResult?.passed).toBe(false);
