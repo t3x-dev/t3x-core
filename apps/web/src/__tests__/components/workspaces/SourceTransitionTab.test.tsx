@@ -208,11 +208,15 @@ describe('SourceTransitionTab', () => {
     render(<SourceTransitionTab active candidate={candidate} view="commit" />);
 
     const continueButton = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(continueButton).toBeDisabled();
+    expect(continueButton).toBeEnabled();
+    fireEvent.click(continueButton);
+    expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a reason before continuing with this failed check.'
+    );
     fireEvent.change(screen.getByLabelText(/Why continue despite the failed check/), {
       target: { value: 'The known environment risk is acceptable for this device.' },
     });
-    expect(continueButton).toBeEnabled();
     fireEvent.click(continueButton);
     expect(decide).toHaveBeenCalledWith(
       'overridden',

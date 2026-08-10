@@ -33,6 +33,11 @@ export interface WorkspaceSourceTransitionState {
   view: TransitionViewV1 | null;
 }
 
+export interface WorkspaceSourceTransitionCommitResult {
+  commitId: string;
+  workspace: WorkspaceCandidate;
+}
+
 type ReviewSession =
   | {
       kind: 'change';
@@ -184,7 +189,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
     async (
       outcome: 'accepted' | 'overridden' | 'rejected',
       decisionReasonInput?: string
-    ): Promise<string | null> => {
+    ): Promise<WorkspaceSourceTransitionCommitResult | null> => {
       const session = sessionRef.current;
       if (!session) {
         setState({
@@ -228,6 +233,9 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
               });
         sessionRef.current = null;
         const commitId = committedTransitionId(decided.transition);
+        if (commitId && !decided.workspace) {
+          throw new Error('Committed Workspace response did not include the latest revision.');
+        }
         setState({
           error: null,
           errorCode: null,
@@ -243,7 +251,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
             branch: candidate.targetBranch,
           });
         }
-        return commitId;
+        return commitId && decided.workspace ? { commitId, workspace: decided.workspace } : null;
       } catch (error) {
         const stale = error instanceof ApiError && error.code === 'STALE_REVIEW';
         if (stale) sessionRef.current = null;

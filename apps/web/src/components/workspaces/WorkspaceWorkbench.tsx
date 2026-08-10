@@ -203,7 +203,15 @@ export function WorkspaceWorkbench({
     }
   };
 
-  const handleCommitted = (commitHash: string) => {
+  const handleCommitted = (
+    commitHash: string,
+    _branch: string,
+    committedWorkspace: WorkspaceCandidate
+  ) => {
+    setWorkspaceOverrides((current) => ({
+      ...current,
+      [committedWorkspace.id]: committedWorkspace,
+    }));
     updateSelectedFlow({ commitHash });
     setActiveWorkflowTab('commit');
   };
@@ -439,7 +447,7 @@ function WorkspaceDetail({
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
-  onYOpsCommitted: (commitHash: string, branch: string) => void;
+  onYOpsCommitted: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
 }) {

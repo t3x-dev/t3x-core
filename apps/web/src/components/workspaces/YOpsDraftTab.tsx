@@ -72,7 +72,7 @@ export function YOpsDraftTab({
   continuationBusy?: boolean;
   flowError?: string;
   onApplied?: (remainingSchemaGapCount: number) => void;
-  onCommitted?: (commitHash: string, branch: string) => void;
+  onCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onContinueFromCommit?: (
     commitHash: string,
     targetBranch: string,
@@ -396,11 +396,11 @@ export function YOpsDraftTab({
   }
 
   async function handleDecision(outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) {
-    const hash = await workspaceTransition.decide(outcome, reason);
-    if (hash) {
-      setCommittedHash(hash);
+    const result = await workspaceTransition.decide(outcome, reason);
+    if (result) {
+      setCommittedHash(result.commitId);
       setStatus('committed');
-      onCommitted?.(hash, targetBranch);
+      onCommitted?.(result.commitId, targetBranch, result.workspace);
     }
   }
 

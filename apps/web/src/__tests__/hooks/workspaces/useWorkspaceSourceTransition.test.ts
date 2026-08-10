@@ -112,6 +112,7 @@ describe('useWorkspaceSourceTransition', () => {
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
       decision_digest: digest('2'),
       commit: {},
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
     });
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
@@ -217,6 +218,7 @@ describe('useWorkspaceSourceTransition', () => {
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
       decision_digest: digest('2'),
       commit: {},
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
     });
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
