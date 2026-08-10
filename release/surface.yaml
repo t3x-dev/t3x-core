@@ -2,22 +2,27 @@ version: 1
 notes: |
   Source of truth for the T3X alpha release package surface.
   Changes to public package entries require owner approval and a stability note.
+  release_train: active means the package can be selected by automated package
+  release preparation; paused keeps an existing public npm package out of the
+  default release train without deleting or unpublishing it.
 packages:
   - name: "@t3x-dev/local"
     path: apps/local
     access: public
     publish_state: applied
     npm_publish: true
+    release_train: paused
     stability_tier: alpha
     readme_required: true
     api_extractor: false
-    why: First-door local installer and no-key demo entrypoint.
+    why: Existing public local installer; paused from release-train publishing while runtime artifacts stay explicit.
 
   - name: "@t3x-dev/yops"
     path: packages/yops
     access: public
     publish_state: applied
     npm_publish: true
+    release_train: active
     stability_tier: alpha
     readme_required: true
     api_extractor: true
@@ -35,19 +40,21 @@ packages:
 
   - name: "@t3x-dev/transition"
     path: packages/transition
-    access: restricted
+    access: public
     publish_state: applied
-    npm_publish: false
-    stability_tier: internal
-    readme_required: false
+    npm_publish: true
+    release_train: active
+    stability_tier: alpha
+    readme_required: true
     api_extractor: false
-    why: Internal leaf package for the Transition protocol; not a public alpha surface.
+    why: Public alpha protocol contracts, Replay, identity, and integrity verification for third-party agents and MCP tools.
 
   - name: "@t3x-dev/yschema"
     path: packages/yschema
     access: public
     publish_state: applied
     npm_publish: true
+    release_train: active
     stability_tier: alpha
     readme_required: true
     api_extractor: false

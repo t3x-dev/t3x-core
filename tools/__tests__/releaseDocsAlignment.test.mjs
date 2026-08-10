@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { validateReleaseDocsAlignment } from '../lib/releaseDocsAlignment.mjs';
 
-test('release-facing docs stay aligned with fixed package version and release surface', async () => {
+test('release-facing docs stay aligned with package versions and release surface', async () => {
   const result = await validateReleaseDocsAlignment();
   const packageJson = JSON.parse(await readFile('packages/yops/package.json', 'utf8'));
 

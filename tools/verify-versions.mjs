@@ -3,7 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export const FIXED_VERSION_PACKAGES = [
+export const LOCAL_RUNTIME_PACKAGE_NAMES = [
   '@t3x-dev/yops',
   '@t3x-dev/yschema',
   '@t3x-dev/core',
@@ -15,7 +15,12 @@ export const FIXED_VERSION_PACKAGES = [
   '@t3x-dev/local',
 ];
 
-const FIXED_PACKAGE_PATHS = {
+export const VERSION_CHECK_PACKAGE_NAMES = [...LOCAL_RUNTIME_PACKAGE_NAMES, '@t3x-dev/transition'];
+
+// Backwards-compatible export for scripts that still import the old name.
+export const FIXED_VERSION_PACKAGES = LOCAL_RUNTIME_PACKAGE_NAMES;
+
+const WORKSPACE_PACKAGE_PATHS = {
   '@t3x-dev/yops': path.join('packages', 'yops', 'package.json'),
   '@t3x-dev/yschema': path.join('packages', 'yschema', 'package.json'),
   '@t3x-dev/core': path.join('packages', 'core', 'package.json'),
@@ -25,6 +30,7 @@ const FIXED_PACKAGE_PATHS = {
   '@t3x-dev/cli': path.join('apps', 'cli', 'package.json'),
   '@t3x-dev/mcp': path.join('apps', 'mcp', 'package.json'),
   '@t3x-dev/local': path.join('apps', 'local', 'package.json'),
+  '@t3x-dev/transition': path.join('packages', 'transition', 'package.json'),
 };
 
 const SOURCE_VERSION_LITERAL_CHECKS = [
@@ -47,73 +53,70 @@ const SOURCE_VERSION_LITERAL_CHECKS = [
 
 export async function verifyVersions(options = {}) {
   const repoRoot = options.repoRoot ?? (await findRepoRoot(options.cwd ?? process.cwd()));
-  const packages = await readFixedPackages(repoRoot);
-  const uniqueVersions = [...new Set(packages.map((pkg) => pkg.version))];
-  const expectedVersion = uniqueVersions[0] ?? null;
+  const packages = await readWorkspacePackages(repoRoot);
+  const packageVersionByName = new Map(packages.map((pkg) => [pkg.name, pkg.version]));
+  const selectedPackages = normalizeSelectedPackages(
+    options.selectedPackages ?? process.env.T3X_PACKAGE_RELEASES
+  );
+  const shouldVerifyManifest =
+    (options.verifyManifest ?? true) &&
+    (selectedPackages === null || selectedPackages.includes('@t3x-dev/local'));
+  const localVersion = packageVersionByName.get('@t3x-dev/local') ?? null;
   const problems = [];
 
-  if (uniqueVersions.length !== 1) {
-    for (const pkg of packages) {
+  if (shouldVerifyManifest && localVersion) {
+    const manifestPath = path.join(repoRoot, 'apps', 'local', 'runtime-manifest.json');
+    const manifest = await tryReadJson(manifestPath);
+
+    if (!manifest) {
       problems.push(
-        `${pkg.name} version mismatch: expected a single fixed version, found ${pkg.version}`
+        'apps/local/runtime-manifest.json is missing; run `pnpm build:local-runtime` first'
       );
-    }
-  }
-
-  if (expectedVersion) {
-    if (options.verifyManifest ?? true) {
-      const manifestPath = path.join(repoRoot, 'apps', 'local', 'runtime-manifest.json');
-      const manifest = await tryReadJson(manifestPath);
-
-      if (!manifest) {
+    } else {
+      if (manifest.packageVersion !== localVersion) {
         problems.push(
-          'apps/local/runtime-manifest.json is missing; run `pnpm build:local-runtime` first'
+          `apps/local/runtime-manifest.json packageVersion must be ${localVersion}, found ${manifest.packageVersion ?? 'missing'}`
         );
-      } else {
-        if (manifest.packageVersion !== expectedVersion) {
+      }
+
+      if (manifest.fixedVersion !== localVersion) {
+        problems.push(
+          `apps/local/runtime-manifest.json fixedVersion must be ${localVersion}, found ${manifest.fixedVersion ?? 'missing'}`
+        );
+      }
+
+      const manifestDependencies = manifest.dependencies ?? {};
+      for (const packageName of LOCAL_RUNTIME_PACKAGE_NAMES) {
+        const expectedVersion = packageVersionByName.get(packageName);
+        const actual = manifestDependencies[packageName];
+
+        if (actual !== expectedVersion) {
           problems.push(
-            `apps/local/runtime-manifest.json packageVersion must be ${expectedVersion}, found ${manifest.packageVersion ?? 'missing'}`
+            `apps/local/runtime-manifest.json dependency ${packageName} must be ${expectedVersion}, found ${actual ?? 'missing'}`
+          );
+        }
+      }
+
+      const platformEntries = Object.entries(manifest.platforms ?? {});
+      if (platformEntries.length === 0) {
+        problems.push(
+          'apps/local/runtime-manifest.json must declare at least one runtime platform artifact'
+        );
+      }
+
+      for (const [platformKey, platform] of platformEntries) {
+        const expectedFileNamePrefix = `t3x-local-runtime-${localVersion}-`;
+        if (!platform?.fileName?.startsWith(expectedFileNamePrefix)) {
+          problems.push(
+            `apps/local/runtime-manifest.json platform ${platformKey} fileName must include ${localVersion}, found ${platform?.fileName ?? 'missing'}`
           );
         }
 
-        if (manifest.fixedVersion !== expectedVersion) {
+        const expectedReleaseTag = `t3x-local-v${localVersion}`;
+        if (!platform?.url?.includes(expectedReleaseTag)) {
           problems.push(
-            `apps/local/runtime-manifest.json fixedVersion must be ${expectedVersion}, found ${manifest.fixedVersion ?? 'missing'}`
+            `apps/local/runtime-manifest.json platform ${platformKey} url must reference ${expectedReleaseTag}, found ${platform?.url ?? 'missing'}`
           );
-        }
-
-        const manifestDependencies = manifest.dependencies ?? {};
-        for (const packageName of FIXED_VERSION_PACKAGES) {
-          const actual = manifestDependencies[packageName];
-
-          if (actual !== expectedVersion) {
-            problems.push(
-              `apps/local/runtime-manifest.json dependency ${packageName} must be ${expectedVersion}, found ${actual ?? 'missing'}`
-            );
-          }
-        }
-
-        const platformEntries = Object.entries(manifest.platforms ?? {});
-        if (platformEntries.length === 0) {
-          problems.push(
-            'apps/local/runtime-manifest.json must declare at least one runtime platform artifact'
-          );
-        }
-
-        for (const [platformKey, platform] of platformEntries) {
-          const expectedFileNamePrefix = `t3x-local-runtime-${expectedVersion}-`;
-          if (!platform?.fileName?.startsWith(expectedFileNamePrefix)) {
-            problems.push(
-              `apps/local/runtime-manifest.json platform ${platformKey} fileName must include ${expectedVersion}, found ${platform?.fileName ?? 'missing'}`
-            );
-          }
-
-          const expectedReleaseTag = `t3x-local-v${expectedVersion}`;
-          if (!platform?.url?.includes(expectedReleaseTag)) {
-            problems.push(
-              `apps/local/runtime-manifest.json platform ${platformKey} url must reference ${expectedReleaseTag}, found ${platform?.url ?? 'missing'}`
-            );
-          }
         }
       }
     }
@@ -124,7 +127,7 @@ export async function verifyVersions(options = {}) {
   }
 
   return {
-    expectedVersion,
+    expectedVersion: localVersion,
     problems,
     packages,
   };
@@ -135,7 +138,7 @@ export async function verifyVersionsOrThrow(options = {}) {
 
   if (result.problems.length > 0) {
     const details = result.problems.map((problem) => `- ${problem}`).join('\n');
-    throw new Error(`T3X fixed-version verification failed.\n${details}`);
+    throw new Error(`T3X version verification failed.\n${details}`);
   }
 
   return result;
@@ -159,11 +162,11 @@ async function verifySourceVersionLiterals(repoRoot, problems) {
   }
 }
 
-async function readFixedPackages(repoRoot) {
+async function readWorkspacePackages(repoRoot) {
   const packages = [];
 
-  for (const packageName of FIXED_VERSION_PACKAGES) {
-    const packageJsonPath = path.join(repoRoot, FIXED_PACKAGE_PATHS[packageName]);
+  for (const packageName of VERSION_CHECK_PACKAGE_NAMES) {
+    const packageJsonPath = path.join(repoRoot, WORKSPACE_PACKAGE_PATHS[packageName]);
     const packageJson = await readJson(packageJsonPath);
 
     packages.push({
@@ -175,6 +178,32 @@ async function readFixedPackages(repoRoot) {
   }
 
   return packages;
+}
+
+function normalizeSelectedPackages(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (/^(none|no|false)$/i.test(trimmed)) {
+    return [];
+  }
+
+  return trimmed
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => (entry.startsWith('@t3x-dev/') ? entry : `@t3x-dev/${entry}`));
 }
 
 async function findRepoRoot(startDir) {
@@ -220,9 +249,7 @@ if (isDirectRun) {
     const verifyManifest = !process.argv.includes('--no-manifest');
     const result = await verifyVersionsOrThrow({ verifyManifest });
     const versions = result.packages.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ');
-    console.log(
-      `[verify-versions] Fixed version ${result.expectedVersion ?? 'unknown'} verified for ${versions}`
-    );
+    console.log(`[verify-versions] Workspace versions verified for ${versions}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
