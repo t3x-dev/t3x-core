@@ -23,6 +23,7 @@ import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { CreateDraftRequest, DraftResponse, UpdateDraftRequest } from '../schemas/contracts';
 
@@ -218,6 +219,9 @@ draftsCrudRoutes.openapi(createDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const draft = await insertDraft(db, {
       project_id: body.project_id,
       title: body.title,
@@ -243,6 +247,9 @@ draftsCrudRoutes.openapi(listDraftsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const drafts = await listDraftsByProject(db, project_id, { status, limit, offset });
 
     return c.json({ success: true as const, data: drafts.map(toApiDraft) }, 200);
@@ -264,6 +271,9 @@ draftsCrudRoutes.openapi(getDraftRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     return c.json({ success: true as const, data: toApiDraft(draft) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -279,6 +289,13 @@ draftsCrudRoutes.openapi(updateDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findDraftById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     // biome-ignore lint/suspicious/noExplicitAny: generic error handler
     const draft = await updateDraft(db, id, updateFields as any, if_revision);
 
@@ -308,6 +325,9 @@ draftsCrudRoutes.openapi(deleteDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
+
+    const accessResult = await assertProjectAccess(c, db, draft.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     await deleteDraft(db, id);
 

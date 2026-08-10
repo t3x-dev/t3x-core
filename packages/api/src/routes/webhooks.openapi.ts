@@ -20,7 +20,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -90,11 +90,8 @@ webhooksRoutes.openapi(createWebhookRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Access control check (if project-scoped)
-    if (body.project_id) {
-      const accessResult = await assertProjectAccess(c, db, body.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const webhook = await createWebhook(db, {
       url: body.url,
@@ -136,11 +133,8 @@ webhooksRoutes.openapi(listWebhooksRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Access control check (if project-scoped)
-    if (project_id) {
-      const accessResult = await assertProjectAccess(c, db, project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const hooks = await listWebhooks(db, { projectId: project_id });
     return c.json({ success: true as const, data: hooks.map(toMaskedWebhook) });
@@ -184,6 +178,9 @@ webhooksRoutes.openapi(getWebhookRoute, async (c) => {
     if (!webhook) {
       return errorResponse(c, 'WEBHOOK_NOT_FOUND', `Webhook not found: ${id}`);
     }
+
+    const accessResult = await assertResourceProjectAccess(c, db, webhook.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     return c.json({ success: true as const, data: toMaskedWebhook(webhook) });
   } catch (_err) {
@@ -234,6 +231,9 @@ webhooksRoutes.openapi(updateWebhookRoute, async (c) => {
     if (!existing) {
       return errorResponse(c, 'WEBHOOK_NOT_FOUND', `Webhook not found: ${id}`);
     }
+
+    const accessResult = await assertResourceProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const updated = await updateWebhook(db, id, body);
     if (!updated) {
@@ -286,6 +286,9 @@ webhooksRoutes.openapi(deleteWebhookRoute, async (c) => {
       return errorResponse(c, 'WEBHOOK_NOT_FOUND', `Webhook not found: ${id}`);
     }
 
+    const accessResult = await assertResourceProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     const deleted = await deleteWebhook(db, id);
     if (!deleted) {
       return errorResponse(c, 'DELETE_FAILED', 'Failed to delete webhook');
@@ -336,6 +339,9 @@ webhooksRoutes.openapi(testWebhookRoute, async (c) => {
     if (!webhook) {
       return errorResponse(c, 'WEBHOOK_NOT_FOUND', `Webhook not found: ${id}`);
     }
+
+    const accessResult = await assertResourceProjectAccess(c, db, webhook.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const body = JSON.stringify({
       event: 'webhook.test',

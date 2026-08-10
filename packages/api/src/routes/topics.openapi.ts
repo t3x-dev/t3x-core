@@ -15,11 +15,13 @@ import {
   createTopic,
   deleteTopic,
   findConversationById,
+  getTopicById,
   listTopicsByConversation,
   updateTopic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const topicsRoutes = new OpenAPIHono({
@@ -192,6 +194,8 @@ topicsRoutes.openapi(listTopicsRoute, async (c) => {
         `Conversation not found: ${conversationId}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
     const records = await listTopicsByConversation(db, conversationId);
     return c.json({ success: true as const, data: records.map(toApiTopic) }, 200);
   } catch (err) {
@@ -213,6 +217,8 @@ topicsRoutes.openapi(createTopicRoute, async (c) => {
         `Conversation not found: ${conversationId}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
     const record = await createTopic(db, {
       conversationId,
       projectId: conversation.projectId,
@@ -230,6 +236,13 @@ topicsRoutes.openapi(updateTopicRoute, async (c) => {
   const body = c.req.valid('json');
   try {
     const db = await getDB();
+    const existing = await getTopicById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Topic not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const record = await updateTopic(db, id, body);
     if (!record) {
       return errorResponse(c, 'NOT_FOUND', `Topic not found: ${id}`);
@@ -245,6 +258,13 @@ topicsRoutes.openapi(deleteTopicRoute, async (c) => {
   const { id } = c.req.valid('param');
   try {
     const db = await getDB();
+    const existing = await getTopicById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Topic not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const record = await deleteTopic(db, id);
     if (!record) {
       return errorResponse(c, 'NOT_FOUND', `Topic not found: ${id}`);

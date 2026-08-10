@@ -317,15 +317,22 @@ export async function markRunAsTimeout(db: AnyDB, runId: string): Promise<Run | 
  * @returns Object containing arrays of unique models and prompt_versions
  */
 export async function getRunFilterOptions(
-  db: AnyDB
+  db: AnyDB,
+  projectId?: string
 ): Promise<{ models: string[]; prompt_versions: string[] }> {
+  const projectCondition = projectId ? eq(runs.projectId, projectId) : undefined;
+
   // Get distinct models
   const modelResults = await db
     .selectDistinct({
       model: sql<string>`${runs.metadataJson}::jsonb->>'model'`,
     })
     .from(runs)
-    .where(sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`);
+    .where(
+      projectCondition
+        ? and(projectCondition, sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`)
+        : sql`${runs.metadataJson}::jsonb->>'model' IS NOT NULL`
+    );
 
   // Get distinct prompt_versions
   const promptResults = await db
@@ -333,7 +340,11 @@ export async function getRunFilterOptions(
       prompt_version: sql<string>`${runs.metadataJson}::jsonb->>'prompt_version'`,
     })
     .from(runs)
-    .where(sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`);
+    .where(
+      projectCondition
+        ? and(projectCondition, sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`)
+        : sql`${runs.metadataJson}::jsonb->>'prompt_version' IS NOT NULL`
+    );
 
   return {
     models: modelResults.map((r) => r.model).filter(Boolean),

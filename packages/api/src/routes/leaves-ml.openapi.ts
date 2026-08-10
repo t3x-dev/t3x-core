@@ -26,6 +26,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -309,6 +310,8 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
@@ -403,6 +406,8 @@ leavesMLRoutes.openapi(learnFromEditsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Collect edit history for this leaf
     const edits = await findEditsByLeafId(db, id, { limit: 20 });
@@ -563,6 +568,8 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
@@ -667,6 +674,8 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
