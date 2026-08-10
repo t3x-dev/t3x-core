@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, deleteAtPath, resolvePath, setAtPath } from '../paths';
+import { deepClone, deleteAtPath, hasOwnKey, resolvePath, setAtPath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -44,7 +44,7 @@ export const splitHandler: OpHandler = (doc, fields, index) => {
 
   for (const groupKeys of Object.values(into)) {
     for (const key of groupKeys) {
-      if (!(key in targetMap)) {
+      if (!hasOwnKey(targetMap, key)) {
         return {
           doc,
           error: yopsError(
@@ -59,7 +59,7 @@ export const splitHandler: OpHandler = (doc, fields, index) => {
 
   const allMovedKeys = new Set(Object.values(into).flat());
   for (const groupName of Object.keys(into)) {
-    if (groupName in targetMap && !allMovedKeys.has(groupName)) {
+    if (hasOwnKey(targetMap, groupName) && !allMovedKeys.has(groupName)) {
       return {
         doc,
         error: yopsError(
@@ -76,9 +76,9 @@ export const splitHandler: OpHandler = (doc, fields, index) => {
   for (const [groupName, groupKeys] of Object.entries(into)) {
     const groupMap: { [key: string]: YValue } = {};
     for (const key of groupKeys) {
-      groupMap[key] = deepClone(targetMap[key]);
+      setOwnKey(groupMap, key, deepClone(targetMap[key]));
     }
-    groups[groupName] = groupMap;
+    setOwnKey(groups, groupName, groupMap);
   }
 
   let cloned = deepClone(doc);

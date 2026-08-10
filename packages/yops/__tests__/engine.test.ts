@@ -42,6 +42,17 @@ describe('applyYOps — engine behavior', () => {
     expect(result.doc).toEqual({ a: 1 });
   });
 
+  it('remains atomic without leaking prototype mutations from an earlier op', () => {
+    const result = applyYOps({}, [
+      { set: { path: '__proto__/audit_polluted', value: true } },
+      { drop: { path: 'missing' } },
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.doc).toEqual({});
+    expect(Object.prototype).not.toHaveProperty('audit_polluted');
+  });
+
   it('returns applied: 0 for empty ops array', () => {
     const doc: YValue = { a: 1 };
     const result = applyYOps(doc, []);

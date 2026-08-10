@@ -162,6 +162,18 @@ describe('tryParsePath', () => {
   });
 });
 
+describe('deepClone', () => {
+  it('preserves an own __proto__ key without changing the clone prototype', () => {
+    const input = JSON.parse('{"__proto__":{"nested":true}}') as YValue;
+    const cloned = deepClone(input) as Record<string, YValue>;
+
+    expect(Object.getPrototypeOf(cloned)).toBe(Object.prototype);
+    expect(Object.hasOwn(cloned, '__proto__')).toBe(true);
+    expect(resolvePath(cloned, '__proto__/nested')).toBe(true);
+    expect(Object.prototype).not.toHaveProperty('nested');
+  });
+});
+
 describe('resolvePath with quoted segments', () => {
   const doc: YValue = {
     config: {
@@ -252,6 +264,11 @@ describe('resolvePath', () => {
   it('key access on non-mapping returns undefined', () => {
     expect(resolvePath(doc, 'items/foo')).toBeUndefined();
   });
+
+  it('does not resolve inherited Object.prototype properties', () => {
+    expect(resolvePath({}, 'constructor')).toBeUndefined();
+    expect(resolvePath({}, 'toString')).toBeUndefined();
+  });
 });
 
 // ── setAtPath ──────────────────────────────────────────────────────────────
@@ -269,6 +286,24 @@ describe('setAtPath', () => {
     const doc: YValue = {};
     const result = setAtPath(doc, 'a/b/c', 42);
     expect(result).toEqual({ a: { b: { c: 42 } } });
+  });
+
+  it('stores __proto__ as data without mutating Object.prototype', () => {
+    const result = setAtPath({}, '__proto__/audit_polluted', true) as Record<string, YValue>;
+
+    expect(Object.prototype).not.toHaveProperty('audit_polluted');
+    expect(Object.hasOwn(result, '__proto__')).toBe(true);
+    expect(resolvePath(result, '__proto__/audit_polluted')).toBe(true);
+  });
+
+  it('stores constructor and toString as own keys', () => {
+    const withConstructor = setAtPath({}, 'constructor', 'safe');
+    const result = setAtPath(withConstructor, 'toString', 'also-safe') as Record<string, YValue>;
+
+    expect(Object.hasOwn(result, 'constructor')).toBe(true);
+    expect(Object.hasOwn(result, 'toString')).toBe(true);
+    expect(resolvePath(result, 'constructor')).toBe('safe');
+    expect(resolvePath(result, 'toString')).toBe('also-safe');
   });
 
   it('set in array by index', () => {
