@@ -2,6 +2,13 @@ export type SchemaArtifactKind = 'core' | 'module';
 export type SchemaArtifactDetailView = 'overview' | 'render' | 'rules' | 'versions';
 export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
 
+export interface SchemaArtifactInstance {
+  title: string;
+  description: string;
+  useCases: string[];
+  value: Record<string, unknown>;
+}
+
 export interface SchemaModuleRulePreview {
   id: string;
   description: string;

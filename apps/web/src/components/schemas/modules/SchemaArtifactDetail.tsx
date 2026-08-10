@@ -1,12 +1,27 @@
 'use client';
 
-import { CheckCircle2, CircleDot, History, Layers3, ShieldCheck } from 'lucide-react';
+import { dump } from 'js-yaml';
+import {
+  Check,
+  CheckCircle2,
+  CircleDot,
+  Copy,
+  History,
+  Info,
+  Layers3,
+  ShieldCheck,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import type { SchemaArtifactDetailView, SchemaArtifactPreview } from '@/types/schemaModules';
+import { findSchemaArtifactInstance } from '@/data/schemaArtifactInstances';
+import type {
+  SchemaArtifactDetailView,
+  SchemaArtifactInstance,
+  SchemaArtifactPreview,
+} from '@/types/schemaModules';
 import { SchemaArtifactIcon } from './SchemaArtifactIcon';
 
-const VIEWS: Array<{ id: SchemaArtifactDetailView; label: string }> = [
+const CORE_VIEWS: Array<{ id: SchemaArtifactDetailView; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'rules', label: 'Rules' },
   { id: 'render', label: 'Render' },
@@ -14,34 +29,204 @@ const VIEWS: Array<{ id: SchemaArtifactDetailView; label: string }> = [
 ];
 
 export function SchemaArtifactDetail({ artifact }: { artifact: SchemaArtifactPreview }) {
-  const [view, setView] = useState<SchemaArtifactDetailView>('overview');
+  const instance = findSchemaArtifactInstance(artifact);
+  if (artifact.kind === 'module' && instance) {
+    return <ModuleArtifactDetail artifact={artifact} instance={instance} />;
+  }
+  return <TabbedArtifactDetail artifact={artifact} />;
+}
+
+function ModuleArtifactDetail({
+  artifact,
+  instance,
+}: {
+  artifact: SchemaArtifactPreview;
+  instance: SchemaArtifactInstance;
+}) {
   return (
-    <section className="mt-3 overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)]">
-      <header className="flex items-start gap-3 border-b border-[var(--stroke-divider)] p-4">
-        <SchemaArtifactIcon artifact={artifact} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
-              {artifact.title}
-            </h3>
-            <Badge variant={artifact.kind === 'core' ? 'commit' : 'outline'}>{artifact.kind}</Badge>
-            <Badge variant="outline">{familyLabel(artifact.family)}</Badge>
-            <Badge variant="success">{artifact.status}</Badge>
-          </div>
-          <p className="mt-1 font-mono text-[11px] text-[var(--text-tertiary)]">
-            {artifact.canonicalName}@{artifact.version}
-          </p>
-          <p className="mt-2 max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
-            {artifact.description}
-          </p>
+    <section
+      aria-label={`${artifact.title} details`}
+      className="mt-3 overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
+    >
+      <ArtifactHeader artifact={artifact} />
+      <div className="grid items-start gap-3 p-3 min-[821px]:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.9fr)]">
+        <ModuleInstancePanel instance={instance} />
+        <aside className="grid gap-3">
+          <ModuleUseCases instance={instance} />
+          <ModuleRules artifact={artifact} />
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function ModuleInstancePanel({ instance }: { instance: SchemaArtifactInstance }) {
+  const [copied, setCopied] = useState(false);
+  const yaml = dump(instance.value, { lineWidth: 100, noRefs: true, sortKeys: false }).trimEnd();
+
+  async function copyYaml() {
+    await navigator.clipboard.writeText(yaml);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <section className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm">
+      <header className="flex flex-col gap-3 border-b border-[var(--stroke-divider)] px-4 py-3 min-[561px]:flex-row min-[561px]:items-start min-[561px]:justify-between">
+        <SectionHeading index="1" title="YAML Instance">
+          A concise example of the structure contributed by this Module.
+        </SectionHeading>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-tertiary)]">
+            <span className="size-1.5 rounded-full bg-[var(--accent-commit)]" />
+            Sample · Not project data
+          </span>
+          <button
+            aria-live="polite"
+            className="flex h-7 items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2.5 text-[10px] font-semibold text-[var(--text-secondary)] hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)]"
+            onClick={copyYaml}
+            type="button"
+          >
+            {copied ? (
+              <Check aria-hidden="true" className="size-3.5" />
+            ) : (
+              <Copy aria-hidden="true" className="size-3.5" />
+            )}
+            {copied ? 'Copied' : 'Copy YAML'}
+          </button>
         </div>
       </header>
+      <pre className="min-h-[320px] overflow-auto bg-[var(--surface-panel)] p-4 font-mono text-[11px] leading-5 text-[var(--text-primary)]">
+        <code>{yaml}</code>
+      </pre>
+      <p className="flex items-start gap-2 border-t border-[color-mix(in_srgb,var(--accent-commit)_18%,var(--stroke-divider))] bg-[color-mix(in_srgb,var(--accent-commit)_6%,var(--surface-card))] px-4 py-2.5 text-[10px] leading-4 text-[var(--text-secondary)]">
+        <Info
+          aria-hidden="true"
+          className="mt-0.5 size-3.5 flex-none text-[var(--accent-commit)]"
+        />
+        Selecting this Module never copies the sample. Uncovered fields remain gaps.
+      </p>
+    </section>
+  );
+}
+
+function ModuleUseCases({ instance }: { instance: SchemaArtifactInstance }) {
+  return (
+    <section className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm">
+      <header className="border-b border-[var(--stroke-divider)] px-4 py-3">
+        <SectionHeading index="2" title="Where to use it">
+          Use when this structure should be explicit before implementation.
+        </SectionHeading>
+      </header>
+      <ul className="divide-y divide-[var(--stroke-divider)] px-3">
+        {instance.useCases.map((useCase) => (
+          <li className="flex gap-2.5 py-3" key={useCase}>
+            <span className="mt-0.5 flex size-5 flex-none items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--accent-leaf)_10%,transparent)] text-[var(--accent-leaf)]">
+              <Check aria-hidden="true" className="size-3.5" />
+            </span>
+            <p className="text-[11px] leading-4 text-[var(--text-secondary)]">{useCase}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ModuleRules({ artifact }: { artifact: SchemaArtifactPreview }) {
+  return (
+    <section className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm">
+      <header className="border-b border-[var(--stroke-divider)] px-4 py-3">
+        <SectionHeading index="3" title="Rules">
+          Composition constraints and gap behavior.
+        </SectionHeading>
+      </header>
+      <dl className="divide-y divide-[var(--stroke-divider)] px-3">
+        <ModuleRule label="Dependency">
+          {artifact.requires.length > 0 ? (
+            <span>
+              Requires <InlineValues values={artifact.requires} />
+            </span>
+          ) : (
+            'No additional capabilities'
+          )}
+        </ModuleRule>
+        <ModuleRule label="Placement">
+          <span>
+            Added to <InlineValues values={[artifact.placement]} />
+          </span>
+        </ModuleRule>
+      </dl>
+      <div className="m-3 rounded-md border border-[color-mix(in_srgb,var(--accent-commit)_28%,var(--stroke-divider))] bg-[color-mix(in_srgb,var(--accent-commit)_6%,var(--surface-card))] p-3 text-[10px] leading-4 text-[var(--text-secondary)]">
+        <strong className="text-[var(--text-primary)]">Gap behavior</strong>
+        <br />
+        Fields not supplied by Source remain gaps. Gaps do not prevent Commit by default.
+      </div>
+    </section>
+  );
+}
+
+function SectionHeading({
+  children,
+  index,
+  title,
+}: {
+  children: string;
+  index: string;
+  title: string;
+}) {
+  return (
+    <div>
+      <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-primary)]">
+        <span className="flex size-5 items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--accent-commit)_10%,transparent)] text-[10px] text-[var(--accent-commit)]">
+          {index}
+        </span>
+        {title}
+      </h4>
+      <p className="mt-1 pl-7 text-[10px] leading-4 text-[var(--text-secondary)]">{children}</p>
+    </div>
+  );
+}
+
+function ModuleRule({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <div className="grid gap-1.5 py-3 min-[481px]:grid-cols-[88px_minmax(0,1fr)] min-[481px]:gap-3">
+      <dt className="text-[9px] font-bold uppercase tracking-[0.05em] text-[var(--text-tertiary)]">
+        {label}
+      </dt>
+      <dd className="min-w-0 text-[10px] leading-4 text-[var(--text-secondary)]">{children}</dd>
+    </div>
+  );
+}
+
+function InlineValues({ values }: { values: string[] }) {
+  return (
+    <>
+      {values.map((value, index) => (
+        <span key={value}>
+          {index > 0 ? ', ' : null}
+          <code className="rounded bg-[var(--hover-bg)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--text-primary)]">
+            {value}
+          </code>
+        </span>
+      ))}
+    </>
+  );
+}
+
+function TabbedArtifactDetail({ artifact }: { artifact: SchemaArtifactPreview }) {
+  const [view, setView] = useState<SchemaArtifactDetailView>('overview');
+  return (
+    <section
+      aria-label={`${artifact.title} details`}
+      className="mt-3 overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
+    >
+      <ArtifactHeader artifact={artifact} />
       <div
+        aria-label={`${artifact.title} details`}
         className="flex gap-5 overflow-x-auto border-b border-[var(--stroke-divider)] px-4"
         role="tablist"
-        aria-label={`${artifact.title} details`}
       >
-        {VIEWS.map((item) => (
+        {CORE_VIEWS.map((item) => (
           <button
             aria-selected={view === item.id}
             className={`h-10 flex-none border-b-2 text-[12px] font-semibold transition-colors ${view === item.id ? 'border-[var(--accent-commit)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
@@ -61,6 +246,28 @@ export function SchemaArtifactDetail({ artifact }: { artifact: SchemaArtifactPre
         {view === 'versions' ? <ArtifactVersions artifact={artifact} /> : null}
       </div>
     </section>
+  );
+}
+
+function ArtifactHeader({ artifact }: { artifact: SchemaArtifactPreview }) {
+  return (
+    <header className="flex items-start gap-3 border-b border-[var(--stroke-divider)] p-4">
+      <SchemaArtifactIcon artifact={artifact} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{artifact.title}</h3>
+          <Badge variant={artifact.kind === 'core' ? 'commit' : 'outline'}>{artifact.kind}</Badge>
+          <Badge variant="outline">{familyLabel(artifact.family)}</Badge>
+          <Badge variant="success">{artifact.status}</Badge>
+        </div>
+        <p className="mt-1 font-mono text-[11px] text-[var(--text-tertiary)]">
+          {artifact.canonicalName}@{artifact.version}
+        </p>
+        <p className="mt-2 max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
+          {artifact.description}
+        </p>
+      </div>
+    </header>
   );
 }
 

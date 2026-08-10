@@ -126,9 +126,11 @@ describe('SchemaModuleRegistry', () => {
     render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Database Design' }));
-    expect(screen.getByRole('tablist', { name: 'Database Design details' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
-    expect(screen.getByText('prd-database-design.dependencies')).toBeInTheDocument();
+    const detail = screen.getByRole('region', { name: 'Database Design details' });
+    expect(within(detail).queryByRole('tablist')).not.toBeInTheDocument();
+    expect(within(detail).getByText('YAML Instance')).toBeInTheDocument();
+    expect(within(detail).getByText('Rules')).toBeInTheDocument();
+    expect(within(detail).getByText('backend-services')).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove Database Design from composition' })
@@ -140,6 +142,22 @@ describe('SchemaModuleRegistry', () => {
     expect(
       screen.getByRole('button', { name: 'Drag Database Design to reorder' })
     ).toBeInTheDocument();
+  });
+
+  it('shows a concise YAML instance, use cases, and rules without Module tabs', () => {
+    render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Frontend Design' }));
+    const detail = screen.getByRole('region', { name: 'Frontend Design details' });
+
+    expect(within(detail).queryByRole('tablist')).not.toBeInTheDocument();
+    expect(within(detail).getByText('Sample · Not project data')).toBeInTheDocument();
+    expect(within(detail).getByText(/frontend_design:/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Checkout → Payment → Success/)).toBeInTheDocument();
+    expect(within(detail).getByText('Where to use it')).toBeInTheDocument();
+    expect(within(detail).getByText(/Multi-step user flows/)).toBeInTheDocument();
+    expect(within(detail).getByText('Gap behavior')).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Copy YAML' })).toBeInTheDocument();
   });
 
   it('offers reliable arrow controls alongside pointer and keyboard sorting', () => {
