@@ -103,6 +103,32 @@ Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
 the first public alpha publish.
 
+## Release Train Automation
+
+The `Release Train` workflow prepares release pull requests. It does not publish
+npm packages by itself.
+
+- Scheduled runs execute every Friday at 10:00 China Standard Time.
+- Scheduled runs use `version=auto`, `mode=code-only`, `dry_run=false`, and
+  `draft=true`.
+- A scheduled release train PR should default to `Package Releases: - None`.
+  It is a Product Release PR unless a maintainer manually chooses a package
+  release mode.
+- `RELEASE_TRAIN_PAUSED=true` skips scheduled runs only. Manual
+  `workflow_dispatch` runs are still available while the schedule is paused.
+- Manual dispatch defaults to `code-only` and may be changed to `auto` or
+  `package`. Use `package` only after confirming package release intent and
+  changeset coverage.
+
+`@t3x-dev/local` remains an existing public alpha package, but scheduled release
+train runs do not automatically publish it. A local package release requires
+explicit maintainer intent plus runtime artifact review, install smoke, and
+no-key demo smoke when relevant. `@t3x-dev/yops` and `@t3x-dev/yschema` should
+publish only when their user-visible package behavior or public contract
+changes. Promoting `@t3x-dev/transition` to a public package is a separate
+release-surface decision and should not be bundled into the default weekly
+Product Release.
+
 ## Release Readiness Report Schema
 
 Release-bound pull requests use a durable readiness report so reviewers can see
@@ -165,7 +191,8 @@ Release PR checklist:
 5. List included PRs or the comparison range.
 6. Add user-facing release notes.
 7. Fill in the `Package Releases` section. Use `- None` when no package publish
-   is intended. For the current public alpha publish flow, package releases
+   is intended. Scheduled release train PRs should start here. For the current
+   public alpha publish flow, package releases
    must list the complete npm publish surface with target package versions:
    `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
 8. Confirm changesets are present when public package behavior changed.
@@ -292,6 +319,8 @@ that npm packages changed.
   information for code-only releases.
 - The current public alpha package publish is the complete npm publish
   surface: `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
+- Scheduled release train runs are code-only by default and intentionally do not
+  start the local package/runtime artifact publish path.
 - Because the current package release set includes `@t3x-dev/local`, runtime
   artifacts are required for package releases.
 - Release review and dry-run packaging must not publish real artifacts.

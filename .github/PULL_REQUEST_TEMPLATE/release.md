@@ -21,6 +21,9 @@ List merged PRs or the comparison range:
 - None
 
 <!--
+Scheduled Release Train PRs default to code-only and should keep None unless a
+maintainer explicitly chooses a package release.
+
 If this product release publishes packages, replace None with the complete
 current npm publish surface and the target package versions:
 
@@ -49,8 +52,11 @@ CI validates this section against .changeset/*.md.
   use bump types such as patch/minor/major.
 - Code-only releases use `Package Releases: - None`; final GitHub Release notes
   omit package information.
+- Scheduled Release Train PRs are code-only by default.
 - Current package releases include `@t3x-dev/local`, `@t3x-dev/yops`, and
   `@t3x-dev/yschema`, so runtime artifacts are required for package releases.
+- `@t3x-dev/local` is paused for scheduled package publishing; publish it only
+  with explicit maintainer intent and runtime/install smoke review.
 - Merging this PR to `main` does not publish by itself unless the follow-up
   Changesets version/publish flow determines a publish is required.
 

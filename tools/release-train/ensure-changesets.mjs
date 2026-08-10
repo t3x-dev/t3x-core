@@ -13,6 +13,18 @@ const bumpRank = new Map([
   ['major', 3],
 ]);
 
+export function normalizeVersionInput(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const normalized = value.trim().replace(/[\u3002\uff0e\uff61]/g, '.');
+  if (normalized.toLowerCase() === 'auto') {
+    return 'auto';
+  }
+  return normalized.replace(/^v(?=\d)/i, '');
+}
+
 function parseArgs(argv) {
   const options = {
     apply: false,
@@ -42,6 +54,8 @@ function parseArgs(argv) {
     }
     throw new Error(`unexpected argument: ${arg}`);
   }
+
+  options.version = normalizeVersionInput(options.version);
 
   if (!options.version || (options.version !== 'auto' && !semverPattern.test(options.version))) {
     throw new Error('--version must be "auto" or a semantic version like 1.1.0');

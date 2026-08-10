@@ -11,13 +11,13 @@ on:
         required: false
         default: auto
       mode:
-        description: "Release mode; auto generates patch changesets when dev has release changes"
+        description: "Release mode; default code-only, auto/package may generate changesets"
         required: true
-        default: auto
+        default: code-only
         type: choice
         options:
-          - auto
           - code-only
+          - auto
           - package
       dry_run:
         description: "Generate the release PR plan without pushing or opening a PR"
@@ -66,7 +66,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Fetch release refs
-        run: git fetch origin main dev
+        run: git fetch origin main dev --tags
 
       - name: Lint and format check
         run: pnpm check
@@ -85,7 +85,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
           RELEASE_TRAIN_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
           RELEASE_TRAIN_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.version || 'auto' }}
-          RELEASE_TRAIN_MODE: ${{ github.event_name == 'schedule' && 'auto' || inputs.mode || 'auto' }}
+          RELEASE_TRAIN_MODE: ${{ github.event_name == 'schedule' && 'code-only' || inputs.mode || 'auto' }}
           RELEASE_TRAIN_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
           RELEASE_TRAIN_DRAFT: ${{ github.event_name == 'schedule' && 'true' || inputs.draft }}
         run: |

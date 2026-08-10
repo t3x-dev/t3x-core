@@ -53,6 +53,13 @@ Release PRs must include:
   `- \`@t3x-dev/local\`: 0.6.0`, `- \`@t3x-dev/yops\`: 0.6.0`, and
   `- \`@t3x-dev/yschema\`: 0.6.0`.
 
+The scheduled Release Train creates draft Product Release PRs in code-only mode
+by default. These PRs should use `Package Releases: - None` unless a maintainer
+manually chooses package release mode. `@t3x-dev/local` remains an existing
+public alpha package, but it is paused for scheduled package publishing because
+the local runtime artifact path needs explicit runtime, install, and no-key demo
+review.
+
 The release PR policy check also validates changeset files:
 
 - `Package Releases: - None` rejects checked-in `.changeset/*.md` files.

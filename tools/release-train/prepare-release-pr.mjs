@@ -16,6 +16,7 @@ import {
 
 const rootUrl = new URL('../..', import.meta.url);
 const rootPath = fileURLToPath(rootUrl);
+const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const bumpRank = new Map([
   ['patch', 1],
   ['minor', 2],
@@ -44,6 +45,18 @@ const ignoredCommitPatterns = [
   /^Merge pull request #\d+ from t3x-dev\/automation\/sync-main-into-dev$/,
   /^Merge remote-tracking branch 'origin\/main' into automation\/sync-main-/,
 ];
+
+export function normalizeVersionInput(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const normalized = value.trim().replace(/[\u3002\uff0e\uff61]/g, '.');
+  if (normalized.toLowerCase() === 'auto') {
+    return 'auto';
+  }
+  return normalized.replace(/^v(?=\d)/i, '');
+}
 
 function parseArgs(argv) {
   const options = {
@@ -90,10 +103,9 @@ function parseArgs(argv) {
     throw new Error(`unexpected argument: ${arg}`);
   }
 
-  if (
-    !options.version ||
-    (options.version !== 'auto' && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(options.version))
-  ) {
+  options.version = normalizeVersionInput(options.version);
+
+  if (!options.version || (options.version !== 'auto' && !semverPattern.test(options.version))) {
     throw new Error('--version must be "auto" or a semantic version like 1.0.1');
   }
   if (!['auto', 'code-only', 'package'].includes(options.mode)) {
@@ -171,6 +183,27 @@ function bumpVersion(version, bump) {
     return `${major}.${minor + 1}.0`;
   }
   return `${major}.${minor}.${patch + 1}`;
+}
+
+function compareVersions(left, right) {
+  const leftMatch = left.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  const rightMatch = right.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!leftMatch || !rightMatch) {
+    throw new Error(`cannot compare non-stable versions: ${left}, ${right}`);
+  }
+
+  const leftParts = leftMatch.slice(1).map(Number);
+  const rightParts = rightMatch.slice(1).map(Number);
+  for (let index = 0; index < leftParts.length; index += 1) {
+    if (leftParts[index] !== rightParts[index]) {
+      return leftParts[index] - rightParts[index];
+    }
+  }
+  return 0;
+}
+
+function highestVersion(versions) {
+  return versions.filter(Boolean).sort(compareVersions).at(-1) ?? null;
 }
 
 function highestBump(entries) {
@@ -361,13 +394,30 @@ export function buildPackagePlan({
   };
 }
 
-function resolveVersion({ requestedVersion, packagePlan, releaseSurface }) {
+function readProductReleaseVersions() {
+  const output = git(['tag', '--list', 't3x-v*']);
+  if (!output) {
+    return [];
+  }
+
+  return output
+    .split('\n')
+    .map((tag) => tag.match(/^t3x-v(\d+\.\d+\.\d+)$/)?.[1])
+    .filter(Boolean);
+}
+
+export function resolveVersion({
+  packagePlan,
+  readProductVersions = readProductReleaseVersions,
+  readVersion = readPackageVersion,
+  releaseSurface,
+  requestedVersion,
+}) {
   if (requestedVersion !== 'auto') {
     return requestedVersion;
   }
-  if (packagePlan.mode === 'package' && packagePlan.packageVersions?.length > 0) {
-    return packagePlan.packageVersions[0].version;
-  }
+
+  const latestProductVersion = highestVersion(readProductVersions());
 
   const firstPackage = releaseSurface.npmPublishPackages
     .map((name) => releaseSurface.packagesByName.get(name))
@@ -375,7 +425,17 @@ function resolveVersion({ requestedVersion, packagePlan, releaseSurface }) {
   if (!firstPackage) {
     throw new Error('cannot infer product release version without npm publish packages');
   }
-  return bumpVersion(readPackageVersion(firstPackage.path), 'patch');
+
+  const fallbackPackageNextVersion = bumpVersion(readVersion(firstPackage.path), 'patch');
+  const nextProductVersion = latestProductVersion
+    ? bumpVersion(latestProductVersion, 'patch')
+    : fallbackPackageNextVersion;
+  const packageTargetVersion =
+    packagePlan.mode === 'package' && packagePlan.packageVersions?.length > 0
+      ? packagePlan.packageVersions[0].version
+      : null;
+
+  return highestVersion([nextProductVersion, packageTargetVersion]) ?? fallbackPackageNextVersion;
 }
 
 function changedSurfaceFiles(changedFiles) {
@@ -499,6 +559,8 @@ ${packagePlan.packageReleases}
 
 - Product release version is independent from npm package versions.
 - Package publish is optional and happens only through Changesets/version PRs.
+- Scheduled Release Train runs default to code-only; package release mode must be selected explicitly.
+- \`@t3x-dev/local\` is paused for scheduled package publishing and requires runtime/install smoke review when package mode is selected.
 - Release train mode: \`${packagePlan.mode}\`.
 - Changesets included: ${changesets.length > 0 ? changesets.map((item) => `\`${item.name}\``).join(', ') : 'None'}.
 - Changed files compared with \`${baseRef}...${headRef}\`: ${changedFiles.length}.
