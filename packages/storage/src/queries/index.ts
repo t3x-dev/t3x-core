@@ -489,6 +489,7 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,
@@ -512,6 +513,7 @@ export {
   findTurnByHash,
   findTurnChain,
   findTurnsByConversation,
+  findTurnsByHashes,
   findTurnsByProject,
   findTurnsInWindow,
   insertTurn,

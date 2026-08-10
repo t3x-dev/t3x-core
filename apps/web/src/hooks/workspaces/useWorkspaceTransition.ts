@@ -32,6 +32,7 @@ export interface WorkspaceTransitionState {
 interface ReviewSession {
   content: WorkspaceTransitionContent;
   precondition: WorkspaceTransitionPrecondition;
+  transitionId: string;
   why?: string;
 }
 
@@ -76,7 +77,12 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
           revision
         );
         if (generationRef.current !== generation) return false;
-        sessionRef.current = { content, precondition: reviewed.precondition, why };
+        sessionRef.current = {
+          content,
+          precondition: reviewed.precondition,
+          transitionId: reviewed.transition_id,
+          why,
+        };
         setState({
           error: null,
           errorCode: null,
@@ -123,6 +129,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
       setState((current) => ({ ...current, error: null, errorCode: null, phase: 'deciding' }));
       try {
         const decided = await decideWorkspaceTransition(candidate.projectId, candidate.id, {
+          transitionId: session.transitionId,
           content: session.content,
           why: session.why,
           outcome,

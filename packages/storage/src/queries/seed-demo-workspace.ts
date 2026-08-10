@@ -25,10 +25,7 @@ import { insertConversation } from './conversations';
 import { getGlobalSetting, setGlobalSetting } from './global-settings';
 import { createLeaf, updateLeafAtomic } from './leaves';
 import { findProjectByIdIncludingDeleted, insertProject } from './projects';
-import {
-  createTransitionCommit,
-  recordRepositoryDecisionAuthorization,
-} from './transition-commits';
+import { createAuthorizedTransitionCommit } from './transition-commits';
 import { insertTurn } from './turns';
 import { insertYOpsLogEntry } from './yops-log';
 
@@ -90,6 +87,8 @@ const DEMO_POLICY = createAcceptancePolicyResource({
   }),
 });
 
+type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
+
 export interface DemoWorkspaceSeedMarker {
   fixture_id: string;
   fixture_version: number;
@@ -121,6 +120,15 @@ export function getDemoWorkspaceSeedKey(ownerId: string | null | undefined): str
 export async function seedDemoWorkspace(
   db: AnyDB,
   options: SeedDemoWorkspaceOptions = {}
+): Promise<SeedDemoWorkspaceResult> {
+  return (db as unknown as TxRunner).transaction((rawTx) =>
+    seedDemoWorkspaceTransaction(rawTx as AnyDB, options)
+  );
+}
+
+async function seedDemoWorkspaceTransaction(
+  db: AnyDB,
+  options: SeedDemoWorkspaceOptions
 ): Promise<SeedDemoWorkspaceResult> {
   const ownerId = options.ownerId ?? null;
   const settingKey = getDemoWorkspaceSeedKey(ownerId);
@@ -363,20 +371,20 @@ async function commitDemoWorkspaceTransition(
       `Demo fixture Decision failed: ${JSON.stringify(issued.ok ? [] : issued.failures)}`
     );
   }
-  await recordRepositoryDecisionAuthorization(db, issued.authorization);
   const objects: ProtocolObject[] = [base, result, ...issued.authorization.objects];
   const object = await createCommitV2({
     parents: [],
     decision: issued.decision,
     resolver: new InMemoryTransitionObjectResolver(objects),
   });
-  const created = await createTransitionCommit(db, {
+  const created = await createAuthorizedTransitionCommit(db, {
     projectId: input.projectId,
     refName: 'main',
     expectedHead: null,
     commit: object,
     objects,
     yopsLogIds: [input.yopsLogId],
+    authorization: issued.authorization,
   });
   return { digest: created.digest, object, recordedAt: input.recordedAt };
 }

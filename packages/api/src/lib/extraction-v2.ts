@@ -4,6 +4,7 @@ import {
   deleteYOpsLogEntry,
   findConversationById,
   findTurnsByConversation,
+  findTurnsByHashes,
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
@@ -16,6 +17,11 @@ export interface ApiExtractionV2Input {
   db: AnyDB;
   conversationId: string;
   turnHashes?: string[];
+  /** Server-resolved repository baseline. When present, conversation YOps logs are ignored. */
+  baselineSnapshot?: {
+    trees: import('@t3x-dev/core').TreeNode[];
+    relations: import('@t3x-dev/core').Relation[];
+  };
   provider?: string;
   model?: string;
   userId?: string;
@@ -53,28 +59,29 @@ export async function runApiExtractionV2(
     };
   }
 
-  const allTurns = await findTurnsByConversation(input.db, {
-    conversationId: input.conversationId,
-    limit: 500,
-  });
-
-  if (allTurns.length === 0) {
-    return {
-      ok: false,
-      kind: 'conversation_not_found',
-      message: 'No turns found for this conversation',
-    };
-  }
-
   const selectedTurns = input.turnHashes
-    ? allTurns.filter((turn) => input.turnHashes?.includes(turn.turnHash))
-    : allTurns;
+    ? await findTurnsByHashes(input.db, {
+        conversationId: input.conversationId,
+        turnHashes: input.turnHashes,
+      })
+    : await findTurnsByConversation(input.db, {
+        conversationId: input.conversationId,
+        limit: 500,
+      });
 
-  if (selectedTurns.length === 0) {
+  if (selectedTurns.length === 0 && input.turnHashes !== undefined) {
     return {
       ok: false,
       kind: 'invalid_request',
       message: 'None of the specified turn_hashes were found',
+    };
+  }
+
+  if (selectedTurns.length === 0) {
+    return {
+      ok: false,
+      kind: 'conversation_not_found',
+      message: 'No turns found for this conversation',
     };
   }
 
@@ -94,23 +101,26 @@ export async function runApiExtractionV2(
     };
   }
 
-  let yopsRecords = input.topicId
-    ? (await listActiveYOpsLogByConversation(input.db, input.conversationId)).filter(
-        (record) => record.topicId === input.topicId
-      )
-    : await listActiveYOpsLogByConversation(input.db, input.conversationId);
+  let replayedSnapshot = input.baselineSnapshot;
+  if (replayedSnapshot === undefined) {
+    let yopsRecords = input.topicId
+      ? (await listActiveYOpsLogByConversation(input.db, input.conversationId)).filter(
+          (record) => record.topicId === input.topicId
+        )
+      : await listActiveYOpsLogByConversation(input.db, input.conversationId);
 
-  if (input.forceExtract && yopsRecords.length > 0) {
-    for (const record of yopsRecords) {
-      await deleteYOpsLogEntry(input.db, record.id);
+    if (input.forceExtract && yopsRecords.length > 0) {
+      for (const record of yopsRecords) {
+        await deleteYOpsLogEntry(input.db, record.id);
+      }
+      yopsRecords = [];
     }
-    yopsRecords = [];
-  }
 
-  const replayedSnapshot = replayEntriesOnBaselineFailFast(
-    await getConversationInheritedBaseline(input.db, input.conversationId),
-    yopsRecords
-  );
+    replayedSnapshot = replayEntriesOnBaselineFailFast(
+      await getConversationInheritedBaseline(input.db, input.conversationId),
+      yopsRecords
+    );
+  }
   const mode: ExtractionMode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
   const result = await extractAndApply({

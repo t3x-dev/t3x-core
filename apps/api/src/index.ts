@@ -101,40 +101,30 @@ async function start() {
     await getDB();
     pinoLogger.info('Database initialized');
 
-    // Start LISTEN relay when running against real Postgres (DATABASE_URL set).
-    // Embedded/local dev skips this — single-process mode doesn't need it.
-    if (!process.env.DATABASE_URL) {
-      pinoLogger.warn(
-        'DATABASE_URL not set — realtime sync relay disabled. ' +
-          'Out-of-process writes (MCP, CLI) will NOT propagate to WebUI in this dev mode. ' +
-          'See packages/storage/REALTIME-SYNC.md.'
-      );
+    // DB triggers are the single event source in both embedded and external
+    // PostgreSQL modes, so every API runtime needs the LISTEN relay.
+    try {
+      await startRealtimeListener({
+        pg: getPostgresClient(),
+        fetchEventById: defaultFetchEventById,
+      });
+    } catch (err) {
+      pinoLogger.error({ err }, 'Failed to start realtime LISTEN relay');
     }
-    if (process.env.DATABASE_URL) {
-      try {
-        await startRealtimeListener({
-          pg: getPostgresClient(),
-          fetchEventById: defaultFetchEventById,
-        });
-      } catch (err) {
-        pinoLogger.error({ err }, 'Failed to start realtime LISTEN relay');
-      }
 
-      // Hourly events outbox cleanup (7-day retention). Each apps/api instance
-      // runs its own cron; DELETE ... WHERE created_at < cutoff is idempotent
-      // and safe to run concurrently across processes.
-      cleanupInterval = setInterval(
-        async () => {
-          try {
-            const count = await cleanupOldEvents(getPostgresDB(), { retentionDays: 7 });
-            pinoLogger.info({ deleted: count }, 'events cleanup ran');
-          } catch (err) {
-            pinoLogger.warn({ err }, 'events cleanup failed');
-          }
-        },
-        60 * 60 * 1000
-      );
-    }
+    // Hourly events outbox cleanup (7-day retention). DELETE by cutoff is
+    // idempotent and safe for both embedded and multi-process deployments.
+    cleanupInterval = setInterval(
+      async () => {
+        try {
+          const count = await cleanupOldEvents(getPostgresDB(), { retentionDays: 7 });
+          pinoLogger.info({ deleted: count }, 'events cleanup ran');
+        } catch (err) {
+          pinoLogger.warn({ err }, 'events cleanup failed');
+        }
+      },
+      60 * 60 * 1000
+    );
 
     // Start background tasks
     startTimeoutChecker();

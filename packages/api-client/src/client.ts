@@ -17,6 +17,8 @@ import type {
   CommitFromDraftInput,
   CommitFromDraftResult,
   CommitRepositoryStateInput,
+  CommitTransitionInput,
+  CommitTransitionResult,
   ContextParams,
   ContextResult,
   Conversation,
@@ -32,6 +34,9 @@ import type {
   CreateShareTokenInput,
   CreateTurnInput,
   CreateWebhookInput,
+  CreateWorkspaceExtractionProposalInput,
+  DecideTransitionInput,
+  DecideTransitionResult,
   DiffResult,
   Draft,
   ExportCfpackInput,
@@ -58,6 +63,7 @@ import type {
   ListLeavesResponse,
   ListPinsResponse,
   ListProjectsResponse,
+  ListRepositoryWorkspacesResponse,
   ListTurnsResponse,
   ListYSchemaArtifactsParams,
   MergeDraft,
@@ -74,6 +80,8 @@ import type {
   PublishWorkspaceYSchemaCompositionInput,
   RenameConversationInput,
   RenameConversationResult,
+  RepositoryWorkspaceCapability,
+  RepositoryWorkspaceEnvelope,
   ShareToken,
   SourceThreadCapability,
   SourceThreadMemory,
@@ -87,6 +95,7 @@ import type {
   VerifyTransitionInput,
   VerifyTransitionResult,
   Webhook,
+  WorkspaceExtractionProposalEnvelope,
   WorkspaceYSchemaCompositionResult,
   YSchemaArtifactManifest,
   YSchemaArtifactRegistryPage,
@@ -98,6 +107,10 @@ export interface T3xClientConfig {
   baseUrl: string;
   headers?: Record<string, string>;
   fetch?: typeof fetch;
+}
+
+export interface T3xRequestOptions {
+  signal?: AbortSignal;
 }
 
 export class T3xApiError extends Error {
@@ -121,6 +134,8 @@ export class T3xClient {
   readonly generation: GenerationCapability;
   /** Durable source metadata, immutable turns, context, and evidence. */
   readonly sourceThreads: SourceThreadCapability;
+  /** Persisted Repository Review Workspace projections. */
+  readonly workspaces: RepositoryWorkspaceCapability;
 
   constructor(config: T3xClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -148,13 +163,20 @@ export class T3xClient {
       evidence: (projectId, conversationId, params) =>
         this.getSourceThreadEvidence(projectId, conversationId, params),
     });
+    this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
+      list: (projectId) => this.listRepositoryWorkspaces(projectId),
+      get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
+      createExtractionProposal: (projectId, workspaceId, input) =>
+        this.createWorkspaceExtractionProposal(projectId, workspaceId, input),
+    });
   }
 
   private async request<T>(
     method: string,
     path: string,
     body?: unknown,
-    query?: Record<string, string | number | undefined>
+    query?: Record<string, string | number | undefined>,
+    options?: T3xRequestOptions
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
 
@@ -170,6 +192,7 @@ export class T3xClient {
       method,
       headers: this.headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: options?.signal,
     });
 
     const data = (await response.json()) as ApiResponse<T>;
@@ -829,6 +852,35 @@ export class T3xClient {
     return this.request<ExtractResult>('POST', '/v1/extract', input);
   }
 
+  async listRepositoryWorkspaces(projectId: string): Promise<ListRepositoryWorkspacesResponse> {
+    return this.request<ListRepositoryWorkspacesResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces`
+    );
+  }
+
+  async getRepositoryWorkspace(
+    projectId: string,
+    workspaceId: string
+  ): Promise<RepositoryWorkspaceEnvelope> {
+    return this.request<RepositoryWorkspaceEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
+  }
+
+  async createWorkspaceExtractionProposal(
+    projectId: string,
+    workspaceId: string,
+    input: CreateWorkspaceExtractionProposalInput
+  ): Promise<WorkspaceExtractionProposalEnvelope> {
+    return this.request<WorkspaceExtractionProposalEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/extraction-proposals`,
+      input
+    );
+  }
+
   async check(input: CheckInput): Promise<CheckResult> {
     return this.request<CheckResult>('POST', '/v1/check', input);
   }
@@ -856,18 +908,22 @@ export class T3xClient {
   ): Promise<ProposeTransitionResult> {
     return this.request<ProposeTransitionResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions`,
       input
     );
   }
 
   async inspectTransition(
     projectId: string,
-    transitionId: string
+    transitionId: string,
+    options?: T3xRequestOptions
   ): Promise<InspectTransitionResult> {
     return this.request<InspectTransitionResult>(
       'GET',
-      `/v1/projects/${projectId}/transitions/${transitionId}`
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}`,
+      undefined,
+      undefined,
+      options
     );
   }
 
@@ -878,7 +934,7 @@ export class T3xClient {
   ): Promise<VerifyTransitionResult> {
     return this.request<VerifyTransitionResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions/${transitionId}/verify`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/verify`,
       input
     );
   }
@@ -890,7 +946,31 @@ export class T3xClient {
   ): Promise<AttachTransitionStatementResult> {
     return this.request<AttachTransitionStatementResult>(
       'POST',
-      `/v1/projects/${projectId}/transitions/${transitionId}/statements`,
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/statements`,
+      input
+    );
+  }
+
+  async decideTransition(
+    projectId: string,
+    transitionId: string,
+    input: DecideTransitionInput
+  ): Promise<DecideTransitionResult> {
+    return this.request<DecideTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/decisions`,
+      input
+    );
+  }
+
+  async commitTransition(
+    projectId: string,
+    transitionId: string,
+    input: CommitTransitionInput
+  ): Promise<CommitTransitionResult> {
+    return this.request<CommitTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/commits`,
       input
     );
   }

@@ -1,3 +1,4 @@
+import type { SourcedYOp } from '@t3x-dev/core';
 import type { SchemaCompositionDraft } from './schemaModules';
 import type { WorkspaceYOpsValue } from './workspaceYops';
 
@@ -91,6 +92,19 @@ export interface WorkspaceCandidate {
   sourceArtifact?: WorkspaceSourceArtifact;
   lastCommitHash?: string;
   commitOverride?: WorkspaceValidationOverride & { confirmedAt?: string };
+  backendCandidateId?: string;
+  extractionProposal?: WorkspaceExtractionProposal;
+}
+
+export interface WorkspaceExtractionProposal {
+  schema: 't3x.dev/workspace-extraction-proposal/v1';
+  sourceSelector: { type: 'conversation'; id: string; turnHashes: string[] };
+  sourceSelectorDigest: string;
+  baseCommitHash: string | null;
+  mode: 'bootstrap' | 'incremental';
+  operations: SourcedYOp[];
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  createdAt: string;
 }
 
 export interface WorkspaceValidationOverride {

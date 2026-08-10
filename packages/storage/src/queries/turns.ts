@@ -5,7 +5,7 @@
  */
 
 import { type ContentBlock, computeTurnHash } from '@t3x-dev/core';
-import { and, asc, desc, eq, gt, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Turn, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
@@ -92,6 +92,29 @@ export async function findTurnByHash(db: AnyDB, turnHash: string): Promise<Turn 
   const [turn] = await db.select().from(turns).where(eq(turns.turnHash, turnHash)).limit(1);
 
   return turn ?? null;
+}
+
+/**
+ * Resolve an exact immutable turn selection within one conversation.
+ *
+ * Callers that already have turn hashes must not approximate the selection by
+ * loading an arbitrary prefix of a potentially long conversation.
+ */
+export async function findTurnsByHashes(
+  db: AnyDB,
+  input: { conversationId: string; turnHashes: readonly string[] }
+): Promise<Turn[]> {
+  if (input.turnHashes.length === 0) return [];
+  return db
+    .select()
+    .from(turns)
+    .where(
+      and(
+        eq(turns.conversationId, input.conversationId),
+        inArray(turns.turnHash, [...input.turnHashes])
+      )
+    )
+    .orderBy(asc(turns.createdAt), asc(turns.turnHash));
 }
 
 /**

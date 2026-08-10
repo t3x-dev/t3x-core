@@ -1,4 +1,4 @@
-import { describeTransitionObject } from '@t3x-dev/core';
+import { type ApiKey, describeTransitionObject } from '@t3x-dev/core';
 import { ConflictError, TransitionHeadConflictError } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -164,6 +164,7 @@ const mockCommitV2 = {
   },
 };
 const mockCommitDigest = describeTransitionObject(mockCommitV2).digest;
+const mockTransitionId = `trn_${'1'.repeat(32)}`;
 const mockPrecondition = {
   workspaceRevision: 1,
   refHead: null,
@@ -199,6 +200,16 @@ describe('Workspace routes', () => {
 
   app.route('/', workspaceRoutes);
 
+  function appWithApiKey(apiKey: ApiKey) {
+    const authenticatedApp = new Hono();
+    authenticatedApp.use('*', async (context, next) => {
+      context.set('apiKey', apiKey);
+      await next();
+    });
+    authenticatedApp.route('/', workspaceRoutes);
+    return authenticatedApp;
+  }
+
   beforeEach(() => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
@@ -210,6 +221,7 @@ describe('Workspace routes', () => {
     storageMock.upsertWorkspaceDraft.mockClear();
     transitionMock.reviewWorkspaceTransition.mockReset();
     transitionMock.reviewWorkspaceTransition.mockResolvedValue({
+      transitionId: mockTransitionId,
       transition: {},
       precondition: mockPrecondition,
     });
@@ -218,6 +230,7 @@ describe('Workspace routes', () => {
       (
         _db: unknown,
         input: {
+          transitionId?: string;
           precondition: typeof mockPrecondition;
           workspaceCommitOverride?: {
             kind: string;
@@ -227,6 +240,7 @@ describe('Workspace routes', () => {
         }
       ) =>
         Promise.resolve({
+          transitionId: input.transitionId ?? mockTransitionId,
           transition: {},
           precondition: input.precondition,
           decisionDigest: mockCommitV2.decision.digest,
@@ -237,6 +251,22 @@ describe('Workspace routes', () => {
           ),
         })
     );
+  });
+
+  it.each([
+    '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+    '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/decide',
+  ])('does not publish retirement metadata before canonical parity: %s', async (path) => {
+    const response = await app.request(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.has('Deprecation')).toBe(false);
+    expect(response.headers.has('Link')).toBe(false);
+    expect(response.headers.has('Sunset')).toBe(false);
   });
 
   it('rejects client-supplied trust facts on Transition review requests', async () => {
@@ -254,6 +284,99 @@ describe('Workspace routes', () => {
 
     expect(res.status).toBe(400);
     expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
+  });
+
+  it('allows agent principals to inspect Workspaces but not impersonate human review', async () => {
+    const agentApp = appWithApiKey({
+      id: 'ak_workspace_agent',
+      key_prefix: 't3xk_test',
+      key_hash: 'test-hash',
+      name: 'Workspace agent',
+      project_id: 'proj_sources',
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: ['transition:inspect', 'transition:propose'],
+      created_at: '2026-08-05T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    });
+
+    const listed = await agentApp.request('/v1/projects/proj_sources/workspaces');
+    expect(listed.status).toBe(200);
+
+    const reviewed = await agentApp.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: { trees: [], relations: [] } }),
+      }
+    );
+    expect(reviewed.status).toBe(403);
+    await expect(reviewed.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'FORBIDDEN',
+          message: 'Workspace review and commit require a human principal',
+        }),
+      })
+    );
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
+  });
+
+  it('returns and binds the durable Transition identity across review and decide', async () => {
+    const content = { trees: [], relations: [] };
+    const reviewed = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, if_revision: 1 }),
+      }
+    );
+    expect(reviewed.status).toBe(200);
+    await expect(reviewed.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ transition_id: mockTransitionId }),
+      })
+    );
+    transitionMock.decideWorkspaceTransition.mockResolvedValueOnce({
+      transitionId: mockTransitionId,
+      transition: {},
+      precondition: mockPrecondition,
+      decisionDigest: mockCommitV2.decision.digest,
+    });
+
+    const decided = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/decide',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transition_id: mockTransitionId,
+          content,
+          outcome: 'accepted',
+          precondition: {
+            workspace_revision: mockPrecondition.workspaceRevision,
+            ref_head: mockPrecondition.refHead,
+            effect_digest: mockPrecondition.effectDigest,
+            proposal_digest: mockPrecondition.proposalDigest,
+            statement_digests: mockPrecondition.statementDigests,
+            policy_digest: mockPrecondition.policyDigest,
+          },
+        }),
+      }
+    );
+    expect(decided.status).toBe(200);
+    await expect(decided.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ transition_id: mockTransitionId }),
+      })
+    );
+    expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ transitionId: mockTransitionId })
+    );
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {

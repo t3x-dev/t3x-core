@@ -1,3 +1,4 @@
+import { T3xApiError } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import type {
   WorkspaceCandidate,
@@ -6,7 +7,8 @@ import type {
   WorkspaceValidationOverride,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
-import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
+import { getSharedApiClient } from './sharedApiClient';
 
 interface ProjectWorkspacesResponse {
   workspaces: WorkspaceCandidate[];
@@ -16,6 +18,18 @@ export interface WorkspaceSaveResponse {
   candidate_id: string;
   yops_draft_id?: string;
   workspace: WorkspaceCandidate;
+}
+
+export interface WorkspaceExtractionTransitionLink {
+  transition_id: string;
+  candidate_id: string;
+  workspace_revision: number;
+  created_at: string;
+}
+
+export interface WorkspaceControlPlaneTransitionResponse {
+  transition_id: string;
+  view: { transition: TransitionViewV1 };
 }
 
 export interface WorkspaceCommitResponse extends WorkspaceSaveResponse {
@@ -39,6 +53,7 @@ export interface WorkspaceTransitionPrecondition {
 }
 
 export interface WorkspaceTransitionReviewResponse {
+  transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
 }
@@ -82,6 +97,7 @@ export type WorkspaceSourceRunnerStatus =
   | { mode: 'statement'; statementDigest: string; outcome: 'passed' | 'failed' };
 
 export interface WorkspaceSourceTransitionReviewResponse {
+  transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
   runner: WorkspaceSourceRunnerStatus;
@@ -108,6 +124,35 @@ export async function listProjectWorkspaces(projectId: string): Promise<Workspac
   );
   const data = await handleResponse<ProjectWorkspacesResponse>(res);
   return data.workspaces;
+}
+
+export async function getWorkspaceExtractionTransitionLink(
+  projectId: string,
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceExtractionTransitionLink> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
+      workspaceId
+    )}/extraction-transition`,
+    { signal }
+  );
+  return handleResponse<WorkspaceExtractionTransitionLink>(res);
+}
+
+export async function getWorkspaceControlPlaneTransition(
+  projectId: string,
+  transitionId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceControlPlaneTransitionResponse> {
+  try {
+    return await getSharedApiClient().inspectTransition(projectId, transitionId, { signal });
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      throw new ApiError(error.code, error.message, error.details);
+    }
+    throw error;
+  }
 }
 
 export async function saveProjectWorkspace(
@@ -184,6 +229,7 @@ export async function decideProjectWorkspaceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     content: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
@@ -197,6 +243,7 @@ export async function decideProjectWorkspaceTransition(
     )}/transition/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         content: input.content,
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,
@@ -244,6 +291,7 @@ export async function decideProjectWorkspaceSourceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     artifact: WorkspaceSourceArtifact;
     change: WorkspaceSourceChange;
     why?: string;
@@ -258,6 +306,7 @@ export async function decideProjectWorkspaceSourceTransition(
     )}/source-transition/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         artifact: sourceArtifactToWire(input.artifact),
         change: sourceChangeToWire(input.change),
         ...(input.why ? { why: input.why } : {}),
@@ -304,6 +353,7 @@ export async function decideProjectWorkspaceSourceRevert(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     commitId: string;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
@@ -317,6 +367,7 @@ export async function decideProjectWorkspaceSourceRevert(
     )}/source-transition/revert/decide`,
     {
       body: JSON.stringify({
+        transition_id: input.transitionId,
         commit_id: input.commitId,
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,

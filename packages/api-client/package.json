@@ -21,6 +21,7 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
+    "@t3x-dev/core": "workspace:*",
     "zod": "^4.2.1"
   },
   "devDependencies": {

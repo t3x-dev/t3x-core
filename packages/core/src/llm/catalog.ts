@@ -11,9 +11,11 @@ const MODEL_ALIASES: Record<string, string> = {
   o1: 'gpt-5.4',
   'o1-mini': 'gpt-5.4-mini',
   'gemini-3.1-pro-preview': 'gemini-2.5-pro',
-  'gemini-2.5-flash': 'gemini-3-flash-preview',
-  'gemini-2.5-flash-lite': 'gemini-3.1-flash-lite-preview',
-  'gemini-2.0-flash': 'gemini-3-flash-preview',
+  'gemini-3-flash-preview': 'gemini-3.6-flash',
+  'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+  'gemini-2.5-flash': 'gemini-3.6-flash',
+  'gemini-2.5-flash-lite': 'gemini-3.1-flash-lite',
+  'gemini-2.0-flash': 'gemini-3.6-flash',
 };
 
 export const MODEL_CATALOG: Record<ProviderName, Record<string, ModelInfo>> = {
@@ -22,21 +24,21 @@ export const MODEL_CATALOG: Record<ProviderName, Record<string, ModelInfo>> = {
       id: 'claude-sonnet-4-6',
       label: 'Claude Sonnet 4.6',
       provider: 'anthropic',
-      capabilities: ['tool_use'],
+      capabilities: ['tool_use', 'structured_output'],
       maxOutputTokens: 65536,
     },
     'claude-opus-4-6': {
       id: 'claude-opus-4-6',
       label: 'Claude Opus 4.6',
       provider: 'anthropic',
-      capabilities: ['tool_use'],
+      capabilities: ['tool_use', 'structured_output'],
       maxOutputTokens: 131072,
     },
     'claude-haiku-4-5-20251001': {
       id: 'claude-haiku-4-5-20251001',
       label: 'Claude Haiku 4.5',
       provider: 'anthropic',
-      capabilities: ['tool_use'],
+      capabilities: ['tool_use', 'structured_output'],
       maxOutputTokens: 65536,
     },
   },
@@ -71,16 +73,16 @@ export const MODEL_CATALOG: Record<ProviderName, Record<string, ModelInfo>> = {
       capabilities: ['function_calling', 'structured_output'],
       maxOutputTokens: 65536,
     },
-    'gemini-3-flash-preview': {
-      id: 'gemini-3-flash-preview',
-      label: 'Gemini 3 Flash Preview',
+    'gemini-3.6-flash': {
+      id: 'gemini-3.6-flash',
+      label: 'Gemini 3.6 Flash',
       provider: 'google',
       capabilities: ['function_calling', 'structured_output'],
       maxOutputTokens: 65536,
     },
-    'gemini-3.1-flash-lite-preview': {
-      id: 'gemini-3.1-flash-lite-preview',
-      label: 'Gemini 3.1 Flash-Lite Preview',
+    'gemini-3.1-flash-lite': {
+      id: 'gemini-3.1-flash-lite',
+      label: 'Gemini 3.1 Flash-Lite',
       provider: 'google',
       capabilities: ['function_calling', 'structured_output'],
       maxOutputTokens: 65536,

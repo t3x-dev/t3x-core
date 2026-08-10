@@ -10,10 +10,13 @@ import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
 import {
   createTransitionProposalMembership,
+  digestTransitionPreparationCanonicalJson,
   digestTransitionRequestCanonicalJson,
   getTransitionProposalMembership,
+  listTransitionProposalsForWorkspaceRevision,
   listTransitionStatementMemberships,
   recordTransitionStatementMembership,
+  recordTransitionStatementMemberships,
   resolveTransitionProposalGraph,
   TransitionMembershipIntegrityError,
   TransitionMembershipNotFoundError,
@@ -148,6 +151,91 @@ describe('Transition proposal and Statement memberships', () => {
     ).rejects.toBeInstanceOf(TransitionRequestConflictError);
   });
 
+  it('binds immutable server preparation without changing client request identity', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Project' }));
+    const input = membershipInput(project.projectId, 'preparation');
+    const preparationCanonicalJson =
+      '{"artifact":{"format":"example/source/v1","root_path":"device.yaml"}}';
+    const prepared = {
+      ...input,
+      preparationCanonicalJson,
+      preparationDigest: digestTransitionPreparationCanonicalJson(preparationCanonicalJson),
+    };
+
+    const first = await createTransitionProposalMembership(db, prepared);
+    const second = await createTransitionProposalMembership(db, prepared);
+    expect(second).toEqual({ membership: first.membership, reused: true });
+
+    const resolved = await resolveTransitionProposalGraph(
+      db,
+      project.projectId,
+      first.membership.transitionId
+    );
+    expect(resolved.preparation).toMatchObject({
+      transitionId: first.membership.transitionId,
+      canonicalJson: preparationCanonicalJson,
+      digest: prepared.preparationDigest,
+    });
+
+    const changedPreparation = '{"artifact":{"root_path":"changed.yaml"}}';
+    await expect(
+      createTransitionProposalMembership(db, {
+        ...input,
+        preparationCanonicalJson: changedPreparation,
+        preparationDigest: digestTransitionPreparationCanonicalJson(changedPreparation),
+      })
+    ).rejects.toBeInstanceOf(TransitionRequestConflictError);
+  });
+
+  it('keeps only the winning preparation under a concurrent request conflict', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Race' }));
+    const input = membershipInput(project.projectId, 'preparation-race');
+    const preparations = ['device-a.yaml', 'device-b.yaml'].map((rootPath) => {
+      const canonicalJson = `{"artifact":{"root_path":"${rootPath}"}}`;
+      return {
+        ...input,
+        preparationCanonicalJson: canonicalJson,
+        preparationDigest: digestTransitionPreparationCanonicalJson(canonicalJson),
+      };
+    });
+
+    const runs = await Promise.allSettled(
+      preparations.map((prepared) => createTransitionProposalMembership(db, prepared))
+    );
+    expect(runs.map((run) => run.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const winner = runs.find((run) => run.status === 'fulfilled');
+    if (winner?.status !== 'fulfilled') throw new Error('Concurrent preparation had no winner');
+    const resolved = await resolveTransitionProposalGraph(
+      db,
+      project.projectId,
+      winner.value.membership.transitionId
+    );
+    expect(preparations.map((prepared) => prepared.preparationCanonicalJson)).toContain(
+      resolved.preparation?.canonicalJson
+    );
+  });
+
+  it('lists only Proposals bound to the exact Workspace revision', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Workspace Revision List' }));
+    const first = membershipInput(project.projectId, 'workspace-list-first');
+    const secondFacts = membershipInput(project.projectId, 'workspace-list-second');
+    const second = {
+      ...secondFacts,
+      workspaceId: first.workspaceId,
+      workspaceRevision: 2,
+    };
+    const createdFirst = await createTransitionProposalMembership(db, first);
+    await createTransitionProposalMembership(db, second);
+
+    await expect(
+      listTransitionProposalsForWorkspaceRevision(db, {
+        projectId: project.projectId,
+        workspaceId: first.workspaceId,
+        workspaceRevision: 1,
+      })
+    ).resolves.toEqual([createdFirst.membership]);
+  });
+
   it('does not resolve a Transition through another project membership', async () => {
     const owner = await insertProject(db, testData.project({ name: 'Owner Project' }));
     const other = await insertProject(db, testData.project({ name: 'Other Project' }));
@@ -209,6 +297,124 @@ describe('Transition proposal and Statement memberships', () => {
     );
   });
 
+  it('prevalidates a Statement batch before exposing any new membership', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Statement batch' }));
+    const input = membershipInput(project.projectId, 'statement-batch');
+    const created = await createTransitionProposalMembership(db, input);
+    const requestId = 'verify:statement-batch';
+    const requestDigest = digestTransitionRequestCanonicalJson('{"operation":"verify"}');
+    await recordTransitionStatementMembership(db, {
+      projectId: project.projectId,
+      transitionId: created.membership.transitionId,
+      statement: externalStatement(input),
+      source: 'provider:existing',
+      issuer: ISSUER,
+      requestId,
+      requestDigest,
+    });
+    const newIssuer = { kind: 'service' as const, id: 'service:new-verifier' };
+    const newStatement = parseStatement({
+      schema: 't3x/statement/v1',
+      subjects: [input.effect.result],
+      actor: newIssuer,
+      predicateType: 'example.test/new-validation/v1',
+      predicate: { outcome: 'passed' },
+    });
+
+    await expect(
+      recordTransitionStatementMemberships(db, [
+        {
+          projectId: project.projectId,
+          transitionId: created.membership.transitionId,
+          statement: newStatement,
+          source: 'provider:new',
+          issuer: newIssuer,
+          requestId,
+          requestDigest,
+        },
+        {
+          projectId: project.projectId,
+          transitionId: created.membership.transitionId,
+          statement: externalStatement(input, 'failed'),
+          source: 'provider:existing',
+          issuer: ISSUER,
+          requestId,
+          requestDigest,
+        },
+      ])
+    ).rejects.toBeInstanceOf(TransitionStatementConflictError);
+
+    const memberships = await listTransitionStatementMemberships(
+      db,
+      project.projectId,
+      created.membership.transitionId
+    );
+    expect(memberships.map((membership) => membership.source)).toEqual(['provider:existing']);
+  });
+
+  it('rolls back the losing concurrent Statement batch without exposing its unique member', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Concurrent batch' }));
+    const input = membershipInput(project.projectId, 'concurrent-statement-batch');
+    const created = await createTransitionProposalMembership(db, input);
+    const requestId = 'verify:concurrent-statement-batch';
+    const requestDigest = digestTransitionRequestCanonicalJson('{"operation":"verify"}');
+    const statement = (issuer: Statement['actor'], predicateType: string, outcome: string) =>
+      parseStatement({
+        schema: 't3x/statement/v1',
+        subjects: [input.effect.result],
+        actor: issuer,
+        predicateType,
+        predicate: { outcome },
+      });
+    const shared = {
+      projectId: project.projectId,
+      transitionId: created.membership.transitionId,
+      source: 'provider:shared',
+      issuer: ISSUER,
+      requestId,
+      requestDigest,
+    };
+    const issuerA = { kind: 'service' as const, id: 'service:batch-a' };
+    const issuerB = { kind: 'service' as const, id: 'service:batch-b' };
+    const runs = await Promise.allSettled([
+      recordTransitionStatementMemberships(db, [
+        {
+          ...shared,
+          statement: statement(ISSUER, 'example.test/shared/v1', 'passed'),
+        },
+        {
+          ...shared,
+          statement: statement(issuerA, 'example.test/unique-a/v1', 'passed'),
+          source: 'provider:unique-a',
+          issuer: issuerA,
+        },
+      ]),
+      recordTransitionStatementMemberships(db, [
+        {
+          ...shared,
+          statement: statement(ISSUER, 'example.test/shared/v1', 'failed'),
+        },
+        {
+          ...shared,
+          statement: statement(issuerB, 'example.test/unique-b/v1', 'passed'),
+          source: 'provider:unique-b',
+          issuer: issuerB,
+        },
+      ]),
+    ]);
+
+    expect(runs.map((run) => run.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const memberships = await listTransitionStatementMemberships(
+      db,
+      project.projectId,
+      created.membership.transitionId
+    );
+    const sources = memberships.map((membership) => membership.source).sort();
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toBe('provider:shared');
+    expect(['provider:unique-a', 'provider:unique-b']).toContain(sources[1]);
+  });
+
   it('rejects claimed issuer spoofing and subjects outside the Transition graph', async () => {
     const project = await insertProject(db, testData.project({ name: 'Forgery Project' }));
     const input = membershipInput(project.projectId, 'forgery');
@@ -260,12 +466,37 @@ describe('Transition proposal and Statement memberships', () => {
     ).rejects.toBeInstanceOf(TransitionMembershipIntegrityError);
   });
 
+  it('rejects tampered server preparation before a provider can consume it', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Preparation Tamper' }));
+    const input = membershipInput(project.projectId, 'preparation-tamper');
+    const preparationCanonicalJson = '{"artifact":{"root_path":"device.yaml"}}';
+    const created = await createTransitionProposalMembership(db, {
+      ...input,
+      preparationCanonicalJson,
+      preparationDigest: digestTransitionPreparationCanonicalJson(preparationCanonicalJson),
+    });
+
+    await sql`
+      UPDATE transition_proposal_preparations
+      SET canonical_json = ${'{"artifact":{"root_path":"tampered.yaml"}}'}
+      WHERE transition_id = ${created.membership.transitionId}
+    `;
+
+    await expect(
+      resolveTransitionProposalGraph(db, project.projectId, created.membership.transitionId)
+    ).rejects.toBeInstanceOf(TransitionMembershipIntegrityError);
+  });
+
   it('stores no mutable lifecycle status in either membership table', async () => {
     const columns = await sql<{ table_name: string; column_name: string }[]>`
       SELECT table_name, column_name
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name IN ('transition_proposal_memberships', 'transition_statement_memberships')
+        AND table_name IN (
+          'transition_proposal_memberships',
+          'transition_proposal_preparations',
+          'transition_statement_memberships'
+        )
     `;
     expect(columns.map((column) => column.column_name)).not.toContain('status');
     expect(columns.map((column) => column.column_name)).not.toContain('outcome');

@@ -4,15 +4,19 @@ import {
   createYOpsState,
   describeTransitionObject,
   type ProposalStatement,
+  sha256,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
   createTransitionProposalMembership,
   digestTransitionRequestCanonicalJson,
   ensureMainBranch,
+  insertConversation,
   insertProject,
+  insertTurn,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
+import { canonicalizeProtocolValue, type ProtocolValue, parseStatement } from '@t3x-dev/transition';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
@@ -80,6 +84,62 @@ function proposeBody(requestId: string, workspaceId: string) {
   };
 }
 
+function extractionCandidate(workspaceId: string, sourceThreadId: string, turnHash: string) {
+  const sourceSelector = {
+    type: 'conversation' as const,
+    id: sourceThreadId,
+    turnHashes: [turnHash],
+  };
+  const sourceSelectorDigest = `sha256:${sha256(
+    `t3x-workspace-extraction-source-selector-v1\0${canonicalizeProtocolValue(sourceSelector)}`
+  )}`;
+  const operations = [
+    {
+      set: { path: 'device/name', value: 'server-selected' },
+      source: {
+        type: 'llm',
+        model: 'test',
+        at: '2026-08-05T00:00:00.000Z',
+        turn_ref: { turn_hash: turnHash, quote: 'server selected' },
+      },
+    },
+  ];
+  const candidateFacts = {
+    sourceSelectorDigest,
+    baseCommitHash: null,
+    operations,
+  };
+  const candidateId = `candidate:${sha256(
+    `t3x-workspace-extraction-candidate-v1\0${canonicalizeProtocolValue(
+      candidateFacts as ProtocolValue
+    )}`
+  )}`;
+  return {
+    candidateId,
+    workspaceState: {
+      id: workspaceId,
+      projectId: '',
+      title: `Workspace ${workspaceId}`,
+      targetBranch: 'main',
+      backendCandidateId: candidateId,
+      extractionProposal: {
+        schema: 't3x.dev/workspace-extraction-proposal/v1',
+        sourceSelector,
+        sourceSelectorDigest,
+        baseCommitHash: null,
+        mode: 'bootstrap',
+        operations,
+        result: {
+          trees: [{ key: 'device', slots: { name: 'server-selected' }, children: [] }],
+          relations: [],
+        },
+        actor: { kind: 'agent', id: 'agent:extractor' },
+        createdAt: '2026-08-05T00:00:00.000Z',
+      },
+    },
+  };
+}
+
 async function jsonRequest(instance: Hono, path: string, body: unknown) {
   return instance.request(path, {
     method: 'POST',
@@ -99,6 +159,96 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('Transition control-plane routes', () => {
+  it('loads canonical YOps from a Workspace extraction candidate and reuses exact retries', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Extraction Proposal' }));
+    await ensureMainBranch(mockDB, project.projectId);
+    const workspaceId = 'ws_extraction_transition';
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Immutable extraction Source',
+    });
+    const turn = await insertTurn(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      role: 'user',
+      content: 'Use the server selected device name.',
+    });
+    const candidate = extractionCandidate(workspaceId, conversation.conversationId, turn.turnHash);
+    const draft = await upsertWorkspaceDraft(mockDB, {
+      project_id: project.projectId,
+      workspace_id: workspaceId,
+      title: `Workspace ${workspaceId}`,
+      target_branch: 'main',
+      workspace_state: { ...candidate.workspaceState, projectId: project.projectId },
+    });
+    const instance = app({
+      apiKey: key(project.projectId, ['transition:propose', 'transition:inspect']),
+    });
+    const body = {
+      kind: 'structured_yops',
+      request_id: 'proposal:workspace-extraction',
+      workspace_id: workspaceId,
+      extraction_candidate_id: candidate.candidateId,
+      if_revision: draft.revision,
+    };
+
+    const proposed = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions`,
+      body
+    );
+    const proposedJson = (await proposed.json()) as {
+      data: {
+        reused: boolean;
+        view: {
+          request_kind: string;
+          transition: { change: { operations: unknown[] }; claims: { actor: unknown } };
+        };
+      };
+    };
+    expect(proposed.status, JSON.stringify(proposedJson)).toBe(200);
+    const payload = proposedJson;
+    expect(payload.data.reused).toBe(false);
+    expect(payload.data.view).toMatchObject({
+      request_kind: 'structured_yops',
+      transition: {
+        change: {
+          operations: [{ set: { path: 'device/name', value: 'server-selected' } }],
+        },
+        claims: {
+          actor: {
+            kind: 'agent',
+            id: 'agent:api-key:ak_transition:propose_transition:inspect',
+          },
+        },
+      },
+    });
+
+    await upsertWorkspaceDraft(
+      mockDB,
+      {
+        project_id: project.projectId,
+        workspace_id: workspaceId,
+        title: `Workspace ${workspaceId}`,
+        target_branch: 'main',
+        workspace_state: {
+          ...candidate.workspaceState,
+          projectId: project.projectId,
+          backendCandidateId: 'candidate:replaced',
+          extractionProposal: undefined,
+        },
+      },
+      draft.revision
+    );
+    const repeated = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions`,
+      body
+    );
+    expect(repeated.status).toBe(200);
+    await expect(repeated.json()).resolves.toMatchObject({ data: { reused: true } });
+  });
+
   it('keeps propose, inspect, verify, and Statement authority independently scoped', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Scoped Control Plane' }));
     await createWorkspace(project.projectId, 'ws_scoped');
@@ -216,10 +366,15 @@ describe('Transition control-plane routes', () => {
     );
     expect(repeated.status).toBe(200);
     const repeatedPayload = (await repeated.json()) as {
-      data: { reused: boolean; statements: unknown[] };
+      data: {
+        reused: boolean;
+        statements: unknown[];
+        operational_results: Array<{ source: string; outcome: string }>;
+      };
     };
     expect(repeatedPayload.data).toMatchObject({ reused: true });
     expect(repeatedPayload.data.statements).toHaveLength(2);
+    expect(repeatedPayload.data.operational_results).toEqual(firstPayload.data.operational_results);
 
     const nextRun = await jsonRequest(
       instance,
@@ -274,6 +429,116 @@ describe('Transition control-plane routes', () => {
       }
     );
     expect(unallowed.status).toBe(400);
+  });
+
+  it('accepts native profile Statements but rejects forged authority and foreign subjects', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Native providers' }));
+    await createWorkspace(project.projectId, 'ws_native_provider');
+    const predicateType = 'example.test/native-validation/v1';
+    const nativeIssuer = { kind: 'service' as const, id: 'service:native-validation' };
+    const options: TransitionControlPlaneOptions = {
+      nativeProviders: [
+        {
+          source: 'native:valid',
+          issuer: nativeIssuer,
+          predicateTypes: [predicateType],
+          async verify(input) {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(input.result)],
+                actor: nativeIssuer,
+                predicateType,
+                predicate: { outcome: 'passed', run: input.run },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:forged-issuer',
+          issuer: { kind: 'service', id: 'service:expected' },
+          predicateTypes: [predicateType],
+          async verify(input) {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(input.result)],
+                actor: { kind: 'service', id: 'service:forged' },
+                predicateType,
+                predicate: { outcome: 'passed' },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:foreign-subject',
+          issuer: { kind: 'service', id: 'service:foreign-subject' },
+          predicateTypes: [predicateType],
+          async verify() {
+            return {
+              outcome: 'statement',
+              statement: parseStatement({
+                schema: 't3x/statement/v1',
+                subjects: [describeTransitionObject(createYOpsState({ foreign: true }))],
+                actor: { kind: 'service', id: 'service:foreign-subject' },
+                predicateType,
+                predicate: { outcome: 'passed' },
+              }),
+            };
+          },
+        },
+        {
+          source: 'native:not-applicable',
+          issuer: { kind: 'service', id: 'service:not-applicable' },
+          predicateTypes: [predicateType],
+          async verify() {
+            return { outcome: 'not_applicable' };
+          },
+        },
+      ],
+    };
+    const instance = app({
+      apiKey: key(project.projectId, [
+        'transition:propose',
+        'transition:inspect',
+        'transition:verify',
+      ]),
+      options,
+    });
+    const proposed = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions`,
+      proposeBody('proposal:native-provider', 'ws_native_provider')
+    );
+    const proposal = (await proposed.json()) as { data: { transition_id: string } };
+    const verified = await jsonRequest(
+      instance,
+      `/v1/projects/${project.projectId}/transitions/${proposal.data.transition_id}/verify`,
+      { request_id: 'verify:native-provider' }
+    );
+    expect(verified.status).toBe(200);
+    const payload = (await verified.json()) as {
+      data: {
+        statements: Array<{ source: string }>;
+        operational_results: Array<{ source: string; outcome: string; message: string }>;
+      };
+    };
+    expect(payload.data.statements.map((statement) => statement.source).sort()).toEqual([
+      'native:valid',
+      'server:replay',
+    ]);
+    expect(payload.data.operational_results).toEqual([
+      expect.objectContaining({ source: 'native:foreign-subject', outcome: 'failed' }),
+      expect.objectContaining({ source: 'native:forged-issuer', outcome: 'failed' }),
+    ]);
+    expect(
+      payload.data.operational_results.some((result) => result.message.includes('another actor'))
+    ).toBe(true);
+    expect(
+      payload.data.operational_results.some((result) => result.message.includes('another graph'))
+    ).toBe(true);
   });
 
   it('denies every cross-scope operation and a wrong-project credential', async () => {

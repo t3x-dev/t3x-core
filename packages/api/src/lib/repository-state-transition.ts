@@ -1,11 +1,9 @@
 import {
-  authorizeDecisionForRepository,
   buildReplayVerificationStatement,
   COMMIT_V2_MEDIA_TYPE,
   type CommitV2,
   compileProposalDraft,
   createAcceptancePolicyResource,
-  createCommitV2,
   createHumanProposalDraft,
   createRepositorySemanticState,
   createSemanticMergeEffect,
@@ -16,12 +14,10 @@ import {
   describeTransitionObject,
   emptyProposalReview,
   flattenTrees,
-  InMemoryTransitionObjectResolver,
   type MergeDecision,
   type MergeResult,
   type MergeSummaryData,
   type ProposalStatement,
-  type ProtocolObject,
   parseAcceptancePolicy,
   prepareMerge,
   type RepositoryDecisionAuthority,
@@ -33,21 +29,21 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
-  createTransitionCommit,
   findConversationById,
   findTurnsByConversation,
   getTransitionRefHead,
-  getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
   listTransitionCommitProjectIds,
-  recordRepositoryDecisionAuthorization,
   TransitionHeadConflictError,
   type VerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
-import type { EvidenceRef } from '@t3x-dev/transition';
+import type { CanonicalTimestamp, EvidenceRef } from '@t3x-dev/transition';
+import {
+  commitPreparedRepositoryTransition,
+  TransitionDecisionDeniedError,
+} from './transition-control-plane/lifecycle';
 
 type ActorRef = ProposalStatement['actor'];
-type CanonicalTimestamp = Parameters<typeof authorizeDecisionForRepository>[0]['decidedAt'];
 
 const REPLAY_ACTOR = Object.freeze({
   kind: 'service' as const,
@@ -401,52 +397,31 @@ export async function commitRepositoryYOpsState(
       };
     },
   };
-  const issued = await authorizeDecisionForRepository({
-    projectId: input.projectId,
-    refName: input.refName,
-    proposal: compiled.proposal,
-    effect,
-    outcome: 'accepted',
-    rationale: input.rationale?.trim()
-      ? { mode: 'authored', value: input.rationale.trim(), evidence: [] }
-      : { mode: 'unspecified' },
-    decidedAt: recordedAt,
-    authority,
-  });
-  if (!issued.ok || issued.authorization === null) {
-    throw new RepositoryStateDecisionDeniedError(issued.ok ? [] : issued.failures);
-  }
-
-  await recordRepositoryDecisionAuthorization(input.db, issued.authorization);
   const parentObjects = head.format === 'transition_v2' ? [head.commit] : [];
-  const objects: ProtocolObject[] = [
-    base,
-    result,
-    ...issued.authorization.objects,
-    ...parentObjects,
-  ];
-  const commit = await createCommitV2({
-    parents: head.format === 'transition_v2' ? [describeCommitV2(head.commit)] : [],
-    decision: issued.decision,
-    resolver: new InMemoryTransitionObjectResolver(objects),
-  });
-  const created = await createTransitionCommit(input.db, {
-    projectId: input.projectId,
-    refName: input.refName,
-    expectedHead: input.expectedHead,
-    commit,
-    objects,
-    ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
-  });
-  const transition = await getTransitionViewForCommit(input.db, {
-    projectId: input.projectId,
-    refName: input.refName,
-    commitId: created.digest,
-  });
-  if (transition === null) {
-    throw new TypeError('Committed repository Transition could not be resolved');
+  try {
+    const created = await commitPreparedRepositoryTransition({
+      db: input.db,
+      projectId: input.projectId,
+      refName: input.refName,
+      expectedHead: input.expectedHead,
+      proposal: compiled.proposal,
+      effect,
+      rationale: input.rationale?.trim()
+        ? { mode: 'authored', value: input.rationale.trim(), evidence: [] }
+        : { mode: 'unspecified' },
+      decidedAt: recordedAt,
+      authority,
+      parents: head.format === 'transition_v2' ? [head.commit] : [],
+      objects: [base, result, ...parentObjects],
+      ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+    });
+    return created;
+  } catch (error) {
+    if (error instanceof TransitionDecisionDeniedError) {
+      throw new RepositoryStateDecisionDeniedError(error.failures);
+    }
+    throw error;
   }
-  return { commit, commitDigest: created.digest, transition };
 }
 
 export class RepositoryMergeCommitNotFoundError extends Error {
@@ -662,54 +637,40 @@ export async function commitRepositoryYOpsMerge(
       };
     },
   };
-  const issued = await authorizeDecisionForRepository({
-    projectId: input.projectId,
-    refName: input.refName,
-    proposal: compiled.proposal,
-    effect: merged.effect,
-    outcome: 'accepted',
-    rationale: { mode: 'unspecified' },
-    decidedAt: recordedAt,
-    authority,
-  });
-  if (!issued.ok || issued.authorization === null) {
-    throw new RepositoryStateDecisionDeniedError(issued.ok ? [] : issued.failures);
+  let created: Awaited<ReturnType<typeof commitPreparedRepositoryTransition>>;
+  try {
+    created = await commitPreparedRepositoryTransition({
+      db: input.db,
+      projectId: input.projectId,
+      refName: input.refName,
+      expectedHead: input.targetDigest,
+      proposal: compiled.proposal,
+      effect: merged.effect,
+      rationale: { mode: 'unspecified' },
+      decidedAt: recordedAt,
+      authority,
+      parents: [context.target.commit, context.source.commit],
+      objects: [
+        context.target.state,
+        context.source.state,
+        context.mergeBaseState,
+        merged.result,
+        context.target.commit,
+        context.source.commit,
+      ],
+    });
+  } catch (error) {
+    if (error instanceof TransitionDecisionDeniedError) {
+      throw new RepositoryStateDecisionDeniedError(error.failures);
+    }
+    throw error;
   }
-
-  await recordRepositoryDecisionAuthorization(input.db, issued.authorization);
-  const objects: ProtocolObject[] = [
-    context.target.state,
-    context.source.state,
-    context.mergeBaseState,
-    merged.result,
-    context.target.commit,
-    context.source.commit,
-    ...issued.authorization.objects,
-  ];
-  const commit = await createCommitV2({
-    parents: [describeCommitV2(context.target.commit), describeCommitV2(context.source.commit)],
-    decision: issued.decision,
-    resolver: new InMemoryTransitionObjectResolver(objects),
-  });
-  const created = await createTransitionCommit(input.db, {
-    projectId: input.projectId,
-    refName: input.refName,
-    expectedHead: input.targetDigest,
-    commit,
-    objects,
-  });
-  const transition = await getTransitionViewForCommit(input.db, {
-    projectId: input.projectId,
-    refName: input.refName,
-    commitId: created.digest,
-  });
-  if (transition === null) throw new TypeError('Committed merge Transition could not be resolved');
 
   const keptFromSource = new Set(input.decisions.keepFromSource).size;
   const keptFromTarget = new Set(input.decisions.keepFromTarget).size;
   return {
-    commit,
-    commitDigest: created.digest,
+    commit: created.commit,
+    commitDigest: created.commitDigest,
     recordedAt,
     content: merged.content,
     mergeSummary: {
@@ -723,6 +684,6 @@ export async function commitRepositoryYOpsMerge(
         (merged.prepared.onlyInTarget.length - keptFromTarget),
       total_nodes: flattenTrees(merged.content.trees).length,
     },
-    transition,
+    transition: created.transition,
   };
 }

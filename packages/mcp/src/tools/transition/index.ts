@@ -87,6 +87,11 @@ const commonProposalProperties = {
     description: 'YOps operations or exact-source replace_scalar operations, depending on kind.',
     items: { type: 'object' },
   },
+  extraction_candidate_id: {
+    type: 'string',
+    description:
+      'Server-owned Workspace extraction candidate to load as structured_yops; mutually exclusive with operations.',
+  },
   artifact: {
     type: 'object',
     description: 'Exact-source artifact selector for import or edit.',
@@ -153,12 +158,21 @@ export const proposeTransitionHandler: ToolHandler = async (args) =>
     };
 
     if (kind === 'structured_yops') {
-      if (!Array.isArray(args.operations) || args.operations.length === 0) {
+      const extractionCandidateId = stringArg(args, 'extraction_candidate_id');
+      const hasOperations = Array.isArray(args.operations) && args.operations.length > 0;
+      if (hasOperations === Boolean(extractionCandidateId)) {
         throw new T3xApiError(
           'INVALID_ARGUMENT',
-          'structured_yops requires a non-empty operations array.',
+          'structured_yops requires exactly one of non-empty operations or extraction_candidate_id.',
           400
         );
+      }
+      if (extractionCandidateId !== undefined) {
+        return client.proposeTransition(projectId, {
+          ...common,
+          kind,
+          extraction_candidate_id: extractionCandidateId,
+        });
       }
       return client.proposeTransition(projectId, {
         ...common,

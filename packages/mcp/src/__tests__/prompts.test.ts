@@ -131,7 +131,7 @@ describe('MCP prompts', () => {
       arguments: { project_id: 'proj_123' },
     });
 
-    expect(result.description).toContain('extract text into a workbench draft');
+    expect(result.description).toContain('durable Workspace Transition');
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]).toMatchObject({
       role: 'user',
@@ -141,7 +141,9 @@ describe('MCP prompts', () => {
     });
     expect(result.messages[0].content.text).toContain('t3x_extract');
     expect(result.messages[0].content.text).toContain('t3x://projects/proj_123');
-    expect(result.messages[0].content.text).toContain('t3x_commit');
+    expect(result.messages[0].content.text).toContain('source_evidence');
+    expect(result.messages[0].content.text).toContain('propose_transition');
+    expect(result.messages[0].content.text).toContain('verify_transition');
 
     await client.close();
   });

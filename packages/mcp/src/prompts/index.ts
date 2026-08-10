@@ -16,11 +16,11 @@ const PROMPTS: PromptDef[] = [
   {
     name: 'extract_review_commit',
     description:
-      'User entry for extracting text into a workbench draft, reviewing it, and committing it.',
+      'User entry for extracting immutable Source turns into a Workspace Transition for human review.',
     arguments: [
       {
         name: 'project_id',
-        description: 'Project that will receive the extracted draft.',
+        description: 'Project that owns the Source, Workspace, and resulting Transition.',
         required: true,
       },
     ],
@@ -28,20 +28,22 @@ const PROMPTS: PromptDef[] = [
       const projectId = args.project_id ?? '<project_id>';
       return {
         description:
-          'Use this workflow to extract text into a workbench draft, inspect it, refine it, and commit it.',
+          'Use this workflow to create and verify a durable Workspace Transition from immutable Source turns.',
         messages: [
           {
             role: 'user',
             content: {
               type: 'text',
               text: [
-                'Workflow: extract, review, and commit semantic knowledge.',
+                'Workflow: extract immutable Source evidence into a reviewable Transition.',
+                'Requires the `transition` toolset with `T3X_MCP_BACKEND=api`.',
                 formatResourceUri(`t3x://projects/${projectId}`),
-                '1. Call `t3x_extract` with the source text and `project_id`.',
-                '2. Read the returned `workbench_draft` resource.',
-                '3. If needed, refine with `t3x_edit`.',
-                '4. Re-read the workbench draft to confirm the result.',
-                '5. Finalize with `t3x_commit`.',
+                '1. Use `t3x_query` targets `workspaces` and `source_threads` in this project.',
+                '2. Query target `source_evidence` with the Source Thread id and select exact immutable `turn_hashes`.',
+                '3. Call `t3x_extract` with `project_id`, `workspace_id`, `source_thread_id`, and `turn_hashes`.',
+                '4. Call `propose_transition` with `project_id`, a new `request_id`, `workspace_id`, `kind: structured_yops`, and the returned `candidate_id` as `extraction_candidate_id`.',
+                '5. Run `verify_transition` with its own `request_id`, then inspect the same Transition in MCP or Web.',
+                '6. Leave Accept/Reject/Override and Commit to the authenticated human review surface.',
               ].join('\n'),
             },
           },

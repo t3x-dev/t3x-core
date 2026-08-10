@@ -207,6 +207,7 @@ describe('infrastructure/workspaces', () => {
     handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
 
     await decideProjectWorkspaceTransition('proj_1', 'workspace_prd_handoff', {
+      transitionId: `trn_${'1'.repeat(32)}`,
       content,
       why: 'Keep the audience current.',
       outcome: 'overridden',
@@ -216,6 +217,7 @@ describe('infrastructure/workspaces', () => {
 
     const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
     expect(body).toEqual({
+      transition_id: `trn_${'1'.repeat(32)}`,
       content,
       why: 'Keep the audience current.',
       outcome: 'overridden',
@@ -305,6 +307,7 @@ describe('infrastructure/workspaces', () => {
     handleResponseMock.mockResolvedValueOnce({ transition: { mode: 'transition' } });
 
     await decideProjectWorkspaceSourceTransition('proj_1', 'workspace_source', {
+      transitionId: `trn_${'2'.repeat(32)}`,
       artifact,
       change: {
         mode: 'edit',
@@ -324,6 +327,7 @@ describe('infrastructure/workspaces', () => {
 
     const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
     expect(body).toEqual({
+      transition_id: `trn_${'2'.repeat(32)}`,
       artifact: {
         format: WORKSPACE_SOURCE_ARTIFACT_FORMAT,
         root_path: 'device.yaml',
@@ -378,6 +382,7 @@ describe('infrastructure/workspaces', () => {
     });
 
     await decideProjectWorkspaceSourceRevert('proj_1', 'workspace_source', {
+      transitionId: `trn_${'2'.repeat(32)}`,
       commitId,
       why: 'Restore the previous configuration.',
       outcome: 'accepted',
@@ -385,6 +390,7 @@ describe('infrastructure/workspaces', () => {
     });
     const decisionBody = JSON.parse(String(fetchWithTimeoutMock.mock.calls[1]?.[1]?.body));
     expect(decisionBody).toEqual({
+      transition_id: `trn_${'2'.repeat(32)}`,
       commit_id: commitId,
       why: 'Restore the previous configuration.',
       outcome: 'accepted',

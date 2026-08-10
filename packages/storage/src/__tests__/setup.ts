@@ -203,6 +203,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_proposal_memberships_idempotenc
   ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
 CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
   ON transition_proposal_memberships(project_id, created_at, transition_id);
+CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_workspace_revision_created
+  ON transition_proposal_memberships(
+    project_id, workspace_id, workspace_revision, created_at, transition_id
+  );
+
+CREATE TABLE IF NOT EXISTS transition_proposal_preparations (
+  transition_id TEXT PRIMARY KEY
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  canonical_json TEXT NOT NULL,
+  digest TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS transition_statement_memberships (
   transition_id TEXT NOT NULL
@@ -226,6 +238,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_statement_memberships_idempoten
   );
 CREATE INDEX IF NOT EXISTS idx_transition_statement_memberships_transition_created
   ON transition_statement_memberships(transition_id, created_at, statement_digest);
+
+CREATE TABLE IF NOT EXISTS transition_verification_receipts (
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  operational_results JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, transition_id, request_id)
+);
 
 CREATE TABLE IF NOT EXISTS transition_command_receipts (
   transition_id TEXT NOT NULL

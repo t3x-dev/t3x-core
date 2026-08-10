@@ -277,7 +277,7 @@ describe('POST /v1/extract-yops', () => {
     });
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(String(input)).toContain('/models/gemini-3-flash-preview:generateContent');
+      expect(String(input)).toContain('/models/gemini-3.6-flash:generateContent');
 
       return new Response(
         JSON.stringify({

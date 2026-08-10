@@ -39,12 +39,14 @@ type ReviewSession =
       artifact: WorkspaceSourceArtifact;
       change: WorkspaceSourceChange;
       precondition: WorkspaceSourceTransitionPrecondition;
+      transitionId: string;
       why?: string;
     }
   | {
       kind: 'revert';
       commitId: string;
       precondition: WorkspaceSourceTransitionPrecondition;
+      transitionId: string;
       why?: string;
     };
 
@@ -107,6 +109,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
           artifact: structuredClone(artifact),
           change: structuredClone(change),
           precondition: reviewed.precondition,
+          transitionId: reviewed.transition_id,
           why,
         };
         setState({
@@ -155,6 +158,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
           kind: 'revert',
           commitId,
           precondition: reviewed.precondition,
+          transitionId: reviewed.transition_id,
           why,
         };
         setState({
@@ -208,6 +212,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
             ? await decideWorkspaceSourceTransition(candidate.projectId, candidate.id, {
                 artifact: session.artifact,
                 change: session.change,
+                transitionId: session.transitionId,
                 why: session.why,
                 outcome,
                 decisionReason,
@@ -215,6 +220,7 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
               })
             : await decideWorkspaceSourceRevert(candidate.projectId, candidate.id, {
                 commitId: session.commitId,
+                transitionId: session.transitionId,
                 why: session.why,
                 outcome,
                 decisionReason,
