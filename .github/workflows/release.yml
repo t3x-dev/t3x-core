@@ -7,8 +7,7 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   changeset-state:
@@ -82,6 +81,8 @@ jobs:
   product-release-record:
     name: Product Release Record
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -147,6 +148,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     needs:
       - changeset-state
       - product-release-record
@@ -214,12 +218,11 @@ jobs:
             exit 1
           fi
 
-      - name: Create Release PR or Publish
-        id: changesets
+      - name: Create release PR
+        if: needs.changeset-state.outputs.should_publish != 'true'
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
-          publish: pnpm publish-release
           createGithubReleases: false
           title: "chore: version packages"
           commit: "chore: version packages"
@@ -229,5 +232,17 @@ jobs:
           # GITHUB_TOKEN do not recursively run GitHub Actions.
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
+          T3X_PACKAGE_RELEASES: ${{ needs.changeset-state.outputs.publish_packages }}
+
+      - name: Publish packages
+        if: needs.changeset-state.outputs.should_publish == 'true'
+        uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm publish-release
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           T3X_PACKAGE_RELEASES: ${{ needs.changeset-state.outputs.publish_packages }}
