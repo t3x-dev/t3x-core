@@ -19,6 +19,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createLeafHistory,
+  deleteRun,
   findLeafById,
   getConfigurationStats,
   getRun,
@@ -665,7 +666,6 @@ runsRoutes.openapi(deleteRunRoute, async (c) => {
     const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const { deleteRun } = await import('@t3x-dev/storage');
     const deleted = await deleteRun(db, id);
 
     if (!deleted) {

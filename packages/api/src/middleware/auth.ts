@@ -14,7 +14,7 @@
  */
 
 import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
-import type { AnyDB } from '@t3x-dev/storage';
+import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
@@ -109,8 +109,6 @@ export async function authMiddleware(c: Context, next: Next) {
   const keyValue = match[1];
 
   try {
-    // Dynamic import to avoid circular dependency
-    const { findApiKeyByValue, touchLastUsed } = await import('@t3x-dev/storage');
     const db = await getDB();
     const apiKey = await findApiKeyByValue(db, keyValue);
 
@@ -140,9 +138,7 @@ export async function authMiddleware(c: Context, next: Next) {
  *
  * Used by non-HTTP entry points (e.g. WebSocket upgrade) that need to
  * authenticate a raw token from a query parameter rather than an
- * Authorization header. Mirrors the dynamic-import pattern used by
- * `authMiddleware` above to preserve the circular-dependency boundary with
- * `@t3x-dev/storage`.
+ * Authorization header.
  */
 export async function verifyBearerToken(
   db: AnyDB,
@@ -155,7 +151,6 @@ export async function verifyBearerToken(
   transitionScopes: readonly TransitionScope[];
 } | null> {
   if (!token) return null;
-  const { findApiKeyByValue } = await import('@t3x-dev/storage');
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;
   return {

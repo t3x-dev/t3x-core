@@ -126,7 +126,7 @@ test.describe('authenticated browser boundaries', () => {
         aliceKey,
         aliceProjectId as string
       );
-      expect(ownSocket.kind).toBe('welcome');
+      expect(ownSocket.kind).toBe('connected');
       expect(ownSocket.projectId).toBe(aliceProjectId);
 
       const deniedSocket = await openProjectSocket(
@@ -249,10 +249,10 @@ async function openProjectSocket(
   page: Page,
   token: string,
   projectId: string
-): Promise<{ kind: 'welcome' | 'denied'; projectId?: string }> {
+): Promise<{ kind: 'connected' | 'denied'; projectId?: string }> {
   return page.evaluate(
     ({ apiUrl, bearerToken, targetProjectId }) =>
-      new Promise<{ kind: 'welcome' | 'denied'; projectId?: string }>((resolve) => {
+      new Promise<{ kind: 'connected' | 'denied'; projectId?: string }>((resolve) => {
         const wsOrigin = apiUrl.replace(/^http/, 'ws');
         const socket = new WebSocket(
           `${wsOrigin}/ws?project_id=${encodeURIComponent(targetProjectId)}&token=${encodeURIComponent(bearerToken)}`
@@ -266,12 +266,13 @@ async function openProjectSocket(
           window.clearTimeout(timer);
           const envelope = JSON.parse(String(event.data)) as {
             type?: string;
+            projectId?: string;
             project_id?: string;
           };
           socket.close();
           resolve({
-            kind: envelope.type === 'welcome' ? 'welcome' : 'denied',
-            projectId: envelope.project_id,
+            kind: envelope.type === 'connected' ? 'connected' : 'denied',
+            projectId: envelope.projectId ?? envelope.project_id,
           });
         });
         socket.addEventListener('error', () => {
