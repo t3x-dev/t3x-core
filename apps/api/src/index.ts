@@ -90,7 +90,7 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // Open-source: built-in local auth (username/password)
-const { app, injectWebSocket } = createApp({ enableLocalConfigRoutes: true });
+const { app, websocket } = createApp({ enableLocalConfigRoutes: true });
 
 // Server startup
 const port = parseInt(process.env.PORT || '8000', 10);
@@ -132,10 +132,8 @@ async function start() {
     const server = serve({
       fetch: app.fetch,
       port,
+      websocket,
     });
-
-    // Enable WebSocket connections on the HTTP server
-    injectWebSocket(server);
 
     pinoLogger.info(
       { port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` },
