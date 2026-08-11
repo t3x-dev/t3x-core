@@ -285,6 +285,11 @@ describe('validator–engine alignment: malformed paths fail both surfaces', () 
       doc: { users: [{ id: 1 }] },
       op: { move: { from: 'users/[id=1', to: 'selected' } },
     },
+    {
+      name: 'unsafe integer array index',
+      doc: { items: [1] },
+      op: { set: { path: 'items/[999999999999999999999999999999]', value: 2 } },
+    },
   ];
 
   for (const { name, doc, op } of cases) {

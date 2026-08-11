@@ -231,6 +231,13 @@ describe('validateYOpsOps — path syntax codes', () => {
     );
   });
 
+  it('YOPS_PATH_INDEX_OUT_OF_RANGE', () => {
+    const diags = validateYOpsOps([
+      { set: { path: 'items/[999999999999999999999999999999]', value: 1 } },
+    ]);
+    expect(diags.map((d) => d.code)).toContain(YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INDEX_OUT_OF_RANGE);
+  });
+
   it('YOPS_PATH_INVALID_MATCH_SYNTAX', () => {
     // Bracket with `=` but doesn't match `[<key>=<value>]` → match syntax error.
     const diags = validateYOpsOps([{ define: { path: 'users/[name=alice' } }]);
@@ -315,6 +322,7 @@ describe('YOpsDiagnostic shape is stable', () => {
       { define: { path: 'config/"unclosed' } },
       { define: { path: '"a\\nb"' } },
       { define: { path: 'items/[0' } },
+      { set: { path: 'items/[999999999999999999999999999999]', value: 1 } },
       { define: { path: 'users/[name=alice' } },
       { sort: { path: 'items', order: 'sideways' } },
       { define: { path: 'config/\\"k\\"/host' } },
@@ -385,6 +393,7 @@ describe('every error-severity diagnostic code is reachable from a fixture', () 
       { ops: [{ define: { path: 'config/"unclosed' } }] },
       { ops: [{ define: { path: '"a\\nb"' } }] },
       { ops: [{ define: { path: 'items/[0' } }] },
+      { ops: [{ set: { path: 'items/[999999999999999999999999999999]', value: 1 } }] },
       { ops: [{ define: { path: 'users/[name=alice' } }] },
       { ops: [{ assert: { path: 'a' } }] },
     ];

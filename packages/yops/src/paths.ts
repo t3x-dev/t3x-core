@@ -90,7 +90,12 @@ export type ParsePathResult =
   | { ok: true; segments: PathSegment[] }
   | {
       ok: false;
-      code: 'UNCLOSED_QUOTE' | 'INVALID_ESCAPE' | 'INVALID_INDEX_SYNTAX' | 'INVALID_MATCH_SYNTAX';
+      code:
+        | 'UNCLOSED_QUOTE'
+        | 'INVALID_ESCAPE'
+        | 'INVALID_INDEX_SYNTAX'
+        | 'INVALID_MATCH_SYNTAX'
+        | 'INDEX_OUT_OF_RANGE';
       message: string;
       offset: number;
     };
@@ -102,7 +107,16 @@ function classifyStrictRawSegment(
   if (raw.startsWith('[')) {
     const indexMatch = raw.match(/^\[(\d+)\]$/);
     if (indexMatch) {
-      return { type: 'index', value: parseInt(indexMatch[1], 10) };
+      const value = Number(indexMatch[1]);
+      if (!Number.isSafeInteger(value)) {
+        return {
+          ok: false,
+          code: 'INDEX_OUT_OF_RANGE',
+          message: `Array index "${indexMatch[1]}" at offset ${offset} exceeds the safe integer range`,
+          offset,
+        };
+      }
+      return { type: 'index', value };
     }
 
     const matchMatch = raw.match(/^\[([^=\]]+)=([^\]]*)\]$/);
@@ -342,6 +356,9 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
   } else if (seg.type === 'index') {
     if (!Array.isArray(current)) {
       throw new Error(`Cannot use index [${seg.value}] on non-array value`);
+    }
+    if (!Number.isSafeInteger(seg.value) || seg.value < 0 || seg.value >= current.length) {
+      throw new Error(`Array index [${seg.value}] is out of bounds for length ${current.length}`);
     }
     if (isLast) {
       current[seg.value] = deepClone(value);

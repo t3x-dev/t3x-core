@@ -1692,6 +1692,13 @@ diagnostic_codes:
     severity: error
     meaning: A bracket segment looks like an index but isn't `[<digits>]`.
 
+  YOPS_PATH_INDEX_OUT_OF_RANGE:
+    severity: error
+    meaning: >
+      An array index exceeds JavaScript's safe integer range and cannot be
+      represented precisely. Runtime writes also reject indexes outside the
+      current sequence; use `append` to add an item at the end.
+
   YOPS_PATH_INVALID_MATCH_SYNTAX:
     severity: error
     meaning: A bracket segment looks like a match but isn't `[<key>=<value>]`.
