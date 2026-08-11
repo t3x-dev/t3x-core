@@ -16,7 +16,7 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(
-    'Usage: node tools/publish-package-tarballs.mjs [--registry <url>] [--tag <name>] [--otp <code>]'
+    'Usage: node tools/publish-package-tarballs.mjs [--packages <names>] [--registry <url>] [--tag <name>] [--otp <code>]'
   );
   process.exit(0);
 }
@@ -26,6 +26,9 @@ const releaseAssetDir = await fs.mkdtemp(path.join(os.tmpdir(), 't3x-release-ass
 const registry = getArgValue('--registry') ?? process.env.NPM_CONFIG_REGISTRY;
 const tag = getArgValue('--tag') ?? process.env.NPM_DIST_TAG;
 const otp = getArgValue('--otp') ?? process.env.NPM_OTP;
+const packageSelection =
+  getArgValue('--packages') ??
+  (Object.hasOwn(process.env, 'T3X_PACKAGE_RELEASES') ? process.env.T3X_PACKAGE_RELEASES : null);
 const maxPublishAttempts = parsePositiveInt(process.env.T3X_PUBLISH_MAX_ATTEMPTS, 6);
 const publishRetryDelayMs = parsePositiveInt(process.env.T3X_PUBLISH_RETRY_DELAY_MS, 15000);
 
@@ -97,7 +100,11 @@ try {
     });
   }
 
-  await uploadPackageReleaseAssets(packedPackages);
+  if (packedPackages.length === 0) {
+    console.log('[publish-package-tarballs] No package releases selected; nothing to publish.');
+  } else {
+    await uploadPackageReleaseAssets(packedPackages);
+  }
 } finally {
   if (process.env.T3X_KEEP_PUBLISH_PACKS === '1') {
     console.log(`[publish-package-tarballs] Kept packed tarballs at ${packDir}`);
@@ -111,20 +118,70 @@ try {
 async function getPublishPackageDirs() {
   const { validateReleaseSurfaceOrThrow } = await import('./lib/releaseSurface.mjs');
   const surface = validateReleaseSurfaceOrThrow({ rootDir: new URL('..', import.meta.url) });
-  const publishEntries = surface.packages.filter((entry) => entry.npm_publish === true);
-
-  if (publishEntries.length === 0) {
-    throw new Error('release/surface.yaml does not declare any packages with npm_publish: true');
-  }
+  const publishEntries = resolvePublishEntries({ packageSelection, surface });
 
   const publishDirs = publishEntries.map((entry) => entry.path);
   console.log(
-    `[publish-package-tarballs] Publishing npm surface: ${publishEntries
-      .map((entry) => entry.name)
-      .join(', ')}`
+    publishEntries.length > 0
+      ? `[publish-package-tarballs] Publishing selected npm packages: ${publishEntries
+          .map((entry) => entry.name)
+          .join(', ')}`
+      : '[publish-package-tarballs] Selected npm package set is empty.'
   );
 
   return publishDirs;
+}
+
+function resolvePublishEntries({ packageSelection, surface }) {
+  const activeEntries = surface.packages.filter(
+    (entry) => entry.npm_publish === true && entry.release_train === 'active'
+  );
+  const entriesByName = new Map(surface.packages.map((entry) => [entry.name, entry]));
+  const entriesBySlug = new Map(
+    surface.packages.map((entry) => [entry.name.replace(/^@t3x-dev\//, ''), entry])
+  );
+  const normalizedSelection = packageSelection?.trim();
+
+  if (normalizedSelection === undefined || normalizedSelection === null) {
+    return activeEntries;
+  }
+
+  if (normalizedSelection.length === 0) {
+    return [];
+  }
+
+  if (/^(none|no|false)$/i.test(normalizedSelection)) {
+    return [];
+  }
+
+  if (/^(all|all-active)$/i.test(normalizedSelection)) {
+    return activeEntries;
+  }
+
+  return [
+    ...new Set(
+      normalizedSelection
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => {
+          const packageName = item.startsWith('@t3x-dev/') ? item : `@t3x-dev/${item}`;
+          const entry = entriesByName.get(packageName) ?? entriesBySlug.get(item);
+          if (!entry) {
+            throw new Error(`Unknown package release selection: ${item}`);
+          }
+          if (entry.npm_publish !== true) {
+            throw new Error(`${entry.name} is not configured for npm publishing`);
+          }
+          if (entry.release_train !== 'active') {
+            throw new Error(
+              `${entry.name} is ${entry.release_train ?? 'inactive'} in the release train`
+            );
+          }
+          return entry;
+        })
+    ),
+  ];
 }
 
 async function uploadPackageReleaseAssets(packageRecords) {
@@ -235,7 +292,11 @@ async function uploadSinglePackageReleaseAssets(packageRecord) {
 }
 
 async function packageReleaseAssetPaths(packageRecord) {
-  if (packageRecord.name === '@t3x-dev/yops' || packageRecord.name === '@t3x-dev/yschema') {
+  if (
+    packageRecord.name === '@t3x-dev/yops' ||
+    packageRecord.name === '@t3x-dev/yschema' ||
+    packageRecord.name === '@t3x-dev/transition'
+  ) {
     return [packageRecord.tarballPath];
   }
 
@@ -342,6 +403,9 @@ function packageReleaseTag(packageRecord) {
   }
   if (packageRecord.name === '@t3x-dev/yschema') {
     return `t3x-yschema-v${packageRecord.version}`;
+  }
+  if (packageRecord.name === '@t3x-dev/transition') {
+    return `t3x-transition-v${packageRecord.version}`;
   }
   return null;
 }

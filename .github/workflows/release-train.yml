@@ -11,14 +11,31 @@ on:
         required: false
         default: auto
       mode:
-        description: "Release mode; auto generates patch changesets when dev has release changes"
+        description: "Release mode; default code-only, auto/package may generate changesets"
         required: true
-        default: auto
+        default: code-only
         type: choice
         options:
-          - auto
           - code-only
+          - auto
           - package
+      packages:
+        description: "Package selection: auto, none, all-active, yops, yschema, transition, or comma list"
+        required: false
+        default: auto
+      package_bump:
+        description: "Generated package changeset bump when package mode is selected"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      package_version:
+        description: "Optional explicit npm package target version, or auto"
+        required: false
+        default: auto
       dry_run:
         description: "Generate the release PR plan without pushing or opening a PR"
         required: true
@@ -66,7 +83,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Fetch release refs
-        run: git fetch origin main dev
+        run: git fetch origin main dev --tags
 
       - name: Lint and format check
         run: pnpm check
@@ -77,7 +94,7 @@ jobs:
       - name: Check release docs alignment
         run: pnpm check:release-docs-alignment
 
-      - name: Verify fixed versions without runtime manifest
+      - name: Verify package versions without runtime manifest
         run: pnpm verify:versions:no-manifest
 
       - name: Prepare release PR
@@ -85,13 +102,19 @@ jobs:
           GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
           RELEASE_TRAIN_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
           RELEASE_TRAIN_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.version || 'auto' }}
-          RELEASE_TRAIN_MODE: ${{ github.event_name == 'schedule' && 'auto' || inputs.mode || 'auto' }}
+          RELEASE_TRAIN_MODE: ${{ github.event_name == 'schedule' && 'code-only' || inputs.mode || 'auto' }}
+          RELEASE_TRAIN_PACKAGES: ${{ github.event_name == 'schedule' && 'none' || inputs.packages || 'auto' }}
+          RELEASE_TRAIN_PACKAGE_BUMP: ${{ github.event_name == 'schedule' && 'patch' || inputs.package_bump || 'patch' }}
+          RELEASE_TRAIN_PACKAGE_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.package_version || 'auto' }}
           RELEASE_TRAIN_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
           RELEASE_TRAIN_DRAFT: ${{ github.event_name == 'schedule' && 'true' || inputs.draft }}
         run: |
           args=(
             --version "${RELEASE_TRAIN_VERSION}"
             --mode "${RELEASE_TRAIN_MODE}"
+            --packages "${RELEASE_TRAIN_PACKAGES}"
+            --package-bump "${RELEASE_TRAIN_PACKAGE_BUMP}"
+            --package-version "${RELEASE_TRAIN_PACKAGE_VERSION}"
             --base-branch main
             --base-ref origin/main
             --head-ref origin/dev

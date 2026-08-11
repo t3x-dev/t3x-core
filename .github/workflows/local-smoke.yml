@@ -61,7 +61,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify fixed versions
+      - name: Verify package versions
         run: pnpm verify:versions:no-manifest
 
       # Lint and format gate. Placed before build so style/import-rule
@@ -85,7 +85,7 @@ jobs:
       - name: Build runtime artifact
         run: pnpm build:local-runtime
 
-      - name: Verify fixed versions with manifest
+      - name: Verify package versions with manifest
         run: pnpm verify:versions
 
       - name: Smoke local install

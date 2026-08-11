@@ -17,16 +17,28 @@ const yopsChangeset = {
   packages: ['@t3x-dev/yops'],
 };
 
+const transitionChangeset = {
+  name: 'publish-transition-package.md',
+  packages: ['@t3x-dev/transition'],
+};
+
 const yschemaChangeset = {
   name: 'promote-yschema-package.md',
   packages: ['@t3x-dev/yschema'],
 };
 
-const releaseSurfacePackages = ['@t3x-dev/local', '@t3x-dev/yops', '@t3x-dev/yschema'];
-const allPackageChangesets = [localChangeset, yopsChangeset, yschemaChangeset];
+const coreChangeset = {
+  name: 'internal-core.md',
+  packages: ['@t3x-dev/core'],
+};
+
+const releaseSurfacePackages = ['@t3x-dev/yops', '@t3x-dev/transition', '@t3x-dev/yschema'];
+const pausedReleaseSurfacePackages = ['@t3x-dev/local'];
+const activePackageChangesets = [yopsChangeset, transitionChangeset, yschemaChangeset];
 
 function validateReleasePrWithSurface(options) {
   return validateReleasePr({
+    pausedReleaseSurfacePackages,
     releaseSurfacePackages,
     ...options,
   });
@@ -42,13 +54,30 @@ T3X product release version: \`0.4.0\`
 
 ## Package Releases
 
-- \`@t3x-dev/local\`: 0.4.1
 - \`@t3x-dev/yops\`: 0.4.1
+- \`@t3x-dev/transition\`: 0.1.0
 - \`@t3x-dev/yschema\`: 0.4.1
 
 ## Release Notes
 
-- Product release 0.4.0 includes local runtime and YOps fixes.
+- Product release 0.4.0 includes public package fixes.
+`;
+
+const validYopsOnlyReleaseBody = `## Product Release
+
+T3X product release version: \`0.4.0\`
+
+## Included Changes
+
+- Promote reviewed dev changes into the product release.
+
+## Package Releases
+
+- \`@t3x-dev/yops\`: 0.4.1
+
+## Release Notes
+
+- Product release 0.4.0 includes YOps fixes.
 `;
 
 const validCodeOnlyReleaseBody = `## Product Release
@@ -70,17 +99,28 @@ T3X product release version: \`0.4.1\`
 
 function withPackageReleaseEntries(entries) {
   return validReleaseBody.replace(
-    '- `@t3x-dev/local`: 0.4.1\n- `@t3x-dev/yops`: 0.4.1\n- `@t3x-dev/yschema`: 0.4.1',
+    '- `@t3x-dev/yops`: 0.4.1\n- `@t3x-dev/transition`: 0.1.0\n- `@t3x-dev/yschema`: 0.4.1',
     entries
   );
 }
 
-test('allows a product release PR with matching release branch and package release entry', () => {
+test('allows a product release PR with a selected active package subset', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: validYopsOnlyReleaseBody,
+    changesetFiles: [yopsChangeset],
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
+test('allows a product release PR with matching active package release entries', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.deepEqual(result.errors, []);
@@ -92,6 +132,17 @@ test('allows a code-only product release with no package publish', () => {
     headBranch: 'release/0.4.1',
     body: validCodeOnlyReleaseBody,
     changesetFiles: [],
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
+test('allows code-only product release with internal-only changesets', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.1',
+    body: validCodeOnlyReleaseBody,
+    changesetFiles: [coreChangeset],
   });
 
   assert.deepEqual(result.errors, []);
@@ -112,7 +163,7 @@ test('rejects ordinary feature branches targeting main', () => {
     baseBranch: 'main',
     headBranch: 'feature/example',
     body: validReleaseBody,
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.match(result.errors.join('\n'), /must come from release\/x\.y\.z/);
@@ -123,7 +174,7 @@ test('rejects release branch and body version mismatch', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validReleaseBody,
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.match(result.errors.join('\n'), /does not match PR body product release version/);
@@ -134,7 +185,7 @@ test('rejects missing package release entries', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: withPackageReleaseEntries('-'),
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.match(
@@ -143,12 +194,12 @@ test('rejects missing package release entries', () => {
   );
 });
 
-test('rejects package releases none when changesets exist', () => {
+test('rejects package releases none when active changesets exist', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: withPackageReleaseEntries('- None'),
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.match(result.errors.join('\n'), /Package Releases is "None"/);
@@ -165,7 +216,7 @@ test('rejects package release entries without changeset files', () => {
   assert.match(result.errors.join('\n'), /Package Releases lists packages/);
 });
 
-test('rejects incomplete current package release set', () => {
+test('rejects paused local package release entries', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
@@ -173,8 +224,7 @@ test('rejects incomplete current package release set', () => {
     changesetFiles: [localChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /complete current public package release set/);
-  assert.match(result.errors.join('\n'), /@t3x-dev\/local, @t3x-dev\/yops, @t3x-dev\/yschema/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/local is paused/);
 });
 
 test('rejects package release entries with changeset bump types instead of versions', () => {
@@ -182,21 +232,23 @@ test('rejects package release entries with changeset bump types instead of versi
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: withPackageReleaseEntries(
-      '- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch\n- `@t3x-dev/yschema`: patch'
+      '- `@t3x-dev/yops`: patch\n- `@t3x-dev/transition`: minor\n- `@t3x-dev/yschema`: patch'
     ),
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.match(result.errors.join('\n'), /must use concrete package versions/);
-  assert.match(result.errors.join('\n'), /@t3x-dev\/local, @t3x-dev\/yops, @t3x-dev\/yschema/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/yops/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/transition/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/yschema/);
 });
 
-test('rejects code-only release when changeset files exist', () => {
+test('rejects code-only release when active changeset files exist', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validCodeOnlyReleaseBody,
-    changesetFiles: [localChangeset],
+    changesetFiles: [yopsChangeset],
   });
 
   assert.match(result.errors.join('\n'), /Package Releases is "None"/);
@@ -207,10 +259,21 @@ test('rejects package release entry without matching changeset target', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
-    changesetFiles: [localChangeset],
+    changesetFiles: [yopsChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/yops/);
+  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/transition/);
+});
+
+test('rejects active changeset target missing from Package Releases', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: validYopsOnlyReleaseBody,
+    changesetFiles: [yopsChangeset, yschemaChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /changeset targets @t3x-dev\/yschema/);
 });
 
 test('allows changesets version package PRs into main', () => {
@@ -226,25 +289,25 @@ test('allows changesets version package PRs into main', () => {
 test('parses package names from changeset frontmatter', () => {
   assert.deepEqual(
     parseChangesetPackages(`---
-"@t3x-dev/local": patch
-'@t3x-dev/yops': minor
-"@t3x-dev/yschema": minor
+"@t3x-dev/yops": minor
+'@t3x-dev/transition': minor
+"@t3x-dev/yschema": patch
 ---
 
 Release package changes.
 `),
-    ['@t3x-dev/local', '@t3x-dev/yops', '@t3x-dev/yschema']
+    ['@t3x-dev/yops', '@t3x-dev/transition', '@t3x-dev/yschema']
   );
 });
 
 test('parses package release section', () => {
   assert.deepEqual(
-    parsePackageReleaseSection(`- \`@t3x-dev/local\`: 0.4.1
-- \`@t3x-dev/yops\`: 0.4.1
+    parsePackageReleaseSection(`- \`@t3x-dev/yops\`: 0.4.1
+- \`@t3x-dev/transition\`: 0.1.0
 - \`@t3x-dev/yschema\`: 0.4.1`),
     {
       none: false,
-      packages: ['@t3x-dev/local', '@t3x-dev/yops', '@t3x-dev/yschema'],
+      packages: ['@t3x-dev/yops', '@t3x-dev/transition', '@t3x-dev/yschema'],
       invalidVersionPackages: [],
       hasEntries: true,
     }
@@ -262,7 +325,7 @@ test('validates multi-line package release sections against changesets', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
-    changesetFiles: allPackageChangesets,
+    changesetFiles: activePackageChangesets,
   });
 
   assert.deepEqual(result.errors, []);

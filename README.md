@@ -91,14 +91,16 @@ Requires Node.js 20+ and pnpm 10+.
 ### Use the engines directly
 
 ```bash
-npm install @t3x-dev/yops @t3x-dev/yschema
+npm install @t3x-dev/yops @t3x-dev/yschema @t3x-dev/transition
 ```
 
 - **YOps** applies declarative YAML changes.
 - **YSchema** validates schema-backed structured state and can produce
   YOps-compatible fixes.
+- **Transition** verifies protocol objects, replay definitions, and commit
+  integrity for integrations.
 
-Both packages can be used without the T3X application.
+These packages can be used without the T3X application.
 
 ### Self-hosted evaluation
 
@@ -119,11 +121,12 @@ T3X is in public alpha. Its published npm surface is intentionally narrow:
 
 | Package | Status | Use |
 |:--|:--|:--|
-| [`@t3x-dev/local`](apps/local/) | public alpha | Run T3X locally |
+| [`@t3x-dev/local`](apps/local/) | public alpha, release-train paused | Run T3X locally |
 | [`@t3x-dev/yops`](packages/yops/) | public alpha | Apply YAML operations |
+| [`@t3x-dev/transition`](packages/transition/) | public alpha | Verify transition protocol objects |
 | [`@t3x-dev/yschema`](packages/yschema/) | public alpha | Validate structured state |
 
-The Transition protocol, WebUI, API, CLI, and MCP integrations remain internal
+The WebUI, API, CLI, MCP integrations, runner, and storage packages remain internal
 or preview surfaces and may change.
 
 ## Learn more

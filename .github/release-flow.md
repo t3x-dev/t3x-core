@@ -103,6 +103,37 @@ Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
 the first public alpha publish.
 
+## Release Train Automation
+
+The `Release Train` workflow prepares release pull requests. It does not publish
+npm packages by itself.
+
+- Scheduled runs execute every Friday at 10:00 China Standard Time.
+- Scheduled runs use `version=auto`, `mode=code-only`, `dry_run=false`, and
+  `draft=true`.
+- A scheduled release train PR should default to `Package Releases: - None`.
+  It is a Product Release PR unless a maintainer manually chooses a package
+  release mode.
+- `RELEASE_TRAIN_PAUSED=true` skips scheduled runs only. Manual
+  `workflow_dispatch` runs are still available while the schedule is paused.
+- Manual dispatch defaults to `code-only` and may be changed to `auto` or
+  `package`. Use `package` only after confirming package release intent and
+  changeset coverage.
+- Manual package dispatch uses `packages` to select `yops`, `transition`,
+  `yschema`, `all-active`, or a comma-separated subset. `package_bump`
+  chooses the generated changeset bump. `version` remains the T3X product
+  release version; package versions are derived independently. Leave
+  `package_version` as `auto` unless intentionally targeting selected package
+  versions that can each be reached by one patch, minor, or major bump.
+
+`@t3x-dev/local` remains an existing public alpha package, but scheduled release
+train runs do not automatically publish it. A local package release requires
+explicit maintainer intent plus runtime artifact review, install smoke, and
+no-key demo smoke when relevant. `@t3x-dev/yops`, `@t3x-dev/transition`, and
+`@t3x-dev/yschema` should publish only when their user-visible package behavior
+or public contract changes. The default weekly Product Release remains
+code-only unless package release mode is selected explicitly.
+
 ## Release Readiness Report Schema
 
 Release-bound pull requests use a durable readiness report so reviewers can see
@@ -165,9 +196,9 @@ Release PR checklist:
 5. List included PRs or the comparison range.
 6. Add user-facing release notes.
 7. Fill in the `Package Releases` section. Use `- None` when no package publish
-   is intended. For the current public alpha publish flow, package releases
-   must list the complete npm publish surface with target package versions:
-   `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
+   is intended. Scheduled release train PRs should start here. For package
+   publishing, list only the active package subset intended for this release
+   with target package versions.
 8. Confirm changesets are present when public package behavior changed.
 9. Wait for PR validation and release surface checks.
 10. Request owner review when protected release, workflow, or ownership files
@@ -180,21 +211,20 @@ After the product release PR merges, the `Release` workflow runs on `main`.
 - If unconsumed changesets are present, Changesets creates a
   `chore: version packages` pull request.
 - If the version packages PR merges, the same workflow publishes the package
-  artifacts to npm and uploads release assets to four GitHub Release records:
-  the product release `t3x-vx.y.z`, the local package release
-  `t3x-local-vx.y.z`, the YOps package release `t3x-yops-vx.y.z`, and the
-  YSchema package release `t3x-yschema-vx.y.z`.
+  artifacts selected by the version package commit and uploads release assets
+  to the product release `t3x-vx.y.z` and to each selected package release,
+  such as `t3x-yops-vx.y.z`, `t3x-transition-vx.y.z`, or
+  `t3x-yschema-vx.y.z`.
 - If no changesets or version package commit are present, the product release is
   code-only and no package publish is expected.
 - The workflow records product releases by creating a `t3x-vx.y.z` GitHub
   Release from the merged release PR notes. Changesets version package PRs do
   not create product release records. Code-only product release notes omit the
   `Package Releases` section from the final GitHub Release.
-- Runtime tarballs live on the local package release `t3x-local-vx.y.z`
-  alongside the `@t3x-dev/local` npm package tarball. The product release
-  `t3x-vx.y.z` carries a package manifest, checksums, and a combined package
-  archive for audit and direct download convenience; npm remains the primary
-  install source.
+- Runtime tarballs are built and uploaded only when an explicit local package
+  release is selected. The product release `t3x-vx.y.z` carries a package
+  manifest, checksums, and a combined package archive for the selected packages;
+  npm remains the primary install source.
 
 The `Release` workflow must create the `chore: version packages` pull request
 with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
@@ -233,19 +263,20 @@ There are two version streams:
 
 - T3X product releases: `t3x-vx.y.z`, represented by `release/x.y.z` branches
   and release notes.
-- npm packages: `@t3x-dev/local@x.y.z`, `@t3x-dev/yops@x.y.z`, and
-  `@t3x-dev/yschema@x.y.z`, plus future package artifacts managed by
+- npm packages: `@t3x-dev/local@x.y.z`, `@t3x-dev/yops@x.y.z`,
+  `@t3x-dev/transition@x.y.z`, and `@t3x-dev/yschema@x.y.z`, managed by
   Changesets.
 
 These versions can differ. For example, T3X product release `0.4.0` may publish
-no packages, or it may publish the current public alpha npm surface with
-package versions determined by Changesets.
+no packages, or it may publish an active package subset with versions
+determined independently by Changesets.
 
 A changeset is required when a pull request changes user-visible behavior for a
 public alpha package:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/transition`
 - `@t3x-dev/yschema`
 
 Examples that require a changeset:
@@ -271,16 +302,16 @@ as `no-release-impact` in the PR body or label. A product release PR into
 PR validation checks the structured `Package Releases` section against the
 checked-in changeset files:
 
-- `Package Releases: - None` requires no `.changeset/*.md` files in the release
-  branch.
-- Package entries require at least one `.changeset/*.md` file.
+- `Package Releases: - None` requires no `.changeset/*.md` files for active or
+  paused release-train packages in the release branch.
+- Package entries require at least one matching `.changeset/*.md` file.
 - Package entries must use concrete target package versions, not changeset bump
   types like `patch`, `minor`, or `major`.
-- Each listed public package must appear in a changeset frontmatter entry.
-- Each public package in changeset frontmatter must appear in `Package
+- Each listed active package must appear in a changeset frontmatter entry.
+- Each active package in changeset frontmatter must appear in `Package
   Releases`.
-- Package releases must list the complete current npm publish surface:
-  `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
+- Paused packages, including `@t3x-dev/local`, cannot be listed by the
+  scheduled release train.
 
 ## Publish Rules
 
@@ -290,13 +321,16 @@ that npm packages changed.
 - A product release may publish zero packages. In the release PR body, use
   `Package Releases` with `- None`; the final GitHub Release omits package
   information for code-only releases.
-- The current public alpha package publish is the complete npm publish
-  surface: `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
-- Because the current package release set includes `@t3x-dev/local`, runtime
-  artifacts are required for package releases.
+- Active package releases may publish one or more selected packages:
+  `@t3x-dev/yops`, `@t3x-dev/transition`, and `@t3x-dev/yschema`.
+- Scheduled release train runs are code-only by default and intentionally do not
+  start the local package/runtime artifact publish path.
+- `@t3x-dev/local` remains public but is paused from automated package
+  publishing. Runtime artifacts are required only for explicit local package
+  releases.
 - Release review and dry-run packaging must not publish real artifacts.
-- Single-package or partial package releases are future release-set detection
-  work, not the current CI contract.
+- Single-package and partial active package releases are supported by release
+  PR validation and the publish workflow.
 
 ## Ownership
 

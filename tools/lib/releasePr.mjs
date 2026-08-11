@@ -126,6 +126,7 @@ function validatePackageReleases({
   packageReleases,
   changesetFiles,
   releaseSurfacePackages,
+  pausedReleaseSurfacePackages = [],
 }) {
   if (!packageReleases.hasEntries) {
     errors.push(
@@ -146,11 +147,25 @@ function validatePackageReleases({
     );
   }
 
-  if (packageReleases.none && changesetFiles.length > 0) {
+  const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
+  const releaseSurfacePackageSet = new Set(releaseSurfacePackages);
+  const pausedReleaseSurfacePackageSet = new Set(pausedReleaseSurfacePackages);
+  const activeChangesetPackages = [...changesetPackages].filter((packageName) =>
+    releaseSurfacePackageSet.has(packageName)
+  );
+  const pausedChangesetPackages = [...changesetPackages].filter((packageName) =>
+    pausedReleaseSurfacePackageSet.has(packageName)
+  );
+
+  if (
+    packageReleases.none &&
+    (activeChangesetPackages.length > 0 || pausedChangesetPackages.length > 0)
+  ) {
     errors.push(
-      `Package Releases is "None", but changeset files exist: ${changesetFiles
-        .map((file) => file.name)
-        .join(', ')}.`
+      `Package Releases is "None", but releasable package changesets exist: ${[
+        ...activeChangesetPackages,
+        ...pausedChangesetPackages,
+      ].join(', ')}.`
     );
   }
 
@@ -158,31 +173,27 @@ function validatePackageReleases({
     errors.push('Package Releases lists packages, but no .changeset/*.md files were found.');
   }
 
-  if (packageReleases.packages.length > 0 && releaseSurfacePackages.length > 0) {
-    const expectedPackages = [...new Set(releaseSurfacePackages)].sort();
-    const actualPackages = [...new Set(packageReleases.packages)].sort();
-    const hasCompleteReleaseSet =
-      actualPackages.length === expectedPackages.length &&
-      actualPackages.every((packageName, index) => packageName === expectedPackages[index]);
-
-    if (!hasCompleteReleaseSet) {
-      errors.push(
-        `Package Releases must list the complete current public package release set: ${expectedPackages.join(
-          ', '
-        )}.`
-      );
-    }
-  }
-
-  const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
-  const releaseSurfacePackageSet = new Set(releaseSurfacePackages);
   for (const packageName of packageReleases.packages) {
+    if (pausedReleaseSurfacePackageSet.has(packageName)) {
+      errors.push(
+        `${packageName} is paused in the release train and cannot be listed in Package Releases.`
+      );
+      continue;
+    }
+    if (!releaseSurfacePackageSet.has(packageName)) {
+      errors.push(`${packageName} is not an active release-train package.`);
+      continue;
+    }
     if (!changesetPackages.has(packageName)) {
       errors.push(`Package Releases lists ${packageName}, but no changeset targets it.`);
     }
   }
 
   for (const packageName of changesetPackages) {
+    if (pausedReleaseSurfacePackageSet.has(packageName)) {
+      errors.push(`${packageName} is paused in the release train, but a changeset targets it.`);
+      continue;
+    }
     if (
       releaseSurfacePackageSet.has(packageName) &&
       !packageReleases.packages.includes(packageName)
@@ -197,6 +208,7 @@ function validateProductReleaseBody({
   branchVersion = null,
   changesetFiles = [],
   releaseSurfacePackages,
+  pausedReleaseSurfacePackages = [],
 }) {
   const errors = [];
   const version = parseProductReleaseVersion(body);
@@ -233,6 +245,7 @@ function validateProductReleaseBody({
     packageReleases: parsePackageReleaseSection(sectionText(body, 'Package Releases')),
     changesetFiles,
     releaseSurfacePackages,
+    pausedReleaseSurfacePackages,
   });
 
   return errors;
@@ -245,6 +258,7 @@ export function validateReleasePr({
   changesetFiles = [],
   changedFiles = [],
   releaseSurfacePackages = [],
+  pausedReleaseSurfacePackages = [],
 }) {
   const errors = [];
   errors.push(...validateProtectedSurfaceChange({ changedFiles, body }).errors);
@@ -273,6 +287,7 @@ export function validateReleasePr({
       branchVersion: releaseMatch?.[1] ?? null,
       changesetFiles,
       releaseSurfacePackages,
+      pausedReleaseSurfacePackages,
     })
   );
 

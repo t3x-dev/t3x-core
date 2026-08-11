@@ -70,7 +70,7 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter t3x-webui exec playwright install --with-deps chromium
 
-      - name: Verify fixed versions
+      - name: Verify package versions
         run: pnpm verify:versions:no-manifest
 
       - name: Lint and format check
@@ -93,7 +93,7 @@ jobs:
       - name: Build local runtime artifact
         run: pnpm build:local-runtime
 
-      - name: Verify fixed versions with manifest
+      - name: Verify package versions with manifest
         run: pnpm verify:versions
 
       - name: Smoke local install

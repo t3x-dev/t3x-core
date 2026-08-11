@@ -9,11 +9,16 @@ The public alpha release surface is:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/transition`
 - `@t3x-dev/yschema`
 
 The source of truth is [`RELEASE.md`](../RELEASE.md) and
 [`release/surface.yaml`](../release/surface.yaml). Other packages remain internal
 or preview until explicitly promoted.
+
+`@t3x-dev/local` remains public but is paused from the automated release train.
+Local package releases require explicit runtime artifact, install, and demo
+review.
 
 ## What Alpha Means
 
@@ -46,6 +51,13 @@ the full policy, including the gate for future YOps spec-tightening PRs.
 YSchema is part of the public alpha surface as a validation candidate for
 schema-backed structured state. Its public API can still evolve during alpha,
 but user-visible behavior changes require a changeset and release notes.
+
+## Transition Contract
+
+Transition is part of the public alpha surface as the leaf protocol package for
+State, Effect, Statement, and CommitV2 objects. It is intended for agents, MCP
+tools, and integrations that need protocol verification without the product
+runtime. Public behavior changes require a changeset and release notes.
 
 ## Preview and Internal Surfaces
 

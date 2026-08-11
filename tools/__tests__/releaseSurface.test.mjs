@@ -12,36 +12,46 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
-test('release surface declares local, yops, and yschema as the public alpha npm packages', () => {
+test('release surface declares the public alpha npm packages and active release train subset', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.npmPublishPackages, [
     '@t3x-dev/local',
     '@t3x-dev/yops',
+    '@t3x-dev/transition',
     '@t3x-dev/yschema',
   ]);
+  assert.deepEqual(result.releaseTrainPackages, [
+    '@t3x-dev/yops',
+    '@t3x-dev/transition',
+    '@t3x-dev/yschema',
+  ]);
+  assert.deepEqual(result.pausedReleaseTrainPackages, ['@t3x-dev/local']);
   assert.deepEqual(result.releaseMarkdownNpmPackages, [
     '@t3x-dev/local',
     '@t3x-dev/yops',
+    '@t3x-dev/transition',
     '@t3x-dev/yschema',
   ]);
   assert.equal(result.packagesByName.get('@t3x-dev/local')?.publish_state, 'applied');
   assert.equal(result.packagesByName.get('@t3x-dev/yops')?.publish_state, 'applied');
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.publish_state, 'applied');
   assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.publish_state, 'applied');
+  assert.equal(result.packagesByName.get('@t3x-dev/local')?.release_train, 'paused');
 });
 
-test('release surface keeps candidate packages restricted until promoted', () => {
+test('release surface keeps non-promoted packages restricted', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
   assert.equal(result.packagesByName.get('@t3x-dev/local')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'public');
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.access, 'public');
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.npm_publish, true);
+  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.stability_tier, 'alpha');
   assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/core')?.access, 'restricted');
-  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.access, 'restricted');
-  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.npm_publish, false);
-  assert.equal(result.packagesByName.get('@t3x-dev/transition')?.stability_tier, 'internal');
   assert.equal(result.packagesByName.get('@t3x-dev/api-client')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/cli')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/mcp')?.access, 'restricted');
@@ -51,8 +61,15 @@ test('README mirrors the public alpha surface instead of the old broad package l
   const readme = readText('README.md');
 
   assert.match(readme, /Its published npm surface is intentionally narrow/);
-  assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha \|/);
+  assert.match(
+    readme,
+    /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha, release-train paused \|/
+  );
   assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| public alpha \|/);
+  assert.match(
+    readme,
+    /\| \[`@t3x-dev\/transition`\]\(packages\/transition\/\) \| public alpha \|/
+  );
   assert.match(readme, /\| \[`@t3x-dev\/yschema`\]\(packages\/yschema\/\) \| public alpha \|/);
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local/);
   assert.doesNotMatch(readme, /npx -p @t3x-dev\/local t3x-local start/);
@@ -159,6 +176,7 @@ function makeTempReleaseRoot({ entry = {}, packageJson = {}, readme = defaultRea
     access: 'restricted',
     publish_state: 'applied',
     npm_publish: true,
+    release_train: 'active',
     stability_tier: 'alpha',
     readme_required: true,
     api_extractor: false,
@@ -194,6 +212,7 @@ packages:
     access: ${surfaceEntry.access}
     publish_state: ${surfaceEntry.publish_state}
     npm_publish: ${surfaceEntry.npm_publish}
+    release_train: ${surfaceEntry.release_train}
     stability_tier: ${surfaceEntry.stability_tier}
     readme_required: ${surfaceEntry.readme_required}
     api_extractor: ${surfaceEntry.api_extractor}
@@ -206,9 +225,9 @@ packages:
 
 ## NPM Release Packages
 
-| Package | Path | Access | Tier | Publish State | Why Published |
-|---|---|---|---|---|---|
-| \`${packageName}\` | \`packages/sample\` | restricted | alpha | applied | Fixture package. |
+| Package | Path | Access | Tier | Publish State | Release Train | Why Published |
+|---|---|---|---|---|---|---|
+| \`${packageName}\` | \`packages/sample\` | restricted | alpha | applied | active | Fixture package. |
 `
   );
 

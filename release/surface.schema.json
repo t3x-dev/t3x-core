@@ -47,6 +47,9 @@
           "npm_publish": {
             "type": "boolean"
           },
+          "release_train": {
+            "enum": ["active", "paused"]
+          },
           "stability_tier": {
             "enum": ["alpha", "beta", "stable", "internal"]
           },

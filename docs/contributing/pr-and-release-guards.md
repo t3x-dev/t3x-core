@@ -13,7 +13,7 @@ Before requesting review:
 - Fill in release impact.
 - Run the smallest relevant local verification commands.
 - Add a changeset if the PR changes user-visible behavior for `@t3x-dev/local`,
-  `@t3x-dev/yops`, or `@t3x-dev/yschema`.
+  `@t3x-dev/yops`, `@t3x-dev/transition`, or `@t3x-dev/yschema`.
 
 Use `no-release-impact` only when the PR does not affect public package behavior
 or documented public contracts.
@@ -48,21 +48,29 @@ Release PRs must include:
 - `T3X product release version: \`x.y.z\`` in the PR body.
 - Included changes or a comparison range.
 - User-facing release notes.
-- A `Package Releases` section containing either `- None` or the complete
-  current npm publish surface:
-  `- \`@t3x-dev/local\`: 0.6.0`, `- \`@t3x-dev/yops\`: 0.6.0`, and
-  `- \`@t3x-dev/yschema\`: 0.6.0`.
+- A `Package Releases` section containing either `- None` or the active package
+  release subset with concrete target versions, for example
+  `- \`@t3x-dev/yops\`: 1.0.1`.
+
+The scheduled Release Train creates draft Product Release PRs in code-only mode
+by default. These PRs should use `Package Releases: - None` unless a maintainer
+manually chooses package release mode. `@t3x-dev/local` remains an existing
+public alpha package, but it is paused for scheduled package publishing because
+the local runtime artifact path needs explicit runtime, install, and no-key demo
+review. The active package release train currently includes `@t3x-dev/yops`,
+`@t3x-dev/transition`, and `@t3x-dev/yschema`.
 
 The release PR policy check also validates changeset files:
 
-- `Package Releases: - None` rejects checked-in `.changeset/*.md` files.
-- Package release entries require at least one `.changeset/*.md`.
+- `Package Releases: - None` rejects checked-in changesets for active or paused
+  release-train packages.
+- Package release entries require at least one matching `.changeset/*.md`.
 - Package release entries use final target package versions, not changeset bump
   types like `patch`, `minor`, or `major`.
-- Listed public packages must appear in changeset frontmatter.
-- Public packages in changeset frontmatter must appear in `Package Releases`.
-- Package releases currently require all public alpha npm packages:
-  `@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
+- Listed active packages must appear in changeset frontmatter.
+- Active packages in changeset frontmatter must appear in `Package Releases`.
+- Paused packages, including `@t3x-dev/local`, cannot be listed in Package
+  Releases by the scheduled release train.
 
 The product release version is independent from npm package versions. If the
 release publishes no packages, write `- None` in `Package Releases`; final
@@ -106,6 +114,7 @@ Use this decision table when filling out a PR.
 | --- | --- |
 | `@t3x-dev/local` user-visible behavior | Yes |
 | `@t3x-dev/yops` user-visible behavior | Yes |
+| `@t3x-dev/transition` user-visible behavior | Yes |
 | `@t3x-dev/yschema` user-visible behavior | Yes |
 | Runtime artifact or install behavior | Yes |
 | Public docs contract | Usually yes |

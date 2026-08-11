@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { FIXED_VERSION_PACKAGES, verifyVersions } from '../verify-versions.mjs';
+import {
+  FIXED_VERSION_PACKAGES,
+  VERSION_CHECK_PACKAGE_NAMES,
+  verifyVersions,
+} from '../verify-versions.mjs';
 
 const FIXED_PACKAGE_DIRS = {
   '@t3x-dev/yops': ['packages', 'yops'],
@@ -16,29 +20,66 @@ const FIXED_PACKAGE_DIRS = {
   '@t3x-dev/cli': ['apps', 'cli'],
   '@t3x-dev/mcp': ['apps', 'mcp'],
   '@t3x-dev/local': ['apps', 'local'],
+  '@t3x-dev/transition': ['packages', 'transition'],
 };
 
-function writeFixedPackageJsons(repoRoot, version = '0.3.0') {
+function writeFixedPackageJsons(repoRoot, version = '0.3.0', versionOverrides = {}) {
   writeJson(join(repoRoot, 'pnpm-workspace.yaml'), {});
 
-  for (const packageName of FIXED_VERSION_PACKAGES) {
+  for (const packageName of VERSION_CHECK_PACKAGE_NAMES) {
+    const packageVersion = versionOverrides[packageName] ?? version;
     const packageDir = join(repoRoot, ...FIXED_PACKAGE_DIRS[packageName]);
     mkdirSync(packageDir, { recursive: true });
     writeJson(join(packageDir, 'package.json'), {
       name: packageName,
-      version,
+      version: packageVersion,
       dependencies:
         packageName === '@t3x-dev/local'
           ? {
-              '@t3x-dev/api': `workspace:${version}`,
-              '@t3x-dev/cli': `workspace:${version}`,
-              '@t3x-dev/mcp': `workspace:${version}`,
-              '@t3x-dev/storage': `workspace:${version}`,
+              '@t3x-dev/api': `workspace:${versionOverrides['@t3x-dev/api'] ?? version}`,
+              '@t3x-dev/cli': `workspace:${versionOverrides['@t3x-dev/cli'] ?? version}`,
+              '@t3x-dev/mcp': `workspace:${versionOverrides['@t3x-dev/mcp'] ?? version}`,
+              '@t3x-dev/storage': `workspace:${versionOverrides['@t3x-dev/storage'] ?? version}`,
             }
           : {},
     });
   }
 }
+
+test('verifyVersions allows independently versioned packages without manifest checks', async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 't3x-verify-versions-independent-'));
+  writeFixedPackageJsons(repoRoot, '1.0.0', {
+    '@t3x-dev/yops': '1.0.1',
+    '@t3x-dev/yschema': '1.1.0',
+  });
+
+  const result = await verifyVersions({ repoRoot, verifyManifest: false });
+
+  assert.deepEqual(result.problems, []);
+});
+
+test('verifyVersions skips stale local runtime manifest when selected packages exclude local', async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 't3x-verify-versions-selected-package-'));
+  writeFixedPackageJsons(repoRoot, '1.0.0', {
+    '@t3x-dev/yops': '1.0.1',
+  });
+
+  writeJson(join(repoRoot, 'apps', 'local', 'runtime-manifest.json'), {
+    manifestVersion: 1,
+    packageVersion: '0.3.0',
+    fixedVersion: '0.3.0',
+    dependencies: Object.fromEntries(FIXED_VERSION_PACKAGES.map((name) => [name, '0.3.0'])),
+    platforms: {},
+  });
+
+  const result = await verifyVersions({
+    repoRoot,
+    selectedPackages: ['@t3x-dev/yops'],
+    verifyManifest: true,
+  });
+
+  assert.deepEqual(result.problems, []);
+});
 
 test('verifyVersions rejects runtime manifests with stale runtime artifact metadata', async () => {
   const repoRoot = mkdtempSync(join(tmpdir(), 't3x-verify-versions-'));

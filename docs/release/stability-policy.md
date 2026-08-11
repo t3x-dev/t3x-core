@@ -10,6 +10,7 @@ The public alpha surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/transition`
 - `@t3x-dev/yschema`
 
 Other packages may exist in the repository, but they are treated as internal
@@ -38,6 +39,8 @@ For `@t3x-dev/local`:
 - Installer and runtime behavior must have smoke coverage before release.
 - Runtime artifacts are published only when the local package is released.
 - Unsupported platforms should fail with clear guidance.
+- The package is public but paused from the automated release train; publish it
+  only through explicit maintainer intent and runtime/install review.
 
 For `@t3x-dev/yops`:
 
@@ -52,6 +55,17 @@ For `@t3x-dev/yschema`:
 - Public validation behavior must be documented before release.
 - Compatibility-sensitive changes should include fixture or golden-case tests.
 - Breaking validation API or schema-profile changes require a changeset and
+  release note.
+
+For `@t3x-dev/transition`:
+
+- Protocol object contracts, canonicalization, parsing, Replay verification,
+  and commit integrity behavior must remain deterministic.
+- The package must stay a leaf package with no T3X package dependencies and no
+  network, storage, LLM, clock, random, or product UI behavior.
+- Public protocol changes require conformance or fixture coverage appropriate
+  to the risk.
+- Breaking protocol object or verification behavior requires a changeset and
   release note.
 
 ### YOps Alpha Contract
