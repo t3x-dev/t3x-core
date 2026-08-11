@@ -9,6 +9,8 @@ let mockDB: AnyDB;
 const commitSpies = vi.hoisted(() => ({
   listProjectIds: vi.fn(),
   getCommit: vi.fn(),
+  findLeaves: vi.fn(),
+  createShareToken: vi.fn(),
 }));
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => {
@@ -16,6 +18,8 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
   return {
     ...actual,
     listTransitionCommitProjectIds: commitSpies.listProjectIds,
+    findLeavesByCommit: commitSpies.findLeaves,
+    createShareToken: commitSpies.createShareToken,
   };
 });
 
@@ -52,6 +56,9 @@ import { checkRoutes } from '../routes/check.openapi';
 import { diffRoutes } from '../routes/diff.openapi';
 import { extractionFeedbackRoutes } from '../routes/extraction-feedback.openapi';
 import { importRoutes } from '../routes/import.openapi';
+import { leavesCrudRoutes } from '../routes/leaves-crud.openapi';
+import { relationsRoutes } from '../routes/relations.openapi';
+import { shareRoutes } from '../routes/share.openapi';
 import { usageRoutes } from '../routes/usage.openapi';
 
 function createAuthenticatedApp(userId: string) {
@@ -72,6 +79,9 @@ function createAuthenticatedApp(userId: string) {
   app.route('/', diffRoutes);
   app.route('/', extractionFeedbackRoutes);
   app.route('/', importRoutes);
+  app.route('/', leavesCrudRoutes);
+  app.route('/', relationsRoutes);
+  app.route('/', shareRoutes);
   app.route('/', usageRoutes);
   return app;
 }
@@ -111,6 +121,8 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     importSpies.parsePlatformExport.mockReset();
     commitSpies.listProjectIds.mockReset();
     commitSpies.getCommit.mockReset();
+    commitSpies.findLeaves.mockReset();
+    commitSpies.createShareToken.mockReset();
   });
 
   it('blocks cross-project checks, feedback statistics, and usage writes', async () => {
@@ -206,6 +218,115 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     for (const call of commitSpies.getCommit.mock.calls) {
       expect(call[2]).toBe(ownerProjectId);
     }
+  });
+
+  it('blocks cross-project commit relations, leaves, and share creation before loading data', async () => {
+    const app = createAuthenticatedApp('user_owner');
+    const encodedHash = encodeURIComponent('sha256:private-commit');
+
+    await expectForbidden(
+      await app.request(
+        `/v1/commits/${encodedHash}/relations?project_id=${encodeURIComponent(otherProjectId)}`
+      )
+    );
+    await expectForbidden(
+      await app.request(
+        `/v1/commits/${encodedHash}/leaves?project_id=${encodeURIComponent(otherProjectId)}`
+      )
+    );
+    await expectForbidden(
+      await app.request('/v1/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type: 'commit',
+          entity_id: 'sha256:private-commit',
+          project_id: otherProjectId,
+        }),
+      })
+    );
+
+    expect(commitSpies.listProjectIds).not.toHaveBeenCalled();
+    expect(commitSpies.getCommit).not.toHaveBeenCalled();
+    expect(commitSpies.findLeaves).not.toHaveBeenCalled();
+    expect(commitSpies.createShareToken).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a commit hash has ambiguous project memberships', async () => {
+    const app = createAuthenticatedApp('user_owner');
+    const encodedHash = encodeURIComponent('sha256:shared-commit');
+    commitSpies.listProjectIds.mockResolvedValue([ownerProjectId, otherProjectId]);
+
+    const responses = [
+      await app.request(`/v1/commits/${encodedHash}/relations`),
+      await app.request(`/v1/commits/${encodedHash}/leaves`),
+      await app.request('/v1/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'commit', entity_id: 'sha256:shared-commit' }),
+      }),
+    ];
+
+    for (const response of responses) expect(response.status).toBe(400);
+    expect(commitSpies.getCommit).not.toHaveBeenCalled();
+    expect(commitSpies.findLeaves).not.toHaveBeenCalled();
+    expect(commitSpies.createShareToken).not.toHaveBeenCalled();
+  });
+
+  it('filters commit relations, leaves, and shares through one authorized membership', async () => {
+    const app = createAuthenticatedApp('user_owner');
+    const digest = 'sha256:owner-shared-surface';
+    const encodedHash = encodeURIComponent(digest);
+    commitSpies.listProjectIds.mockResolvedValue([ownerProjectId]);
+    commitSpies.findLeaves.mockResolvedValue([]);
+    commitSpies.getCommit.mockImplementation(
+      async (_db: AnyDB, commitDigest: string, projectId: string | undefined) => ({
+        digest: commitDigest,
+        projectId,
+        schema: 't3x/commit/v2',
+        parents: [],
+        actor: { kind: 'human', id: 'user_owner' },
+        recordedAt: '2026-08-11T00:00:00.000Z',
+        intent: null,
+        rationale: null,
+        evidence: [],
+        semanticContent: { trees: [], relations: [] },
+      })
+    );
+    commitSpies.createShareToken.mockResolvedValue({
+      id: 'share_owner',
+      token: 'token_owner',
+      entity_type: 'commit',
+      entity_id: digest,
+      project_id: ownerProjectId,
+      created_by: null,
+      created_at: '2026-08-11T00:00:00.000Z',
+      expires_at: null,
+      revoked_at: null,
+    });
+
+    expect((await app.request(`/v1/commits/${encodedHash}/relations`)).status).toBe(200);
+    expect((await app.request(`/v1/commits/${encodedHash}/leaves`)).status).toBe(200);
+    expect(
+      (
+        await app.request('/v1/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_type: 'commit', entity_id: digest }),
+        })
+      ).status
+    ).toBe(201);
+
+    for (const call of commitSpies.getCommit.mock.calls) expect(call[2]).toBe(ownerProjectId);
+    expect(commitSpies.findLeaves).toHaveBeenCalledWith(
+      expect.anything(),
+      digest,
+      expect.objectContaining({ projectId: ownerProjectId })
+    );
+    expect(commitSpies.createShareToken).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ project_id: ownerProjectId })
+    );
   });
 
   it('blocks URL imports before fetching attacker-selected content', async () => {

@@ -129,7 +129,9 @@ export const generateHandler: ToolHandler = async (args) => {
   // ── Step 3: Collect lessons from historical leaves (optional improvement) ──
   let lessons: string[] | undefined;
   try {
-    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash, {
+      projectId: leaf.project_id,
+    });
     const collected = collectLessonsFromAssertions(
       historicalLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
     );
