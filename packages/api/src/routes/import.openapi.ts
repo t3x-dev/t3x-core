@@ -26,7 +26,7 @@ import {
   parsePlatformExportFromBuffer,
   parseUrl,
 } from '../lib/import';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, assertProjectCreationAccess, getUserId } from '../lib/project-access';
 import { jsonError } from '../lib/response';
 import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -196,16 +196,25 @@ const importCfpackRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    403: {
+      description: 'Machine credentials cannot create projects',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
   },
 });
 
 importRoutes.openapi(importCfpackRoute, async (c) => {
   const cfpack = c.req.valid('json');
+  const denied = assertProjectCreationAccess(c);
+  if (denied) return denied;
+
   const db = await getDB();
 
   try {
     // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const result = await restoreFromCfpack(db, cfpack as any);
+    const result = await restoreFromCfpack(db, cfpack as any, { ownerId: getUserId(c) });
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
     return c.json(

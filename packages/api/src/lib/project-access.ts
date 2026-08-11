@@ -133,6 +133,19 @@ export async function assertResourceProjectAccess(
 }
 
 /**
+ * Machine principals must not create new, unowned projects. The current
+ * identity model has no server-operator role that can own such a project.
+ * Human principals and AUTH_DISABLED local development may create.
+ */
+export function assertProjectCreationAccess(c: Context): Response | undefined {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (apiKey?.principal_kind !== undefined && apiKey.principal_kind !== 'human') {
+    return c.json(createError('FORBIDDEN', 'Machine credentials cannot create projects'), 403);
+  }
+  return undefined;
+}
+
+/**
  * Resolve and authorize the project membership used to read one repository
  * commit. A digest can be bound to multiple projects, so callers without an
  * explicit project must fail closed instead of guessing a membership.

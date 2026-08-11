@@ -27,6 +27,7 @@ import { getDB } from '../lib/db';
 import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
+  assertProjectCreationAccess,
   getUserId,
 } from '../lib/project-access';
 import {
@@ -290,6 +291,14 @@ const createProjectRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Machine credentials cannot create projects',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -303,6 +312,9 @@ const createProjectRoute = createRoute({
 
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
+
+  const denied = assertProjectCreationAccess(c);
+  if (denied) return denied;
 
   try {
     const db = await getDB();
