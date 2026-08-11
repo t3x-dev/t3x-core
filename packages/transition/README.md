@@ -2,7 +2,7 @@
 
 Public alpha contracts for verifiable T3X state transitions.
 
-`@t3x-dev/transition@0.6.0` is part of the public T3X alpha release surface.
+`@t3x-dev/transition@0.1.0` is part of the public T3X alpha release surface.
 
 ## What
 
