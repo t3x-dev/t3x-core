@@ -129,6 +129,14 @@ test.describe('authenticated browser boundaries', () => {
       expect(ownSocket.kind).toBe('connected');
       expect(ownSocket.projectId).toBe(aliceProjectId);
 
+      const deniedHandshakeStatus = await browserFetchStatus(
+        bobPage,
+        `${API_ORIGIN}/ws?project_id=${encodeURIComponent(
+          aliceProjectId as string
+        )}&token=${encodeURIComponent(bobKey)}`
+      );
+      expect(deniedHandshakeStatus).toBe(403);
+
       const deniedSocket = await openProjectSocket(
         bobPage,
         bobKey,
@@ -243,6 +251,13 @@ async function browserApi<T = unknown>(
       requestData: data,
     }
   ) as Promise<BrowserApiResult<T>>;
+}
+
+async function browserFetchStatus(page: Page, url: string): Promise<number> {
+  return page.evaluate(async (targetUrl) => {
+    const response = await fetch(targetUrl);
+    return response.status;
+  }, url);
 }
 
 async function openProjectSocket(
