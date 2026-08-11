@@ -2,18 +2,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock() factories run BEFORE top-level `const` declarations due to
 // Vitest's hoisting. Use vi.hoisted to move spy creation above the mocks.
-const { mockVerify, joinSpy, leaveSpy, getPresenceSpy, touchSpy, findApiKeySpy, findProjectSpy } =
-  vi.hoisted(() => {
-    return {
-      mockVerify: vi.fn(),
-      joinSpy: vi.fn(),
-      leaveSpy: vi.fn(),
-      getPresenceSpy: vi.fn(() => []),
-      touchSpy: vi.fn(() => Promise.resolve()),
-      findApiKeySpy: vi.fn(),
-      findProjectSpy: vi.fn(),
-    };
-  });
+const {
+  mockVerify,
+  joinSpy,
+  leaveSpy,
+  getPresenceSpy,
+  touchSpy,
+  findApiKeySpy,
+  findProjectSpy,
+  findConversationSpy,
+} = vi.hoisted(() => {
+  return {
+    mockVerify: vi.fn(),
+    joinSpy: vi.fn(),
+    leaveSpy: vi.fn(),
+    getPresenceSpy: vi.fn(() => []),
+    touchSpy: vi.fn(() => Promise.resolve()),
+    findApiKeySpy: vi.fn(),
+    findProjectSpy: vi.fn(),
+    findConversationSpy: vi.fn(),
+  };
+});
 
 // Mock auth verification BEFORE importing the route.
 vi.mock('../middleware/auth', async () => {
@@ -47,6 +56,7 @@ vi.mock('@t3x-dev/storage', () => ({
   touchLastUsed: touchSpy,
   findApiKeyByValue: findApiKeySpy,
   findProjectById: findProjectSpy,
+  findConversationById: findConversationSpy,
 }));
 
 import { createWsRoute } from '../routes/ws';
@@ -87,6 +97,10 @@ describe('ws route — query parameter validation', () => {
     findProjectSpy.mockReset();
     findProjectSpy.mockImplementation((_db, projectId: string) =>
       Promise.resolve({ projectId, ownerId: 'u1' })
+    );
+    findConversationSpy.mockReset();
+    findConversationSpy.mockImplementation((_db, conversationId: string) =>
+      Promise.resolve({ conversationId, projectId: 'proj_conversation' })
     );
     mockVerify.mockReset();
   });
@@ -171,6 +185,58 @@ describe('ws route — query parameter validation', () => {
     // We don't assert it was awaited, just that it was called.
     await Promise.resolve();
     expect(touchSpy).toHaveBeenCalledWith(expect.anything(), 'k_abc');
+  });
+
+  it('rejects a human token subscribing to a conversation owned by another user', async () => {
+    delete process.env.AUTH_DISABLED;
+    mockVerify.mockResolvedValue({
+      userId: 'u1',
+      projectId: null,
+      keyId: 'k_user',
+      principalKind: 'human',
+      transitionScopes: [],
+    });
+    findConversationSpy.mockResolvedValue({
+      conversationId: 'conv_private',
+      projectId: 'proj_private',
+    });
+    findProjectSpy.mockResolvedValue({ projectId: 'proj_private', ownerId: 'u2' });
+    const { fakeUpgrade } = makeFakeUpgrade();
+    const route = createWsRoute(fakeUpgrade as never);
+
+    const response = await route.fetch(
+      new Request('http://localhost/ws?conversation_id=conv_private&token=good_token')
+    );
+
+    expect(response.status).toBe(403);
+    expect(fakeUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('rejects a conversation and project pair that do not share ownership', async () => {
+    delete process.env.AUTH_DISABLED;
+    mockVerify.mockResolvedValue({
+      userId: 'u1',
+      projectId: null,
+      keyId: 'k_user',
+      principalKind: 'human',
+      transitionScopes: [],
+    });
+    findConversationSpy.mockResolvedValue({
+      conversationId: 'conv_private',
+      projectId: 'proj_actual',
+    });
+    const { fakeUpgrade } = makeFakeUpgrade();
+    const route = createWsRoute(fakeUpgrade as never);
+
+    const response = await route.fetch(
+      new Request(
+        'http://localhost/ws?conversation_id=conv_private&project_id=proj_spoofed&token=good_token'
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(fakeUpgrade).not.toHaveBeenCalled();
+    expect(findProjectSpy).not.toHaveBeenCalled();
   });
 
   it('rejects a project-scoped agent key subscribing to another project', async () => {

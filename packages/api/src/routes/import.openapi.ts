@@ -26,6 +26,7 @@ import {
   parsePlatformExportFromBuffer,
   parseUrl,
 } from '../lib/import';
+import { assertProjectAccess, assertProjectCreationAccess, getUserId } from '../lib/project-access';
 import { jsonError } from '../lib/response';
 import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -195,16 +196,25 @@ const importCfpackRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    403: {
+      description: 'Machine credentials cannot create projects',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
   },
 });
 
 importRoutes.openapi(importCfpackRoute, async (c) => {
   const cfpack = c.req.valid('json');
+  const denied = assertProjectCreationAccess(c);
+  if (denied) return denied;
+
   const db = await getDB();
 
   try {
     // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const result = await restoreFromCfpack(db, cfpack as any);
+    const result = await restoreFromCfpack(db, cfpack as any, { ownerId: getUserId(c) });
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
     return c.json(
@@ -264,11 +274,15 @@ importRoutes.openapi(urlPreviewRoute, async (c) => {
   const { url, project_id } = c.req.valid('json');
 
   try {
+    const db = project_id ? await getDB() : null;
+    if (db && project_id) {
+      const access = await assertProjectAccess(c, db, project_id);
+      if (access instanceof Response) return access;
+    }
     const result = await parseUrl(url);
 
     let duplicateWarning: string | undefined;
-    if (project_id) {
-      const db = await getDB();
+    if (db && project_id) {
       duplicateWarning = await checkDuplicate(db, project_id, result.metadata.content_hash, url);
     }
 
@@ -340,6 +354,8 @@ importRoutes.openapi(urlImportRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, project_id);
+    if (access instanceof Response) return access;
     const result = await parseUrl(url);
 
     const duplicateWarning = await checkDuplicate(
@@ -427,6 +443,7 @@ importRoutes.openapi(documentPreviewRoute, async (c) => {
   try {
     const body = await c.req.parseBody();
     const file = body.file;
+    const projectId = body.project_id as string | undefined;
 
     if (!file || !(file instanceof File)) {
       return c.json(
@@ -451,13 +468,17 @@ importRoutes.openapi(documentPreviewRoute, async (c) => {
       );
     }
 
+    const db = projectId ? await getDB() : null;
+    if (db && projectId) {
+      const access = await assertProjectAccess(c, db, projectId);
+      if (access instanceof Response) return access;
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await parseDocument(buffer, file.name, file.type);
 
     let duplicateWarning: string | undefined;
-    const projectId = body.project_id as string | undefined;
-    if (projectId) {
-      const db = await getDB();
+    if (db && projectId) {
       duplicateWarning = await checkDuplicate(db, projectId, result.metadata.content_hash);
     }
 
@@ -551,6 +572,10 @@ importRoutes.openapi(documentImportRoute, async (c) => {
       );
     }
 
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+
     if (file.size > MAX_FILE_SIZE) {
       return c.json(
         {
@@ -564,7 +589,6 @@ importRoutes.openapi(documentImportRoute, async (c) => {
       );
     }
 
-    const db = await getDB();
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await parseDocument(buffer, file.name, file.type);
 
@@ -770,6 +794,8 @@ importRoutes.openapi(platformImportRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, project_id);
+    if (access instanceof Response) return access;
     const parsed = parsePlatformExport(platform_data);
 
     // Filter to selected conversations if specified
@@ -859,6 +885,9 @@ importRoutes.post('/v1/import/url/stream', async (c) => {
   if (!url || typeof url !== 'string') {
     return jsonError(c, 'INVALID_REQUEST', 'url is required', 400);
   }
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, project_id);
+  if (access instanceof Response) return access;
   if (await isInternalUrlResolved(url)) {
     return jsonError(c, 'INVALID_REQUEST', 'URL targets a blocked internal address', 400);
   }
@@ -866,8 +895,6 @@ importRoutes.post('/v1/import/url/stream', async (c) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const db = await getDB();
-
         controller.enqueue(
           encodeSseEvent(JSON.stringify({ type: 'status', message: 'Fetching URL...' }))
         );
@@ -953,6 +980,9 @@ importRoutes.post('/v1/import/document/stream', async (c) => {
       400
     );
   }
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
   if (file.size > MAX_FILE_SIZE) {
     return c.json(
       {
@@ -973,8 +1003,6 @@ importRoutes.post('/v1/import/document/stream', async (c) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const db = await getDB();
-
         controller.enqueue(
           encodeSseEvent(JSON.stringify({ type: 'status', message: 'Parsing document...' }))
         );
@@ -1055,12 +1083,13 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
   if (!platform_data || typeof platform_data !== 'string') {
     return jsonError(c, 'INVALID_REQUEST', 'platform_data is required', 400);
   }
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, project_id);
+  if (access instanceof Response) return access;
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const db = await getDB();
-
         controller.enqueue(
           encodeSseEvent(JSON.stringify({ type: 'status', message: 'Parsing export...' }))
         );

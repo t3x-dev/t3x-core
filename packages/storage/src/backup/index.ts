@@ -5,7 +5,7 @@
  */
 
 export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup';
-export { type RestoreResult, restoreFromCfpack } from './restore';
+export { type RestoreOptions, type RestoreResult, restoreFromCfpack } from './restore';
 export {
   type VerifyChainResult,
   type VerifyResult,

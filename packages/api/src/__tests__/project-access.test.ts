@@ -9,7 +9,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import { deleteProject, findProjectById, findProjects, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -27,6 +27,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { importRoutes } from '../routes/import.openapi';
 // Import routes after mocking
 import { projectRoutes } from '../routes/projects.openapi';
 
@@ -48,10 +49,11 @@ function createAppWithUser(userId?: string) {
     });
   }
   app.route('/', projectRoutes);
+  app.route('/', importRoutes);
   return app;
 }
 
-function createAppWithProjectAgent(projectId: string) {
+function createAppWithProjectAgent(projectId: string | null) {
   const app = new Hono();
   app.use('*', async (c, next) => {
     // biome-ignore lint/suspicious/noExplicitAny: test mock access
@@ -67,7 +69,28 @@ function createAppWithProjectAgent(projectId: string) {
     return next();
   });
   app.route('/', projectRoutes);
+  app.route('/', importRoutes);
   return app;
+}
+
+function cfpack(name: string) {
+  return {
+    version: '2.0.0',
+    project: {
+      project_id: 'project_exported',
+      name,
+      created_at: '2026-08-11T00:00:00.000Z',
+    },
+    conversations: [],
+    turns: [],
+    leaves: [],
+    pins: [],
+    meta: {
+      exported_at: '2026-08-11T00:00:00.000Z',
+      exported_by: 'project-access-test',
+      format_version: '2.0.0',
+    },
+  };
 }
 
 describe('Project Access Control (#508)', () => {
@@ -160,6 +183,67 @@ describe('Project Access Control (#508)', () => {
 
       const allProjects = await findProjects(mockDB, {});
       expect(allProjects[0].ownerId).toBeNull();
+    });
+
+    it('project-scoped agent cannot create a project outside its binding', async () => {
+      const bound = await insertProject(mockDB, { name: 'Agent bound project' });
+      const app = createAppWithProjectAgent(bound.projectId);
+
+      const res = await app.request('/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Escaped project' }),
+      });
+
+      expect(res.status).toBe(403);
+      expect((await findProjects(mockDB, {})).map((project) => project.name)).toEqual([
+        'Agent bound project',
+      ]);
+    });
+
+    it('global agent cannot create an unowned project', async () => {
+      const app = createAppWithProjectAgent(null);
+
+      const res = await app.request('/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Global agent project' }),
+      });
+
+      expect(res.status).toBe(403);
+      expect(await findProjects(mockDB, {})).toEqual([]);
+    });
+  });
+
+  describe('POST /v1/import/cfpack — imported project ownership', () => {
+    it('assigns the authenticated user as owner of the imported project', async () => {
+      const app = createAppWithUser('user_aaa');
+      const res = await app.request('/v1/import/cfpack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfpack('Owned import')),
+      });
+
+      expect(res.status).toBe(200);
+      const payload: ApiResponse = await res.json();
+      const projectId = (payload.data as Record<string, unknown>).project_id as string;
+      expect((await findProjectById(mockDB, projectId))?.ownerId).toBe('user_aaa');
+    });
+
+    it('project-scoped agent cannot import a new project', async () => {
+      const bound = await insertProject(mockDB, { name: 'Agent import boundary' });
+      const app = createAppWithProjectAgent(bound.projectId);
+
+      const res = await app.request('/v1/import/cfpack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfpack('Escaped import')),
+      });
+
+      expect(res.status).toBe(403);
+      expect((await findProjects(mockDB, {})).map((project) => project.name)).toEqual([
+        'Agent import boundary',
+      ]);
     });
   });
 
