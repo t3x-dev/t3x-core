@@ -19,6 +19,10 @@ test('full-stack E2E is manual, broad, and artifact-producing', () => {
   assert.match(workflow, /playwright install --with-deps chromium/);
   assert.match(workflow, /pnpm e2e:full$/m);
   assert.match(workflow, /pnpm e2e:auth$/m);
+  assert.match(
+    workflow,
+    /- name: Run authenticated browser qualification\n\s+if: \$\{\{ !cancelled\(\) \}\}/
+  );
   assert.ok(workflow.indexOf('pnpm e2e:full') < workflow.indexOf('pnpm e2e:auth'));
   assert.match(workflow, /if: always\(\)/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
