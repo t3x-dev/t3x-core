@@ -19,3 +19,27 @@ test('production dependency audit blocks high-severity advisories', () => {
 
   assert.equal(packageJson.scripts['audit:prod'], 'pnpm audit --prod --audit-level high');
 });
+
+test('PR validation runs the authenticated security smoke before the full suite', () => {
+  const workflow = readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8');
+  const packageJson = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
+  const apiPackageJson = JSON.parse(
+    readFileSync(new URL('packages/api/package.json', root), 'utf8')
+  );
+
+  assert.equal(
+    packageJson.scripts['test:security-smoke'],
+    'pnpm --filter @t3x-dev/api test:auth-smoke'
+  );
+  assert.equal(
+    apiPackageJson.scripts['test:auth-smoke'],
+    'vitest run src/__tests__/auth-boundary.smoke.test.ts src/__tests__/auth-websocket.smoke.test.ts'
+  );
+  assert.match(
+    workflow,
+    /^ {6}- name: Run authenticated security smoke\n(?: {8}.+\n)+ {8}run: pnpm test:security-smoke$/m
+  );
+  assert.ok(
+    workflow.indexOf('run: pnpm test:security-smoke') < workflow.indexOf('run: pnpm test\n')
+  );
+});
