@@ -125,6 +125,10 @@ npm packages by itself.
   release version; package versions are derived independently. Leave
   `package_version` as `auto` unless intentionally targeting selected package
   versions that can each be reached by one patch, minor, or major bump.
+- One-time current-version first publishes use `first_publish_packages`, for
+  example `transition`. The release PR body must list the package with
+  `(first publish)`, and the listed version must match the package's current
+  `package.json` version.
 
 `@t3x-dev/local` remains an existing public alpha package, but scheduled release
 train runs do not automatically publish it. A local package release requires
@@ -304,7 +308,9 @@ checked-in changeset files:
 
 - `Package Releases: - None` requires no `.changeset/*.md` files for active or
   paused release-train packages in the release branch.
-- Package entries require at least one matching `.changeset/*.md` file.
+- Package entries require at least one matching `.changeset/*.md` file unless
+  the entry is explicitly marked `(first publish)` and uses the current
+  package version.
 - Package entries must use concrete target package versions, not changeset bump
   types like `patch`, `minor`, or `major`.
 - Each listed active package must appear in a changeset frontmatter entry.
@@ -323,6 +329,9 @@ that npm packages changed.
   information for code-only releases.
 - Active package releases may publish one or more selected packages:
   `@t3x-dev/yops`, `@t3x-dev/transition`, and `@t3x-dev/yschema`.
+- First publishes may include an active package at its current source version
+  in the same publish run as Changesets-bumped packages. After the first
+  publish, future releases for that package must use normal changesets.
 - Scheduled release train runs are code-only by default and intentionally do not
   start the local package/runtime artifact publish path.
 - `@t3x-dev/local` remains public but is paused from automated package

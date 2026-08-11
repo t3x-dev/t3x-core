@@ -36,6 +36,10 @@ on:
         description: "Optional explicit npm package target version, or auto"
         required: false
         default: auto
+      first_publish_packages:
+        description: "Active packages to publish at their current package.json version, for one-time first publishes"
+        required: false
+        default: none
       dry_run:
         description: "Generate the release PR plan without pushing or opening a PR"
         required: true
@@ -106,6 +110,7 @@ jobs:
           RELEASE_TRAIN_PACKAGES: ${{ github.event_name == 'schedule' && 'none' || inputs.packages || 'auto' }}
           RELEASE_TRAIN_PACKAGE_BUMP: ${{ github.event_name == 'schedule' && 'patch' || inputs.package_bump || 'patch' }}
           RELEASE_TRAIN_PACKAGE_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.package_version || 'auto' }}
+          RELEASE_TRAIN_FIRST_PUBLISH_PACKAGES: ${{ github.event_name == 'schedule' && 'none' || inputs.first_publish_packages || 'none' }}
           RELEASE_TRAIN_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
           RELEASE_TRAIN_DRAFT: ${{ github.event_name == 'schedule' && 'true' || inputs.draft }}
         run: |
@@ -115,6 +120,7 @@ jobs:
             --packages "${RELEASE_TRAIN_PACKAGES}"
             --package-bump "${RELEASE_TRAIN_PACKAGE_BUMP}"
             --package-version "${RELEASE_TRAIN_PACKAGE_VERSION}"
+            --first-publish-packages "${RELEASE_TRAIN_FIRST_PUBLISH_PACKAGES}"
             --base-branch main
             --base-ref origin/main
             --head-ref origin/dev

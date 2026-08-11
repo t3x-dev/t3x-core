@@ -66,6 +66,7 @@ function parseArgs(argv) {
     baseRef: 'origin/main',
     draft: false,
     dryRun: true,
+    firstPublishPackages: 'none',
     headRef: 'origin/dev',
     mode: 'auto',
     packageBump: 'patch',
@@ -110,6 +111,7 @@ function parseArgs(argv) {
   options.version = normalizeVersionInput(options.version);
   options.packageVersion = normalizeVersionInput(options.packageVersion);
   options.packages = normalizePackageSelectionInput(options.packages);
+  options.firstPublishPackages = normalizePackageSelectionInput(options.firstPublishPackages);
 
   if (!options.version || (options.version !== 'auto' && !semverPattern.test(options.version))) {
     throw new Error('--version must be "auto" or a semantic version like 1.0.1');
@@ -198,6 +200,40 @@ function bumpVersion(version, bump) {
     return `${major}.${minor + 1}.0`;
   }
   return `${major}.${minor}.${patch + 1}`;
+}
+
+function packageSlug(packageName) {
+  return packageName.replace(/^@t3x-dev\//, '').replace(/[^a-z0-9]+/g, '-');
+}
+
+function resolveFirstPublishPackageNames({ packageSelection, releaseSurface }) {
+  const normalizedSelection = normalizePackageSelectionInput(packageSelection);
+  const lowered = normalizedSelection.toLowerCase();
+
+  if (['auto', 'none', 'no', 'false'].includes(lowered)) {
+    return [];
+  }
+
+  const activePackageNames = releaseTrainPackageNames({ releaseSurface });
+  const activeByName = new Map(activePackageNames.map((name) => [name, name]));
+  const activeBySlug = new Map(activePackageNames.map((name) => [packageSlug(name), name]));
+
+  return [
+    ...new Set(
+      normalizedSelection
+        .split(',')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .map((token) => {
+          const packageName = token.startsWith('@t3x-dev/') ? token : `@t3x-dev/${token}`;
+          const resolved = activeByName.get(packageName) ?? activeBySlug.get(token);
+          if (!resolved) {
+            throw new Error(`${packageName} is not an active release-train package`);
+          }
+          return resolved;
+        })
+    ),
+  ];
 }
 
 function compareVersions(left, right) {
@@ -338,6 +374,7 @@ function buildIncludedChanges(commits, baseRef, headRef) {
 
 export function buildPackagePlan({
   changesets,
+  firstPublishPackageNames = [],
   mode,
   releaseSurface,
   readVersion = readPackageVersion,
@@ -352,11 +389,25 @@ export function buildPackagePlan({
   const pausedPackageEntries = packageEntries.filter((entry) =>
     pausedReleaseTrainPackageSet.has(entry.packageName)
   );
-  const hasChangesets = changesets.length > 0;
   const hasActivePackageChangesets = activePackageEntries.length > 0;
+  const firstPublishPackageSet = new Set(firstPublishPackageNames);
+  const hasFirstPublishPackages = firstPublishPackageSet.size > 0;
   const resolvedMode =
-    mode === 'auto' ? (hasActivePackageChangesets ? 'package' : 'code-only') : mode;
+    mode === 'auto'
+      ? hasActivePackageChangesets || hasFirstPublishPackages
+        ? 'package'
+        : 'code-only'
+      : mode;
   const diagnostics = [];
+
+  for (const packageName of firstPublishPackageSet) {
+    if (!releaseTrainPackageSet.has(packageName)) {
+      diagnostics.push(`${packageName} is not an active release-train package.`);
+    }
+    if (activePackageEntries.some((entry) => entry.packageName === packageName)) {
+      diagnostics.push(`${packageName} cannot be both first-publish and changeset-bumped.`);
+    }
+  }
 
   if (pausedPackageEntries.length > 0) {
     diagnostics.push(
@@ -375,8 +426,10 @@ export function buildPackagePlan({
   }
 
   if (resolvedMode === 'package') {
-    if (!hasChangesets || !hasActivePackageChangesets) {
-      diagnostics.push('mode package requires at least one active package .changeset/*.md file');
+    if (!hasActivePackageChangesets && !hasFirstPublishPackages) {
+      diagnostics.push(
+        'mode package requires at least one active package .changeset/*.md file or first-publish package'
+      );
     }
   }
 
@@ -407,12 +460,35 @@ export function buildPackagePlan({
       };
     })
     .filter(Boolean);
+  const firstPublishReleases = releaseTrainPackages
+    .map((packageName) => {
+      if (!firstPublishPackageSet.has(packageName)) {
+        return null;
+      }
+      const entry = releaseSurface.packagesByName.get(packageName);
+      if (!entry) {
+        return null;
+      }
+      const version = readVersion(entry.path);
+      return {
+        firstPublish: true,
+        name: entry.name,
+        version,
+        line: `- \`${entry.name}\`: ${version} (first publish)`,
+      };
+    })
+    .filter(Boolean);
+  const allPackageReleases = [...packageReleases, ...firstPublishReleases];
 
   return {
     diagnostics,
     mode: resolvedMode,
-    packageReleases: packageReleases.map((entry) => entry.line).join('\n'),
-    packageVersions: packageReleases.map(({ name, version }) => ({ name, version })),
+    packageReleases: allPackageReleases.map((entry) => entry.line).join('\n'),
+    packageVersions: allPackageReleases.map(({ firstPublish = false, name, version }) => ({
+      firstPublish,
+      name,
+      version,
+    })),
   };
 }
 
@@ -468,11 +544,17 @@ function buildReleaseSurfaceSection(files) {
     )}.\n- Owner review must confirm the public npm release surface and stability wording remain intentional.\n`;
 }
 
-function packageVisibleWarnings({ changedFiles, changesets, releaseSurface }) {
+function packageVisibleWarnings({
+  changedFiles,
+  changesets,
+  firstPublishPackageNames = [],
+  releaseSurface,
+}) {
   const warnings = [];
   const changesetPackages = new Set(
     changesets.flatMap((changeset) => changeset.entries).map((entry) => entry.packageName)
   );
+  const firstPublishPackageSet = new Set(firstPublishPackageNames);
   const npmEntries = releaseSurface.releaseTrainPackages
     .map((name) => releaseSurface.packagesByName.get(name))
     .filter(Boolean);
@@ -482,7 +564,11 @@ function packageVisibleWarnings({ changedFiles, changesets, releaseSurface }) {
     const packageChanged = changedFiles.some(
       (file) => file === entry.path || file.startsWith(packagePath)
     );
-    if (packageChanged && !changesetPackages.has(entry.name)) {
+    if (
+      packageChanged &&
+      !changesetPackages.has(entry.name) &&
+      !firstPublishPackageSet.has(entry.name)
+    ) {
       warnings.push(
         `${entry.name} changed under ${entry.path} without a matching changeset; confirm code-only release is intentional or add a changeset.`
       );
@@ -579,6 +665,10 @@ function buildPlan(options) {
   ensureGitRef(options.baseRef);
   ensureGitRef(options.headRef);
   const releaseSurface = validateReleaseSurfaceOrThrow({ rootDir: rootUrl });
+  const firstPublishPackageNames = resolveFirstPublishPackageNames({
+    packageSelection: options.firstPublishPackages,
+    releaseSurface,
+  });
   const initialChangesets = readChangesets({ rootDir: rootPath });
   const commits = readCommits(options.baseRef, options.headRef);
   const changedFiles = readChangedFiles(options.baseRef, options.headRef);
@@ -601,6 +691,7 @@ function buildPlan(options) {
   ].sort();
   const packagePlan = buildPackagePlan({
     changesets,
+    firstPublishPackageNames,
     mode: options.mode,
     releaseSurface,
   });
@@ -614,6 +705,7 @@ function buildPlan(options) {
   const warnings = packageVisibleWarnings({
     changedFiles: effectiveChangedFiles,
     changesets,
+    firstPublishPackageNames,
     releaseSurface,
   });
   const body = buildPullRequestBody({
@@ -633,6 +725,12 @@ function buildPlan(options) {
         headBranch: branch,
         body,
         changedFiles: effectiveChangedFiles,
+        currentPackageVersions: new Map(
+          releaseSurface.releaseTrainPackages.map((packageName) => {
+            const entry = releaseSurface.packagesByName.get(packageName);
+            return [packageName, entry ? readPackageVersion(entry.path) : null];
+          })
+        ),
         changesetFiles: changesets.map((changeset) => ({
           name: changeset.name.replace(/^\.changeset\//, ''),
           packages: changeset.entries.map((entry) => entry.packageName),
@@ -652,6 +750,7 @@ function buildPlan(options) {
     packageSelection: options.packages,
     packageBump: options.packageBump,
     packageVersion: options.packageVersion,
+    firstPublishPackages: options.firstPublishPackages,
     requestedVersion: options.version,
     title,
     version,
@@ -750,6 +849,7 @@ function printDryRun(options, plan) {
   console.log(`resolved version: ${plan.version}`);
   console.log(`mode: ${plan.packagePlan.mode}`);
   console.log(`packages: ${plan.packageSelection}`);
+  console.log(`first publish packages: ${plan.firstPublishPackages}`);
   console.log(`package bump: ${plan.packageBump}`);
   console.log(`package target version: ${plan.packageVersion}`);
   console.log(`branch: ${plan.branch}`);

@@ -79,6 +79,25 @@ test('release train estimates active package versions independently', () => {
   assert.match(plan.packageReleases, /`@t3x-dev\/yschema`: 1\.0\.1/);
 });
 
+test('release train includes current-version first publishes beside changeset bumps', () => {
+  const plan = buildPackagePlan({
+    changesets: [
+      changeset('.changeset/yops.md', [{ packageName: '@t3x-dev/yops', bump: 'minor' }]),
+      changeset('.changeset/yschema.md', [{ packageName: '@t3x-dev/yschema', bump: 'minor' }]),
+    ],
+    firstPublishPackageNames: ['@t3x-dev/transition'],
+    mode: 'package',
+    readVersion: (packagePath) => versionByPath.get(packagePath),
+    releaseSurface,
+  });
+
+  assert.deepEqual(plan.diagnostics, []);
+  assert.equal(plan.mode, 'package');
+  assert.match(plan.packageReleases, /`@t3x-dev\/yops`: 1\.1\.0/);
+  assert.match(plan.packageReleases, /`@t3x-dev\/yschema`: 1\.1\.0/);
+  assert.match(plan.packageReleases, /`@t3x-dev\/transition`: 0\.1\.0 \(first publish\)/);
+});
+
 test('release train can generate minor changesets for selected active packages', () => {
   const changesetPlan = planMissingChangesets({
     changesets: [],
@@ -281,6 +300,9 @@ test('release train workflow supports scheduled code-only preparation and manual
   assert.match(workflow, /github\.event_name == 'schedule' && 'none'/);
   assert.match(workflow, /RELEASE_TRAIN_PACKAGE_BUMP/);
   assert.match(workflow, /--package-bump/);
+  assert.match(workflow, /first_publish_packages/);
+  assert.match(workflow, /RELEASE_TRAIN_FIRST_PUBLISH_PACKAGES/);
+  assert.match(workflow, /--first-publish-packages/);
   assert.match(
     workflow,
     /RELEASE_TRAIN_DRY_RUN: \$\{\{ github\.event_name == 'schedule' && 'false'/

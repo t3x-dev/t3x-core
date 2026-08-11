@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   parseChangesetPackages,
+  parsePackageReleaseEntries,
   parsePackageReleaseSection,
   validateProtectedSurfaceChange,
   validateReleasePr,
@@ -35,9 +36,15 @@ const coreChangeset = {
 const releaseSurfacePackages = ['@t3x-dev/yops', '@t3x-dev/transition', '@t3x-dev/yschema'];
 const pausedReleaseSurfacePackages = ['@t3x-dev/local'];
 const activePackageChangesets = [yopsChangeset, transitionChangeset, yschemaChangeset];
+const currentPackageVersions = new Map([
+  ['@t3x-dev/yops', '1.0.0'],
+  ['@t3x-dev/transition', '0.1.0'],
+  ['@t3x-dev/yschema', '1.0.0'],
+]);
 
 function validateReleasePrWithSurface(options) {
   return validateReleasePr({
+    currentPackageVersions,
     pausedReleaseSurfacePackages,
     releaseSurfacePackages,
     ...options,
@@ -78,6 +85,25 @@ T3X product release version: \`0.4.0\`
 ## Release Notes
 
 - Product release 0.4.0 includes YOps fixes.
+`;
+
+const validFirstPublishReleaseBody = `## Product Release
+
+T3X product release version: \`1.1.0\`
+
+## Included Changes
+
+- Promote reviewed dev changes into the product release.
+
+## Package Releases
+
+- \`@t3x-dev/yops\`: 1.1.0
+- \`@t3x-dev/transition\`: 0.1.0 (first publish)
+- \`@t3x-dev/yschema\`: 1.1.0
+
+## Release Notes
+
+- Product release 1.1.0 publishes the selected package train.
 `;
 
 const validCodeOnlyReleaseBody = `## Product Release
@@ -121,6 +147,17 @@ test('allows a product release PR with matching active package release entries',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
     changesetFiles: activePackageChangesets,
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
+test('allows a first-publish package entry without a changeset when it uses the current version', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/1.1.0',
+    body: validFirstPublishReleaseBody,
+    changesetFiles: [yopsChangeset, yschemaChangeset],
   });
 
   assert.deepEqual(result.errors, []);
@@ -265,6 +302,20 @@ test('rejects package release entry without matching changeset target', () => {
   assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/transition/);
 });
 
+test('rejects a first-publish package entry when the version does not match the current package', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/1.1.0',
+    body: validFirstPublishReleaseBody.replace(
+      '- `@t3x-dev/transition`: 0.1.0 (first publish)',
+      '- `@t3x-dev/transition`: 0.2.0 (first publish)'
+    ),
+    changesetFiles: [yopsChangeset, yschemaChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/transition/);
+});
+
 test('rejects active changeset target missing from Package Releases', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
@@ -318,6 +369,17 @@ test('parses package release section', () => {
     invalidVersionPackages: [],
     hasEntries: true,
   });
+});
+
+test('parses first-publish package release entries', () => {
+  assert.deepEqual(parsePackageReleaseEntries(`- \`@t3x-dev/transition\`: 0.1.0 (first publish)`), [
+    {
+      firstPublish: true,
+      note: '(first publish)',
+      packageName: '@t3x-dev/transition',
+      version: '0.1.0',
+    },
+  ]);
 });
 
 test('validates multi-line package release sections against changesets', () => {

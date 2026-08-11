@@ -50,7 +50,9 @@ Release PRs must include:
 - User-facing release notes.
 - A `Package Releases` section containing either `- None` or the active package
   release subset with concrete target versions, for example
-  `- \`@t3x-dev/yops\`: 1.0.1`.
+  `- \`@t3x-dev/yops\`: 1.0.1`. One-time first publishes may use the current
+  source version with an explicit marker, for example
+  `- \`@t3x-dev/transition\`: 0.1.0 (first publish)`.
 
 The scheduled Release Train creates draft Product Release PRs in code-only mode
 by default. These PRs should use `Package Releases: - None` unless a maintainer
@@ -64,7 +66,9 @@ The release PR policy check also validates changeset files:
 
 - `Package Releases: - None` rejects checked-in changesets for active or paused
   release-train packages.
-- Package release entries require at least one matching `.changeset/*.md`.
+- Package release entries require at least one matching `.changeset/*.md`,
+  except entries explicitly marked `(first publish)` whose version matches the
+  package's current `package.json`.
 - Package release entries use final target package versions, not changeset bump
   types like `patch`, `minor`, or `major`.
 - Listed active packages must appear in changeset frontmatter.

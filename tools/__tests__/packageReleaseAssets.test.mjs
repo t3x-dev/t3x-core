@@ -285,6 +285,62 @@ test('detects selected active publish packages from version package changes', ()
   assert.equal(result.publishesLocal, false);
 });
 
+test('detects current-version first publish packages from product release notes', () => {
+  const result = detectPublishPackages({
+    changedFiles: ['packages/yops/package.json', 'packages/yschema/package.json'],
+    isPackageVersionPublished: (packageName, packageVersion) =>
+      packageName !== '@t3x-dev/transition' || packageVersion !== '0.1.0',
+    readVersion: (packagePath) =>
+      new Map([
+        ['packages/yops', '1.1.0'],
+        ['packages/transition', '0.1.0'],
+        ['packages/yschema', '1.1.0'],
+      ]).get(packagePath),
+    releaseRecords: [
+      {
+        tagName: 't3x-v1.1.0',
+        body: `## Package Releases
+
+- \`@t3x-dev/yops\`: 1.1.0
+- \`@t3x-dev/yschema\`: 1.1.0
+- \`@t3x-dev/transition\`: 0.1.0 (first publish)
+`,
+      },
+    ],
+    releaseSurface: {
+      packages: [
+        {
+          name: '@t3x-dev/yops',
+          path: 'packages/yops',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/transition',
+          path: 'packages/transition',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/yschema',
+          path: 'packages/yschema',
+          npm_publish: true,
+          release_train: 'active',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(result.packageNames, [
+    '@t3x-dev/yops',
+    '@t3x-dev/transition',
+    '@t3x-dev/yschema',
+  ]);
+  assert.deepEqual(result.packageSlugs, ['yops', 'transition', 'yschema']);
+  assert.equal(result.hasPublishPackages, true);
+  assert.equal(result.publishesLocal, false);
+});
+
 function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
