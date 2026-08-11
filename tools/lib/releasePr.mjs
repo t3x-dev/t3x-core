@@ -48,13 +48,7 @@ export function parsePackageReleaseSection(section) {
     .filter((line) => line.startsWith('- '));
 
   const none = lines.some((line) => /^-\s+None\s*$/i.test(line));
-  const packageEntries = lines
-    .map((line) => line.match(/^-\s+(`?@t3x-dev\/[a-z0-9-]+`?)\s*:\s*(\S+)/))
-    .filter(Boolean)
-    .map((match) => ({
-      packageName: normalizePackageName(match[1]),
-      version: match[2].replace(/^`|`$/g, '').trim(),
-    }));
+  const packageEntries = parsePackageReleaseEntries(section);
   const packages = packageEntries.map((entry) => entry.packageName);
   const invalidVersionPackages = packageEntries
     .filter((entry) => !packageReleaseVersionPattern.test(entry.version))
@@ -66,6 +60,24 @@ export function parsePackageReleaseSection(section) {
     invalidVersionPackages: [...new Set(invalidVersionPackages)],
     hasEntries: none || packages.length > 0,
   };
+}
+
+export function parsePackageReleaseEntries(section) {
+  return section
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.match(/^-\s+(`?@t3x-dev\/[a-z0-9-]+`?)\s*:\s*(\S+)(?:\s+(.*))?$/))
+    .filter(Boolean)
+    .map((match) => {
+      const note = match[3]?.trim() ?? '';
+      return {
+        firstPublish: /\bfirst[-\s]+publish\b/i.test(note),
+        note,
+        packageName: normalizePackageName(match[1]),
+        version: match[2].replace(/^`|`$/g, '').trim(),
+      };
+    });
 }
 
 function parseProductReleaseVersion(body) {
@@ -123,8 +135,10 @@ export function validateProtectedSurfaceChange({ changedFiles = [], body = '' })
 
 function validatePackageReleases({
   errors,
+  packageReleaseEntries = [],
   packageReleases,
   changesetFiles,
+  currentPackageVersions = new Map(),
   releaseSurfacePackages,
   pausedReleaseSurfacePackages = [],
 }) {
@@ -169,7 +183,23 @@ function validatePackageReleases({
     );
   }
 
-  if (packageReleases.packages.length > 0 && changesetFiles.length === 0) {
+  const firstPublishPackages = new Set(
+    packageReleaseEntries
+      .filter(
+        (entry) =>
+          entry.firstPublish && currentPackageVersions.get(entry.packageName) === entry.version
+      )
+      .map((entry) => entry.packageName)
+  );
+  const allPackageEntriesAreFirstPublishes =
+    packageReleaseEntries.length > 0 &&
+    packageReleaseEntries.every((entry) => firstPublishPackages.has(entry.packageName));
+
+  if (
+    packageReleases.packages.length > 0 &&
+    changesetFiles.length === 0 &&
+    !allPackageEntriesAreFirstPublishes
+  ) {
     errors.push('Package Releases lists packages, but no .changeset/*.md files were found.');
   }
 
@@ -184,7 +214,7 @@ function validatePackageReleases({
       errors.push(`${packageName} is not an active release-train package.`);
       continue;
     }
-    if (!changesetPackages.has(packageName)) {
+    if (!changesetPackages.has(packageName) && !firstPublishPackages.has(packageName)) {
       errors.push(`Package Releases lists ${packageName}, but no changeset targets it.`);
     }
   }
@@ -207,6 +237,7 @@ function validateProductReleaseBody({
   body,
   branchVersion = null,
   changesetFiles = [],
+  currentPackageVersions = new Map(),
   releaseSurfacePackages,
   pausedReleaseSurfacePackages = [],
 }) {
@@ -240,10 +271,13 @@ function validateProductReleaseBody({
   if (!body.includes('## Package Releases')) {
     errors.push('main release PRs must include a Package Releases section.');
   }
+  const packageReleaseSection = sectionText(body, 'Package Releases');
   validatePackageReleases({
     errors,
-    packageReleases: parsePackageReleaseSection(sectionText(body, 'Package Releases')),
+    packageReleaseEntries: parsePackageReleaseEntries(packageReleaseSection),
+    packageReleases: parsePackageReleaseSection(packageReleaseSection),
     changesetFiles,
+    currentPackageVersions,
     releaseSurfacePackages,
     pausedReleaseSurfacePackages,
   });
@@ -257,6 +291,7 @@ export function validateReleasePr({
   body = '',
   changesetFiles = [],
   changedFiles = [],
+  currentPackageVersions = new Map(),
   releaseSurfacePackages = [],
   pausedReleaseSurfacePackages = [],
 }) {
@@ -286,6 +321,7 @@ export function validateReleasePr({
       body,
       branchVersion: releaseMatch?.[1] ?? null,
       changesetFiles,
+      currentPackageVersions,
       releaseSurfacePackages,
       pausedReleaseSurfacePackages,
     })

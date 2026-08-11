@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { readChangesetFiles, validateReleasePr } from './lib/releasePr.mjs';
 import { validateReleaseSurfaceOrThrow } from './lib/releaseSurface.mjs';
 
@@ -30,12 +32,26 @@ const releaseSurface = validateReleaseSurfaceOrThrow({
   rootDir: new URL('..', import.meta.url),
 });
 
+function readCurrentPackageVersions() {
+  const versions = new Map();
+  for (const packageName of releaseSurface.releaseTrainPackages) {
+    const entry = releaseSurface.packagesByName.get(packageName);
+    if (!entry) {
+      continue;
+    }
+    const packageJson = JSON.parse(readFileSync(join(entry.path, 'package.json'), 'utf8'));
+    versions.set(packageName, packageJson.version);
+  }
+  return versions;
+}
+
 const result = validateReleasePr({
   baseBranch: process.env.T3X_PR_BASE ?? '',
   headBranch: process.env.T3X_PR_HEAD ?? '',
   body: process.env.T3X_PR_BODY ?? '',
   changesetFiles: readChangesetFiles(),
   changedFiles: readChangedFiles(),
+  currentPackageVersions: readCurrentPackageVersions(),
   pausedReleaseSurfacePackages: releaseSurface.pausedReleaseTrainPackages,
   releaseSurfacePackages: releaseSurface.releaseTrainPackages,
 });

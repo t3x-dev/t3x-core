@@ -64,6 +64,8 @@ jobs:
 
       - name: Detect package versions to publish
         id: publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node tools/detect-publish-packages.mjs
 
   product-release-record:
