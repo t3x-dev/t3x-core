@@ -420,6 +420,12 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByLabelText('Sort workspaces')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Collect source evidence, then generate a schema-aligned proposal. If no model is configured, T3X uses a deterministic scaffold that you can review and refine.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Production proposal steps use LLMs/)).not.toBeInTheDocument();
 
     activateTab(/Validation/);
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
@@ -1267,6 +1273,12 @@ describe('WorkspaceWorkbench', () => {
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},
+            workspace: {
+              ...workspaceCandidates[1],
+              revision: 3,
+              status: 'committed',
+              lastCommitHash: transitionDigest('9'),
+            },
           },
         });
       }
@@ -1340,11 +1352,15 @@ describe('WorkspaceWorkbench', () => {
       'Awaiting decision'
     );
     const overrideButton = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(overrideButton).toBeDisabled();
+    expect(overrideButton).toBeEnabled();
+    fireEvent.click(overrideButton);
+    expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(0);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a reason before continuing with this failed check.'
+    );
     fireEvent.change(screen.getByLabelText('Why continue despite the failed check?'), {
       target: { value: 'This known schema gap is acceptable for the draft.' },
     });
-    expect(overrideButton).toBeEnabled();
     fireEvent.click(overrideButton);
 
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(1));
@@ -1357,6 +1373,20 @@ describe('WorkspaceWorkbench', () => {
       precondition: transitionPrecondition,
     });
     expect(countFetchCalls(fetchMock.mock.calls, `${workspaceUrl}/commit`)).toBe(0);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue on release/notes' }));
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, workspaceUrl)).toBe(2));
+    const continuationSave = fetchMock.mock.calls.filter(
+      ([input]) => String(input) === workspaceUrl
+    )[1];
+    const continuationBody = JSON.parse(String(continuationSave?.[1]?.body));
+    expect(continuationBody).toMatchObject({
+      if_revision: 3,
+      workspace: {
+        status: 'draft',
+      },
+    });
+    expect(continuationBody.workspace).not.toHaveProperty('lastCommitHash');
 
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
@@ -2425,6 +2455,12 @@ describe('WorkspaceWorkbench', () => {
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},
+            workspace: {
+              ...yopsWorkspace,
+              revision: 3,
+              status: 'committed',
+              lastCommitHash: transitionDigest('8'),
+            },
           },
         });
       }

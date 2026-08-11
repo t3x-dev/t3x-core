@@ -293,8 +293,8 @@ export function SourcesTab({
             </Badge>
           </div>
           <p className="mt-1 max-w-3xl text-sm font-medium text-[var(--text-secondary)]">
-            Collect evidence before generating a candidate proposal. Production proposal steps use
-            LLMs; this local preview can fall back to a deterministic scaffold.
+            Collect source evidence, then generate a schema-aligned proposal. If no model is
+            configured, T3X uses a deterministic scaffold that you can review and refine.
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
             <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5">

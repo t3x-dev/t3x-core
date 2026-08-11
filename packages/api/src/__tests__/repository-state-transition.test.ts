@@ -9,6 +9,7 @@ import {
   listRepositoryDecisionAudit,
   listTransitionCommits,
   TransitionHeadConflictError,
+  TransitionYOpsLogMembershipError,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -141,6 +142,34 @@ describe('repository YOps State Transition application service', () => {
       })
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_MEDIA_TYPE' });
     await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+  });
+
+  it('rolls back Decision audit, CommitV2, and ref when commit persistence fails', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository State Atomic Commit' })
+    );
+    await ensureMainBranch(db, project.projectId);
+
+    await expect(
+      commitRepositoryYOpsState({
+        db,
+        projectId: project.projectId,
+        refName: 'main',
+        expectedHead: null,
+        target: createYOpsState({ version: 1 }),
+        actor: HUMAN,
+        yopsLogIds: ['missing-yops-log'],
+      })
+    ).rejects.toBeInstanceOf(TransitionYOpsLogMembershipError);
+
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+    await expect(
+      listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toEqual([]);
+    await expect(
+      getTransitionRefHead(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ format: 'empty', head: null });
   });
 
   it('round-trips repository trees and relations through the versioned YOps domain', () => {

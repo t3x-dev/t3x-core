@@ -133,6 +133,14 @@ function packageReleaseFor(packageRecord) {
     };
   }
 
+  if (packageRecord.name === '@t3x-dev/transition') {
+    return {
+      releaseTag: `t3x-transition-v${packageRecord.version}`,
+      releaseTitle: `t3x-transition v${packageRecord.version}`,
+      releaseNotes: `Package release for @t3x-dev/transition@${packageRecord.version}.`,
+    };
+  }
+
   throw new Error(`unsupported package release asset package: ${packageRecord.name}`);
 }
 

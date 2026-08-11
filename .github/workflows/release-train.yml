@@ -1,0 +1,138 @@
+name: Release Train
+
+on:
+  schedule:
+    # Fridays at 10:00 China Standard Time.
+    - cron: "0 2 * * 5"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "T3X product release version, for example 1.1.0, or auto"
+        required: false
+        default: auto
+      mode:
+        description: "Release mode; default code-only, auto/package may generate changesets"
+        required: true
+        default: code-only
+        type: choice
+        options:
+          - code-only
+          - auto
+          - package
+      packages:
+        description: "Package selection: auto, none, all-active, yops, yschema, transition, or comma list"
+        required: false
+        default: auto
+      package_bump:
+        description: "Generated package changeset bump when package mode is selected"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      package_version:
+        description: "Optional explicit npm package target version, or auto"
+        required: false
+        default: auto
+      first_publish_packages:
+        description: "Active packages to publish at their current package.json version, for one-time first publishes"
+        required: false
+        default: none
+      dry_run:
+        description: "Generate the release PR plan without pushing or opening a PR"
+        required: true
+        default: true
+        type: boolean
+      draft:
+        description: "Create the release PR as a draft when dry_run is false"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-train-${{ github.event_name == 'schedule' && 'scheduled' || inputs.version || 'auto' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    name: Prepare release PR
+    if: ${{ github.event_name != 'schedule' || vars.RELEASE_TRAIN_PAUSED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch release refs
+        run: git fetch origin main dev --tags
+
+      - name: Lint and format check
+        run: pnpm check
+
+      - name: Check release surface
+        run: pnpm check:release-surface
+
+      - name: Check release docs alignment
+        run: pnpm check:release-docs-alignment
+
+      - name: Verify package versions without runtime manifest
+        run: pnpm verify:versions:no-manifest
+
+      - name: Prepare release PR
+        env:
+          GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+          RELEASE_TRAIN_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+          RELEASE_TRAIN_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.version || 'auto' }}
+          RELEASE_TRAIN_MODE: ${{ github.event_name == 'schedule' && 'code-only' || inputs.mode || 'auto' }}
+          RELEASE_TRAIN_PACKAGES: ${{ github.event_name == 'schedule' && 'none' || inputs.packages || 'auto' }}
+          RELEASE_TRAIN_PACKAGE_BUMP: ${{ github.event_name == 'schedule' && 'patch' || inputs.package_bump || 'patch' }}
+          RELEASE_TRAIN_PACKAGE_VERSION: ${{ github.event_name == 'schedule' && 'auto' || inputs.package_version || 'auto' }}
+          RELEASE_TRAIN_FIRST_PUBLISH_PACKAGES: ${{ github.event_name == 'schedule' && 'none' || inputs.first_publish_packages || 'none' }}
+          RELEASE_TRAIN_DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+          RELEASE_TRAIN_DRAFT: ${{ github.event_name == 'schedule' && 'true' || inputs.draft }}
+        run: |
+          args=(
+            --version "${RELEASE_TRAIN_VERSION}"
+            --mode "${RELEASE_TRAIN_MODE}"
+            --packages "${RELEASE_TRAIN_PACKAGES}"
+            --package-bump "${RELEASE_TRAIN_PACKAGE_BUMP}"
+            --package-version "${RELEASE_TRAIN_PACKAGE_VERSION}"
+            --first-publish-packages "${RELEASE_TRAIN_FIRST_PUBLISH_PACKAGES}"
+            --base-branch main
+            --base-ref origin/main
+            --head-ref origin/dev
+          )
+
+          if [ "${RELEASE_TRAIN_DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          else
+            args+=(--apply)
+            if [ "${RELEASE_TRAIN_DRAFT}" = "true" ]; then
+              args+=(--draft)
+            fi
+          fi
+
+          node tools/release-train/prepare-release-pr.mjs "${args[@]}"

@@ -19,8 +19,7 @@ function createFixture() {
       'transition',
       {
         name: '@t3x-dev/transition',
-        private: true,
-        publishConfig: { access: 'restricted' },
+        publishConfig: { access: 'public' },
       },
     ],
     ['core', { name: '@t3x-dev/core' }],
@@ -52,8 +51,7 @@ test('the Transition leaf rejects T3X dependencies and imports outside the packa
     `${JSON.stringify(
       {
         name: '@t3x-dev/transition',
-        private: true,
-        publishConfig: { access: 'restricted' },
+        publishConfig: { access: 'public' },
         dependencies: { '@t3x-dev/core': 'workspace:*', lodash: '^4.0.0', pg: '^8.0.0' },
       },
       null,

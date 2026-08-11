@@ -58,6 +58,7 @@ export { transitionPolicyBindingRoutes } from './transition-policy-bindings.open
 export { turnRoutes } from './turns.openapi';
 export { usageRoutes } from './usage.openapi';
 export { webhooksRoutes } from './webhooks.openapi';
+export { workspaceExtractionProposalRoutes } from './workspace-extraction-proposals.openapi';
 export {
   createWorkspaceSourceTransitionRoutes,
   workspaceSourceTransitionRoutes,
@@ -66,5 +67,6 @@ export { workspaceValidationRoutes } from './workspace-validation.openapi';
 export { workspaceRoutes } from './workspaces.openapi';
 export { yopsLogRoutes } from './yops-log.openapi';
 export { yopsValidateRoutes } from './yops-validate.openapi';
+export { yschemaCompositionRoutes } from './yschema-composition.openapi';
 export { yschemaPrdSmokeRoutes } from './yschema-prd-smoke.openapi';
 export { yschemaValidationRoutes } from './yschema-validation.openapi';

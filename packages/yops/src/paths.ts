@@ -18,6 +18,24 @@
 
 import type { YValue } from './types';
 
+/** Test whether a mapping contains a key without consulting Object.prototype. */
+export function hasOwnKey(map: object, key: string): boolean {
+  return Object.hasOwn(map, key);
+}
+
+/**
+ * Define an enumerable own data property without invoking the legacy
+ * `Object.prototype.__proto__` setter.
+ */
+export function setOwnKey<T>(map: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(map, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
 /** Compare a match segment's string value against a YAML value with type coercion.
  *  `[id=1]` matches both `{ id: "1" }` and `{ id: 1 }`. */
 function matchEquals(actual: YValue, expected: string): boolean {
@@ -29,12 +47,9 @@ function matchEquals(actual: YValue, expected: string): boolean {
 
 /** Predicate: does this array item match a key-match segment? */
 function itemMatchesSeg(item: YValue, seg: { key: string; value: string }): boolean {
-  return (
-    item !== null &&
-    typeof item === 'object' &&
-    !Array.isArray(item) &&
-    matchEquals((item as { [key: string]: YValue })[seg.key], seg.value)
-  );
+  if (item === null || typeof item !== 'object' || Array.isArray(item)) return false;
+  const map = item as { [key: string]: YValue };
+  return hasOwnKey(map, seg.key) && matchEquals(map[seg.key], seg.value);
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -216,7 +231,7 @@ export function deepClone(value: YValue): YValue {
   }
   const result: { [key: string]: YValue } = {};
   for (const key of Object.keys(value as { [key: string]: YValue })) {
-    result[key] = deepClone((value as { [key: string]: YValue })[key]);
+    setOwnKey(result, key, deepClone((value as { [key: string]: YValue })[key]));
   }
   return result;
 }
@@ -239,7 +254,7 @@ export function resolvePath(doc: YValue, path: string): YValue | undefined {
     if (seg.type === 'key') {
       if (typeof current !== 'object' || Array.isArray(current)) return undefined;
       const map = current as { [key: string]: YValue };
-      if (!(seg.value in map)) return undefined;
+      if (!hasOwnKey(map, seg.value)) return undefined;
       current = map[seg.value];
     } else if (seg.type === 'index') {
       if (!Array.isArray(current)) return undefined;
@@ -284,11 +299,11 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
     }
     const map = current as { [key: string]: YValue };
     if (isLast) {
-      map[seg.value] = deepClone(value);
+      setOwnKey(map, seg.value, deepClone(value));
     } else {
       // Create intermediate mapping if key is absent
-      if (!(seg.value in map)) {
-        map[seg.value] = {};
+      if (!hasOwnKey(map, seg.value)) {
+        setOwnKey(map, seg.value, {});
       } else if (map[seg.value] === null || typeof map[seg.value] !== 'object') {
         // Scalar or null intermediate — refuse to silently overwrite
         throw new Error(`Cannot traverse through non-mapping value at "${seg.value}"`);
@@ -354,7 +369,7 @@ function _deleteRecursive(current: YValue, segments: PathSegment[], idx: number)
   if (seg.type === 'key') {
     if (current === null || typeof current !== 'object' || Array.isArray(current)) return false;
     const map = current as { [key: string]: YValue };
-    if (!(seg.value in map)) return false;
+    if (!hasOwnKey(map, seg.value)) return false;
     if (isLast) {
       delete map[seg.value];
       return true;

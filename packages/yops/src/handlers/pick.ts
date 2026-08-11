@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, resolvePath, setAtPath } from '../paths';
+import { deepClone, resolvePath, setAtPath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -29,7 +29,7 @@ export const pickHandler: OpHandler = (doc, fields, index) => {
   const picked: { [key: string]: YValue } = {};
   for (const key of Object.keys(targetMap)) {
     if (keepSet.has(key)) {
-      picked[key] = deepClone(targetMap[key]);
+      setOwnKey(picked, key, deepClone(targetMap[key]));
     }
   }
 

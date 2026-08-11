@@ -5,8 +5,12 @@
  * - Extended thinking parameter handling
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
+import * as storage from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetProviderRegistry } from '../lib/provider-registry';
+import { setupTestDB } from './setup';
 
 // Mock undici for proxy support
 vi.mock('undici', () => ({
@@ -14,22 +18,57 @@ vi.mock('undici', () => ({
   fetch: vi.fn(),
 }));
 
+let mockDB: AnyDB;
+let cleanup: (() => Promise<void>) | null = null;
+
+vi.mock('../lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
+  closeDB: vi.fn(() => Promise.resolve()),
+}));
+
 // Save and clear env vars
 const savedEnv: Record<string, string | undefined> = {};
 const envKeys = [
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
   'OPENAI_API_KEY',
+  'GOOGLE_AI_STUDIO_KEY',
   'HTTPS_PROXY',
   'https_proxy',
   'HTTP_PROXY',
   'http_proxy',
 ];
 
-beforeAll(() => {
+let app: Hono;
+
+beforeAll(async () => {
   for (const key of envKeys) {
     savedEnv[key] = process.env[key];
     delete process.env[key];
   }
+
+  const setup = await setupTestDB();
+  mockDB = setup.db;
+  cleanup = setup.cleanup;
+
+  const { chatRoutes } = await import('../routes/chat.openapi');
+  app = new Hono();
+  app.route('/', chatRoutes);
+});
+
+beforeEach(async () => {
+  resetProviderRegistry();
+
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
+
+  await storage.deleteProviderCredential(mockDB, 'anthropic');
+  await storage.deleteProviderCredential(mockDB, 'openai');
+  await storage.deleteProviderCredential(mockDB, 'google');
 });
 
 afterAll(() => {
@@ -40,12 +79,9 @@ afterAll(() => {
       delete process.env[key];
     }
   }
+
+  return cleanup?.();
 });
-
-import { chatRoutes } from '../routes/chat.openapi';
-
-const app = new Hono();
-app.route('/', chatRoutes);
 
 describe('Chat Multimodal Validation', () => {
   describe('string content (backward compatibility)', () => {

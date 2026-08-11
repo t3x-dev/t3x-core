@@ -43,9 +43,9 @@ positioning unless the README changes first.
 ## Transition Spine
 
 Epic #1222 completed the internal Transition Spine architecture. The protocol
-kernel and conformance bundle are implemented, but `@t3x-dev/transition`
-remains an internal surface until explicitly promoted through the release
-process.
+kernel and conformance bundle are implemented, and `@t3x-dev/transition` is the
+public alpha leaf package for protocol contracts. Public packaging does not
+loosen the protocol boundary.
 
 Preserve these boundaries:
 
@@ -86,10 +86,19 @@ Root docs are intentionally minimal. Public policy and operational docs live in
 
 ## Release Surface
 
-The restricted alpha npm release surface is intentionally narrow:
+The public alpha npm release surface is intentionally narrow:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/transition`
+- `@t3x-dev/yschema`
+
+`@t3x-dev/local` remains public but is paused from automated release-train
+publishing. The active package release train is:
+
+- `@t3x-dev/yops`
+- `@t3x-dev/transition`
+- `@t3x-dev/yschema`
 
 `RELEASE.md` and `release/surface.yaml` are the source of truth. Other packages
 are internal, preview, or candidate surfaces until promoted.

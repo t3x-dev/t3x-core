@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
 import { extractWorkspaceCandidate } from '@/infrastructure/workspaceFlow';
@@ -13,6 +13,14 @@ const fetchMaterialsByProjectMock = vi.fn();
 const fetchProjectWorkspacesMock = vi.fn();
 let searchParamsValue = new URLSearchParams('tab=workspaces');
 let branchHeadsValue: Record<string, string | null> = {};
+
+class FakeWebSocket {
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  close() {}
+}
 
 vi.mock('@/infrastructure/workspaceFlow', () => ({
   extractWorkspaceCandidate: vi.fn(),
@@ -46,6 +54,7 @@ vi.mock('@/queries/workspaces', () => ({
 
 describe('ProjectWorkspacesTab', () => {
   beforeEach(() => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
     replaceMock.mockClear();
     pushMock.mockClear();
     fetchMaterialsByProjectMock.mockResolvedValue([]);
@@ -62,6 +71,8 @@ describe('ProjectWorkspacesTab', () => {
       'release/notes': null,
     };
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('starts a new project with a clean main workspace instead of preview fixture state', async () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);

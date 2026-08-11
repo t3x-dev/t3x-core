@@ -32,7 +32,13 @@ export interface WorkspaceTransitionState {
 interface ReviewSession {
   content: WorkspaceTransitionContent;
   precondition: WorkspaceTransitionPrecondition;
+  transitionId: string;
   why?: string;
+}
+
+export interface WorkspaceTransitionCommitResult {
+  commitId: string;
+  workspace: WorkspaceCandidate;
 }
 
 const INITIAL_STATE: WorkspaceTransitionState = {
@@ -76,7 +82,12 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
           revision
         );
         if (generationRef.current !== generation) return false;
-        sessionRef.current = { content, precondition: reviewed.precondition, why };
+        sessionRef.current = {
+          content,
+          precondition: reviewed.precondition,
+          transitionId: reviewed.transition_id,
+          why,
+        };
         setState({
           error: null,
           errorCode: null,
@@ -98,7 +109,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
     async (
       outcome: WorkspaceTransitionOutcome,
       decisionReasonInput?: string
-    ): Promise<string | null> => {
+    ): Promise<WorkspaceTransitionCommitResult | null> => {
       const session = sessionRef.current;
       if (!session) {
         setState({
@@ -123,6 +134,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
       setState((current) => ({ ...current, error: null, errorCode: null, phase: 'deciding' }));
       try {
         const decided = await decideWorkspaceTransition(candidate.projectId, candidate.id, {
+          transitionId: session.transitionId,
           content: session.content,
           why: session.why,
           outcome,
@@ -131,6 +143,9 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
         });
         sessionRef.current = null;
         const commitId = committedTransitionId(decided.transition);
+        if (commitId && !decided.workspace) {
+          throw new Error('Committed Workspace response did not include the latest revision.');
+        }
         setState({
           error: null,
           errorCode: null,
@@ -144,7 +159,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
             branch: candidate.targetBranch,
           });
         }
-        return commitId;
+        return commitId && decided.workspace ? { commitId, workspace: decided.workspace } : null;
       } catch (error) {
         const stale = error instanceof ApiError && error.code === 'STALE_REVIEW';
         if (stale) sessionRef.current = null;

@@ -32,7 +32,7 @@ const RUNNER_ACTOR = { kind: 'service', id: 'runner:esphome-local-oci' } as cons
 const REPLAY_ACTOR = { kind: 'service', id: 'service:replay' } as const;
 const PROPOSER = { kind: 'agent', id: 'agent:workspace' } as const;
 const DECIDER = { kind: 'human', id: 'human:maintainer' } as const;
-const REPLAY_TOOL = { name: '@t3x-dev/transition', version: '0.6.0' } as const;
+const REPLAY_TOOL = { name: '@t3x-dev/transition', version: '0.1.0' } as const;
 const UNSPECIFIED_RESOURCE = { mode: 'unspecified' } as const;
 const SECRET_VALUES = {
   api_encryption_key: 'transient-api-key',

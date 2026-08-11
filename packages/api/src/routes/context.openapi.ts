@@ -13,6 +13,7 @@ import { serializeForPrompt } from '@t3x-dev/core';
 import { getTransitionRefHead } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { decodeRepositorySemanticContentState } from '../lib/repository-state-transition';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { ContextQuery, ContextResponse } from '../schemas/integration-contracts';
@@ -77,6 +78,8 @@ contextRoutes.openapi(getContextRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const head = await getTransitionRefHead(db, { projectId, refName: branch });
 

@@ -7,13 +7,15 @@ import {
   type State,
   sha256,
 } from '@t3x-dev/core';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type TransitionProposalMembershipRecord,
+  type TransitionProposalPreparationRecord,
   type TransitionStatementMembershipRecord,
   transitionObjects,
   transitionProposalMemberships,
+  transitionProposalPreparations,
   transitionStatementMemberships,
 } from '../schema-transition-commits';
 import { persistTransitionObjects } from './transition-commits';
@@ -29,6 +31,7 @@ export type TransitionRequestKind = (typeof TRANSITION_REQUEST_KINDS)[number];
 type ActorRef = ProposalStatement['actor'];
 
 const REQUEST_DIGEST_DOMAIN = 't3x-transition-request-v1' as const;
+const PREPARATION_DIGEST_DOMAIN = 't3x-transition-preparation-v1' as const;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 export class TransitionMembershipNotFoundError extends Error {
@@ -69,6 +72,12 @@ export class TransitionMembershipIntegrityError extends Error {
 
 export function digestTransitionRequestCanonicalJson(canonicalJson: string): `sha256:${string}` {
   return `sha256:${sha256(`${REQUEST_DIGEST_DOMAIN}\0${canonicalJson}`)}`;
+}
+
+export function digestTransitionPreparationCanonicalJson(
+  canonicalJson: string
+): `sha256:${string}` {
+  return `sha256:${sha256(`${PREPARATION_DIGEST_DOMAIN}\0${canonicalJson}`)}`;
 }
 
 function assertActor(actor: ActorRef, field: string): void {
@@ -117,6 +126,18 @@ function proposalFactsEqual(
   );
 }
 
+function preparationFactsEqual(
+  row: TransitionProposalPreparation | null,
+  input: CreateTransitionProposalMembershipInput
+): boolean {
+  if (input.preparationCanonicalJson === undefined) return row === null;
+  return (
+    row !== null &&
+    row.canonicalJson === input.preparationCanonicalJson &&
+    row.digest === input.preparationDigest
+  );
+}
+
 export interface CreateTransitionProposalMembershipInput {
   projectId: string;
   workspaceId: string;
@@ -126,6 +147,8 @@ export interface CreateTransitionProposalMembershipInput {
   requestKind: TransitionRequestKind;
   requestCanonicalJson: string;
   requestDigest: string;
+  preparationCanonicalJson?: string;
+  preparationDigest?: string;
   requestId: string;
   actor: ActorRef;
   base: State;
@@ -151,6 +174,13 @@ export interface TransitionProposalMembership {
   createdAt: string;
 }
 
+export interface TransitionProposalPreparation {
+  transitionId: string;
+  canonicalJson: string;
+  digest: string;
+  createdAt: string;
+}
+
 export interface TransitionStatementMembership {
   transitionId: string;
   statementDigest: string;
@@ -163,6 +193,7 @@ export interface TransitionStatementMembership {
 
 export interface ResolvedTransitionProposalGraph {
   membership: TransitionProposalMembership;
+  preparation: TransitionProposalPreparation | null;
   base: State;
   result: State;
   effect: Extract<ProtocolObject, { schema: 't3x/effect/v1' }>;
@@ -172,6 +203,17 @@ export interface ResolvedTransitionProposalGraph {
     statement: Extract<ProtocolObject, { schema: 't3x/statement/v1' }>;
     issuerContext: { actor: ActorRef };
   }>;
+}
+
+function proposalPreparation(
+  row: TransitionProposalPreparationRecord
+): TransitionProposalPreparation {
+  return {
+    transitionId: row.transitionId,
+    canonicalJson: row.canonicalJson,
+    digest: row.digest,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 function proposalMembership(row: TransitionProposalMembershipRecord): TransitionProposalMembership {
@@ -221,6 +263,16 @@ function assertProposalGraph(input: CreateTransitionProposalMembershipInput): vo
   if (!DIGEST_PATTERN.test(input.requestDigest)) throw new TypeError('requestDigest is invalid');
   if (digestTransitionRequestCanonicalJson(input.requestCanonicalJson) !== input.requestDigest) {
     throw new TypeError('requestDigest does not match the canonical request bytes');
+  }
+  if ((input.preparationCanonicalJson === undefined) !== (input.preparationDigest === undefined)) {
+    throw new TypeError('preparation canonical bytes and digest must be supplied together');
+  }
+  if (
+    input.preparationCanonicalJson !== undefined &&
+    digestTransitionPreparationCanonicalJson(input.preparationCanonicalJson) !==
+      input.preparationDigest
+  ) {
+    throw new TypeError('preparationDigest does not match the canonical preparation bytes');
   }
   const effect = describeTransitionObject(input.effect);
   const proposal = describeTransitionObject(input.proposal);
@@ -279,7 +331,10 @@ export async function createTransitionProposalMembership(
       actorKind: existing.actor.kind,
       actorId: existing.actor.id,
     } as TransitionProposalMembershipRecord;
-    if (!proposalFactsEqual(row, input)) throw new TransitionRequestConflictError(input.requestId);
+    const preparation = await getTransitionProposalPreparation(db, existing.transitionId);
+    if (!proposalFactsEqual(row, input) || !preparationFactsEqual(preparation, input)) {
+      throw new TransitionRequestConflictError(input.requestId);
+    }
     return { membership: existing, reused: true };
   }
 
@@ -307,7 +362,25 @@ export async function createTransitionProposalMembership(
   ).transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
     await persistTransitionObjects(tx, [input.base, input.result, input.effect, input.proposal]);
-    await tx.insert(transitionProposalMemberships).values(values).onConflictDoNothing();
+    const inserted = await tx
+      .insert(transitionProposalMemberships)
+      .values(values)
+      .onConflictDoNothing()
+      .returning({ transitionId: transitionProposalMemberships.transitionId });
+    if (
+      inserted.length > 0 &&
+      input.preparationCanonicalJson !== undefined &&
+      input.preparationDigest !== undefined
+    ) {
+      await tx
+        .insert(transitionProposalPreparations)
+        .values({
+          transitionId,
+          canonicalJson: input.preparationCanonicalJson,
+          digest: input.preparationDigest,
+        })
+        .onConflictDoNothing();
+    }
   });
 
   const stored = await findTransitionProposalByRequest(db, input);
@@ -318,9 +391,22 @@ export async function createTransitionProposalMembership(
     actorKind: stored.actor.kind,
     actorId: stored.actor.id,
   } as TransitionProposalMembershipRecord;
-  if (!proposalFactsEqual(storedRow, input))
+  const preparation = await getTransitionProposalPreparation(db, stored.transitionId);
+  if (!proposalFactsEqual(storedRow, input) || !preparationFactsEqual(preparation, input))
     throw new TransitionRequestConflictError(input.requestId);
   return { membership: stored, reused: stored.transitionId !== transitionId };
+}
+
+export async function getTransitionProposalPreparation(
+  db: AnyDB,
+  transitionId: string
+): Promise<TransitionProposalPreparation | null> {
+  const [row] = await db
+    .select()
+    .from(transitionProposalPreparations)
+    .where(eq(transitionProposalPreparations.transitionId, transitionId))
+    .limit(1);
+  return row === undefined ? null : proposalPreparation(row);
 }
 
 export async function getTransitionProposalMembership(
@@ -339,6 +425,30 @@ export async function getTransitionProposalMembership(
     )
     .limit(1);
   return row === undefined ? null : proposalMembership(row);
+}
+
+/** List newest durable Proposals derived from one exact Workspace revision. */
+export async function listTransitionProposalsForWorkspaceRevision(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; workspaceRevision: number; limit?: number }
+): Promise<TransitionProposalMembership[]> {
+  const limit = Math.max(1, Math.min(input.limit ?? 100, 1000));
+  const rows = await db
+    .select()
+    .from(transitionProposalMemberships)
+    .where(
+      and(
+        eq(transitionProposalMemberships.projectId, input.projectId),
+        eq(transitionProposalMemberships.workspaceId, input.workspaceId),
+        eq(transitionProposalMemberships.workspaceRevision, input.workspaceRevision)
+      )
+    )
+    .orderBy(
+      desc(transitionProposalMemberships.createdAt),
+      desc(transitionProposalMemberships.transitionId)
+    )
+    .limit(limit);
+  return rows.map(proposalMembership);
 }
 
 async function loadObject(
@@ -421,16 +531,10 @@ function statementFactsEqual(
   );
 }
 
-export async function recordTransitionStatementMembership(
-  db: AnyDB,
+function assertStatementMembershipInput(
+  graph: ResolvedTransitionProposalGraph,
   input: RecordTransitionStatementMembershipInput
-): Promise<{ membership: TransitionStatementMembership; reused: boolean }> {
-  const graph = await resolveTransitionProposalGraph(
-    db,
-    input.projectId,
-    input.transitionId,
-    false
-  );
+): void {
   assertActor(input.issuer, 'issuer');
   if (input.source.trim().length === 0 || input.requestId.trim().length === 0) {
     throw new TypeError('Statement source and requestId must be non-empty');
@@ -461,53 +565,114 @@ export async function recordTransitionStatementMembership(
       'Statement subjects must belong to the project-scoped Transition graph'
     );
   }
+}
 
-  const digest = describeTransitionObject(input.statement).digest;
-  const current = await listTransitionStatementMemberships(db, input.projectId, input.transitionId);
-  const sameDigest = current.find((row) => row.statementDigest === digest);
-  const sameRequest = current.find(
-    (row) =>
-      row.source === input.source &&
-      sameActor(row.issuer, input.issuer) &&
-      row.requestId === input.requestId
+/**
+ * Atomically persist one complete application observation batch. Either every
+ * new Statement membership becomes visible or none do.
+ */
+export async function recordTransitionStatementMemberships(
+  db: AnyDB,
+  inputs: readonly RecordTransitionStatementMembershipInput[]
+): Promise<Array<{ membership: TransitionStatementMembership; reused: boolean }>> {
+  if (inputs.length === 0) return [];
+  const first = inputs[0]!;
+  if (
+    inputs.some(
+      (input) => input.projectId !== first.projectId || input.transitionId !== first.transitionId
+    )
+  ) {
+    throw new TypeError('Statement membership batches require one project-scoped Transition');
+  }
+  const graph = await resolveTransitionProposalGraph(
+    db,
+    first.projectId,
+    first.transitionId,
+    false
   );
-  for (const existing of [sameDigest, sameRequest]) {
-    if (existing !== undefined) {
-      if (!statementFactsEqual(existing, input)) {
+  inputs.forEach((input) => assertStatementMembershipInput(graph, input));
+
+  const digests = inputs.map((input) => describeTransitionObject(input.statement).digest);
+  const requestKeys = inputs.map(
+    (input) => `${input.source}\0${input.issuer.kind}\0${input.issuer.id}\0${input.requestId}`
+  );
+  if (
+    new Set(digests).size !== digests.length ||
+    new Set(requestKeys).size !== requestKeys.length
+  ) {
+    throw new TypeError('Statement membership batches cannot repeat a Statement or issuer request');
+  }
+
+  const current = await listTransitionStatementMemberships(db, first.projectId, first.transitionId);
+  const reused = inputs.map((input, index) => {
+    const sameDigest = current.find((row) => row.statementDigest === digests[index]);
+    const sameRequest = current.find(
+      (row) =>
+        row.source === input.source &&
+        sameActor(row.issuer, input.issuer) &&
+        row.requestId === input.requestId
+    );
+    for (const existing of [sameDigest, sameRequest]) {
+      if (existing !== undefined && !statementFactsEqual(existing, input)) {
         throw new TransitionStatementConflictError(input.requestId);
       }
-      return { membership: existing, reused: true };
     }
-  }
-
-  await (
-    db as unknown as {
-      transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
-    }
-  ).transaction(async (rawTx) => {
-    const tx = rawTx as AnyDB;
-    await persistTransitionObjects(tx, [input.statement]);
-    await tx
-      .insert(transitionStatementMemberships)
-      .values({
-        transitionId: input.transitionId,
-        statementDigest: digest,
-        source: input.source,
-        issuerKind: input.issuer.kind,
-        issuerId: input.issuer.id,
-        requestId: input.requestId,
-        requestDigest: input.requestDigest,
-      })
-      .onConflictDoNothing();
+    return sameDigest ?? sameRequest ?? null;
   });
+  const pending = inputs.filter((_input, index) => reused[index] === null);
 
-  const stored = (
-    await listTransitionStatementMemberships(db, input.projectId, input.transitionId)
-  ).find((row) => row.statementDigest === digest);
-  if (stored === undefined || !statementFactsEqual(stored, input)) {
-    throw new TransitionStatementConflictError(input.requestId);
-  }
-  return { membership: stored, reused: false };
+  const verifyStoredBatch = (stored: TransitionStatementMembership[]) => {
+    inputs.forEach((input, index) => {
+      const membership = stored.find((row) => row.statementDigest === digests[index]);
+      if (membership === undefined || !statementFactsEqual(membership, input)) {
+        throw new TransitionStatementConflictError(input.requestId);
+      }
+    });
+    return stored;
+  };
+  const stored =
+    pending.length === 0
+      ? verifyStoredBatch(current)
+      : await (
+          db as unknown as {
+            transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+          }
+        ).transaction(async (rawTx) => {
+          const tx = rawTx as AnyDB;
+          await persistTransitionObjects(
+            tx,
+            pending.map((input) => input.statement)
+          );
+          await tx
+            .insert(transitionStatementMemberships)
+            .values(
+              pending.map((input) => ({
+                transitionId: input.transitionId,
+                statementDigest: describeTransitionObject(input.statement).digest,
+                source: input.source,
+                issuerKind: input.issuer.kind,
+                issuerId: input.issuer.id,
+                requestId: input.requestId,
+                requestDigest: input.requestDigest,
+              }))
+            )
+            .onConflictDoNothing();
+          return verifyStoredBatch(
+            await listTransitionStatementMemberships(tx, first.projectId, first.transitionId)
+          );
+        });
+
+  return digests.map((digest, index) => {
+    const membership = stored.find((row) => row.statementDigest === digest)!;
+    return { membership, reused: reused[index] !== null };
+  });
+}
+
+export async function recordTransitionStatementMembership(
+  db: AnyDB,
+  input: RecordTransitionStatementMembershipInput
+): Promise<{ membership: TransitionStatementMembership; reused: boolean }> {
+  return (await recordTransitionStatementMemberships(db, [input]))[0]!;
 }
 
 export async function resolveTransitionProposalGraph(
@@ -534,6 +699,14 @@ export async function resolveTransitionProposalGraph(
       membership.requestDigest
   ) {
     throw new TransitionMembershipIntegrityError('Stored Proposal membership facts are invalid');
+  }
+  const preparation = await getTransitionProposalPreparation(db, transitionId);
+  if (
+    preparation !== null &&
+    (!DIGEST_PATTERN.test(preparation.digest) ||
+      digestTransitionPreparationCanonicalJson(preparation.canonicalJson) !== preparation.digest)
+  ) {
+    throw new TransitionMembershipIntegrityError('Stored Proposal preparation facts are invalid');
   }
 
   const proposalObject = await loadObject(db, {
@@ -628,6 +801,7 @@ export async function resolveTransitionProposalGraph(
   );
   return {
     membership,
+    preparation,
     base: baseObject,
     result: resultObject,
     effect: effectObject,

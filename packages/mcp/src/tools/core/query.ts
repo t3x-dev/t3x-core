@@ -35,6 +35,7 @@ const SINGULAR_TARGETS = [
   'pin',
   'source_thread',
   'source_evidence',
+  'workspace',
   'conversation',
 ] as const;
 const PLURAL_TARGETS = [
@@ -45,6 +46,7 @@ const PLURAL_TARGETS = [
   'pins',
   'branches',
   'source_threads',
+  'workspaces',
   'conversations',
 ] as const;
 const ALL_TARGETS = [...SINGULAR_TARGETS, ...PLURAL_TARGETS] as const;
@@ -59,14 +61,15 @@ export const queryDef: ToolDef = {
     'Read any T3X resource.',
     '',
     'Singular targets (require `id`):',
-    '  project, draft, commit, leaf, pin, source_thread, source_evidence',
+    '  project, draft, commit, leaf, pin, source_thread, source_evidence, workspace',
     '',
     'Plural targets (require `project_id`, except `projects`):',
-    '  projects, drafts, commits, leaves, pins, branches, source_threads',
+    '  projects, drafts, commits, leaves, pins, branches, source_threads, workspaces',
     '',
     'Notes:',
     '  draft / drafts = workbench drafts used by extract/edit/commit',
     '  source_evidence also requires `project_id` and is available through the API backend',
+    '  workspace / workspaces require `project_id` and the authenticated API backend',
     '  conversation / conversations are compatibility aliases for source_thread / source_threads',
     '',
     'Examples:',
@@ -158,6 +161,11 @@ export const queryHandler: ToolHandler = async (args) => {
             );
           }
           return ok(await client.sourceThreads.evidence(projectId, id, { limit, offset }));
+        case 'workspace':
+          if (!projectId) {
+            return fail('"project_id" is required for target="workspace".');
+          }
+          return ok(await client.workspaces.get(projectId, id));
       }
     }
 
@@ -195,14 +203,16 @@ export const queryHandler: ToolHandler = async (args) => {
             'conversations'
           )
         );
+      case 'workspaces':
+        return ok((await client.workspaces.list(projectId!)).workspaces);
       default:
         return fail(`Unhandled target: ${target}`);
     }
   }
 
-  if (target === 'source_evidence') {
+  if (target === 'source_evidence' || target === 'workspace' || target === 'workspaces') {
     return fail(
-      'target="source_evidence" requires T3X_MCP_BACKEND=api so authorization and observation completeness are enforced by the Source service.'
+      `target="${target}" requires T3X_MCP_BACKEND=api so authorization stays at the Source/Workspace service boundary.`
     );
   }
 

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
 
@@ -23,20 +23,20 @@ function readText(rootDir, relativePath) {
 }
 
 function packageSnapshotFileName(entry) {
-  return `${basename(entry.path)}.api.md`;
+  return `${posix.basename(entry.path)}.api.md`;
 }
 
 function packageMetadata(rootDir, entry) {
-  const snapshotRelativePath = join(entry.path, 'etc', packageSnapshotFileName(entry));
-  const declarationRelativePath = join(entry.path, DECLARATION_RELATIVE_PATH);
+  const snapshotRelativePath = posix.join(entry.path, 'etc', packageSnapshotFileName(entry));
+  const declarationRelativePath = posix.join(entry.path, DECLARATION_RELATIVE_PATH);
 
   return {
     name: entry.name,
     relativePath: entry.path,
-    packageJsonRelativePath: join(entry.path, 'package.json'),
+    packageJsonRelativePath: posix.join(entry.path, 'package.json'),
     declarationRelativePath,
     snapshotRelativePath,
-    apiExtractorConfigRelativePath: join(entry.path, 'api-extractor.json'),
+    apiExtractorConfigRelativePath: posix.join(entry.path, 'api-extractor.json'),
     packagePath: join(rootPath(rootDir), entry.path),
     declarationPath: join(rootPath(rootDir), declarationRelativePath),
     snapshotPath: join(rootPath(rootDir), snapshotRelativePath),

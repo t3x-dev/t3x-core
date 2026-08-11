@@ -10,11 +10,14 @@ The current release-facing npm package surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/transition`
 - `@t3x-dev/yschema`
 
 Package access is public for the current release surface. Other packages in this
 repository are preview or internal until promoted through the release process in
 [`RELEASE.md`](../RELEASE.md) and [`release/surface.yaml`](../release/surface.yaml).
+`@t3x-dev/local` remains public but is paused from automated release-train
+publishing.
 
 ## Product Limitations
 
@@ -29,6 +32,8 @@ repository are preview or internal until promoted through the release process in
   local package release.
 - CLI, MCP, API, runner, and storage package contracts may change before they
   are promoted to the release surface.
+- Transition is a protocol package, not a hosted product runtime or database
+  integration.
 
 ## Auth and Data Limitations
 
@@ -66,3 +71,9 @@ small PRs, one spec contraction at a time, with executable conformance coverage.
 YSchema is a public alpha validation candidate. It is useful for schema-backed
 state validation, but its API and supported schema profile may still change
 during alpha. Keep compatibility-sensitive changes documented with changesets.
+
+## Transition Limitations
+
+Transition is a public alpha protocol package for State, Effect, Statement, and
+CommitV2 verification. It intentionally excludes product workflow, API server,
+database, WebUI, LLM, and runner behavior.

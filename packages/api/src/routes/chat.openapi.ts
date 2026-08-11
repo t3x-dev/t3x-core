@@ -11,12 +11,16 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { GenerationRuntimeProviderId, LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
-import { GENERATION_RUNTIME_PROVIDER_IDS, isGenerationRuntimeProviderId } from '@t3x-dev/core';
+import {
+  GENERATION_RUNTIME_PROVIDER_IDS,
+  isGenerationRuntimeProviderId,
+  LLMProviderError,
+} from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
@@ -114,13 +118,50 @@ function sanitizeError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   if (/rate.limit/i.test(message) || /429/.test(message))
     return 'Rate limited. Please try again later.';
-  if (/invalid.*api.*key/i.test(message) || /unauthorized/i.test(message))
+  if (
+    /invalid.*api.*key/i.test(message) ||
+    /unauthorized|forbidden/i.test(message) ||
+    /\b(?:401|403)\b/.test(message)
+  )
     return 'Provider authentication failed.';
   if (/overloaded/i.test(message) || /503/.test(message)) return 'Provider temporarily overloaded.';
   if (/timeout/i.test(message) || /abort/i.test(message)) return 'Request timed out.';
   if (message.length > 200 || message.includes('{'))
     return 'Chat request failed. Please try again.';
   return message;
+}
+
+type ChatErrorClassification = {
+  status: 401 | 429 | 500 | 502;
+  code: 'AUTH_ERROR' | 'RATE_LIMITED' | 'PROVIDER_UNAVAILABLE' | 'CHAT_ERROR';
+};
+
+function classifyChatError(err: unknown): ChatErrorClassification {
+  const statusCode = err instanceof LLMProviderError ? err.statusCode : undefined;
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (statusCode === 429 || /rate.limit/i.test(message) || /\b429\b/.test(message)) {
+    return { status: 429, code: 'RATE_LIMITED' };
+  }
+
+  if (
+    statusCode === 401 ||
+    statusCode === 403 ||
+    /\b(?:401|403)\b/.test(message) ||
+    /invalid.*api.*key|unauthorized|forbidden/i.test(message)
+  ) {
+    return { status: 401, code: 'AUTH_ERROR' };
+  }
+
+  if (
+    err instanceof LLMProviderError ||
+    /\b5\d\d\b/.test(message) ||
+    /provider|api error|overloaded|timeout|abort|network|fetch failed/i.test(message)
+  ) {
+    return { status: 502, code: 'PROVIDER_UNAVAILABLE' };
+  }
+
+  return { status: 500, code: 'CHAT_ERROR' };
 }
 
 // ============================================================================
@@ -539,6 +580,18 @@ const generationRoute = createRoute({
       description: 'Invalid request or provider error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    401: {
+      description: 'Provider authentication failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Provider rate limit exceeded',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    502: {
+      description: 'Provider unavailable',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Generation error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -591,6 +644,10 @@ generationRoutes.openapi(generationRoute, async (c) => {
   }
 
   const db = await getDB();
+  if (body.project_id) {
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+  }
   const target = await resolveChatRequestTarget({
     db,
     provider: body.provider,
@@ -664,9 +721,13 @@ generationRoutes.openapi(generationRoute, async (c) => {
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
     pinoLogger.error({ err }, 'Chat error');
+    const classified = classifyChatError(err);
     return c.json(
-      { success: false as const, error: { code: 'CHAT_ERROR', message: sanitizeError(err) } },
-      500
+      {
+        success: false as const,
+        error: { code: classified.code, message: sanitizeError(err) },
+      },
+      classified.status
     );
   }
 });
@@ -713,6 +774,10 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
   }
 
   const db = await getDB();
+  if (body.project_id) {
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+  }
   const target = await resolveChatRequestTarget({
     db,
     provider: body.provider,

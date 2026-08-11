@@ -1,5 +1,6 @@
 import type { ActionCapabilityView, TransitionViewV1 } from '@t3x-dev/core';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -18,6 +19,9 @@ export function TransitionDecisionControls({
   overrideReason: string;
   view: TransitionViewV1;
 }) {
+  const overrideReasonRef = useRef<HTMLTextAreaElement>(null);
+  const [showOverrideReasonError, setShowOverrideReasonError] = useState(false);
+
   if (view.mode !== 'transition') return null;
   if (view.decision.observation === 'supplied') {
     if (view.decision.outcome !== 'rejected') return null;
@@ -37,6 +41,8 @@ export function TransitionDecisionControls({
   const acceptAllowed = isAllowed(view.capabilities.accept);
   const overrideAllowed = isAllowed(view.capabilities.override);
   const rejectAllowed = isAllowed(view.capabilities.reject);
+  const overrideReasonMissing = !overrideReason.trim();
+  const overrideReasonHelpId = 'workspace-transition-override-reason-help';
   const reasons = deniedReasons([
     view.capabilities.accept,
     view.capabilities.override,
@@ -62,15 +68,39 @@ export function TransitionDecisionControls({
           className="mt-4 grid gap-1.5 text-xs font-semibold text-[var(--text-secondary)]"
           htmlFor="workspace-transition-override-reason"
         >
-          Why continue despite the failed check?
+          <span>
+            Why continue despite the failed check?{' '}
+            <span className="text-[var(--status-warning)]">(required)</span>
+          </span>
           <Textarea
+            aria-describedby={overrideReasonHelpId}
+            aria-invalid={showOverrideReasonError && overrideReasonMissing}
+            aria-label="Why continue despite the failed check?"
             disabled={busy}
             id="workspace-transition-override-reason"
             maxLength={2000}
-            onChange={(event) => onOverrideReasonChange(event.target.value)}
+            onChange={(event) => {
+              if (event.target.value.trim()) setShowOverrideReasonError(false);
+              onOverrideReasonChange(event.target.value);
+            }}
             placeholder="Explain the accepted risk for the audit history."
+            ref={overrideReasonRef}
+            required
             value={overrideReason}
           />
+          <span
+            className={
+              showOverrideReasonError && overrideReasonMissing
+                ? 'font-medium text-[var(--status-error)]'
+                : 'font-normal text-[var(--text-tertiary)]'
+            }
+            id={overrideReasonHelpId}
+            role={showOverrideReasonError && overrideReasonMissing ? 'alert' : undefined}
+          >
+            {showOverrideReasonError && overrideReasonMissing
+              ? 'Enter a reason before continuing with this failed check.'
+              : 'Required for the audit history. Add a reason, then save with the override.'}
+          </span>
         </label>
       ) : null}
 
@@ -88,8 +118,16 @@ export function TransitionDecisionControls({
         ) : null}
         {overrideAllowed ? (
           <Button
-            disabled={busy || !overrideReason.trim()}
-            onClick={() => onDecide('overridden', overrideReason)}
+            disabled={busy}
+            onClick={() => {
+              if (overrideReasonMissing) {
+                setShowOverrideReasonError(true);
+                overrideReasonRef.current?.focus();
+                return;
+              }
+              onDecide('overridden', overrideReason);
+            }}
+            title={overrideReasonMissing ? 'Enter an override reason to continue.' : undefined}
             type="button"
             variant="pending"
           >

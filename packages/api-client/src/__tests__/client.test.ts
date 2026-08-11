@@ -365,6 +365,66 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('repository workspaces', () => {
+    it('exposes authenticated Workspace reads through a frozen capability', async () => {
+      const data = {
+        workspaces: [{ id: 'workspace_1', projectId: 'proj/1', revision: 3 }],
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.list('proj/1')).toEqual(data);
+      expect(Object.isFrozen(client.workspaces)).toBe(true);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('gets one project-scoped Workspace projection', async () => {
+      const data = {
+        candidate_id: 'candidate_1',
+        yops_draft_id: 'draft:1',
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 4 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(await client.workspaces.get('proj/1', 'workspace/1')).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1'),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('creates a server-owned extraction proposal from immutable Source turns', async () => {
+      const data = {
+        candidate_id: 'candidate:abc',
+        proposal: {
+          schema: 't3x.dev/workspace-extraction-proposal/v1',
+          operations: [],
+        },
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 5 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        source: { type: 'conversation' as const, id: 'conv_1', turn_hashes: ['turn_1'] },
+        if_revision: 4,
+      };
+
+      expect(
+        await client.workspaces.createExtractionProposal('proj/1', 'workspace/1', input)
+      ).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/proj%2F1/workspaces/workspace%2F1/extraction-proposals'
+        ),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+  });
+
   // =========================================================================
   // Turns
   // =========================================================================
@@ -794,6 +854,25 @@ describe('T3xClient', () => {
       );
     });
 
+    it('proposes from a server-owned Workspace extraction candidate', async () => {
+      const data = { transition_id: 'trn_extract', reused: false, view: {} };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'structured_yops' as const,
+        request_id: 'request:proposal:extract',
+        workspace_id: 'ws_1',
+        extraction_candidate_id: 'candidate:abc',
+        if_revision: 4,
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('inspects one project-scoped Transition', async () => {
       const data = { transition_id: 'trn_abc', view: {} };
       const fn = mockFetch(successResponse(data));
@@ -844,6 +923,193 @@ describe('T3xClient', () => {
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/statements'),
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('creates a Decision from an immutable review precondition', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        decision_digest: 'sha256:decision',
+        decision: {},
+        view: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:decision:1',
+        outcome: 'accepted' as const,
+        precondition: {
+          workspace_revision: 4,
+          ref_name: 'main',
+          ref_head: null,
+          effect_digest: 'sha256:effect',
+          proposal_digest: 'sha256:proposal',
+          statement_digests: ['sha256:statement'],
+          policy_digest: 'sha256:policy',
+        },
+      };
+
+      expect(await client.decideTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/decisions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('creates a Commit only from a recorded Decision and expected head', async () => {
+      const data = {
+        transition_id: 'trn_abc',
+        reused: false,
+        commit_digest: 'sha256:commit',
+        commit: {},
+        transition: {},
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        request_id: 'request:commit:1',
+        decision_digest: 'sha256:decision',
+        expected_head: null,
+      };
+
+      expect(await client.commitTransition('proj_1', 'trn_abc', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions/trn_abc/commits'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('encodes project and Transition ids in control-plane paths', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+
+      await client.inspectTransition('project/with space', 'transition/with space');
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/project%2Fwith%20space/transitions/transition%2Fwith%20space'
+        ),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('passes AbortSignal through Transition inspection', async () => {
+      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const client = createTestClient(fn);
+      const controller = new AbortController();
+
+      await client.inspectTransition('proj_1', 'trn_abc', { signal: controller.signal });
+
+      expect(fn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: controller.signal })
+      );
+    });
+  });
+
+  describe('YSchema Composition Registry', () => {
+    const composition = {
+      apiVersion: 't3x.dev/yschema-composition/v1' as const,
+      id: 'composition:prd',
+      revision: 2,
+      family: 'prd' as const,
+      status: 'draft' as const,
+      core: { canonicalName: 't3x/prd-core', version: '1.1.0' },
+      modules: [
+        {
+          canonicalName: 't3x/prd-frontend-design',
+          version: '1.0.0',
+          order: 10,
+        },
+      ],
+    };
+
+    it('lists the project-visible Registry with encoded filters', async () => {
+      const fn = mockFetch(successResponse({ items: [], next_cursor: null, has_more: false }));
+      const client = createTestClient(fn);
+
+      await client.listYSchemaArtifacts({
+        projectId: 'project/a',
+        family: 'prd',
+        kind: 'module',
+        limit: 12,
+      });
+
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/projects/project%2Fa/yschema/artifacts');
+      expect(url).toContain('family=prd');
+      expect(url).toContain('kind=module');
+      expect(url).toContain('limit=12');
+    });
+
+    it('previews and applies an exact saved Composition revision', async () => {
+      const fn = mockFetch(successResponse({ composition, workspaceRevision: 8 }));
+      const client = createTestClient(fn);
+
+      await client.previewYSchemaComposition(composition, 'proj_1');
+      await client.applyWorkspaceYSchemaComposition('proj_1', 'workspace/1', {
+        workspaceRevision: 7,
+        compositionRevision: 2,
+        compositionHash: 'sha256:composition',
+      });
+
+      expect(fn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/v1/projects/proj_1/yschema/compositions/preview'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(composition) })
+      );
+      expect(fn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          '/v1/projects/proj_1/workspaces/workspace%2F1/schema-composition/apply'
+        ),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            if_revision: 7,
+            composition_revision: 2,
+            composition_hash: 'sha256:composition',
+          }),
+        })
+      );
+    });
+
+    it('lists and publishes immutable project Schema versions', async () => {
+      const fn = mockFetch(successResponse({ items: [] }));
+      const client = createTestClient(fn);
+
+      await client.listProjectYSchemaVersions('project/a', 'prd');
+      await client.publishWorkspaceYSchemaComposition('project/a', 'workspace/1', {
+        compositionRevision: 2,
+        compositionHash: 'sha256:composition',
+        canonicalName: 'projects/project-a/prd',
+        version: '1.0.0',
+        title: 'Project A PRD',
+        releaseNotes: 'Initial composed contract.',
+      });
+
+      expect(fn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/v1/projects/project%2Fa/yschema/versions?family=prd'),
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          '/v1/projects/project%2Fa/workspaces/workspace%2F1/schema-composition/publish'
+        ),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            composition_revision: 2,
+            composition_hash: 'sha256:composition',
+            canonical_name: 'projects/project-a/prd',
+            version: '1.0.0',
+            title: 'Project A PRD',
+            release_notes: 'Initial composed contract.',
+          }),
+        })
       );
     });
   });

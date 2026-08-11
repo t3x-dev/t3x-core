@@ -58,7 +58,7 @@ const PROPOSER = { kind: 'human', id: 'human:operator' } as const;
 const DECIDER = { kind: 'human', id: 'human:maintainer' } as const;
 const REPLAY_ISSUER = { kind: 'service', id: 'service:replay' } as const;
 const VALIDATION_ISSUER = { kind: 'service', id: 'validator:yschema' } as const;
-const REPLAY_TOOL = { name: '@t3x-dev/transition', version: '0.6.0' } as const;
+const REPLAY_TOOL = { name: '@t3x-dev/transition', version: '0.1.0' } as const;
 const VALIDATION_TOOL = { name: '@t3x-dev/yschema', version: '0.6.0' } as const;
 const UNSPECIFIED_RESOURCE = { mode: 'unspecified' } as const;
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockDB = {};
 const mockApiClient = {
   extract: vi.fn(),
+  workspaces: { createExtractionProposal: vi.fn() },
 };
 
 vi.mock('../db.js', () => ({
@@ -305,16 +306,64 @@ describe('t3x_extract handler', () => {
     });
   });
 
+  it('creates a Workspace proposal from server-resolved immutable Source turns', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.createExtractionProposal.mockResolvedValueOnce({
+      candidate_id: 'candidate:abc',
+      proposal: {
+        schema: 't3x.dev/workspace-extraction-proposal/v1',
+        operations: [],
+      },
+      workspace: { id: 'workspace_1', projectId: 'proj_test1', revision: 4 },
+    });
+
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      workspace_id: 'workspace_1',
+      source_thread_id: 'conv_source1',
+      turn_hashes: ['turn_1', 'turn_2'],
+      if_revision: 3,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.createExtractionProposal).toHaveBeenCalledWith(
+      'proj_test1',
+      'workspace_1',
+      {
+        source: {
+          type: 'conversation',
+          id: 'conv_source1',
+          turn_hashes: ['turn_1', 'turn_2'],
+        },
+        if_revision: 3,
+      }
+    );
+    expect(mockApiClient.extract).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for Workspace proposal extraction in direct-storage mode', async () => {
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      workspace_id: 'workspace_1',
+      source_thread_id: 'conv_source1',
+      turn_hashes: ['turn_1'],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
+  });
+
   it('returns error when text is missing', async () => {
     const result = await extractHandler({ project_id: 'proj_test1' });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"text" is required');
+    expect(result.content[0].text).toContain('"workspace_id"');
+    expect(result.content[0].text).toContain('"text"');
   });
 
   it('returns required error when text is an empty string', async () => {
     const result = await extractHandler({ project_id: 'proj_test1', text: '' });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"text" is required');
+    expect(result.content[0].text).toContain('"text"');
   });
 
   it('returns error when no generation provider is configured', async () => {

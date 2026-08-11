@@ -245,6 +245,7 @@ export {
 export {
   type CreateNotificationInput,
   deleteOldNotifications,
+  findNotificationById,
   getUnreadCount,
   insertNotification,
   type ListNotificationsOptions,
@@ -489,6 +490,7 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,
@@ -512,6 +514,7 @@ export {
   findTurnByHash,
   findTurnChain,
   findTurnsByConversation,
+  findTurnsByHashes,
   findTurnsByProject,
   findTurnsInWindow,
   insertTurn,
@@ -582,6 +585,23 @@ export {
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+export {
+  type FindYSchemaArtifactVersionInput,
+  findYSchemaArtifactVersion,
+  findYSchemaCompositionSnapshot,
+  type ListProjectYSchemaVersionHistoryOptions,
+  type ListYSchemaArtifactsOptions,
+  listProjectYSchemaVersionHistory,
+  listYSchemaArtifactVersions,
+  type PublishYSchemaArtifactVersionInput,
+  publishYSchemaArtifactVersion,
+  type SaveYSchemaCompositionSnapshotInput,
+  saveYSchemaCompositionSnapshot,
+  type UpsertYSchemaArtifactVersionInput,
+  upsertYSchemaArtifactVersion,
+  type YSchemaArtifactVersionView,
+  type YSchemaArtifactVisibility,
+} from './yschema-registry';
 // YSchema Validation Runs
 export {
   type CreateYSchemaValidationRunInput,

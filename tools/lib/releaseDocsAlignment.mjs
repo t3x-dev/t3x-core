@@ -70,7 +70,10 @@ function validateReadmeWorkflowBadges({ rootDir, readme, errors }) {
 
 function validateReadmeAvailability({ readme, releaseSurface, errors }) {
   for (const entry of releaseSurface.packages.filter((item) => item.npm_publish === true)) {
-    const expectedStatus = `${entry.access} ${entry.stability_tier}`;
+    const expectedStatus =
+      entry.release_train === 'paused'
+        ? `${entry.access} ${entry.stability_tier}, release-train paused`
+        : `${entry.access} ${entry.stability_tier}`;
     const rowPattern = new RegExp(
       `\\|\\s*\\[\\\`${escapeRegex(entry.name)}\\\`\\]\\(${escapeRegex(
         entry.path
@@ -98,7 +101,12 @@ function validateStabilitySurface({ stability, releaseSurface, errors }) {
   }
 }
 
-function validatePackageReadmeReleaseStatus({ rootDir, releaseSurface, expectedVersion, errors }) {
+function validatePackageReadmeReleaseStatus({
+  errors,
+  packageVersionByName,
+  releaseSurface,
+  rootDir,
+}) {
   for (const entry of releaseSurface.packages.filter((item) => item.npm_publish === true)) {
     const readmePath = `${entry.path}/README.md`;
     if (!existsSync(new URL(readmePath, rootDir))) {
@@ -106,6 +114,11 @@ function validatePackageReadmeReleaseStatus({ rootDir, releaseSurface, expectedV
     }
 
     const packageReadme = readRepoText(rootDir, readmePath);
+    const expectedVersion = packageVersionByName.get(entry.name);
+    if (!expectedVersion) {
+      errors.push(`${readmePath} could not resolve package version for ${entry.name}.`);
+      continue;
+    }
     const expectedSentence = `\`${entry.name}@${expectedVersion}\` is part of the ${entry.access} T3X ${entry.stability_tier} release surface.`;
 
     if (!packageReadme.includes(expectedSentence)) {
@@ -148,6 +161,9 @@ export async function validateReleaseDocsAlignment({
     repoRoot: rootPath(rootUrl),
     verifyManifest: false,
   });
+  const packageVersionByName = new Map(
+    versionResult.packages.map((packageRecord) => [packageRecord.name, packageRecord.version])
+  );
   errors.push(...versionResult.problems);
 
   const releaseSurface = validateReleaseSurface({ rootDir: rootUrl });
@@ -163,13 +179,13 @@ export async function validateReleaseDocsAlignment({
       errors,
     });
     validatePackageReadmeReleaseStatus({
-      rootDir: rootUrl,
-      releaseSurface,
-      expectedVersion: versionResult.expectedVersion,
       errors,
+      packageVersionByName,
+      releaseSurface,
+      rootDir: rootUrl,
     });
   } else {
-    errors.push('Could not resolve current fixed package version.');
+    errors.push('Could not resolve current local package version.');
   }
 
   validateReadmeWorkflowBadges({ rootDir: rootUrl, readme, errors });

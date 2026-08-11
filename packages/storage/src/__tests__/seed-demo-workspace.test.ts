@@ -1,4 +1,5 @@
 import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
+import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -113,6 +114,28 @@ describe('seedDemoWorkspace', () => {
     ).toHaveLength(1);
     expect(await listTransitionCommits(db, projects[0]!.projectId)).toHaveLength(1);
     expect(await findLeavesByProject(db, projects[0]!.projectId)).toHaveLength(1);
+  });
+
+  it('rolls back every fixture row and marker when a late seed step fails', async () => {
+    await db.execute(sql`
+      CREATE FUNCTION fail_demo_leaf_insert() RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced demo leaf failure';
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER fail_demo_leaf_insert
+      BEFORE INSERT ON leaves
+      FOR EACH ROW EXECUTE FUNCTION fail_demo_leaf_insert();
+    `);
+
+    await expect(seedDemoWorkspace(db, { ownerId: null })).rejects.toThrow();
+
+    await expect(findProjects(db, {})).resolves.toEqual([]);
+    await expect(
+      getGlobalSetting<DemoWorkspaceSeedMarker>(db, getDemoWorkspaceSeedKey(null))
+    ).resolves.toBeNull();
   });
 
   it('does not silently recreate a deleted demo project unless reset is explicit', async () => {

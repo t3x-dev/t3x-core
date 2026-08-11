@@ -10,7 +10,7 @@
 
 import { YOPS_ERRORS, yopsError } from './errors';
 import { isMappingObject, resolveOpName } from './opShape';
-import { deepClone } from './paths';
+import { deepClone, hasOwnKey } from './paths';
 import type { OpRegistry } from './registry';
 import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
@@ -26,7 +26,7 @@ function validateFields(
 ): { code: string; message: string; op_index: number } | null {
   // Check required fields present
   for (const [name, fieldSpec] of Object.entries(spec.fields)) {
-    if (fieldSpec.required && !(name in fields)) {
+    if (fieldSpec.required && !hasOwnKey(fields, name)) {
       return {
         code: 'INVALID_OP',
         message: `${opName}: missing required field "${name}"`,
@@ -36,13 +36,13 @@ function validateFields(
   }
   // Check no extra fields
   for (const key of Object.keys(fields)) {
-    if (!(key in spec.fields)) {
+    if (!hasOwnKey(spec.fields, key)) {
       return { code: 'INVALID_OP', message: `${opName}: unknown field "${key}"`, op_index: index };
     }
   }
   // Check enum constraints
   for (const [name, fieldSpec] of Object.entries(spec.fields)) {
-    if (fieldSpec.enum && name in fields) {
+    if (fieldSpec.enum && hasOwnKey(fields, name)) {
       if (!fieldSpec.enum.includes(fields[name] as string)) {
         return {
           code: 'INVALID_OP',
@@ -63,7 +63,7 @@ function deprecatedFieldWarnings(
 ): YOpsWarning[] {
   const warnings: YOpsWarning[] = [];
   for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
-    if (!(fieldName in fields) || fieldSpec.deprecated_in === undefined) continue;
+    if (!hasOwnKey(fields, fieldName) || fieldSpec.deprecated_in === undefined) continue;
     const replacement = fieldSpec.replacement_field
       ? `; use ${fieldSpec.replacement_field} instead`
       : '';
@@ -190,7 +190,18 @@ export function createEngine(registry: OpRegistry) {
       }
 
       // 7. Execute handler.
-      const result = handler(current, fields, i);
+      let result;
+      try {
+        result = handler(current, fields, i);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return finish({
+          ok: false,
+          doc: original,
+          applied: i,
+          error: yopsError(YOPS_ERRORS.INVALID_OP, `${opName}: ${message}`, i),
+        });
+      }
       if (result.error) {
         return finish({
           ok: false,

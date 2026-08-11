@@ -233,11 +233,11 @@ function checkTransitionLeaf(rootPath, errors) {
   if (manifest.name !== '@t3x-dev/transition') {
     errors.push('packages/transition must be named @t3x-dev/transition');
   }
-  if (manifest.private !== true) {
-    errors.push('@t3x-dev/transition must remain private');
+  if (manifest.private === true) {
+    errors.push('@t3x-dev/transition must be publishable');
   }
-  if (manifest.publishConfig?.access !== 'restricted') {
-    errors.push('@t3x-dev/transition publishConfig.access must remain restricted');
+  if (manifest.publishConfig?.access !== 'public') {
+    errors.push('@t3x-dev/transition publishConfig.access must be public');
   }
 
   for (const dependency of dependencyNames(manifest)) {

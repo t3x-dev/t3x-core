@@ -24,6 +24,7 @@ const {
     getLeaf: vi.fn(),
     getMergeDraft: vi.fn(),
     sourceThreads: { get: vi.fn() },
+    workspaces: { get: vi.fn() },
   },
 }));
 
@@ -161,6 +162,10 @@ describe('MCP resources', () => {
       expect.objectContaining({
         name: 'workbench_draft',
         uriTemplate: 't3x://workbench-drafts/{draft_id}',
+      }),
+      expect.objectContaining({
+        name: 'workspace',
+        uriTemplate: 't3x://projects/{project_id}/workspaces/{workspace_id}',
       }),
       expect.objectContaining({
         name: 'source_thread',
@@ -368,6 +373,42 @@ describe('MCP resources', () => {
       project_id: 'proj_api',
       title: 'Authenticated source',
     });
+
+    await client.close();
+  });
+
+  it('reads a project-scoped Workspace resource through the authenticated API boundary', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.get.mockResolvedValueOnce({
+      candidate_id: 'candidate_1',
+      yops_draft_id: 'draft:1',
+      workspace: { id: 'workspace_1', projectId: 'proj_1', revision: 5 },
+    });
+    const { getDB } = await import('../db.js');
+    const callsBeforeRead = (getDB as ReturnType<typeof vi.fn>).mock.calls.length;
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({
+      uri: 't3x://projects/proj_1/workspaces/workspace_1',
+    });
+
+    expect(mockApiClient.workspaces.get).toHaveBeenCalledWith('proj_1', 'workspace_1');
+    expect((getDB as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(callsBeforeRead);
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'workspace',
+      candidate_id: 'candidate_1',
+      workspace: { id: 'workspace_1', revision: 5 },
+    });
+
+    await client.close();
+  });
+
+  it('fails closed for Workspace resources in direct-storage mode', async () => {
+    const { client } = await connectClientAndServer();
+
+    await expect(
+      client.readResource({ uri: 't3x://projects/proj_1/workspaces/workspace_1' })
+    ).rejects.toThrow('T3X_MCP_BACKEND=api');
 
     await client.close();
   });

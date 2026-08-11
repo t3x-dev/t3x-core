@@ -45,6 +45,7 @@ import { PrdPreviewView } from './PrdPreviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
+import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -71,7 +72,7 @@ export function YOpsDraftTab({
   continuationBusy?: boolean;
   flowError?: string;
   onApplied?: (remainingSchemaGapCount: number) => void;
-  onCommitted?: (commitHash: string, branch: string) => void;
+  onCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onContinueFromCommit?: (
     commitHash: string,
     targetBranch: string,
@@ -395,11 +396,11 @@ export function YOpsDraftTab({
   }
 
   async function handleDecision(outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) {
-    const hash = await workspaceTransition.decide(outcome, reason);
-    if (hash) {
-      setCommittedHash(hash);
+    const result = await workspaceTransition.decide(outcome, reason);
+    if (result) {
+      setCommittedHash(result.commitId);
       setStatus('committed');
-      onCommitted?.(hash, targetBranch);
+      onCommitted?.(result.commitId, targetBranch, result.workspace);
     }
   }
 
@@ -454,26 +455,30 @@ export function YOpsDraftTab({
       ) : null}
 
       {view === 'ops' ? (
-        <ProposalReviewView
-          candidate={candidate}
-          flowError={visibleErrorMessage}
-          onContinueToValidation={() => onViewChange?.('validation')}
-          onSendToYOps={onSendToYOps}
-          onSaveYOpsScript={handleSaveYOpsScript}
-          proposalMode={proposalMode}
-          sendingToYOps={Boolean(sendingToYOps)}
-          statusText={statusText}
-          yopsDraftSent={Boolean(yopsDraftSent)}
-          yopsLines={yopsLines}
-          yopsReadOnly={Boolean(committedHash) || isBusy}
-          yopsReadOnlyReason={
-            committedHash
-              ? 'Committed workspaces are read-only.'
-              : isBusy
-                ? 'A workspace operation is already in progress.'
-                : undefined
-          }
-        />
+        candidate.extractionProposal ? (
+          <WorkspaceExtractionProposalView candidate={candidate} />
+        ) : (
+          <ProposalReviewView
+            candidate={candidate}
+            flowError={visibleErrorMessage}
+            onContinueToValidation={() => onViewChange?.('validation')}
+            onSendToYOps={onSendToYOps}
+            onSaveYOpsScript={handleSaveYOpsScript}
+            proposalMode={proposalMode}
+            sendingToYOps={Boolean(sendingToYOps)}
+            statusText={statusText}
+            yopsDraftSent={Boolean(yopsDraftSent)}
+            yopsLines={yopsLines}
+            yopsReadOnly={Boolean(committedHash) || isBusy}
+            yopsReadOnlyReason={
+              committedHash
+                ? 'Committed workspaces are read-only.'
+                : isBusy
+                  ? 'A workspace operation is already in progress.'
+                  : undefined
+            }
+          />
+        )
       ) : null}
 
       {view === 'validation' ? (

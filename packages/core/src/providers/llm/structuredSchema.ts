@@ -33,6 +33,30 @@ function normalizeConstNode(node: Record<string, unknown>): Record<string, unkno
   };
 }
 
+/**
+ * Gemini's responseSchema accepts string enums, but rejects enum values whose
+ * JSON type is boolean (and other non-string literal values on some models).
+ * Keep the literal's base type in the provider schema and let the mandatory
+ * Zod parse after generation enforce the exact value.
+ */
+function normalizeGeminiConstNode(node: Record<string, unknown>): Record<string, unknown> {
+  if (!('const' in node)) {
+    return node;
+  }
+
+  const literalType = inferLiteralType(node.const);
+  if (!literalType) {
+    return node;
+  }
+
+  const { const: literalValue, ...rest } = node;
+  return {
+    ...rest,
+    type: literalType,
+    ...(literalType === 'string' ? { enum: [literalValue] } : {}),
+  };
+}
+
 function normalizeEnumNode(node: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(node.enum) || node.enum.length === 0 || 'type' in node) {
     return node;
@@ -110,7 +134,7 @@ function normalizeGeminiSchemaNode(node: unknown): unknown {
       .map(([key, value]) => [key, normalizeGeminiSchemaNode(value)])
   );
 
-  return normalizeGeminiNullable(normalizeEnumNode(normalizeConstNode(mapped)));
+  return normalizeGeminiNullable(normalizeEnumNode(normalizeGeminiConstNode(mapped)));
 }
 
 function normalizeClaudeSchemaNode(node: unknown): unknown {

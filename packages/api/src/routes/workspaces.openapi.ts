@@ -9,6 +9,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  type ApiKey,
   type Draft,
   describeTransitionObject,
   type Material,
@@ -32,6 +33,7 @@ import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -46,12 +48,8 @@ import {
   buildEsphomeDeviceWorkspace,
   isEsphomeDeviceWorkspace,
 } from '../lib/workspace-validation/esphome-workspace-profile';
-import {
-  canonicalSchemaNameFromBinding,
-  resolveBuiltInYSchema,
-  schemaRootKeyFromBinding,
-  schemaVersionFromBinding,
-} from '../lib/yschema-registry';
+import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
+import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -151,6 +149,10 @@ const ReviewWorkspaceTransitionRequestSchema = z
 
 const DecideWorkspaceTransitionRequestSchema = z
   .object({
+    transition_id: z
+      .string()
+      .regex(/^trn_[0-9a-f]{32}$/)
+      .optional(),
     content: TransitionContentSchema,
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
@@ -178,6 +180,7 @@ const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
 });
 
 const WorkspaceTransitionReviewResponseSchema = z.object({
+  transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
   transition: z.any(),
   precondition: WorkspaceTransitionPreconditionSchema,
 });
@@ -448,6 +451,7 @@ const reviewWorkspaceTransitionRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review',
   tags: ['Workspaces'],
   summary: 'Build a verified Transition review from persisted Workspace state',
+  middleware: observeTransitionCompatibilityRoute('workspace-structured-governance.review'),
   request: {
     params: workspaceParams,
     body: {
@@ -493,6 +497,7 @@ const decideWorkspaceTransitionRoute = createRoute({
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide',
   tags: ['Workspaces'],
   summary: 'Re-derive, decide, audit, and conditionally commit a Workspace Transition',
+  middleware: observeTransitionCompatibilityRoute('workspace-structured-governance.decide'),
   request: {
     params: workspaceParams,
     body: {
@@ -558,6 +563,8 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+  if (humanRequired) return humanRequired;
 
   try {
     const reviewed = await reviewWorkspaceTransition(db, {
@@ -571,6 +578,7 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
+        transition_id: reviewed.transitionId,
         transition: reviewed.transition,
         precondition: transitionPreconditionToWire(reviewed.precondition),
       },
@@ -586,17 +594,21 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
     content,
     why,
     outcome,
+    transition_id: transitionId,
     decision_reason: decisionReason,
     precondition,
   } = c.req.valid('json');
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+  if (humanRequired) return humanRequired;
 
   try {
     const decided = await decideWorkspaceTransition(db, {
       projectId,
       workspaceId,
+      transitionId,
       content,
       why,
       outcome,
@@ -607,6 +619,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
+        transition_id: decided.transitionId,
         transition: decided.transition,
         precondition: transitionPreconditionToWire(decided.precondition),
         decision_digest: decided.decisionDigest,
@@ -719,6 +732,8 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     const db = await getDB();
     const access = await assertProjectAccess(c, db, projectId);
     if (access instanceof Response) return access;
+    const humanRequired = rejectNonHumanWorkspaceReviewer(c);
+    if (humanRequired) return humanRequired;
     const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
@@ -774,6 +789,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       const decided = await decideWorkspaceTransition(txOrDb, {
         projectId,
         workspaceId,
+        transitionId: reviewed.transitionId,
         content: commitContent,
         why,
         outcome: validationOverride ? 'overridden' : 'accepted',
@@ -945,7 +961,7 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const extractedWorkspace = isEsphomeDeviceWorkspace(workspace)
     ? buildEsphomeDeviceWorkspace(workspace, projectId, sourceTexts, candidateId)
-    : buildGenericExtractedWorkspace(workspace, projectId, sourceTexts);
+    : await buildGenericExtractedWorkspace(db, workspace, projectId, sourceTexts);
   if (!extractedWorkspace.ok) {
     return errorResponse(c, 'INVALID_REQUEST', extractedWorkspace.message);
   }
@@ -984,12 +1000,13 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   });
 });
 
-function buildGenericExtractedWorkspace(
+async function buildGenericExtractedWorkspace(
+  db: AnyDB,
   workspace: Record<string, unknown>,
   projectId: string,
   sourceTexts: WorkspaceSourceText[]
-): { ok: true; workspace: Record<string, unknown> } | { ok: false; message: string } {
-  const schemaResolution = resolveWorkspaceYSchema(workspace);
+): Promise<{ ok: true; workspace: Record<string, unknown> } | { ok: false; message: string }> {
+  const schemaResolution = await resolveWorkspaceYSchema(workspace, db, projectId);
   if (schemaResolution.canonicalName && !schemaResolution.schema) {
     const releaseLabel = schemaResolution.version
       ? `${schemaResolution.canonicalName} ${schemaResolution.version}`
@@ -1127,6 +1144,14 @@ function workspaceHumanActor(c: Parameters<typeof getUserId>[0]) {
     kind: 'human' as const,
     id: userId ? `user:${userId}` : 'human:local-user',
   };
+}
+
+function rejectNonHumanWorkspaceReviewer(c: Parameters<typeof getUserId>[0]): Response | null {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Workspace review and commit require a human principal');
+  }
+  return null;
 }
 
 function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondition) {
@@ -1393,22 +1418,6 @@ function buildExtractedWorkspace(
           : 'Add source material before YOps handoff.',
       gaps: sourceTexts.length > 0 ? gaps : ['No source material.'],
     },
-  };
-}
-
-function resolveWorkspaceYSchema(workspace: Record<string, unknown>): {
-  canonicalName: string | null;
-  schema: YSchema | null;
-  version?: string;
-} {
-  const bindings = workspace.schemaBindings as unknown[] | undefined;
-  const binding = bindings?.[0];
-  const canonicalName = canonicalSchemaNameFromBinding(binding);
-  const version = schemaVersionFromBinding(binding);
-  return {
-    canonicalName,
-    schema: canonicalName ? resolveBuiltInYSchema(canonicalName, version) : null,
-    ...(version ? { version } : {}),
   };
 }
 

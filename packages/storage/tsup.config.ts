@@ -10,7 +10,9 @@ export default defineConfig({
     'seed/templates': 'src/seed/templates.ts',
   },
   format: ['cjs'],
-  dts: true,
+  // Type declarations are emitted by tsc so re-exported query modules are
+  // preserved as a declaration tree for downstream packages.
+  dts: false,
   clean: true,
   // Mark all dependencies as external (this is a library, not a bundle)
   external: [/^[^./]/],

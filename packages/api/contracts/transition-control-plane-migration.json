@@ -1,0 +1,355 @@
+{
+  "schema_version": 1,
+  "purpose": "Keep one Transition control plane while first-party compatibility routes migrate to the canonical lifecycle.",
+  "canonical": {
+    "route_source": "packages/api/src/routes/transition-control-plane.openapi.ts",
+    "application_sources": [
+      "packages/api/src/lib/transition-control-plane/index.ts",
+      "packages/api/src/lib/transition-control-plane/lifecycle.ts",
+      "packages/api/src/lib/transition-control-plane/materialize.ts"
+    ],
+    "writer_sources": ["packages/api/src/lib/transition-control-plane/lifecycle.ts"],
+    "actions": [
+      {
+        "id": "propose",
+        "method": "POST",
+        "path": "/v1/projects/{projectId}/transitions",
+        "scopes": ["transition:propose"],
+        "client_method": "async proposeTransition("
+      },
+      {
+        "id": "inspect",
+        "method": "GET",
+        "path": "/v1/projects/{projectId}/transitions/{transitionId}",
+        "scopes": ["transition:inspect"],
+        "client_method": "async inspectTransition("
+      },
+      {
+        "id": "verify",
+        "method": "POST",
+        "path": "/v1/projects/{projectId}/transitions/{transitionId}/verify",
+        "scopes": ["transition:verify"],
+        "client_method": "async verifyTransition("
+      },
+      {
+        "id": "statement",
+        "method": "POST",
+        "path": "/v1/projects/{projectId}/transitions/{transitionId}/statements",
+        "scopes": ["transition:statement:issue"],
+        "client_method": "async attachTransitionStatement("
+      },
+      {
+        "id": "decide",
+        "method": "POST",
+        "path": "/v1/projects/{projectId}/transitions/{transitionId}/decisions",
+        "scopes": [
+          "transition:decide:accept",
+          "transition:decide:override",
+          "transition:decide:reject"
+        ],
+        "client_method": "async decideTransition("
+      },
+      {
+        "id": "commit",
+        "method": "POST",
+        "path": "/v1/projects/{projectId}/transitions/{transitionId}/commits",
+        "scopes": ["transition:commit:create", "transition:ref:advance"],
+        "client_method": "async commitTransition("
+      }
+    ]
+  },
+  "compatibility_contracts": [
+    {
+      "id": "workspace-structured-governance",
+      "state": "compatibility",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review",
+          "source": "packages/api/src/routes/workspaces.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide",
+          "source": "packages/api/src/routes/workspaces.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/commit",
+          "source": "packages/api/src/routes/workspaces.openapi.ts"
+        }
+      ],
+      "application_sources": [
+        "packages/api/src/lib/transition-control-plane/materialize.ts",
+        "packages/api/src/lib/workspace-transition.ts"
+      ],
+      "writer_sources": [],
+      "consumers": [
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function reviewWorkspaceTransition("
+        },
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function decideWorkspaceTransition("
+        },
+        {
+          "file": "apps/web/src/infrastructure/workspaces.ts",
+          "token": "commitProjectWorkspace"
+        }
+      ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "materializePreparedWorkspaceTransition("
+        },
+        {
+          "file": "packages/api/src/routes/workspaces.openapi.ts",
+          "token": "transition_id: reviewed.transitionId"
+        },
+        {
+          "file": "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
+          "token": "transitionId: reviewed.transition_id"
+        },
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "const decided = await decideTransition("
+        },
+        {
+          "file": "packages/api/src/lib/workspace-transition.ts",
+          "token": "const committed = await commitTransition("
+        },
+        {
+          "file": "packages/api/src/__tests__/pull-requests.test.ts",
+          "token": "const retried = await decideWorkspaceTransition(mockDB, decisionInput)"
+        }
+      ],
+      "progress": "Structured Workspace review materializes a durable Proposal and replay/YSchema Statement memberships, returns transition_id, and binds Web decide calls to that identity. Its compatibility decide/commit path delegates Decision receipts, Decision audit writes, CommitV2 creation, ref CAS, Workspace projection, and retry reuse to the shared lifecycle use cases. Review and decide calls emit structured compatibility-route telemetry, but are intentionally not marked deprecated yet.",
+      "remaining_gap": "The canonical proposal input does not yet represent the legacy full target-State replacement plus YSchema review projection, canonical Decision requires an explicit policy binding, and canonical Decision/Commit are separate while the Web adapter conditionally commits. First-party Web consumers and the one-shot Workspace commit route therefore remain. Deprecation metadata, successor links, Sunset, and a removal window must wait for semantic parity and caller migration.",
+      "replacement": "Resolve a durable transition_id, then use canonical inspect/verify, decisions, and commits while preserving the task-oriented Workspace projection.",
+      "removal_gate": "Remove only after Web callers use canonical actions, contract parity and adversarial tests pass, and the route has completed its documented deprecation window."
+    },
+    {
+      "id": "workspace-source-governance",
+      "state": "compatibility",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/review",
+          "source": "packages/api/src/routes/workspace-source-transition.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/decide",
+          "source": "packages/api/src/routes/workspace-source-transition.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/review",
+          "source": "packages/api/src/routes/workspace-source-transition.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/decide",
+          "source": "packages/api/src/routes/workspace-source-transition.openapi.ts"
+        }
+      ],
+      "application_sources": [
+        "packages/api/src/lib/transition-control-plane/materialize.ts",
+        "packages/api/src/lib/workspace-source-transition.ts"
+      ],
+      "writer_sources": [],
+      "consumers": [
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function reviewWorkspaceSourceTransition("
+        },
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function decideWorkspaceSourceTransition("
+        },
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function reviewWorkspaceSourceRevert("
+        },
+        {
+          "file": "apps/web/src/queries/workspaces.ts",
+          "token": "export function decideWorkspaceSourceRevert("
+        }
+      ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "materializePreparedWorkspaceSourceTransition("
+        },
+        {
+          "file": "packages/api/src/routes/workspace-source-transition.openapi.ts",
+          "token": "transition_id: reviewed.transitionId"
+        },
+        {
+          "file": "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
+          "token": "transitionId: reviewed.transition_id"
+        },
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "const decided = await decideTransition("
+        },
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "const committed = await commitTransition("
+        },
+        {
+          "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
+          "token": "const revertedRetry = await decideWorkspaceSourceRevert("
+        },
+        {
+          "file": "packages/storage/src/schema-transition-commits.ts",
+          "token": "transitionProposalPreparations"
+        },
+        {
+          "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
+          "token": "const verifiedRevert = await verifyTransition("
+        },
+        {
+          "file": "packages/api/src/lib/workspace-source-transition.ts",
+          "token": "resolveCanonicalWorkspaceSourceCommitProjection("
+        },
+        {
+          "file": "packages/api/src/__tests__/transition-decision-commit-routes.test.ts",
+          "token": "commits canonical exact-source import, edit, and revert with trusted projections"
+        }
+      ],
+      "progress": "Exact-source import, edit, and revert reviews materialize durable Proposal and replay/runner Statement memberships, return transition_id, and bind Web decide calls to that identity. Canonical Propose retains server-resolved source preparation for all three request kinds, Canonical Verify runs the native ESPHome provider, and canonical Commit derives sourceArtifact Workspace projection only from that immutable preparation. A real database route test covers import, edit, and revert from Runner Statement through an explicitly policy-bound human Decision to Commit, including exact retry reuse. Compatibility decide/commit paths delegate Decision receipts, audit writes, CommitV2 creation, ref CAS, and sourceArtifact Workspace projection to the shared lifecycle; real database tests cover Runner Statements and post-commit retry reuse for all three request kinds. All four routes emit structured compatibility-route telemetry, but are intentionally not marked deprecated yet.",
+      "remaining_gap": "Explicit policy binding is a required governance prerequisite, not a parity gap, and canonical Decision/Commit intentionally remain separate capability actions. First-party Web still uses the task adapter to compose conditional commit and operational Runner status; runner no-Statement details are not protocol facts. First-party caller migration, deprecation metadata, successor links, Sunset, and a removal window are still required before removal.",
+      "replacement": "Create or resolve an exact-source Transition, retain source-specific preparation, and delegate governance to the canonical actions.",
+      "removal_gate": "Remove only after import, edit, and revert retain exact-source parity through canonical actions and all first-party callers have migrated."
+    },
+    {
+      "id": "repository-state-shortcuts",
+      "state": "compatibility",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/commits",
+          "source": "packages/api/src/routes/commits.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/commit",
+          "source": "packages/api/src/routes/commit-from-draft.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/{id}/commit",
+          "source": "packages/api/src/routes/drafts-workflows.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/{draftId}/auto-commit",
+          "source": "packages/api/src/routes/autopilot.openapi.ts"
+        }
+      ],
+      "application_sources": ["packages/api/src/lib/repository-state-transition.ts"],
+      "writer_sources": [],
+      "consumers": [
+        {
+          "file": "packages/api-client/src/client.ts",
+          "token": "async commitRepositoryState("
+        },
+        {
+          "file": "packages/api-client/src/client.ts",
+          "token": "async commitFromDraft("
+        },
+        {
+          "file": "packages/mcp/src/tools/core/commit.ts",
+          "token": "client.commitFromDraft("
+        }
+      ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/repository-state-transition.ts",
+          "token": "const created = await commitPreparedRepositoryTransition({"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "creates a first-parent CommitV2 chain and rejects a stale observed head"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "rolls back Decision audit, CommitV2, and ref when commit persistence fails"
+        }
+      ],
+      "progress": "Repository State task adapters retain their input preparation and projections, but accepted Decision authorization, audit persistence, CommitV2 construction, ref CAS, and YOps log linking now execute through the shared repository lifecycle boundary in one transaction.",
+      "remaining_gap": "These shortcuts remain one-shot compatibility commands without durable transition_id review or request receipts. Route retirement still requires explicit canonical replacements, caller migration, deprecation metadata, and observability.",
+      "replacement": "Preserve each task input adapter but execute Propose, Verify, Decide, and Commit through the same canonical application use cases.",
+      "removal_gate": "Do not delete a task shortcut until its semantics and first-party callers have an explicit canonical replacement; no shortcut may remain solely to preserve a deprecated writer."
+    },
+    {
+      "id": "merge-governance",
+      "state": "retained_task_adapter",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/merge/drafts/{id}/commit",
+          "source": "packages/api/src/routes/merge.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/pull-requests/{number}/merge",
+          "source": "packages/api/src/routes/pull-requests.openapi.ts"
+        }
+      ],
+      "application_sources": [
+        "packages/api/src/lib/repository-state-transition.ts",
+        "packages/api/src/ops/merge.ts"
+      ],
+      "writer_sources": [],
+      "consumers": [
+        {
+          "file": "apps/web/src/infrastructure/mergeApi.ts",
+          "token": "commitMergeDraft"
+        },
+        {
+          "file": "packages/mcp/src/tools/advanced/merge.ts",
+          "token": "commitRepositoryYOpsMerge({"
+        }
+      ],
+      "migration_proofs": [
+        {
+          "file": "packages/api/src/lib/repository-state-transition.ts",
+          "token": "created = await commitPreparedRepositoryTransition({"
+        },
+        {
+          "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
+          "token": "recomputes and commits a deterministic two-parent merge with source evidence"
+        }
+      ],
+      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary.",
+      "remaining_gap": "Merge remains a task adapter and does not yet expose durable canonical review or command receipts. Retiring governance ownership requires canonical merge lifecycle parity and first-party caller migration.",
+      "replacement": "Keep Merge as a task-level adapter while its deterministic multi-parent Effect, Statements, Decision, and Commit use the canonical lifecycle.",
+      "removal_gate": "The task endpoint may remain, but it must stop owning governance orchestration once canonical merge lifecycle parity is covered."
+    },
+    {
+      "id": "demo-seed",
+      "state": "internal_compatibility",
+      "routes": [],
+      "application_sources": ["packages/storage/src/queries/seed-demo-workspace.ts"],
+      "writer_sources": [],
+      "consumers": [],
+      "migration_proofs": [
+        {
+          "file": "packages/storage/src/queries/seed-demo-workspace.ts",
+          "token": "const created = await createAuthorizedTransitionCommit(db, {"
+        },
+        {
+          "file": "packages/storage/src/__tests__/seed-demo-workspace.test.ts",
+          "token": "rolls back every fixture row and marker when a late seed step fails"
+        }
+      ],
+      "progress": "The demo fixture now runs inside one outer transaction and persists trusted Decision authorization plus CommitV2 through the storage authorized-transition boundary. A late leaf failure rolls back project, source, YOps, audit, CommitV2, ref, leaf, and marker rows together.",
+      "remaining_gap": "The demo seed remains an internal fixture application service and intentionally owns its bundled fixture policy and projections. It is not a public canonical Transition API and should not be reused for product writes.",
+      "replacement": "Seed a valid canonical Transition graph through a fixture-specific application boundary.",
+      "removal_gate": "The seed must not call the storage Commit primitive directly after a fixture/application boundary exists."
+    }
+  ]
+}

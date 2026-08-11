@@ -1,8 +1,7 @@
 {
   "name": "@t3x-dev/transition",
-  "version": "0.6.0",
-  "private": true,
-  "description": "Internal leaf package for verifiable T3X state-transition protocol contracts",
+  "version": "0.1.0",
+  "description": "Public alpha contracts for verifiable T3X state transitions",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -44,6 +43,6 @@
     "directory": "packages/transition"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }

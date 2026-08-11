@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, deleteAtPath, resolvePath, setAtPath } from '../paths';
+import { deepClone, deleteAtPath, hasOwnKey, resolvePath, setAtPath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -27,7 +27,7 @@ export const mergeHandler: OpHandler = (doc, fields, index) => {
   const targetMap = target as { [key: string]: YValue };
 
   for (const key of keys) {
-    if (!(key in targetMap)) {
+    if (!hasOwnKey(targetMap, key)) {
       return {
         doc,
         error: yopsError(
@@ -55,8 +55,10 @@ export const mergeHandler: OpHandler = (doc, fields, index) => {
 
   const merged: { [key: string]: YValue } = {};
   for (const key of keys) {
-    const val = targetMap[key];
-    Object.assign(merged, deepClone(val as { [k: string]: YValue }));
+    const val = deepClone(targetMap[key]) as { [k: string]: YValue };
+    for (const [mergedKey, mergedValue] of Object.entries(val)) {
+      setOwnKey(merged, mergedKey, mergedValue);
+    }
   }
 
   let cloned = deepClone(doc);

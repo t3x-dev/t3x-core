@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 60;
+const SCHEMA_VERSION = 62;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -492,6 +492,69 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON yschema_validation_runs(project_id, commit_hash);
     CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
       ON yschema_validation_runs(schema_name, schema_hash);
+
+    -- Immutable YSchema Artifact Registry
+    CREATE TABLE IF NOT EXISTS yschema_artifacts (
+      artifact_id TEXT PRIMARY KEY,
+      canonical_name TEXT NOT NULL UNIQUE,
+      family TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      owner_project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      visibility TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifacts_family_kind_visibility
+      ON yschema_artifacts(family, kind, visibility);
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifacts_owner
+      ON yschema_artifacts(owner_project_id);
+
+    CREATE TABLE IF NOT EXISTS yschema_artifact_versions (
+      artifact_version_id TEXT PRIMARY KEY,
+      artifact_id TEXT NOT NULL REFERENCES yschema_artifacts(artifact_id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      manifest_json JSONB NOT NULL,
+      artifact_hash TEXT NOT NULL,
+      path_count INTEGER NOT NULL,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(artifact_id, version),
+      UNIQUE(artifact_id, artifact_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifact_versions_status
+      ON yschema_artifact_versions(status, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_yschema_artifact_active_version
+      ON yschema_artifact_versions(artifact_id) WHERE status = 'active';
+
+    CREATE TABLE IF NOT EXISTS yschema_artifact_capabilities (
+      artifact_version_id TEXT NOT NULL
+        REFERENCES yschema_artifact_versions(artifact_version_id) ON DELETE CASCADE,
+      direction TEXT NOT NULL,
+      capability TEXT NOT NULL,
+      UNIQUE(artifact_version_id, direction, capability)
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifact_capabilities_lookup
+      ON yschema_artifact_capabilities(direction, capability);
+
+    CREATE TABLE IF NOT EXISTS yschema_composition_snapshots (
+      snapshot_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      composition_id TEXT NOT NULL,
+      composition_revision INTEGER NOT NULL,
+      composition_hash TEXT NOT NULL,
+      compiled_schema_hash TEXT NOT NULL,
+      compiler_version TEXT NOT NULL,
+      manifest_json JSONB NOT NULL,
+      schema_json JSONB NOT NULL,
+      render_plan_json JSONB NOT NULL,
+      origins_json JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(project_id, composition_id, composition_revision),
+      UNIQUE(project_id, composition_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_yschema_composition_schema_hash
+      ON yschema_composition_snapshots(project_id, compiled_schema_hash);
 
     -- Workspace validation runs (candidate-level external validator records)
     CREATE TABLE IF NOT EXISTS validation_runs (
@@ -1733,6 +1796,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON transition_proposal_memberships(project_id, actor_kind, actor_id, request_id);
     CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_project_created
       ON transition_proposal_memberships(project_id, created_at, transition_id);
+    CREATE INDEX IF NOT EXISTS idx_transition_proposal_memberships_workspace_revision_created
+      ON transition_proposal_memberships(
+        project_id, workspace_id, workspace_revision, created_at, transition_id
+      );
 
     CREATE TABLE IF NOT EXISTS transition_statement_memberships (
       transition_id TEXT NOT NULL
@@ -1819,6 +1886,28 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE transition_yops_log_consumptions
       ADD CONSTRAINT transition_yops_log_consumptions_pkey
       PRIMARY KEY (project_id, yops_log_id);
+  `);
+
+  // ── Schema v61: resolved Proposal preparation and Verify operation receipts ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_proposal_preparations (
+      transition_id TEXT PRIMARY KEY
+        REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+      canonical_json TEXT NOT NULL,
+      digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS transition_verification_receipts (
+      transition_id TEXT NOT NULL
+        REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      operational_results JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, transition_id, request_id)
+    );
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

@@ -24,6 +24,7 @@ vi.mock('@/queries/workspaces', () => ({
 }));
 
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}`;
+const transitionId = `trn_${'2'.repeat(32)}`;
 
 const candidate = {
   id: 'workspace_esphome',
@@ -86,11 +87,13 @@ describe('useWorkspaceSourceTransition', () => {
       workspace: { ...candidate, revision: 7 },
     });
     vi.mocked(reviewWorkspaceSourceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('pending'),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
     });
     vi.mocked(reviewWorkspaceSourceRevert).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('pending'),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
@@ -103,11 +106,13 @@ describe('useWorkspaceSourceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceSourceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('committed'),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
       decision_digest: digest('2'),
       commit: {},
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
     });
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
@@ -132,6 +137,7 @@ describe('useWorkspaceSourceTransition', () => {
     });
 
     expect(decideWorkspaceSourceTransition).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
+      transitionId,
       artifact: candidate.sourceArtifact,
       change,
       why: 'Reduce production log volume.',
@@ -147,6 +153,7 @@ describe('useWorkspaceSourceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceSourceTransition).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('rejected'),
       precondition,
       runner: { mode: 'not_configured' },
@@ -205,11 +212,13 @@ describe('useWorkspaceSourceTransition', () => {
   it('saves before revert Review and decides only the commit-bound opaque session', async () => {
     const commitId = digest('8');
     vi.mocked(decideWorkspaceSourceRevert).mockResolvedValue({
+      transition_id: transitionId,
       transition: transitionView('committed'),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
       decision_digest: digest('2'),
       commit: {},
+      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
     });
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
@@ -233,6 +242,7 @@ describe('useWorkspaceSourceTransition', () => {
     });
 
     expect(decideWorkspaceSourceRevert).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
+      transitionId,
       commitId,
       why: 'Restore the previous configuration.',
       outcome: 'accepted',

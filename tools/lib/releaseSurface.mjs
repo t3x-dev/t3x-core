@@ -97,6 +97,20 @@ function validatePackageEntry(rootDir, entry, index, errors, warnings) {
     errors.push(`${prefix} has invalid publish_state: ${entry.publish_state}`);
   }
 
+  if (entry.release_train !== undefined && !['active', 'paused'].includes(entry.release_train)) {
+    errors.push(`${prefix} has invalid release_train: ${entry.release_train}`);
+  }
+
+  if (entry.npm_publish === true && !['active', 'paused'].includes(entry.release_train)) {
+    errors.push(
+      `${entry.name} must declare release_train as active or paused when npm_publish is true`
+    );
+  }
+
+  if (entry.npm_publish !== true && entry.release_train === 'active') {
+    errors.push(`${entry.name} cannot have release_train: active when npm_publish is false`);
+  }
+
   const packagePath = join(fileURLToPath(rootDir), entry.path);
   const packageJsonPath = join(packagePath, 'package.json');
   if (!existsSync(packageJsonPath)) {
@@ -153,6 +167,12 @@ export function validateReleaseSurface({ rootDir = new URL('../..', import.meta.
   const npmPublishPackages = packages
     .filter((entry) => entry.npm_publish === true)
     .map((entry) => entry.name);
+  const releaseTrainPackages = packages
+    .filter((entry) => entry.npm_publish === true && entry.release_train === 'active')
+    .map((entry) => entry.name);
+  const pausedReleaseTrainPackages = packages
+    .filter((entry) => entry.npm_publish === true && entry.release_train === 'paused')
+    .map((entry) => entry.name);
   const releaseMarkdownNpmPackages = extractReleaseMarkdownNpmPackages(
     readText(rootDir, 'RELEASE.md')
   );
@@ -171,6 +191,8 @@ export function validateReleaseSurface({ rootDir = new URL('../..', import.meta.
     packages,
     packagesByName: new Map(packages.map((entry) => [entry.name, entry])),
     npmPublishPackages,
+    pausedReleaseTrainPackages,
+    releaseTrainPackages,
     releaseMarkdownNpmPackages,
   };
 }

@@ -46,7 +46,7 @@ import { findConversationById } from '@t3x-dev/storage';
 import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -217,6 +217,8 @@ extractYopsRoutes.openapi(route, async (c) => {
         `Conversation not found: ${conversation_id}`
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Short-circuit: empty turns → no LLM call needed. Travels as a
     // clean `kind:'ok'` outcome with no warnings so clients consume the

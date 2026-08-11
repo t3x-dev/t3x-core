@@ -23,6 +23,7 @@ import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage'
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 
 /**
  * Create a proxy-aware fetch function
@@ -681,23 +682,25 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
   // Validate cosine value
   const cosine = clamp01(body.cosine ?? 0.5);
 
-  // Check for embedding API key
-  const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
-  if (!googleApiKey) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PROVIDER_ERROR',
-          message: 'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)',
-        },
-      },
-      400
-    );
-  }
-
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
+    // Resolve provider configuration only after project authorization succeeds.
+    const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
+    if (!googleApiKey) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'PROVIDER_ERROR',
+            message: 'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)',
+          },
+        },
+        400
+      );
+    }
     let sourceText: string | undefined;
     let chunks: Array<{ id: string; start: number; end: number; text: string }> = [];
     let allAnchorCandidates: AnchorCandidate[] = [];
@@ -714,6 +717,9 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
           'NOT_FOUND',
           `Conversation ${body.source_conversation_id} not found`
         );
+      }
+      if (conversation.projectId !== body.project_id) {
+        return errorResponse(c, 'INVALID_REQUEST', 'Conversation does not belong to project');
       }
 
       const turns = await findTurnsByConversation(db, {

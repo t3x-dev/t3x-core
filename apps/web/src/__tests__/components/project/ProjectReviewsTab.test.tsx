@@ -179,7 +179,9 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
     const baseSelect = await screen.findByRole('combobox', { name: 'base:' });
-    expect(baseSelect).toHaveTextContent('main');
+    await waitFor(() => {
+      expect(baseSelect).toHaveTextContent('main');
+    });
 
     fireEvent.keyDown(baseSelect, { key: 'ArrowDown' });
     expect(await screen.findByRole('option', { name: 'main' })).toBeInTheDocument();

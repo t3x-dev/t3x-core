@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, parsePath, resolvePath } from '../paths';
+import { deepClone, hasOwnKey, parsePath, resolvePath, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -47,7 +47,7 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
     [key: string]: YValue;
   };
 
-  if (to in parentMap) {
+  if (hasOwnKey(parentMap, to)) {
     return {
       doc,
       error: yopsError(
@@ -68,7 +68,7 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
     delete clonedParent[key];
   }
   for (const [k, v] of entries) {
-    clonedParent[k === oldKey ? to : k] = v;
+    setOwnKey(clonedParent, k === oldKey ? to : k, v);
   }
 
   return { doc: cloned };

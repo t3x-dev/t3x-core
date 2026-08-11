@@ -1,14 +1,9 @@
 /**
- * t3x_extract — extract structured YAML state from raw text using server-side LLM.
+ * t3x_extract — create a server-owned Workspace v2 extraction proposal.
  *
- * The calling agent passes text; T3X handles:
- *   1. Conversation + turn creation (persisting the raw input)
- *   2. LLM extraction via the shared v2 pipeline from @t3x-dev/core
- *   3. Applying the compiled YOps onto a snapshot
- *   4. Draft creation with the resulting trees
- *
- * This is a simplified version of the full API extraction pipeline
- * (packages/api/src/lib/extraction-v2.ts). It omits:
+ * The preferred API path selects immutable Source turns and a Repository
+ * Workspace. The legacy raw-text Draft path remains below for compatibility;
+ * its direct-storage implementation omits:
  *   - Drift detection (multi-topic management)
  *   - Session state / readiness gating
  *   - Ambiguity detection
@@ -16,8 +11,7 @@
  *   - Event bus usage-tracking telemetry (the extraction.done event
  *     is still emitted, best-effort)
  *
- * These features live in the API layer and depend on API-specific
- * infrastructure (yops_log table, usage tracker, etc.).
+ * Those features live in the API layer and depend on API-specific infrastructure.
  */
 
 import { extractAndApply } from '@t3x-dev/core';
@@ -41,22 +35,18 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 export const extractDef: ToolDef = {
   name: 't3x_extract',
   description: [
-    'Extract structured YAML state from raw text using server-side LLM.',
+    'Create a v2 extraction proposal from immutable Source turns in a Repository Workspace.',
     '',
-    'Pass raw text (conversation transcript, notes, document content) and T3X will:',
-    '  1. Create a conversation record with the text as turns',
-    '  2. Run LLM-based semantic extraction (requires a configured generation provider)',
-    '  3. Compile the extraction into YOps and materialize the resulting trees',
-    '  4. Create a draft containing the extracted state tree',
+    'Preferred authenticated API flow:',
+    '  1. Select an existing Workspace and Source Thread',
+    '  2. Pass exact immutable turn hashes',
+    '  3. T3X re-resolves Source and target-ref baseline server-side',
+    '  4. T3X persists canonical SourcedYOps in the Workspace proposal',
     '',
-    'Returns a draft_id that you can then:',
-    '  - Inspect with t3x_query { "target": "draft", "id": "<draft_id>" }',
-    '  - Edit with t3x_edit { "draft_id": "<draft_id>", "yops": "..." }',
-    '  - Commit with t3x_commit { "project_id": "...", "draft_id": "...", "message": "..." }',
+    'Use workspace_id + source_thread_id + turn_hashes for this flow.',
+    'Inspect the result with t3x_query target="workspace".',
     '',
-    'If conversation_id is provided, the text is appended as new turns to that',
-    'conversation and extraction runs on all turns (bootstrap mode — MCP does',
-    'not persist snapshots between calls).',
+    'Raw text remains a compatibility mode for the legacy Draft workflow.',
   ].join('\n'),
   inputSchema: {
     type: 'object',
@@ -65,11 +55,34 @@ export const extractDef: ToolDef = {
         type: 'string',
         description: 'Project ID to extract into.',
       },
+      workspace_id: {
+        type: 'string',
+        description: 'Repository Workspace ID for the preferred proposal flow.',
+      },
+      source_thread_id: {
+        type: 'string',
+        description: 'Existing Source Thread ID selected inside the project.',
+      },
+      turn_hashes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Exact immutable Source turn hashes to extract.',
+      },
+      if_revision: {
+        type: 'number',
+        description: 'Expected Workspace revision for optimistic concurrency.',
+      },
+      provider: {
+        type: 'string',
+        description: 'Optional configured provider override.',
+      },
+      model: {
+        type: 'string',
+        description: 'Optional model override compatible with the provider.',
+      },
       text: {
         type: 'string',
-        description:
-          'Raw text to extract structured state from. Can be a conversation transcript, ' +
-          'notes, document content, or any unstructured text.',
+        description: 'Compatibility mode only: raw text for the legacy Draft extraction workflow.',
       },
       conversation_id: {
         type: 'string',
@@ -83,7 +96,7 @@ export const extractDef: ToolDef = {
           'Optional label describing the source of the text (e.g., "meeting notes", "slack thread").',
       },
     },
-    required: ['project_id', 'text'],
+    required: ['project_id'],
   },
   annotations: {
     readOnlyHint: false,
@@ -147,13 +160,46 @@ export const extractHandler: ToolHandler = async (args) => {
   const text = args.text as string | undefined;
   const conversationId = args.conversation_id as string | undefined;
   const source = args.source as string | undefined;
+  const workspaceId = args.workspace_id as string | undefined;
+  const sourceThreadId = args.source_thread_id as string | undefined;
+  const turnHashes = args.turn_hashes as string[] | undefined;
+  const ifRevision = args.if_revision as number | undefined;
+  const provider = args.provider as string | undefined;
+  const model = args.model as string | undefined;
 
   // ── Validate required params ──
   if (!projectId) {
     return fail('"project_id" is required.\nProvide the project ID to extract into.');
   }
+  const workspaceMode =
+    workspaceId !== undefined || sourceThreadId !== undefined || turnHashes !== undefined;
+
+  if (workspaceMode) {
+    if (!workspaceId || !sourceThreadId || !Array.isArray(turnHashes) || turnHashes.length === 0) {
+      return fail(
+        'Workspace extraction requires "workspace_id", "source_thread_id", and at least one "turn_hashes" entry.'
+      );
+    }
+    if (!isApiBackend()) {
+      return fail(
+        'Workspace extraction requires T3X_MCP_BACKEND=api so Source resolution, authorization, and Workspace concurrency stay server-owned.'
+      );
+    }
+    const client = getApiClient();
+    return ok(
+      await client.workspaces.createExtractionProposal(projectId, workspaceId, {
+        source: { type: 'conversation', id: sourceThreadId, turn_hashes: turnHashes },
+        ...(ifRevision === undefined ? {} : { if_revision: ifRevision }),
+        ...(provider === undefined ? {} : { provider }),
+        ...(model === undefined ? {} : { model }),
+      })
+    );
+  }
+
   if (!text) {
-    return fail('"text" is required.\nProvide the raw text to extract structured state from.');
+    return fail(
+      '"text" is required for compatibility extraction. Alternatively provide "workspace_id" + "source_thread_id" + "turn_hashes".'
+    );
   }
 
   if (isApiBackend()) {

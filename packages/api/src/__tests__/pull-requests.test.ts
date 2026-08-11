@@ -32,7 +32,12 @@ import {
   commitRepositoryYOpsState,
   getRepositorySemanticCommit,
 } from '../lib/repository-state-transition';
-import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
+import { inspectTransition } from '../lib/transition-control-plane';
+import {
+  decideWorkspaceTransition,
+  reviewWorkspaceTransition,
+  WorkspaceTransitionReviewStaleError,
+} from '../lib/workspace-transition';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
@@ -123,16 +128,43 @@ describe('Pull request routes', () => {
       expectedRevision: draft.revision,
       actor,
     });
-    const decided = await decideWorkspaceTransition(mockDB, {
+    const durable = await inspectTransition({
+      db: mockDB,
+      projectId: input.projectId,
+      transitionId: reviewed.transitionId,
+      actor,
+    });
+    expect(durable.transitionId).toBe(reviewed.transitionId);
+    expect(durable.precondition.effectDigest).toBe(reviewed.precondition.effectDigest);
+    expect(durable.precondition.statementDigests).toEqual(reviewed.precondition.statementDigests);
+    await expect(
+      decideWorkspaceTransition(mockDB, {
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+        transitionId: `trn_${'0'.repeat(32)}`,
+        content,
+        why: `Commit ${input.workspaceId}`,
+        outcome: 'accepted',
+        precondition: reviewed.precondition,
+        actor,
+      })
+    ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
+    const decisionInput = {
       projectId: input.projectId,
       workspaceId: input.workspaceId,
+      transitionId: reviewed.transitionId,
       content,
       why: `Commit ${input.workspaceId}`,
       outcome: 'accepted',
       precondition: reviewed.precondition,
       actor,
-    });
+    } as const;
+    const decided = await decideWorkspaceTransition(mockDB, decisionInput);
     if (!decided.commit) throw new Error('Workspace fixture did not create a CommitV2');
+    const retried = await decideWorkspaceTransition(mockDB, decisionInput);
+    expect(retried.commit).toEqual(decided.commit);
+    expect(retried.decisionDigest).toBe(decided.decisionDigest);
+    expect(retried.workspace).toEqual(decided.workspace);
     return decided;
   }
 

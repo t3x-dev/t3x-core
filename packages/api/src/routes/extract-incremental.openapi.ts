@@ -31,7 +31,7 @@ import { collectResult, flattenTrees, runOperation } from '@t3x-dev/core';
 import { findConversationById, findDraftById, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { buildPipelineContext } from '../ops/context';
 import { extractOp } from '../ops/extract';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -195,6 +195,8 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
     if (draft.project_id !== project_id) {
       return errorResponse(c, 'INVALID_REQUEST', 'Draft does not belong to the specified project');
     }
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Validate conversation
     const conv = await findConversationById(db, conversation_id);

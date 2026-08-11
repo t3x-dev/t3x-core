@@ -46,6 +46,7 @@ export function decideWorkspaceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     content: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
@@ -73,6 +74,7 @@ export function decideWorkspaceSourceTransition(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     artifact: WorkspaceSourceArtifact;
     change: WorkspaceSourceChange;
     why?: string;
@@ -96,6 +98,7 @@ export function decideWorkspaceSourceRevert(
   projectId: string,
   workspaceId: string,
   input: {
+    transitionId: string;
     commitId: string;
     why?: string;
     outcome: WorkspaceTransitionOutcome;

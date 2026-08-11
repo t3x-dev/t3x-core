@@ -10,12 +10,26 @@ alpha package surface; the public alpha packages are `@t3x-dev/local`,
 
 ## First-Stage Scope
 
-This CLI currently only promises one main path:
+The legacy compatibility path remains available:
 
 `create project -> extract -> show draft -> yops apply -> commit -> create leaf -> generate leaf`
 
 The `commit` command is part of that path and commits a draft, not a local
 YAML/JSON file.
+
+Source-backed Repository extraction uses the same persisted Workspace contract
+as MCP and WebUI:
+
+```bash
+t3x extract -p proj_abc \
+  --workspace workspace_abc \
+  --source-thread conv_abc \
+  --turn-hash sha256:turn_1 sha256:turn_2 \
+  --if-revision 3
+```
+
+This mode returns a durable Workspace candidate that WebUI can inspect. Raw
+`--text` extraction continues to return a workbench `draft_id` for compatibility.
 
 ## Core Rule
 

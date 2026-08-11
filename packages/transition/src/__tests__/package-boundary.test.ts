@@ -27,10 +27,10 @@ const manifest = JSON.parse(
 ) as PackageManifest;
 
 describe('@t3x-dev/transition package boundary', () => {
-  it('is an internal package with no runtime package dependencies', () => {
+  it('is a public alpha leaf package with no runtime package dependencies', () => {
     expect(manifest.name).toBe('@t3x-dev/transition');
-    expect(manifest.private).toBe(true);
-    expect(manifest.publishConfig?.access).toBe('restricted');
+    expect(manifest.private).not.toBe(true);
+    expect(manifest.publishConfig?.access).toBe('public');
     expect(manifest.dependencies ?? {}).toEqual({});
     expect(manifest.optionalDependencies ?? {}).toEqual({});
     expect(manifest.peerDependencies ?? {}).toEqual({});

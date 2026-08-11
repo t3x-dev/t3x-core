@@ -20,6 +20,7 @@ type ResourceKind =
   | 'project'
   | 'commit'
   | 'workbench_draft'
+  | 'workspace'
   | 'source_thread'
   | 'leaf'
   | 'merge_draft';
@@ -47,6 +48,12 @@ export const RESOURCE_TEMPLATES = [
     name: 'workbench_draft',
     uriTemplate: 't3x://workbench-drafts/{draft_id}',
     description: 'Read a workbench draft used by extract/edit/commit.',
+    mimeType: 'application/json',
+  },
+  {
+    name: 'workspace',
+    uriTemplate: 't3x://projects/{project_id}/workspaces/{workspace_id}',
+    description: 'Read a persisted Repository Review Workspace through authenticated API access.',
     mimeType: 'application/json',
   },
   {
@@ -100,6 +107,9 @@ function parseResourceUri(uri: string): ParsedResourceUri {
       if (segments.length === 3 && segments[1] === 'commits') {
         return { kind: 'commit', projectId: segments[0], id: segments[2] };
       }
+      if (segments.length === 3 && segments[1] === 'workspaces') {
+        return { kind: 'workspace', projectId: segments[0], id: segments[2] };
+      }
       return { kind: 'project', id };
     }
     case 'workbench-drafts':
@@ -150,6 +160,13 @@ export async function readResource(uri: string) {
           kind: 'workbench_draft',
           ...(await client.getDraft(parsed.id)),
         });
+      case 'workspace':
+        if (!parsed.projectId)
+          throw new Error(`Workspace resource is missing project scope: ${uri}`);
+        return jsonTextContent(uri, {
+          kind: 'workspace',
+          ...(await client.workspaces.get(parsed.projectId, parsed.id)),
+        });
       case 'source_thread':
         return jsonTextContent(uri, {
           kind: 'source_thread',
@@ -170,6 +187,12 @@ export async function readResource(uri: string) {
         throw new Error(`Unhandled resource kind: ${String(exhaustiveCheck)}`);
       }
     }
+  }
+
+  if (parsed.kind === 'workspace') {
+    throw new Error(
+      'Workspace resources require T3X_MCP_BACKEND=api so authorization stays at the Workspace service boundary.'
+    );
   }
 
   const db = await getDB();
