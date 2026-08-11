@@ -76,6 +76,12 @@ jobs:
       - name: Lint and format check
         run: pnpm check
 
+      - name: Typecheck production sources
+        run: pnpm typecheck
+
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+
       - name: Check release surface
         run: pnpm check:release-surface
 
