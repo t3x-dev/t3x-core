@@ -151,6 +151,21 @@ describe('SchemaModuleRegistry', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens a deep-linked Module instance instead of the default Core', () => {
+    render(
+      <SchemaModuleRegistry
+        initialArtifactName="t3x/prd-frontend-design"
+        initialArtifactVersion="1.0.0"
+        registryArtifacts={TEST_REGISTRY}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Frontend Design details' })).toBeInTheDocument();
+    expect(document.getElementById('module-detail')).toContainElement(
+      screen.getByRole('region', { name: 'Frontend Design details' })
+    );
+  });
+
   it('switches between rendered, YAML, and curated Guide views for a Module', () => {
     render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
 

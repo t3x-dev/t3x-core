@@ -20,11 +20,15 @@ import { SchemaCompositionWorkbench } from './SchemaCompositionWorkbench';
 export function SchemaModuleRegistry({
   nextVersion,
   family = 'prd',
+  initialArtifactName,
+  initialArtifactVersion,
   workspace,
   registryArtifacts,
 }: {
   nextVersion?: string;
   family?: YSchemaArtifactFamily;
+  initialArtifactName?: string;
+  initialArtifactVersion?: string;
   workspace?: SchemaCompositionWorkspaceContext;
   registryArtifacts?: SchemaArtifactPreview[];
 }) {
@@ -60,9 +64,17 @@ export function SchemaModuleRegistry({
   const { publish, save } = useSchemaCompositionDraft();
   const [query, setQuery] = useState('');
   const [domain, setDomain] = useState('All');
-  const [selectedArtifactName, setSelectedArtifactName] = useState('');
+  const [selectedArtifactName, setSelectedArtifactName] = useState(initialArtifactName ?? '');
   const selectedArtifact =
-    artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ?? core;
+    artifacts.find(
+      (artifact) =>
+        artifact.canonicalName === selectedArtifactName &&
+        (selectedArtifactName !== initialArtifactName ||
+          !initialArtifactVersion ||
+          artifact.version === initialArtifactVersion)
+    ) ??
+    artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ??
+    core;
   const [compositionModules, setCompositionModules] = useState<SchemaArtifactPreview[]>([]);
   const [compositionRevision, setCompositionRevision] = useState(
     workspace?.composition?.revision ?? 0
@@ -96,6 +108,16 @@ export function SchemaModuleRegistry({
     workspace?.workspaceId,
     workspace?.workspaceRevision,
   ]);
+  useEffect(() => {
+    if (!initialArtifactName || selectedArtifact?.canonicalName !== initialArtifactName) return;
+    const frame = window.requestAnimationFrame(() => {
+      const detail = document.getElementById('module-detail');
+      if (typeof detail?.scrollIntoView === 'function') {
+        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialArtifactName, selectedArtifact?.canonicalName]);
   const domains = ['All', ...new Set(availableModules.map((module) => module.domain))];
   const visibleModules = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -309,7 +331,9 @@ export function SchemaModuleRegistry({
               : 'No Modules match this filter.'}
           </div>
         ) : null}
-        <SchemaArtifactDetail key={selectedArtifact.canonicalName} artifact={selectedArtifact} />
+        <div className="scroll-mt-4" id="module-detail">
+          <SchemaArtifactDetail key={selectedArtifact.canonicalName} artifact={selectedArtifact} />
+        </div>
       </main>
 
       <SchemaCompositionWorkbench

@@ -1,15 +1,24 @@
 'use client';
 
 import {
+  Blocks,
+  Braces,
   Check,
   ChevronDown,
   Copy,
+  Cpu,
+  Database,
+  ExternalLink,
+  FileCode2,
   FileText,
   GitCompare,
   ListTree,
+  Monitor,
   PanelRight,
+  Server,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -30,14 +39,16 @@ import type {
   PrdRenderRequirement,
   PrdRenderSection,
 } from '@/domain/project/stateViewModel';
+import type { SchemaArtifactPreview, SchemaCompositionDraft } from '@/types/schemaModules';
 import { cn } from '@/utils/cn';
 
 type ReaderMode = 'rendered' | 'raw';
 type InspectorTab = 'changes' | 'evidence' | 'node';
 type ReaderPane = 'inspector' | 'outline';
+type PrdSchemaCompositionSource = 'committed' | 'workspace';
 
-const PRD_OUTLINE_DEFAULT_WIDTH = 220;
-const PRD_OUTLINE_MIN_WIDTH = 180;
+const PRD_OUTLINE_DEFAULT_WIDTH = 252;
+const PRD_OUTLINE_MIN_WIDTH = 220;
 const PRD_OUTLINE_MAX_WIDTH = 420;
 const PRD_INSPECTOR_DEFAULT_WIDTH = 310;
 const PRD_INSPECTOR_MIN_WIDTH = 260;
@@ -55,6 +66,22 @@ interface PrdOutlineNode {
   meta?: string;
 }
 
+interface PrdSchemaNavigationItem {
+  canonicalName: string;
+  href: string;
+  icon: SchemaArtifactPreview['icon'];
+  nodeId: string;
+  source: PrdSchemaCompositionSource;
+  title: string;
+  version: string;
+}
+
+interface PrdSchemaNavigation {
+  core: PrdSchemaNavigationItem;
+  modules: PrdSchemaNavigationItem[];
+  source: PrdSchemaCompositionSource;
+}
+
 interface PrdSelectedNode {
   acceptanceCount: number;
   cardinality: string;
@@ -68,7 +95,11 @@ interface PrdSelectedNode {
 
 interface StatePrdReaderProps {
   model: PrdRenderModel;
+  schemaArtifacts?: SchemaArtifactPreview[];
+  schemaComposition?: SchemaCompositionDraft;
+  schemaCompositionSource?: PrdSchemaCompositionSource;
   schemaName: string;
+  schemaRegistryHref?: string;
   validationGapCount: number;
   validationReady: boolean;
   yamlText: string;
@@ -76,7 +107,11 @@ interface StatePrdReaderProps {
 
 export function StatePrdReader({
   model,
+  schemaArtifacts = [],
+  schemaComposition,
+  schemaCompositionSource = 'committed',
   schemaName,
+  schemaRegistryHref,
   validationGapCount,
   validationReady,
   yamlText,
@@ -98,6 +133,17 @@ export function StatePrdReader({
   const programmaticNodeRef = useRef<string | null>(null);
   const programmaticNodeTimerRef = useRef<number | null>(null);
   const outlineNodes = useMemo(() => buildOutlineNodes(model), [model]);
+  const schemaNavigation = useMemo(
+    () =>
+      buildPrdSchemaNavigation(
+        model,
+        schemaComposition,
+        schemaCompositionSource,
+        schemaArtifacts,
+        schemaRegistryHref
+      ),
+    [model, schemaArtifacts, schemaComposition, schemaCompositionSource, schemaRegistryHref]
+  );
   const selectedNode = useMemo(
     () => selectInspectorNode(model, selectedNodeId),
     [model, selectedNodeId]
@@ -379,6 +425,7 @@ export function StatePrdReader({
             onClose={() => setOutlineOpen(false)}
             onSelect={(nodeId) => selectNode(nodeId, true)}
             open={outlineOpen}
+            schemaNavigation={schemaNavigation}
             selectedNodeId={selectedNodeId}
           />
           <StatePaneResizeHandle
@@ -402,6 +449,7 @@ export function StatePrdReader({
               onInspectEvidence={(evidenceId) => openInspector('evidence', evidenceId)}
               onSelectNode={(nodeId) => selectNode(nodeId)}
               schemaName={schemaName}
+              schemaNavigation={schemaNavigation}
               selectedNodeId={selectedNodeId}
               validationGapCount={validationGapCount}
               validationReady={validationReady}
@@ -464,6 +512,7 @@ function PrdDocument({
   onInspectEvidence,
   onSelectNode,
   schemaName,
+  schemaNavigation,
   selectedNodeId,
   validationGapCount,
   validationReady,
@@ -472,11 +521,15 @@ function PrdDocument({
   onInspectEvidence: (evidenceId: string) => void;
   onSelectNode: (nodeId: string) => void;
   schemaName: string;
+  schemaNavigation: PrdSchemaNavigation | null;
   selectedNodeId: string;
   validationGapCount: number;
   validationReady: boolean;
 }) {
   const isPrdDocument = schemaName === 't3x/prd';
+  const moduleByNodeId = new Map(
+    schemaNavigation?.modules.map((module) => [module.nodeId, module]) ?? []
+  );
   return (
     <article className="mx-auto w-[min(1080px,calc(100%-56px))] py-10 max-md:w-[calc(100%-32px)] max-md:py-7">
       <header
@@ -579,6 +632,7 @@ function PrdDocument({
           onInspectEvidence={onInspectEvidence}
           onSelectNode={onSelectNode}
           section={section}
+          schemaModule={moduleByNodeId.get(`section-${String(index)}`)}
           selected={selectedNodeId === `section-${String(index)}`}
         />
       ))}
@@ -646,6 +700,7 @@ function StructuredSection({
   onInspectEvidence,
   onSelectNode,
   section,
+  schemaModule,
   selected,
 }: {
   alwaysExpanded?: boolean;
@@ -655,6 +710,7 @@ function StructuredSection({
   onInspectEvidence: (evidenceId: string) => void;
   onSelectNode: (nodeId: string) => void;
   section: PrdRenderSection;
+  schemaModule?: PrdSchemaNavigationItem;
   selected: boolean;
 }) {
   const evidenceIds = evidenceIdsForPath(model, section.key);
@@ -664,7 +720,14 @@ function StructuredSection({
       data-prd-node={nodeId}
     >
       <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-        {index} · {section.title}
+        {index} ·{' '}
+        {schemaModule ? (
+          <Link className="text-[var(--accent-commit)] hover:underline" href={schemaModule.href}>
+            {schemaModule.title}
+          </Link>
+        ) : (
+          section.title
+        )}
       </p>
       <div className="mt-2 flex flex-wrap items-start gap-2">
         <h2 className="text-[21px] font-bold leading-[1.35] tracking-[-0.02em] text-[var(--text-primary)]">
@@ -685,6 +748,21 @@ function StructuredSection({
         </h2>
         <CitationButtons evidenceIds={evidenceIds} onInspectEvidence={onInspectEvidence} />
       </div>
+      {schemaModule ? (
+        <p className="mt-1.5 flex items-center gap-1.5 font-mono text-[9px] text-[var(--text-tertiary)]">
+          {schemaModule.source === 'workspace'
+            ? 'Mapped by Workspace composition'
+            : 'Project instance from'}{' '}
+          {schemaModule.canonicalName}@{schemaModule.version}
+          <Link
+            aria-label={`View ${schemaModule.title} source Module in YSchema`}
+            className="rounded p-0.5 text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]"
+            href={schemaModule.href}
+          >
+            <ExternalLink aria-hidden="true" className="size-3" />
+          </Link>
+        </p>
+      ) : null}
       {selected || alwaysExpanded ? (
         <div className="mt-4">
           <StructuredValue value={section.value} />
@@ -978,6 +1056,7 @@ function PrdOutline({
   onClose,
   onSelect,
   open,
+  schemaNavigation,
   selectedNodeId,
 }: {
   model: PrdRenderModel;
@@ -985,13 +1064,16 @@ function PrdOutline({
   onClose: () => void;
   onSelect: (nodeId: string) => void;
   open: boolean;
+  schemaNavigation: PrdSchemaNavigation | null;
   selectedNodeId: string;
 }) {
+  const [view, setView] = useState<'modules' | 'outline'>('modules');
   const isPrdDocument = (model.rootKey || 'prd') === 'prd';
+  const activeView = schemaNavigation ? view : 'outline';
   const groups: PrdOutlineNode['group'][] = ['document', 'summary', 'requirements', 'optional'];
   const labels: Record<PrdOutlineNode['group'], string> = {
     document: 'Document',
-    optional: 'Document sections',
+    optional: 'Other sections',
     requirements: 'Requirements',
     summary: 'Summary',
   };
@@ -1008,69 +1090,213 @@ function PrdOutline({
     >
       <StateScrollArea className="h-full" label="Document outline items">
         <div className="px-3 py-4">
-          <header className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-1 pb-3 xl:hidden">
-            <strong className="text-xs text-[var(--text-primary)]">Document outline</strong>
-            <Button onClick={onClose} size="sm" type="button" variant="canvas-outline">
-              Close
-            </Button>
+          <header className="border-b border-[var(--stroke-divider)] px-1 pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <strong className="block text-[11px] font-bold text-[var(--text-primary)]">
+                  {isPrdDocument ? 'PRD structure' : 'Document structure'}
+                </strong>
+                <span className="mt-0.5 block text-[9px] text-[var(--text-tertiary)]">
+                  {schemaNavigation ? (
+                    <>
+                      <span>
+                        {schemaNavigation.modules.length} Module
+                        {schemaNavigation.modules.length === 1 ? '' : 's'} used
+                      </span>
+                      <span aria-hidden="true"> · </span>
+                      <span>
+                        {schemaNavigation.source === 'committed'
+                          ? 'Committed composition'
+                          : 'Workspace composition'}
+                      </span>
+                    </>
+                  ) : (
+                    'Committed document outline'
+                  )}
+                </span>
+              </div>
+              <Button
+                className="xl:hidden"
+                onClick={onClose}
+                size="sm"
+                type="button"
+                variant="canvas-outline"
+              >
+                Close
+              </Button>
+            </div>
+            {schemaNavigation ? (
+              <div
+                aria-label="PRD navigation view"
+                className="mt-3 grid grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
+                role="tablist"
+              >
+                {(['modules', 'outline'] as const).map((nextView) => (
+                  <button
+                    aria-selected={activeView === nextView}
+                    className={cn(
+                      'h-7 rounded-[5px] text-[9px] font-bold capitalize text-[var(--text-tertiary)] transition-colors',
+                      activeView === nextView &&
+                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                    )}
+                    key={nextView}
+                    onClick={() => setView(nextView)}
+                    role="tab"
+                    tabIndex={activeView === nextView ? 0 : -1}
+                    type="button"
+                  >
+                    {nextView}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </header>
-          <p className="truncate px-2 font-mono text-[9px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-            {model.documentId || model.rootKey || 'prd'}
-          </p>
-          <nav
-            className="mt-3"
-            aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
-          >
-            {groups.map((group) => {
-              const groupNodes = nodes.filter((node) => node.group === group);
-              if (groupNodes.length === 0) return null;
-              return (
-                <section className="mb-5" key={group}>
-                  <h2 className="px-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                    {labels[group]}
-                  </h2>
-                  <div className="mt-2 grid gap-0.5">
-                    {groupNodes.map((node) => {
-                      const selected = selectedNodeId === node.id;
-                      return (
-                        <button
-                          aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
-                          aria-current={selected ? 'true' : undefined}
-                          className={cn(
-                            'flex min-h-9 w-full items-start gap-2 rounded-md px-2 py-2 text-left text-[11px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-                            selected &&
-                              'bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)] ring-1 ring-inset ring-[var(--status-info)]/20'
-                          )}
-                          key={node.id}
-                          onClick={() => onSelect(node.id)}
-                          type="button"
-                        >
-                          <span
-                            aria-hidden="true"
+
+          {activeView === 'modules' && schemaNavigation ? (
+            <nav aria-label="PRD Module navigation" className="mt-4">
+              <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                Core
+              </h2>
+              <div className="mt-1.5">
+                <SchemaNavigationRow
+                  index={0}
+                  item={schemaNavigation.core}
+                  onSelect={onSelect}
+                  selected={selectedNodeId === schemaNavigation.core.nodeId}
+                />
+              </div>
+              <h2 className="mt-4 px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                Modules used
+              </h2>
+              <div className="mt-1.5 grid gap-1">
+                {schemaNavigation.modules.map((module, index) => (
+                  <SchemaNavigationRow
+                    index={index + 1}
+                    item={module}
+                    key={`${module.canonicalName}@${module.version}`}
+                    onSelect={onSelect}
+                    selected={selectedNodeId === module.nodeId}
+                  />
+                ))}
+              </div>
+            </nav>
+          ) : (
+            <nav
+              aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
+              className="mt-4"
+            >
+              {groups.map((group) => {
+                const groupNodes = nodes.filter((node) => node.group === group);
+                if (groupNodes.length === 0) return null;
+                return (
+                  <section className="mb-4" key={group}>
+                    <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                      {labels[group]}
+                    </h2>
+                    <div className="mt-1.5 grid gap-0.5">
+                      {groupNodes.map((node) => {
+                        const selected = selectedNodeId === node.id;
+                        return (
+                          <button
+                            aria-current={selected ? 'true' : undefined}
+                            aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'mt-1 size-1.5 shrink-0 rounded-full bg-[var(--text-tertiary)]/60',
-                              selected && 'bg-[var(--status-info)]'
+                              'flex min-h-8 w-full items-start gap-2 rounded-md border-l-2 border-l-transparent px-2 py-1.5 text-left text-[10px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                              selected &&
+                                'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)]'
                             )}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-semibold text-current">{node.label}</span>
-                            {node.meta ? (
-                              <span className="mt-0.5 block truncate font-mono text-[9px] font-normal text-[var(--text-tertiary)]">
-                                {node.meta}
-                              </span>
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
-          </nav>
+                            key={node.id}
+                            onClick={() => onSelect(node.id)}
+                            type="button"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-semibold text-current">{node.label}</span>
+                              {node.meta ? (
+                                <span className="mt-0.5 block truncate font-mono text-[8px] font-normal text-[var(--text-tertiary)]">
+                                  {node.meta}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </StateScrollArea>
     </aside>
+  );
+}
+
+const SCHEMA_NAV_ICONS = {
+  blocks: Blocks,
+  braces: Braces,
+  cpu: Cpu,
+  database: Database,
+  file: FileCode2,
+  monitor: Monitor,
+  server: Server,
+};
+
+const SCHEMA_NAV_TONES = [
+  'text-[var(--accent-commit)] bg-[color-mix(in_srgb,var(--accent-commit)_9%,transparent)]',
+  'text-[var(--accent-extract)] bg-[color-mix(in_srgb,var(--accent-extract)_9%,transparent)]',
+  'text-[var(--accent-leaf)] bg-[color-mix(in_srgb,var(--accent-leaf)_9%,transparent)]',
+  'text-[var(--accent-pending)] bg-[color-mix(in_srgb,var(--accent-pending)_9%,transparent)]',
+  'text-[var(--accent-conversation)] bg-[color-mix(in_srgb,var(--accent-conversation)_9%,transparent)]',
+];
+
+function SchemaNavigationRow({
+  index,
+  item,
+  onSelect,
+  selected,
+}: {
+  index: number;
+  item: PrdSchemaNavigationItem;
+  onSelect: (nodeId: string) => void;
+  selected: boolean;
+}) {
+  const Icon = SCHEMA_NAV_ICONS[item.icon];
+  const tone = SCHEMA_NAV_TONES[index % SCHEMA_NAV_TONES.length] ?? SCHEMA_NAV_TONES[0];
+  return (
+    <div
+      className={cn(
+        'group flex min-h-[50px] items-center rounded-md border-l-2 border-l-transparent transition-colors hover:bg-[var(--hover-bg)]',
+        selected && 'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)]'
+      )}
+    >
+      <button
+        aria-current={selected ? 'true' : undefined}
+        aria-label={`Go to ${item.title} instance`}
+        className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left"
+        onClick={() => onSelect(item.nodeId)}
+        type="button"
+      >
+        <span className={cn('flex size-6 flex-none items-center justify-center rounded-md', tone)}>
+          <Icon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[10px] font-semibold text-[var(--text-primary)]">
+            {item.title}
+          </span>
+          <span className="mt-0.5 block truncate font-mono text-[8px] text-[var(--text-tertiary)]">
+            {item.canonicalName} · v{item.version}
+          </span>
+        </span>
+      </button>
+      <Link
+        aria-label={`Open ${item.title} in YSchema`}
+        className="mr-1 flex size-7 flex-none items-center justify-center rounded-md text-[var(--text-tertiary)] opacity-70 transition-colors hover:bg-[var(--surface-card)] hover:text-[var(--accent-commit)] group-hover:opacity-100"
+        href={item.href}
+      >
+        <ExternalLink aria-hidden="true" className="size-3" />
+      </Link>
+    </div>
   );
 }
 
@@ -1546,6 +1772,126 @@ function buildOutlineNodes(model: PrdRenderModel): PrdOutlineNode[] {
       ? [{ group: 'optional' as const, id: 'metadata', label: 'Document metadata' }]
       : []),
   ];
+}
+
+function buildPrdSchemaNavigation(
+  model: PrdRenderModel,
+  composition: SchemaCompositionDraft | undefined,
+  source: PrdSchemaCompositionSource,
+  artifacts: SchemaArtifactPreview[],
+  registryHref: string | undefined
+): PrdSchemaNavigation | null {
+  if (!composition || composition.family !== 'prd' || !registryHref) return null;
+
+  const artifactFor = (canonicalName: string, version: string) =>
+    artifacts.find(
+      (artifact) => artifact.canonicalName === canonicalName && artifact.version === version
+    ) ?? artifacts.find((artifact) => artifact.canonicalName === canonicalName);
+  const coreArtifact = artifactFor(composition.core.canonicalName, composition.core.version);
+  const core: PrdSchemaNavigationItem = {
+    canonicalName: composition.core.canonicalName,
+    href: schemaArtifactHref(
+      registryHref,
+      composition.family,
+      composition.core.canonicalName,
+      composition.core.version
+    ),
+    icon: coreArtifact?.icon ?? 'file',
+    nodeId: 'document',
+    source,
+    title: coreArtifact?.title ?? humanizeArtifactName(composition.core.canonicalName),
+    version: composition.core.version,
+  };
+  const claimedSectionIndexes = new Set<number>();
+  const modules = [...composition.modules]
+    .sort((left, right) => left.order - right.order)
+    .flatMap((reference) => {
+      const artifact = artifactFor(reference.canonicalName, reference.version);
+      const findSectionIndex = (candidates: string[]) =>
+        model.sections.findIndex(
+          (section, index) => !claimedSectionIndexes.has(index) && candidates.includes(section.key)
+        );
+      const artifactPathIndex = findSectionIndex(
+        (artifact?.nodePaths ?? []).map(normalizeSchemaNodePath).filter(Boolean)
+      );
+      const compositionSlotIndex = reference.slot
+        ? findSectionIndex([normalizeSchemaNodePath(reference.slot)])
+        : -1;
+      const nameFallbackIndex = findSectionIndex([
+        canonicalNameToNodeKey(reference.canonicalName, composition.family),
+      ]);
+      const sectionIndex =
+        artifactPathIndex >= 0
+          ? artifactPathIndex
+          : compositionSlotIndex >= 0
+            ? compositionSlotIndex
+            : nameFallbackIndex;
+      if (sectionIndex < 0) return [];
+
+      claimedSectionIndexes.add(sectionIndex);
+      return [
+        {
+          canonicalName: reference.canonicalName,
+          href: schemaArtifactHref(
+            registryHref,
+            composition.family,
+            reference.canonicalName,
+            reference.version
+          ),
+          icon: artifact?.icon ?? 'blocks',
+          nodeId: `section-${String(sectionIndex)}`,
+          source,
+          title: artifact?.title ?? humanizeArtifactName(reference.canonicalName),
+          version: reference.version,
+        },
+      ];
+    });
+
+  return modules.length > 0 ? { core, modules, source } : null;
+}
+
+function normalizeSchemaNodePath(value: string): string {
+  return (
+    value
+      .trim()
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^prd\//, '')
+      .split('/')[0]
+      ?.replace(/-/g, '_') ?? ''
+  );
+}
+
+function canonicalNameToNodeKey(
+  canonicalName: string,
+  family: SchemaCompositionDraft['family']
+): string {
+  return (
+    canonicalName
+      .split('/')
+      .at(-1)
+      ?.replace(new RegExp(`^${family}-`), '')
+      .replace(/-/g, '_') ?? ''
+  );
+}
+
+function humanizeArtifactName(canonicalName: string): string {
+  const name = canonicalName.split('/').at(-1) ?? canonicalName;
+  return humanizeKey(name.replace(/^(prd|skill|prompt|esphome)-/, ''));
+}
+
+function schemaArtifactHref(
+  registryHref: string,
+  family: SchemaCompositionDraft['family'],
+  canonicalName: string,
+  version: string
+): string {
+  const query = new URLSearchParams({
+    family,
+    mode: 'compose',
+    module: canonicalName,
+    version,
+  });
+  return `${registryHref}?${query.toString()}#module-detail`;
 }
 
 function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelectedNode {

@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowLeft, FilePlus2 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { SchemaModuleRegistry } from '@/components/schemas/modules/SchemaModuleRegistry';
 import {
   SchemaBindingActions,
@@ -42,6 +42,28 @@ export function SchemaRegistry({
   const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? '');
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<Record<string, string>>({});
   const [activeView, setActiveView] = useState<SchemaDetailView>('structure');
+  const [linkedArtifact, setLinkedArtifact] = useState<{
+    canonicalName: string;
+    version?: string;
+  }>();
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('mode') !== 'compose') return;
+
+    const linkedFamily = query.get('family');
+    if (linkedFamily && families.some((family) => family.id === linkedFamily)) {
+      setSelectedFamilyId(linkedFamily);
+    }
+    const canonicalName = query.get('module');
+    if (canonicalName) {
+      setLinkedArtifact({
+        canonicalName,
+        version: query.get('version') ?? undefined,
+      });
+    }
+    setRegistryView('compose');
+  }, [families]);
 
   const selectedFamily = families.find((family) => family.id === selectedFamilyId) ?? initialFamily;
   const currentRelease = getCurrentRelease(selectedFamily);
@@ -158,6 +180,8 @@ export function SchemaRegistry({
         {registryView === 'compose' ? (
           <SchemaModuleRegistry
             family={schemaArtifactFamily(selectedFamily?.id)}
+            initialArtifactName={linkedArtifact?.canonicalName}
+            initialArtifactVersion={linkedArtifact?.version}
             nextVersion={suggestNextVersion(selectedFamily?.releases ?? [])}
             workspace={
               compositionWorkspace

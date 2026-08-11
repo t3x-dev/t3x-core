@@ -47,6 +47,7 @@ import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
+import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
@@ -305,6 +306,15 @@ export function ProjectStateTab({
     () => findCommittedWorkspaceForCommit(projectWorkspaces.workspaces, headCommit),
     [headCommit, projectWorkspaces.workspaces]
   );
+  const schemaCompositionWorkspace = useMemo(
+    () =>
+      findSchemaCompositionWorkspaceForCommit(
+        projectWorkspaces.workspaces,
+        headCommit,
+        committedWorkspace
+      ),
+    [committedWorkspace, headCommit, projectWorkspaces.workspaces]
+  );
   const workspaceOperations = useMemo(
     () => workspaceDraftOperationsToStateOperations(committedWorkspace?.yopsDraft.operations ?? []),
     [committedWorkspace]
@@ -343,6 +353,11 @@ export function ProjectStateTab({
           })
         : null,
     [effectiveOperations, headCommit, readerKind, validationGaps]
+  );
+  const prdSchemaRegistry = useSchemaArtifactRegistry(
+    projectId,
+    'prd',
+    Boolean(prdRenderModel && schemaCompositionWorkspace?.schemaComposition)
   );
   const skillRenderModel = useMemo(
     () =>
@@ -611,7 +626,15 @@ export function ProjectStateTab({
                   {activeView === 'render' && prdRenderModel ? (
                     <StatePrdReader
                       model={prdRenderModel}
+                      schemaArtifacts={prdSchemaRegistry.artifacts}
+                      schemaComposition={schemaCompositionWorkspace?.schemaComposition}
+                      schemaCompositionSource={
+                        schemaCompositionWorkspace === committedWorkspace
+                          ? 'committed'
+                          : 'workspace'
+                      }
                       schemaName={schemaName}
+                      schemaRegistryHref={`${repositoryPath}/schemas`}
                       validationGapCount={validationGapCount}
                       validationReady={validationReady}
                       yamlText={yamlText}
@@ -1435,6 +1458,30 @@ function findCommittedWorkspaceForCommit(
     workspaces.find(
       (workspace) => workspace.status === 'committed' && workspace.lastCommitHash === commit.hash
     ) ?? null
+  );
+}
+
+function findSchemaCompositionWorkspaceForCommit(
+  workspaces: WorkspaceCandidate[],
+  commit: ApiCommit | null,
+  committedWorkspace: WorkspaceCandidate | null
+): WorkspaceCandidate | null {
+  if (!commit) return null;
+  if (committedWorkspace?.schemaComposition) return committedWorkspace;
+
+  return (
+    workspaces
+      .filter(
+        (workspace) =>
+          Boolean(workspace.schemaComposition) &&
+          workspace.baseCommitHash === commit.hash &&
+          workspace.targetBranch === commit.branch
+      )
+      .sort(
+        (left, right) =>
+          Date.parse(right.updatedAt) - Date.parse(left.updatedAt) ||
+          right.id.localeCompare(left.id)
+      )[0] ?? null
   );
 }
 
