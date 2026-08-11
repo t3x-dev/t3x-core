@@ -38,6 +38,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { findConversationById, touchLastUsed } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { getDB } from '../lib/db';
@@ -82,7 +83,6 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
 
         let authorizedProjectId = projectId;
         if (conversationId) {
-          const { findConversationById } = await import('@t3x-dev/storage');
           const conversation = await findConversationById(db, conversationId);
           if (!conversation) {
             return c.json(
@@ -113,7 +113,6 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
         // `verifyBearerToken` is intentionally side-effect-free, so we mirror
         // the bookkeeping done by `authMiddleware` here. Errors are swallowed
         // so a DB hiccup during touch doesn't poison the handshake.
-        const { touchLastUsed } = await import('@t3x-dev/storage');
         touchLastUsed(db, principal.keyId).catch(() => {});
       } catch (err) {
         pinoLogger.error({ err }, 'ws auth failed');
