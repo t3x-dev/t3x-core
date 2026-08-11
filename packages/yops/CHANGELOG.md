@@ -1,5 +1,11 @@
 # @t3x-dev/yops
 
+## 1.1.0
+
+### Minor Changes
+
+- [#1318](https://github.com/t3x-dev/t3x-core/pull/1318) [`2f1fbf3`](https://github.com/t3x-dev/t3x-core/commit/2f1fbf32d8532f7cec2d8e6649caee4dc7e3f795) Thanks [@a996qaq](https://github.com/a996qaq)! - Prevent prototype-chain mutation when YOps reads, clones, or writes mapping keys such as `__proto__`, `constructor`, and `toString`.
+
 ## 1.0.0
 
 ### Major Changes
