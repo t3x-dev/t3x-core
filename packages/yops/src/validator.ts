@@ -207,23 +207,19 @@ function validatePath(
 
   const parsed = tryParsePath(path);
   if (!parsed.ok) {
-    if (parsed.code === 'UNCLOSED_QUOTE') {
-      out.push(
-        diagnostic('error', YOPS_DIAGNOSTIC_CODES.YOPS_PATH_UNCLOSED_QUOTE, parsed.message, {
-          op_index: ctx.op_index,
-          field: ctx.field,
-          path,
-        })
-      );
-    } else {
-      out.push(
-        diagnostic('error', YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_ESCAPE, parsed.message, {
-          op_index: ctx.op_index,
-          field: ctx.field,
-          path,
-        })
-      );
-    }
+    const code = {
+      UNCLOSED_QUOTE: YOPS_DIAGNOSTIC_CODES.YOPS_PATH_UNCLOSED_QUOTE,
+      INVALID_ESCAPE: YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_ESCAPE,
+      INVALID_INDEX_SYNTAX: YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_INDEX_SYNTAX,
+      INVALID_MATCH_SYNTAX: YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_MATCH_SYNTAX,
+    }[parsed.code];
+    out.push(
+      diagnostic('error', code, parsed.message, {
+        op_index: ctx.op_index,
+        field: ctx.field,
+        path,
+      })
+    );
     return out;
   }
 

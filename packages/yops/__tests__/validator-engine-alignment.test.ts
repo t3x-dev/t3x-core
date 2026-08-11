@@ -270,3 +270,35 @@ describe('validator–engine alignment: engine acceptances must not raise valida
     });
   }
 });
+
+describe('validator–engine alignment: malformed paths fail both surfaces', () => {
+  const cases: AlignmentApplyCase[] = [
+    { name: 'unclosed quoted set path', doc: {}, op: { set: { path: '"unterminated', value: 1 } } },
+    { name: 'invalid quoted escape', doc: {}, op: { set: { path: '"bad\\n"', value: 1 } } },
+    {
+      name: 'malformed array index',
+      doc: { items: [1] },
+      op: { set: { path: 'items/[x]', value: 2 } },
+    },
+    {
+      name: 'malformed match source path',
+      doc: { users: [{ id: 1 }] },
+      op: { move: { from: 'users/[id=1', to: 'selected' } },
+    },
+  ];
+
+  for (const { name, doc, op } of cases) {
+    it(name, () => {
+      const validatorErrors = validateYOpsOps([op]).filter((d) => d.severity === 'error');
+      expect(validatorErrors.length).toBeGreaterThan(0);
+
+      const apply = applyYOps(doc, [op] as Parameters<typeof applyYOps>[1]);
+      expect(apply).toMatchObject({
+        ok: false,
+        doc,
+        applied: 0,
+        error: { code: 'INVALID_PATH', op_index: 0 },
+      });
+    });
+  }
+});

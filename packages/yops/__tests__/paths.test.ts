@@ -160,6 +160,18 @@ describe('tryParsePath', () => {
     if (!r.ok) return;
     expect(r.segments).toEqual([]);
   });
+
+  it.each([
+    ['items/[abc]', 'INVALID_INDEX_SYNTAX'],
+    ['items/[1', 'INVALID_INDEX_SYNTAX'],
+    ['users/[=alice]', 'INVALID_MATCH_SYNTAX'],
+    ['users/[name=alice', 'INVALID_MATCH_SYNTAX'],
+  ])('rejects malformed bracket segment %s', (path, code) => {
+    const r = tryParsePath(path);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe(code);
+  });
 });
 
 describe('deepClone', () => {
