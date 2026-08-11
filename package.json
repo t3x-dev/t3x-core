@@ -55,6 +55,7 @@
     "dev:agent": "turbo run dev --filter=agent-demo",
     "e2e": "pnpm e2e:full",
     "e2e:full": "node tools/full-e2e.mjs",
+    "e2e:auth": "node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts",
     "e2e:serve": "pnpm e2e:stop && node tools/dev-package-runner.mjs webui pnpm build && (node tools/dev-package-runner.mjs api node apps/api/dist/index.js & pnpm --filter t3x-webui start & wait)",
     "e2e:api": "(lsof -ti:8000 | xargs kill -9 2>/dev/null; true) && node tools/dev-package-runner.mjs api pnpm build && node tools/dev-package-runner.mjs api node apps/api/dist/index.js",
     "e2e:webui": "(lsof -ti:3000 | xargs kill -9 2>/dev/null; true) && node tools/dev-package-runner.mjs webui pnpm --filter t3x-webui build && pnpm --filter t3x-webui start",

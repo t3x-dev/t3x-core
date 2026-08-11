@@ -23,6 +23,22 @@ test('full-stack E2E is manual, broad, and artifact-producing', () => {
   assert.match(workflow, /test-results\/full-e2e\//);
 });
 
+test('authenticated browser qualification uses a fail-closed isolated profile', () => {
+  const packageJson = JSON.parse(readText('package.json'));
+  const runner = readText('tools/full-e2e.mjs');
+
+  assert.equal(
+    packageJson.scripts['e2e:auth'],
+    'node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts'
+  );
+  assert.match(runner, /const authEnabled = runnerArgs\.includes\('--auth-enabled'\)/);
+  assert.match(runner, /AUTH_DISABLED: authEnabled \? 'false' : 'true'/);
+  assert.match(runner, /NEXT_PUBLIC_AUTH_DISABLED: authEnabled \? 'false' : 'true'/);
+  assert.match(runner, /T3X_E2E_AUTH_ENABLED: authEnabled \? '1' : '0'/);
+  assert.match(runner, /authEnabled \? 'test-results\/full-e2e-auth'/);
+  assert.match(runner, /auth_enabled: authEnabled/);
+});
+
 test('legacy local smoke is manual instead of a pull-request trigger', () => {
   const workflow = readText('.github/workflows/local-smoke.yml');
 
