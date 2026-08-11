@@ -80,11 +80,9 @@ function classifyRawSegment(raw: string): PathSegment {
 }
 
 /**
- * Result type for the strict parser. Used by the validator (which surfaces
- * `YOPS_PATH_UNCLOSED_QUOTE` and `YOPS_PATH_INVALID_ESCAPE` diagnostics)
- * when callers need to know about parse-level errors. `parsePath` itself
- * stays permissive — it's used by handlers that already accept whatever
- * shape the user gave them.
+ * Result type for the strict parser. Used by the validator and runtime engine
+ * when callers need typed quote, escape, bracket, or index-range errors.
+ * `parsePath` itself stays permissive for direct-call compatibility.
  */
 export type ParsePathResult =
   | { ok: true; segments: PathSegment[] }
