@@ -33,7 +33,7 @@ const releaseSurface = {
 const versionByPath = new Map([
   ['apps/local', '1.0.0'],
   ['packages/yops', '1.0.0'],
-  ['packages/transition', '0.6.0'],
+  ['packages/transition', '0.1.0'],
   ['packages/yschema', '1.0.0'],
 ]);
 
@@ -105,7 +105,7 @@ test('release train can generate minor changesets for selected active packages',
     ]
   );
   assert.match(packagePlan.packageReleases, /`@t3x-dev\/yops`: 1\.1\.0/);
-  assert.match(packagePlan.packageReleases, /`@t3x-dev\/transition`: 0\.7\.0/);
+  assert.match(packagePlan.packageReleases, /`@t3x-dev\/transition`: 0\.2\.0/);
   assert.doesNotMatch(packagePlan.packageReleases, /@t3x-dev\/yschema/);
 });
 

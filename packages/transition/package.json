@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/transition",
-  "version": "0.6.0",
+  "version": "0.1.0",
   "description": "Public alpha contracts for verifiable T3X state transitions",
   "license": "Apache-2.0",
   "type": "module",
