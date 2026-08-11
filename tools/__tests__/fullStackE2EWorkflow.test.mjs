@@ -18,9 +18,12 @@ test('full-stack E2E is manual, broad, and artifact-producing', () => {
   assert.match(workflow, /pnpm smoke:local-install$/m);
   assert.match(workflow, /playwright install --with-deps chromium/);
   assert.match(workflow, /pnpm e2e:full$/m);
+  assert.match(workflow, /pnpm e2e:auth$/m);
+  assert.ok(workflow.indexOf('pnpm e2e:full') < workflow.indexOf('pnpm e2e:auth'));
   assert.match(workflow, /if: always\(\)/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
   assert.match(workflow, /test-results\/full-e2e\//);
+  assert.match(workflow, /test-results\/full-e2e-auth\//);
 });
 
 test('authenticated browser qualification uses a fail-closed isolated profile', () => {

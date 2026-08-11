@@ -104,6 +104,11 @@ jobs:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
         run: pnpm e2e:full
 
+      - name: Run authenticated browser qualification
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm e2e:auth
+
       - name: Publish qualification summary
         if: always()
         shell: bash
@@ -111,22 +116,30 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
 
-          const heading = '## Full-stack E2E\n\n';
-          const summaryPath = 'test-results/full-e2e/run-summary.json';
-          let body = 'No browser qualification summary was produced. Check the preceding setup steps.\n';
+          const qualifications = [
+            ['Full browser (auth disabled)', 'test-results/full-e2e/run-summary.json'],
+            ['Authenticated browser', 'test-results/full-e2e-auth/run-summary.json'],
+          ];
+          const sections = qualifications.map(([name, summaryPath]) => {
+            if (!fs.existsSync(summaryPath)) {
+              return `### ${name}\n\nNo qualification summary was produced. Check the preceding setup steps.\n`;
+            }
 
-          if (fs.existsSync(summaryPath)) {
             const result = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-            body = [
+            const body = [
               `- Status: **${result.status}**`,
               `- Test exit code: \`${result.test_exit_code}\``,
               `- API: \`${result.api_url}\``,
               `- WebUI: \`${result.webui_url}\``,
               result.error ? `- Error: ${result.error}` : null,
-            ].filter(Boolean).join('\n') + '\n';
-          }
+            ].filter(Boolean).join('\n');
+            return `### ${name}\n\n${body}\n`;
+          });
 
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, heading + body);
+          fs.appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            `## Full-stack E2E\n\n${sections.join('\n')}`
+          );
           NODE
 
       - name: Upload qualification artifacts
@@ -134,6 +147,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: full-stack-e2e-${{ github.run_id }}
-          path: test-results/full-e2e/
+          path: |
+            test-results/full-e2e/
+            test-results/full-e2e-auth/
           if-no-files-found: warn
           retention-days: 14
