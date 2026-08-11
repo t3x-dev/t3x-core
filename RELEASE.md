@@ -40,6 +40,9 @@ surface. They may be promoted later after API stability review:
 - Package releases may publish an active release-train package subset.
 - Paused packages stay public but are not selected by automated package
   publishing.
+- Internal and preview workspace versions are source bookkeeping values; when
+  Changesets changes them during package versioning, they are synchronized to
+  the Product Release version. This does not make those packages publishable.
 - NPM package additions, removals, or downgrades require owner approval and
   a stability note.
 - Removing a package from the npm release surface is a breaking change.
