@@ -5,7 +5,10 @@ export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill
 export interface SchemaArtifactInstance {
   title: string;
   description: string;
-  useCases: string[];
+  useCases: Array<{
+    title: string;
+    description: string;
+  }>;
   value: Record<string, unknown>;
 }
 

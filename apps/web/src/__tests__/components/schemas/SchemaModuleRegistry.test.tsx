@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SchemaModuleRegistry } from '@/components/schemas';
+import { SchemaArtifactDetail } from '@/components/schemas/modules/SchemaArtifactDetail';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
 
 const TEST_REGISTRY = [PRD_CORE_ARTIFACT, ...PRD_MODULE_ARTIFACTS];
@@ -127,8 +128,14 @@ describe('SchemaModuleRegistry', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Database Design' }));
     const detail = screen.getByRole('region', { name: 'Database Design details' });
-    expect(within(detail).queryByRole('tablist')).not.toBeInTheDocument();
-    expect(within(detail).getByText('YAML Instance')).toBeInTheDocument();
+    expect(
+      within(detail).getByRole('tablist', { name: 'Database Design instance views' })
+    ).toBeInTheDocument();
+    expect(within(detail).getByRole('tab', { name: 'Rendered' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    fireEvent.click(within(detail).getByRole('tab', { name: 'Guide' }));
     expect(within(detail).getByText('Rules')).toBeInTheDocument();
     expect(within(detail).getByText('backend-services')).toBeInTheDocument();
 
@@ -144,20 +151,62 @@ describe('SchemaModuleRegistry', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows a concise YAML instance, use cases, and rules without Module tabs', () => {
+  it('switches between rendered, YAML, and curated Guide views for a Module', () => {
     render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Frontend Design' }));
     const detail = screen.getByRole('region', { name: 'Frontend Design details' });
 
-    expect(within(detail).queryByRole('tablist')).not.toBeInTheDocument();
-    expect(within(detail).getByText('Sample · Not project data')).toBeInTheDocument();
+    expect(within(detail).getByRole('tab', { name: 'Rendered' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(detail).getByText('Sample instance')).toBeInTheDocument();
+    expect(within(detail).getByText('User Flows')).toBeInTheDocument();
+    expect(within(detail).getByText('Checkout → Payment → Success')).toBeInTheDocument();
+    expect(
+      new Set(
+        [...detail.querySelectorAll('[data-tone]')].map((field) => field.getAttribute('data-tone'))
+      )
+    ).toEqual(new Set(['blue', 'violet', 'teal', 'indigo']));
+
+    fireEvent.click(within(detail).getByRole('tab', { name: 'YAML' }));
     expect(within(detail).getByText(/frontend_design:/)).toBeInTheDocument();
     expect(within(detail).getByText(/Checkout → Payment → Success/)).toBeInTheDocument();
+    expect(within(detail).queryByRole('button', { name: 'Copy YAML' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(detail).getByRole('tab', { name: 'Guide' }));
     expect(within(detail).getByText('Where to use it')).toBeInTheDocument();
-    expect(within(detail).getByText(/Multi-step user flows/)).toBeInTheDocument();
+    expect(within(detail).getByText('Multi-step user flows')).toBeInTheDocument();
+    expect(within(detail).getByText(/checkout, onboarding, recovery/)).toBeInTheDocument();
     expect(within(detail).getByText('Gap behavior')).toBeInTheDocument();
-    expect(within(detail).getByRole('button', { name: 'Copy YAML' })).toBeInTheDocument();
+    expect(within(detail).getByText('frontend-contract')).toBeInTheDocument();
+    expect(within(detail).getByText('frontend_design')).toBeInTheDocument();
+  });
+
+  it('keeps semantic colors for policy fields while neutral Modules use the accent rotation', () => {
+    render(
+      <SchemaArtifactDetail
+        artifact={{
+          ...PRD_MODULE_ARTIFACTS[0]!,
+          canonicalName: 't3x/skill-tool-policy',
+          title: 'Tool Policy',
+          description: 'Tool allowlists, permissions, approvals, and failure behavior.',
+          family: 'skill',
+          provides: ['tool-policy'],
+          requires: ['skill-root'],
+          placement: 'tooling',
+          nodePaths: ['tool_policy'],
+        }}
+      />
+    );
+
+    const detail = screen.getByRole('region', { name: 'Tool Policy details' });
+    expect(
+      new Set(
+        [...detail.querySelectorAll('[data-tone]')].map((field) => field.getAttribute('data-tone'))
+      )
+    ).toEqual(new Set(['positive', 'danger', 'warning', 'indigo']));
   });
 
   it('offers reliable arrow controls alongside pointer and keyboard sorting', () => {

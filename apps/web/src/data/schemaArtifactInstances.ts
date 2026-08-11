@@ -212,131 +212,359 @@ const OFFICIAL_MODULE_INSTANCES: Record<string, Record<string, unknown>> = {
   },
 };
 
-const MODULE_USE_CASES: Record<string, string[]> = {
+const MODULE_USE_CASES: Record<string, Array<{ title: string; description: string }>> = {
   't3x/prd-system-architecture': [
-    'Products with multiple components or service boundaries.',
-    'Systems that need an explicit deployment shape.',
-    'Teams aligning responsibilities across frontend, backend, and infrastructure.',
+    {
+      title: 'Multiple system components',
+      description: 'Clarify boundaries when a product spans applications, services, or workers.',
+    },
+    {
+      title: 'Deployment topology',
+      description: 'Record where components run and how the runtime shape affects the design.',
+    },
+    {
+      title: 'Cross-team ownership',
+      description: 'Align frontend, backend, and infrastructure responsibilities before delivery.',
+    },
   ],
   't3x/prd-technology-stack': [
-    'Projects choosing runtimes, frameworks, and infrastructure.',
-    'Teams that need technology decisions and constraints recorded together.',
-    'Products where implementation choices affect later design Modules.',
+    {
+      title: 'Stack selection',
+      description: 'Make runtimes, frameworks, storage, and infrastructure choices explicit.',
+    },
+    {
+      title: 'Engineering constraints',
+      description: 'Keep supported versions, portability limits, and required practices together.',
+    },
+    {
+      title: 'Downstream design alignment',
+      description:
+        'Give frontend, backend, and operations Modules a shared implementation baseline.',
+    },
   ],
   't3x/prd-frontend-design': [
-    'Multi-step user flows such as checkout, onboarding, or recovery.',
-    'Products that need explicit loading, error, and success behavior.',
-    'Pages where component responsibilities should be agreed before implementation.',
+    {
+      title: 'Multi-step user flows',
+      description:
+        'Describe checkout, onboarding, recovery, or other journeys before implementation.',
+    },
+    {
+      title: 'Explicit UI states',
+      description: 'Define loading, empty, error, success, and accessibility behavior together.',
+    },
+    {
+      title: 'Component boundaries',
+      description: 'Agree which pages and components own each interaction responsibility.',
+    },
   ],
   't3x/prd-backend-design': [
-    'Products with multiple services, jobs, or domain boundaries.',
-    'Backends that need failure and retry behavior defined.',
-    'Teams separating business rules from transport and storage concerns.',
+    {
+      title: 'Service responsibilities',
+      description: 'Separate ownership when several services or background jobs participate.',
+    },
+    {
+      title: 'Failure and retry behavior',
+      description: 'Make idempotency, timeouts, retries, and recovery expectations reviewable.',
+    },
+    {
+      title: 'Domain rule ownership',
+      description: 'Keep business invariants distinct from transport and persistence concerns.',
+    },
   ],
   't3x/prd-database-design': [
-    'Features introducing persistent entities and relationships.',
-    'Changes that require indexes, migrations, or retention decisions.',
-    'Teams reviewing data lifecycle before implementation.',
+    {
+      title: 'Persistent domain data',
+      description: 'Define entities and relationships introduced or changed by the feature.',
+    },
+    {
+      title: 'Schema evolution',
+      description: 'Plan indexes, compatible migrations, backfills, and constraint rollout.',
+    },
+    {
+      title: 'Data lifecycle',
+      description: 'Review retention and deletion expectations before data is stored.',
+    },
   ],
   't3x/prd-api-contract': [
-    'Features shared between multiple producers and consumers.',
-    'Interfaces that need stable errors, events, or payload expectations.',
-    'APIs with explicit compatibility requirements.',
+    {
+      title: 'Shared producer-consumer interfaces',
+      description: 'Align teams or systems that exchange requests, responses, or events.',
+    },
+    {
+      title: 'Stable failure contracts',
+      description: 'Define errors and event outcomes that consumers must handle consistently.',
+    },
+    {
+      title: 'Compatibility policy',
+      description: 'State which changes are additive and when a new API version is required.',
+    },
   ],
   't3x/prd-security-privacy': [
-    'Products handling sensitive, personal, or restricted data.',
-    'Features that introduce access-control or abuse risks.',
-    'Teams that need security constraints visible in delivery planning.',
+    {
+      title: 'Sensitive data handling',
+      description:
+        'Classify personal, confidential, and restricted information and its safeguards.',
+    },
+    {
+      title: 'Access and abuse risks',
+      description: 'Capture authorization boundaries, threats, and likely misuse paths.',
+    },
+    {
+      title: 'Reviewable privacy constraints',
+      description: 'Keep minimization, retention, and deletion rules visible during delivery.',
+    },
   ],
   't3x/prd-quality-strategy': [
-    'Releases that need explicit test levels and quality gates.',
-    'Teams agreeing what evidence is required before shipping.',
-    'Products with measurable reliability or accessibility budgets.',
+    {
+      title: 'Layered verification',
+      description: 'Define the unit, integration, and end-to-end coverage a release needs.',
+    },
+    {
+      title: 'Release evidence',
+      description: 'Agree which reports, recordings, or audits must exist before shipping.',
+    },
+    {
+      title: 'Measurable quality gates',
+      description: 'Set reliability, accessibility, and defect thresholds that can be evaluated.',
+    },
   ],
   't3x/prd-rollout-operations': [
-    'Changes that need staged rollout, migration, or rollback plans.',
-    'Services with monitoring and operational runbook requirements.',
-    'Features where safe recovery matters after release.',
+    {
+      title: 'Staged releases',
+      description: 'Plan cohorts, feature flags, migrations, and progressive exposure.',
+    },
+    {
+      title: 'Operational readiness',
+      description: 'Identify monitoring signals and runbooks needed to operate the change.',
+    },
+    {
+      title: 'Safe recovery',
+      description: 'Define rollback behavior that preserves data created by the new version.',
+    },
   ],
   't3x/skill-tool-policy': [
-    'Skills that call tools or mutate external state.',
-    'Workflows that need allowlists, denylists, or approvals.',
-    'Teams defining predictable behavior after tool failures.',
+    {
+      title: 'Tools that change external state',
+      description: 'Set boundaries for Skills that write files, call services, or mutate systems.',
+    },
+    {
+      title: 'Explicit safety boundaries',
+      description: 'Declare allowed, denied, and approval-required operations in one contract.',
+    },
+    {
+      title: 'Predictable failure behavior',
+      description: 'Specify how execution stops and what diagnostics must be preserved.',
+    },
   ],
   't3x/skill-safety-gates': [
-    'Skills with destructive or externally visible actions.',
-    'Workflows that must stop when scope or targets are ambiguous.',
-    'Teams requiring explicit approval before risky steps.',
+    {
+      title: 'High-impact actions',
+      description: 'Protect destructive, irreversible, or externally visible operations.',
+    },
+    {
+      title: 'Ambiguous execution scope',
+      description: 'Stop safely when targets, authority, or verification conditions are unclear.',
+    },
+    {
+      title: 'Required human decisions',
+      description: 'Make the approval points for risky steps explicit before execution.',
+    },
   ],
   't3x/skill-delivery-targets': [
-    'Skills that emit files, packages, or host-specific adapters.',
-    'Workflows supporting more than one output format.',
-    'Teams that need delivery expectations defined before execution.',
+    {
+      title: 'File and package outputs',
+      description: 'Declare which artifacts a Skill is expected to produce or modify.',
+    },
+    {
+      title: 'Multiple delivery formats',
+      description: 'Keep Markdown, workspace patches, and host adapters aligned.',
+    },
+    {
+      title: 'Clear completion criteria',
+      description: 'Define the deliverables that must exist when execution finishes.',
+    },
   ],
   't3x/skill-runtime-environment': [
-    'Skills with runtime, dependency, filesystem, or network requirements.',
-    'Workflows that reference environment-provided credentials.',
-    'Portable Skills that must declare their host assumptions.',
+    {
+      title: 'Runtime prerequisites',
+      description: 'Declare required runtimes, package tools, and host dependencies.',
+    },
+    {
+      title: 'Environment-provided resources',
+      description: 'Reference credentials and configuration without embedding secret values.',
+    },
+    {
+      title: 'Portable host assumptions',
+      description: 'Make filesystem and network expectations visible across environments.',
+    },
   ],
   't3x/skill-evaluation-suite': [
-    'Skills that need repeatable regression coverage.',
-    'Workflows with deterministic assertions or acceptance thresholds.',
-    'Teams comparing behavior across Skill versions.',
+    {
+      title: 'Repeatable regression cases',
+      description: 'Exercise clean, conflicting, and failure-path workspace conditions.',
+    },
+    {
+      title: 'Deterministic acceptance',
+      description: 'Define assertions and thresholds that produce reproducible results.',
+    },
+    {
+      title: 'Version comparison',
+      description: 'Measure whether a Skill preserves required behavior across revisions.',
+    },
   ],
   't3x/prompt-few-shot-examples': [
-    'Prompts where examples materially shape output behavior.',
-    'Tasks with stable input and expected-output patterns.',
-    'Teams that need examples versioned with the Prompt contract.',
+    {
+      title: 'Example-shaped behavior',
+      description: 'Use representative pairs when examples materially influence the response.',
+    },
+    {
+      title: 'Stable input-output patterns',
+      description: 'Show expected handling for recurring task intents and edge cases.',
+    },
+    {
+      title: 'Versioned demonstrations',
+      description: 'Review and evolve examples alongside the Prompt contract.',
+    },
   ],
   't3x/prompt-guardrails': [
-    'Prompts handling sensitive or policy-constrained requests.',
-    'Assistants that need refusal and escalation behavior.',
-    'Teams making content boundaries explicit and reviewable.',
+    {
+      title: 'Policy-constrained requests',
+      description: 'State which outputs or actions the Prompt must never produce.',
+    },
+    {
+      title: 'Refusal and escalation',
+      description: 'Define safe alternatives and the conditions for human handoff.',
+    },
+    {
+      title: 'Reviewable boundaries',
+      description: 'Keep sensitive behavior explicit instead of relying on implicit instructions.',
+    },
   ],
   't3x/prompt-observability': [
-    'Prompts that need trace fields and quality signals.',
-    'Runtime paths with latency or redaction requirements.',
-    'Teams measuring Prompt behavior across versions.',
+    {
+      title: 'Traceable Prompt runs',
+      description: 'Capture identifiers and version fields needed to diagnose outcomes.',
+    },
+    {
+      title: 'Privacy-aware telemetry',
+      description: 'Define redactions before Prompt inputs or outputs reach observability systems.',
+    },
+    {
+      title: 'Runtime performance budgets',
+      description: 'Track latency and quality signals consistently across Prompt versions.',
+    },
   ],
   't3x/prompt-context-policy': [
-    'Prompts combining context from multiple sources.',
-    'Tasks where freshness, trust, or conflicts affect correctness.',
-    'Teams managing token budgets and context selection rules.',
+    {
+      title: 'Multiple context sources',
+      description: 'Declare which records, policies, or user claims may inform an answer.',
+    },
+    {
+      title: 'Freshness and trust decisions',
+      description: 'Resolve stale or conflicting context using explicit authority rules.',
+    },
+    {
+      title: 'Bounded context selection',
+      description: 'Manage token budgets without silently dropping required evidence.',
+    },
   ],
   't3x/prompt-evaluation-suite': [
-    'Prompts that need regression cases and graders.',
-    'Teams tracking quality metrics across releases.',
-    'High-impact behaviors with explicit acceptance thresholds.',
+    {
+      title: 'Prompt regression coverage',
+      description: 'Keep normal, unknown, and conflicting cases in a reusable suite.',
+    },
+    {
+      title: 'Consistent grading',
+      description: 'Name the policy, factuality, or task-success criteria used for evaluation.',
+    },
+    {
+      title: 'Release thresholds',
+      description: 'Turn high-impact quality expectations into explicit acceptance gates.',
+    },
   ],
   't3x/esphome-sensors': [
-    'Devices that expose one or more sensor entities.',
-    'Configurations sharing update intervals or filters.',
-    'Hardware projects that need sensor behavior reviewed together.',
+    {
+      title: 'Sensor entities',
+      description: 'Describe physical and diagnostic sensors exposed by the device.',
+    },
+    {
+      title: 'Shared signal processing',
+      description: 'Keep update intervals, throttling, and filters consistent across sensors.',
+    },
+    {
+      title: 'Reviewable telemetry behavior',
+      description: 'Verify pins, units, and reporting behavior before compiling firmware.',
+    },
   ],
   't3x/esphome-actuators': [
-    'Devices controlling switches, lights, fans, or motors.',
-    'Outputs that need a safe restore policy.',
-    'Hardware projects with multiple actuator entities.',
+    {
+      title: 'Controllable outputs',
+      description: 'Define switches, lights, fans, relays, or motors owned by the device.',
+    },
+    {
+      title: 'Safe restart state',
+      description: 'Specify how outputs recover after power loss or an unexpected reboot.',
+    },
+    {
+      title: 'Coordinated actuators',
+      description: 'Review multiple output entities and their hardware responsibilities together.',
+    },
   ],
   't3x/esphome-automations': [
-    'Devices with local triggers, actions, or scripts.',
-    'Offline behavior that must remain deterministic.',
-    'Hardware requiring safety fallbacks when inputs fail.',
+    {
+      title: 'Local trigger-action behavior',
+      description: 'Define automations that must run directly on the device.',
+    },
+    {
+      title: 'Offline operation',
+      description: 'Keep essential behavior deterministic when network services are unavailable.',
+    },
+    {
+      title: 'Input failure fallbacks',
+      description: 'Specify safe actions when sensors or other required inputs disappear.',
+    },
   ],
   't3x/esphome-hardware-buses': [
-    'Devices sharing I2C, SPI, UART, or OneWire buses.',
-    'Boards that need explicit pin ownership.',
-    'Hardware designs where peripheral conflicts must be prevented.',
+    {
+      title: 'Shared hardware buses',
+      description: 'Describe I2C, SPI, UART, and OneWire wiring in one place.',
+    },
+    {
+      title: 'Explicit pin ownership',
+      description: 'Reserve pins and document bus parameters before assigning peripherals.',
+    },
+    {
+      title: 'Peripheral conflict prevention',
+      description: 'Review reused pins and incompatible bus settings before firmware generation.',
+    },
   ],
   't3x/esphome-network-services': [
-    'Devices exposing local network services or discovery.',
-    'Configurations with multiple transports.',
-    'Products that need fallback access when normal connectivity fails.',
+    {
+      title: 'Local network capabilities',
+      description: 'Declare APIs, OTA updates, and discovery services exposed by the device.',
+    },
+    {
+      title: 'Transport configuration',
+      description: 'Keep Wi-Fi, Ethernet, and related connectivity assumptions explicit.',
+    },
+    {
+      title: 'Fallback access',
+      description: 'Define how the device remains recoverable when normal connectivity fails.',
+    },
   ],
   't3x/esphome-power-management': [
-    'Battery-powered or energy-constrained devices.',
-    'Devices using sleep modes and wake sources.',
-    'Hardware with explicit power domains or energy budgets.',
+    {
+      title: 'Energy-constrained devices',
+      description: 'Set an explicit operating budget for battery or harvested-power hardware.',
+    },
+    {
+      title: 'Sleep and wake behavior',
+      description: 'Coordinate active modes, deep sleep, timers, and wake inputs.',
+    },
+    {
+      title: 'Controlled power domains',
+      description: 'Specify which sensors or peripherals are disabled between measurements.',
+    },
   ],
 };
 
@@ -348,7 +576,12 @@ export function findSchemaArtifactInstance(
   return {
     title: `${artifact.title} instance`,
     description: 'Representative sample content that conforms to this Module structure.',
-    useCases: MODULE_USE_CASES[artifact.canonicalName] ?? [artifact.title],
+    useCases: MODULE_USE_CASES[artifact.canonicalName] ?? [
+      {
+        title: artifact.title,
+        description: 'Use when this Module contribution should be explicit and reviewable.',
+      },
+    ],
     value,
   };
 }
