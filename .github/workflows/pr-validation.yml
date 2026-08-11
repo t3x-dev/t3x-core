@@ -91,6 +91,11 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Run authenticated security smoke
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:security-smoke
+
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
