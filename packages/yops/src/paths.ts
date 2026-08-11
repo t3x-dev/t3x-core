@@ -80,24 +80,63 @@ function classifyRawSegment(raw: string): PathSegment {
 }
 
 /**
- * Result type for the strict parser. Used by the validator (which surfaces
- * `YOPS_PATH_UNCLOSED_QUOTE` and `YOPS_PATH_INVALID_ESCAPE` diagnostics)
- * when callers need to know about parse-level errors. `parsePath` itself
- * stays permissive — it's used by handlers that already accept whatever
- * shape the user gave them.
+ * Result type for the strict parser. Used by the validator and runtime engine
+ * when callers need typed quote, escape, bracket, or index-range errors.
+ * `parsePath` itself stays permissive for direct-call compatibility.
  */
 export type ParsePathResult =
   | { ok: true; segments: PathSegment[] }
   | {
       ok: false;
-      code: 'UNCLOSED_QUOTE' | 'INVALID_ESCAPE';
+      code:
+        | 'UNCLOSED_QUOTE'
+        | 'INVALID_ESCAPE'
+        | 'INVALID_INDEX_SYNTAX'
+        | 'INVALID_MATCH_SYNTAX'
+        | 'INDEX_OUT_OF_RANGE';
       message: string;
       offset: number;
     };
 
+function classifyStrictRawSegment(
+  raw: string,
+  offset: number
+): PathSegment | Exclude<ParsePathResult, { ok: true }> {
+  if (raw.startsWith('[')) {
+    const indexMatch = raw.match(/^\[(\d+)\]$/);
+    if (indexMatch) {
+      const value = Number(indexMatch[1]);
+      if (!Number.isSafeInteger(value)) {
+        return {
+          ok: false,
+          code: 'INDEX_OUT_OF_RANGE',
+          message: `Array index "${indexMatch[1]}" at offset ${offset} exceeds the safe integer range`,
+          offset,
+        };
+      }
+      return { type: 'index', value };
+    }
+
+    const matchMatch = raw.match(/^\[([^=\]]+)=([^\]]*)\]$/);
+    if (matchMatch) {
+      return { type: 'match', key: matchMatch[1], value: matchMatch[2] };
+    }
+
+    const code = raw.includes('=') ? 'INVALID_MATCH_SYNTAX' : 'INVALID_INDEX_SYNTAX';
+    return {
+      ok: false,
+      code,
+      message: `Malformed bracket segment "${raw}" at offset ${offset}`,
+      offset,
+    };
+  }
+
+  return { type: 'key', value: raw };
+}
+
 /**
- * Strict parse: returns segments on success or a typed error on quoted-segment
- * malformation. Existing callers should keep using `parsePath` (which is
+ * Strict parse: returns segments on success or a typed syntax error. Existing
+ * callers should keep using `parsePath` (which is
  * permissive); this is the entry point the validator builds on.
  */
 export function tryParsePath(path: string): ParsePathResult {
@@ -167,7 +206,9 @@ export function tryParsePath(path: string): ParsePathResult {
       // preserve that for backwards compat).
       const start = i;
       while (i < path.length && path[i] !== '/') i++;
-      segments.push(classifyRawSegment(path.slice(start, i)));
+      const classified = classifyStrictRawSegment(path.slice(start, i), start);
+      if ('ok' in classified) return classified;
+      segments.push(classified);
     }
 
     // Expect `/` separator or end of input.
@@ -200,7 +241,7 @@ export function tryParsePath(path: string): ParsePathResult {
 /**
  * Parse a path string into an array of PathSegments.
  *
- * Permissive: invalid quoted-segment shapes fall back to the legacy
+ * Permissive: invalid path syntax falls back to the legacy
  * `path.split('/')` behaviour so existing callers see no change for any
  * path that doesn't use the new escape syntax. Callers that need to
  * detect parse errors (the validator) should use `tryParsePath` instead.
@@ -210,7 +251,7 @@ export function parsePath(path: string): PathSegment[] {
   if (result.ok) return result.segments;
 
   // Fallback: replicate the legacy split-on-slash behaviour for paths
-  // whose quoted segments are malformed. The strict parser surfaces the
+  // whose syntax is malformed. The strict parser surfaces the
   // error via `tryParsePath`; this entry point stays lenient so handlers
   // that today accept these inputs continue to.
   if (path === '') return [];
@@ -313,6 +354,9 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
   } else if (seg.type === 'index') {
     if (!Array.isArray(current)) {
       throw new Error(`Cannot use index [${seg.value}] on non-array value`);
+    }
+    if (!Number.isSafeInteger(seg.value) || seg.value < 0 || seg.value >= current.length) {
+      throw new Error(`Array index [${seg.value}] is out of bounds for length ${current.length}`);
     }
     if (isLast) {
       current[seg.value] = deepClone(value);

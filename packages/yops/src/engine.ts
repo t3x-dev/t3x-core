@@ -10,7 +10,7 @@
 
 import { YOPS_ERRORS, yopsError } from './errors';
 import { isMappingObject, resolveOpName } from './opShape';
-import { deepClone, hasOwnKey } from './paths';
+import { deepClone, hasOwnKey, tryParsePath } from './paths';
 import type { OpRegistry } from './registry';
 import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
@@ -189,7 +189,22 @@ export function createEngine(registry: OpRegistry) {
         });
       }
 
-      // 7. Execute handler.
+      // 7. Validate every spec-declared path with the same strict parser
+      // used by the preflight validator. Public parsePath remains permissive
+      // for compatibility, but malformed syntax must never reach a handler.
+      for (const { path } of registry.getOpPaths(op)) {
+        const parsedPath = tryParsePath(path);
+        if (!parsedPath.ok) {
+          return finish({
+            ok: false,
+            doc: original,
+            applied: i,
+            error: yopsError(YOPS_ERRORS.INVALID_PATH, parsedPath.message, i),
+          });
+        }
+      }
+
+      // 8. Execute handler.
       let result;
       try {
         result = handler(current, fields, i);
