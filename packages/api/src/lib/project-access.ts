@@ -13,11 +13,76 @@
  * - Otherwise → 403
  */
 
-import type { ApiKey } from '@t3x-dev/core';
+import type { ApiKey, ApiKeyPrincipalKind } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { findProjectById, findProjectByIdIncludingDeleted } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { createError } from './errors';
+
+export interface ProjectAccessPrincipal {
+  userId: string | null | undefined;
+  projectId: string | null | undefined;
+  principalKind: ApiKeyPrincipalKind | undefined;
+}
+
+export type ProjectAccessDecision =
+  | { allowed: true; project: NonNullable<Awaited<ReturnType<typeof findProjectById>>> }
+  | { allowed: false; status: 403 | 404; code: 'FORBIDDEN' | 'NOT_FOUND'; message: string };
+
+/**
+ * Resolve one project access decision without depending on HTTP middleware.
+ * HTTP routes and raw-token entry points such as WebSocket upgrades must share
+ * this exact ownership and project-scoped-principal policy.
+ */
+export async function evaluateProjectAccess(
+  db: AnyDB,
+  projectId: string,
+  principal?: ProjectAccessPrincipal
+): Promise<ProjectAccessDecision> {
+  const project = await findProjectById(db, projectId);
+
+  if (!project) {
+    return {
+      allowed: false,
+      status: 404,
+      code: 'NOT_FOUND',
+      message: `Project ${projectId} not found`,
+    };
+  }
+
+  if (
+    principal?.principalKind !== undefined &&
+    principal.principalKind !== 'human' &&
+    principal.projectId !== null
+  ) {
+    if (principal.projectId !== projectId) {
+      return {
+        allowed: false,
+        status: 403,
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+      };
+    }
+    return { allowed: true, project };
+  }
+
+  // AUTH_DISABLED mode — no principal, allow all.
+  if (!principal?.userId) return { allowed: true, project };
+
+  // Legacy public data — owner_id is null, allow all.
+  if (!project.ownerId) return { allowed: true, project };
+
+  if (project.ownerId !== principal.userId) {
+    return {
+      allowed: false,
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'Access denied',
+    };
+  }
+
+  return { allowed: true, project };
+}
 
 /**
  * Assert that the current user has access to the given project.
@@ -26,37 +91,20 @@ import { createError } from './errors';
  * Downstream handlers can use the returned project to avoid a redundant DB lookup.
  */
 export async function assertProjectAccess(c: Context, db: AnyDB, projectId: string) {
-  const project = await findProjectById(db, projectId);
-
-  if (!project) {
-    return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
-  }
-
   const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (
-    apiKey?.principal_kind !== undefined &&
-    apiKey.principal_kind !== 'human' &&
-    apiKey.project_id !== null
-  ) {
-    if (apiKey.project_id !== projectId) {
-      return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+  const decision = await evaluateProjectAccess(
+    db,
+    projectId,
+    apiKey && {
+      userId: apiKey.user_id,
+      projectId: apiKey.project_id,
+      principalKind: apiKey.principal_kind,
     }
-    return project;
+  );
+  if (!decision.allowed) {
+    return c.json(createError(decision.code, decision.message), decision.status);
   }
-  const userId = apiKey?.user_id;
-
-  // AUTH_DISABLED mode — no user identity, allow all
-  if (!userId) return project;
-
-  // Legacy public data — owner_id is null, allow all
-  if (!project.ownerId) return project;
-
-  // Ownership check
-  if (project.ownerId !== userId) {
-    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
-  }
-
-  return project;
+  return decision.project;
 }
 
 /**

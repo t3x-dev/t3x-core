@@ -11,6 +11,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getUsageByEndpoint, getUsageSummary, getUsageTotal, recordUsage } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const usageRoutes = new OpenAPIHono({
@@ -172,6 +173,8 @@ usageRoutes.openapi(recordUsageRoute, async (c) => {
 
   const body = c.req.valid('json');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, body.project_id);
+  if (access instanceof Response) return access;
 
   const result = await recordUsage(db, {
     user_id: userId,
