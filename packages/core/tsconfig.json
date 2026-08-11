@@ -26,6 +26,6 @@
     "tests",
     "schema",
     "configs",
-    "src/__tests__"
+    "src/**/__tests__/**"
   ]
 }

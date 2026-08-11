@@ -17,6 +17,7 @@
     "api-extract:verify": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --verify",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretypecheck": "tsx scripts/generate-spec-data.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
