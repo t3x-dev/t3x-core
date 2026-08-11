@@ -15,7 +15,11 @@
 
 import type { ApiKey, ApiKeyPrincipalKind } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { findProjectById, findProjectByIdIncludingDeleted } from '@t3x-dev/storage';
+import {
+  findProjectById,
+  findProjectByIdIncludingDeleted,
+  listTransitionCommitProjectIds,
+} from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { createError } from './errors';
 
@@ -126,6 +130,48 @@ export async function assertResourceProjectAccess(
   if (!apiKey) return null;
 
   return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
+}
+
+/**
+ * Resolve and authorize the project membership used to read one repository
+ * commit. A digest can be bound to multiple projects, so callers without an
+ * explicit project must fail closed instead of guessing a membership.
+ */
+export async function assertRepositoryCommitAccess(
+  c: Context,
+  db: AnyDB,
+  digest: string,
+  projectId?: string
+): Promise<string | Response> {
+  if (projectId) {
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+
+    const memberships = await listTransitionCommitProjectIds(db, digest);
+    if (!memberships.includes(projectId)) {
+      return c.json(createError('NOT_FOUND', `Commit ${digest} not found`), 404);
+    }
+    return projectId;
+  }
+
+  const memberships = await listTransitionCommitProjectIds(db, digest);
+  if (memberships.length === 0) {
+    return c.json(createError('NOT_FOUND', `Commit ${digest} not found`), 404);
+  }
+  if (memberships.length > 1) {
+    return c.json(
+      createError(
+        'INVALID_REQUEST',
+        `Commit ${digest} belongs to multiple projects; project_id is required`
+      ),
+      400
+    );
+  }
+
+  const resolvedProjectId = memberships[0];
+  const access = await assertProjectAccess(c, db, resolvedProjectId);
+  if (access instanceof Response) return access;
+  return resolvedProjectId;
 }
 
 /**

@@ -6,6 +6,19 @@ import { setupTestDB } from './setup';
 
 let mockDB: AnyDB;
 
+const commitSpies = vi.hoisted(() => ({
+  listProjectIds: vi.fn(),
+  getCommit: vi.fn(),
+}));
+
+vi.mock('@t3x-dev/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
+  return {
+    ...actual,
+    listTransitionCommitProjectIds: commitSpies.listProjectIds,
+  };
+});
+
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
@@ -27,7 +40,16 @@ vi.mock('../lib/import', async (importOriginal) => {
   };
 });
 
+vi.mock('../lib/repository-state-transition', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/repository-state-transition')>();
+  return {
+    ...actual,
+    getRepositorySemanticCommit: commitSpies.getCommit,
+  };
+});
+
 import { checkRoutes } from '../routes/check.openapi';
+import { diffRoutes } from '../routes/diff.openapi';
 import { extractionFeedbackRoutes } from '../routes/extraction-feedback.openapi';
 import { importRoutes } from '../routes/import.openapi';
 import { usageRoutes } from '../routes/usage.openapi';
@@ -47,6 +69,7 @@ function createAuthenticatedApp(userId: string) {
     return next();
   });
   app.route('/', checkRoutes);
+  app.route('/', diffRoutes);
   app.route('/', extractionFeedbackRoutes);
   app.route('/', importRoutes);
   app.route('/', usageRoutes);
@@ -86,6 +109,8 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     importSpies.parseUrl.mockReset();
     importSpies.parseDocument.mockReset();
     importSpies.parsePlatformExport.mockReset();
+    commitSpies.listProjectIds.mockReset();
+    commitSpies.getCommit.mockReset();
   });
 
   it('blocks cross-project checks, feedback statistics, and usage writes', async () => {
@@ -114,6 +139,73 @@ describe('project ownership on remaining HTTP project surfaces', () => {
         }),
       })
     );
+  });
+
+  it('blocks both commit-diff surfaces before loading cross-project commit state', async () => {
+    const app = createAuthenticatedApp('user_owner');
+    const payload = JSON.stringify({
+      project_id: otherProjectId,
+      base_commit_hash: 'sha256:private-base',
+      target_commit_hash: 'sha256:private-target',
+    });
+
+    await expectForbidden(
+      await app.request('/v1/diff/two-way', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+    );
+    await expectForbidden(
+      await app.request('/v1/diff/frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+    );
+    expect(commitSpies.listProjectIds).not.toHaveBeenCalled();
+    expect(commitSpies.getCommit).not.toHaveBeenCalled();
+  });
+
+  it('loads commit state only through an authorized project membership', async () => {
+    const app = createAuthenticatedApp('user_owner');
+    commitSpies.listProjectIds.mockResolvedValue([ownerProjectId]);
+    commitSpies.getCommit.mockImplementation(
+      async (_db: AnyDB, digest: string, projectId: string | undefined) => ({
+        digest,
+        projectId,
+        schema: 't3x/commit/v2',
+        parents: [],
+        actor: { kind: 'human', id: 'user_owner' },
+        recordedAt: '2026-08-11T00:00:00.000Z',
+        intent: null,
+        rationale: null,
+        evidence: [],
+        semanticContent: { trees: [], relations: [] },
+      })
+    );
+    const payload = JSON.stringify({
+      base_commit_hash: 'sha256:owner-base',
+      target_commit_hash: 'sha256:owner-target',
+    });
+
+    const twoWay = await app.request('/v1/diff/two-way', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    expect(twoWay.status).toBe(200);
+
+    const frame = await app.request('/v1/diff/frame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    expect(frame.status).toBe(200);
+    expect(commitSpies.getCommit).toHaveBeenCalledTimes(4);
+    for (const call of commitSpies.getCommit.mock.calls) {
+      expect(call[2]).toBe(ownerProjectId);
+    }
   });
 
   it('blocks URL imports before fetching attacker-selected content', async () => {
