@@ -1,5 +1,16 @@
 # @t3x-dev/yschema
 
+## 1.1.0
+
+### Minor Changes
+
+- [#1324](https://github.com/t3x-dev/t3x-core/pull/1324) [`4539d51`](https://github.com/t3x-dev/t3x-core/commit/4539d51f8bf099f6258cbb0bd4ab9dd303bc2f4a) Thanks [@jjy0230](https://github.com/jjy0230)! - Add schema module composition helpers for building, canonicalizing, compiling, and rendering composed YSchema modules.
+
+### Patch Changes
+
+- Updated dependencies [[`2f1fbf3`](https://github.com/t3x-dev/t3x-core/commit/2f1fbf32d8532f7cec2d8e6649caee4dc7e3f795)]:
+  - @t3x-dev/yops@1.1.0
+
 ## 1.0.0
 
 ### Major Changes

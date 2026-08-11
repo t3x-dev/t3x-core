@@ -5,7 +5,7 @@ import { validateReleaseDocsAlignment } from '../lib/releaseDocsAlignment.mjs';
 
 test('release-facing docs stay aligned with package versions and release surface', async () => {
   const result = await validateReleaseDocsAlignment();
-  const packageJson = JSON.parse(await readFile('packages/yops/package.json', 'utf8'));
+  const packageJson = JSON.parse(await readFile('apps/local/package.json', 'utf8'));
 
   assert.deepEqual(result.errors, []);
   assert.equal(result.expectedVersion, packageJson.version);
