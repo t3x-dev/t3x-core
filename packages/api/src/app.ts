@@ -119,8 +119,8 @@ export interface CreateAppOptions {
 
 export interface CreateAppResult {
   app: Hono;
-  /** Call with the HTTP server returned by @hono/node-server serve() */
-  injectWebSocket: ReturnType<typeof setupWebSocket>['injectWebSocket'];
+  /** Pass to the `websocket` option of @hono/node-server v2 `serve()`. */
+  websocket: ReturnType<typeof setupWebSocket>['websocket'];
 }
 
 export function createApp(options?: CreateAppOptions): CreateAppResult {
@@ -357,7 +357,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   app.route('/api', api);
 
   // WebSocket — real-time event push (mounted at root, not under /api)
-  const { upgradeWebSocket, injectWebSocket } = setupWebSocket(app);
+  const { upgradeWebSocket, websocket } = setupWebSocket();
   app.route('/', createWsRoute(upgradeWebSocket));
 
   // 404 handler
@@ -389,7 +389,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     );
   });
 
-  return { app, injectWebSocket };
+  return { app, websocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──

@@ -84,7 +84,7 @@
     "@changesets/cli": "^2.30.0",
     "@types/js-yaml": "^4.0.9",
     "dotenv-cli": "^11.0.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.1",
     "turbo": "^2.7.2",
     "typescript": "^5.9.3"
   }
