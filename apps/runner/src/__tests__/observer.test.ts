@@ -62,7 +62,9 @@ describe('Observer', () => {
         type: 'http',
       });
       const runId = obs.startRun(PROJECT_ID, 'a1', { agent_id: 'a1', input: { query: 'hello' } });
-      expect(runId).toMatch(/^run_/);
+      expect(runId).toMatch(
+        /^run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      );
     });
 
     it('initializes RunRecord correctly', () => {

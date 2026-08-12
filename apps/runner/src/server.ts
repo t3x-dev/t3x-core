@@ -383,7 +383,7 @@ app.post('/run', async (req, res) => {
 
       res.json({
         success: true,
-        data: { run_id: runId, output, record },
+        data: { run_id: runId, output, trace: record },
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -394,7 +394,7 @@ app.post('/run', async (req, res) => {
       res.status(500).json({
         success: false,
         error: { code: 'RUN_FAILED', message: errorMsg },
-        data: { run_id: runId, record },
+        data: { run_id: runId, trace: record },
       });
     }
   } catch (error) {
@@ -538,7 +538,7 @@ app.get('/runs', (req, res) => {
 app.post('/runs', async (req, res) => {
   try {
     const data = EngineRunRequestSchema.parse(req.body);
-    const runner_run_id = `runner_run_${randomUUID().slice(0, 8)}`;
+    const runner_run_id = `runner_run_${randomUUID()}`;
 
     // Note: No longer storing in pendingRuns Map
     // Run info is stored in Engine's PostgreSQL and fetched on callback

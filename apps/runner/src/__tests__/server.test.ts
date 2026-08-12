@@ -359,6 +359,48 @@ describe('runner server routes', () => {
     expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
   });
 
+  it('POST /run returns the RunRecord under the web-client trace contract', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        id: 'proxy-agent',
+        name: 'Proxy Agent',
+        endpoint: 'http://127.0.0.1:9000/proxy',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: 'ok' }),
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        agent_id: 'proxy-agent',
+        input: { prompt: 'hello' },
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      data: { run_id: string; output: unknown; trace: { run_id: string; status: string } };
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.run_id).toMatch(/^run_[0-9a-f-]{36}$/);
+    expect(body.data.output).toEqual({ answer: 'ok' });
+    expect(body.data.trace).toMatchObject({
+      run_id: body.data.run_id,
+      status: 'completed',
+    });
+  });
+
   it('POST /run revalidates an endpoint after its private-origin authorization is removed', async () => {
     process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
     const registerRes = await requestJson(server, '/agents', {
@@ -425,15 +467,15 @@ describe('runner server routes', () => {
     const body = res.body as {
       success: boolean;
       error: { code: string; message: string };
-      data: { record: { status: string; error: { message: string } } };
+      data: { trace: { status: string; error: { message: string } } };
     };
 
     expect(res.status).toBe(500);
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('RUN_FAILED');
     expect(body.error.message).toContain('Agent request failed with 502');
-    expect(body.data.record.status).toBe('failed');
-    expect(body.data.record.error.message).toContain('Agent request failed with 502');
+    expect(body.data.trace.status).toBe('failed');
+    expect(body.data.trace.error.message).toContain('Agent request failed with 502');
   });
 
   it('POST /webhook/run fails the trace when the registered agent returns a non-2xx response', async () => {

@@ -37,31 +37,36 @@ export interface AgentConfig {
 export interface RunTrace {
   run_id: string;
   project_id: string;
-  agent_id: string;
-  started_at: string;
-  completed_at?: string;
-  status: 'running' | 'completed' | 'failed' | 'timeout';
-  input: Record<string, unknown>;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  inputs: Record<string, unknown>;
   output?: unknown;
-  events: Array<{
-    id: string;
-    timestamp: string;
-    type: 'llm_call' | 'tool_call' | 'agent_input' | 'agent_output' | 'error';
-    data: {
-      input?: unknown;
-      output?: unknown;
-      model?: string;
-      tool_name?: string;
-      latency_ms?: number;
-      error?: string;
+  steps: Array<{
+    step_id: string;
+    step_index: number;
+    name: string;
+    type: string;
+    parent_step_id?: string;
+    span_kind?: 'chain' | 'llm' | 'tool' | 'retriever' | 'workflow';
+    input: unknown;
+    output: unknown;
+    latency_ms: number;
+    status: 'ok' | 'error';
+    error?: string;
+    tokens?: { in: number; out: number };
+    llm?: {
+      model: string;
+      provider?: string;
+      tokens: { prompt: number; completion: number; total: number };
     };
+    tool?: { tool_name: string; tool_input: unknown; tool_output: unknown };
   }>;
-  metrics?: {
-    total_latency_ms?: number;
-    llm_calls: number;
-    tool_calls: number;
-    tokens_used?: number;
+  timing: {
+    started_at: string;
+    ended_at?: string;
+    total_ms?: number;
   };
+  error?: { code: string; message: string; step_id?: string };
+  source?: { system: 'n8n' | 'langchain' | 'custom'; execution_id?: string };
 }
 
 export interface RunAgentResult {

@@ -36,7 +36,7 @@ export class Observer {
    * Start a new run
    */
   startRun(projectId: string, _agentId: string, input: AgentInput): string {
-    const runId = `run_${randomUUID().slice(0, 8)}`;
+    const runId = `run_${randomUUID()}`;
     const now = new Date().toISOString();
 
     const record: RunRecord = {
@@ -76,7 +76,7 @@ export class Observer {
 
     const stepIndex = record.steps.length;
     const step: StepRecord = {
-      step_id: `step_${randomUUID().slice(0, 8)}`,
+      step_id: `step_${randomUUID()}`,
       step_index: stepIndex,
       name: model ? `LLM Call (${model})` : 'LLM Call',
       type: 'llm_call',
@@ -113,7 +113,7 @@ export class Observer {
 
     const stepIndex = record.steps.length;
     const step: StepRecord = {
-      step_id: `step_${randomUUID().slice(0, 8)}`,
+      step_id: `step_${randomUUID()}`,
       step_index: stepIndex,
       name: toolName,
       type: 'tool_call',
