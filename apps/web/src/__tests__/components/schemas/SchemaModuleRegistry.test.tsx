@@ -53,6 +53,27 @@ describe('SchemaModuleRegistry', () => {
     ).toHaveLength(2);
   });
 
+  it('places a newly added Core first without pinning its position', () => {
+    render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Frontend Design to composition' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add PRD Core to composition' }));
+
+    const workbench = screen.getByRole('complementary', { name: 'Composition workbench' });
+    const titles = within(workbench)
+      .getAllByRole('article')
+      .map((article) => within(article).getByText(/PRD Core|Frontend Design/).textContent);
+    expect(titles).toEqual(['PRD Core', 'Frontend Design']);
+    expect(
+      within(workbench).getByRole('button', { name: 'Drag PRD Core to reorder' })
+    ).toBeInTheDocument();
+    fireEvent.click(within(workbench).getByRole('button', { name: 'Move PRD Core later' }));
+    const movedTitles = within(workbench)
+      .getAllByRole('article')
+      .map((article) => within(article).getByText(/PRD Core|Frontend Design/).textContent);
+    expect(movedTitles).toEqual(['Frontend Design', 'PRD Core']);
+  });
+
   it('uses an Instance outline for Modules without a curated sample', () => {
     const communityModule = {
       ...PRD_MODULE_ARTIFACTS[0],
@@ -107,6 +128,12 @@ describe('SchemaModuleRegistry', () => {
     render(<SchemaModuleRegistry registryArtifacts={TEST_REGISTRY} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add System Architecture to composition' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add Technology Stack to composition' }));
+    expect(
+      screen.getByRole('button', { name: 'Drag System Architecture to reorder' })
+    ).toHaveAttribute('aria-roledescription', 'sortable');
+    expect(
+      screen.getByRole('button', { name: 'Drag Technology Stack to reorder' })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Move Technology Stack earlier' }));
 
     const workbench = screen.getByRole('complementary', { name: 'Composition workbench' });

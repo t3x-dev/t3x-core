@@ -1,11 +1,29 @@
 'use client';
 
 import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   ArrowDown,
   ArrowUp,
   Check,
   ChevronDown,
   Filter,
+  GripVertical,
   Layers3,
   Plus,
   Search,
@@ -87,6 +105,10 @@ export function SchemaModuleRegistry({
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
   const [savedSignature, setSavedSignature] = useState<string>();
   const [feedback, setFeedback] = useState<string>();
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const artifactSignature = artifacts
     .map((artifact) => `${artifact.canonicalName}@${artifact.version}`)
@@ -168,7 +190,9 @@ export function SchemaModuleRegistry({
     setCompositionModules((current) =>
       current.some((item) => item.canonicalName === module.canonicalName)
         ? current.filter((item) => item.canonicalName !== module.canonicalName)
-        : [...current, module]
+        : isCoreModule(module)
+          ? [module, ...current]
+          : [...current, module]
     );
   }
 
@@ -183,6 +207,17 @@ export function SchemaModuleRegistry({
         next[index] as SchemaArtifactPreview,
       ];
       return next;
+    });
+  }
+
+  function finishModuleDrag(event: DragEndEvent) {
+    if (!event.over || event.active.id === event.over.id) return;
+    previewState.reset();
+    setFeedback(undefined);
+    setCompositionModules((current) => {
+      const from = current.findIndex((module) => artifactKey(module) === event.active.id);
+      const to = current.findIndex((module) => artifactKey(module) === event.over?.id);
+      return from < 0 || to < 0 ? current : arrayMove(current, from, to);
     });
   }
 
@@ -493,52 +528,29 @@ export function SchemaModuleRegistry({
               </p>
             </div>
           ) : null}
-          {compositionModules.map((module, index) => (
-            <article
-              className="rounded-[var(--radius-md)] border border-[var(--stroke-divider)] p-2.5"
-              key={module.canonicalName}
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={finishModuleDrag}
+            sensors={dragSensors}
+          >
+            <SortableContext
+              items={compositionModules.map(artifactKey)}
+              strategy={verticalListSortingStrategy}
             >
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 w-5 shrink-0 font-mono text-[10px] text-[var(--text-tertiary)]">
-                  {String((index + 1) * 10).padStart(2, '0')}
-                </span>
-                <SchemaArtifactIcon artifact={module} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-semibold text-[var(--text-primary)]">
-                    {module.title}
-                  </p>
-                  <p className="mt-0.5 truncate font-mono text-[9px] text-[var(--text-tertiary)]">
-                    {module.canonicalName}@{module.version}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center">
-                  <button
-                    aria-label={`Move ${module.title} earlier`}
-                    disabled={index === 0}
-                    onClick={() => moveModule(index, -1)}
-                    type="button"
-                  >
-                    <ArrowUp className="size-3.5 text-[var(--text-tertiary)]" />
-                  </button>
-                  <button
-                    aria-label={`Move ${module.title} later`}
-                    disabled={index === compositionModules.length - 1}
-                    onClick={() => moveModule(index, 1)}
-                    type="button"
-                  >
-                    <ArrowDown className="size-3.5 text-[var(--text-tertiary)]" />
-                  </button>
-                  <button
-                    aria-label={`Remove ${module.title} from composition`}
-                    onClick={() => toggleModule(module)}
-                    type="button"
-                  >
-                    <X className="size-3.5 text-[var(--text-tertiary)]" />
-                  </button>
-                </div>
+              <div className="space-y-2">
+                {compositionModules.map((module, index) => (
+                  <SortableCompositionModule
+                    index={index}
+                    key={artifactKey(module)}
+                    module={module}
+                    onMove={moveModule}
+                    onRemove={toggleModule}
+                    total={compositionModules.length}
+                  />
+                ))}
               </div>
-            </article>
-          ))}
+            </SortableContext>
+          </DndContext>
           {previewState.result?.report.issues.map((issue) => (
             <div
               className={`rounded-[var(--radius-md)] border p-2.5 text-[10px] leading-4 ${issue.blocking ? 'border-[var(--destructive)]/30 bg-[var(--destructive)]/5 text-[var(--destructive)]' : 'border-[var(--stroke-divider)] text-[var(--text-secondary)]'}`}
@@ -588,6 +600,91 @@ export function SchemaModuleRegistry({
       </aside>
     </section>
   );
+}
+
+function SortableCompositionModule({
+  index,
+  module,
+  onMove,
+  onRemove,
+  total,
+}: {
+  index: number;
+  module: SchemaArtifactPreview;
+  onMove: (index: number, direction: -1 | 1) => void;
+  onRemove: (module: SchemaArtifactPreview) => void;
+  total: number;
+}) {
+  const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
+    id: artifactKey(module),
+  });
+  return (
+    <article
+      className={`rounded-[var(--radius-md)] border bg-[var(--surface-card)] p-2.5 transition-[border-color,box-shadow,opacity] ${isDragging ? 'relative z-10 border-[var(--accent-commit)] opacity-90 shadow-lg' : 'border-[var(--stroke-divider)]'}`}
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      <div className="flex items-start gap-2">
+        <button
+          aria-label={`Drag ${module.title} to reorder`}
+          className="-ml-1 mt-0.5 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] active:cursor-grabbing"
+          type="button"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical aria-hidden="true" className="size-3.5" />
+        </button>
+        <span className="mt-0.5 w-5 shrink-0 font-mono text-[10px] text-[var(--text-tertiary)]">
+          {String((index + 1) * 10).padStart(2, '0')}
+        </span>
+        <SchemaArtifactIcon artifact={module} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[11px] font-semibold text-[var(--text-primary)]">
+            {module.title}
+          </p>
+          <p className="mt-0.5 truncate font-mono text-[9px] text-[var(--text-tertiary)]">
+            {module.canonicalName}@{module.version}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <button
+            aria-label={`Move ${module.title} earlier`}
+            className="rounded p-0.5 hover:bg-[var(--hover-bg)] disabled:opacity-30"
+            disabled={index === 0}
+            onClick={() => onMove(index, -1)}
+            type="button"
+          >
+            <ArrowUp className="size-3.5 text-[var(--text-tertiary)]" />
+          </button>
+          <button
+            aria-label={`Move ${module.title} later`}
+            className="rounded p-0.5 hover:bg-[var(--hover-bg)] disabled:opacity-30"
+            disabled={index === total - 1}
+            onClick={() => onMove(index, 1)}
+            type="button"
+          >
+            <ArrowDown className="size-3.5 text-[var(--text-tertiary)]" />
+          </button>
+          <button
+            aria-label={`Remove ${module.title} from composition`}
+            className="rounded p-0.5 hover:bg-[var(--hover-bg)]"
+            onClick={() => onRemove(module)}
+            type="button"
+          >
+            <X className="size-3.5 text-[var(--text-tertiary)]" />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function artifactKey(module: Pick<SchemaArtifactPreview, 'canonicalName' | 'version'>): string {
+  return `${module.canonicalName}@${module.version}`;
+}
+
+function isCoreModule(module: Pick<SchemaArtifactPreview, 'kind' | 'tags'>): boolean {
+  return module.kind === 'core' || module.tags?.includes('role:core') === true;
 }
 
 function withEffectiveTags(artifact: SchemaArtifactPreview): SchemaArtifactPreview {
