@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
 import { isEnabledEnv, isTrustedLoopbackRequest } from './debug-access.js';
+import { assertSafeAgentEndpoint, fetchAgentEndpoint } from './endpoint-security.js';
 import {
   getEngineCallbackUrl,
   getEngineUrl,
@@ -12,6 +13,7 @@ import {
 import { evalEngine } from './evaluator/index.js';
 import { logger } from './lib/logger.js';
 import { triggerN8nWorkflow } from './n8n.js';
+import { resolveRunnerHost, resolveRunnerPort } from './network.js';
 import { observer } from './observer.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import {
@@ -238,9 +240,10 @@ app.get('/debug/n8n-check', async (req, res) => {
 /**
  * POST /agents - Register an agent
  */
-app.post('/agents', (req, res) => {
+app.post('/agents', async (req, res) => {
   try {
     const config = AgentConfigSchema.parse(req.body);
+    await assertSafeAgentEndpoint(config.endpoint);
     observer.registerAgent(config);
     logger.info({ agent_id: config.id }, 'Agent registered');
     res.json({ success: true, data: { agent_id: config.id } });
@@ -293,7 +296,7 @@ app.post('/run', async (req, res) => {
     try {
       // Forward to agent
       const startTime = Date.now();
-      const response = await fetch(agent.endpoint, {
+      const response = await fetchAgentEndpoint(agent.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -874,7 +877,7 @@ app.post('/webhook/run', async (req, res) => {
     const startTime = Date.now();
 
     try {
-      const response = await fetch(agent.endpoint, {
+      const response = await fetchAgentEndpoint(agent.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -983,9 +986,14 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // Start Server
 // ============================================
 
-export function startServer(port: number | string = process.env.PORT || 8080) {
-  return app.listen(port, () => {
-    logger.info({ port }, 'T3X Runner started');
+export function startServer(
+  port: number | string = process.env.PORT || 8080,
+  host: string = resolveRunnerHost()
+) {
+  const numericPort = resolveRunnerPort(port);
+
+  return app.listen(numericPort, host, () => {
+    logger.info({ host, port: numericPort }, 'T3X Runner started');
     logger.info('Endpoints:');
     logger.info('  GET  /health        - Health check');
     logger.info('  GET  /ready         - Readiness check');

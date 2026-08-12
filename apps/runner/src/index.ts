@@ -30,6 +30,14 @@
 
 // LLM Asserter
 export { type AssertionStatus, type GenerateAssertionsResult, llmAsserter } from './asserter.js';
+// Outbound endpoint policy
+export {
+  assertSafeAgentEndpoint,
+  fetchAgentEndpoint,
+  isBlockedAgentAddress,
+  RUNNER_ENDPOINT_ALLOWLIST_ENV,
+  UnsafeAgentEndpointError,
+} from './endpoint-security.js';
 // Evaluator (rule-based)
 export {
   DEFAULT_RULES,
@@ -38,6 +46,7 @@ export {
   loadRulesFromFile,
   parseRulesFromLeaf,
 } from './evaluator/index.js';
+export { DEFAULT_RUNNER_HOST, resolveRunnerHost, resolveRunnerPort } from './network.js';
 // Observer (SDK proxy mode)
 export { Observer, observer } from './observer.js';
 // Schemas - Types

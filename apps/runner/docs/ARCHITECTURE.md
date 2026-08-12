@@ -637,6 +637,13 @@ passed = score >= pass_threshold
 | `N8N_WEBHOOK_URL` | `http://n8n:5678/webhook` | n8n Webhook base URL |
 | `ENGINE_CALLBACK_URL` | `{T3X_ENGINE_URL}/api/v1/runs/ingest` | Engine callback URL |
 | `ANTHROPIC_API_KEY` | (none) | Claude API Key (for assertion generation) |
+| `RUNNER_ENDPOINT_ALLOWLIST` | (none) | Comma-separated exact private origins Runner may call, for example `http://127.0.0.1:9000` |
+| `RUNNER_HOST` | `127.0.0.1` | Standalone server bind address. Set explicitly for a trusted container network; keep published host ports loopback-only. |
+
+Agent registration and execution allow public HTTP(S) endpoints by default. Loopback,
+private, link-local, and reserved targets require an exact origin in
+`RUNNER_ENDPOINT_ALLOWLIST`. Runner revalidates the endpoint on every execution and
+does not automatically follow agent redirects.
 
 ---
 

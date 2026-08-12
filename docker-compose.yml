@@ -130,14 +130,19 @@ services:
       dockerfile: apps/runner/Dockerfile
     container_name: t3x-runner
     ports:
-      - "8080:8080"
+      # Runner control routes are intentionally exposed only on host loopback.
+      - "127.0.0.1:${RUNNER_PORT:-8080}:8080"
     environment:
       - PORT=8080
+      # Inter-container callers need the service to listen on the Docker network.
+      - RUNNER_HOST=0.0.0.0
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - N8N_API_URL=http://n8n:5678/api/v1
       - N8N_API_KEY=${N8N_API_KEY:-}
       - LOG_LEVEL=info
+      # Exact private origins Runner may call; public HTTP(S) origins do not need listing.
+      - RUNNER_ENDPOINT_ALLOWLIST=${RUNNER_ENDPOINT_ALLOWLIST:-http://agent-demo:9000}
       # Trace storage policy: always | on_failure | on_violation
       - TRACE_POLICY=${TRACE_POLICY:-always}
       # CORS: Allow WebUI access from common local origins
