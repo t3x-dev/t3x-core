@@ -132,18 +132,23 @@ export interface PublishSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  tags?: string[];
 }
 
 export interface PublishedSchemaVersionManifest extends Record<string, unknown> {
-  apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v2';
+  apiVersion:
+    | 't3x.dev/yschema-core/v1'
+    | 't3x.dev/yschema-module/v2'
+    | 't3x.dev/yschema-blueprint/v1';
   canonicalName: string;
   version: string;
-  family?: YSchemaArtifactFamily;
+  family?: YSchemaArtifactFamily | 'open';
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';
   source: 'official' | 'team' | 'community';
   artifactHash?: string;
+  tags?: string[];
   schema?: Record<string, unknown>;
 }
 

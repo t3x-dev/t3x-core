@@ -139,3 +139,32 @@ export interface CompileYSchemaCompositionV2Input {
   composition: YSchemaCompositionDraftV2;
   modules: YSchemaModuleArtifactV2[];
 }
+
+export interface PublishedYSchemaBlueprintV1 {
+  apiVersion: 't3x.dev/yschema-blueprint/v1';
+  canonicalName: string;
+  version: string;
+  title: string;
+  description: string;
+  status: 'active' | 'deprecated';
+  source: 'team';
+  tags: string[];
+  blueprint: {
+    compositionApiVersion: 't3x.dev/yschema-composition/v2';
+    compositionId: string;
+    compositionRevision: number;
+    modules: Array<YSchemaCompositionModuleReferenceV2 & { hash: string }>;
+  };
+  schema: YSchema;
+  registry: {
+    origin: 'composition';
+    compilerVersion: 'yschema-v2';
+    compositionHash: string;
+    compiledSchemaHash: string;
+    reportHash: string;
+    schemaHash: string;
+    renderPlan: YSchemaCompositionRenderEntryV2[];
+    originsByPath: Record<string, YSchemaCompositionOriginV2>;
+    releaseNotes: string;
+  };
+}

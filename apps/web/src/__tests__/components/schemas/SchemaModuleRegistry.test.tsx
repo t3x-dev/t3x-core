@@ -230,4 +230,79 @@ describe('SchemaModuleRegistry', () => {
     });
     expect(screen.getByText(/No Commit was created/)).toBeInTheDocument();
   });
+
+  it('publishes a verified v2 Composition as a Schema Blueprint', async () => {
+    const onPublished = vi.fn();
+    const hash = `sha256:${'2'.repeat(64)}`;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const data = url.endsWith('/publish')
+        ? {
+            apiVersion: 't3x.dev/yschema-blueprint/v1',
+            canonicalName: 'projects/proj_modules/schema',
+            version: '1.0.0',
+            title: 'Module Workspace Schema',
+            description: 'Published Schema',
+            status: 'active',
+            source: 'team',
+          }
+        : {
+            report: { valid: true, mode: 'open', issues: [] },
+            compiledSchemaHash: `sha256:${'1'.repeat(64)}`,
+            compositionHash: hash,
+            renderPlan: [],
+          };
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <SchemaModuleRegistry
+        registryArtifacts={TEST_REGISTRY}
+        workspace={{
+          projectId: 'proj_modules',
+          workspaceId: 'workspace_modules',
+          workspaceTitle: 'Module Workspace',
+          workspaceRevision: 8,
+          onPublished,
+          composition: {
+            apiVersion: 't3x.dev/yschema-composition/v2',
+            id: 'composition:workspace_modules',
+            revision: 1,
+            status: 'draft',
+            modules: [
+              {
+                canonicalName: 't3x/prd-frontend-design',
+                version: '1.0.0',
+                presentationOrder: 10,
+              },
+            ],
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify composition' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Publish Schema version' })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish Schema version' }));
+    fireEvent.change(screen.getByLabelText('Tags (comma separated)'), {
+      target: { value: 'product, team' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Publish 1.0.0' }));
+
+    await waitFor(() => expect(onPublished).toHaveBeenCalledTimes(1));
+    const publishCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/publish'));
+    expect(JSON.parse(String(publishCall?.[1]?.body))).toMatchObject({
+      canonical_name: 'projects/proj_modules/schema',
+      version: '1.0.0',
+      composition_hash: hash,
+      tags: ['product', 'team'],
+    });
+    expect(screen.getByText(/immutable Schema/)).toBeInTheDocument();
+  });
 });

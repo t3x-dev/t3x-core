@@ -15,7 +15,10 @@ import {
 import { SchemaReleaseList } from '@/components/schemas/SchemaReleaseList';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { publishedSchemaReleaseId } from '@/domain/schemas/publishedSchemaVersions';
+import {
+  blueprintFamilyId,
+  publishedSchemaReleaseId,
+} from '@/domain/schemas/publishedSchemaVersions';
 import type {
   PublishedSchemaVersionManifest,
   SchemaCompositionWorkspaceContext,
@@ -97,7 +100,10 @@ export function SchemaRegistry({
 
   async function handleVersionPublished(version: PublishedSchemaVersionManifest) {
     await compositionWorkspace?.onPublished?.(version);
-    const publishedFamily = version.family ?? selectedFamily?.id ?? defaultFamilyId;
+    const publishedFamily =
+      version.apiVersion === 't3x.dev/yschema-blueprint/v1'
+        ? blueprintFamilyId(version.canonicalName)
+        : (version.family ?? selectedFamily?.id ?? defaultFamilyId);
     setSelectedFamilyId(publishedFamily);
     setSelectedReleaseIds((releaseIds) => ({
       ...releaseIds,

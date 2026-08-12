@@ -25,6 +25,7 @@ import {
   Filter,
   GripVertical,
   Layers3,
+  PackageCheck,
   Plus,
   Search,
   ShieldCheck,
@@ -34,6 +35,16 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useSchemaCompositionDraft } from '@/hooks/schemas/useSchemaCompositionDraft';
 import { useSchemaCompositionPreview } from '@/hooks/schemas/useSchemaCompositionPreview';
@@ -65,6 +76,7 @@ const TAG_GROUPS: Array<{ id: TagGroupId; label: string; prefixes: string[] }> =
 ];
 
 export function SchemaModuleRegistry({
+  nextVersion = '1.0.0',
   initialArtifactName,
   initialArtifactVersion,
   workspace,
@@ -91,7 +103,7 @@ export function SchemaModuleRegistry({
         ),
     [registry.artifacts, registryArtifacts]
   );
-  const { apply, save } = useSchemaCompositionDraft();
+  const { apply, publish, save } = useSchemaCompositionDraft();
   const previewState = useSchemaCompositionPreview();
   const [nameQuery, setNameQuery] = useState('');
   const [activeTagGroup, setActiveTagGroup] = useState<TagGroupId>('main');
@@ -105,6 +117,18 @@ export function SchemaModuleRegistry({
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
   const [savedSignature, setSavedSignature] = useState<string>();
   const [feedback, setFeedback] = useState<string>();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishPending, setPublishPending] = useState(false);
+  const [publishTitle, setPublishTitle] = useState(
+    `${workspace?.workspaceTitle ?? 'Composed'} Schema`
+  );
+  const [publishCanonicalName, setPublishCanonicalName] = useState(
+    `projects/${workspace?.projectId ?? 'project'}/schema`
+  );
+  const [publishVersion, setPublishVersion] = useState(nextVersion);
+  const [publishDescription, setPublishDescription] = useState('');
+  const [publishTags, setPublishTags] = useState('');
+  const [releaseNotes, setReleaseNotes] = useState('');
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -261,6 +285,37 @@ export function SchemaModuleRegistry({
     setWorkspaceRevision(result.workspaceRevision);
     setFeedback('Verified Composition applied to this Workspace.');
     await workspace.onApplied?.(result);
+  }
+
+  async function publishSchemaVersion() {
+    if (!workspace || !previewState.result?.report.valid || dirty || compositionRevision < 1)
+      return;
+    setPublishPending(true);
+    setFeedback(undefined);
+    try {
+      const published = await publish(workspace.projectId, workspace.workspaceId, {
+        compositionRevision,
+        compositionHash: previewState.result.compositionHash,
+        canonicalName: publishCanonicalName.trim(),
+        version: publishVersion.trim(),
+        title: publishTitle.trim(),
+        ...(publishDescription.trim() ? { description: publishDescription.trim() } : {}),
+        ...(releaseNotes.trim() ? { releaseNotes: releaseNotes.trim() } : {}),
+        tags: publishTags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      });
+      setPublishOpen(false);
+      setFeedback(`Published ${published.title} ${published.version} as an immutable Schema.`);
+      await workspace.onPublished?.(published);
+    } catch (cause) {
+      setFeedback(
+        cause instanceof Error ? cause.message : 'Schema version could not be published.'
+      );
+    } finally {
+      setPublishPending(false);
+    }
   }
 
   if (!selectedArtifact) {
@@ -596,9 +651,123 @@ export function SchemaModuleRegistry({
               Apply verified composition
             </Button>
           ) : null}
+          {workspaceRevision !== undefined ? (
+            <Button
+              className="w-full"
+              disabled={
+                dirty ||
+                compositionRevision < 1 ||
+                !previewState.result?.report.valid ||
+                publishPending
+              }
+              onClick={() => setPublishOpen(true)}
+              type="button"
+              variant="commit"
+            >
+              <PackageCheck className="size-4" /> Publish Schema version
+            </Button>
+          ) : null}
         </div>
       </aside>
+      <Dialog onOpenChange={setPublishOpen} open={publishOpen}>
+        <DialogContent className="sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle>Publish Schema version</DialogTitle>
+            <DialogDescription>
+              Freeze Composition r{compositionRevision} and its exact Module versions as an
+              immutable Schema. This does not create a Module or Commit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <PublishField id="schema-version-title" label="Schema title">
+              <Input
+                id="schema-version-title"
+                onChange={(event) => setPublishTitle(event.target.value)}
+                value={publishTitle}
+              />
+            </PublishField>
+            <div className="grid gap-4 min-[481px]:grid-cols-[minmax(0,1fr)_120px]">
+              <PublishField id="schema-canonical-name" label="Canonical name">
+                <Input
+                  className="font-mono text-xs"
+                  id="schema-canonical-name"
+                  onChange={(event) => setPublishCanonicalName(event.target.value)}
+                  value={publishCanonicalName}
+                />
+              </PublishField>
+              <PublishField id="schema-semantic-version" label="Version">
+                <Input
+                  className="font-mono text-xs"
+                  id="schema-semantic-version"
+                  onChange={(event) => setPublishVersion(event.target.value)}
+                  value={publishVersion}
+                />
+              </PublishField>
+            </div>
+            <PublishField id="schema-version-tags" label="Tags (comma separated)">
+              <Input
+                id="schema-version-tags"
+                onChange={(event) => setPublishTags(event.target.value)}
+                placeholder="product, checkout, team"
+                value={publishTags}
+              />
+            </PublishField>
+            <PublishField id="schema-version-description" label="Description (optional)">
+              <Textarea
+                id="schema-version-description"
+                onChange={(event) => setPublishDescription(event.target.value)}
+                rows={2}
+                value={publishDescription}
+              />
+            </PublishField>
+            <PublishField id="schema-release-notes" label="Release notes (optional)">
+              <Textarea
+                id="schema-release-notes"
+                onChange={(event) => setReleaseNotes(event.target.value)}
+                rows={3}
+                value={releaseNotes}
+              />
+            </PublishField>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPublishOpen(false)} type="button" variant="canvas-outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                publishPending ||
+                !publishTitle.trim() ||
+                !publishCanonicalName.trim() ||
+                !publishVersion.trim()
+              }
+              onClick={publishSchemaVersion}
+              type="button"
+              variant="commit"
+            >
+              <PackageCheck className="size-4" />
+              {publishPending ? 'Publishing…' : `Publish ${publishVersion || 'version'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
+  );
+}
+
+function PublishField({
+  children,
+  id,
+  label,
+}: {
+  children: React.ReactNode;
+  id: string;
+  label: string;
+}) {
+  return (
+    <div className="grid gap-1.5 text-xs font-medium text-[var(--text-primary)]">
+      <label htmlFor={id}>{label}</label>
+      {children}
+    </div>
   );
 }
 

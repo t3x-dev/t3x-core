@@ -15,7 +15,7 @@ export interface UpsertYSchemaArtifactVersionInput {
   artifact_version_id: string;
   canonical_name: string;
   family: string;
-  kind: 'core' | 'module';
+  kind: 'core' | 'module' | 'schema';
   owner_project_id?: string;
   visibility: YSchemaArtifactVisibility;
   version: string;
@@ -49,7 +49,7 @@ export interface YSchemaArtifactVersionView {
 export interface ListYSchemaArtifactsOptions {
   project_id?: string;
   family?: string;
-  kind?: 'core' | 'module';
+  kind?: 'core' | 'module' | 'schema';
   visibility?: YSchemaArtifactVisibility;
   search?: string;
   cursor?: string;
@@ -65,7 +65,7 @@ export interface FindYSchemaArtifactVersionInput {
 export interface ListProjectYSchemaVersionHistoryOptions {
   project_id: string;
   family?: string;
-  kind?: 'core' | 'module';
+  kind?: 'core' | 'module' | 'schema';
 }
 
 export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifactVersionInput {

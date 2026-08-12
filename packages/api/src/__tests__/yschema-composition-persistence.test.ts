@@ -87,6 +87,24 @@ vi.mock('../lib/yschema-artifact-registry', async () => {
     resolveCompositionArtifacts: vi.fn(() =>
       Promise.resolve({ core: builtInPrdCoreArtifact, modules: builtInPrdModules })
     ),
+    resolveCompositionArtifactsV2: vi.fn(() =>
+      Promise.resolve([
+        {
+          apiVersion: 't3x.dev/yschema-module/v2',
+          canonicalName: 'team/problem',
+          version: '1.0.0',
+          title: 'Problem',
+          description: 'Problem contract',
+          status: 'active',
+          source: 'team',
+          tags: ['type:product'],
+          compatibility: { yschema: ['0.1'] },
+          provides: [],
+          imports: [],
+          contribution: { nodes: { problem: { slots: { statement: { type: 'string' } } } } },
+        },
+      ])
+    ),
   };
 });
 
@@ -110,6 +128,22 @@ function composition(revision = 0) {
         canonicalName: 't3x/prd-system-architecture',
         version: '1.0.0',
         order: 5,
+      },
+    ],
+  };
+}
+
+function openComposition(revision = 0) {
+  return {
+    apiVersion: 't3x.dev/yschema-composition/v2',
+    id: 'composition:workspace_modules',
+    revision,
+    status: 'draft',
+    modules: [
+      {
+        canonicalName: 'team/problem',
+        version: '1.0.0',
+        presentationOrder: 10,
       },
     ],
   };
@@ -220,6 +254,56 @@ describe('Workspace YSchema Composition persistence', () => {
         version: '1.0.0',
         status: 'active',
       })
+    );
+  });
+
+  it('publishes an open Composition as a Blueprint-backed Schema rather than a Module', async () => {
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: openComposition(), if_revision: 4 }),
+      }
+    );
+    const saved: any = await savedResponse.json();
+    const response = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/product-schema',
+          version: '1.0.0',
+          title: 'Product Schema',
+          tags: ['product', 'team'],
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data).toMatchObject({
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName: 'projects/proj_modules/product-schema',
+      version: '1.0.0',
+      tags: ['product', 'team'],
+      blueprint: {
+        compositionApiVersion: 't3x.dev/yschema-composition/v2',
+        modules: [
+          expect.objectContaining({
+            canonicalName: 'team/problem',
+            version: '1.0.0',
+            hash: expect.stringMatching(/^sha256:/),
+          }),
+        ],
+      },
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: 'schema', family: 'open' })
     );
   });
 

@@ -1029,10 +1029,14 @@ export interface AttachTransitionStatementResult {
 // ============================================
 
 export interface YSchemaArtifactManifest {
-  apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v1';
+  apiVersion:
+    | 't3x.dev/yschema-core/v1'
+    | 't3x.dev/yschema-module/v1'
+    | 't3x.dev/yschema-module/v2'
+    | 't3x.dev/yschema-blueprint/v1';
   canonicalName: string;
   version: string;
-  family: 'esphome-device' | 'prd' | 'prompt' | 'skill';
+  family?: 'esphome-device' | 'prd' | 'prompt' | 'skill' | 'open';
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';
@@ -1133,6 +1137,7 @@ export interface PublishWorkspaceYSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  tags?: string[];
 }
 
 export interface TransitionReviewPrecondition {

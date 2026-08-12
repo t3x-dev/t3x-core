@@ -89,7 +89,9 @@ export async function resolveCompositionArtifactsV2(
       })
     )
   );
-  return views.flatMap((view) => (view ? [artifactViewToOpenModule(view)] : []));
+  return views.flatMap((view) =>
+    view && view.kind !== 'schema' ? [artifactViewToOpenModule(view)] : []
+  );
 }
 
 export function artifactViewToOpenModule(
@@ -156,6 +158,7 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
   const module =
     manifest.apiVersion === 't3x.dev/yschema-module/v1' ||
     manifest.apiVersion === 't3x.dev/yschema-module/v2';
+  const schema = manifest.apiVersion === 't3x.dev/yschema-blueprint/v1' || view.kind === 'schema';
   const family = typeof manifest.family === 'string' ? manifest.family : 'general';
   const domain =
     typeof manifest.domain === 'string'
@@ -165,13 +168,13 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
     ? manifest.tags.filter((tag): tag is string => typeof tag === 'string')
     : [];
   const derivedTags = [
-    ...(module ? [] : ['role:core']),
+    ...(module || schema ? [] : ['role:core']),
     `type:${family}`,
     `domain:${domain}`,
     `version:${view.version}`,
     `source:${manifest.source === 'team' || manifest.source === 'community' ? manifest.source : 'official'}`,
     `status:${view.status}`,
-    module ? 'contribution:structure' : 'contribution:foundation',
+    schema ? 'artifact:schema' : module ? 'contribution:structure' : 'contribution:foundation',
   ];
   return {
     ...manifest,

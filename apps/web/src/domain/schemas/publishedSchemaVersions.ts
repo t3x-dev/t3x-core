@@ -14,21 +14,53 @@ export function mergePublishedSchemaVersions(
   projectId: string
 ): SchemaRegistryPreview {
   if (manifests.length === 0) return registry;
-  const published = manifests.map((manifest) => ({
-    family: manifest.family,
-    release: publishedManifestToRelease(manifest, projectId),
-  }));
+  const published = manifests
+    .filter((manifest) => manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1')
+    .map((manifest) => ({
+      family: manifest.family,
+      release: publishedManifestToRelease(manifest, projectId),
+    }));
+  const blueprints = manifests.filter(
+    (manifest) => manifest.apiVersion === 't3x.dev/yschema-blueprint/v1'
+  );
+  const blueprintFamilies = new Map<string, PublishedSchemaVersionManifest[]>();
+  for (const manifest of blueprints) {
+    blueprintFamilies.set(manifest.canonicalName, [
+      ...(blueprintFamilies.get(manifest.canonicalName) ?? []),
+      manifest,
+    ]);
+  }
   return {
     ...registry,
-    families: registry.families.map((family) => {
-      const familyPublished = published
-        .filter((item) => item.family === family.id)
-        .map((item) => item.release);
-      return familyPublished.length > 0
-        ? { ...family, releases: [...familyPublished, ...family.releases] }
-        : family;
-    }),
+    families: [
+      ...registry.families.map((family) => {
+        const familyPublished = published
+          .filter((item) => item.family === family.id)
+          .map((item) => item.release);
+        return familyPublished.length > 0
+          ? { ...family, releases: [...familyPublished, ...family.releases] }
+          : family;
+      }),
+      ...[...blueprintFamilies.entries()].map(([canonicalName, versions]) => {
+        const releases = versions.map((manifest) =>
+          publishedManifestToRelease(manifest, projectId)
+        );
+        const current = releases.find((release) => release.status === 'active') ?? releases[0];
+        return {
+          id: blueprintFamilyId(canonicalName),
+          name: versions[0]?.title ?? canonicalName,
+          canonicalName,
+          description: versions[0]?.description ?? 'Published open Module Schema.',
+          currentReleaseId: current?.id ?? '',
+          releases,
+        };
+      }),
+    ],
   };
+}
+
+export function blueprintFamilyId(canonicalName: string): string {
+  return `blueprint:${canonicalName}`;
 }
 
 export function publishedSchemaReleaseId(canonicalName: string, version: string): string {
@@ -78,11 +110,14 @@ export function publishedManifestToRelease(
 }
 
 function familyLabel(family: PublishedSchemaVersionManifest['family']): string {
+  if (!family || family === 'open') return 'open Module';
   if (family === 'esphome-device') return 'ESPHome device';
   return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
 }
 
 function compatibleSurfaces(family: PublishedSchemaVersionManifest['family']): string[] {
+  if (!family || family === 'open')
+    return ['YSchema validation', 'Composition replay', 'Workspace'];
   if (family === 'skill') return ['YSchema validation', 'SKILL.md adapter', 'Skill package'];
   if (family === 'prompt') return ['YSchema validation', 'Prompt compiler', 'Prompt text'];
   if (family === 'esphome-device') {

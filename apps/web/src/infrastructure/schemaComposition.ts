@@ -123,6 +123,7 @@ export async function publishWorkspaceYSchemaComposition(
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.tags?.length ? { tags: input.tags } : {}),
       }),
     }
   );

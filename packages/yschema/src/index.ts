@@ -40,6 +40,7 @@ export {
 export type {
   CompiledYSchemaCompositionV2,
   CompileYSchemaCompositionV2Input,
+  PublishedYSchemaBlueprintV1,
   YSchemaCapabilityBindingV2,
   YSchemaCompositionDraftV2,
   YSchemaCompositionIssueCodeV2,

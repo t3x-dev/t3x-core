@@ -89,4 +89,38 @@ describe('published Schema version projections', () => {
       version: promptManifest.version,
     });
   });
+
+  it('creates a separate Schema history for Blueprint versions', () => {
+    const registry = {
+      defaultFamilyId: 'prd',
+      families: [
+        {
+          id: 'prd',
+          name: 'PRD',
+          canonicalName: 't3x/prd',
+          description: 'PRD contracts',
+          currentReleaseId: 'official-current',
+          releases: [],
+        },
+      ],
+    };
+    const blueprint: PublishedSchemaVersionManifest = {
+      ...manifest,
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName: 'projects/proj_test/product-schema',
+      title: 'Product Schema',
+      status: 'active',
+      family: undefined,
+    };
+
+    const merged = mergePublishedSchemaVersions(registry, [blueprint], 'proj_test');
+
+    expect(merged.families).toHaveLength(2);
+    expect(merged.families[1]).toMatchObject({
+      id: 'blueprint:projects/proj_test/product-schema',
+      name: 'Product Schema',
+      canonicalName: 'projects/proj_test/product-schema',
+    });
+    expect(merged.families[1]?.releases[0]).toMatchObject({ version: '1.0.0' });
+  });
 });
