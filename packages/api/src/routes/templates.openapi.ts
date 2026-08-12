@@ -9,8 +9,9 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
+import { type ApiKey, getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
 import { createTemplate, deleteTemplate, findTemplateById, listTemplates } from '@t3x-dev/storage';
+import type { Context } from 'hono';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -90,6 +91,14 @@ const ListTemplatesQuery = z.object({
 export const templatesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+function requireHumanTemplateAdministrator(c: Context): Response | null {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Template administration requires a human principal');
+  }
+  return null;
+}
 
 const SUPPORTED_TEMPLATE_LEAF_TYPES = new Set<string>(LEAF_TYPES);
 
@@ -301,6 +310,9 @@ const createTemplateRoute = createRoute({
 });
 
 templatesRoutes.openapi(createTemplateRoute, async (c) => {
+  const administrationError = requireHumanTemplateAdministrator(c);
+  if (administrationError) return administrationError;
+
   const body = c.req.valid('json');
 
   // Validate template block syntax (unclosed/unmatched conditional blocks)
@@ -401,6 +413,9 @@ const deleteTemplateRoute = createRoute({
 });
 
 templatesRoutes.openapi(deleteTemplateRoute, async (c) => {
+  const administrationError = requireHumanTemplateAdministrator(c);
+  if (administrationError) return administrationError;
+
   const { id } = c.req.valid('param');
 
   try {

@@ -16,6 +16,7 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import {
+  type ApiKey,
   GENERATION_RUNTIME_PROVIDER_IDS,
   getModelsByProvider,
   normalizeLocalProviderId as normalizeSharedLocalProviderId,
@@ -31,7 +32,7 @@ import {
   upsertProviderCredential,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { zodErrorHook } from '../lib/errors';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   getProviderRegistry,
   refreshProviderRegistryConfig,
@@ -52,6 +53,14 @@ import {
 
 export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+providersRoutes.use('*', async (c, next) => {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Provider administration requires a human principal');
+  }
+  return next();
 });
 
 function normalizeLocalProviderId(id: string): LocalProviderId | null {

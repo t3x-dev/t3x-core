@@ -23,6 +23,22 @@ describe('Templates Routes', () => {
   const app = new Hono();
   app.route('/', templatesRoutes);
 
+  function machineApp() {
+    const machine = new Hono();
+    machine.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: 'ak_template_agent',
+        user_id: null,
+        project_id: 'proj_bound',
+        principal_kind: 'agent',
+      });
+      return next();
+    });
+    machine.route('/', templatesRoutes);
+    return machine;
+  }
+
   function makeCreateBody(overrides: Record<string, unknown> = {}) {
     return {
       title: 'My Custom Template',
@@ -166,6 +182,18 @@ describe('Templates Routes', () => {
       expect(data.updated_at).toBeTruthy();
     });
 
+    it('allows machine reads but rejects machine creation of global templates', async () => {
+      const machine = machineApp();
+      expect((await machine.request('/v1/templates')).status).toBe(200);
+
+      const create = await machine.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Machine Global Template' })),
+      });
+      expect(create.status).toBe(403);
+    });
+
     it('returns 400 for missing title', async () => {
       const res = await app.request('/v1/templates', {
         method: 'POST',
@@ -296,6 +324,22 @@ describe('Templates Routes', () => {
       // Verify it's gone
       const getRes = await app.request(`/v1/templates/${tmplId}`);
       expect(getRes.status).toBe(404);
+    });
+
+    it('rejects machine deletion of a global custom template', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Human Managed Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      const machine = machineApp();
+      expect(
+        (await machine.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
+      ).toBe(403);
+      expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
     });
 
     it('returns 403 for builtin template', async () => {
