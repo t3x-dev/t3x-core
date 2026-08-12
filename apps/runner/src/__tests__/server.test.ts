@@ -11,7 +11,7 @@ vi.mock('pino', () => {
 const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
 process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
 
-const { app } = await import('../server.js');
+const { app, startServer } = await import('../server.js');
 
 interface JsonResponse {
   status: number;
@@ -138,6 +138,29 @@ describe('runner server routes', () => {
       success: false,
       error: { code: 'UNAUTHORIZED' },
     });
+  });
+
+  it('rejects an unauthenticated non-loopback startup without the dangerous override', () => {
+    const originalToken = process.env.RUNNER_SERVICE_TOKEN;
+    const originalLegacyToken = process.env.RUNNER_SECRET;
+    const originalOverride = process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+    delete process.env.RUNNER_SERVICE_TOKEN;
+    delete process.env.RUNNER_SECRET;
+    delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+
+    try {
+      expect(() => startServer(8080, '0.0.0.0')).toThrow('RUNNER_SERVICE_TOKEN');
+    } finally {
+      if (originalToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+      else process.env.RUNNER_SERVICE_TOKEN = originalToken;
+      if (originalLegacyToken === undefined) delete process.env.RUNNER_SECRET;
+      else process.env.RUNNER_SECRET = originalLegacyToken;
+      if (originalOverride === undefined) {
+        delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+      } else {
+        process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK = originalOverride;
+      }
+    }
   });
 
   it('GET / returns service metadata with docs link and hides debug routes by default', async () => {

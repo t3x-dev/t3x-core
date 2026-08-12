@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -9,6 +10,7 @@ import {
   updateDeployAgentRunStatus,
 } from '../queries/deployAgents';
 import { insertProject } from '../queries/projects';
+import { deployAgents } from '../schema';
 import { createTestDB, testData } from './setup';
 
 describe('Deploy Agents Storage', () => {
@@ -67,6 +69,13 @@ describe('Deploy Agents Storage', () => {
       expect(agent.type).toBe('websocket');
       expect(agent.projectId).toBe(testProjectId);
       expect(JSON.parse(agent.authJson!)).toEqual({ type: 'bearer', token: 'secret123' });
+
+      const [persisted] = await db
+        .select({ authJson: deployAgents.authJson })
+        .from(deployAgents)
+        .where(eq(deployAgents.deployAgentId, agent.deployAgentId));
+      expect(persisted.authJson).toMatch(/^t3xenc:v1:/);
+      expect(persisted.authJson).not.toContain('secret123');
     });
 
     it('stores auth with custom header', async () => {
@@ -97,6 +106,29 @@ describe('Deploy Agents Storage', () => {
       const found = await findDeployAgentById(db, 'agent_find_1');
       expect(found).toBeDefined();
       expect(found!.name).toBe('Find Me');
+    });
+
+    it('lazily migrates legacy plaintext auth', async () => {
+      await insertDeployAgent(db, {
+        id: 'agent_legacy_auth',
+        name: 'Legacy Auth',
+        endpoint: 'http://localhost:8080',
+      });
+      const legacyAuth = JSON.stringify({ type: 'bearer', token: 'legacy-token' });
+      await db
+        .update(deployAgents)
+        .set({ authJson: legacyAuth })
+        .where(eq(deployAgents.deployAgentId, 'agent_legacy_auth'));
+
+      const found = await findDeployAgentById(db, 'agent_legacy_auth');
+      expect(found?.authJson).toBe(legacyAuth);
+
+      const [persisted] = await db
+        .select({ authJson: deployAgents.authJson })
+        .from(deployAgents)
+        .where(eq(deployAgents.deployAgentId, 'agent_legacy_auth'));
+      expect(persisted.authJson).toMatch(/^t3xenc:v1:/);
+      expect(persisted.authJson).not.toContain('legacy-token');
     });
 
     it('returns null for non-existent ID', async () => {

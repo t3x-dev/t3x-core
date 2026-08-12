@@ -1052,9 +1052,13 @@ export function startServer(
   host: string = resolveRunnerHost()
 ) {
   const numericPort = resolveRunnerPort(port);
+  const bindHost = resolveRunnerHost({ ...process.env, RUNNER_HOST: host });
 
-  return app.listen(numericPort, host, () => {
-    logger.info({ host, port: numericPort }, 'T3X Runner started');
+  return app.listen(numericPort, bindHost, () => {
+    logger.info(
+      { host: bindHost, port: numericPort, authentication: 'service-bearer' },
+      'T3X Runner started'
+    );
     logger.info('Endpoints:');
     logger.info('  GET  /health        - Health check');
     logger.info('  GET  /ready         - Readiness check');

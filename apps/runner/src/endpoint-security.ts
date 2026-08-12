@@ -4,6 +4,51 @@ import { Agent } from 'undici';
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
+// IANA IPv4 Special-Purpose Address Registry, plus multicast space.
+// https://www.iana.org/assignments/iana-ipv4-special-registry/
+const BLOCKED_IPV4_CIDRS: ReadonlyArray<readonly [network: string, prefixLength: number]> = [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.31.196.0', 24],
+  ['192.52.193.0', 24],
+  ['192.88.99.0', 24],
+  ['192.168.0.0', 16],
+  ['192.175.48.0', 24],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4],
+];
+
+// IANA IPv6 Special-Purpose Address Registry, plus multicast space.
+// Broader registry parents intentionally cover their registered child ranges.
+// https://www.iana.org/assignments/iana-ipv6-special-registry/
+const BLOCKED_IPV6_CIDRS: ReadonlyArray<readonly [network: string, prefixLength: number]> = [
+  ['::', 128],
+  ['::1', 128],
+  ['::ffff:0:0', 96],
+  ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['100:0:0:1::', 64],
+  ['2001::', 23],
+  ['2001:db8::', 32],
+  ['2002::', 16],
+  ['2620:4f:8000::', 48],
+  ['3fff::', 20],
+  ['5f00::', 16],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['ff00::', 8],
+];
+
 export const RUNNER_ENDPOINT_ALLOWLIST_ENV = 'RUNNER_ENDPOINT_ALLOWLIST';
 
 type LookupAddress = { address: string; family?: number };
@@ -36,26 +81,25 @@ function parseIPv4(address: string): number[] | undefined {
   return octets;
 }
 
-function isBlockedIPv4(address: string): boolean {
+function ipv4ToNumber(address: string): number | undefined {
   const octets = parseIPv4(address);
-  if (!octets) return true;
+  if (!octets) return undefined;
+  return octets.reduce((value, octet) => value * 256 + octet, 0) >>> 0;
+}
 
-  const [a, b, c] = octets;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 0 && c === 0) ||
-    (a === 192 && b === 0 && c === 2) ||
-    (a === 192 && b === 88 && c === 99) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    (a === 198 && b === 51 && c === 100) ||
-    (a === 203 && b === 0 && c === 113) ||
-    a >= 224
+function isInIPv4Cidr(address: string, network: string, prefixLength: number): boolean {
+  const value = ipv4ToNumber(address);
+  const networkValue = ipv4ToNumber(network);
+  if (value === undefined || networkValue === undefined) return false;
+
+  const mask = prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0;
+  return (value & mask) >>> 0 === (networkValue & mask) >>> 0;
+}
+
+function isBlockedIPv4(address: string): boolean {
+  if (!parseIPv4(address)) return true;
+  return BLOCKED_IPV4_CIDRS.some(([network, prefixLength]) =>
+    isInIPv4Cidr(address, network, prefixLength)
   );
 }
 
@@ -75,20 +119,67 @@ function mappedIPv4FromIPv6(address: string): string | undefined {
   return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
 }
 
+function parseIPv6Groups(address: string): number[] | undefined {
+  const normalized = address.toLowerCase().split('%')[0];
+  if (isIP(normalized) !== 6) return undefined;
+
+  const compressionParts = normalized.split('::');
+  if (compressionParts.length > 2) return undefined;
+
+  const parseSide = (side: string): number[] | undefined => {
+    if (!side) return [];
+    const groups: number[] = [];
+    for (const part of side.split(':')) {
+      if (part.includes('.')) {
+        const octets = parseIPv4(part);
+        if (!octets) return undefined;
+        groups.push((octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]);
+        continue;
+      }
+      if (!/^[0-9a-f]{1,4}$/.test(part)) return undefined;
+      groups.push(Number.parseInt(part, 16));
+    }
+    return groups;
+  };
+
+  const head = parseSide(compressionParts[0]);
+  const tail = parseSide(compressionParts[1] ?? '');
+  if (!head || !tail) return undefined;
+
+  if (compressionParts.length === 1) return head.length === 8 ? head : undefined;
+  const omittedGroups = 8 - head.length - tail.length;
+  if (omittedGroups < 1) return undefined;
+  return [...head, ...Array.from({ length: omittedGroups }, () => 0), ...tail];
+}
+
+function ipv6ToBigInt(address: string): bigint | undefined {
+  const groups = parseIPv6Groups(address);
+  if (!groups) return undefined;
+  return groups.reduce((value, group) => (value << 16n) | BigInt(group), 0n);
+}
+
+function isInIPv6Cidr(address: string, network: string, prefixLength: number): boolean {
+  const value = ipv6ToBigInt(address);
+  const networkValue = ipv6ToBigInt(network);
+  if (value === undefined || networkValue === undefined) return false;
+
+  const shift = BigInt(128 - prefixLength);
+  return value >> shift === networkValue >> shift;
+}
+
 function isBlockedIPv6(address: string): boolean {
   const normalized = address.toLowerCase().split('%')[0];
   const mappedIPv4 = mappedIPv4FromIPv6(normalized);
-  if (mappedIPv4) return isBlockedIPv4(mappedIPv4);
+  if (mappedIPv4) return true;
+  if (!parseIPv6Groups(normalized)) return true;
 
-  const firstGroup = Number.parseInt(normalized.split(':')[0] || '0', 16);
-  return (
-    normalized === '::' ||
-    normalized === '::1' ||
-    (firstGroup & 0xfe00) === 0xfc00 ||
-    (firstGroup & 0xffc0) === 0xfe80 ||
-    (firstGroup & 0xff00) === 0xff00 ||
-    normalized.startsWith('2001:db8:') ||
-    normalized === '2001:db8::'
+  // Fail closed for unallocated and non-global IPv6 space. Public Runner
+  // endpoints should resolve to global unicast (2000::/3) unless their exact
+  // origin is explicitly allowlisted.
+  if (!isInIPv6Cidr(normalized, '2000::', 3)) return true;
+
+  return BLOCKED_IPV6_CIDRS.some(([network, prefixLength]) =>
+    isInIPv6Cidr(normalized, network, prefixLength)
   );
 }
 

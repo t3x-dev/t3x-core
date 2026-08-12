@@ -10,8 +10,13 @@ test('PR validation enforces production type and dependency gates', () => {
   assert.match(workflow, /^permissions:\n {2}contents: read$/m);
   assert.match(workflow, /^ {6}- name: Typecheck production sources\n {8}run: pnpm typecheck$/m);
   assert.match(workflow, /^ {6}- name: Audit production dependencies\n {8}run: pnpm audit:prod$/m);
+  assert.match(
+    workflow,
+    /^ {6}- name: Check API route policy inventory\n {8}run: pnpm check:route-policy$/m
+  );
   assert.ok(workflow.indexOf('run: pnpm typecheck') < workflow.indexOf('run: pnpm build'));
   assert.ok(workflow.indexOf('run: pnpm audit:prod') < workflow.indexOf('run: pnpm build'));
+  assert.ok(workflow.indexOf('run: pnpm check:route-policy') < workflow.indexOf('run: pnpm build'));
 });
 
 test('production dependency audit blocks high-severity advisories', () => {

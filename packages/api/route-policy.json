@@ -1,0 +1,1916 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "source": "agent-drafts.openapi.ts",
+      "method": "POST",
+      "path": "/v1/agent/drafts",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "agent-drafts.openapi.ts",
+      "method": "GET",
+      "path": "/v1/agent/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "agent-drafts.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/agent/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "api-keys.openapi.ts",
+      "method": "GET",
+      "path": "/v1/api-keys",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "api-keys.openapi.ts",
+      "method": "POST",
+      "path": "/v1/api-keys",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "api-keys.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/api-keys/{id}",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "app.ts",
+      "method": "GET",
+      "path": "/docs",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "app.ts",
+      "method": "GET",
+      "path": "/openapi.json",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "auth-local.openapi.ts",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "auth-local.openapi.ts",
+      "method": "POST",
+      "path": "/v1/auth/register",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
+      "path": "/v1/auth/me",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/auth/me",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "autopilot.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{draftId}/auto-commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "autopilot.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/autopilot/adaptive",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "autopilot.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/autopilot/config",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "autopilot.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/autopilot/config",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "branches.openapi.ts",
+      "method": "GET",
+      "path": "/v1/branches",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "branches.openapi.ts",
+      "method": "POST",
+      "path": "/v1/branches",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "branches.openapi.ts",
+      "method": "GET",
+      "path": "/v1/branches/current",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "branches.openapi.ts",
+      "method": "POST",
+      "path": "/v1/branches/switch",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "chat.openapi.ts",
+      "method": "POST",
+      "path": "/v1/chat",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "chat.openapi.ts",
+      "method": "GET",
+      "path": "/v1/chat/providers",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "chat.openapi.ts",
+      "method": "POST",
+      "path": "/v1/chat/stream",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "check.openapi.ts",
+      "method": "POST",
+      "path": "/v1/check",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commit-from-draft.openapi.ts",
+      "method": "POST",
+      "path": "/v1/commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "POST",
+      "path": "/v1/commits",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/history",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/operations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commit-history",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitId}/transition-view",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "comparisons.openapi.ts",
+      "method": "GET",
+      "path": "/v1/comparisons",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "comparisons.openapi.ts",
+      "method": "POST",
+      "path": "/v1/comparisons",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "comparisons.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/comparisons/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "comparisons.openapi.ts",
+      "method": "GET",
+      "path": "/v1/comparisons/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "context.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/context",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/conversations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/:id/context-export",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/conversations/{conversation_id}/rename",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/conversations/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/conversations/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{id}/context",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/conversations/{id}/context",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{id}/context-manifest",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "conversations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{id}/memory",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "curate.openapi.ts",
+      "method": "POST",
+      "path": "/v1/curate/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "deploy-agents.openapi.ts",
+      "method": "GET",
+      "path": "/v1/deploy-agents",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "deploy-agents.openapi.ts",
+      "method": "POST",
+      "path": "/v1/deploy-agents",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "deploy-agents.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/deploy-agents/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "deploy-agents.openapi.ts",
+      "method": "GET",
+      "path": "/v1/deploy-agents/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "deploy-agents.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/deploy-agents/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "diff.openapi.ts",
+      "method": "POST",
+      "path": "/v1/diff/frame",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "diff.openapi.ts",
+      "method": "POST",
+      "path": "/v1/diff/three-way",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "diff.openapi.ts",
+      "method": "POST",
+      "path": "/v1/diff/two-way",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "docs-yops.openapi.ts",
+      "method": "GET",
+      "path": "/v1/docs/yops",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "drafts-crud.openapi.ts",
+      "method": "GET",
+      "path": "/v1/drafts",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-crud.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-crud.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-crud.openapi.ts",
+      "method": "GET",
+      "path": "/v1/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-crud.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-special.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/promote",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-special.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/review-action",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-workflows.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-workflows.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/fork",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-workflows.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-workflows.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/suggest",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "drafts-yops.openapi.ts",
+      "method": "POST",
+      "path": "/v1/drafts/{id}/apply-yops",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "export.openapi.ts",
+      "method": "GET",
+      "path": "/v1/export/cfpack",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "export.openapi.ts",
+      "method": "GET",
+      "path": "/v1/export/ledger",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "extract-incremental.openapi.ts",
+      "method": "POST",
+      "path": "/v1/extract/incremental",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "extract-yops.openapi.ts",
+      "method": "POST",
+      "path": "/v1/extract-yops",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "extract.openapi.ts",
+      "method": "POST",
+      "path": "/v1/extract",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "extraction-feedback.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/extraction-feedback/stats",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "gate.openapi.ts",
+      "method": "POST",
+      "path": "/v1/gate/check",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "health.openapi.ts",
+      "method": "GET",
+      "path": "/health",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "health.openapi.ts",
+      "method": "GET",
+      "path": "/ready",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/cfpack",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/document",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/document/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/document/stream",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/platform",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/platform/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/platform/stream",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/url",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/url/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "import.openapi.ts",
+      "method": "POST",
+      "path": "/v1/import/url/stream",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "ingest.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/ingest/webhook",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{projectId}/knowledge-graph",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/knowledge-graph/build",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/knowledge-graph/nodes",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}/neighbors",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "knowledge-graph.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/knowledge-graph/search",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/leaves",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/leaves/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "GET",
+      "path": "/v1/leaves/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/leaves/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-crud.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/leaves",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-generation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/commits/{hash}/leaves/batch",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-generation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/generate",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-generation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/validate",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-history.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/leaf-history/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-history.openapi.ts",
+      "method": "GET",
+      "path": "/v1/leaves/{id}/history",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-history.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/restore",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-ml.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/compare",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-ml.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/learn-from-edits",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-ml.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/reverse-learn",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "leaves-ml.openapi.ts",
+      "method": "POST",
+      "path": "/v1/leaves/{id}/suggest-constraints",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "llm.openapi.ts",
+      "method": "GET",
+      "path": "/v1/llm/models",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "local-config.openapi.ts",
+      "method": "GET",
+      "path": "/v1/local-config",
+      "policy": "local-only",
+      "rationale": "Mounted only for the standalone machine-local runtime."
+    },
+    {
+      "source": "local-config.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/local-config",
+      "policy": "local-only",
+      "rationale": "Mounted only for the standalone machine-local runtime."
+    },
+    {
+      "source": "local-config.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/local-config/api-key",
+      "policy": "local-only",
+      "rationale": "Mounted only for the standalone machine-local runtime."
+    },
+    {
+      "source": "local-config.openapi.ts",
+      "method": "POST",
+      "path": "/v1/local-config/check",
+      "policy": "local-only",
+      "rationale": "Mounted only for the standalone machine-local runtime."
+    },
+    {
+      "source": "materials.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/materials",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "materials.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{projectId}/materials/{materialId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "materials.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/materials/{materialId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "materials.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/materials/document",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/drafts",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/merge/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "GET",
+      "path": "/v1/merge/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/merge/drafts/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "GET",
+      "path": "/v1/merge/drafts/{id}/checks",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/drafts/{id}/commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/drafts/{id}/suggest-frame/{frameId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/drafts/{id}/suggest/{pairIndex}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/execute",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "merge.openapi.ts",
+      "method": "POST",
+      "path": "/v1/merge/prepare",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "notifications.openapi.ts",
+      "method": "GET",
+      "path": "/v1/notifications",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "notifications.openapi.ts",
+      "method": "POST",
+      "path": "/v1/notifications/{id}/read",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "notifications.openapi.ts",
+      "method": "POST",
+      "path": "/v1/notifications/read-all",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "pins.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/pins/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pins.openapi.ts",
+      "method": "GET",
+      "path": "/v1/pins/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pins.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/pins/{id}/assertions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pins.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pins",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pins.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/pins",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/business-rules",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{id}/business-rules",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{id}/restore",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/verify",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/claim-unowned",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/demo-workspace",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "projects.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/unowned",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "prompt-compile.openapi.ts",
+      "method": "POST",
+      "path": "/v1/prompts/compile-preview",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "GET",
+      "path": "/v1/providers",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "POST",
+      "path": "/v1/providers/{id}/test",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "GET",
+      "path": "/v1/providers/config",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/providers/config",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/providers/local/{id}",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "GET",
+      "path": "/v1/providers/local/{id}",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/providers/local/{id}",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "GET",
+      "path": "/v1/providers/roles",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/providers/roles",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pull-requests",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/pull-requests",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}/checks",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}/checks/rerun",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}/close",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}/merge",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pull-requests/compare",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "recipes.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/recipes",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "recipes.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/recipes",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "recipes.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{projectId}/recipes/{recipeId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "recipes.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/projects/{projectId}/recipes/{recipeId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "relations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/relations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/agents",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "GET",
+      "path": "/runner/agents/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/eval",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/eval/validate",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/run",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "GET",
+      "path": "/runner/run/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/run/{id}/event",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "GET",
+      "path": "/runner/runs",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runner.openapi.ts",
+      "method": "POST",
+      "path": "/runner/webhook/run",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "GET",
+      "path": "/v1/runs",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "POST",
+      "path": "/v1/runs",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/runs/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "GET",
+      "path": "/v1/runs/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/runs/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "GET",
+      "path": "/v1/runs/by-runner-id/{runnerRunId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "POST",
+      "path": "/v1/runs/compare",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "GET",
+      "path": "/v1/runs/configurations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "GET",
+      "path": "/v1/runs/filters",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "runs.openapi.ts",
+      "method": "POST",
+      "path": "/v1/runs/ingest",
+      "policy": "runner-service",
+      "rationale": "Internal Runner service credential boundary."
+    },
+    {
+      "source": "search.openapi.ts",
+      "method": "POST",
+      "path": "/v1/search",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "share.openapi.ts",
+      "method": "POST",
+      "path": "/v1/share",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "share.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/share/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "share.openapi.ts",
+      "method": "GET",
+      "path": "/v1/share/{token}",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "share.openapi.ts",
+      "method": "GET",
+      "path": "/v1/share/entity/{entityType}/{entityId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "skill-artifacts.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitHash}/artifacts/skill",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "source-evidence.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "source-text-revisions.openapi.ts",
+      "method": "GET",
+      "path": "/v1/source-text-revisions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "source-text-revisions.openapi.ts",
+      "method": "POST",
+      "path": "/v1/source-text-revisions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "source-text-revisions.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/source-text-revisions/{revisionId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "status.openapi.ts",
+      "method": "GET",
+      "path": "/v1/status",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "templates.openapi.ts",
+      "method": "GET",
+      "path": "/v1/templates",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "templates.openapi.ts",
+      "method": "POST",
+      "path": "/v1/templates",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "templates.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/templates/{id}",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "templates.openapi.ts",
+      "method": "GET",
+      "path": "/v1/templates/{id}",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "templates.openapi.ts",
+      "method": "GET",
+      "path": "/v1/templates/{id}/audit",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "topics.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{id}/topics",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "topics.openapi.ts",
+      "method": "POST",
+      "path": "/v1/conversations/{id}/topics",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "topics.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/topics/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "topics.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/topics/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/transitions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/transitions/{transitionId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/transitions/{transitionId}/commits",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/transitions/{transitionId}/decisions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/transitions/{transitionId}/statements",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/transitions/{transitionId}/verify",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-policy-bindings.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{projectId}/transition-policy-binding",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-policy-bindings.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/transition-policy-binding",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-policy-bindings.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/transition-policy-binding",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "turns.openapi.ts",
+      "method": "GET",
+      "path": "/v1/turns",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "turns.openapi.ts",
+      "method": "POST",
+      "path": "/v1/turns",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "turns.openapi.ts",
+      "method": "GET",
+      "path": "/v1/turns/{hash}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "turns.openapi.ts",
+      "method": "GET",
+      "path": "/v1/turns/{hash}/chain",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "turns.openapi.ts",
+      "method": "GET",
+      "path": "/v1/turns/{hash}/context",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "usage.openapi.ts",
+      "method": "GET",
+      "path": "/v1/usage",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "usage.openapi.ts",
+      "method": "POST",
+      "path": "/v1/usage",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/webhooks",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "POST",
+      "path": "/v1/webhooks",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/webhooks/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/webhooks/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/webhooks/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "webhooks.openapi.ts",
+      "method": "POST",
+      "path": "/v1/webhooks/{id}/test",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-extraction-proposals.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extraction-proposals",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-extraction-proposals.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extraction-transition",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-source-transition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/decide",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-source-transition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/decide",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-source-transition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/revert/review",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-source-transition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/review",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-validation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/validation-runs",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-validation.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/validation-runs/latest",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspace-validation.openapi.ts",
+      "method": "GET",
+      "path": "/v1/workspace-validation-runs/{runId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extract-candidate",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/yops-draft",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "ws.ts",
+      "method": "GET",
+      "path": "/ws",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "yops-log.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{conversationId}/draft",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yops-log.openapi.ts",
+      "method": "GET",
+      "path": "/v1/conversations/{conversationId}/yops",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yops-log.openapi.ts",
+      "method": "POST",
+      "path": "/v1/conversations/{conversationId}/yops",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yops-log.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/conversations/{conversationId}/yops/{yopsId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yops-validate.openapi.ts",
+      "method": "POST",
+      "path": "/v1/yops/validate",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/apply",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/publish",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/yschema/artifacts",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/yschema/compositions/preview",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/yschema/versions",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema/artifacts",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "POST",
+      "path": "/v1/yschema/compositions/preview",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-prd-smoke.openapi.ts",
+      "method": "GET",
+      "path": "/v1/dev/yschema/prd-smoke",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-prd-smoke.openapi.ts",
+      "method": "POST",
+      "path": "/v1/dev/yschema/prd-smoke/diff",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-prd-smoke.openapi.ts",
+      "method": "POST",
+      "path": "/v1/dev/yschema/prd-smoke/validate",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "yschema-validation.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/yschema-validation/latest",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-validation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/yschema-validation/runs",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "yschema-validation.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema-validation-runs/{runId}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    }
+  ]
+}

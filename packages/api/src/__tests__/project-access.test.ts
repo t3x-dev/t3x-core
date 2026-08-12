@@ -21,6 +21,7 @@ type ApiResponse = Record<string, unknown> & {
 };
 
 let mockDB: AnyDB;
+const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -42,6 +43,8 @@ function createAppWithUser(userId?: string) {
       (c as any).set('apiKey', {
         id: 'ak_test',
         user_id: userId,
+        project_id: null,
+        principal_kind: 'human',
         key_prefix: 'test',
         name: 'test',
       });
@@ -70,6 +73,25 @@ function createAppWithProjectAgent(projectId: string | null) {
   });
   app.route('/', projectRoutes);
   app.route('/', importRoutes);
+  return app;
+}
+
+function createAppWithProjectUser(userId: string, projectId: string) {
+  const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock access
+    (c as any).set('apiKey', {
+      id: 'ak_project_user',
+      user_id: userId,
+      project_id: projectId,
+      principal_kind: 'human',
+      transition_scopes: [],
+      key_prefix: 't3xk_hum',
+      name: 'Project-bound human',
+    });
+    return next();
+  });
+  app.route('/', projectRoutes);
   return app;
 }
 
@@ -103,10 +125,13 @@ describe('Project Access Control (#508)', () => {
   });
 
   afterAll(async () => {
+    if (originalOperatorUserIds === undefined) delete process.env.T3X_OPERATOR_USER_IDS;
+    else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
     await cleanup();
   });
 
   beforeEach(async () => {
+    delete process.env.T3X_OPERATOR_USER_IDS;
     const existingProjects = await findProjects(mockDB, {});
     for (const project of existingProjects) {
       await deleteProject(mockDB, project.projectId);
@@ -116,8 +141,8 @@ describe('Project Access Control (#508)', () => {
   // ─── findProjects owner_id filtering ─────────────────────────────
 
   describe('LIST /v1/projects — owner filtering', () => {
-    it('authenticated user sees own projects + public (owner_id=NULL)', async () => {
-      // Create: 1 owned by userA, 1 owned by userB, 1 public (no owner)
+    it('authenticated user sees only their owned projects', async () => {
+      // Create: 1 owned by userA, 1 owned by userB, 1 legacy unowned project.
       await insertProject(mockDB, { name: 'User A Project', ownerId: 'user_aaa' });
       await insertProject(mockDB, { name: 'User B Project', ownerId: 'user_bbb' });
       await insertProject(mockDB, { name: 'Public Project' });
@@ -132,7 +157,7 @@ describe('Project Access Control (#508)', () => {
       const projects = (data.data as Record<string, unknown>).projects as Array<{ name: string }>;
       const names = projects.map((p) => p.name);
       expect(names).toContain('User A Project');
-      expect(names).toContain('Public Project');
+      expect(names).not.toContain('Public Project');
       expect(names).not.toContain('User B Project');
     });
 
@@ -269,12 +294,12 @@ describe('Project Access Control (#508)', () => {
       expect(data.error?.code).toBe('FORBIDDEN');
     });
 
-    it('public project (owner_id=NULL) accessible by anyone', async () => {
-      const project = await insertProject(mockDB, { name: 'Public' });
+    it('legacy unowned project is inaccessible until claimed', async () => {
+      const project = await insertProject(mockDB, { name: 'Legacy unowned' });
       const app = createAppWithUser('user_bbb');
 
       const res = await app.request(`/v1/projects/${project.projectId}`);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
     });
 
     it('AUTH_DISABLED can access any project', async () => {
@@ -294,10 +319,77 @@ describe('Project Access Control (#508)', () => {
       expect((await app.request(`/v1/projects/${other.projectId}`)).status).toBe(403);
     });
 
+    it('global machine credentials cannot access any project', async () => {
+      const project = await insertProject(mockDB, { name: 'No global machine access' });
+      const app = createAppWithProjectAgent(null);
+
+      expect((await app.request(`/v1/projects/${project.projectId}`)).status).toBe(403);
+    });
+
+    it('project-bound human credentials can access only their exact project', async () => {
+      const bound = await insertProject(mockDB, { name: 'Bound legacy project' });
+      const other = await insertProject(mockDB, { name: 'Other legacy project' });
+      const app = createAppWithProjectUser('user_reviewer', bound.projectId);
+
+      expect((await app.request(`/v1/projects/${bound.projectId}`)).status).toBe(200);
+      expect((await app.request(`/v1/projects/${other.projectId}`)).status).toBe(403);
+    });
+
     it('non-existent project returns 404', async () => {
       const app = createAppWithUser('user_aaa');
       const res = await app.request('/v1/projects/proj_nonexistent');
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('legacy unowned project recovery', () => {
+    it('lets an explicitly configured human operator list and atomically claim projects', async () => {
+      process.env.T3X_OPERATOR_USER_IDS = 'user_operator';
+      const legacy = await insertProject(mockDB, { name: 'Legacy unowned' });
+      const alreadyOwned = await insertProject(mockDB, {
+        name: 'Already owned',
+        ownerId: 'user_other',
+      });
+      const app = createAppWithUser('user_operator');
+
+      const listRes = await app.request('/v1/projects/unowned');
+      expect(listRes.status).toBe(200);
+      const listed: ApiResponse = await listRes.json();
+      const projects = (listed.data as { projects: Array<{ project_id: string }> }).projects;
+      expect(projects.map((project) => project.project_id)).toEqual([legacy.projectId]);
+
+      const claimRes = await app.request('/v1/projects/claim-unowned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_ids: [legacy.projectId, alreadyOwned.projectId] }),
+      });
+      expect(claimRes.status).toBe(200);
+      const claimed: ApiResponse = await claimRes.json();
+      expect(
+        (claimed.data as { projects: Array<{ project_id: string }> }).projects.map(
+          (project) => project.project_id
+        )
+      ).toEqual([legacy.projectId]);
+      expect((await findProjectById(mockDB, legacy.projectId))?.ownerId).toBe('user_operator');
+      expect((await findProjectById(mockDB, alreadyOwned.projectId))?.ownerId).toBe('user_other');
+      expect((await app.request(`/v1/projects/${legacy.projectId}`)).status).toBe(200);
+    });
+
+    it('rejects ordinary authenticated users', async () => {
+      const legacy = await insertProject(mockDB, { name: 'Legacy unowned' });
+      const app = createAppWithUser('user_member');
+
+      expect((await app.request('/v1/projects/unowned')).status).toBe(403);
+      expect(
+        (
+          await app.request('/v1/projects/claim-unowned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_ids: [legacy.projectId] }),
+          })
+        ).status
+      ).toBe(403);
+      expect((await findProjectById(mockDB, legacy.projectId))?.ownerId).toBeNull();
     });
   });
 

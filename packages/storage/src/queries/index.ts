@@ -272,11 +272,13 @@ export {
 // Projects
 export {
   type CreateProjectInput,
+  claimUnownedProjects,
   deleteProject,
   findProjectById,
   findProjectByIdIncludingDeleted,
   findProjects,
   findProjectWithStats,
+  findUnownedProjects,
   insertProject,
   type ListProjectsOptions,
   type ProjectStats,

@@ -5,7 +5,7 @@
  *   t3x compose preview <tree.yaml> [-o out]    — emit preview compose, optionally verify
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { homedir } from 'node:os';
 import * as path from 'node:path';
@@ -20,6 +20,13 @@ function previewDir(): string {
   return dir;
 }
 
+export function verifyDockerCompose(file: string): void {
+  execFileSync('docker', ['compose', '-f', file, 'config'], {
+    shell: false,
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+}
+
 export function registerComposeCommands(program: Command): void {
   const compose = program.command('compose').description('Docker Compose from a YAML tree');
 
@@ -32,9 +39,7 @@ export function registerComposeCommands(program: Command): void {
         process.exit(2);
       }
       try {
-        execSync(`docker compose -f ${JSON.stringify(file)} config`, {
-          stdio: ['ignore', 'ignore', 'pipe'],
-        });
+        verifyDockerCompose(file);
         success(`OK: ${file} is valid per docker compose config`);
       } catch (e) {
         const stderr = (e as { stderr?: Buffer }).stderr?.toString() ?? String(e);
@@ -67,9 +72,7 @@ export function registerComposeCommands(program: Command): void {
 
       if (opts.verify !== false) {
         try {
-          execSync(`docker compose -f ${JSON.stringify(outPath)} config`, {
-            stdio: ['ignore', 'ignore', 'pipe'],
-          });
+          verifyDockerCompose(outPath);
           success('docker compose config: OK');
         } catch (e) {
           const stderr = (e as { stderr?: Buffer }).stderr?.toString() ?? String(e);
