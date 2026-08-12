@@ -531,6 +531,17 @@ export const templates = pgTable(
     >(),
     tags: jsonb('tags').$type<string[]>().notNull().default([]),
     isBuiltin: boolean('is_builtin').notNull().default(false),
+    /** Human principal that created the template; null for builtin/legacy rows. */
+    ownerId: text('owner_id'),
+    /** Immutable origin facts captured when the template was created or migrated. */
+    provenance: jsonb('provenance')
+      .$type<{
+        source: 'builtin' | 'human' | 'local' | 'legacy';
+        actor_kind: 'human' | 'system' | 'local';
+        actor_id: string;
+      }>()
+      .notNull()
+      .default({ source: 'legacy', actor_kind: 'system', actor_id: 'schema-migration' }),
     /** Default constraints applied when using this template */
     defaultConstraints: jsonb('default_constraints')
       .$type<
@@ -548,6 +559,29 @@ export const templates = pgTable(
   (table) => [
     index('idx_templates_category').on(table.category),
     index('idx_templates_leaf_type').on(table.leafType),
+  ]
+);
+
+/** Append-only template mutation ledger retained even after template deletion. */
+export const templateAuditLog = pgTable(
+  'template_audit_log',
+  {
+    auditId: text('audit_id').primaryKey(),
+    templateId: text('template_id').notNull(),
+    action: text('action').notNull(),
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    ownerId: text('owner_id'),
+    provenance: jsonb('provenance').notNull().$type<Record<string, unknown>>(),
+    snapshot: jsonb('snapshot').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_template_audit_template').on(table.templateId, table.createdAt),
+    check(
+      'template_audit_action_valid',
+      sql`${table.action} IN ('create', 'delete', 'migrate', 'seed')`
+    ),
   ]
 );
 
@@ -859,6 +893,7 @@ export type NewValidationFindingRecord = typeof validationFindings.$inferInsert;
 
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
+export type TemplateAuditRecord = typeof templateAuditLog.$inferSelect;
 
 export type GlobalSetting = typeof globalSettings.$inferSelect;
 export type NewGlobalSetting = typeof globalSettings.$inferInsert;

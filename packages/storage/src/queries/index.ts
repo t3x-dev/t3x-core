@@ -417,7 +417,10 @@ export {
   deleteTemplate,
   findTemplateById,
   type ListTemplatesOptions,
+  listTemplateAudit,
   listTemplates,
+  type TemplateAuditActor,
+  type TemplateProvenance,
 } from './templates';
 // Token Usage (LLM token metering)
 export {
