@@ -77,7 +77,7 @@ interface PrdSchemaNavigationItem {
 }
 
 interface PrdSchemaNavigation {
-  core: PrdSchemaNavigationItem;
+  core?: PrdSchemaNavigationItem;
   modules: PrdSchemaNavigationItem[];
   source: PrdSchemaCompositionSource;
 }
@@ -1154,24 +1154,28 @@ function PrdOutline({
 
           {activeView === 'modules' && schemaNavigation ? (
             <nav aria-label="PRD Module navigation" className="mt-4">
-              <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-                Core
-              </h2>
-              <div className="mt-1.5">
-                <SchemaNavigationRow
-                  index={0}
-                  item={schemaNavigation.core}
-                  onSelect={onSelect}
-                  selected={selectedNodeId === schemaNavigation.core.nodeId}
-                />
-              </div>
+              {schemaNavigation.core ? (
+                <>
+                  <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                    Core tagged Module
+                  </h2>
+                  <div className="mt-1.5">
+                    <SchemaNavigationRow
+                      index={0}
+                      item={schemaNavigation.core}
+                      onSelect={onSelect}
+                      selected={selectedNodeId === schemaNavigation.core.nodeId}
+                    />
+                  </div>
+                </>
+              ) : null}
               <h2 className="mt-4 px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                 Modules used
               </h2>
               <div className="mt-1.5 grid gap-1">
                 {schemaNavigation.modules.map((module, index) => (
                   <SchemaNavigationRow
-                    index={index + 1}
+                    index={index + (schemaNavigation.core ? 1 : 0)}
                     item={module}
                     key={`${module.canonicalName}@${module.version}`}
                     onSelect={onSelect}
@@ -1781,30 +1785,53 @@ function buildPrdSchemaNavigation(
   artifacts: SchemaArtifactPreview[],
   registryHref: string | undefined
 ): PrdSchemaNavigation | null {
-  if (!composition || composition.family !== 'prd' || !registryHref) return null;
+  if (!composition || !registryHref) return null;
+  if (composition.apiVersion === 't3x.dev/yschema-composition/v1' && composition.family !== 'prd') {
+    return null;
+  }
 
   const artifactFor = (canonicalName: string, version: string) =>
     artifacts.find(
       (artifact) => artifact.canonicalName === canonicalName && artifact.version === version
     ) ?? artifacts.find((artifact) => artifact.canonicalName === canonicalName);
-  const coreArtifact = artifactFor(composition.core.canonicalName, composition.core.version);
-  const core: PrdSchemaNavigationItem = {
-    canonicalName: composition.core.canonicalName,
-    href: schemaArtifactHref(
-      registryHref,
-      composition.family,
-      composition.core.canonicalName,
-      composition.core.version
-    ),
-    icon: coreArtifact?.icon ?? 'file',
-    nodeId: 'document',
-    source,
-    title: coreArtifact?.title ?? humanizeArtifactName(composition.core.canonicalName),
-    version: composition.core.version,
-  };
+  const family =
+    composition.apiVersion === 't3x.dev/yschema-composition/v1' ? composition.family : undefined;
+  const coreReference =
+    composition.apiVersion === 't3x.dev/yschema-composition/v1'
+      ? composition.core
+      : composition.modules.find((reference) =>
+          artifactFor(reference.canonicalName, reference.version)?.tags?.includes('role:core')
+        );
+  const coreArtifact = coreReference
+    ? artifactFor(coreReference.canonicalName, coreReference.version)
+    : undefined;
+  const core: PrdSchemaNavigationItem | undefined = coreReference
+    ? {
+        canonicalName: coreReference.canonicalName,
+        href: schemaArtifactHref(
+          registryHref,
+          family,
+          coreReference.canonicalName,
+          coreReference.version
+        ),
+        icon: coreArtifact?.icon ?? 'file',
+        nodeId: 'document',
+        source,
+        title: coreArtifact?.title ?? humanizeArtifactName(coreReference.canonicalName),
+        version: coreReference.version,
+      }
+    : undefined;
   const claimedSectionIndexes = new Set<number>();
-  const modules = [...composition.modules]
-    .sort((left, right) => left.order - right.order)
+  const moduleReferences = composition.modules.filter(
+    (reference) => reference.canonicalName !== coreReference?.canonicalName
+  );
+  const modules = [...moduleReferences]
+    .sort((left, right) =>
+      composition.apiVersion === 't3x.dev/yschema-composition/v1'
+        ? (left as { order: number }).order - (right as { order: number }).order
+        : (left as { presentationOrder: number }).presentationOrder -
+          (right as { presentationOrder: number }).presentationOrder
+    )
     .flatMap((reference) => {
       const artifact = artifactFor(reference.canonicalName, reference.version);
       const findSectionIndex = (candidates: string[]) =>
@@ -1814,11 +1841,10 @@ function buildPrdSchemaNavigation(
       const artifactPathIndex = findSectionIndex(
         (artifact?.nodePaths ?? []).map(normalizeSchemaNodePath).filter(Boolean)
       );
-      const compositionSlotIndex = reference.slot
-        ? findSectionIndex([normalizeSchemaNodePath(reference.slot)])
-        : -1;
+      const slot = 'slot' in reference ? reference.slot : undefined;
+      const compositionSlotIndex = slot ? findSectionIndex([normalizeSchemaNodePath(slot)]) : -1;
       const nameFallbackIndex = findSectionIndex([
-        canonicalNameToNodeKey(reference.canonicalName, composition.family),
+        canonicalNameToNodeKey(reference.canonicalName, family),
       ]);
       const sectionIndex =
         artifactPathIndex >= 0
@@ -1834,7 +1860,7 @@ function buildPrdSchemaNavigation(
           canonicalName: reference.canonicalName,
           href: schemaArtifactHref(
             registryHref,
-            composition.family,
+            family,
             reference.canonicalName,
             reference.version
           ),
@@ -1847,7 +1873,7 @@ function buildPrdSchemaNavigation(
       ];
     });
 
-  return modules.length > 0 ? { core, modules, source } : null;
+  return core || modules.length > 0 ? { core, modules, source } : null;
 }
 
 function normalizeSchemaNodePath(value: string): string {
@@ -1861,15 +1887,12 @@ function normalizeSchemaNodePath(value: string): string {
   );
 }
 
-function canonicalNameToNodeKey(
-  canonicalName: string,
-  family: SchemaCompositionDraft['family']
-): string {
+function canonicalNameToNodeKey(canonicalName: string, family?: string): string {
   return (
     canonicalName
       .split('/')
       .at(-1)
-      ?.replace(new RegExp(`^${family}-`), '')
+      ?.replace(new RegExp(`^${family ? `${family}-` : ''}`), '')
       .replace(/-/g, '_') ?? ''
   );
 }
@@ -1881,16 +1904,15 @@ function humanizeArtifactName(canonicalName: string): string {
 
 function schemaArtifactHref(
   registryHref: string,
-  family: SchemaCompositionDraft['family'],
+  family: string | undefined,
   canonicalName: string,
   version: string
 ): string {
-  const query = new URLSearchParams({
-    family,
-    mode: 'compose',
-    module: canonicalName,
-    version,
-  });
+  const query = new URLSearchParams();
+  if (family) query.set('family', family);
+  query.set('mode', 'compose');
+  query.set('module', canonicalName);
+  query.set('version', version);
   return `${registryHref}?${query.toString()}#module-detail`;
 }
 

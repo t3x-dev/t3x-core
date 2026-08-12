@@ -16,6 +16,7 @@ describe('YSchema public export surface', () => {
       'builtInYSchemaModules',
       'canonicalizeCompositionValue',
       'compileYSchemaComposition',
+      'compileYSchemaCompositionV2',
       'defaultEsphomeDeviceCompositionModuleOrder',
       'defaultPrdCompositionModuleOrder',
       'defaultPromptCompositionModuleOrder',

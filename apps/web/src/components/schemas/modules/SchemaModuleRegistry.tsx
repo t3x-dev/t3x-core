@@ -1,25 +1,52 @@
 'use client';
 
-import { Check, Plus, Search, SlidersHorizontal, Star } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Filter,
+  Layers3,
+  Plus,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useSchemaCompositionDraft } from '@/hooks/schemas/useSchemaCompositionDraft';
+import { useSchemaCompositionPreview } from '@/hooks/schemas/useSchemaCompositionPreview';
 import type {
   SchemaArtifactPreview,
   SchemaCompositionDraft,
+  SchemaCompositionDraftV2,
   SchemaCompositionWorkspaceContext,
-  WorkspaceSchemaCompositionResult,
   YSchemaArtifactFamily,
 } from '@/types/schemaModules';
 import { SchemaArtifactDetail } from './SchemaArtifactDetail';
 import { SchemaArtifactIcon } from './SchemaArtifactIcon';
-import { SchemaCompositionWorkbench } from './SchemaCompositionWorkbench';
+
+type TagGroupId = 'main' | 'type' | 'domain' | 'version' | 'source' | 'other';
+
+interface TagSection {
+  id: string;
+  label: string;
+  tags: string[];
+}
+
+const TAG_GROUPS: Array<{ id: TagGroupId; label: string; prefixes: string[] }> = [
+  { id: 'main', label: 'Main', prefixes: ['role', 'recommended', 'status'] },
+  { id: 'type', label: 'Type', prefixes: ['type', 'contribution'] },
+  { id: 'domain', label: 'Domain', prefixes: ['domain'] },
+  { id: 'version', label: 'Version', prefixes: ['version'] },
+  { id: 'source', label: 'Source', prefixes: ['source'] },
+  { id: 'other', label: 'Other', prefixes: ['runtime', 'protocol', 'maturity', 'tag'] },
+];
 
 export function SchemaModuleRegistry({
-  nextVersion,
-  family = 'prd',
   initialArtifactName,
   initialArtifactVersion,
   workspace,
@@ -34,149 +61,174 @@ export function SchemaModuleRegistry({
 }) {
   const registry = useSchemaArtifactRegistry(
     workspace?.projectId,
-    family,
+    undefined,
     registryArtifacts === undefined
   );
-  const artifacts = (registryArtifacts ?? registry.artifacts).filter(
-    (artifact) => artifact.family === family
+  const artifacts = useMemo(
+    () =>
+      (registryArtifacts ?? registry.artifacts)
+        .map(withEffectiveTags)
+        .sort(
+          (left, right) => left.sortOrder - right.sortOrder || left.title.localeCompare(right.title)
+        ),
+    [registry.artifacts, registryArtifacts]
   );
-  const activeComposition =
-    workspace?.composition?.family === family ? workspace.composition : undefined;
-  const cores = artifacts.filter((artifact) => artifact.kind === 'core');
-  const persistedCore = activeComposition
-    ? cores.find(
-        (artifact) =>
-          artifact.canonicalName === activeComposition.core.canonicalName &&
-          artifact.version === activeComposition.core.version
-      )
-    : undefined;
-  const core =
-    persistedCore ??
-    cores.find((artifact) => artifact.source === 'official' && artifact.status === 'active') ??
-    cores.find((artifact) => artifact.source === 'official') ??
-    cores[0];
-  const availableModules = artifacts
-    .filter((artifact) => artifact.kind === 'module')
-    .sort(
-      (left, right) =>
-        left.sortOrder - right.sortOrder || left.canonicalName.localeCompare(right.canonicalName)
-    );
-  const { publish, save } = useSchemaCompositionDraft();
-  const [query, setQuery] = useState('');
-  const [domain, setDomain] = useState('All');
+  const { apply, save } = useSchemaCompositionDraft();
+  const previewState = useSchemaCompositionPreview();
+  const [nameQuery, setNameQuery] = useState('');
+  const [activeTagGroup, setActiveTagGroup] = useState<TagGroupId>('main');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [selectedArtifactName, setSelectedArtifactName] = useState(initialArtifactName ?? '');
-  const selectedArtifact =
-    artifacts.find(
-      (artifact) =>
-        artifact.canonicalName === selectedArtifactName &&
-        (selectedArtifactName !== initialArtifactName ||
-          !initialArtifactVersion ||
-          artifact.version === initialArtifactVersion)
-    ) ??
-    artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ??
-    core;
   const [compositionModules, setCompositionModules] = useState<SchemaArtifactPreview[]>([]);
   const [compositionRevision, setCompositionRevision] = useState(
     workspace?.composition?.revision ?? 0
   );
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
   const [savedSignature, setSavedSignature] = useState<string>();
+  const [feedback, setFeedback] = useState<string>();
+
   const artifactSignature = artifacts
     .map((artifact) => `${artifact.canonicalName}@${artifact.version}`)
     .join('|');
-  const persistedCompositionSignature = activeComposition
-    ? compositionSignature(modulesFromComposition(activeComposition, availableModules))
+  const persistedSignature = workspace?.composition
+    ? compositionSignature(artifactsFromComposition(workspace.composition, artifacts))
     : undefined;
 
   useEffect(() => {
-    if (!core) return;
-    const persistedModules = modulesFromComposition(activeComposition, availableModules);
-    setCompositionModules(persistedModules);
+    const persisted = artifactsFromComposition(workspace?.composition, artifacts);
+    setCompositionModules(persisted);
     setCompositionRevision(workspace?.composition?.revision ?? 0);
     setWorkspaceRevision(workspace?.workspaceRevision);
-    setSavedSignature(persistedCompositionSignature);
+    setSavedSignature(persistedSignature);
     setSelectedArtifactName((current) =>
       artifacts.some((artifact) => artifact.canonicalName === current)
         ? current
-        : core.canonicalName
+        : (artifacts[0]?.canonicalName ?? '')
     );
-  }, [
-    artifactSignature,
-    family,
-    persistedCompositionSignature,
-    workspace?.composition?.revision,
-    workspace?.workspaceId,
-    workspace?.workspaceRevision,
-  ]);
+  }, [artifactSignature, persistedSignature, workspace?.workspaceId, workspace?.workspaceRevision]);
+
   useEffect(() => {
-    if (!initialArtifactName || selectedArtifact?.canonicalName !== initialArtifactName) return;
+    if (!initialArtifactName || selectedArtifactName !== initialArtifactName) return;
     const frame = window.requestAnimationFrame(() => {
-      const detail = document.getElementById('module-detail');
-      if (typeof detail?.scrollIntoView === 'function') {
-        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      document.getElementById('module-detail')?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'start',
+      });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [initialArtifactName, selectedArtifact?.canonicalName]);
-  const domains = ['All', ...new Set(availableModules.map((module) => module.domain))];
+  }, [initialArtifactName, selectedArtifactName]);
+
+  const selectedArtifact =
+    artifacts.find(
+      (artifact) =>
+        artifact.canonicalName === selectedArtifactName &&
+        (!initialArtifactVersion || artifact.version === initialArtifactVersion)
+    ) ??
+    artifacts.find((artifact) => artifact.canonicalName === selectedArtifactName) ??
+    artifacts[0];
+  const tagSections = useMemo(
+    () => buildTagSections(artifacts, activeTagGroup),
+    [artifacts, activeTagGroup]
+  );
   const visibleModules = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return availableModules.filter((module) => {
-      const matchesDomain = domain === 'All' || module.domain === domain;
-      const matchesQuery =
-        !normalizedQuery ||
-        `${module.title} ${module.description} ${module.canonicalName}`
-          .toLowerCase()
-          .includes(normalizedQuery);
-      return matchesDomain && matchesQuery;
+    const query = nameQuery.trim().toLowerCase();
+    const selectedBySection = groupSelectedTags(selectedTags);
+    return artifacts.filter((artifact) => {
+      const nameMatches =
+        !query ||
+        artifact.title.toLowerCase().includes(query) ||
+        artifact.canonicalName.toLowerCase().includes(query);
+      if (!nameMatches) return false;
+      const tags = new Set(artifact.tags ?? []);
+      return [...selectedBySection.values()].every((sectionTags) =>
+        sectionTags.some((tag) => tags.has(tag))
+      );
     });
-  }, [availableModules, domain, query]);
+  }, [artifacts, nameQuery, selectedTags]);
+  const draft = buildOpenComposition(
+    workspace?.workspaceId ?? 'preview',
+    compositionRevision,
+    compositionModules
+  );
+  const dirty = savedSignature !== compositionSignature(compositionModules);
+
+  function toggleTag(tag: string) {
+    setSelectedTags((current) => {
+      const next = new Set(current);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
 
   function toggleModule(module: SchemaArtifactPreview) {
-    const isSelected = compositionModules.some(
-      (item) => item.canonicalName === module.canonicalName
-    );
-    setCompositionModules(
-      isSelected
-        ? compositionModules.filter((item) => item.canonicalName !== module.canonicalName)
-        : [...compositionModules, module]
+    previewState.reset();
+    setFeedback(undefined);
+    setCompositionModules((current) =>
+      current.some((item) => item.canonicalName === module.canonicalName)
+        ? current.filter((item) => item.canonicalName !== module.canonicalName)
+        : [...current, module]
     );
   }
 
-  async function saveComposition(
-    composition: SchemaCompositionDraft
-  ): Promise<WorkspaceSchemaCompositionResult> {
-    if (!workspace || workspaceRevision === undefined) {
-      throw new Error('Select a persisted Workspace before saving this Composition draft.');
-    }
-    const saved = await save(
-      workspace.projectId,
-      workspace.workspaceId,
-      composition,
-      workspaceRevision
-    );
-    if (!saved.composition) {
-      throw new Error('The saved Workspace did not return a Composition draft.');
-    }
-    const normalizedModules = modulesFromComposition(saved.composition, availableModules);
-    setCompositionModules(normalizedModules);
+  function moveModule(index: number, direction: -1 | 1) {
+    previewState.reset();
+    setCompositionModules((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [
+        next[target] as SchemaArtifactPreview,
+        next[index] as SchemaArtifactPreview,
+      ];
+      return next;
+    });
+  }
+
+  async function compileComposition() {
+    const preview = await previewState.compile(draft, workspace?.projectId);
+    if (preview)
+      setFeedback(preview.report.valid ? 'Composition is valid.' : 'Review blocking issues.');
+    return preview;
+  }
+
+  async function saveComposition() {
+    if (!workspace || workspaceRevision === undefined) return;
+    const saved = await save(workspace.projectId, workspace.workspaceId, draft, workspaceRevision);
+    if (!saved.composition) throw new Error('The saved Workspace did not return a Composition.');
+    const normalized = artifactsFromComposition(saved.composition, artifacts);
+    setCompositionModules(normalized);
     setCompositionRevision(saved.composition.revision);
     setWorkspaceRevision(saved.workspaceRevision);
-    setSavedSignature(compositionSignature(normalizedModules));
+    setSavedSignature(compositionSignature(normalized));
+    if (saved.preview) previewState.accept(saved.preview);
+    setFeedback('Composition draft saved. No Commit was created.');
     await workspace.onSaved?.(saved);
-    return saved;
   }
 
-  async function publishComposition(input: Parameters<typeof publish>[2]) {
-    if (!workspace || compositionRevision < 1) {
-      throw new Error('Save this Composition to a persisted Workspace before publishing it.');
+  async function applyComposition() {
+    if (
+      !workspace ||
+      workspaceRevision === undefined ||
+      compositionRevision < 1 ||
+      !previewState.result?.report.valid
+    ) {
+      return;
     }
-    const published = await publish(workspace.projectId, workspace.workspaceId, input);
-    await workspace.onPublished?.(published);
-    return published;
+    const result = await apply(
+      workspace.projectId,
+      workspace.workspaceId,
+      workspaceRevision,
+      compositionRevision,
+      previewState.result.compositionHash
+    );
+    setWorkspaceRevision(result.workspaceRevision);
+    setFeedback('Verified Composition applied to this Workspace.');
+    await workspace.onApplied?.(result);
   }
 
-  if (!core || !selectedArtifact) {
+  if (!selectedArtifact) {
     return (
       <section
         aria-label="Schema Module Registry"
@@ -194,90 +246,158 @@ export function SchemaModuleRegistry({
 
   return (
     <section
-      className="mt-4 grid gap-4 min-[1181px]:grid-cols-[220px_minmax(0,1fr)_340px]"
       aria-label="Schema Module Registry"
+      className="mt-4 grid gap-4 min-[1181px]:grid-cols-[270px_minmax(0,1fr)_350px]"
     >
-      <aside className="self-start rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 shadow-sm min-[1181px]:sticky min-[1181px]:top-4">
-        <div className="flex items-center gap-2 px-1 py-2 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-tertiary)]">
-          <SlidersHorizontal className="size-3.5" /> Artifact type
+      <aside className="self-start overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm min-[1181px]:sticky min-[1181px]:top-4">
+        <div className="border-b border-[var(--stroke-divider)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[13px] font-semibold text-[var(--text-primary)]">Browse by tags</p>
+              <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">HF-style discovery</p>
+            </div>
+            {selectedTags.size > 0 ? (
+              <button
+                className="text-[11px] font-medium text-[var(--accent-commit)] hover:underline"
+                onClick={() => setSelectedTags(new Set())}
+                type="button"
+              >
+                Clear all
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Tag groups">
+            {TAG_GROUPS.map((group) => (
+              <button
+                aria-selected={activeTagGroup === group.id}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${activeTagGroup === group.id ? 'bg-[var(--text-primary)] text-[var(--surface-card)]' : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'}`}
+                key={group.id}
+                onClick={() => setActiveTagGroup(group.id)}
+                role="tab"
+                type="button"
+              >
+                {group.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <button
-          className={`mt-1 flex w-full items-center gap-2 rounded-[var(--radius-md)] border p-2.5 text-left transition-colors ${selectedArtifact.kind === 'core' ? 'border-[var(--accent-commit)] bg-[color-mix(in_srgb,var(--accent-commit)_8%,transparent)]' : 'border-[var(--stroke-divider)] hover:bg-[var(--hover-bg)]'}`}
-          onClick={() => setSelectedArtifactName(core.canonicalName)}
-          type="button"
-        >
-          <SchemaArtifactIcon artifact={core} />
-          <span className="min-w-0">
-            <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
-              {core.title}
-            </span>
-            <span className="block text-[10px] text-[var(--text-tertiary)]">Pinned foundation</span>
-          </span>
-        </button>
-        <p className="mt-5 px-1 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--text-tertiary)]">
-          Domains
-        </p>
-        <div className="mt-2 space-y-0.5">
-          {domains.map((item) => (
-            <button
-              className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[12px] ${domain === item ? 'bg-[var(--active-bg)] font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'}`}
-              key={item}
-              onClick={() => setDomain(item)}
-              type="button"
-            >
-              <span>{item}</span>
-              <span className="text-[10px] text-[var(--text-tertiary)]">
-                {item === 'All'
-                  ? availableModules.length
-                  : availableModules.filter((module) => module.domain === item).length}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="mt-5 rounded-[var(--radius-md)] bg-[var(--surface-panel)] p-3 text-[11px] leading-5 text-[var(--text-secondary)]">
-          <strong className="text-[var(--text-primary)]">
-            {familyLabel(family)} Core + Modules
-          </strong>
-          <br />
-          {familyDescription(family)}
+        <div className="max-h-[calc(100vh-180px)] space-y-5 overflow-y-auto p-3">
+          {tagSections.map((section) => {
+            const expanded = expandedSections.has(section.id);
+            const visible = expanded ? section.tags : section.tags.slice(0, 8);
+            return (
+              <section key={section.id} aria-labelledby={`tag-section-${section.id}`}>
+                <div className="flex items-center justify-between">
+                  <h3
+                    id={`tag-section-${section.id}`}
+                    className="text-[11px] font-semibold text-[var(--text-secondary)]"
+                  >
+                    {section.label}
+                  </h3>
+                  <span className="text-[10px] text-[var(--text-tertiary)]">
+                    {section.tags.filter((tag) => selectedTags.has(tag)).length || ''}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {visible.map((tag) => (
+                    <button
+                      aria-pressed={selectedTags.has(tag)}
+                      className={`rounded-[9px] border px-2.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors ${selectedTags.has(tag) ? 'border-[var(--accent-commit)] bg-[color-mix(in_srgb,var(--accent-commit)_10%,var(--surface-card))] font-semibold text-[var(--text-primary)]' : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'}`}
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      title={tag}
+                      type="button"
+                    >
+                      {tagLabel(tag)}
+                    </button>
+                  ))}
+                  {section.tags.length > 8 ? (
+                    <button
+                      className="flex items-center gap-1 rounded-[9px] border border-[var(--stroke-divider)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                      onClick={() =>
+                        setExpandedSections((current) => {
+                          const next = new Set(current);
+                          if (next.has(section.id)) next.delete(section.id);
+                          else next.add(section.id);
+                          return next;
+                        })
+                      }
+                      type="button"
+                    >
+                      {expanded ? 'Less' : `+${section.tags.length - 8}`}
+                      <ChevronDown
+                        className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </aside>
 
       <main className="min-w-0">
-        <div className="flex flex-col gap-3 min-[641px]:flex-row min-[641px]:items-center min-[641px]:justify-between">
+        <div className="flex flex-col gap-3 min-[641px]:flex-row min-[641px]:items-end min-[641px]:justify-between">
           <div>
             <h2 className="text-[16px] font-semibold text-[var(--text-primary)]">
-              {familyLabel(family)} Modules{' '}
+              Modules{' '}
               <span className="font-normal text-[var(--text-tertiary)]">
                 {visibleModules.length}
               </span>
             </h2>
             <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
-              Choose focused contracts, inspect their rules, then arrange the render order.
+              Filter by tags on the left, search by Module name here, compose on the right.
             </p>
           </div>
-          <label className="flex h-9 min-w-[240px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 focus-within:border-[var(--accent-commit)] focus-within:ring-2 focus-within:ring-[var(--accent-commit)]/10">
+          <label className="flex h-9 min-w-[260px] items-center gap-2 rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 focus-within:border-[var(--accent-commit)] focus-within:ring-2 focus-within:ring-[var(--accent-commit)]/10">
             <Search aria-hidden="true" className="size-4 text-[var(--text-tertiary)]" />
-            <span className="sr-only">Search Modules</span>
+            <span className="sr-only">Search Modules by name</span>
             <input
               className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by name or capability"
-              value={query}
+              onChange={(event) => setNameQuery(event.target.value)}
+              placeholder="Search modules by name..."
+              value={nameQuery}
             />
+            {nameQuery ? (
+              <button
+                aria-label="Clear Module name search"
+                onClick={() => setNameQuery('')}
+                type="button"
+              >
+                <X className="size-3.5 text-[var(--text-tertiary)]" />
+              </button>
+            ) : null}
           </label>
         </div>
 
+        {selectedTags.size > 0 ? (
+          <fieldset className="mt-3 flex flex-wrap items-center gap-1.5">
+            <legend className="sr-only">Selected tags</legend>
+            <Filter className="size-3.5 text-[var(--text-tertiary)]" />
+            {[...selectedTags].map((tag) => (
+              <button
+                className="flex items-center gap-1 rounded-full bg-[var(--active-bg)] px-2 py-1 text-[10px] text-[var(--text-secondary)]"
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                type="button"
+              >
+                {tagLabel(tag)} <X className="size-3" />
+              </button>
+            ))}
+          </fieldset>
+        ) : null}
+
         <div className="mt-3 grid gap-2 min-[761px]:grid-cols-2">
           {visibleModules.map((module) => {
-            const isInComposition = compositionModules.some(
+            const selected = compositionModules.some(
               (item) => item.canonicalName === module.canonicalName
             );
-            const isActive = selectedArtifact.canonicalName === module.canonicalName;
+            const active = selectedArtifact.canonicalName === module.canonicalName;
             return (
               <article
-                className={`group flex min-w-0 gap-3 rounded-[var(--radius-md)] border bg-[var(--surface-card)] p-3 shadow-sm transition-colors ${isActive ? 'border-[var(--accent-commit)]' : 'border-[var(--stroke-divider)] hover:border-[var(--stroke-strong)]'}`}
-                key={module.canonicalName}
+                className={`group flex min-w-0 gap-3 rounded-[var(--radius-md)] border bg-[var(--surface-card)] p-3 shadow-sm transition-colors ${active ? 'border-[var(--accent-commit)]' : 'border-[var(--stroke-divider)] hover:border-[var(--stroke-strong)]'}`}
+                key={`${module.canonicalName}@${module.version}`}
               >
                 <button
                   aria-label={`Inspect ${module.title}`}
@@ -287,28 +407,33 @@ export function SchemaModuleRegistry({
                 >
                   <SchemaArtifactIcon artifact={module} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">
-                      {module.title}
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-[12px] font-semibold text-[var(--text-primary)]">
+                        {module.title}
+                      </span>
+                      {module.tags?.includes('role:core') ? (
+                        <Badge variant="outline">Core tag</Badge>
+                      ) : null}
                     </span>
                     <span className="mt-1 line-clamp-2 block text-[11px] leading-4 text-[var(--text-secondary)]">
                       {module.description}
                     </span>
-                    <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] text-[var(--text-tertiary)]">
-                      <Badge variant="outline">{module.domain}</Badge>
-                      {module.recommended ? <Badge variant="commit">Recommended</Badge> : null}
-                      <span>{module.version}</span>
-                      <span>·</span>
-                      <span>{module.usageCount.toLocaleString()} uses</span>
-                      <span className="flex items-center gap-0.5">
-                        <Star className="size-3" />
-                        {module.starCount}
-                      </span>
+                    <span className="mt-2 flex flex-wrap items-center gap-1 text-[10px] text-[var(--text-tertiary)]">
+                      {(module.tags ?? [])
+                        .filter(cardTag)
+                        .slice(0, 3)
+                        .map((tag) => (
+                          <Badge key={tag} variant="outline">
+                            {tagLabel(tag)}
+                          </Badge>
+                        ))}
+                      <span className="font-mono">{module.version}</span>
                     </span>
                   </span>
                 </button>
                 <Button
                   aria-label={
-                    isInComposition
+                    selected
                       ? `Remove ${module.title} from composition`
                       : `Add ${module.title} to composition`
                   }
@@ -316,9 +441,9 @@ export function SchemaModuleRegistry({
                   onClick={() => toggleModule(module)}
                   size="icon-sm"
                   type="button"
-                  variant={isInComposition ? 'commit' : 'canvas-outline'}
+                  variant={selected ? 'commit' : 'canvas-outline'}
                 >
-                  {isInComposition ? <Check className="size-4" /> : <Plus className="size-4" />}
+                  {selected ? <Check className="size-4" /> : <Plus className="size-4" />}
                 </Button>
               </article>
             );
@@ -326,9 +451,7 @@ export function SchemaModuleRegistry({
         </div>
         {visibleModules.length === 0 ? (
           <div className="mt-3 rounded-[var(--radius-md)] border border-dashed border-[var(--stroke-strong)] p-10 text-center text-[12px] text-[var(--text-secondary)]">
-            {availableModules.length === 0
-              ? `No official ${familyLabel(family)} Modules are available yet.`
-              : 'No Modules match this filter.'}
+            No Modules match this name and Tag selection.
           </div>
         ) : null}
         <div className="scroll-mt-4" id="module-detail">
@@ -336,86 +459,246 @@ export function SchemaModuleRegistry({
         </div>
       </main>
 
-      <SchemaCompositionWorkbench
-        key={family}
-        compositionId={
-          activeComposition?.id ??
-          (workspace ? `composition:${workspace.workspaceId}` : `webui-${family}-composition`)
-        }
-        compositionRevision={compositionRevision}
-        core={core}
-        dirty={savedSignature !== compositionSignature(compositionModules)}
-        modules={compositionModules}
-        family={family}
-        onModulesChange={setCompositionModules}
-        onPublish={workspaceRevision === undefined ? undefined : publishComposition}
-        onSave={workspaceRevision === undefined ? undefined : saveComposition}
-        nextVersion={nextVersion}
-        workspaceTitle={workspace?.workspaceTitle}
-        projectId={workspace?.projectId}
-      />
+      <aside
+        aria-label="Composition workbench"
+        className="self-start rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm min-[1181px]:sticky min-[1181px]:top-4"
+      >
+        <div className="border-b border-[var(--stroke-divider)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Layers3 className="size-4 text-[var(--accent-commit)]" />
+                <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">
+                  Composition
+                </h2>
+              </div>
+              <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                {compositionModules.length} Modules · no required Core
+              </p>
+            </div>
+            <Badge variant={previewState.result?.report.valid ? 'commit' : 'outline'}>
+              {previewState.result?.report.valid ? 'Valid' : dirty ? 'Draft' : 'Saved'}
+            </Badge>
+          </div>
+        </div>
+        <div className="max-h-[calc(100vh-310px)] space-y-2 overflow-y-auto p-3">
+          {compositionModules.length === 0 ? (
+            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--stroke-strong)] p-6 text-center">
+              <Sparkles className="mx-auto size-5 text-[var(--text-tertiary)]" />
+              <p className="mt-2 text-[12px] font-medium text-[var(--text-primary)]">
+                Start from any Module
+              </p>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--text-tertiary)]">
+                Core is optional and behaves like every other tagged Module.
+              </p>
+            </div>
+          ) : null}
+          {compositionModules.map((module, index) => (
+            <article
+              className="rounded-[var(--radius-md)] border border-[var(--stroke-divider)] p-2.5"
+              key={module.canonicalName}
+            >
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 w-5 shrink-0 font-mono text-[10px] text-[var(--text-tertiary)]">
+                  {String((index + 1) * 10).padStart(2, '0')}
+                </span>
+                <SchemaArtifactIcon artifact={module} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-semibold text-[var(--text-primary)]">
+                    {module.title}
+                  </p>
+                  <p className="mt-0.5 truncate font-mono text-[9px] text-[var(--text-tertiary)]">
+                    {module.canonicalName}@{module.version}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center">
+                  <button
+                    aria-label={`Move ${module.title} earlier`}
+                    disabled={index === 0}
+                    onClick={() => moveModule(index, -1)}
+                    type="button"
+                  >
+                    <ArrowUp className="size-3.5 text-[var(--text-tertiary)]" />
+                  </button>
+                  <button
+                    aria-label={`Move ${module.title} later`}
+                    disabled={index === compositionModules.length - 1}
+                    onClick={() => moveModule(index, 1)}
+                    type="button"
+                  >
+                    <ArrowDown className="size-3.5 text-[var(--text-tertiary)]" />
+                  </button>
+                  <button
+                    aria-label={`Remove ${module.title} from composition`}
+                    onClick={() => toggleModule(module)}
+                    type="button"
+                  >
+                    <X className="size-3.5 text-[var(--text-tertiary)]" />
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+          {previewState.result?.report.issues.map((issue) => (
+            <div
+              className={`rounded-[var(--radius-md)] border p-2.5 text-[10px] leading-4 ${issue.blocking ? 'border-[var(--destructive)]/30 bg-[var(--destructive)]/5 text-[var(--destructive)]' : 'border-[var(--stroke-divider)] text-[var(--text-secondary)]'}`}
+              key={`${issue.code}:${issue.module ?? issue.path ?? issue.message}`}
+            >
+              <strong>{issue.code}</strong> · {issue.message}
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2 border-t border-[var(--stroke-divider)] p-3">
+          {previewState.error ? (
+            <p className="text-[10px] text-[var(--destructive)]">{previewState.error}</p>
+          ) : null}
+          {feedback ? <p className="text-[10px] text-[var(--text-secondary)]">{feedback}</p> : null}
+          <Button
+            className="w-full"
+            disabled={previewState.pending || compositionModules.length === 0}
+            onClick={compileComposition}
+            type="button"
+            variant="canvas-outline"
+          >
+            <ShieldCheck className="size-4" />{' '}
+            {previewState.pending ? 'Compiling…' : 'Verify composition'}
+          </Button>
+          {workspaceRevision !== undefined ? (
+            <Button
+              className="w-full"
+              disabled={!dirty || compositionModules.length === 0}
+              onClick={saveComposition}
+              type="button"
+              variant="commit"
+            >
+              Save draft
+            </Button>
+          ) : null}
+          {workspaceRevision !== undefined && compositionRevision > 0 ? (
+            <Button
+              className="w-full"
+              disabled={dirty || !previewState.result?.report.valid}
+              onClick={applyComposition}
+              type="button"
+            >
+              Apply verified composition
+            </Button>
+          ) : null}
+        </div>
+      </aside>
     </section>
   );
 }
 
-function familyLabel(family: YSchemaArtifactFamily): string {
-  if (family === 'esphome-device') return 'ESPHome Device';
-  return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
+function withEffectiveTags(artifact: SchemaArtifactPreview): SchemaArtifactPreview {
+  const tags = new Set(artifact.tags ?? []);
+  if (artifact.kind === 'core') tags.add('role:core');
+  tags.add(`type:${artifact.family}`);
+  tags.add(`domain:${slug(artifact.domain)}`);
+  tags.add(`version:${artifact.version}`);
+  tags.add(`source:${artifact.source}`);
+  tags.add(`status:${artifact.status}`);
+  tags.add(artifact.kind === 'core' ? 'contribution:foundation' : 'contribution:structure');
+  if (artifact.recommended) tags.add('recommended:yes');
+  return { ...artifact, tags: [...tags].sort() };
 }
 
-function familyDescription(family: YSchemaArtifactFamily): string {
-  if (family === 'skill') {
-    return 'Core owns executable workflow invariants. Modules extend tooling, safety, delivery, runtime, and evaluation.';
+function buildTagSections(artifacts: SchemaArtifactPreview[], groupId: TagGroupId): TagSection[] {
+  const group = TAG_GROUPS.find((candidate) => candidate.id === groupId) ?? TAG_GROUPS[0];
+  const byPrefix = new Map<string, Set<string>>();
+  for (const artifact of artifacts) {
+    for (const tag of artifact.tags ?? []) {
+      const prefix = tag.includes(':') ? tag.split(':', 1)[0] : 'tag';
+      if (!group?.prefixes.includes(prefix ?? 'tag')) continue;
+      const values = byPrefix.get(prefix ?? 'tag') ?? new Set<string>();
+      values.add(tag);
+      byPrefix.set(prefix ?? 'tag', values);
+    }
   }
-  if (family === 'prompt') {
-    return 'Core owns messages and output contracts. Modules extend context, examples, guardrails, evaluation, and runtime signals.';
-  }
-  if (family === 'esphome-device') {
-    return 'Core owns device identity and platform. Modules add hardware, connectivity, entities, power, and local automations.';
-  }
-  return 'Core owns product invariants. Modules add focused engineering structure through declared slots.';
+  return [...byPrefix.entries()]
+    .map(([id, tags]) => ({ id, label: sectionLabel(id), tags: [...tags].sort(tagSort) }))
+    .filter((section) => section.tags.length > 0);
 }
 
-function modulesFromComposition(
+function groupSelectedTags(tags: Set<string>): Map<string, string[]> {
+  const grouped = new Map<string, string[]>();
+  for (const tag of tags) {
+    const prefix = tag.includes(':') ? tag.split(':', 1)[0] : 'tag';
+    grouped.set(prefix ?? 'tag', [...(grouped.get(prefix ?? 'tag') ?? []), tag]);
+  }
+  return grouped;
+}
+
+function artifactsFromComposition(
   composition: SchemaCompositionDraft | undefined,
-  availableModules: SchemaArtifactPreview[]
+  artifacts: SchemaArtifactPreview[]
 ): SchemaArtifactPreview[] {
-  if (!composition) {
-    return availableModules.filter((module) =>
-      DEFAULT_COMPOSITION_MODULES.has(module.canonicalName)
-    );
-  }
-  const artifactsByKey = new Map(
-    availableModules.map((artifact) => [`${artifact.canonicalName}@${artifact.version}`, artifact])
+  if (!composition) return [];
+  const byKey = new Map(
+    artifacts.map((artifact) => [`${artifact.canonicalName}@${artifact.version}`, artifact])
   );
-  return [...composition.modules]
-    .sort((left, right) => left.order - right.order)
-    .flatMap((reference) => {
-      const artifact = artifactsByKey.get(`${reference.canonicalName}@${reference.version}`);
-      return artifact ? [artifact] : [];
-    });
+  const references =
+    composition.apiVersion === 't3x.dev/yschema-composition/v2'
+      ? [...composition.modules].sort(
+          (left, right) => left.presentationOrder - right.presentationOrder
+        )
+      : [
+          composition.core,
+          ...[...composition.modules].sort((left, right) => left.order - right.order),
+        ];
+  return references.flatMap((reference) => {
+    const artifact = byKey.get(`${reference.canonicalName}@${reference.version}`);
+    return artifact ? [artifact] : [];
+  });
 }
 
-const DEFAULT_COMPOSITION_MODULES = new Set([
-  't3x/prd-system-architecture',
-  't3x/prd-technology-stack',
-  't3x/prd-frontend-design',
-  't3x/prd-backend-design',
-  't3x/prd-database-design',
-  't3x/prd-api-contract',
-  't3x/skill-tool-policy',
-  't3x/skill-safety-gates',
-  't3x/skill-delivery-targets',
-  't3x/prompt-few-shot-examples',
-  't3x/prompt-guardrails',
-  't3x/prompt-observability',
-  't3x/esphome-sensors',
-  't3x/esphome-actuators',
-  't3x/esphome-automations',
-]);
+function buildOpenComposition(
+  workspaceId: string,
+  revision: number,
+  modules: SchemaArtifactPreview[]
+): SchemaCompositionDraftV2 {
+  return {
+    apiVersion: 't3x.dev/yschema-composition/v2',
+    id: `composition:${workspaceId}`,
+    revision,
+    status: 'draft',
+    modules: modules.map((module, index) => ({
+      canonicalName: module.canonicalName,
+      version: module.version,
+      presentationOrder: (index + 1) * 10,
+    })),
+  };
+}
 
 function compositionSignature(modules: SchemaArtifactPreview[]): string {
-  return modules
-    .map((module) => `${module.canonicalName}@${module.version}:${module.placement}`)
-    .join('|');
+  return modules.map((module) => `${module.canonicalName}@${module.version}`).join('|');
+}
+
+function sectionLabel(prefix: string): string {
+  return prefix === 'recommended'
+    ? 'Featured'
+    : `${prefix[0]?.toUpperCase() ?? ''}${prefix.slice(1)}`;
+}
+
+function tagLabel(tag: string): string {
+  const value = tag.includes(':') ? tag.slice(tag.indexOf(':') + 1) : tag;
+  return value
+    .split('-')
+    .map((part) => (part ? `${part[0]?.toUpperCase()}${part.slice(1)}` : part))
+    .join(' ');
+}
+
+function tagSort(left: string, right: string): number {
+  return tagLabel(left).localeCompare(tagLabel(right));
+}
+
+function cardTag(tag: string): boolean {
+  return tag.startsWith('type:') || tag.startsWith('domain:') || tag === 'role:core';
+}
+
+function slug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }

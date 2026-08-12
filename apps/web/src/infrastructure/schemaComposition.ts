@@ -27,14 +27,13 @@ export async function previewYSchemaComposition(
 
 export async function loadYSchemaArtifactRegistry(
   projectId?: string,
-  family: YSchemaArtifactFamily = 'prd'
+  family?: YSchemaArtifactFamily
 ): Promise<YSchemaArtifactRegistryPage> {
   const path = projectId
     ? `/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
     : '/yschema/artifacts';
-  const response = await fetchWithTimeout(
-    `${API_V1}${path}?family=${encodeURIComponent(family)}&limit=100`
-  );
+  const query = family ? `family=${encodeURIComponent(family)}&limit=100` : 'limit=100';
+  const response = await fetchWithTimeout(`${API_V1}${path}?${query}`);
   return handleResponse(response);
 }
 

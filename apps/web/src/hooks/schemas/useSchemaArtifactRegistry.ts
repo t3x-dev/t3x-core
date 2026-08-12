@@ -6,7 +6,7 @@ import type { SchemaArtifactPreview, YSchemaArtifactFamily } from '@/types/schem
 
 export function useSchemaArtifactRegistry(
   projectId?: string,
-  family: YSchemaArtifactFamily = 'prd',
+  family?: YSchemaArtifactFamily,
   enabled = true
 ) {
   const [artifacts, setArtifacts] = useState<SchemaArtifactPreview[]>([]);
@@ -43,7 +43,10 @@ export function useSchemaArtifactRegistry(
 }
 
 function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPreview {
-  const module = manifest.apiVersion === 't3x.dev/yschema-module/v1';
+  const module =
+    manifest.apiVersion === 't3x.dev/yschema-module/v1' ||
+    manifest.apiVersion === 't3x.dev/yschema-module/v2';
+  const openModule = manifest.apiVersion === 't3x.dev/yschema-module/v2';
   const contribution = recordValue(manifest.contribution);
   const schema = recordValue(manifest.schema);
   const nodes = recordValue(module ? contribution.nodes : schema.nodes);
@@ -67,7 +70,8 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
   const source = manifest.source;
   const icon = registry.icon;
   const canonicalName = String(manifest.canonicalName ?? '');
-  const family = schemaFamily(manifest.family);
+  const declaredTags = stringArray(manifest.tags);
+  const family = schemaFamily(manifest.family ?? tagValue(declaredTags, 'type'));
   const render = recordValue(manifest.render);
   const rules = module
     ? mergeRules(declaredRules, [
@@ -111,8 +115,12 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
     source: source === 'team' || source === 'community' ? source : 'official',
     status:
       manifest.status === 'draft' || manifest.status === 'deprecated' ? manifest.status : 'active',
-    provides: stringArray(manifest.provides),
-    requires: module ? stringArray(manifest.requires) : [],
+    provides: capabilityArray(manifest.provides),
+    requires: module
+      ? openModule
+        ? requiredImports(manifest.imports)
+        : stringArray(manifest.requires)
+      : [],
     placement: module
       ? String(recordValue(manifest.defaultPlacement).slot ?? 'technical-design')
       : 'core',
@@ -138,7 +146,27 @@ function artifactToPreview(manifest: Record<string, unknown>): SchemaArtifactPre
     sortOrder: numberValue(registry.sortOrder) || recommendedSortOrder(canonicalName),
     icon: isIcon(icon) ? icon : module ? 'blocks' : 'file',
     recommended: registry.recommended === true,
+    tags: effectiveTags(manifest, module, family, String(manifest.domain ?? 'General')),
   };
+}
+
+function effectiveTags(
+  manifest: Record<string, unknown>,
+  module: boolean,
+  family: YSchemaArtifactFamily,
+  domain: string
+): string[] {
+  const declared = stringArray(manifest.tags);
+  const derived = [
+    ...(module ? [] : ['role:core']),
+    `type:${family}`,
+    `domain:${domain.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    `version:${String(manifest.version ?? '')}`,
+    `source:${manifest.source === 'team' || manifest.source === 'community' ? manifest.source : 'official'}`,
+    `status:${manifest.status === 'draft' || manifest.status === 'deprecated' ? manifest.status : 'active'}`,
+    module ? 'contribution:structure' : 'contribution:foundation',
+  ];
+  return Array.from(new Set([...declared, ...derived])).sort();
 }
 
 function schemaFamily(value: unknown): YSchemaArtifactFamily {
@@ -202,6 +230,32 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function capabilityArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+        if (typeof item === 'string') return [item];
+        const capability = recordValue(item).capability;
+        return typeof capability === 'string' ? [capability] : [];
+      })
+    : [];
+}
+
+function requiredImports(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+        const record = recordValue(item);
+        return record.required === true && typeof record.capability === 'string'
+          ? [record.capability]
+          : [];
+      })
+    : [];
+}
+
+function tagValue(tags: string[], namespace: string): string | undefined {
+  const prefix = `${namespace}:`;
+  return tags.find((tag) => tag.startsWith(prefix))?.slice(prefix.length);
 }
 
 function numberValue(value: unknown): number {

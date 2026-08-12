@@ -1,5 +1,4 @@
 export type SchemaArtifactKind = 'core' | 'module';
-export type SchemaArtifactDetailView = 'overview' | 'render' | 'rules' | 'versions';
 export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
 
 export interface SchemaArtifactInstance {
@@ -41,6 +40,7 @@ export interface SchemaArtifactPreview {
   sortOrder: number;
   icon: 'blocks' | 'braces' | 'cpu' | 'database' | 'file' | 'monitor' | 'server';
   recommended?: boolean;
+  tags?: string[];
 }
 
 export interface SchemaCompositionIssuePreview {
@@ -64,7 +64,7 @@ export interface SchemaCompositionPreviewResult {
   }>;
 }
 
-export interface SchemaCompositionDraft {
+export interface SchemaCompositionDraftV1 {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
@@ -79,6 +79,21 @@ export interface SchemaCompositionDraft {
     hash?: string;
   }>;
 }
+
+export interface SchemaCompositionDraftV2 {
+  apiVersion: 't3x.dev/yschema-composition/v2';
+  id: string;
+  revision: number;
+  status: 'draft';
+  modules: Array<{
+    canonicalName: string;
+    version: string;
+    presentationOrder: number;
+    hash?: string;
+  }>;
+}
+
+export type SchemaCompositionDraft = SchemaCompositionDraftV1 | SchemaCompositionDraftV2;
 
 export interface WorkspaceSchemaCompositionResult {
   composition: SchemaCompositionDraft | null;
@@ -120,16 +135,16 @@ export interface PublishSchemaCompositionInput {
 }
 
 export interface PublishedSchemaVersionManifest extends Record<string, unknown> {
-  apiVersion: 't3x.dev/yschema-core/v1';
+  apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v2';
   canonicalName: string;
   version: string;
-  family: YSchemaArtifactFamily;
+  family?: YSchemaArtifactFamily;
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';
   source: 'official' | 'team' | 'community';
   artifactHash?: string;
-  schema: Record<string, unknown>;
+  schema?: Record<string, unknown>;
 }
 
 export interface ProjectSchemaVersionHistory {

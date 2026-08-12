@@ -97,10 +97,11 @@ export function SchemaRegistry({
 
   async function handleVersionPublished(version: PublishedSchemaVersionManifest) {
     await compositionWorkspace?.onPublished?.(version);
-    setSelectedFamilyId(version.family);
+    const publishedFamily = version.family ?? selectedFamily?.id ?? defaultFamilyId;
+    setSelectedFamilyId(publishedFamily);
     setSelectedReleaseIds((releaseIds) => ({
       ...releaseIds,
-      [version.family]: publishedSchemaReleaseId(version.canonicalName, version.version),
+      [publishedFamily]: publishedSchemaReleaseId(version.canonicalName, version.version),
     }));
     setActiveView('structure');
     setRegistryView('versions');

@@ -38,6 +38,22 @@ export {
   sha256CompositionValue,
 } from './composition';
 export type {
+  CompiledYSchemaCompositionV2,
+  CompileYSchemaCompositionV2Input,
+  YSchemaCapabilityBindingV2,
+  YSchemaCompositionDraftV2,
+  YSchemaCompositionIssueCodeV2,
+  YSchemaCompositionIssueV2,
+  YSchemaCompositionModuleReferenceV2,
+  YSchemaCompositionOriginV2,
+  YSchemaCompositionPolicyV2,
+  YSchemaCompositionRenderEntryV2,
+  YSchemaModuleArtifactV2,
+  YSchemaModuleImportV2,
+  YSchemaModuleSuggestionV2,
+} from './composition-v2';
+export { compileYSchemaCompositionV2 } from './composition-v2';
+export type {
   ContentKind,
   DiffValidationResultsInput,
   FixProposal,

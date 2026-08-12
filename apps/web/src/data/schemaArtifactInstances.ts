@@ -1,6 +1,18 @@
 import type { SchemaArtifactInstance, SchemaArtifactPreview } from '@/types/schemaModules';
 
 const OFFICIAL_MODULE_INSTANCES: Record<string, Record<string, unknown>> = {
+  't3x/prd-core@1.1.0': {
+    summary: {
+      problem: 'Teams need one reviewable source of truth for product decisions.',
+      audience: 'Product, design, and engineering teams',
+      outcome: 'A shared product contract that can be verified before delivery.',
+    },
+    requirements: [
+      { title: 'Review proposed product changes', priority: 'must' },
+      { title: 'Keep acceptance evidence traceable', priority: 'should' },
+    ],
+    milestones: ['Validated product contract', 'Approved delivery scope'],
+  },
   't3x/prd-system-architecture@1.0.0': {
     system_architecture: {
       context:
@@ -569,10 +581,11 @@ const MODULE_USE_CASES: Record<string, Array<{ title: string; description: strin
 };
 
 export function findSchemaArtifactInstance(
-  artifact: Pick<SchemaArtifactPreview, 'canonicalName' | 'title' | 'version'>
-): SchemaArtifactInstance | undefined {
+  artifact: Pick<SchemaArtifactPreview, 'canonicalName' | 'title' | 'version'> & {
+    nodePaths?: string[];
+  }
+): SchemaArtifactInstance {
   const value = OFFICIAL_MODULE_INSTANCES[`${artifact.canonicalName}@${artifact.version}`];
-  if (!value) return undefined;
   return {
     title: `${artifact.title} instance`,
     description: 'Representative sample content that conforms to this Module structure.',
@@ -582,6 +595,33 @@ export function findSchemaArtifactInstance(
         description: 'Use when this Module contribution should be explicit and reviewable.',
       },
     ],
-    value,
+    value: value ?? representativeOutline(artifact),
   };
+}
+
+function representativeOutline(
+  artifact: Pick<SchemaArtifactPreview, 'canonicalName' | 'title'> & { nodePaths?: string[] }
+): Record<string, unknown> {
+  const nodePaths = artifact.nodePaths ?? [];
+  if (nodePaths.length === 0) {
+    return {
+      module: {
+        name: artifact.title,
+        contribution: 'No representative fields are declared for this Module.',
+      },
+    };
+  }
+  return Object.fromEntries(
+    nodePaths.map((path) => [
+      path,
+      {
+        example: `Representative ${humanize(path)} content`,
+        source: artifact.canonicalName,
+      },
+    ])
+  );
+}
+
+function humanize(value: string): string {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

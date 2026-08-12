@@ -88,6 +88,41 @@ describe('YSchema Composition routes', () => {
     expect(firstBody.data.compiledSchemaHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it('compiles an open v2 composition without a family or Core', async () => {
+    const response = await app.request('/v1/yschema/compositions/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiVersion: 't3x.dev/yschema-composition/v2',
+        id: 'open-frontend',
+        revision: 0,
+        status: 'draft',
+        modules: [
+          {
+            canonicalName: 't3x/prd-frontend-design',
+            version: '1.0.0',
+            presentationOrder: 10,
+          },
+          {
+            canonicalName: 't3x/prompt-few-shot-examples',
+            version: '1.0.0',
+            presentationOrder: 20,
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data.report).toMatchObject({ valid: true, mode: 'open', issues: [] });
+    expect(body.data.renderPlan.map((entry: any) => entry.artifact)).toEqual([
+      't3x/prd-frontend-design',
+      't3x/prompt-few-shot-examples',
+    ]);
+    expect(body.data.compiledSchemaHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(body.data.reportHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   it('publishes both endpoints in OpenAPI', async () => {
     const document: any = yschemaCompositionRoutes.getOpenAPIDocument({
       openapi: '3.1.0',

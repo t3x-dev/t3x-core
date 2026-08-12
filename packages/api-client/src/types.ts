@@ -1063,7 +1063,7 @@ export interface ListYSchemaArtifactsParams {
   limit?: number;
 }
 
-export interface YSchemaCompositionDraft {
+export interface YSchemaCompositionDraftV1 {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
@@ -1078,6 +1078,21 @@ export interface YSchemaCompositionDraft {
     hash?: string;
   }>;
 }
+
+export interface YSchemaCompositionDraftV2 {
+  apiVersion: 't3x.dev/yschema-composition/v2';
+  id: string;
+  revision: number;
+  status: 'draft';
+  modules: Array<{
+    canonicalName: string;
+    version: string;
+    presentationOrder: number;
+    hash?: string;
+  }>;
+}
+
+export type YSchemaCompositionDraft = YSchemaCompositionDraftV1 | YSchemaCompositionDraftV2;
 
 export interface YSchemaCompositionPreview {
   schema: Record<string, unknown>;

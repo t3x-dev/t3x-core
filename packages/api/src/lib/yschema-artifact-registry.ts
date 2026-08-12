@@ -6,7 +6,9 @@ import {
   type NodeSchema,
   sha256CompositionValue,
   type YSchemaCompositionDraft,
+  type YSchemaCompositionDraftV2,
   type YSchemaCoreArtifact,
+  type YSchemaModuleArtifactV2,
   type YSchemaModuleManifest,
 } from '@t3x-dev/yschema';
 
@@ -72,9 +74,107 @@ export async function resolveCompositionArtifacts(
   };
 }
 
-export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record<string, unknown> {
+export async function resolveCompositionArtifactsV2(
+  db: AnyDB,
+  composition: YSchemaCompositionDraftV2,
+  projectId?: string
+): Promise<YSchemaModuleArtifactV2[]> {
+  await ensureBuiltInYSchemaArtifacts(db);
+  const views = await Promise.all(
+    composition.modules.map((module) =>
+      findYSchemaArtifactVersion(db, {
+        canonical_name: module.canonicalName,
+        version: module.version,
+        project_id: projectId,
+      })
+    )
+  );
+  return views.flatMap((view) => (view ? [artifactViewToOpenModule(view)] : []));
+}
+
+export function artifactViewToOpenModule(
+  view: YSchemaArtifactVersionView
+): YSchemaModuleArtifactV2 {
+  const manifest = view.manifest as Record<string, unknown>;
+  if (manifest.apiVersion === 't3x.dev/yschema-module/v2') {
+    return manifest as unknown as YSchemaModuleArtifactV2;
+  }
+  const module = manifest.apiVersion === 't3x.dev/yschema-module/v1';
+  const contribution = asRecord(manifest.contribution);
+  const schema = asRecord(manifest.schema);
+  const family = typeof manifest.family === 'string' ? manifest.family : 'general';
+  const domain = typeof manifest.domain === 'string' ? manifest.domain.toLowerCase() : 'foundation';
+  const provides = Array.isArray(manifest.provides)
+    ? manifest.provides.flatMap((capability) =>
+        typeof capability === 'string' ? [{ capability, version: 1 }] : []
+      )
+    : [];
+  const requires =
+    module && Array.isArray(manifest.requires)
+      ? manifest.requires.filter((value): value is string => typeof value === 'string')
+      : [];
   return {
-    ...view.manifest,
+    apiVersion: 't3x.dev/yschema-module/v2',
+    canonicalName: view.canonicalName,
+    version: view.version,
+    title: String(manifest.title ?? view.canonicalName),
+    description: String(manifest.description ?? ''),
+    status: view.status === 'draft' || view.status === 'deprecated' ? view.status : 'active',
+    source:
+      manifest.source === 'team' || manifest.source === 'community' ? manifest.source : 'official',
+    tags: [
+      ...(module ? [] : ['role:core']),
+      `type:${family}`,
+      `domain:${domain.replace(/\s+/g, '-')}`,
+      `source:${manifest.source === 'team' || manifest.source === 'community' ? manifest.source : 'official'}`,
+    ],
+    compatibility: { yschema: ['0.1'] },
+    provides,
+    imports: [],
+    suggests: requires.map((capability) => ({ capability, version: 1 })),
+    contribution: {
+      nodes: (module
+        ? contribution.nodes
+        : schema.nodes) as YSchemaModuleArtifactV2['contribution']['nodes'],
+      relationTypes: (module
+        ? contribution.relationTypes
+        : schema.relationTypes) as YSchemaModuleArtifactV2['contribution']['relationTypes'],
+      rules: (module
+        ? contribution.rules
+        : schema.rules) as YSchemaModuleArtifactV2['contribution']['rules'],
+    },
+    registry: {
+      ...asRecord(manifest.registry),
+      legacyApiVersion: manifest.apiVersion,
+      artifactHash: view.artifactHash,
+    },
+  };
+}
+
+export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record<string, unknown> {
+  const manifest = view.manifest as Record<string, unknown>;
+  const module =
+    manifest.apiVersion === 't3x.dev/yschema-module/v1' ||
+    manifest.apiVersion === 't3x.dev/yschema-module/v2';
+  const family = typeof manifest.family === 'string' ? manifest.family : 'general';
+  const domain =
+    typeof manifest.domain === 'string'
+      ? manifest.domain.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      : 'foundation';
+  const declaredTags = Array.isArray(manifest.tags)
+    ? manifest.tags.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+  const derivedTags = [
+    ...(module ? [] : ['role:core']),
+    `type:${family}`,
+    `domain:${domain}`,
+    `version:${view.version}`,
+    `source:${manifest.source === 'team' || manifest.source === 'community' ? manifest.source : 'official'}`,
+    `status:${view.status}`,
+    module ? 'contribution:structure' : 'contribution:foundation',
+  ];
+  return {
+    ...manifest,
     canonicalName: view.canonicalName,
     version: view.version,
     status: view.status,
@@ -82,6 +182,9 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
     updatedAt: view.createdAt.toISOString(),
     visibility: view.visibility,
     ownerProjectId: view.ownerProjectId,
+    declaredTags,
+    derivedTags,
+    tags: Array.from(new Set([...declaredTags, ...derivedTags])).sort(),
     versions: view.versions.map((version) => ({
       version: version.version,
       status: version.status,
@@ -105,4 +208,10 @@ function countNodePaths(nodes: Record<string, NodeSchema>): number {
     if (node.children && node.children !== 'any') count += countNodePaths(node.children);
   }
   return count;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
