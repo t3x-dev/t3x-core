@@ -15,10 +15,12 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AgentConfigSchema,
   AgentInputSchema,
+  assertSafeAgentEndpoint,
   DEFAULT_RULES,
   type EvalRules,
   EvalRulesSchema,
   evalEngine,
+  fetchAgentEndpoint,
   observer,
   parseRulesFromLeaf,
   RuleSchema,
@@ -365,6 +367,7 @@ runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const config = AgentConfigSchema.parse(body);
+    await assertSafeAgentEndpoint(config.endpoint);
     observer.registerAgent(config);
     pinoLogger.info({ agent_id: config.id }, 'agent registered');
     return successJson(c, { agent_id: config.id });
@@ -404,7 +407,7 @@ runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
     try {
       // Forward to agent
       const startTime = Date.now();
-      const response = await fetch(agent.endpoint, {
+      const response = await fetchAgentEndpoint(agent.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -578,7 +581,7 @@ runnerRoutes.openapi(webhookRunRoute, async (c: any): Promise<any> => {
 
     const runId = observer.startRun(agent_id, { agent_id, input });
 
-    const response = await fetch(agent.endpoint, {
+    const response = await fetchAgentEndpoint(agent.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

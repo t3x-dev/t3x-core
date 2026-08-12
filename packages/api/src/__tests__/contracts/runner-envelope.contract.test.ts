@@ -13,7 +13,7 @@ describe('Runner API response envelope', () => {
       body: JSON.stringify({
         id: 'agent_envelope_test',
         name: 'Envelope Test Agent',
-        endpoint: 'http://localhost:9000/run',
+        endpoint: 'https://93.184.216.34/run',
         type: 'http',
       }),
     });
@@ -43,5 +43,32 @@ describe('Runner API response envelope', () => {
       code: 'INVALID_REQUEST',
       message: expect.any(String),
     });
+  });
+
+  it('rejects private runner endpoints by default', async () => {
+    const originalAllowlist = process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    try {
+      const res = await app.request('/runner/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'metadata_target',
+          name: 'Metadata Target',
+          endpoint: 'http://169.254.169.254/latest/meta-data',
+          type: 'http',
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        success: false,
+        error: { code: 'INVALID_REQUEST' },
+      });
+    } finally {
+      if (originalAllowlist === undefined) delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+      else process.env.RUNNER_ENDPOINT_ALLOWLIST = originalAllowlist;
+    }
   });
 });

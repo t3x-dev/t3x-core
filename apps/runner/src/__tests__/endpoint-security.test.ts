@@ -1,0 +1,120 @@
+import http from 'node:http';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  assertSafeAgentEndpoint,
+  fetchAgentEndpoint,
+  isBlockedAgentAddress,
+  UnsafeAgentEndpointError,
+} from '../endpoint-security.js';
+
+describe('runner endpoint security', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    '127.0.0.1',
+    '10.0.0.1',
+    '100.64.0.1',
+    '169.254.169.254',
+    '172.16.0.1',
+    '192.168.1.1',
+    '198.18.0.1',
+    '::1',
+    '::ffff:7f00:1',
+    'fd00::1',
+    'fe80::1',
+  ])('classifies %s as private or reserved', (address) => {
+    expect(isBlockedAgentAddress(address)).toBe(true);
+  });
+
+  it('allows a public address returned by DNS', async () => {
+    await expect(
+      assertSafeAgentEndpoint('https://agent.example/run', {
+        lookup: async () => [{ address: '93.184.216.34' }],
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it('blocks a hostname when any resolved address is private', async () => {
+    await expect(
+      assertSafeAgentEndpoint('https://agent.example/run', {
+        lookup: async () => [{ address: '93.184.216.34' }, { address: '127.0.0.1' }],
+      })
+    ).rejects.toBeInstanceOf(UnsafeAgentEndpointError);
+  });
+
+  it('blocks loopback endpoints unless their exact origin is allowlisted', async () => {
+    await expect(
+      assertSafeAgentEndpoint('http://127.0.0.1:9000/run', { allowlist: '' })
+    ).rejects.toThrow('RUNNER_ENDPOINT_ALLOWLIST');
+
+    await expect(
+      assertSafeAgentEndpoint('http://127.0.0.1:9000/run', {
+        allowlist: 'http://127.0.0.1:9000',
+      })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      assertSafeAgentEndpoint('http://127.0.0.1:9001/run', {
+        allowlist: 'http://127.0.0.1:9000',
+      })
+    ).rejects.toBeInstanceOf(UnsafeAgentEndpointError);
+  });
+
+  it.each([
+    'file:///etc/passwd',
+    'ftp://agent.example/run',
+    'https://user:pass@agent.example',
+  ])('rejects unsupported or credential-bearing endpoint %s', async (endpoint) => {
+    await expect(assertSafeAgentEndpoint(endpoint)).rejects.toBeInstanceOf(
+      UnsafeAgentEndpointError
+    );
+  });
+
+  it('forces manual redirect handling for outbound agent requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 302 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchAgentEndpoint(
+      'https://agent.example/run',
+      { redirect: 'follow' },
+      { lookup: async () => [{ address: '93.184.216.34' }] }
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://agent.example/run',
+      expect.objectContaining({ dispatcher: expect.anything(), redirect: 'manual' })
+    );
+  });
+
+  it('uses the validated address for the actual connection instead of resolving again', async () => {
+    const server = http.createServer((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ host: req.headers.host }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected a TCP test server');
+      const origin = `http://agent.invalid:${address.port}`;
+
+      const response = await fetchAgentEndpoint(
+        `${origin}/run`,
+        {},
+        {
+          allowlist: origin,
+          lookup: async () => [{ address: '127.0.0.1', family: 4 }],
+        }
+      );
+
+      expect(await response.json()).toEqual({ host: `agent.invalid:${address.port}` });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+});

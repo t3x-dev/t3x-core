@@ -1,6 +1,6 @@
 import http, { type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('pino', () => {
   const noop = () => {};
@@ -74,6 +74,7 @@ describe('runner server routes', () => {
   const originalEnv = {
     RUNNER_ENABLE_DEBUG_ROUTES: process.env.RUNNER_ENABLE_DEBUG_ROUTES,
     RUNNER_DEBUG_TOKEN: process.env.RUNNER_DEBUG_TOKEN,
+    RUNNER_ENDPOINT_ALLOWLIST: process.env.RUNNER_ENDPOINT_ALLOWLIST,
     N8N_API_KEY: process.env.N8N_API_KEY,
   };
 
@@ -84,10 +85,19 @@ describe('runner server routes', () => {
     });
   });
 
+  beforeEach(() => {
+    process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
     process.env.RUNNER_ENABLE_DEBUG_ROUTES = originalEnv.RUNNER_ENABLE_DEBUG_ROUTES;
     process.env.RUNNER_DEBUG_TOKEN = originalEnv.RUNNER_DEBUG_TOKEN;
+    if (originalEnv.RUNNER_ENDPOINT_ALLOWLIST === undefined) {
+      delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    } else {
+      process.env.RUNNER_ENDPOINT_ALLOWLIST = originalEnv.RUNNER_ENDPOINT_ALLOWLIST;
+    }
     process.env.N8N_API_KEY = originalEnv.N8N_API_KEY;
     vi.restoreAllMocks();
   });
@@ -237,7 +247,7 @@ describe('runner server routes', () => {
       body: {
         id: 'webhook-agent',
         name: 'Webhook Agent',
-        endpoint: 'http://agent.example/run',
+        endpoint: 'http://127.0.0.1:9000/run',
         type: 'http',
       },
     });
@@ -275,12 +285,62 @@ describe('runner server routes', () => {
     expect(body.data.trace.status).toBe('completed');
     expect(body.data.eval_result).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://agent.example/run',
+      'http://127.0.0.1:9000/run',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ prompt: 'hello' }),
       })
     );
+  });
+
+  it('POST /agents rejects a private endpoint that was not explicitly allowlisted', async () => {
+    delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+
+    const res = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        id: 'private-agent',
+        name: 'Private Agent',
+        endpoint: 'http://169.254.169.254/latest/meta-data',
+        type: 'http',
+      },
+    });
+    const body = res.body as { success: boolean; error: { code: string; message: string } };
+
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_REQUEST');
+    expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
+  });
+
+  it('POST /run revalidates an endpoint after its private-origin authorization is removed', async () => {
+    process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        id: 'revoked-private-agent',
+        name: 'Revoked Private Agent',
+        endpoint: 'http://127.0.0.1:9000/run',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: { agent_id: 'revoked-private-agent', input: { prompt: 'hello' } },
+    });
+    const body = res.body as { success: boolean; error: { code: string; message: string } };
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('RUN_FAILED');
+    expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('POST /run fails the trace when the registered agent returns a non-2xx response', async () => {
@@ -289,7 +349,7 @@ describe('runner server routes', () => {
       body: {
         id: 'failing-proxy-agent',
         name: 'Failing Proxy Agent',
-        endpoint: 'http://agent.example/fail',
+        endpoint: 'http://127.0.0.1:9000/fail',
         type: 'http',
       },
     });
@@ -329,7 +389,7 @@ describe('runner server routes', () => {
       body: {
         id: 'failing-webhook-agent',
         name: 'Failing Webhook Agent',
-        endpoint: 'http://agent.example/fail-webhook',
+        endpoint: 'http://127.0.0.1:9000/fail-webhook',
         type: 'http',
       },
     });

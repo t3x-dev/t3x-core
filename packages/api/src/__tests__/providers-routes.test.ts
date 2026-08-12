@@ -47,6 +47,22 @@ describe('Provider Routes', () => {
   const app = new Hono();
   app.route('/', providersRoutes);
 
+  function principalApp(principalKind: 'human' | 'agent' | 'service') {
+    const principal = new Hono();
+    principal.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: `ak_${principalKind}`,
+        user_id: principalKind === 'human' ? 'user_owner' : null,
+        project_id: principalKind === 'human' ? null : 'proj_bound',
+        principal_kind: principalKind,
+      });
+      return next();
+    });
+    principal.route('/', providersRoutes);
+    return principal;
+  }
+
   beforeAll(async () => {
     const setup = await setupTestDB();
     mockDB = setup.db;
@@ -93,6 +109,32 @@ describe('Provider Routes', () => {
     expect(json.data.configured).toBe(true);
     expect(json.data.default_model).toBe('gpt-4o-mini');
     expect(JSON.stringify(json)).not.toContain('sk-local-openai');
+  });
+
+  it.each([
+    'agent',
+    'service',
+  ] as const)('rejects %s principals before reading or mutating global provider settings', async (principalKind) => {
+    const principal = principalApp(principalKind);
+
+    expect((await principal.request('/v1/providers')).status).toBe(403);
+    expect(
+      (
+        await principal.request('/v1/providers/local/openai', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: 'must-not-be-stored' }),
+        })
+      ).status
+    ).toBe(403);
+
+    const bundle = await storage.getProviderCredentialBundle(mockDB);
+    expect(bundle.secrets.OPENAI_API_KEY).toBeUndefined();
+  });
+
+  it('keeps provider administration available to human principals', async () => {
+    mockRegistry.listProviders.mockReturnValue([]);
+    expect((await principalApp('human').request('/v1/providers')).status).toBe(200);
   });
 
   it('normalizes google aliases to the local provider family model', async () => {
