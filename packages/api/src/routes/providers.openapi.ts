@@ -30,6 +30,7 @@ import {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '@t3x-dev/storage';
+import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { hasOperatorAccess } from '../lib/operator-access';
@@ -55,12 +56,15 @@ export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
-providersRoutes.use('*', async (c, next) => {
+async function requireProviderOperator(c: Context, next: Next) {
   if (!hasOperatorAccess(c)) {
     return errorResponse(c, 'FORBIDDEN', 'Provider administration requires operator access');
   }
   return next();
-});
+}
+
+providersRoutes.use('/v1/providers', requireProviderOperator);
+providersRoutes.use('/v1/providers/*', requireProviderOperator);
 
 function normalizeLocalProviderId(id: string): LocalProviderId | null {
   return normalizeSharedLocalProviderId(id);
