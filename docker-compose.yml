@@ -64,6 +64,8 @@ services:
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
       - GOOGLE_AI_STUDIO_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
