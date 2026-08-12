@@ -214,6 +214,12 @@ describe('Templates Routes', () => {
       expect(data.category).toBe('social');
       expect(data.leaf_type).toBe('tweet');
       expect(data.is_builtin).toBe(false);
+      expect(data.owner_id).toBe('user_template_operator');
+      expect(data.provenance).toEqual({
+        source: 'human',
+        actor_kind: 'human',
+        actor_id: 'user_template_operator',
+      });
       expect(data.tags).toEqual(['custom', 'tweet']);
       expect(data.created_at).toBeTruthy();
       expect(data.updated_at).toBeTruthy();
@@ -405,6 +411,31 @@ describe('Templates Routes', () => {
         (await member.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
       ).toBe(403);
       expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
+    });
+
+    it('retains operator-visible create and delete audit records after deletion', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Audited Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      expect((await app.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status).toBe(
+        200
+      );
+
+      const auditRes = await app.request(`/v1/templates/${templateId}/audit`);
+      expect(auditRes.status).toBe(200);
+      const auditJson = (await auditRes.json()) as ApiResponse;
+      const records = auditJson.data as Array<Record<string, unknown>>;
+      expect(records.map((record) => record.action)).toEqual(['create', 'delete']);
+      expect(records.every((record) => record.owner_id === 'user_template_operator')).toBe(true);
+      expect(records[1]?.snapshot).toMatchObject({ templateId });
+
+      expect((await memberApp().request(`/v1/templates/${templateId}/audit`)).status).toBe(403);
+      expect((await machineApp().request(`/v1/templates/${templateId}/audit`)).status).toBe(403);
     });
 
     it('returns 403 for builtin template', async () => {

@@ -9,8 +9,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
-import { createTemplate, deleteTemplate, findTemplateById, listTemplates } from '@t3x-dev/storage';
+import { type ApiKey, getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
+import {
+  createTemplate,
+  deleteTemplate,
+  findTemplateById,
+  listTemplateAudit,
+  listTemplates,
+} from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
@@ -57,10 +63,28 @@ const TemplateSchema = z.object({
   variables: z.array(TemplateVariableSchema),
   tags: z.array(z.string()),
   is_builtin: z.boolean(),
+  owner_id: z.string().nullable(),
+  provenance: z.object({
+    source: z.enum(['builtin', 'human', 'local', 'legacy']),
+    actor_kind: z.enum(['human', 'system', 'local']),
+    actor_id: z.string(),
+  }),
   default_constraints: z.array(DefaultConstraintSchema),
   semantic_threshold: SemanticThresholdSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+});
+
+const TemplateAuditRecordSchema = z.object({
+  audit_id: z.string(),
+  template_id: z.string(),
+  action: z.enum(['create', 'delete', 'migrate', 'seed']),
+  actor_kind: z.enum(['human', 'system', 'local']),
+  actor_id: z.string(),
+  owner_id: z.string().nullable(),
+  provenance: z.record(z.string(), z.unknown()),
+  snapshot: z.record(z.string(), z.unknown()),
+  created_at: z.string(),
 });
 
 const CreateTemplateRequest = z.object({
@@ -100,6 +124,18 @@ function requireTemplateOperator(c: Context): Response | null {
   return null;
 }
 
+function templateMutationIdentity(c: Context): {
+  ownerId: string | null;
+  actor: { kind: 'human' | 'local'; id: string };
+} {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (!apiKey) {
+    return { ownerId: null, actor: { kind: 'local', id: 'auth-disabled-local' } };
+  }
+  const actorId = apiKey.user_id ?? apiKey.id;
+  return { ownerId: actorId, actor: { kind: 'human', id: actorId } };
+}
+
 const SUPPORTED_TEMPLATE_LEAF_TYPES = new Set<string>(LEAF_TYPES);
 
 function isSupportedTemplateLeafType(leafType: string): leafType is LeafType {
@@ -121,6 +157,12 @@ function formatTemplate(row: {
   variables: Array<{ name: string; description: string; required: boolean; defaultValue?: string }>;
   tags: string[];
   isBuiltin: boolean;
+  ownerId: string | null;
+  provenance: {
+    source: 'builtin' | 'human' | 'local' | 'legacy';
+    actor_kind: 'human' | 'system' | 'local';
+    actor_id: string;
+  };
   defaultConstraints: Array<{
     type: 'require' | 'exclude';
     match_mode: 'exact' | 'semantic';
@@ -146,6 +188,8 @@ function formatTemplate(row: {
     variables: builtinDefault?.variables ?? row.variables,
     tags: row.tags,
     is_builtin: row.isBuiltin,
+    owner_id: row.ownerId,
+    provenance: row.provenance,
     default_constraints: row.defaultConstraints ?? [],
     semantic_threshold: row.semanticThreshold ?? null,
     created_at: row.createdAt.toISOString(),
@@ -355,6 +399,7 @@ templatesRoutes.openapi(createTemplateRoute, async (c) => {
   try {
     const db = await getDB();
     const templateId = `tmpl_${nanoid(12)}`;
+    const identity = templateMutationIdentity(c);
 
     const row = await createTemplate(db, {
       template_id: templateId,
@@ -368,6 +413,13 @@ templatesRoutes.openapi(createTemplateRoute, async (c) => {
       tags: body.tags,
       default_constraints: body.default_constraints,
       semantic_threshold: body.semantic_threshold,
+      owner_id: identity.ownerId,
+      provenance: {
+        source: identity.actor.kind === 'human' ? 'human' : 'local',
+        actor_kind: identity.actor.kind,
+        actor_id: identity.actor.id,
+      },
+      audit_actor: identity.actor,
     });
 
     return c.json({ success: true as const, data: formatTemplate(row) }, 201);
@@ -378,6 +430,54 @@ templatesRoutes.openapi(createTemplateRoute, async (c) => {
       err instanceof Error ? err.message : 'Failed to create template'
     );
   }
+});
+
+// ============================================================
+// GET /v1/templates/:id/audit — Inspect retained mutation history
+// ============================================================
+
+const getTemplateAuditRoute = createRoute({
+  method: 'get',
+  path: '/v1/templates/{id}/audit',
+  tags: ['Templates'],
+  summary: 'Get the retained mutation audit for a template',
+  request: { params: TemplateIdParam },
+  responses: {
+    200: {
+      description: 'Append-only template audit records',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.array(TemplateAuditRecordSchema)),
+        },
+      },
+    },
+    403: {
+      description: 'Operator access required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+templatesRoutes.openapi(getTemplateAuditRoute, async (c) => {
+  const administrationError = requireTemplateOperator(c);
+  if (administrationError) return administrationError;
+
+  const db = await getDB();
+  const records = await listTemplateAudit(db, c.req.valid('param').id);
+  return c.json({
+    success: true as const,
+    data: records.map((record) => ({
+      audit_id: record.auditId,
+      template_id: record.templateId,
+      action: record.action as 'create' | 'delete' | 'migrate' | 'seed',
+      actor_kind: record.actorKind as 'human' | 'system' | 'local',
+      actor_id: record.actorId,
+      owner_id: record.ownerId,
+      provenance: record.provenance,
+      snapshot: record.snapshot,
+      created_at: record.createdAt.toISOString(),
+    })),
+  });
 });
 
 // ============================================================
@@ -430,7 +530,7 @@ templatesRoutes.openapi(deleteTemplateRoute, async (c) => {
       return errorResponse(c, 'FORBIDDEN', 'Cannot delete builtin templates');
     }
 
-    await deleteTemplate(db, id);
+    await deleteTemplate(db, id, templateMutationIdentity(c).actor);
     return c.json({ success: true as const, data: { deleted: true as const } });
   } catch (err) {
     return errorResponse(
