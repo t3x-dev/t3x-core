@@ -8,8 +8,8 @@
  * Access rules:
  * - Project not found → 404
  * - AUTH_DISABLED (no principal) → allow
- * - Machine principal with an exact project binding → allow
- * - Human principal matching project.owner_id → allow
+ * - Any principal with an exact project binding → allow
+ * - Global human principal matching project.owner_id → allow
  * - Legacy unowned projects require an explicit operator claim first
  * - Otherwise → 403
  */
@@ -59,10 +59,8 @@ export async function evaluateProjectAccess(
   // single-user access to all projects.
   if (!principal) return { allowed: true, project };
 
-  if (principal.principalKind !== undefined && principal.principalKind !== 'human') {
-    // Machine credentials must always carry a concrete project boundary.
-    // A global/null binding must not fall through to human/local rules.
-    if (!principal.projectId || principal.projectId !== projectId) {
+  if (principal.projectId) {
+    if (principal.projectId !== projectId) {
       return {
         allowed: false,
         status: 403,
@@ -71,6 +69,17 @@ export async function evaluateProjectAccess(
       };
     }
     return { allowed: true, project };
+  }
+
+  // Machine credentials must always carry a concrete project boundary. A
+  // global/null binding must not fall through to human ownership rules.
+  if (principal.principalKind !== undefined && principal.principalKind !== 'human') {
+    return {
+      allowed: false,
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'Access denied',
+    };
   }
 
   if (!principal.userId || !project.ownerId || project.ownerId !== principal.userId) {
@@ -203,11 +212,15 @@ export async function assertProjectAccessIncludingDeleted(
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   if (!apiKey) return project;
 
-  if (apiKey.principal_kind !== undefined && apiKey.principal_kind !== 'human') {
-    if (!apiKey.project_id || apiKey.project_id !== projectId) {
+  if (apiKey.project_id) {
+    if (apiKey.project_id !== projectId) {
       return c.json(createError('FORBIDDEN', 'Access denied'), 403);
     }
     return project;
+  }
+
+  if (apiKey.principal_kind !== undefined && apiKey.principal_kind !== 'human') {
+    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
   }
   const userId = apiKey.user_id;
   if (!userId || !project.ownerId || project.ownerId !== userId) {

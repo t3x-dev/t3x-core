@@ -76,6 +76,25 @@ function createAppWithProjectAgent(projectId: string | null) {
   return app;
 }
 
+function createAppWithProjectUser(userId: string, projectId: string) {
+  const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock access
+    (c as any).set('apiKey', {
+      id: 'ak_project_user',
+      user_id: userId,
+      project_id: projectId,
+      principal_kind: 'human',
+      transition_scopes: [],
+      key_prefix: 't3xk_hum',
+      name: 'Project-bound human',
+    });
+    return next();
+  });
+  app.route('/', projectRoutes);
+  return app;
+}
+
 function cfpack(name: string) {
   return {
     version: '2.0.0',
@@ -305,6 +324,15 @@ describe('Project Access Control (#508)', () => {
       const app = createAppWithProjectAgent(null);
 
       expect((await app.request(`/v1/projects/${project.projectId}`)).status).toBe(403);
+    });
+
+    it('project-bound human credentials can access only their exact project', async () => {
+      const bound = await insertProject(mockDB, { name: 'Bound legacy project' });
+      const other = await insertProject(mockDB, { name: 'Other legacy project' });
+      const app = createAppWithProjectUser('user_reviewer', bound.projectId);
+
+      expect((await app.request(`/v1/projects/${bound.projectId}`)).status).toBe(200);
+      expect((await app.request(`/v1/projects/${other.projectId}`)).status).toBe(403);
     });
 
     it('non-existent project returns 404', async () => {
