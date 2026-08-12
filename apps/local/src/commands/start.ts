@@ -4,6 +4,7 @@ import {
   buildApiEnv,
   buildWebEnv,
   DEFAULT_API_PORT,
+  LOCAL_RUNTIME_HOST,
   type ResolvedStartOptions,
   resolveStartOptions,
 } from '../runtime/env.js';
@@ -224,10 +225,10 @@ function buildRuntimeState(
     webPort: options.webPort,
     apiPid: pids.apiPid,
     webPid: pids.webPid,
-    apiUrl: `http://localhost:${options.apiPort}`,
-    webUrl: `http://localhost:${options.webPort}`,
-    apiHealthUrl: `http://127.0.0.1:${options.apiPort}/health`,
-    webHealthUrl: `http://127.0.0.1:${options.webPort}/health`,
+    apiUrl: `http://${LOCAL_RUNTIME_HOST}:${options.apiPort}`,
+    webUrl: `http://${LOCAL_RUNTIME_HOST}:${options.webPort}`,
+    apiHealthUrl: `http://${LOCAL_RUNTIME_HOST}:${options.apiPort}/health`,
+    webHealthUrl: `http://${LOCAL_RUNTIME_HOST}:${options.webPort}/health`,
     apiLogPath,
     webLogPath,
   };
