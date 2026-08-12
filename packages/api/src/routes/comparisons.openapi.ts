@@ -18,7 +18,7 @@ import {
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -135,11 +135,8 @@ comparisonsRoutes.openapi(createComparisonRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Verify project access if project_id is provided
-    if (body.project_id) {
-      const accessResult = await assertProjectAccess(c, db, body.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const comparisonId = `comp_${nanoid(12)}`;
 
@@ -205,11 +202,8 @@ comparisonsRoutes.openapi(listComparisonsRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Verify project access if project_id is provided
-    if (project_id) {
-      const accessResult = await assertProjectAccess(c, db, project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -274,6 +268,10 @@ comparisonsRoutes.openapi(getComparisonRoute, async (c) => {
     if (!row) {
       return errorResponse(c, 'NOT_FOUND', `Comparison not found: ${id}`);
     }
+
+    const accessResult = await assertResourceProjectAccess(c, db, row.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     return c.json({ success: true as const, data: formatComparison(row) });
   } catch (err) {
     return errorResponse(
@@ -317,6 +315,14 @@ comparisonsRoutes.openapi(deleteComparisonRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await getComparison(db, id);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Comparison not found: ${id}`);
+    }
+
+    const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const deleted = await deleteComparison(db, id);
     if (!deleted) {
       return errorResponse(c, 'NOT_FOUND', `Comparison not found: ${id}`);

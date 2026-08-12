@@ -20,7 +20,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -334,11 +334,8 @@ deployAgentRoutes.openapi(listDeployAgentsRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Access control check (if project-scoped)
-    if (projectId) {
-      const accessResult = await assertProjectAccess(c, db, projectId);
-      if (accessResult instanceof Response) return accessResult as never;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult as never;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -380,11 +377,8 @@ deployAgentRoutes.openapi(createDeployAgentRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Access control check (if project-scoped)
-    if (body.project_id) {
-      const accessResult = await assertProjectAccess(c, db, body.project_id);
-      if (accessResult instanceof Response) return accessResult as never;
-    }
+    const accessResult = await assertResourceProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult as never;
 
     const agent = await insertDeployAgent(db, {
       id: body.id,
@@ -395,21 +389,7 @@ deployAgentRoutes.openapi(createDeployAgentRoute, async (c) => {
       auth: body.auth ?? undefined,
     });
 
-    const apiAgent = {
-      deploy_agent_id: agent.deployAgentId,
-      project_id: agent.projectId,
-      name: agent.name,
-      endpoint: agent.endpoint,
-      type: agent.type,
-      auth: agent.authJson ? JSON.parse(agent.authJson) : null,
-      status: agent.status,
-      last_run_id: agent.lastRunId,
-      last_run_at: agent.lastRunAt?.toISOString() ?? null,
-      created_at: agent.createdAt.toISOString(),
-      updated_at: agent.updatedAt.toISOString(),
-    };
-
-    return c.json({ success: true as const, data: apiAgent }, 201);
+    return c.json({ success: true as const, data: toApiAgent(agent) }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
@@ -430,6 +410,9 @@ deployAgentRoutes.openapi(getDeployAgentRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Deploy agent ${deployAgentId} not found`);
     }
 
+    const accessResult = await assertResourceProjectAccess(c, db, agent.projectId);
+    if (accessResult instanceof Response) return accessResult as never;
+
     return c.json({ success: true as const, data: toApiAgent(agent) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -446,6 +429,14 @@ deployAgentRoutes.openapi(updateDeployAgentRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findDeployAgentById(db, deployAgentId);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Deploy agent ${deployAgentId} not found`);
+    }
+
+    const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult as never;
+
     const agent = await updateDeployAgent(db, deployAgentId, {
       name: body.name,
       endpoint: body.endpoint,
@@ -475,6 +466,14 @@ deployAgentRoutes.openapi(deleteDeployAgentRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findDeployAgentById(db, deployAgentId);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Deploy agent ${deployAgentId} not found`);
+    }
+
+    const accessResult = await assertResourceProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult as never;
+
     const deleted = await deleteDeployAgent(db, deployAgentId);
 
     if (!deleted) {

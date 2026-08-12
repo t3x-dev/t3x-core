@@ -3,7 +3,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import { getComparison, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -22,8 +22,26 @@ import { comparisonsRoutes } from '../routes/comparisons.openapi';
 describe('Comparisons Routes', () => {
   let cleanup: () => Promise<void>;
   let projectId: string;
+  let ownerProjectId: string;
+  let otherProjectId: string;
   const app = new Hono();
   app.route('/', comparisonsRoutes);
+
+  function authenticatedApp(userId: string) {
+    const authenticated = new Hono();
+    authenticated.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: `ak_${userId}`,
+        user_id: userId,
+        project_id: null,
+        principal_kind: 'human',
+      });
+      return next();
+    });
+    authenticated.route('/', comparisonsRoutes);
+    return authenticated;
+  }
 
   const sampleSnapshot = {
     version: 'compare_v1',
@@ -82,6 +100,12 @@ describe('Comparisons Routes', () => {
     cleanup = setup.cleanup;
     const proj = await insertProject(mockDB, testData.project({ name: 'Comparisons Project' }));
     projectId = proj.projectId;
+    ownerProjectId = (
+      await insertProject(mockDB, { name: 'Owner Comparisons Project', ownerId: 'user_owner' })
+    ).projectId;
+    otherProjectId = (
+      await insertProject(mockDB, { name: 'Other Comparisons Project', ownerId: 'user_other' })
+    ).projectId;
   });
 
   afterAll(async () => {
@@ -298,6 +322,53 @@ describe('Comparisons Routes', () => {
       expect(snapshot.winner).toBe('treatment');
       expect((snapshot.control as Record<string, unknown>).model).toBe('gpt-4');
       expect((snapshot.treatment as Record<string, unknown>).avg_score).toBe(0.92);
+    });
+  });
+
+  describe('authenticated project isolation', () => {
+    it('requires a project filter and rejects another project by resource id', async () => {
+      const createRes = await app.request('/v1/comparisons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          makeCreateBody({
+            project_id: otherProjectId,
+            title: 'Other Project Comparison',
+          })
+        ),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const comparisonId = (created.data as Record<string, unknown>).comparison_id as string;
+      const owner = authenticatedApp('user_owner');
+
+      expect((await owner.request('/v1/comparisons')).status).toBe(403);
+      expect((await owner.request(`/v1/comparisons?project_id=${ownerProjectId}`)).status).toBe(
+        200
+      );
+      expect((await owner.request(`/v1/comparisons/${comparisonId}`)).status).toBe(403);
+      expect(
+        (await owner.request(`/v1/comparisons/${comparisonId}`, { method: 'DELETE' })).status
+      ).toBe(403);
+      expect(await getComparison(mockDB, comparisonId)).not.toBeNull();
+    });
+
+    it('rejects authenticated creation and access without a concrete project', async () => {
+      const owner = authenticatedApp('user_owner');
+      const create = await owner.request('/v1/comparisons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ project_id: null, title: 'Denied Global' })),
+      });
+      expect(create.status).toBe(403);
+
+      const localCreate = await app.request('/v1/comparisons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ project_id: null, title: 'Existing Global' })),
+      });
+      const created = (await localCreate.json()) as ApiResponse;
+      const comparisonId = (created.data as Record<string, unknown>).comparison_id as string;
+      expect((await owner.request(`/v1/comparisons/${comparisonId}`)).status).toBe(403);
     });
   });
 });
