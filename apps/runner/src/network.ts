@@ -1,4 +1,18 @@
 export const DEFAULT_RUNNER_HOST = '127.0.0.1';
+export const RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV =
+  'T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK';
+
+function isLoopbackHost(host: string): boolean {
+  const normalized = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
+  if (normalized === 'localhost' || normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') {
+    return true;
+  }
+  const octets = normalized.split('.');
+  return octets.length === 4 && octets[0] === '127';
+}
 
 /**
  * Standalone Runner is an evaluation surface with stateful control routes.
@@ -7,7 +21,16 @@ export const DEFAULT_RUNNER_HOST = '127.0.0.1';
  */
 export function resolveRunnerHost(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.RUNNER_HOST?.trim();
-  return configured || DEFAULT_RUNNER_HOST;
+  const host = configured || DEFAULT_RUNNER_HOST;
+  if (
+    !isLoopbackHost(host) &&
+    env[RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV]?.toLowerCase() !== 'true'
+  ) {
+    throw new Error(
+      `Runner cannot bind a non-loopback host without explicitly setting ${RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV}=true`
+    );
+  }
+  return host;
 }
 
 export function resolveRunnerPort(port: number | string): number {
