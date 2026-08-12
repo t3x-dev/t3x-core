@@ -16,7 +16,6 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import {
-  type ApiKey,
   GENERATION_RUNTIME_PROVIDER_IDS,
   getModelsByProvider,
   normalizeLocalProviderId as normalizeSharedLocalProviderId,
@@ -31,8 +30,10 @@ import {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '@t3x-dev/storage';
+import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { hasOperatorAccess } from '../lib/operator-access';
 import {
   getProviderRegistry,
   refreshProviderRegistryConfig,
@@ -55,13 +56,15 @@ export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
-providersRoutes.use('*', async (c, next) => {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
-    return errorResponse(c, 'FORBIDDEN', 'Provider administration requires a human principal');
+async function requireProviderOperator(c: Context, next: Next) {
+  if (!hasOperatorAccess(c)) {
+    return errorResponse(c, 'FORBIDDEN', 'Provider administration requires operator access');
   }
   return next();
-});
+}
+
+providersRoutes.use('/v1/providers', requireProviderOperator);
+providersRoutes.use('/v1/providers/*', requireProviderOperator);
 
 function normalizeLocalProviderId(id: string): LocalProviderId | null {
   return normalizeSharedLocalProviderId(id);

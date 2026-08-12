@@ -16,6 +16,8 @@ type ApiResponse = any;
 
 let mockDB: AnyDB;
 let cleanup: (() => Promise<void>) | null = null;
+const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
+const originalOperatorKeyIds = process.env.T3X_OPERATOR_KEY_IDS;
 
 const mockRegistry = {
   getEntry: vi.fn((id: string) => ({ id })),
@@ -45,6 +47,16 @@ import { providersRoutes } from '../routes/providers.openapi';
 
 describe('Provider Routes', () => {
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+    (c as any).set('apiKey', {
+      id: 'ak_human',
+      user_id: 'user_owner',
+      project_id: null,
+      principal_kind: 'human',
+    });
+    return next();
+  });
   app.route('/', providersRoutes);
 
   function principalApp(principalKind: 'human' | 'agent' | 'service') {
@@ -70,6 +82,8 @@ describe('Provider Routes', () => {
   });
 
   beforeEach(async () => {
+    process.env.T3X_OPERATOR_USER_IDS = 'user_owner';
+    delete process.env.T3X_OPERATOR_KEY_IDS;
     mockRegistry.getEntry.mockImplementation((id: string) => ({ id }));
     mockRegistry.listProviders.mockReset();
     mockRegistry.getProviderIdsForRole.mockReset();
@@ -86,6 +100,10 @@ describe('Provider Routes', () => {
   });
 
   afterAll(async () => {
+    if (originalOperatorUserIds === undefined) delete process.env.T3X_OPERATOR_USER_IDS;
+    else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
+    if (originalOperatorKeyIds === undefined) delete process.env.T3X_OPERATOR_KEY_IDS;
+    else process.env.T3X_OPERATOR_KEY_IDS = originalOperatorKeyIds;
     if (cleanup) {
       await cleanup();
     }
@@ -132,7 +150,19 @@ describe('Provider Routes', () => {
     expect(bundle.secrets.OPENAI_API_KEY).toBeUndefined();
   });
 
-  it('keeps provider administration available to human principals', async () => {
+  it('rejects ordinary human principals without operator assignment', async () => {
+    delete process.env.T3X_OPERATOR_USER_IDS;
+    expect((await principalApp('human').request('/v1/providers')).status).toBe(403);
+  });
+
+  it('keeps provider administration available to configured human operators', async () => {
+    mockRegistry.listProviders.mockReturnValue([]);
+    expect((await principalApp('human').request('/v1/providers')).status).toBe(200);
+  });
+
+  it('supports explicit human API-key operator bootstrap', async () => {
+    delete process.env.T3X_OPERATOR_USER_IDS;
+    process.env.T3X_OPERATOR_KEY_IDS = 'ak_human';
     mockRegistry.listProviders.mockReturnValue([]);
     expect((await principalApp('human').request('/v1/providers')).status).toBe(200);
   });

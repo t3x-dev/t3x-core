@@ -4,12 +4,14 @@
 
 import { type AnyDB, createTemplate } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown>;
 
 let mockDB: AnyDB;
+const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
+const originalOperatorKeyIds = process.env.T3X_OPERATOR_KEY_IDS;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -21,7 +23,33 @@ import { templatesRoutes } from '../routes/templates.openapi';
 describe('Templates Routes', () => {
   let cleanup: () => Promise<void>;
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+    (c as any).set('apiKey', {
+      id: 'ak_template_human',
+      user_id: 'user_template_operator',
+      project_id: null,
+      principal_kind: 'human',
+    });
+    return next();
+  });
   app.route('/', templatesRoutes);
+
+  function memberApp() {
+    const member = new Hono();
+    member.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: 'ak_template_member',
+        user_id: 'user_template_member',
+        project_id: null,
+        principal_kind: 'human',
+      });
+      return next();
+    });
+    member.route('/', templatesRoutes);
+    return member;
+  }
 
   function machineApp() {
     const machine = new Hono();
@@ -68,7 +96,16 @@ describe('Templates Routes', () => {
     cleanup = setup.cleanup;
   });
 
+  beforeEach(() => {
+    process.env.T3X_OPERATOR_USER_IDS = 'user_template_operator';
+    delete process.env.T3X_OPERATOR_KEY_IDS;
+  });
+
   afterAll(async () => {
+    if (originalOperatorUserIds === undefined) delete process.env.T3X_OPERATOR_USER_IDS;
+    else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
+    if (originalOperatorKeyIds === undefined) delete process.env.T3X_OPERATOR_KEY_IDS;
+    else process.env.T3X_OPERATOR_KEY_IDS = originalOperatorKeyIds;
     await cleanup();
   });
 
@@ -190,6 +227,18 @@ describe('Templates Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(makeCreateBody({ title: 'Machine Global Template' })),
+      });
+      expect(create.status).toBe(403);
+    });
+
+    it('allows member reads but rejects member creation of global templates', async () => {
+      const member = memberApp();
+      expect((await member.request('/v1/templates')).status).toBe(200);
+
+      const create = await member.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Member Global Template' })),
       });
       expect(create.status).toBe(403);
     });
@@ -338,6 +387,22 @@ describe('Templates Routes', () => {
       const machine = machineApp();
       expect(
         (await machine.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
+      ).toBe(403);
+      expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
+    });
+
+    it('rejects member deletion of a global custom template', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Operator Managed Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      const member = memberApp();
+      expect(
+        (await member.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
       ).toBe(403);
       expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
     });

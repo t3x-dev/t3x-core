@@ -9,12 +9,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
+import { getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
 import { createTemplate, deleteTemplate, findTemplateById, listTemplates } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { hasOperatorAccess } from '../lib/operator-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -92,10 +93,9 @@ export const templatesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
-function requireHumanTemplateAdministrator(c: Context): Response | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
-    return errorResponse(c, 'FORBIDDEN', 'Template administration requires a human principal');
+function requireTemplateOperator(c: Context): Response | null {
+  if (!hasOperatorAccess(c)) {
+    return errorResponse(c, 'FORBIDDEN', 'Template administration requires operator access');
   }
   return null;
 }
@@ -310,7 +310,7 @@ const createTemplateRoute = createRoute({
 });
 
 templatesRoutes.openapi(createTemplateRoute, async (c) => {
-  const administrationError = requireHumanTemplateAdministrator(c);
+  const administrationError = requireTemplateOperator(c);
   if (administrationError) return administrationError;
 
   const body = c.req.valid('json');
@@ -413,7 +413,7 @@ const deleteTemplateRoute = createRoute({
 });
 
 templatesRoutes.openapi(deleteTemplateRoute, async (c) => {
-  const administrationError = requireHumanTemplateAdministrator(c);
+  const administrationError = requireTemplateOperator(c);
   if (administrationError) return administrationError;
 
   const { id } = c.req.valid('param');
