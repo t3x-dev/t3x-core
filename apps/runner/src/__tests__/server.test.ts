@@ -8,7 +8,7 @@ vi.mock('pino', () => {
   return { default: () => logger };
 });
 
-const { app } = await import('../server.js');
+const { app, startServer } = await import('../server.js');
 
 interface JsonResponse {
   status: number;
@@ -121,6 +121,23 @@ describe('runner server routes', () => {
       data: { status: 'ok', service: 't3x-runner' },
     });
     expect(res.headers['x-request-id']).toMatch(/^[a-f0-9]{12}$/);
+  });
+
+  it('rejects an explicit non-loopback startup host without the dangerous override', () => {
+    const originalOverride = process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+    delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+
+    try {
+      expect(() => startServer(8080, '0.0.0.0')).toThrow(
+        'T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK=true'
+      );
+    } finally {
+      if (originalOverride === undefined) {
+        delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+      } else {
+        process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK = originalOverride;
+      }
+    }
   });
 
   it('GET / returns service metadata with docs link and hides debug routes by default', async () => {

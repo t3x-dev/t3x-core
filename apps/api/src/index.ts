@@ -21,7 +21,7 @@ import {
   stopRealtimeListener,
   stopTimeoutChecker,
 } from '@t3x-dev/api';
-import { resolveApiHost } from './network.js';
+import { resolveApiAuthenticationMode, resolveApiHost } from './network.js';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -140,7 +140,13 @@ async function start() {
     });
 
     pinoLogger.info(
-      { host, port, url: `http://${host}:${port}`, ws: `ws://${host}:${port}/ws` },
+      {
+        host,
+        port,
+        url: `http://${host}:${port}`,
+        ws: `ws://${host}:${port}/ws`,
+        authentication: resolveApiAuthenticationMode(),
+      },
       'T3X API server running'
     );
 

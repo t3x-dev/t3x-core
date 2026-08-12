@@ -7,6 +7,7 @@
 
 import { and, desc, eq, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { decryptCredential, encryptCredential } from '../lib/credential-encryption';
 import { type DeployAgent, deployAgents, type NewDeployAgent } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
@@ -45,6 +46,42 @@ export interface ListDeployAgentsOptions {
   cursor?: string;
 }
 
+function deployAgentAuthContext(deployAgentId: string): string {
+  return `deploy-agent:${deployAgentId}:auth`;
+}
+
+function encryptedDeployAgentAuth(
+  deployAgentId: string,
+  auth: NonNullable<CreateDeployAgentInput['auth']>
+): string {
+  return encryptCredential(JSON.stringify(auth), deployAgentAuthContext(deployAgentId));
+}
+
+async function materializeDeployAgentAuth(db: AnyDB, agent: DeployAgent): Promise<DeployAgent> {
+  if (!agent.authJson) return agent;
+
+  const decrypted = decryptCredential(agent.authJson, deployAgentAuthContext(agent.deployAgentId));
+  if (decrypted.needsRotation) {
+    await db
+      .update(deployAgents)
+      .set({
+        authJson: encryptCredential(
+          decrypted.plaintext,
+          deployAgentAuthContext(agent.deployAgentId)
+        ),
+      })
+      .where(eq(deployAgents.deployAgentId, agent.deployAgentId));
+  }
+  return { ...agent, authJson: decrypted.plaintext };
+}
+
+async function materializeDeployAgentAuthList(
+  db: AnyDB,
+  agents: DeployAgent[]
+): Promise<DeployAgent[]> {
+  return Promise.all(agents.map((agent) => materializeDeployAgentAuth(db, agent)));
+}
+
 /**
  * Insert a new deploy agent
  */
@@ -62,14 +99,14 @@ export async function insertDeployAgent(
       name: input.name,
       endpoint: input.endpoint,
       type: input.type ?? 'http',
-      authJson: input.auth ? JSON.stringify(input.auth) : null,
+      authJson: input.auth ? encryptedDeployAgentAuth(input.id, input.auth) : null,
       status: 'idle',
       createdAt: now,
       updatedAt: now,
     })
     .returning();
 
-  return agent;
+  return materializeDeployAgentAuth(db, agent);
 }
 
 /**
@@ -85,7 +122,7 @@ export async function findDeployAgentById(
     .where(eq(deployAgents.deployAgentId, deployAgentId))
     .limit(1);
 
-  return agent ?? null;
+  return agent ? materializeDeployAgentAuth(db, agent) : null;
 }
 
 /**
@@ -131,7 +168,8 @@ export async function findDeployAgents(
       .orderBy(desc(deployAgents.createdAt), desc(deployAgents.deployAgentId))
       .limit(limit + 1);
 
-    return toCursorPage(rows, limit, (a) => ({
+    const materializedRows = await materializeDeployAgentAuthList(db, rows);
+    return toCursorPage(materializedRows, limit, (a) => ({
       t: a.createdAt.toISOString(),
       k: a.deployAgentId,
     }));
@@ -140,21 +178,23 @@ export async function findDeployAgents(
   // Legacy offset/limit mode
   const offset = options.offset ?? 0;
   if (options.projectId) {
-    return db
+    const rows = await db
       .select()
       .from(deployAgents)
       .where(eq(deployAgents.projectId, options.projectId))
       .orderBy(desc(deployAgents.createdAt))
       .limit(limit)
       .offset(offset);
+    return materializeDeployAgentAuthList(db, rows);
   }
 
-  return db
+  const rows = await db
     .select()
     .from(deployAgents)
     .orderBy(desc(deployAgents.createdAt))
     .limit(limit)
     .offset(offset);
+  return materializeDeployAgentAuthList(db, rows);
 }
 
 /**
@@ -182,7 +222,9 @@ export async function updateDeployAgent(
     updateData.type = updates.type;
   }
   if (updates.auth !== undefined) {
-    updateData.authJson = updates.auth ? JSON.stringify(updates.auth) : null;
+    updateData.authJson = updates.auth
+      ? encryptedDeployAgentAuth(deployAgentId, updates.auth)
+      : null;
   }
   if (updates.status !== undefined) {
     updateData.status = updates.status;
@@ -200,7 +242,7 @@ export async function updateDeployAgent(
     .where(eq(deployAgents.deployAgentId, deployAgentId))
     .returning();
 
-  return updated ?? null;
+  return updated ? materializeDeployAgentAuth(db, updated) : null;
 }
 
 /**

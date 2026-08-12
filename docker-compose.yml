@@ -66,6 +66,8 @@ services:
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
       - GOOGLE_AI_STUDIO_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -138,6 +140,8 @@ services:
       - PORT=8080
       # Inter-container callers need the service to listen on the Docker network.
       - RUNNER_HOST=0.0.0.0
+      # Runner business-route auth is not implemented yet; acknowledge the trusted network boundary.
+      - T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK=true
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - N8N_API_URL=http://n8n:5678/api/v1

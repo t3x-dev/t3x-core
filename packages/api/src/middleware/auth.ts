@@ -16,6 +16,7 @@
 import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
 import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import { pinoLogger } from './logger';
@@ -68,14 +69,14 @@ export async function authMiddleware(c: Context, next: Next) {
   // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive).
   // Production builds require an additional explicit opt-in so a stray
   // AUTH_DISABLED=true cannot silently expose a deployed API.
-  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
-    const allowProductionDisable =
-      process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION?.toLowerCase() === 'true';
-    if (process.env.NODE_ENV === 'production' && !allowProductionDisable) {
-      pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
-    } else {
-      return next();
-    }
+  if (isAuthenticationDisabled()) {
+    return next();
+  }
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.AUTH_DISABLED?.toLowerCase() === 'true'
+  ) {
+    pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
   }
 
   // Skip auth for public paths
