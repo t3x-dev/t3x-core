@@ -5,7 +5,10 @@ import path from 'node:path';
 type FileConfig = {
   api_url?: string;
   api_key?: string;
+  api_key_origin?: string;
 };
+
+const DEFAULT_API_URL = 'http://localhost:8000/api';
 
 export type LocalConfigSource = 'env' | 'file' | 'default' | 'none';
 
@@ -31,6 +34,10 @@ function readFileConfig(): FileConfig {
     return {
       api_url: typeof raw.api_url === 'string' && raw.api_url.trim() ? raw.api_url : undefined,
       api_key: typeof raw.api_key === 'string' && raw.api_key.trim() ? raw.api_key : undefined,
+      api_key_origin:
+        typeof raw.api_key_origin === 'string' && raw.api_key_origin.trim()
+          ? raw.api_key_origin
+          : undefined,
     };
   } catch {
     return {};
@@ -52,7 +59,7 @@ export function resolveLocalConfigState(): LocalConfigState {
   const fileConfig = readFileConfig();
   const envApiUrl = process.env.T3X_API_URL;
   const envApiKey = process.env.T3X_API_KEY;
-  const apiUrl = envApiUrl || fileConfig.api_url || 'http://localhost:8000/api';
+  const apiUrl = envApiUrl || fileConfig.api_url || DEFAULT_API_URL;
   const apiUrlSource: LocalConfigState['api_url_source'] = envApiUrl
     ? 'env'
     : fileConfig.api_url
@@ -81,6 +88,11 @@ export function updateLocalConfig(input: FileConfig): LocalConfigState {
     ...current,
     ...input,
   };
+  if (input.api_key !== undefined) {
+    const credentialApiUrl =
+      process.env.T3X_API_URL || input.api_url || current.api_url || DEFAULT_API_URL;
+    next.api_key_origin = getHttpOrigin(credentialApiUrl);
+  }
   writeFileConfig(next);
   return resolveLocalConfigState();
 }
@@ -89,11 +101,36 @@ export function clearStoredApiKey(): LocalConfigState {
   const current = readFileConfig();
   const next: FileConfig = { ...current };
   delete next.api_key;
+  delete next.api_key_origin;
   writeFileConfig(next);
   return resolveLocalConfigState();
 }
 
-export function getEffectiveApiKey(): string | undefined {
+export interface EffectiveApiCredential {
+  apiKey: string | undefined;
+  trustedOrigin: string | undefined;
+}
+
+export function getHttpOrigin(apiUrl: string): string | undefined {
+  try {
+    const url = new URL(apiUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getEffectiveApiCredential(): EffectiveApiCredential {
   const fileConfig = readFileConfig();
-  return process.env.T3X_API_KEY || fileConfig.api_key;
+  if (process.env.T3X_API_KEY) {
+    return {
+      apiKey: process.env.T3X_API_KEY,
+      trustedOrigin: getHttpOrigin(process.env.T3X_API_URL || DEFAULT_API_URL),
+    };
+  }
+  return {
+    apiKey: fileConfig.api_key,
+    trustedOrigin: fileConfig.api_key_origin,
+  };
 }

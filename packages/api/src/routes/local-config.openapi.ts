@@ -18,6 +18,8 @@ const LocalAccessCheckSchema = z.object({
     'ACCESS_OK',
     'AUTH_NOT_REQUIRED',
     'MISSING_API_KEY',
+    'CREDENTIAL_ORIGIN_MISMATCH',
+    'UNSAFE_API_URL',
     'INVALID_API_KEY',
     'API_UNREACHABLE',
     'API_ERROR',
