@@ -204,6 +204,34 @@ describe('runner server routes', () => {
     expect(body.error.message).toContain('boom');
   });
 
+  it('POST /runs requires project scope', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-without-project',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /runs accepts an explicitly project-scoped engine run', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-project-a',
+        project_id: 'project-a',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { status: 'running' } });
+  });
+
   it('GET /debug/n8n-check returns 404 when debug routes are disabled', async () => {
     const res = await requestJson(server, '/debug/n8n-check');
     const body = res.body as { error: { code: string } };
@@ -260,6 +288,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'webhook-agent',
         name: 'Webhook Agent',
         endpoint: 'http://127.0.0.1:9000/run',
@@ -278,6 +307,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,
@@ -314,6 +344,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'private-agent',
         name: 'Private Agent',
         endpoint: 'http://169.254.169.254/latest/meta-data',
@@ -333,6 +364,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'revoked-private-agent',
         name: 'Revoked Private Agent',
         endpoint: 'http://127.0.0.1:9000/run',
@@ -347,7 +379,11 @@ describe('runner server routes', () => {
 
     const res = await requestJson(server, '/run', {
       method: 'POST',
-      body: { agent_id: 'revoked-private-agent', input: { prompt: 'hello' } },
+      body: {
+        project_id: 'project-a',
+        agent_id: 'revoked-private-agent',
+        input: { prompt: 'hello' },
+      },
     });
     const body = res.body as { success: boolean; error: { code: string; message: string } };
 
@@ -362,6 +398,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-proxy-agent',
         name: 'Failing Proxy Agent',
         endpoint: 'http://127.0.0.1:9000/fail',
@@ -380,6 +417,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-proxy-agent',
         input: { prompt: 'hello' },
       },
@@ -402,6 +440,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-webhook-agent',
         name: 'Failing Webhook Agent',
         endpoint: 'http://127.0.0.1:9000/fail-webhook',
@@ -420,6 +459,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,

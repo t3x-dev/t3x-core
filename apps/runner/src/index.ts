@@ -8,7 +8,7 @@
 //   import { observer, evalEngine } from '@t3x-dev/runner';
 //
 //   // Register an agent
-//   observer.registerAgent({
+//   observer.registerAgent('project-id', {
 //     id: 'my-agent',
 //     name: 'My Agent',
 //     endpoint: 'http://localhost:3000/agent',
@@ -16,14 +16,16 @@
 //   });
 //
 //   // Start a run
-//   const runId = observer.startRun('my-agent', { agent_id: 'my-agent', input: { query: 'hello' } });
+//   const runId = observer.startRun('project-id', 'my-agent', {
+//     agent_id: 'my-agent', input: { query: 'hello' }
+//   });
 //
 //   // Record steps
-//   observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
-//   observer.recordToolCall(runId, 'search', { query: 'test' }, { results: [] }, 100);
+//   observer.recordLLMCall('project-id', runId, prompt, response, 'gpt-4', 500);
+//   observer.recordToolCall('project-id', runId, 'search', { query: 'test' }, { results: [] }, 100);
 //
 //   // Complete run
-//   const record = observer.completeRun(runId, output, 'completed');
+//   const record = observer.completeRun('project-id', runId, output, 'completed');
 //
 //   // Evaluate with rules
 //   const result = evalEngine.evaluate(record, rules);
@@ -63,6 +65,8 @@ export type {
   LLMData,
   N8nCallback,
   PendingRun,
+  ProjectScopedAgentConfig,
+  ProjectScopedAgentInput,
   RetrievalData,
   Rule,
   // Eval Rules
@@ -89,6 +93,8 @@ export {
   EvalRulesSchema,
   LLMDataSchema,
   N8nCallbackSchema,
+  ProjectScopedAgentConfigSchema,
+  ProjectScopedAgentInputSchema,
   RetrievalDataSchema,
   // Eval Rules
   RuleOperatorSchema,

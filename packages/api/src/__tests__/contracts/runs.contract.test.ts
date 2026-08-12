@@ -207,6 +207,7 @@ describe('Runs API Contract', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          project_id: testProjectId,
           leaf: { id: 'test-agent', type: 'deploy' },
           inputs: { test: true },
           workflow: { type: 'n8n', webhook_id: 'test-webhook' },

@@ -200,7 +200,7 @@ apps/runner/
 import { observer } from '@t3x-dev/runner';
 
 // Register Agent
-observer.registerAgent({
+observer.registerAgent('project-id', {
   id: 'my-agent',
   name: 'My Agent',
   endpoint: 'http://localhost:3000/agent',
@@ -208,16 +208,19 @@ observer.registerAgent({
 });
 
 // Start a run
-const runId = observer.startRun('my-agent', { agent_id: 'my-agent', input: { query: 'hello' } });
+const runId = observer.startRun('project-id', 'my-agent', {
+  agent_id: 'my-agent',
+  input: { query: 'hello' },
+});
 
 // Record LLM call
-observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
+observer.recordLLMCall('project-id', runId, prompt, response, 'gpt-4', 500);
 
 // Record tool call
-observer.recordToolCall(runId, 'search', { query: 'test' }, { results: [] }, 100);
+observer.recordToolCall('project-id', runId, 'search', { query: 'test' }, { results: [] }, 100);
 
 // Complete run
-const record = observer.completeRun(runId, output, 'completed');
+const record = observer.completeRun('project-id', runId, output, 'completed');
 ```
 
 **Key Classes**:

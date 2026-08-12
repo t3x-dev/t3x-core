@@ -108,10 +108,8 @@ runsRoutes.openapi(createRunRoute, async (c) => {
     const db = await getDB();
     let resolvedProjectId = input.project_id;
 
-    if (input.project_id) {
-      const accessResult = await assertProjectAccess(c, db, input.project_id);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const accessResult = await assertProjectAccess(c, db, input.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     let resolvedLeaf = input.leaf;
     const leafId: string | null = input.leaf_id || null;
@@ -139,7 +137,7 @@ runsRoutes.openapi(createRunRoute, async (c) => {
           400
         );
       }
-      if (resolvedProjectId && resolvedProjectId !== leaf.project_id) {
+      if (resolvedProjectId !== leaf.project_id) {
         return errorResponse(c, 'INVALID_REQUEST', 'leaf_id does not belong to project_id');
       }
       resolvedProjectId = leaf.project_id;
@@ -153,12 +151,9 @@ runsRoutes.openapi(createRunRoute, async (c) => {
       };
     }
 
-    const resourceAccess = await assertResourceProjectAccess(c, db, resolvedProjectId);
-    if (resourceAccess instanceof Response) return resourceAccess;
-
     await insertRun(db, {
       run_id,
-      project_id: resolvedProjectId || null,
+      project_id: resolvedProjectId,
       runner_run_id: null,
       commit_ref: input.commit_ref || null,
       leaf_id: leafId,
@@ -172,6 +167,7 @@ runsRoutes.openapi(createRunRoute, async (c) => {
 
     const runnerPayload = {
       run_id,
+      project_id: resolvedProjectId,
       commit_ref: input.commit_ref,
       leaf: resolvedLeaf,
       inputs: input.inputs,

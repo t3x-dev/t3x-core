@@ -17,10 +17,12 @@ import { resolveRunnerHost, resolveRunnerPort } from './network.js';
 import { observer } from './observer.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import {
-  AgentConfigSchema,
-  AgentInputSchema,
   EngineRunRequestSchema,
+  EvalRulesSchema,
   N8nCallbackSchema,
+  ProjectScopedAgentConfigSchema,
+  ProjectScopedAgentInputSchema,
+  RunRecordSchema,
 } from './schemas/index.js';
 import type { RunRecord } from './schemas/run-record.js';
 import {
@@ -293,10 +295,10 @@ app.get('/debug/n8n-check', async (req, res) => {
  */
 app.post('/agents', async (req, res) => {
   try {
-    const config = AgentConfigSchema.parse(req.body);
+    const { project_id: projectId, ...config } = ProjectScopedAgentConfigSchema.parse(req.body);
     await assertSafeAgentEndpoint(config.endpoint);
-    observer.registerAgent(config);
-    logger.info({ agent_id: config.id }, 'Agent registered');
+    observer.registerAgent(projectId, config);
+    logger.info({ project_id: projectId, agent_id: config.id }, 'Agent registered');
     res.json({ success: true, data: { agent_id: config.id } });
   } catch (error) {
     res
@@ -309,7 +311,14 @@ app.post('/agents', async (req, res) => {
  * GET /agents/:id - Get agent config
  */
 app.get('/agents/:id', (req, res) => {
-  const agent = observer.getAgent(req.params.id);
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
+  const agent = observer.getAgent(projectId, req.params.id);
   if (!agent) {
     return res
       .status(404)
@@ -330,8 +339,8 @@ app.get('/agents/:id', (req, res) => {
  */
 app.post('/run', async (req, res) => {
   try {
-    const input = AgentInputSchema.parse(req.body);
-    const agent = observer.getAgent(input.agent_id);
+    const input = ProjectScopedAgentInputSchema.parse(req.body);
+    const agent = observer.getAgent(input.project_id, input.agent_id);
 
     if (!agent) {
       return res.status(404).json({
@@ -341,8 +350,11 @@ app.post('/run', async (req, res) => {
     }
 
     // Start observing
-    const runId = observer.startRun(input.agent_id, input);
-    logger.info({ run_id: runId, agent_id: input.agent_id }, 'Run started');
+    const runId = observer.startRun(input.project_id, input.agent_id, input);
+    logger.info(
+      { project_id: input.project_id, run_id: runId, agent_id: input.agent_id },
+      'Run started'
+    );
 
     try {
       // Forward to agent
@@ -366,7 +378,7 @@ app.post('/run', async (req, res) => {
       const latencyMs = Date.now() - startTime;
 
       // Complete the run
-      const record = observer.completeRun(runId, output, 'completed');
+      const record = observer.completeRun(input.project_id, runId, output, 'completed');
       logger.info({ run_id: runId, latency_ms: latencyMs }, 'Run completed');
 
       res.json({
@@ -375,8 +387,8 @@ app.post('/run', async (req, res) => {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      observer.recordError(runId, errorMsg);
-      const record = observer.completeRun(runId, null, 'failed');
+      observer.recordError(input.project_id, runId, errorMsg);
+      const record = observer.completeRun(input.project_id, runId, null, 'failed');
 
       logger.error({ run_id: runId, error: errorMsg }, 'Run failed');
       res.status(500).json({
@@ -400,10 +412,12 @@ app.post('/run', async (req, res) => {
 app.post('/run/:id/step', (req, res) => {
   try {
     const runId = req.params.id;
-    const { type, data } = req.body;
+    const { project_id: projectId, type, data } = req.body;
+    if (typeof projectId !== 'string' || !projectId) throw new Error('project_id is required');
 
     if (type === 'llm_call') {
       observer.recordLLMCall(
+        projectId,
         runId,
         data.input,
         data.output,
@@ -412,12 +426,19 @@ app.post('/run/:id/step', (req, res) => {
         data.tokens
       );
     } else if (type === 'tool_call') {
-      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
+      observer.recordToolCall(
+        projectId,
+        runId,
+        data.tool_name,
+        data.input,
+        data.output,
+        data.latency_ms
+      );
     } else if (type === 'error') {
-      observer.recordError(runId, data.error, data.step_id);
+      observer.recordError(projectId, runId, data.error, data.step_id);
     }
 
-    res.json({ success: true, data: {} });
+    res.json({ success: true, data: { recorded: true } });
   } catch (error) {
     res
       .status(400)
@@ -432,17 +453,32 @@ app.post('/run/:id/step', (req, res) => {
 app.post('/run/:id/event', (req, res) => {
   try {
     const runId = req.params.id;
-    const { type, data } = req.body;
+    const { project_id: projectId, type, data } = req.body;
+    if (typeof projectId !== 'string' || !projectId) throw new Error('project_id is required');
 
     if (type === 'llm_call') {
-      observer.recordLLMCall(runId, data.input, data.output, data.model, data.latency_ms);
+      observer.recordLLMCall(
+        projectId,
+        runId,
+        data.input,
+        data.output,
+        data.model,
+        data.latency_ms
+      );
     } else if (type === 'tool_call') {
-      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
+      observer.recordToolCall(
+        projectId,
+        runId,
+        data.tool_name,
+        data.input,
+        data.output,
+        data.latency_ms
+      );
     } else if (type === 'error') {
-      observer.recordError(runId, data.error);
+      observer.recordError(projectId, runId, data.error);
     }
 
-    res.json({ success: true, data: {} });
+    res.json({ success: true, data: { recorded: true } });
   } catch (error) {
     res
       .status(400)
@@ -454,7 +490,14 @@ app.post('/run/:id/event', (req, res) => {
  * GET /run/:id - Get run record
  */
 app.get('/run/:id', (req, res) => {
-  const record = observer.getRun(req.params.id);
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
+  const record = observer.getRun(projectId, req.params.id);
   if (!record) {
     return res
       .status(404)
@@ -467,8 +510,15 @@ app.get('/run/:id', (req, res) => {
  * GET /runs - List runs
  */
 app.get('/runs', (req, res) => {
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
   const system = req.query.system as 'n8n' | 'langchain' | 'custom' | undefined;
-  const runs = observer.listRuns(system);
+  const runs = observer.listRuns(projectId, system);
   res.json({ success: true, data: { runs } });
 });
 
@@ -654,6 +704,7 @@ async function processN8nCallback(data: {
 
       runRecord = mapN8nExecutionToRunRecord(execution, {
         runId: runInfo.run_id,
+        projectId: runInfo.project_id,
       });
       logger.info(
         {
@@ -871,6 +922,7 @@ function buildRunRecordFromCallback(
   const now = new Date().toISOString();
   return {
     run_id: runInfo.run_id,
+    project_id: runInfo.project_id,
     status: data.error ? 'failed' : 'completed',
     inputs: runInfo.inputs || {},
     output: data.output || {},
@@ -920,12 +972,13 @@ function buildRunRecordFromCallback(
  */
 app.post('/webhook/run', async (req, res) => {
   try {
-    const input = AgentInputSchema.parse({
+    const input = ProjectScopedAgentInputSchema.parse({
+      project_id: req.body.project_id,
       agent_id: req.body.agent_id,
       input: req.body.input,
       config: req.body.config,
     });
-    const agent = observer.getAgent(input.agent_id);
+    const agent = observer.getAgent(input.project_id, input.agent_id);
 
     if (!agent) {
       return res.status(404).json({
@@ -934,7 +987,7 @@ app.post('/webhook/run', async (req, res) => {
       });
     }
 
-    const runId = observer.startRun(input.agent_id, input);
+    const runId = observer.startRun(input.project_id, input.agent_id, input);
     const startTime = Date.now();
 
     try {
@@ -955,8 +1008,15 @@ app.post('/webhook/run', async (req, res) => {
 
       const output = await parseAgentResponse(response);
       const latencyMs = Date.now() - startTime;
-      observer.recordToolCall(runId, 'agent_http_request', input.input, output, latencyMs);
-      const record = observer.completeRun(runId, output, 'completed');
+      observer.recordToolCall(
+        input.project_id,
+        runId,
+        'agent_http_request',
+        input.input,
+        output,
+        latencyMs
+      );
+      const record = observer.completeRun(input.project_id, runId, output, 'completed');
       const evalResult =
         req.body.auto_eval === true
           ? evalEngine.evaluateWithLeaf(
@@ -971,8 +1031,8 @@ app.post('/webhook/run', async (req, res) => {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      observer.recordError(runId, errorMsg);
-      const record = observer.completeRun(runId, null, 'failed');
+      observer.recordError(input.project_id, runId, errorMsg);
+      const record = observer.completeRun(input.project_id, runId, null, 'failed');
 
       res.status(500).json({
         success: false,
@@ -999,23 +1059,40 @@ app.post('/webhook/run', async (req, res) => {
  */
 app.post('/eval', async (req, res) => {
   try {
-    const { run_record, rules_ref, rules } = req.body;
+    const { project_id: projectId, run_id: runId, run_record, rules_ref, rules } = req.body;
 
-    if (!run_record) {
+    if (typeof projectId !== 'string' || !projectId) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_REQUEST', message: 'run_record is required' },
+        error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
       });
     }
 
-    // Build leaf-like object for evaluation
-    const leaf = rules_ref ? { rules_ref } : rules ? { rules_ref: undefined } : undefined;
+    const resolvedRecord =
+      run_record ?? (typeof runId === 'string' ? observer.getRun(projectId, runId) : undefined);
 
-    const evalResult = evalEngine.evaluateWithLeaf(run_record, leaf);
+    if (!resolvedRecord) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'run_id or run_record is required' },
+      });
+    }
+
+    const validatedRecord = RunRecordSchema.parse(resolvedRecord);
+    if (validatedRecord.project_id !== projectId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'run_record does not belong to project_id' },
+      });
+    }
+
+    const evalResult = rules
+      ? evalEngine.evaluate(validatedRecord, EvalRulesSchema.parse(rules))
+      : evalEngine.evaluateWithLeaf(validatedRecord, rules_ref ? { rules_ref } : undefined);
 
     logger.info(
       {
-        run_id: run_record.run_id,
+        run_id: validatedRecord.run_id,
         passed: evalResult.passed,
         score: evalResult.score.toFixed(2),
       },
