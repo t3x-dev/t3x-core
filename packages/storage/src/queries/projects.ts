@@ -5,7 +5,7 @@
  */
 
 import { generateProjectId } from '@t3x-dev/core';
-import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -22,7 +22,7 @@ import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 export interface CreateProjectInput {
   name: string;
   metadata?: Record<string, unknown>;
-  /** Owner user ID. Omit or undefined → NULL (public/legacy data). */
+  /** Owner user ID. Omit or undefined → NULL (local/legacy data). */
   ownerId?: string;
 }
 
@@ -31,7 +31,7 @@ export interface ListProjectsOptions {
   offset?: number;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
   cursor?: string;
-  /** Filter by owner. When set, returns projects owned by this user OR public (owner_id IS NULL). */
+  /** Filter by owner. Authenticated callers receive only projects owned by this user. */
   owner_id?: string;
 }
 
@@ -116,10 +116,9 @@ export async function findProjects(
 ): Promise<Project[] | CursorPage<Project>> {
   const limit = options.limit ?? 100;
 
-  // Owner filter: show user's own projects + public (owner_id IS NULL)
-  const ownerCondition = options.owner_id
-    ? or(eq(projects.ownerId, options.owner_id), sql`${projects.ownerId} IS NULL`)!
-    : undefined;
+  // Owner filter: authenticated callers see only their own projects. Unowned
+  // rows are legacy local data and must be claimed explicitly before auth use.
+  const ownerCondition = options.owner_id ? eq(projects.ownerId, options.owner_id) : undefined;
 
   if (options.cursor !== undefined) {
     // Cursor pagination mode
@@ -163,6 +162,39 @@ export async function findProjects(
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);
+}
+
+/** List active legacy projects that have not yet been assigned to a human owner. */
+export async function findUnownedProjects(db: AnyDB, limit = 100): Promise<Project[]> {
+  return db
+    .select()
+    .from(projects)
+    .where(and(isNull(projects.ownerId), isNull(projects.deletedAt)))
+    .orderBy(desc(projects.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Atomically claim selected active legacy projects for one authenticated human.
+ * The owner_id IS NULL predicate prevents reassignment races or operator takeover.
+ */
+export async function claimUnownedProjects(
+  db: AnyDB,
+  ownerId: string,
+  projectIds: string[]
+): Promise<Project[]> {
+  if (projectIds.length === 0) return [];
+  return db
+    .update(projects)
+    .set({ ownerId })
+    .where(
+      and(
+        inArray(projects.projectId, projectIds),
+        isNull(projects.ownerId),
+        isNull(projects.deletedAt)
+      )
+    )
+    .returning();
 }
 
 /**
