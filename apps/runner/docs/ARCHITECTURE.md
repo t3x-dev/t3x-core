@@ -639,6 +639,7 @@ passed = score >= pass_threshold
 | `ANTHROPIC_API_KEY` | (none) | Claude API Key (for assertion generation) |
 | `RUNNER_ENDPOINT_ALLOWLIST` | (none) | Comma-separated exact private origins Runner may call, for example `http://127.0.0.1:9000` |
 | `RUNNER_HOST` | `127.0.0.1` | Standalone server bind address. Set explicitly for a trusted container network; keep published host ports loopback-only. |
+| `RUNNER_SERVICE_TOKEN` | (required for business routes) | Random shared credential for the narrow API-to-Runner control plane. The Runner derives per-run HMAC callback capabilities for n8n instead of sharing this token with workflows. |
 
 Agent registration and execution allow public HTTP(S) endpoints by default. Loopback,
 private, link-local, and reserved targets require an exact origin in

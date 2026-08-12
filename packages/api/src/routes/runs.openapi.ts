@@ -35,6 +35,7 @@ import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, assertResourceProjectAccess } from '../lib/project-access';
+import { runnerServiceAuthenticationError, runnerServiceToken } from '../lib/runner-service-auth';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -185,7 +186,10 @@ runsRoutes.openapi(createRunRoute, async (c) => {
     try {
       const runnerResponse = await fetch(`${RUNNER_URL}/runs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
+        },
         body: JSON.stringify(runnerPayload),
         signal: AbortSignal.timeout(10000),
       });
@@ -264,27 +268,8 @@ const ingestRunRoute = createRoute({
 
 // @ts-expect-error - OpenAPI handler return type
 runsRoutes.openapi(ingestRunRoute, async (c) => {
-  // Authenticate runner callback: check shared secret if RUNNER_SECRET is configured.
-  // If RUNNER_SECRET is not set, allow the request for backward compatibility (local dev) but warn.
-  const runnerSecret = process.env.RUNNER_SECRET;
-  if (runnerSecret) {
-    const authHeader = c.req.header('Authorization');
-    const customHeader = c.req.header('X-Runner-Secret');
-    const providedSecret =
-      customHeader ?? (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
-    if (providedSecret !== runnerSecret) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'UNAUTHORIZED', message: 'Invalid or missing runner secret' },
-        },
-        401
-      );
-    }
-  } else {
-    // No secret configured — log a warning but allow for local dev
-    pinoLogger.warn('RUNNER_SECRET is not set. /v1/runs/ingest endpoint is unauthenticated.');
-  }
+  const authenticationError = runnerServiceAuthenticationError(c);
+  if (authenticationError) return authenticationError;
 
   try {
     const data = c.req.valid('json');
@@ -469,6 +454,9 @@ const getRunByRunnerIdRoute = createRoute({
 });
 
 runsRoutes.openapi(getRunByRunnerIdRoute, async (c) => {
+  const authenticationError = runnerServiceAuthenticationError(c);
+  if (authenticationError) return authenticationError;
+
   try {
     const { runnerRunId } = c.req.valid('param');
     const db = await getDB();

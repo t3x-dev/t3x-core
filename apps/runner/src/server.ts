@@ -24,6 +24,13 @@ import {
 } from './schemas/index.js';
 import type { RunRecord } from './schemas/run-record.js';
 import {
+  buildSignedN8nCallbackUrl,
+  runnerServiceToken,
+  runnerSignatureQuery,
+  verifyN8nCallbackSignature,
+  verifyRunnerBearer,
+} from './service-auth.js';
+import {
   buildTraceSummary,
   mapN8nExecutionToRunRecord,
   n8nClient,
@@ -68,7 +75,11 @@ function ensureDebugAccess(req: Request, res: Response): boolean {
     return false;
   }
 
-  if (req.header('authorization') !== `Bearer ${debugToken}`) {
+  const providedDebugToken = req.header('x-runner-debug-token') ?? req.header('authorization');
+  const normalizedDebugToken = providedDebugToken?.startsWith('Bearer ')
+    ? providedDebugToken.slice(7)
+    : providedDebugToken;
+  if (normalizedDebugToken !== debugToken) {
     res.status(401).json({
       success: false,
       error: { code: 'UNAUTHORIZED', message: 'Missing or invalid debug bearer token' },
@@ -94,6 +105,46 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const reqId = randomUUID().replace(/-/g, '').slice(0, 12);
   (req as Request & { id: string }).id = reqId;
   res.setHeader('X-Request-Id', reqId);
+  next();
+});
+
+// Every standalone business route uses a service identity. Health and service
+// metadata stay public for orchestrators; n8n receives a per-run HMAC callback
+// capability instead of the shared secret itself.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/' || req.path === '/health' || req.path === '/ready') return next();
+
+  let authentication: 'ok' | 'missing-config' | 'invalid';
+  if (req.path === '/callbacks/n8n') {
+    const signature =
+      typeof req.query[runnerSignatureQuery] === 'string'
+        ? req.query[runnerSignatureQuery]
+        : undefined;
+    const signedCallback = verifyN8nCallbackSignature(
+      signature,
+      typeof req.body?.run_id === 'string' ? req.body.run_id : undefined,
+      typeof req.body?.runner_run_id === 'string' ? req.body.runner_run_id : undefined
+    );
+    const bearer = verifyRunnerBearer(req.header('authorization'));
+    authentication = signedCallback === 'ok' || bearer === 'ok' ? 'ok' : signedCallback;
+  } else {
+    authentication = verifyRunnerBearer(req.header('authorization'));
+  }
+
+  if (authentication === 'missing-config') {
+    res.status(503).json({
+      success: false,
+      error: { code: 'SERVICE_AUTH_NOT_CONFIGURED', message: 'RUNNER_SERVICE_TOKEN is required' },
+    });
+    return;
+  }
+  if (authentication !== 'ok') {
+    res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Invalid or missing Runner service identity' },
+    });
+    return;
+  }
   next();
 });
 
@@ -446,9 +497,16 @@ app.post('/runs', async (req, res) => {
 
     // Trigger n8n workflow (async, fire-and-forget)
     if (data.workflow?.webhook_id) {
-      triggerN8nWorkflow(data, runner_run_id).catch((err) => {
-        logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
-      });
+      const signedCallbackUrl = buildSignedN8nCallbackUrl(
+        data.callback_url,
+        data.run_id,
+        runner_run_id
+      );
+      triggerN8nWorkflow({ ...data, callback_url: signedCallbackUrl }, runner_run_id).catch(
+        (err) => {
+          logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
+        }
+      );
     }
 
     res.json({ success: true, data: { runner_run_id, status: 'running' } });
@@ -769,7 +827,10 @@ async function processN8nCallback(data: {
       engineCallbackUrl,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
+        },
         body: JSON.stringify(ingestPayload),
         signal: AbortSignal.timeout(10000),
       },

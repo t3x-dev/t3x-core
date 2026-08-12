@@ -8,6 +8,9 @@ vi.mock('pino', () => {
   return { default: () => logger };
 });
 
+const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
+process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
+
 const { app } = await import('../server.js');
 
 interface JsonResponse {
@@ -38,6 +41,7 @@ async function requestJson(
         path,
         method: options?.method ?? 'GET',
         headers: {
+          Authorization: 'Bearer runner-test-secret',
           ...options?.headers,
           ...(rawBody
             ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody) }
@@ -110,6 +114,8 @@ describe('runner server routes', () => {
         else resolve();
       });
     });
+    if (originalRunnerServiceToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+    else process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
   });
 
   it('GET /health returns ok and request id header', async () => {
@@ -121,6 +127,17 @@ describe('runner server routes', () => {
       data: { status: 'ok', service: 't3x-runner' },
     });
     expect(res.headers['x-request-id']).toMatch(/^[a-f0-9]{12}$/);
+  });
+
+  it('rejects standalone business routes without a service identity', async () => {
+    const res = await requestJson(server, '/agents/missing', {
+      headers: { Authorization: '' },
+    });
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({
+      success: false,
+      error: { code: 'UNAUTHORIZED' },
+    });
   });
 
   it('GET / returns service metadata with docs link and hides debug routes by default', async () => {
@@ -220,12 +237,10 @@ describe('runner server routes', () => {
     process.env.RUNNER_DEBUG_TOKEN = 'debug-secret';
 
     const res = await requestJson(server, '/debug/n8n-check', {
-      headers: { Host: 'runner.example.com' },
+      headers: { Host: 'runner.example.com', 'X-Runner-Debug-Token': 'debug-secret' },
     });
-    const body = res.body as { error: { code: string } };
 
-    expect(res.status).toBe(401);
-    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(res.status).toBe(200);
   });
 
   it('GET /debug/n8n-check fails closed when exposed off localhost without a configured token', async () => {

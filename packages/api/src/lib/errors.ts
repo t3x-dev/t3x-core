@@ -76,6 +76,7 @@ export const ErrorCodes = {
   // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   DATABASE_ERROR: 'DATABASE_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 
   // Generation errors
   GENERATION_NOT_CONFIGURED: 'GENERATION_NOT_CONFIGURED',
@@ -227,6 +228,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   LIST_FAILED: 500,
   INTERNAL_ERROR: 500,
   DATABASE_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 
   // Generation errors
   GENERATION_NOT_CONFIGURED: 400,

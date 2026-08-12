@@ -37,6 +37,7 @@ vi.mock('../../lib/db', () => ({
 import { runsRoutes } from '../../routes/runs.openapi';
 
 describe('Runs API Contract', () => {
+  const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
   let cleanup: () => Promise<void>;
   const app = new Hono();
   app.route('/', runsRoutes);
@@ -45,6 +46,7 @@ describe('Runs API Contract', () => {
   let testProjectId: string;
 
   beforeAll(async () => {
+    process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
     const setup = await setupTestDB();
     mockDB = setup.db;
     cleanup = setup.cleanup;
@@ -52,6 +54,8 @@ describe('Runs API Contract', () => {
 
   afterAll(async () => {
     await cleanup();
+    if (originalRunnerServiceToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+    else process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
   });
 
   beforeEach(async () => {
@@ -220,6 +224,19 @@ describe('Runs API Contract', () => {
   });
 
   describe('POST /v1/runs/ingest - Ingest callback schema', () => {
+    it('rejects callbacks without the Runner service identity', async () => {
+      const res = await app.request('/v1/runs/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          run_id: 'run_test',
+          runner_run_id: 'runner_test',
+          status: 'completed',
+        }),
+      });
+      expect(res.status).toBe(401);
+    });
+
     it('accepts valid ingest payload', async () => {
       // First create a run
       await insertRun(mockDB, {
@@ -236,7 +253,10 @@ describe('Runs API Contract', () => {
 
       const res = await app.request('/v1/runs/ingest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer runner-test-secret',
+        },
         body: JSON.stringify({
           run_id: testRunId,
           runner_run_id: 'runner_test_123',
@@ -255,7 +275,10 @@ describe('Runs API Contract', () => {
     it('rejects invalid status values', async () => {
       const res = await app.request('/v1/runs/ingest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer runner-test-secret',
+        },
         body: JSON.stringify({
           run_id: 'run_test',
           runner_run_id: 'runner_test',

@@ -46,6 +46,8 @@ function createTestApp() {
   app.get('/api/docs', (c) => c.json({ docs: true }));
   app.get('/api/openapi.json', (c) => c.json({ openapi: '3.0' }));
   app.get('/api/v1/share/:token', (c) => c.json({ shared: true }));
+  app.post('/api/v1/runs/ingest', (c) => c.json({ ingested: true }));
+  app.get('/api/v1/runs/by-runner-id/:id', (c) => c.json({ run: c.req.param('id') }));
 
   return app;
 }
@@ -54,6 +56,7 @@ describe('Auth Middleware', () => {
   const originalEnv = process.env.AUTH_DISABLED;
   const originalNodeEnv = process.env.NODE_ENV;
   const originalAllowProductionAuthDisabled = process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
+  const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
   let app: Hono;
 
   beforeEach(() => {
@@ -78,6 +81,47 @@ describe('Auth Middleware', () => {
     } else {
       delete process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
     }
+    if (originalRunnerServiceToken !== undefined) {
+      process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
+    } else {
+      delete process.env.RUNNER_SERVICE_TOKEN;
+    }
+  });
+
+  describe('Runner service routes', () => {
+    it('enforces service auth even when human auth is disabled', async () => {
+      process.env.AUTH_DISABLED = 'true';
+      process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
+
+      expect((await app.request('/api/v1/runs/ingest', { method: 'POST' })).status).toBe(401);
+      expect(
+        (
+          await app.request('/api/v1/runs/ingest', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer runner-test-secret' },
+          })
+        ).status
+      ).toBe(200);
+    });
+
+    it('does not treat the Runner token as a general API key', async () => {
+      process.env.AUTH_DISABLED = 'false';
+      process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
+      mockFindApiKeyByValue.mockResolvedValueOnce(null);
+
+      const res = await app.request('/api/v1/projects', {
+        headers: { Authorization: 'Bearer runner-test-secret' },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('fails closed when service auth is not configured', async () => {
+      process.env.AUTH_DISABLED = 'true';
+      delete process.env.RUNNER_SERVICE_TOKEN;
+      delete process.env.RUNNER_SECRET;
+      const res = await app.request('/api/v1/runs/by-runner-id/runner_1');
+      expect(res.status).toBe(503);
+    });
   });
 
   describe('AUTH_DISABLED=true', () => {

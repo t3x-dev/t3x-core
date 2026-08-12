@@ -24,6 +24,7 @@ import { getEngineCallbackUrl, getEngineUrl, getRunByRunnerRunId } from '../engi
 describe('engine-client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
   });
 
   describe('getEngineUrl', () => {
@@ -184,7 +185,10 @@ describe('engine-client', () => {
         expect.stringContaining('/api/v1/runs/by-runner-id/runner_1'),
         expect.objectContaining({
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer runner-test-secret',
+          },
         }),
         expect.objectContaining({ maxRetries: 3 })
       );
