@@ -1,0 +1,213 @@
+[
+  {
+    "name": "source_only accepts supported source-backed organization",
+    "posture": "source_only",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "supported",
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "source_only rejects inferred completion",
+    "posture": "source_only",
+    "origin": "inferred",
+    "evidence": false,
+    "basis": true,
+    "challenge": false,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_ONLY_ORIGIN_NOT_ALLOWED"]
+  },
+  {
+    "name": "source_only rejects recommendation",
+    "posture": "source_only",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_ONLY_ORIGIN_NOT_ALLOWED"]
+  },
+  {
+    "name": "source_only rejects generated challenge",
+    "posture": "source_only",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": true,
+    "support": "supported",
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_ONLY_CHALLENGE_NOT_ALLOWED"]
+  },
+  {
+    "name": "source_only requires semantic support conclusion",
+    "posture": "source_only",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_SUPPORT_REQUIRED"]
+  },
+  {
+    "name": "source_only rejects semantically unrelated quote",
+    "posture": "source_only",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "unsupported",
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_SUPPORT_FAILED"]
+  },
+  {
+    "name": "source_only rejects source-backed claim without evidence",
+    "posture": "source_only",
+    "origin": "source_backed",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "support": "supported",
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_EVIDENCE_REQUIRED"]
+  },
+  {
+    "name": "guided accepts supported source-backed change",
+    "posture": "guided",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "supported",
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "guided accepts inference with explicit basis",
+    "posture": "guided",
+    "origin": "inferred",
+    "evidence": false,
+    "basis": true,
+    "challenge": false,
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "guided rejects inference without basis",
+    "posture": "guided",
+    "origin": "inferred",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["INFERRED_BASIS_REQUIRED"]
+  },
+  {
+    "name": "guided accepts explicit recommendation",
+    "posture": "guided",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "guided rejects replacement challenge",
+    "posture": "guided",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": true,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["GUIDED_CHALLENGE_NOT_ALLOWED"]
+  },
+  {
+    "name": "guided rejects indeterminate semantic support",
+    "posture": "guided",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "indeterminate",
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_SUPPORT_REQUIRED"]
+  },
+  {
+    "name": "recommend accepts supported source-backed change",
+    "posture": "recommend",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "supported",
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "recommend accepts inference with basis",
+    "posture": "recommend",
+    "origin": "inferred",
+    "evidence": false,
+    "basis": true,
+    "challenge": false,
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "recommend accepts un sourced recommendation",
+    "posture": "recommend",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "recommend accepts visible challenge",
+    "posture": "recommend",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": true,
+    "expectedOutcome": "passed",
+    "expectedCodes": []
+  },
+  {
+    "name": "recommend still rejects unsupported source attribution",
+    "posture": "recommend",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "unsupported",
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SOURCE_SUPPORT_FAILED"]
+  },
+  {
+    "name": "unknown support assessment cannot influence a proposal",
+    "posture": "recommend",
+    "origin": "recommended",
+    "evidence": false,
+    "basis": false,
+    "challenge": false,
+    "unknownSupport": true,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SUPPORT_ASSESSMENT_UNKNOWN_GROUP"]
+  },
+  {
+    "name": "duplicate support assessments are rejected",
+    "posture": "guided",
+    "origin": "source_backed",
+    "evidence": true,
+    "basis": false,
+    "challenge": false,
+    "support": "supported",
+    "duplicateSupport": true,
+    "expectedOutcome": "failed",
+    "expectedCodes": ["SUPPORT_ASSESSMENT_INVALID"]
+  }
+]
