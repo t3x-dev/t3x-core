@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  blueprintFamilyId,
+  publishedSchemaFamilyId,
   publishedSchemaReleaseId,
 } from '@/domain/schemas/publishedSchemaVersions';
 import type {
@@ -120,7 +120,7 @@ export function SchemaRegistry({
   const visibleFamilies = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return families.filter((family) => {
-      const source = family.source ?? 'official';
+      const source = schemaSourceTag(family.tags);
       const status = family.lifecycleStatus ?? 'active';
       const searchable = [family.name, family.canonicalName, ...(family.tags ?? [])]
         .join(' ')
@@ -135,7 +135,14 @@ export function SchemaRegistry({
     });
   }, [families, lifecycle, query, scope]);
 
-  const selectedFamily = families.find((family) => family.id === selectedFamilyId) ?? initialFamily;
+  useEffect(() => {
+    if (visibleFamilies.some((family) => family.id === selectedFamilyId)) return;
+    setSelectedFamilyId(visibleFamilies[0]?.id ?? '');
+    setActiveView('structure');
+    setIdentityFeedback(undefined);
+  }, [selectedFamilyId, visibleFamilies]);
+
+  const selectedFamily = families.find((family) => family.id === selectedFamilyId) ?? null;
   const selectedRelease = selectedFamily
     ? (selectedFamily.releases.find(
         (release) => release.id === selectedReleaseIds[selectedFamily.id]
@@ -164,10 +171,7 @@ export function SchemaRegistry({
 
   async function handleVersionPublished(version: PublishedSchemaVersionManifest) {
     await compositionWorkspace?.onPublished?.(version);
-    const publishedFamily =
-      version.apiVersion === 't3x.dev/yschema-blueprint/v1'
-        ? blueprintFamilyId(version.canonicalName)
-        : (version.family ?? selectedFamily?.id ?? defaultFamilyId);
+    const publishedFamily = publishedSchemaFamilyId(version.canonicalName);
     setSelectedFamilyId(publishedFamily);
     setSelectedReleaseIds((releaseIds) => ({
       ...releaseIds,
@@ -181,7 +185,7 @@ export function SchemaRegistry({
     if (!selectedFamily) return;
     setEditName(selectedFamily.name);
     setEditDescription(selectedFamily.description);
-    setEditTags((selectedFamily.tags ?? []).join(', '));
+    setEditTags(userEditableSchemaTags(selectedFamily.tags).join(', '));
     setEditOpen(true);
   }
 
@@ -380,6 +384,19 @@ export function SchemaRegistry({
   );
 }
 
+function schemaSourceTag(tags: string[] | undefined): 'official' | 'team' | 'community' {
+  const value = tags
+    ?.find((tag) => tag.toLowerCase().startsWith('source:'))
+    ?.toLowerCase()
+    .slice(7);
+  if (value === 'team' || value === 'community') return value;
+  return 'official';
+}
+
+function userEditableSchemaTags(tags: string[] | undefined): string[] {
+  return (tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:'));
+}
+
 function SchemaRegistryHeader({
   onViewChange,
   registryView,
@@ -515,11 +532,13 @@ function SchemaLibrary({
                 >
                   {family.source === 'team' ? 'Composed' : 'Official'}
                 </Badge>
-                {(family.tags ?? []).slice(0, 2).map((tag) => (
-                  <Badge className="text-[9px]" key={tag} variant="secondary">
-                    {tag.replace(/^[^:]+:/, '')}
-                  </Badge>
-                ))}
+                {userEditableSchemaTags(family.tags)
+                  .slice(0, 2)
+                  .map((tag) => (
+                    <Badge className="text-[9px]" key={tag} variant="secondary">
+                      {tag.replace(/^[^:]+:/, '')}
+                    </Badge>
+                  ))}
               </span>
             </button>
           );
@@ -577,7 +596,7 @@ function SchemaIdentityHeader({
             {selectedFamily.description}
           </p>
           <div className="mt-2 flex flex-wrap gap-1">
-            {(selectedFamily.tags ?? []).map((tag) => (
+            {userEditableSchemaTags(selectedFamily.tags).map((tag) => (
               <Badge className="text-[9px]" key={tag} variant="secondary">
                 {tag.replace(/^[^:]+:/, '')}
               </Badge>

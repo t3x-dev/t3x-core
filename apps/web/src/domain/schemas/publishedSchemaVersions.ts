@@ -13,53 +13,36 @@ export function mergePublishedSchemaVersions(
   manifests: PublishedSchemaVersionManifest[],
   projectId: string
 ): SchemaRegistryPreview {
-  if (manifests.length === 0) return registry;
-  const published = manifests
-    .filter(
-      (manifest) =>
-        manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1' && manifest.status !== 'draft'
-    )
-    .map((manifest) => ({
-      family: manifest.family,
-      release: publishedManifestToRelease(manifest, projectId),
-    }));
-  const blueprints = manifests.filter(
-    (manifest) =>
-      manifest.apiVersion === 't3x.dev/yschema-blueprint/v1' && manifest.status !== 'draft'
-  );
-  const blueprintFamilies = new Map<string, PublishedSchemaVersionManifest[]>();
-  for (const manifest of blueprints) {
-    blueprintFamilies.set(manifest.canonicalName, [
-      ...(blueprintFamilies.get(manifest.canonicalName) ?? []),
+  const projectFamilies = new Map<string, PublishedSchemaVersionManifest[]>();
+  for (const manifest of manifests.filter((item) => item.status !== 'draft')) {
+    projectFamilies.set(manifest.canonicalName, [
+      ...(projectFamilies.get(manifest.canonicalName) ?? []),
       manifest,
     ]);
   }
   return {
     ...registry,
     families: [
-      ...registry.families.map((family) => {
-        const familyPublished = published
-          .filter((item) => item.family === family.id)
-          .map((item) => item.release);
-        return familyPublished.length > 0
-          ? { ...family, releases: [...familyPublished, ...family.releases] }
-          : family;
-      }),
-      ...[...blueprintFamilies.entries()].map(([canonicalName, versions]) => {
+      ...registry.families.map((family) => ({
+        ...family,
+        source: 'official' as const,
+        tags: withSourceTag(family.tags, 'official'),
+      })),
+      ...[...projectFamilies.entries()].map(([canonicalName, versions]) => {
         const releases = versions.map((manifest) =>
           publishedManifestToRelease(manifest, projectId)
         );
         return {
-          id: blueprintFamilyId(canonicalName),
+          id: publishedSchemaFamilyId(canonicalName),
           artifactId: versions[0]?.artifactId,
           name: versions[0]?.displayName ?? versions[0]?.title ?? canonicalName,
           canonicalName,
           description:
             versions[0]?.catalogDescription ??
             versions[0]?.description ??
-            'Published open Module Schema.',
-          tags: versions[0]?.catalogTags ?? versions[0]?.tags ?? [],
-          source: versions[0]?.source,
+            'Published project Schema.',
+          tags: withSourceTag(versions[0]?.catalogTags ?? versions[0]?.tags ?? [], 'team'),
+          source: 'team' as const,
           lifecycleStatus: versions[0]?.lifecycleStatus ?? 'active',
           metadataRevision: versions[0]?.metadataRevision ?? 1,
           updatedAt: versions[0]?.updatedAt,
@@ -70,8 +53,17 @@ export function mergePublishedSchemaVersions(
   };
 }
 
-export function blueprintFamilyId(canonicalName: string): string {
-  return `blueprint:${canonicalName}`;
+export function publishedSchemaFamilyId(canonicalName: string): string {
+  return `published:${canonicalName}`;
+}
+
+function withSourceTag(tags: string[] | undefined, source: 'official' | 'team'): string[] {
+  return Array.from(
+    new Set([
+      ...(tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:')),
+      `source:${source}`,
+    ])
+  ).sort();
 }
 
 export function publishedSchemaReleaseId(canonicalName: string, version: string): string {

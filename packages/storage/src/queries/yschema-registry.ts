@@ -186,7 +186,7 @@ export async function updateYSchemaArtifactIdentity(
       and(
         eq(yschemaArtifacts.artifactId, input.artifact_id),
         eq(yschemaArtifacts.ownerProjectId, input.project_id),
-        eq(yschemaArtifacts.kind, 'schema'),
+        inArray(yschemaArtifacts.kind, ['schema', 'core']),
         eq(yschemaArtifacts.metadataRevision, input.if_revision)
       )
     )

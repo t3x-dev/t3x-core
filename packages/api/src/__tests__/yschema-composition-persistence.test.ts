@@ -290,7 +290,7 @@ describe('Workspace YSchema Composition persistence', () => {
           canonical_name: 'projects/proj_modules/product-schema',
           version: '1.0.0',
           title: 'Product Schema',
-          tags: ['product', 'team'],
+          tags: ['product', 'source:official', 'team'],
         }),
       }
     );
@@ -301,7 +301,7 @@ describe('Workspace YSchema Composition persistence', () => {
       apiVersion: 't3x.dev/yschema-blueprint/v1',
       canonicalName: 'projects/proj_modules/product-schema',
       version: '1.0.0',
-      tags: ['product', 'team'],
+      tags: ['product', 'source:team', 'team'],
       blueprint: {
         compositionApiVersion: 't3x.dev/yschema-composition/v2',
         modules: [
@@ -315,7 +315,12 @@ describe('Workspace YSchema Composition persistence', () => {
     });
     expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenLastCalledWith(
       expect.anything(),
-      expect.objectContaining({ kind: 'schema', family: 'open', status: 'published' })
+      expect.objectContaining({
+        kind: 'schema',
+        family: 'open',
+        status: 'published',
+        tags: ['product', 'source:team', 'team'],
+      })
     );
   });
 
@@ -425,7 +430,7 @@ describe('Workspace YSchema Composition persistence', () => {
       if_revision: 3,
       display_name: 'Product delivery Schema',
       description: 'Shared contract for the product team.',
-      tags: ['product', 'team:delivery'],
+      tags: ['product', 'source:team', 'team:delivery'],
     });
     expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
   });

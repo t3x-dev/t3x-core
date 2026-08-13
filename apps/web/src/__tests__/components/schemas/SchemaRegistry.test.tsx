@@ -25,6 +25,37 @@ describe('SchemaRegistry', () => {
     for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 
+  it('isolates Official and project Schemas using protected source tags', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const official = preview.families[0]!;
+    render(
+      <SchemaRegistry
+        defaultFamilyId={official.id}
+        families={[
+          { ...official, source: 'official', tags: ['source:official'] },
+          {
+            ...official,
+            id: 'published:projects/proj_test/prd',
+            name: 'Project PRD',
+            canonicalName: 'projects/proj_test/prd',
+            source: 'team',
+            tags: ['source:team'],
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
+    expect(screen.getByRole('button', { name: /Project PRD/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^PRD Schema/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project PRD' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Official' }));
+    expect(screen.getByRole('button', { name: /^PRD Schema/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Project PRD/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'PRD Schema' })).toBeInTheDocument();
+  });
+
   it('shows version details only after the user selects an exact version', () => {
     renderRegistry();
 

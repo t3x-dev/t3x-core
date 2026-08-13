@@ -79,7 +79,7 @@ describe('published Schema version projections', () => {
     ]);
   });
 
-  it('places published versions into their Schema history without creating a default pointer', () => {
+  it('keeps project versions out of Official families and groups them by canonical name', () => {
     const registry = {
       defaultFamilyId: 'prd',
       families: [
@@ -109,13 +109,22 @@ describe('published Schema version projections', () => {
 
     const merged = mergePublishedSchemaVersions(registry, [manifest, promptManifest], 'proj_test');
 
-    expect(merged.families[0]?.releases[0]).toMatchObject({
+    expect(merged.families[0]).toMatchObject({ source: 'official', tags: ['source:official'] });
+    expect(merged.families[0]?.releases).toEqual([]);
+    expect(merged.families[1]?.releases).toEqual([]);
+    expect(merged.families[2]).toMatchObject({
+      id: 'published:projects/proj_test/prd',
       canonicalName: manifest.canonicalName,
-      version: manifest.version,
+      source: 'team',
+      tags: ['source:team'],
+      releases: [expect.objectContaining({ version: manifest.version })],
     });
-    expect(merged.families[1]?.releases[0]).toMatchObject({
+    expect(merged.families[3]).toMatchObject({
+      id: 'published:projects/proj_test/prompt',
       canonicalName: promptManifest.canonicalName,
-      version: promptManifest.version,
+      source: 'team',
+      tags: ['source:team'],
+      releases: [expect.objectContaining({ version: promptManifest.version })],
     });
   });
 
@@ -145,9 +154,11 @@ describe('published Schema version projections', () => {
 
     expect(merged.families).toHaveLength(2);
     expect(merged.families[1]).toMatchObject({
-      id: 'blueprint:projects/proj_test/product-schema',
+      id: 'published:projects/proj_test/product-schema',
       name: 'Product Schema',
       canonicalName: 'projects/proj_test/product-schema',
+      source: 'team',
+      tags: ['source:team'],
     });
     expect(merged.families[1]?.releases[0]).toMatchObject({ version: '1.0.0' });
   });

@@ -262,6 +262,44 @@ describe('YSchema Registry storage', () => {
     ).resolves.toBeNull();
   });
 
+  it('archives a project-owned legacy Core published as a Schema identity', async () => {
+    const canonicalName = `projects/${projectId}/legacy-schema`;
+    const published = await publishYSchemaArtifactVersion(db, {
+      artifact_id: `ysa_legacy_${projectId}`,
+      artifact_version_id: `ysav_legacy_${projectId}_1_0_0`,
+      canonical_name: canonicalName,
+      family: 'prd',
+      kind: 'core',
+      display_name: 'Legacy Schema',
+      owner_project_id: projectId,
+      visibility: 'private',
+      version: '1.0.0',
+      status: 'published',
+      manifest_json: {
+        apiVersion: 't3x.dev/yschema-core/v1',
+        canonicalName,
+        version: '1.0.0',
+      },
+      artifact_hash: `sha256:${'d'.repeat(64)}`,
+      path_count: 0,
+      provides: [],
+      requires: [],
+    });
+
+    const archived = await updateYSchemaArtifactIdentity(db, {
+      artifact_id: published.artifactId,
+      project_id: projectId,
+      if_revision: 1,
+      lifecycle_status: 'archived',
+    });
+
+    expect(archived).toMatchObject({
+      kind: 'core',
+      lifecycleStatus: 'archived',
+      metadataRevision: 2,
+    });
+  });
+
   function publishArtifact(input: {
     canonicalName: string;
     visibility: 'official' | 'private';

@@ -628,7 +628,7 @@ yschemaCompositionRoutes.openapi(updateSchemaIdentityRoute, async (c) => {
     if_revision: input.if_revision,
     display_name: input.display_name,
     description: input.description,
-    tags: input.tags,
+    tags: input.tags ? projectSchemaTags(input.tags) : undefined,
   });
   if (!updated) {
     return errorResponse(c, 'CONFLICT', 'Schema metadata changed or the Schema is unavailable.');
@@ -907,6 +907,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       description: input.description || preview.schema.description,
     });
     const schemaHash = await sha256CompositionValue(schema);
+    const schemaTags = projectSchemaTags(input.tags);
     const comparison = await findCompositionComparison({
       canonicalName: input.canonical_name,
       compositionId: persisted.composition.id,
@@ -923,7 +924,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       description: input.description || `Published from ${persisted.composition.id}.`,
       status: 'published',
       source: 'team',
-      tags: Array.from(new Set(input.tags ?? [])).sort(),
+      tags: schemaTags,
       blueprint: {
         compositionApiVersion: persisted.composition.apiVersion,
         compositionId: persisted.composition.id,
@@ -954,7 +955,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         kind: 'schema',
         display_name: input.title,
         description: input.description ?? '',
-        tags: input.tags ?? [],
+        tags: schemaTags,
         owner_project_id: projectId,
         visibility: 'private',
         version: input.version,
@@ -1014,6 +1015,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || preview.schema.description,
   });
   const schemaHash = await sha256CompositionValue(schema);
+  const schemaTags = projectSchemaTags(input.tags);
   const comparison = await findCompositionComparison({
     canonicalName: input.canonical_name,
     compositionId: persisted.composition.id,
@@ -1025,7 +1027,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   const provides = Array.from(
     new Set([...artifacts.core.provides, ...artifacts.modules.flatMap((module) => module.provides)])
   ).sort();
-  const manifest: YSchemaCoreArtifact & { registry: Record<string, unknown> } = {
+  const manifest: YSchemaCoreArtifact & { tags: string[]; registry: Record<string, unknown> } = {
     apiVersion: 't3x.dev/yschema-core/v1',
     canonicalName: input.canonical_name,
     version: input.version,
@@ -1034,6 +1036,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || `Published from ${persisted.composition.id}.`,
     status: 'published',
     source: 'team',
+    tags: schemaTags,
     provides,
     extensionSlots: artifacts.core.extensionSlots,
     render: artifacts.core.render,
@@ -1063,6 +1066,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       kind: 'core',
       display_name: input.title,
       description: input.description ?? '',
+      tags: schemaTags,
       owner_project_id: projectId,
       visibility: 'private',
       version: input.version,
@@ -1334,6 +1338,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function projectSchemaTags(tags: string[] | undefined): string[] {
+  return Array.from(
+    new Set([
+      ...(tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:')),
+      'source:team',
+    ])
+  ).sort();
 }
 
 async function findCompositionComparison({
