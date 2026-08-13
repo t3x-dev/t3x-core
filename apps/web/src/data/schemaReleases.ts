@@ -17,9 +17,9 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     name: 'PRD Schema',
     version: 'v3',
     description:
-      'Draft version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
-    status: 'draft',
-    runtimeAvailable: false,
+      'Published version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
+    status: 'published',
+    runtimeAvailable: true,
     usedByCommitCount: 0,
     usedByWorkspaceCount: 1,
     breakingChangeLevel: 'minor',
@@ -29,7 +29,7 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     requiredFields: ['summary.problem', 'summary.audience', 'summary.outcome', 'requirements.*'],
     compatibleWith: ['YSchema review', 'YOps apply', 'Leaf document'],
     migrationSummary:
-      'Comparison only. Existing v2 commits remain valid; one workspace is testing this draft without changing the current version.',
+      'Existing v2 commits remain valid; Workspaces adopt this version only when it is explicitly applied.',
     canonicalName: 't3x/prd',
     relationTypes: [],
     rules: [],

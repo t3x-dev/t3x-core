@@ -63,7 +63,7 @@ describe('SchemaRegistry', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps draft versions view-only', () => {
+  it('does not expose a Draft Schema version state', () => {
     const onApplyToWorkspace = vi.fn().mockResolvedValue(undefined);
     render(
       <SchemaRegistry
@@ -76,9 +76,10 @@ describe('SchemaRegistry', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
+    expect(screen.queryByText('Draft')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /v3 Published/i }));
 
-    expect(screen.getByRole('button', { name: 'View only' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply to Main workspace' })).toBeEnabled();
   });
 
   it('remembers explicit selections per Schema while resetting the detail view', () => {
@@ -96,7 +97,7 @@ describe('SchemaRegistry', () => {
   it('compares a version with its recorded baseline rather than a current pointer', () => {
     renderRegistry();
 
-    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /v3 Published/i }));
     expect(screen.queryByRole('button', { name: /Compare with/i })).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes vs v2' }), {
       button: 0,

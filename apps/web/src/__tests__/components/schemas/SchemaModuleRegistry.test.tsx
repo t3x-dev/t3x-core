@@ -179,7 +179,7 @@ describe('SchemaModuleRegistry', () => {
     ).toBeInTheDocument();
   });
 
-  it('saves the open v2 composition payload without creating a Commit', async () => {
+  it('auto-saves the open v2 Composition without exposing a Draft action', async () => {
     const onSaved = vi.fn();
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
@@ -215,9 +215,10 @@ describe('SchemaModuleRegistry', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add Frontend Design to composition' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify composition' })).toBeDisabled();
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1), { timeout: 2_000 });
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(request.composition).toMatchObject({
       apiVersion: 't3x.dev/yschema-composition/v2',
@@ -228,7 +229,8 @@ describe('SchemaModuleRegistry', () => {
         },
       ],
     });
-    expect(screen.getByText(/No Commit was created/)).toBeInTheDocument();
+    expect(screen.getByText('Needs verification')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify composition' })).toBeEnabled();
   });
 
   it('publishes a verified v2 Composition as a Schema Blueprint', async () => {

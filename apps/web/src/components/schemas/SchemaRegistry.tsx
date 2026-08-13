@@ -402,7 +402,7 @@ function SchemaRegistryHeader({
         <p className="mt-0.5 max-w-[820px] text-[13px] leading-5 text-[var(--text-secondary)]">
           {registryView === 'versions'
             ? 'Manage Schema identities and inspect immutable versions. Compose Modules to publish without changing existing history.'
-            : 'Assemble Modules, verify the result, save the draft, then publish an immutable Schema version.'}
+            : 'Assemble Modules with automatic saving, verify the result, then publish an immutable Schema version.'}
         </p>
       </div>
       <Button

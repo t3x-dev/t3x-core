@@ -32,7 +32,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -116,6 +116,9 @@ export function SchemaModuleRegistry({
   );
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
   const [savedSignature, setSavedSignature] = useState<string>();
+  const [autoSavePending, setAutoSavePending] = useState(false);
+  const [autoSaveError, setAutoSaveError] = useState<string>();
+  const [failedAutoSaveSignature, setFailedAutoSaveSignature] = useState<string>();
   const [feedback, setFeedback] = useState<string>();
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
@@ -137,8 +140,10 @@ export function SchemaModuleRegistry({
   const artifactSignature = artifacts
     .map((artifact) => `${artifact.canonicalName}@${artifact.version}`)
     .join('|');
-  const persistedSignature = workspace?.composition
-    ? compositionSignature(artifactsFromComposition(workspace.composition, artifacts))
+  const persistedSignature = workspace
+    ? workspace.composition
+      ? compositionSignature(artifactsFromComposition(workspace.composition, artifacts))
+      : compositionSignature([])
     : undefined;
 
   useEffect(() => {
@@ -197,7 +202,71 @@ export function SchemaModuleRegistry({
     compositionRevision,
     compositionModules
   );
-  const dirty = savedSignature !== compositionSignature(compositionModules);
+  const currentSignature = compositionSignature(compositionModules);
+  const latestSignatureRef = useRef(currentSignature);
+  latestSignatureRef.current = currentSignature;
+  const dirty = savedSignature !== currentSignature;
+
+  useEffect(() => {
+    if (failedAutoSaveSignature && failedAutoSaveSignature !== currentSignature) {
+      setFailedAutoSaveSignature(undefined);
+      setAutoSaveError(undefined);
+    }
+  }, [currentSignature, failedAutoSaveSignature]);
+
+  useEffect(() => {
+    if (
+      !workspace ||
+      workspaceRevision === undefined ||
+      !dirty ||
+      autoSavePending ||
+      failedAutoSaveSignature === currentSignature
+    ) {
+      return;
+    }
+
+    const compositionToSave = draft;
+    const signatureToSave = currentSignature;
+    const revisionToSave = workspaceRevision;
+    const timer = window.setTimeout(() => {
+      setAutoSavePending(true);
+      setAutoSaveError(undefined);
+      void save(workspace.projectId, workspace.workspaceId, compositionToSave, revisionToSave)
+        .then(async (saved) => {
+          if (!saved.composition) {
+            throw new Error('The saved Workspace did not return a Composition.');
+          }
+          const normalized = artifactsFromComposition(saved.composition, artifacts);
+          const normalizedSignature = compositionSignature(normalized);
+          setCompositionRevision(saved.composition.revision);
+          setWorkspaceRevision(saved.workspaceRevision);
+          setSavedSignature(normalizedSignature);
+          if (latestSignatureRef.current === signatureToSave) {
+            setCompositionModules(normalized);
+            await workspace.onSaved?.(saved);
+          }
+        })
+        .catch((cause) => {
+          setFailedAutoSaveSignature(signatureToSave);
+          setAutoSaveError(
+            cause instanceof Error ? cause.message : 'Composition could not be saved automatically.'
+          );
+        })
+        .finally(() => setAutoSavePending(false));
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    artifacts,
+    autoSavePending,
+    currentSignature,
+    dirty,
+    draft,
+    failedAutoSaveSignature,
+    save,
+    workspace,
+    workspaceRevision,
+  ]);
 
   function toggleTag(tag: string) {
     setSelectedTags((current) => {
@@ -250,20 +319,6 @@ export function SchemaModuleRegistry({
     if (preview)
       setFeedback(preview.report.valid ? 'Composition is valid.' : 'Review blocking issues.');
     return preview;
-  }
-
-  async function saveComposition() {
-    if (!workspace || workspaceRevision === undefined) return;
-    const saved = await save(workspace.projectId, workspace.workspaceId, draft, workspaceRevision);
-    if (!saved.composition) throw new Error('The saved Workspace did not return a Composition.');
-    const normalized = artifactsFromComposition(saved.composition, artifacts);
-    setCompositionModules(normalized);
-    setCompositionRevision(saved.composition.revision);
-    setWorkspaceRevision(saved.workspaceRevision);
-    setSavedSignature(compositionSignature(normalized));
-    if (saved.preview) previewState.accept(saved.preview);
-    setFeedback('Composition draft saved. No Commit was created.');
-    await workspace.onSaved?.(saved);
   }
 
   async function applyComposition() {
@@ -566,8 +621,26 @@ export function SchemaModuleRegistry({
                 {compositionModules.length} Modules · no required Core
               </p>
             </div>
-            <Badge variant={previewState.result?.report.valid ? 'commit' : 'outline'}>
-              {previewState.result?.report.valid ? 'Valid' : dirty ? 'Draft' : 'Saved'}
+            <Badge
+              variant={
+                previewState.result?.report.valid
+                  ? 'commit'
+                  : autoSaveError
+                    ? 'destructive'
+                    : workspace && (autoSavePending || dirty)
+                      ? 'pending'
+                      : 'outline'
+              }
+            >
+              {previewState.result?.report.valid
+                ? 'Verified'
+                : autoSaveError
+                  ? 'Save failed'
+                  : workspace
+                    ? autoSavePending || dirty
+                      ? 'Saving…'
+                      : 'Needs verification'
+                    : 'Preview'}
             </Badge>
           </div>
         </div>
@@ -619,10 +692,18 @@ export function SchemaModuleRegistry({
           {previewState.error ? (
             <p className="text-[10px] text-[var(--destructive)]">{previewState.error}</p>
           ) : null}
+          {autoSaveError ? (
+            <p className="text-[10px] text-[var(--destructive)]">{autoSaveError}</p>
+          ) : null}
           {feedback ? <p className="text-[10px] text-[var(--text-secondary)]">{feedback}</p> : null}
           <Button
             className="w-full"
-            disabled={previewState.pending || compositionModules.length === 0}
+            disabled={
+              previewState.pending ||
+              autoSavePending ||
+              (Boolean(workspace) && (dirty || Boolean(autoSaveError))) ||
+              compositionModules.length === 0
+            }
             onClick={compileComposition}
             type="button"
             variant="canvas-outline"
@@ -630,21 +711,15 @@ export function SchemaModuleRegistry({
             <ShieldCheck className="size-4" />{' '}
             {previewState.pending ? 'Compiling…' : 'Verify composition'}
           </Button>
-          {workspaceRevision !== undefined ? (
-            <Button
-              className="w-full"
-              disabled={!dirty || compositionModules.length === 0}
-              onClick={saveComposition}
-              type="button"
-              variant="commit"
-            >
-              Save draft
-            </Button>
-          ) : null}
           {workspaceRevision !== undefined && compositionRevision > 0 ? (
             <Button
               className="w-full"
-              disabled={dirty || !previewState.result?.report.valid}
+              disabled={
+                autoSavePending ||
+                dirty ||
+                Boolean(autoSaveError) ||
+                !previewState.result?.report.valid
+              }
               onClick={applyComposition}
               type="button"
             >
@@ -656,6 +731,8 @@ export function SchemaModuleRegistry({
               className="w-full"
               disabled={
                 dirty ||
+                autoSavePending ||
+                Boolean(autoSaveError) ||
                 compositionRevision < 1 ||
                 !previewState.result?.report.valid ||
                 publishPending

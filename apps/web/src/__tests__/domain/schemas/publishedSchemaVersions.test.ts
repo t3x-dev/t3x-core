@@ -151,4 +151,27 @@ describe('published Schema version projections', () => {
     });
     expect(merged.families[1]?.releases[0]).toMatchObject({ version: '1.0.0' });
   });
+
+  it('does not project legacy Draft manifests into Schema version history', () => {
+    const registry = {
+      defaultFamilyId: 'prd',
+      families: [
+        {
+          id: 'prd',
+          name: 'PRD',
+          canonicalName: 't3x/prd',
+          description: 'PRD contracts',
+          releases: [],
+        },
+      ],
+    };
+
+    const merged = mergePublishedSchemaVersions(
+      registry,
+      [{ ...manifest, status: 'draft' }],
+      'proj_test'
+    );
+
+    expect(merged.families[0]?.releases).toEqual([]);
+  });
 });

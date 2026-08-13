@@ -15,13 +15,17 @@ export function mergePublishedSchemaVersions(
 ): SchemaRegistryPreview {
   if (manifests.length === 0) return registry;
   const published = manifests
-    .filter((manifest) => manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1')
+    .filter(
+      (manifest) =>
+        manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1' && manifest.status !== 'draft'
+    )
     .map((manifest) => ({
       family: manifest.family,
       release: publishedManifestToRelease(manifest, projectId),
     }));
   const blueprints = manifests.filter(
-    (manifest) => manifest.apiVersion === 't3x.dev/yschema-blueprint/v1'
+    (manifest) =>
+      manifest.apiVersion === 't3x.dev/yschema-blueprint/v1' && manifest.status !== 'draft'
   );
   const blueprintFamilies = new Map<string, PublishedSchemaVersionManifest[]>();
   for (const manifest of blueprints) {
@@ -105,7 +109,7 @@ export function publishedManifestToRelease(
     rootKey: Object.keys(nodes)[0] ?? 'document',
     requiredFields,
     compatibleWith: compatibleSurfaces(manifest.family),
-    migrationSummary: releaseNotes || 'Published from a verified Core + Module Composition draft.',
+    migrationSummary: releaseNotes || 'Published from a verified Core + Module Composition.',
     canonicalName: manifest.canonicalName,
     schemaHash: stringValue(registry.schemaHash),
     updatedLabel: updatedAt ? formatDate(updatedAt) : 'Published version',
