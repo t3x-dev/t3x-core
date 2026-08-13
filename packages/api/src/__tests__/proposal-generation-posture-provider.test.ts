@@ -13,6 +13,7 @@ import {
   createProposalGenerationPostureProvider,
   type ProposalGenerationSupportVerifier,
 } from '../lib/proposal-generation-posture-provider';
+import { projectProposalGenerationReview } from '../lib/proposal-generation-projection';
 import {
   PROPOSAL_POSTURE_VERIFIER_ACTOR,
   PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT,
@@ -205,5 +206,67 @@ describe('Proposal generation posture provider', () => {
         run: { id: 'verification-run', recordedAt: '2026-08-13T01:00:00.000Z' },
       })
     ).resolves.toEqual({ outcome: 'not_applicable' });
+  });
+
+  it('projects origin-aware Change Groups, before/after values, and verifier findings', async () => {
+    const built = graph({});
+    const verified = await verify(built);
+    if (verified.outcome !== 'statement') throw new Error('Expected posture Statement');
+    const projection = projectProposalGenerationReview({
+      preparationFacts: built.preparation as unknown as ProtocolValue,
+      operations: built.generated.effect.operations,
+      base: built.base.value,
+      result: built.generated.result.value,
+      statements: [verified.statement],
+    });
+
+    expect(projection).toMatchObject({
+      posture: 'guided',
+      requestedBy: { kind: 'human', id: 'user:requester' },
+      generator: { kind: 'service', id: 'service:t3x-proposal-generator' },
+      counts: { sourceBacked: 1, inferred: 0, recommended: 0, challenges: 0 },
+      verification: { status: 'passed', findings: [] },
+    });
+    expect(projection?.groups[0]).toMatchObject({
+      id: 'audience',
+      origin: 'source_backed',
+      operationIndexes: [0],
+      paths: ['prd/audience'],
+      values: [
+        {
+          path: 'prd/audience',
+          before: { availability: 'unavailable' },
+          after: { availability: 'available', value: 'enterprise operators' },
+          changed: true,
+        },
+      ],
+    });
+  });
+
+  it('marks absent prior lineage as unavailable instead of inventing evidence', () => {
+    const built = graph({ posture: 'recommend' });
+    const preparation = structuredClone(built.preparation);
+    preparation.bindings[0]!.challenges = [
+      {
+        path: 'prd/audience',
+        priorValue: 'existing audience',
+        priorEvidence: [],
+        reason: 'Recommend a narrower audience',
+        impactPaths: ['prd/audience'],
+      },
+    ];
+    const projection = projectProposalGenerationReview({
+      preparationFacts: preparation as unknown as ProtocolValue,
+      operations: built.generated.effect.operations,
+      base: built.base.value,
+      result: built.generated.result.value,
+      statements: [],
+    });
+
+    expect(projection?.verification.status).toBe('pending');
+    expect(projection?.groups[0]?.challenges[0]).toMatchObject({
+      priorEvidence: [],
+      priorEvidenceAvailability: 'unavailable',
+    });
   });
 });

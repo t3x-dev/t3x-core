@@ -38,6 +38,10 @@ import {
 } from '@t3x-dev/transition';
 import type { ProposalGenerationModel, ProposalGenerationRequest } from '../proposal-generation';
 import type { ProposalGenerationSupportVerifier } from '../proposal-generation-posture-provider';
+import {
+  type ProposalGenerationReviewProjection,
+  projectProposalGenerationReview,
+} from '../proposal-generation-projection';
 import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
@@ -221,6 +225,7 @@ export interface TransitionControlPlaneView {
     requestId: string;
     createdAt: string;
   }>;
+  generation?: ProposalGenerationReviewProjection;
 }
 
 export interface TransitionOperationalResult {
@@ -479,16 +484,17 @@ export async function inspectTransition(input: {
     input.projectId,
     graph.membership.refName
   );
+  const preparationFacts =
+    graph.preparation === null
+      ? null
+      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
   const applicablePolicy =
     policyBinding === null
       ? null
       : resolveApplicableTransitionPolicy({
           refPolicyBinding: policyBinding,
           requestKind: graph.membership.requestKind,
-          preparationFacts:
-            graph.preparation === null
-              ? null
-              : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
+          preparationFacts,
         });
   const capabilityContext: ProjectionCapabilityContext | undefined =
     input.actor === undefined || applicablePolicy === null
@@ -510,6 +516,13 @@ export async function inspectTransition(input: {
     objectIntegrity: 'verified',
     ...(input.decision === undefined ? {} : { decision: input.decision }),
     ...(capabilityContext === undefined ? {} : { capabilityContext }),
+  });
+  const generation = projectProposalGenerationReview({
+    preparationFacts,
+    operations: graph.effect.operations,
+    base: graph.base.value,
+    result: graph.result.value,
+    statements: graph.observations.map((observation) => observation.statement as Statement),
   });
   return {
     transitionId: graph.membership.transitionId,
@@ -537,6 +550,7 @@ export async function inspectTransition(input: {
       requestId: observation.membership.requestId,
       createdAt: observation.membership.createdAt,
     })),
+    ...(generation === null ? {} : { generation }),
   };
 }
 

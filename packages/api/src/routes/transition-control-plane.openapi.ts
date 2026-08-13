@@ -306,6 +306,7 @@ function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
       request_id: statement.requestId,
       created_at: statement.createdAt,
     })),
+    ...(view.generation === undefined ? {} : { generation: view.generation }),
   };
 }
 
