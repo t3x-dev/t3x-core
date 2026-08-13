@@ -41,8 +41,13 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { extractAndApply, extractToOutcome, PRESETS, type PresetName } from '@t3x-dev/core';
-import { findConversationById } from '@t3x-dev/storage';
+import {
+  extractAndApplyWithRetry,
+  extractToOutcome,
+  PRESETS,
+  type PresetName,
+} from '@t3x-dev/core';
+import { findConversationById, findTurnsByHashes } from '@t3x-dev/storage';
 import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -82,21 +87,98 @@ const ExtractYopsRequest = z.object({
   preset: z.enum(['concise', 'balanced', 'detailed']).optional(),
 });
 
+type ExtractYopsTurnInput = z.infer<typeof TurnInput>;
+
+type AuthoritativeExtractionTurn = {
+  turn_hash: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+};
+
+async function resolveAuthoritativeTurns(
+  db: Awaited<ReturnType<typeof getDB>>,
+  conversationId: string,
+  requestedTurns: readonly ExtractYopsTurnInput[]
+): Promise<
+  | {
+      ok: true;
+      promptTurns: AuthoritativeExtractionTurn[];
+      sourceTurns: AuthoritativeExtractionTurn[];
+    }
+  | { ok: false; message: string }
+> {
+  const requestedHashes = requestedTurns.map((turn) => turn.turn_hash);
+  const uniqueHashes = [...new Set(requestedHashes)];
+  if (uniqueHashes.length !== requestedHashes.length) {
+    return { ok: false, message: 'Duplicate turn_hash values are not allowed' };
+  }
+
+  const storedTurns = await findTurnsByHashes(db, { conversationId, turnHashes: uniqueHashes });
+  const storedByHash = new Map(storedTurns.map((turn) => [turn.turnHash, turn]));
+  const missing = uniqueHashes.filter((hash) => !storedByHash.has(hash));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message: `Turn selection contains hashes that do not belong to conversation ${conversationId}: ${missing.join(', ')}`,
+    };
+  }
+
+  const promptTurns: AuthoritativeExtractionTurn[] = [];
+  const sourceTurns: AuthoritativeExtractionTurn[] = [];
+  for (const requested of requestedTurns) {
+    const stored = storedByHash.get(requested.turn_hash);
+    if (!stored) {
+      return {
+        ok: false,
+        message: `Turn ${requested.turn_hash} does not belong to conversation ${conversationId}`,
+      };
+    }
+    const isFullStoredContent = requested.content === stored.content;
+    const isStoredSubstring =
+      requested.content.length > 0 && stored.content.includes(requested.content);
+    if (!isFullStoredContent && !isStoredSubstring) {
+      return {
+        ok: false,
+        message: `Turn content mismatch for ${requested.turn_hash}; extraction content must match stored conversation content or a verbatim substring`,
+      };
+    }
+    if (requested.role !== undefined && requested.role !== stored.role) {
+      return {
+        ok: false,
+        message: `Turn role mismatch for ${requested.turn_hash}; extraction must use stored conversation role`,
+      };
+    }
+    promptTurns.push({
+      turn_hash: stored.turnHash,
+      role: stored.role,
+      content: requested.content,
+    });
+    sourceTurns.push({
+      turn_hash: stored.turnHash,
+      role: stored.role,
+      content: stored.content,
+    });
+  }
+
+  return { ok: true, promptTurns, sourceTurns };
+}
+
 // Response schema — `data` is the canonical ExtractionOutcome envelope.
 // `ops` and `variants` are opaque (YOp shape lives in core); OpenAPI
 // describes the discriminator + the always-present fields and leaves the
 // op shape as z.any() to avoid duplicating the YOps schema here.
+const ExtractionWarningSchema = z.object({ message: z.string() });
 const ExtractionOutcomeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('ok'),
     ops: z.array(z.any()),
-    warnings: z.array(z.object({ message: z.string() })),
+    warnings: z.array(ExtractionWarningSchema),
     variants: z.record(z.string(), z.array(z.any())).optional(),
   }),
   z.object({
     kind: z.literal('partial'),
     ops: z.array(z.any()),
-    warnings: z.array(z.object({ message: z.string() })),
+    warnings: z.array(ExtractionWarningSchema),
     dropped: z.array(z.object({ item_id: z.string(), reason: z.string() })),
     reason: z.string(),
     message: z.string(),
@@ -233,6 +315,15 @@ extractYopsRoutes.openapi(route, async (c) => {
       );
     }
 
+    // Bind provenance to immutable turns stored under this conversation.
+    // Full-turn extraction prompts use DB-owned content. Selected-span flows
+    // may prompt the LLM with a verbatim substring for focus/token savings,
+    // but source validation still runs against full DB-owned turns.
+    const authoritativeTurns = await resolveAuthoritativeTurns(db, conversation_id, turns);
+    if (!authoritativeTurns.ok) {
+      return errorResponse(c, 'INVALID_REQUEST', authoritativeTurns.message);
+    }
+
     // Snapshot must match the workspace's active applied tree. Apply for
     // staged Extract drafts is append-oriented, so re-extract should
     // extend the current active yops_log replay instead of compiling
@@ -272,12 +363,9 @@ extractYopsRoutes.openapi(route, async (c) => {
       // emits the historical no-style prompt.
       const style = preset ? PRESETS[preset as PresetName] : undefined;
 
-      const pipelineResult = await extractAndApply({
-        turns: turns.map((turn) => ({
-          turn_hash: turn.turn_hash,
-          role: turn.role ?? 'user',
-          content: turn.content,
-        })),
+      const pipelineResult = await extractAndApplyWithRetry({
+        turns: authoritativeTurns.promptTurns,
+        sourceTurns: authoritativeTurns.sourceTurns,
         mode,
         providerId: resolution.providerId,
         provider: resolution.provider,
