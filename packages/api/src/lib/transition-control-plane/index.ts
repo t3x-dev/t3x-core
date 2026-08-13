@@ -47,6 +47,7 @@ import {
   buildWorkspaceYOpsProposal,
   WorkspaceTransitionReviewStaleError,
 } from '../workspace-transition';
+import { resolveApplicableTransitionPolicy } from './applicable-policy';
 import { canonicalTransitionRequest, materializeTransitionProposal } from './materialize';
 
 type ActorRef = ProposalStatement['actor'];
@@ -467,13 +468,24 @@ export async function inspectTransition(input: {
     input.projectId,
     graph.membership.refName
   );
+  const applicablePolicy =
+    policyBinding === null
+      ? null
+      : resolveApplicableTransitionPolicy({
+          refPolicyBinding: policyBinding,
+          requestKind: graph.membership.requestKind,
+          preparationFacts:
+            graph.preparation === null
+              ? null
+              : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
+        });
   const capabilityContext: ProjectionCapabilityContext | undefined =
-    input.actor === undefined || policyBinding === null
+    input.actor === undefined || applicablePolicy === null
       ? undefined
       : {
           actorContext: { actor: input.actor },
-          policy: policyBinding.policy,
-          policyResource: policyBinding.resource,
+          policy: applicablePolicy.policy,
+          policyResource: applicablePolicy.resource,
         };
   const transition = projectTransitionView({
     mode: 'transition',
@@ -504,7 +516,7 @@ export async function inspectTransition(input: {
       statementDigests: graph.observations.map(
         (observation) => observation.membership.statementDigest
       ),
-      policyDigest: policyBinding?.resource.digest ?? null,
+      policyDigest: applicablePolicy?.resource.digest ?? null,
     },
     transition,
     statements: graph.observations.map((observation) => ({
