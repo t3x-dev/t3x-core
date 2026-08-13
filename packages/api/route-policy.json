@@ -1458,6 +1458,13 @@
       "rationale": "Authenticated user surface without a cross-project resource."
     },
     {
+      "source": "templates.openapi.ts",
+      "method": "GET",
+      "path": "/v1/templates/{id}/audit",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
       "source": "topics.openapi.ts",
       "method": "GET",
       "path": "/v1/conversations/{id}/topics",

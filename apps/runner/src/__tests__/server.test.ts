@@ -8,6 +8,9 @@ vi.mock('pino', () => {
   return { default: () => logger };
 });
 
+const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
+process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
+
 const { app, startServer } = await import('../server.js');
 
 interface JsonResponse {
@@ -38,6 +41,7 @@ async function requestJson(
         path,
         method: options?.method ?? 'GET',
         headers: {
+          Authorization: 'Bearer runner-test-secret',
           ...options?.headers,
           ...(rawBody
             ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody) }
@@ -110,6 +114,8 @@ describe('runner server routes', () => {
         else resolve();
       });
     });
+    if (originalRunnerServiceToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+    else process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
   });
 
   it('GET /health returns ok and request id header', async () => {
@@ -123,15 +129,32 @@ describe('runner server routes', () => {
     expect(res.headers['x-request-id']).toMatch(/^[a-f0-9]{12}$/);
   });
 
-  it('rejects an explicit non-loopback startup host without the dangerous override', () => {
+  it('rejects standalone business routes without a service identity', async () => {
+    const res = await requestJson(server, '/agents/missing', {
+      headers: { Authorization: '' },
+    });
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({
+      success: false,
+      error: { code: 'UNAUTHORIZED' },
+    });
+  });
+
+  it('rejects an unauthenticated non-loopback startup without the dangerous override', () => {
+    const originalToken = process.env.RUNNER_SERVICE_TOKEN;
+    const originalLegacyToken = process.env.RUNNER_SECRET;
     const originalOverride = process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+    delete process.env.RUNNER_SERVICE_TOKEN;
+    delete process.env.RUNNER_SECRET;
     delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
 
     try {
-      expect(() => startServer(8080, '0.0.0.0')).toThrow(
-        'T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK=true'
-      );
+      expect(() => startServer(8080, '0.0.0.0')).toThrow('RUNNER_SERVICE_TOKEN');
     } finally {
+      if (originalToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+      else process.env.RUNNER_SERVICE_TOKEN = originalToken;
+      if (originalLegacyToken === undefined) delete process.env.RUNNER_SECRET;
+      else process.env.RUNNER_SECRET = originalLegacyToken;
       if (originalOverride === undefined) {
         delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
       } else {
@@ -237,12 +260,10 @@ describe('runner server routes', () => {
     process.env.RUNNER_DEBUG_TOKEN = 'debug-secret';
 
     const res = await requestJson(server, '/debug/n8n-check', {
-      headers: { Host: 'runner.example.com' },
+      headers: { Host: 'runner.example.com', 'X-Runner-Debug-Token': 'debug-secret' },
     });
-    const body = res.body as { error: { code: string } };
 
-    expect(res.status).toBe(401);
-    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(res.status).toBe(200);
   });
 
   it('GET /debug/n8n-check fails closed when exposed off localhost without a configured token', async () => {

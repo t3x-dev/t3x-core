@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 81 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(81);
+  it('has 82 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(82);
   });
 
   it('key equals value for every code', () => {
@@ -86,6 +86,7 @@ describe('ErrorCodes', () => {
         "SEARCH_FAILED": "SEARCH_FAILED",
         "SEMANTIC_NOT_CONFIGURED": "SEMANTIC_NOT_CONFIGURED",
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
+        "SERVICE_UNAVAILABLE": "SERVICE_UNAVAILABLE",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
         "STALE_REVIEW": "STALE_REVIEW",

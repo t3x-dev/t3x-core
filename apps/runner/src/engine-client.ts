@@ -9,6 +9,7 @@
  */
 
 import { logger } from './lib/logger.js';
+import { runnerServiceToken } from './service-auth.js';
 import { fetchWithRetry } from './utils/retry.js';
 
 // Engine API URL (support both T3X_ENGINE_URL and T3X_API_URL for compatibility)
@@ -83,7 +84,10 @@ export async function getRunByRunnerRunId(runnerRunId: string): Promise<ParsedRu
       url,
       {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
+        },
         signal: AbortSignal.timeout(10000),
       },
       { maxRetries: 3, operationName: 'getRunByRunnerRunId' }

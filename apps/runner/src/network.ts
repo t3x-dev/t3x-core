@@ -14,6 +14,11 @@ function isLoopbackHost(host: string): boolean {
   return octets.length === 4 && octets[0] === '127';
 }
 
+function hasServiceToken(env: NodeJS.ProcessEnv): boolean {
+  const token = env.RUNNER_SERVICE_TOKEN ?? env.RUNNER_SECRET;
+  return Boolean(token && token.length > 0);
+}
+
 /**
  * Standalone Runner is an evaluation surface with stateful control routes.
  * Keep source use loopback-only unless a deployment explicitly chooses a
@@ -24,10 +29,11 @@ export function resolveRunnerHost(env: NodeJS.ProcessEnv = process.env): string 
   const host = configured || DEFAULT_RUNNER_HOST;
   if (
     !isLoopbackHost(host) &&
+    !hasServiceToken(env) &&
     env[RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV]?.toLowerCase() !== 'true'
   ) {
     throw new Error(
-      `Runner cannot bind a non-loopback host without explicitly setting ${RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV}=true`
+      `Runner cannot bind a non-loopback host without RUNNER_SERVICE_TOKEN (or RUNNER_SECRET) or explicitly setting ${RUNNER_UNAUTHENTICATED_NETWORK_OVERRIDE_ENV}=true`
     );
   }
   return host;

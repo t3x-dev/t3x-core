@@ -63,6 +63,7 @@ services:
       - T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION=${AUTH_DISABLED:-false}
       - T3X_OPERATOR_USER_IDS=${T3X_OPERATOR_USER_IDS:-}
       - T3X_OPERATOR_KEY_IDS=${T3X_OPERATOR_KEY_IDS:-}
+      - RUNNER_SERVICE_TOKEN=${RUNNER_SERVICE_TOKEN:-}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
       - GOOGLE_AI_STUDIO_KEY
@@ -140,8 +141,8 @@ services:
       - PORT=8080
       # Inter-container callers need the service to listen on the Docker network.
       - RUNNER_HOST=0.0.0.0
-      # Runner business-route auth is not implemented yet; acknowledge the trusted network boundary.
-      - T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK=true
+      # Required for the authenticated API-to-Runner control plane.
+      - RUNNER_SERVICE_TOKEN=${RUNNER_SERVICE_TOKEN:-}
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - N8N_API_URL=http://n8n:5678/api/v1

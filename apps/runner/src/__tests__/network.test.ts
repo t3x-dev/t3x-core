@@ -6,15 +6,19 @@ describe('runner network boundary', () => {
     expect(resolveRunnerHost({})).toBe(DEFAULT_RUNNER_HOST);
   });
 
-  it('requires an explicit deployment override to listen externally', () => {
-    expect(() => resolveRunnerHost({ RUNNER_HOST: '0.0.0.0' })).toThrow(
-      'T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK=true'
-    );
+  it('requires service auth or an explicit deployment override to listen externally', () => {
+    expect(() => resolveRunnerHost({ RUNNER_HOST: '0.0.0.0' })).toThrow('RUNNER_SERVICE_TOKEN');
     expect(
       resolveRunnerHost({
         RUNNER_HOST: '0.0.0.0',
         T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK: 'true',
       })
+    ).toBe('0.0.0.0');
+  });
+
+  it('allows an authenticated Runner service to listen externally', () => {
+    expect(
+      resolveRunnerHost({ RUNNER_HOST: '0.0.0.0', RUNNER_SERVICE_TOKEN: 'service-secret' })
     ).toBe('0.0.0.0');
   });
 

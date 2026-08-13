@@ -19,6 +19,7 @@ import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/runner-service-auth';
 import { pinoLogger } from './logger';
 
 /** Paths that never require authentication */
@@ -66,6 +67,15 @@ function isPublicPath(path: string, method?: string): boolean {
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
+  // Runner callbacks and lookups use a narrowly scoped service identity. Check
+  // this before AUTH_DISABLED so machine routes never become anonymous as a
+  // side effect of local-development settings.
+  if (isRunnerServiceRoute(c.req.path, c.req.method)) {
+    const authenticationError = runnerServiceAuthenticationError(c);
+    if (authenticationError) return authenticationError;
+    return next();
+  }
+
   // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive).
   // Production builds require an additional explicit opt-in so a stray
   // AUTH_DISABLED=true cannot silently expose a deployed API.

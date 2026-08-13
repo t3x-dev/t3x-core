@@ -24,6 +24,7 @@ vi.stubGlobal('fetch', mockFetchFn);
 import { runsRoutes } from '../routes/runs.openapi';
 
 describe('Runs Routes', () => {
+  const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
   let cleanup: () => Promise<void>;
   let projectId: string;
   const app = new Hono();
@@ -40,9 +41,12 @@ describe('Runs Routes', () => {
   afterAll(async () => {
     vi.unstubAllGlobals();
     await cleanup();
+    if (originalRunnerServiceToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+    else process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
   });
 
   beforeEach(async () => {
+    process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
     mockFetchFn.mockReset();
     const runs = await listRuns(mockDB, {});
     for (const r of runs) {
@@ -146,6 +150,12 @@ describe('Runs Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
+      expect(mockFetchFn).toHaveBeenCalledWith(
+        expect.stringContaining('/runs'),
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer runner-test-secret' }),
+        })
+      );
     });
   });
 
