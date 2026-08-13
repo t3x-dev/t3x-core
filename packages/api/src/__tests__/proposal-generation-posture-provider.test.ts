@@ -37,14 +37,23 @@ const pointer = {
 
 function graph(input: {
   posture?: 'source_only' | 'guided' | 'recommend';
-  value?: string;
+  value?: ProtocolValue;
   base?: ProtocolValue;
+  path?: string;
+  intent?: string;
 }) {
   const posture = input.posture ?? 'guided';
   const base = createYOpsState(input.base ?? {});
   const generated = createYOpsEffect({
     base,
-    operations: [{ set: { path: 'prd/audience', value: input.value ?? 'enterprise operators' } }],
+    operations: [
+      {
+        set: {
+          path: input.path ?? 'prd/audience',
+          value: input.value ?? 'enterprise operators',
+        },
+      },
+    ],
     expectedBase: describeProtocolObject(base),
   });
   const context = {
@@ -69,7 +78,7 @@ function graph(input: {
       posture,
       intent: {
         mode: 'stated',
-        value: 'Target enterprise operators',
+        value: input.intent ?? 'enterprise operators',
         evidencePointers: [pointer],
       },
       rationale: { mode: 'authored', value: 'Structure the source', evidencePointers: [] },
@@ -184,6 +193,45 @@ describe('Proposal generation posture provider', () => {
     expect(predicate.outcome).toBe('failed');
     expect(predicate.findings.map((finding) => finding.code)).toEqual(
       expect.arrayContaining(['SOURCE_REPLACEMENT_NOT_ALLOWED', 'BASE_VALUE_CONFLICT'])
+    );
+  });
+
+  it('uses canonical YOps match paths when detecting an explicit Base replacement', async () => {
+    const result = await verify(
+      graph({
+        base: { users: [{ name: 'alice', role: 'viewer' }] },
+        path: 'users/[name=alice]/role',
+        value: 'enterprise operators',
+      })
+    );
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome).toBe('failed');
+    expect(predicate.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining(['SOURCE_REPLACEMENT_NOT_ALLOWED', 'BASE_VALUE_CONFLICT'])
+    );
+  });
+
+  it('does not treat nested data keys named path as YOps routing metadata', async () => {
+    const result = await verify(
+      graph({ value: { path: 'fabricated claim', audience: 'enterprise operators' } })
+    );
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome).toBe('failed');
+    expect(predicate.findings.map((finding) => finding.code)).toContain('SOURCE_SUPPORT_REQUIRED');
+  });
+
+  it('rejects a mechanically valid but semantically unsupported stated Claim', async () => {
+    const result = await verify(graph({ intent: 'Launch a consumer product' }));
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome).toBe('failed');
+    expect(predicate.findings.map((finding) => finding.code)).toContain(
+      'CLAIM_SOURCE_SUPPORT_REQUIRED'
     );
   });
 

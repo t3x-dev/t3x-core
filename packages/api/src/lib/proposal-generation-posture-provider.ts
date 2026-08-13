@@ -1,5 +1,7 @@
 import {
   buildRunnerValidationStatement,
+  generationOperationIntroducedScalars,
+  generationValueAtPath,
   parseProposalGenerationPreparation,
   proposalGenerationPreparationResource,
   RUNNER_VALIDATION_PREDICATE_TYPE,
@@ -25,6 +27,14 @@ export interface ProposalGenerationSupportVerifier {
   assess(input: {
     groupId: string;
     operations: ProtocolValue[];
+    evidenceQuotes: string[];
+    preparation: ReturnType<typeof parseProposalGenerationPreparation>;
+    base: ProtocolValue;
+    result: ProtocolValue;
+  }): Promise<'supported' | 'unsupported' | 'indeterminate'>;
+  assessClaim?(input: {
+    claim: 'intent' | 'rationale';
+    value: string;
     evidenceQuotes: string[];
     preparation: ReturnType<typeof parseProposalGenerationPreparation>;
     base: ProtocolValue;
@@ -56,57 +66,36 @@ function operationName(operation: ProtocolValue): string | null {
   return Object.keys(operation)[0] ?? null;
 }
 
-function introducedScalars(value: unknown, key?: string): string[] {
-  if (key === 'path' || key === 'from' || key === 'to' || key === 'source' || key === 'target') {
-    return [];
-  }
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return [String(value)];
-  }
-  if (Array.isArray(value)) return value.flatMap((item) => introducedScalars(item));
-  if (!isRecord(value)) return [];
-  return Object.entries(value).flatMap(([childKey, child]) => introducedScalars(child, childKey));
+const DETERMINISTIC_STRUCTURAL_OPERATIONS = new Set(['move', 'nest', 'sort', 'unique']);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const DETERMINISTIC_STRUCTURAL_OPERATIONS = new Set(['move', 'nest', 'sort', 'unique']);
+function quoteContainsValue(quote: string, value: string): boolean {
+  const normalizedQuote = normalizeText(quote);
+  const normalizedValue = normalizeText(value);
+  if (normalizedValue.length === 0) return false;
+  return new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])${escapeRegExp(normalizedValue)}(?=$|[^\\p{L}\\p{N}])`,
+    'u'
+  ).test(normalizedQuote);
+}
 
 function deterministicSupport(operations: readonly ProtocolValue[], quotes: readonly string[]) {
   const names = operations.map(operationName);
   if (names.every((name) => name !== null && DETERMINISTIC_STRUCTURAL_OPERATIONS.has(name))) {
     return true;
   }
-  const normalizedQuotes = quotes.map(normalizeText);
-  const values = operations.flatMap((operation) => introducedScalars(operation));
+  const values = operations.flatMap((operation) =>
+    generationOperationIntroducedScalars(
+      operation as Parameters<typeof generationOperationIntroducedScalars>[0]
+    )
+  );
   return (
     values.length > 0 &&
-    values.every((value) => {
-      const normalized = normalizeText(value);
-      return normalized.length > 0 && normalizedQuotes.some((quote) => quote.includes(normalized));
-    })
+    values.every((value) => quotes.some((quote) => quoteContainsValue(quote, value)))
   );
-}
-
-function pathParts(path: string): string[] {
-  if (path === '$' || path === '') return [];
-  return path
-    .replace(/^\$\.?/, '')
-    .split(/[/.]/)
-    .filter(Boolean);
-}
-
-function valueAtPath(root: ProtocolValue, path: string): ProtocolValue | undefined {
-  let cursor: ProtocolValue | undefined = root;
-  for (const part of pathParts(path)) {
-    if (Array.isArray(cursor)) {
-      const index = Number(part);
-      if (!Number.isInteger(index)) return undefined;
-      cursor = cursor[index];
-      continue;
-    }
-    if (!isRecord(cursor)) return undefined;
-    cursor = cursor[part] as ProtocolValue | undefined;
-  }
-  return cursor;
 }
 
 function sameValue(left: ProtocolValue | undefined, right: ProtocolValue | undefined): boolean {
@@ -121,6 +110,47 @@ function compareResource(
   const a = canonicalizeProtocolValue(left);
   const b = canonicalizeProtocolValue(right);
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function independentVerifier(
+  verifier: ProposalGenerationSupportVerifier | undefined,
+  preparation: ReturnType<typeof parseProposalGenerationPreparation>
+): ProposalGenerationSupportVerifier | undefined {
+  return verifier === undefined ||
+    (verifier.provider === preparation.provider && verifier.model === preparation.model)
+    ? undefined
+    : verifier;
+}
+
+function proposalClaim(
+  proposal: { predicate: ProtocolValue },
+  claim: 'intent' | 'rationale'
+):
+  | { mode: 'unspecified' }
+  | {
+      mode: 'stated' | 'inferred' | 'authored';
+      value: string;
+      evidence: Array<{ locator: { scheme: string; value: ProtocolValue } }>;
+    }
+  | null {
+  if (!isRecord(proposal.predicate)) return null;
+  const value = proposal.predicate[claim];
+  if (!isRecord(value) || typeof value.mode !== 'string') return null;
+  if (value.mode === 'unspecified') return { mode: 'unspecified' };
+  if (
+    !['stated', 'inferred', 'authored'].includes(value.mode) ||
+    typeof value.value !== 'string' ||
+    !Array.isArray(value.evidence)
+  ) {
+    return null;
+  }
+  return {
+    mode: value.mode as 'stated' | 'inferred' | 'authored',
+    value: value.value,
+    evidence: value.evidence as Array<{
+      locator: { scheme: string; value: ProtocolValue };
+    }>,
+  };
 }
 
 export function createProposalGenerationPostureProvider(input?: {
@@ -138,6 +168,7 @@ export function createProposalGenerationPostureProvider(input?: {
         return { outcome: 'not_applicable' };
       }
       const preparation = parseProposalGenerationPreparation(context.preparationFacts);
+      const verifier = independentVerifier(input?.supportVerifier, preparation);
       const support: SourceSupportAssessment[] = [];
       for (const binding of preparation.bindings) {
         if (binding.origin !== 'source_backed') continue;
@@ -153,11 +184,7 @@ export function createProposalGenerationPostureProvider(input?: {
           });
           continue;
         }
-        const verifier = input?.supportVerifier;
-        if (
-          verifier === undefined ||
-          (verifier.provider === preparation.provider && verifier.model === preparation.model)
-        ) {
+        if (verifier === undefined) {
           support.push({
             groupId: binding.groupId,
             outcome: 'indeterminate',
@@ -179,19 +206,93 @@ export function createProposalGenerationPostureProvider(input?: {
         });
       }
 
-      const baseConflicts = preparation.bindings.flatMap((binding) =>
-        binding.paths.flatMap((path) => {
-          const before = valueAtPath(context.base.value, path);
-          const after = valueAtPath(context.result.value, path);
+      const claimFindings: Array<{
+        severity: 'error';
+        code: string;
+        message: string;
+        path: string;
+      }> = [];
+      for (const claimName of ['intent', 'rationale'] as const) {
+        const claim = proposalClaim(context.proposal, claimName);
+        if (claim === null || claim.mode === 'unspecified') continue;
+        if (
+          claimName === 'intent' &&
+          preparation.profile.id === 'source_only' &&
+          claim.mode !== 'stated'
+        ) {
+          claimFindings.push({
+            severity: 'error',
+            code: 'SOURCE_ONLY_CLAIM_MODE_NOT_ALLOWED',
+            message: 'source_only intent must be source-backed stated content or unspecified.',
+            path: '$.proposal.intent.mode',
+          });
+          continue;
+        }
+        if (claim.mode !== 'stated') continue;
+        const quotes = evidenceQuotes(claim);
+        let outcome: 'supported' | 'unsupported' | 'indeterminate' = quotes.some((quote) =>
+          quoteContainsValue(quote, claim.value)
+        )
+          ? 'supported'
+          : 'indeterminate';
+        if (outcome === 'indeterminate' && verifier?.assessClaim !== undefined) {
+          outcome = await verifier.assessClaim({
+            claim: claimName,
+            value: claim.value,
+            evidenceQuotes: quotes,
+            preparation,
+            base: context.base.value,
+            result: context.result.value,
+          });
+        }
+        if (outcome !== 'supported') {
+          claimFindings.push({
+            severity: 'error',
+            code:
+              outcome === 'unsupported'
+                ? 'CLAIM_SOURCE_SUPPORT_FAILED'
+                : 'CLAIM_SOURCE_SUPPORT_REQUIRED',
+            message:
+              outcome === 'unsupported'
+                ? `The cited Source does not support the stated ${claimName}.`
+                : `The stated ${claimName} requires a conclusive source-support assessment.`,
+            path: `$.proposal.${claimName}.evidence`,
+          });
+        }
+      }
+
+      const baseChanges = preparation.bindings.flatMap((binding) => {
+        const operations = binding.operationIndexes.map(
+          (index) => context.effect.operations[index]!
+        );
+        const structural = operations.every((operation) =>
+          DETERMINISTIC_STRUCTURAL_OPERATIONS.has(operationName(operation) ?? '')
+        );
+        return binding.paths.flatMap((path) => {
+          const before = generationValueAtPath(context.base.value, path);
+          const after = generationValueAtPath(context.result.value, path);
           return before !== undefined && !sameValue(before, after)
-            ? [{ groupId: binding.groupId, path, kind: 'explicit_claim_replacement' as const }]
+            ? [
+                {
+                  groupId: binding.groupId,
+                  path,
+                  kind: 'explicit_claim_replacement' as const,
+                  structural,
+                },
+              ]
             : [];
-        })
-      );
+        });
+      });
       const report = verifyProposalGenerationPosture({
         preparation,
         sourceSupport: support,
-        conflicts: baseConflicts,
+        conflicts: baseChanges
+          .filter((conflict) => !conflict.structural)
+          .map((conflict) => ({
+            groupId: conflict.groupId,
+            path: conflict.path,
+            kind: conflict.kind,
+          })),
       });
       const riskFindings = preparation.bindings.flatMap((binding) => {
         const operations = binding.operationIndexes.map(
@@ -223,10 +324,10 @@ export function createProposalGenerationPostureProvider(input?: {
             : []),
         ];
       });
-      const conflictFindings = baseConflicts.map((conflict) => ({
+      const conflictFindings = baseChanges.map((conflict) => ({
         severity: 'warning' as const,
         code: 'BASE_VALUE_CONFLICT',
-        message: 'Generated value differs from the immutable Base value.',
+        message: `Change Group ${conflict.groupId} differs from the immutable Base value.`,
         path: conflict.path,
       }));
       const findings = [
@@ -236,6 +337,7 @@ export function createProposalGenerationPostureProvider(input?: {
           message: issue.message,
           path: issue.path,
         })),
+        ...claimFindings,
         ...conflictFindings,
         ...riskFindings,
       ];
@@ -269,11 +371,14 @@ export function createProposalGenerationPostureProvider(input?: {
             inputArtifacts,
             logs: [],
             outputs: [],
-            outcome: report.outcome,
+            outcome: report.outcome === 'failed' || claimFindings.length > 0 ? 'failed' : 'passed',
             summary:
-              report.outcome === 'passed'
+              report.outcome === 'passed' && claimFindings.length === 0
                 ? `${report.posture} posture verification passed.`
-                : `${report.posture} posture verification failed with ${report.issues.filter((issue) => issue.severity === 'error').length} error(s).`,
+                : `${report.posture} posture verification failed with ${
+                    report.issues.filter((issue) => issue.severity === 'error').length +
+                    claimFindings.length
+                  } error(s).`,
             findings,
           },
         }),
