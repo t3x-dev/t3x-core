@@ -36,6 +36,12 @@ import {
   type Statement,
   verifyEffect,
 } from '@t3x-dev/transition';
+import type { ProposalGenerationModel, ProposalGenerationRequest } from '../proposal-generation';
+import type { ProposalGenerationSupportVerifier } from '../proposal-generation-posture-provider';
+import {
+  type ProposalGenerationReviewProjection,
+  projectProposalGenerationReview,
+} from '../proposal-generation-projection';
 import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
@@ -47,6 +53,7 @@ import {
   buildWorkspaceYOpsProposal,
   WorkspaceTransitionReviewStaleError,
 } from '../workspace-transition';
+import { resolveApplicableTransitionPolicy } from './applicable-policy';
 import { canonicalTransitionRequest, materializeTransitionProposal } from './materialize';
 
 type ActorRef = ProposalStatement['actor'];
@@ -183,6 +190,15 @@ export interface TransitionControlPlaneOptions {
   providers?: readonly TransitionExternalStatementProvider[];
   nativeProviders?: readonly TransitionNativeStatementProvider[];
   allowedExternalPredicateTypes?: readonly string[];
+  proposalGeneration?: {
+    resolveModel(input: {
+      db: AnyDB;
+      projectId: string;
+      requester: ActorRef;
+      request: ProposalGenerationRequest;
+    }): Promise<ProposalGenerationModel>;
+    supportVerifier?: ProposalGenerationSupportVerifier;
+  };
 }
 
 export interface TransitionControlPlaneView {
@@ -209,6 +225,7 @@ export interface TransitionControlPlaneView {
     requestId: string;
     createdAt: string;
   }>;
+  generation?: ProposalGenerationReviewProjection;
 }
 
 export interface TransitionOperationalResult {
@@ -467,13 +484,25 @@ export async function inspectTransition(input: {
     input.projectId,
     graph.membership.refName
   );
+  const preparationFacts =
+    graph.preparation === null
+      ? null
+      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
+  const applicablePolicy =
+    policyBinding === null
+      ? null
+      : resolveApplicableTransitionPolicy({
+          refPolicyBinding: policyBinding,
+          requestKind: graph.membership.requestKind,
+          preparationFacts,
+        });
   const capabilityContext: ProjectionCapabilityContext | undefined =
-    input.actor === undefined || policyBinding === null
+    input.actor === undefined || applicablePolicy === null
       ? undefined
       : {
           actorContext: { actor: input.actor },
-          policy: policyBinding.policy,
-          policyResource: policyBinding.resource,
+          policy: applicablePolicy.policy,
+          policyResource: applicablePolicy.resource,
         };
   const transition = projectTransitionView({
     mode: 'transition',
@@ -487,6 +516,17 @@ export async function inspectTransition(input: {
     objectIntegrity: 'verified',
     ...(input.decision === undefined ? {} : { decision: input.decision }),
     ...(capabilityContext === undefined ? {} : { capabilityContext }),
+  });
+  const generation = projectProposalGenerationReview({
+    preparationFacts,
+    operations: graph.effect.operations,
+    base: graph.base.value,
+    result: graph.result.value,
+    observations: graph.observations.map((observation) => ({
+      statement: observation.statement as Statement,
+      source: observation.membership.source,
+      issuer: observation.issuerContext.actor,
+    })),
   });
   return {
     transitionId: graph.membership.transitionId,
@@ -504,7 +544,7 @@ export async function inspectTransition(input: {
       statementDigests: graph.observations.map(
         (observation) => observation.membership.statementDigest
       ),
-      policyDigest: policyBinding?.resource.digest ?? null,
+      policyDigest: applicablePolicy?.resource.digest ?? null,
     },
     transition,
     statements: graph.observations.map((observation) => ({
@@ -514,6 +554,7 @@ export async function inspectTransition(input: {
       requestId: observation.membership.requestId,
       createdAt: observation.membership.createdAt,
     })),
+    ...(generation === null ? {} : { generation }),
   };
 }
 

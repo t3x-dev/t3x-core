@@ -1256,6 +1256,13 @@
     },
     {
       "source": "runner.openapi.ts",
+      "method": "GET",
+      "path": "/runner/health",
+      "policy": "authenticated",
+      "rationale": "Authenticated service-health proxy without a project-scoped resource."
+    },
+    {
+      "source": "runner.openapi.ts",
       "method": "POST",
       "path": "/runner/run",
       "policy": "project",
@@ -1496,6 +1503,13 @@
       "source": "topics.openapi.ts",
       "method": "PATCH",
       "path": "/v1/topics/{id}",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/proposal-generations",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
