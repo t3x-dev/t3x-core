@@ -12,6 +12,7 @@ import {
   createYSchemaResourceDescriptor,
   decodeRepositorySemanticState,
   describeTransitionObject,
+  type ProposalDraft,
   type ProposalStatement,
   parseAcceptancePolicy,
   projectTransitionView,
@@ -253,7 +254,7 @@ interface PreparedWorkspaceTransition
   workspaceId: string;
 }
 
-interface ResolvedWorkspaceTransitionContext {
+export interface ResolvedWorkspaceTransitionContext {
   base: State;
   head: TransitionRefHead;
   targetBranch: string;
@@ -368,7 +369,7 @@ function samePrecondition(
   );
 }
 
-async function resolveWorkspaceTransitionContext(
+export async function resolveWorkspaceTransitionContext(
   db: AnyDB,
   input: { projectId: string; workspaceId: string; expectedRevision?: number }
 ): Promise<ResolvedWorkspaceTransitionContext> {
@@ -416,9 +417,14 @@ export async function resolveWorkspaceExtractionContext(
   };
 }
 
-function buildWorkspaceYOpsProposalFromContext(
+export function buildWorkspaceYOpsProposalFromContext(
   context: ResolvedWorkspaceTransitionContext,
-  input: { operations: ProtocolValue[]; why?: string; actor: ActorRef }
+  input: {
+    operations: ProtocolValue[];
+    why?: string;
+    actor: ActorRef;
+    proposalDraft?: ProposalDraft;
+  }
 ): BuiltWorkspaceYOpsProposal {
   const { effect, result } = createYOpsEffect({
     base: context.base,
@@ -426,7 +432,7 @@ function buildWorkspaceYOpsProposalFromContext(
     expectedBase: describeTransitionObject(context.base),
   });
   const compiled = compileProposalDraft({
-    draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
+    draft: input.proposalDraft ?? createHumanProposalDraft({ why: input.why?.trim() || undefined }),
     effect,
     actor: input.actor,
   });

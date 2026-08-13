@@ -36,6 +36,7 @@ import {
   type Statement,
   verifyEffect,
 } from '@t3x-dev/transition';
+import type { ProposalGenerationModel, ProposalGenerationRequest } from '../proposal-generation';
 import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
@@ -184,6 +185,14 @@ export interface TransitionControlPlaneOptions {
   providers?: readonly TransitionExternalStatementProvider[];
   nativeProviders?: readonly TransitionNativeStatementProvider[];
   allowedExternalPredicateTypes?: readonly string[];
+  proposalGeneration?: {
+    resolveModel(input: {
+      db: AnyDB;
+      projectId: string;
+      requester: ActorRef;
+      request: ProposalGenerationRequest;
+    }): Promise<ProposalGenerationModel>;
+  };
 }
 
 export interface TransitionControlPlaneView {
