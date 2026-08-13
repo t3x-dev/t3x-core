@@ -25,6 +25,7 @@ export default defineConfig({
     isolate: true,
     // Longer timeout for database operations
     testTimeout: 10000,
+    hookTimeout: 30000,
     // Limit parallel workers
     minWorkers: 1,
     maxWorkers: 4,
