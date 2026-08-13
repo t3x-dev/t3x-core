@@ -696,9 +696,20 @@ export async function decideWorkspaceTransition(
     }
 
     const graph = await resolveTransitionProposalGraph(db, input.projectId, transitionId);
+    let requestFacts: unknown;
+    try {
+      requestFacts = JSON.parse(graph.membership.requestCanonicalJson);
+    } catch {
+      throw new WorkspaceTransitionReviewStaleError();
+    }
     if (
       graph.membership.workspaceId !== input.workspaceId ||
-      graph.membership.requestKind !== 'structured_yops'
+      graph.membership.requestKind !== 'structured_yops' ||
+      requestFacts === null ||
+      typeof requestFacts !== 'object' ||
+      Array.isArray(requestFacts) ||
+      !('adapter' in requestFacts) ||
+      requestFacts.adapter !== 'workspace_transition_review'
     ) {
       throw new WorkspaceTransitionReviewStaleError();
     }

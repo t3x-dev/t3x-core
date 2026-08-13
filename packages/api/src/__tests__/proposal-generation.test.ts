@@ -17,6 +17,10 @@ import {
   ProposalGenerationDraftError,
   type ProposalGenerationModel,
 } from '../lib/proposal-generation';
+import {
+  decideWorkspaceTransition,
+  WorkspaceTransitionReviewStaleError,
+} from '../lib/workspace-transition';
 import { setupTestDB, testData } from './setup';
 
 let db: AnyDB;
@@ -356,5 +360,44 @@ describe('governed Proposal generation', () => {
     const [left, right] = await Promise.all([first, second]);
     expect(left.view.transitionId).toBe(right.view.transitionId);
     expect([left.reused, right.reused]).toContain(true);
+  });
+
+  it('cannot be decided through the legacy Workspace compatibility policy', async () => {
+    const data = await fixture('Generation compatibility boundary');
+    const generated = await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:compatibility-boundary',
+      requester: { kind: 'human', id: 'user:compatibility-boundary' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Structure the launch audience.',
+        sourceMaterialIds: [data.material.id],
+        expectedRevision: data.workspace.revision,
+      },
+      resolveModel: async () => model(),
+    });
+    const policyDigest = generated.view.precondition.policyDigest;
+    if (policyDigest === null) throw new Error('Generated Proposal has no applicable policy');
+
+    await expect(
+      decideWorkspaceTransition(db, {
+        projectId: data.projectId,
+        workspaceId: data.workspaceId,
+        transitionId: generated.view.transitionId,
+        content: { trees: [], relations: [] },
+        outcome: 'accepted',
+        precondition: {
+          workspaceRevision: generated.view.precondition.workspaceRevision,
+          refHead: generated.view.precondition.refHead,
+          effectDigest: generated.view.precondition.effectDigest,
+          proposalDigest: generated.view.precondition.proposalDigest,
+          statementDigests: generated.view.precondition.statementDigests,
+          policyDigest,
+        },
+        actor: { kind: 'human', id: 'human:compatibility-boundary' },
+      })
+    ).rejects.toBeInstanceOf(WorkspaceTransitionReviewStaleError);
   });
 });
