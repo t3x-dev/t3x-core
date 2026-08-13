@@ -79,7 +79,7 @@ function key(
 }
 
 function app(apiKey: ApiKey, options: TransitionControlPlaneOptions) {
-  const instance = new Hono();
+  const instance = new Hono<{ Variables: { apiKey: ApiKey } }>();
   instance.use('*', async (context, next) => {
     context.set('apiKey', apiKey);
     await next();
@@ -88,7 +88,7 @@ function app(apiKey: ApiKey, options: TransitionControlPlaneOptions) {
   return instance;
 }
 
-async function post(instance: Hono, path: string, body: unknown) {
+async function post(instance: ReturnType<typeof app>, path: string, body: unknown) {
   return instance.request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -186,7 +186,16 @@ async function fixture(name: string) {
   return { projectId: project.projectId, workspaceId, material, workspace };
 }
 
-function draft(value: string) {
+function draft(
+  value: string,
+  input: {
+    posture?: 'source_only' | 'guided' | 'recommend';
+    origin?: 'source_backed' | 'inferred' | 'recommended';
+    path?: string;
+  } = {}
+) {
+  const posture = input.posture ?? 'guided';
+  const origin = input.origin ?? 'source_backed';
   const pointer = {
     sourceIndex: 0,
     locator: {
@@ -197,7 +206,7 @@ function draft(value: string) {
   return {
     schema: 't3x.dev/proposal-generation-draft/v1' as const,
     version: 1 as const,
-    posture: 'guided' as const,
+    posture,
     intent: {
       mode: 'stated' as const,
       value: 'enterprise operators',
@@ -211,12 +220,16 @@ function draft(value: string) {
     changes: [
       {
         id: 'audience',
-        operations: [{ set: { path: 'prd/audience', value } }],
-        claimedOrigin: 'source_backed' as const,
-        evidencePointers: [pointer],
+        operations: [{ set: { path: input.path ?? 'prd/audience', value } }],
+        claimedOrigin: origin,
+        evidencePointers: origin === 'source_backed' ? [pointer] : [],
         basisPointers: [],
-        assumptions: [],
-        reason: 'The source explicitly names the launch audience',
+        assumptions:
+          origin === 'recommended' ? ['A human must review this generated candidate.'] : [],
+        reason:
+          origin === 'source_backed'
+            ? 'The source explicitly names the launch audience'
+            : 'Offer a clearly labeled candidate for human review',
         challenges: [],
       },
     ],
@@ -431,5 +444,104 @@ describe('Proposal generation HTTP lifecycle E2E', () => {
       refName: 'main',
     });
     expect(head).toEqual({ format: 'empty', refName: 'main', head: null });
+  });
+
+  it.each([
+    {
+      posture: 'source_only' as const,
+      origin: 'source_backed' as const,
+      path: 'prd/audience',
+      stateKey: 'audience',
+      value: 'enterprise operators',
+      counts: { sourceBacked: 1, inferred: 0, recommended: 0, challenges: 0 },
+    },
+    {
+      posture: 'recommend' as const,
+      origin: 'recommended' as const,
+      path: 'prd/onboarding',
+      stateKey: 'onboarding',
+      value: 'guided setup',
+      counts: { sourceBacked: 0, inferred: 0, recommended: 1, challenges: 0 },
+    },
+  ])('persists a verified $posture Proposal through human Decision and CommitV2', async ({
+    posture,
+    origin,
+    path,
+    stateKey,
+    value,
+    counts,
+  }) => {
+    const data = await fixture(`Proposal generation ${posture} lifecycle`);
+    const generate = vi.fn(async () => draft(value, { posture, origin, path }));
+    const selected = options(value, generate);
+    const writer = key(data.projectId, `${posture}-writer`, 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(data.projectId, `${posture}-reviewer`, 'human', [
+      'transition:decide:accept',
+    ]);
+    const committer = key(data.projectId, `${posture}-committer`, 'service', [
+      'transition:commit:create',
+      'transition:ref:advance',
+    ]);
+    const generated = await post(
+      app(writer, selected.options),
+      `/v1/projects/${data.projectId}/proposal-generations`,
+      {
+        request_id: `generation:e2e:${posture}`,
+        workspace_id: data.workspaceId,
+        posture,
+        instruction: `Exercise the ${posture} lifecycle.`,
+        source_material_ids: [data.material.id],
+      }
+    );
+    expect(generated.status).toBe(200);
+    const generatedPayload = (await generated.json()) as {
+      data: { transition_id: string; view: WireView };
+    };
+    expect(generatedPayload.data.view.generation).toMatchObject({
+      posture,
+      counts,
+      verification: { status: 'pending', findings: [] },
+    });
+    expect(generatedPayload.data.view.generation.groups[0]).toMatchObject({
+      origin,
+      paths: [path],
+      values: [{ after: { availability: 'available', value }, changed: true }],
+    });
+
+    const transitionPath = `/v1/projects/${data.projectId}/transitions/${generatedPayload.data.transition_id}`;
+    const verified = await post(app(writer, selected.options), `${transitionPath}/verify`, {
+      request_id: `verify:e2e:${posture}`,
+    });
+    expect(verified.status).toBe(200);
+    const verifiedPayload = (await verified.json()) as { data: { view: WireView } };
+    expect(verifiedPayload.data.view.generation.verification).toEqual({
+      status: 'passed',
+      findings: [],
+    });
+
+    const accepted = await post(app(reviewer, selected.options), `${transitionPath}/decisions`, {
+      request_id: `decision:e2e:${posture}`,
+      outcome: 'accepted',
+      precondition: verifiedPayload.data.view.precondition,
+    });
+    expect(accepted.status).toBe(200);
+    const acceptedPayload = (await accepted.json()) as { data: { decision_digest: string } };
+    const committed = await post(app(committer, selected.options), `${transitionPath}/commits`, {
+      request_id: `commit:e2e:${posture}`,
+      decision_digest: acceptedPayload.data.decision_digest,
+      expected_head: verifiedPayload.data.view.precondition.ref_head,
+    });
+    expect(committed.status).toBe(200);
+    const head = await getTransitionRefHead(mockDB, {
+      projectId: data.projectId,
+      refName: 'main',
+    });
+    expect(head).toMatchObject({
+      format: 'transition_v2',
+      state: { value: { prd: { [stateKey]: value } } },
+    });
   });
 });
