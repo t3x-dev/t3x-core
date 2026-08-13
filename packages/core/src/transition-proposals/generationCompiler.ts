@@ -4,7 +4,7 @@ import {
   type ProtocolValue,
   type ResourceDescriptor,
 } from '@t3x-dev/transition';
-import { spec, type YOp, YOpSchema } from '@t3x-dev/yops';
+import { resolvePath, spec, type YOp, YOpSchema, type YValue } from '@t3x-dev/yops';
 import type { ProposalDraft } from './draft';
 import {
   type DraftBasisPointer,
@@ -238,6 +238,50 @@ export function generationOperationPaths(operation: YOp): string[] {
     return typeof value === 'string' ? [value.length === 0 ? '$' : value] : [];
   });
   return [...new Set(paths)].sort();
+}
+
+/** Resolve a compiler-derived path with the canonical YOps path grammar. */
+export function generationValueAtPath(
+  value: ProtocolValue,
+  path: string
+): ProtocolValue | undefined {
+  try {
+    return resolvePath(value as YValue, path === '$' ? '' : path) as ProtocolValue | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function generationScalarValues(value: unknown): string[] {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return [String(value)];
+  }
+  if (Array.isArray(value)) return value.flatMap((item) => generationScalarValues(item));
+  if (value === null || typeof value !== 'object') return [];
+  return Object.values(value).flatMap((child) => generationScalarValues(child));
+}
+
+/**
+ * Return scalar content introduced by an operation while excluding only its
+ * spec-declared top-level path fields. Nested data keys that happen to be
+ * named `path`, `from`, or `to` remain content and cannot evade source checks.
+ */
+export function generationOperationIntroducedScalars(operation: YOp): string[] {
+  const operationName = Object.keys(operation)[0];
+  const operationSpec = operationName === undefined ? undefined : spec.operations[operationName];
+  const payload =
+    operationName === undefined
+      ? undefined
+      : (operation as unknown as Record<string, Record<string, unknown>>)[operationName];
+  if (operationSpec === undefined || payload === undefined) return [];
+  const pathFields = new Set(
+    Object.values(operationSpec.path_fields).filter(
+      (field): field is string => typeof field === 'string'
+    )
+  );
+  return Object.entries(payload).flatMap(([field, value]) =>
+    pathFields.has(field) ? [] : generationScalarValues(value)
+  );
 }
 
 function compileClaim(

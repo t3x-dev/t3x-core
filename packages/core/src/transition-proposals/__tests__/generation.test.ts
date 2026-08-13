@@ -12,7 +12,9 @@ import fixturesJson from '../__fixtures__/proposal-generation-postures-v1.json';
 import { compileProposalDraft } from '../compiler';
 import {
   compileProposalGenerationDraft,
+  generationOperationIntroducedScalars,
   generationOperationPaths,
+  generationValueAtPath,
   type ProposalGenerationCompilationResult,
 } from '../generationCompiler';
 import {
@@ -299,6 +301,27 @@ describe('Proposal Generation compiler and preparation contract', () => {
     expect(generationOperationPaths({ split: { path: '', into: { product: ['name'] } } })).toEqual([
       '$',
     ]);
+  });
+
+  it('uses canonical YOps grammar when resolving generation paths', () => {
+    const value = {
+      users: [{ name: 'alice', role: 'viewer' }],
+      config: { 'db/prod': { host: 'localhost' } },
+    };
+    expect(generationValueAtPath(value, 'users/[name=alice]/role')).toBe('viewer');
+    expect(generationValueAtPath(value, 'config/"db/prod"/host')).toBe('localhost');
+    expect(generationValueAtPath(value, '$')).toEqual(value);
+  });
+
+  it('excludes declared path fields without exempting nested data keys with path-like names', () => {
+    expect(
+      generationOperationIntroducedScalars({
+        set: {
+          path: 'product/config',
+          value: { path: 'invented', audience: 'enterprise' },
+        },
+      })
+    ).toEqual(['invented', 'enterprise']);
   });
 
   it('canonicalizes and addresses the exact preparation bytes', () => {
