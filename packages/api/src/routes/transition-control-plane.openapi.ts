@@ -32,6 +32,10 @@ import {
   verifyTransition,
 } from '../lib/transition-control-plane';
 import {
+  GenerationPolicyIncompatibleError,
+  GenerationPolicyIntegrityError,
+} from '../lib/transition-control-plane/applicable-policy';
+import {
   commitTransition,
   decideTransition,
   TransitionAutomatedOverrideDeniedError,
@@ -357,6 +361,7 @@ function controlPlaneError(c: Context, error: unknown) {
     error instanceof TransitionHeadConflictError ||
     error instanceof TransitionReviewStaleError ||
     error instanceof TransitionDecisionDeniedError ||
+    error instanceof GenerationPolicyIncompatibleError ||
     error instanceof WorkspaceTransitionReviewStaleError ||
     error instanceof ConflictError
   ) {
@@ -369,6 +374,7 @@ function controlPlaneError(c: Context, error: unknown) {
     error instanceof TransitionMembershipIntegrityError ||
     error instanceof TransitionCommandIntegrityError ||
     error instanceof TransitionDecisionMembershipError ||
+    error instanceof GenerationPolicyIntegrityError ||
     error instanceof TransitionRefHeadIntegrityError ||
     error instanceof TransitionProtocolError ||
     error instanceof WorkspaceTransitionLegacyHeadError ||

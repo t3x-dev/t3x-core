@@ -6,6 +6,7 @@ import {
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
   type PolicyFailure,
+  PROPOSAL_GENERATION_PREPARATION_SCHEMA,
   type ProposalStatement,
   type RepositoryDecisionAuthority,
   type RequestedDecisionOutcome,
@@ -38,6 +39,7 @@ import {
   type ProtocolValue,
   type StringClaim,
 } from '@t3x-dev/transition';
+import { resolveApplicableTransitionPolicy } from './applicable-policy';
 import { inspectTransition, type TransitionControlPlaneView } from './index';
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
@@ -142,6 +144,15 @@ function sameDescriptor(
   return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
 }
 
+function sameResourceDescriptor(
+  left: { uri: string; mediaType: string; digest: string },
+  right: { uri: string; mediaType: string; digest: string }
+): boolean {
+  return (
+    left.uri === right.uri && left.mediaType === right.mediaType && left.digest === right.digest
+  );
+}
+
 function commandDigest(value: ProtocolValue): string {
   return digestTransitionRequestCanonicalJson(canonicalizeProtocolValue(value));
 }
@@ -185,12 +196,23 @@ async function resolveReviewFacts(
   if (workspace === null || (authoritySelection === undefined && policyBinding === null)) {
     throw new TransitionReviewStaleError();
   }
+  const applicablePolicy =
+    authoritySelection !== undefined
+      ? null
+      : resolveApplicableTransitionPolicy({
+          refPolicyBinding: policyBinding!,
+          requestKind: graph.membership.requestKind,
+          preparationFacts:
+            graph.preparation === null
+              ? null
+              : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
+        });
   return {
     graph,
     workspace,
     head,
-    policyBinding,
-    policyDigest: authoritySelection?.policyDigest ?? policyBinding!.resource.digest,
+    policyBinding: applicablePolicy,
+    policyDigest: authoritySelection?.policyDigest ?? applicablePolicy!.resource.digest,
   };
 }
 
@@ -551,7 +573,7 @@ export async function commitTransition(input: {
   if (input.expectedHead !== graph.membership.refHead) {
     throw new TransitionHeadConflictError(graph.membership.refHead, input.expectedHead);
   }
-  const [audit, head, workspace] = await Promise.all([
+  const [audit, head, workspace, refPolicyBinding] = await Promise.all([
     getRepositoryDecisionAudit(input.db, {
       projectId: input.projectId,
       refName: graph.membership.refName,
@@ -562,6 +584,7 @@ export async function commitTransition(input: {
       refName: graph.membership.refName,
     }),
     findWorkspaceDraft(input.db, input.projectId, graph.membership.workspaceId),
+    getTransitionPolicyBinding(input.db, input.projectId, graph.membership.refName),
   ]);
   if (audit === null) {
     throw new TransitionDecisionMembershipError('Decision is not in this repository audit ledger');
@@ -569,6 +592,34 @@ export async function commitTransition(input: {
   assertDecisionMembership(audit.decision, graph);
   if (audit.outcome === 'rejected') {
     throw new DecisionNotAuthorizedError(input.decisionDigest);
+  }
+  const preparationFacts =
+    graph.preparation === null
+      ? null
+      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
+  const isGeneratedProposal =
+    preparationFacts !== null &&
+    typeof preparationFacts === 'object' &&
+    !Array.isArray(preparationFacts) &&
+    preparationFacts.schema === PROPOSAL_GENERATION_PREPARATION_SCHEMA;
+  if (refPolicyBinding === null && isGeneratedProposal) throw new TransitionReviewStaleError();
+  const applicablePolicy =
+    refPolicyBinding === null
+      ? null
+      : resolveApplicableTransitionPolicy({
+          refPolicyBinding,
+          requestKind: graph.membership.requestKind,
+          preparationFacts,
+        });
+  // Generated Proposals are always decided against the server-derived overlay.
+  // Other adapters may deliberately select a narrower authority policy whose
+  // resource is not the ref binding, so preserve their existing commit path.
+  if (
+    applicablePolicy?.mode === 'generation_overlay' &&
+    (audit.decision.predicate.policy.mode !== 'evaluated' ||
+      !sameResourceDescriptor(audit.decision.predicate.policy.resource, applicablePolicy.resource))
+  ) {
+    throw new TransitionReviewStaleError();
   }
   if (head.head !== input.expectedHead) {
     throw new TransitionHeadConflictError(input.expectedHead, head.head);
