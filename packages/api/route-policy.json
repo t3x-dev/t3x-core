@@ -1249,6 +1249,13 @@
     },
     {
       "source": "runner.openapi.ts",
+      "method": "GET",
+      "path": "/runner/health",
+      "policy": "authenticated",
+      "rationale": "Authenticated service-health proxy without a project-scoped resource."
+    },
+    {
+      "source": "runner.openapi.ts",
       "method": "POST",
       "path": "/runner/run",
       "policy": "project",
