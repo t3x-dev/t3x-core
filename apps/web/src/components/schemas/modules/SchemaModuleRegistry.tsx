@@ -668,17 +668,11 @@ export function SchemaModuleRegistry({
           ))}
         </div>
         <div className="space-y-2 border-t border-[var(--stroke-divider)] p-3">
-          {previewState.error ? (
-            <p className="text-[10px] text-[var(--destructive)]">{previewState.error}</p>
-          ) : null}
-          {autoSaveError ? (
-            <p className="text-[10px] text-[var(--destructive)]">{autoSaveError}</p>
-          ) : null}
-          {feedback ? <p className="text-[10px] text-[var(--text-secondary)]">{feedback}</p> : null}
           <Button
             className="w-full"
             disabled={
               previewState.pending ||
+              Boolean(previewState.result?.report.valid) ||
               autoSavePending ||
               (Boolean(workspace) && (dirty || Boolean(autoSaveError))) ||
               compositionModules.length === 0
@@ -688,7 +682,11 @@ export function SchemaModuleRegistry({
             variant="canvas-outline"
           >
             <ShieldCheck className="size-4" />{' '}
-            {previewState.pending ? 'Compiling…' : 'Verify composition'}
+            {previewState.pending
+              ? 'Compiling…'
+              : previewState.result?.report.valid
+                ? 'Verified'
+                : 'Verify composition'}
           </Button>
           {workspaceRevision !== undefined ? (
             <Button
@@ -708,6 +706,15 @@ export function SchemaModuleRegistry({
               <PackageCheck className="size-4" /> Publish Schema version
             </Button>
           ) : null}
+          <div aria-live="polite" className="min-h-4 text-[10px] leading-4">
+            {previewState.error ? (
+              <p className="text-[var(--destructive)]">{previewState.error}</p>
+            ) : autoSaveError ? (
+              <p className="text-[var(--destructive)]">{autoSaveError}</p>
+            ) : feedback ? (
+              <p className="text-[var(--text-secondary)]">{feedback}</p>
+            ) : null}
+          </div>
         </div>
       </aside>
       <Dialog onOpenChange={setPublishOpen} open={publishOpen}>

@@ -294,6 +294,7 @@ describe('SchemaModuleRegistry', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Publish Schema version' })).toBeEnabled()
     );
+    expect(screen.getByRole('button', { name: 'Verified' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Publish Schema version' }));
     fireEvent.change(screen.getByLabelText('Tags (comma separated)'), {
       target: { value: 'product, team' },
