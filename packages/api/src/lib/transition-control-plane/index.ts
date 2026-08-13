@@ -522,7 +522,11 @@ export async function inspectTransition(input: {
     operations: graph.effect.operations,
     base: graph.base.value,
     result: graph.result.value,
-    statements: graph.observations.map((observation) => observation.statement as Statement),
+    observations: graph.observations.map((observation) => ({
+      statement: observation.statement as Statement,
+      source: observation.membership.source,
+      issuer: observation.issuerContext.actor,
+    })),
   });
   return {
     transitionId: graph.membership.transitionId,

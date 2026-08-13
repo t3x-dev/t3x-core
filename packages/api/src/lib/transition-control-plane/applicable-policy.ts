@@ -16,6 +16,8 @@ export const PROPOSAL_POSTURE_VERIFIER_ACTOR = Object.freeze({
   kind: 'service' as const,
   id: 'service:t3x-proposal-posture-verifier',
 });
+export const PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE =
+  'native:proposal-generation-posture/v1' as const;
 export const PROPOSAL_POSTURE_VERIFIER_TOOL = Object.freeze({
   name: '@t3x-dev/core/proposal-generation-posture',
   version: '1',

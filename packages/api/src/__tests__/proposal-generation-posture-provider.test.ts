@@ -1,4 +1,5 @@
 import {
+  buildRunnerValidationStatement,
   compileProposalDraft,
   compileProposalGenerationDraft,
   createYOpsEffect,
@@ -11,6 +12,7 @@ import { describeProtocolObject, type ProtocolValue } from '@t3x-dev/transition'
 import { describe, expect, it, vi } from 'vitest';
 import {
   createProposalGenerationPostureProvider,
+  PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
   type ProposalGenerationSupportVerifier,
 } from '../lib/proposal-generation-posture-provider';
 import { projectProposalGenerationReview } from '../lib/proposal-generation-projection';
@@ -22,6 +24,7 @@ import {
 } from '../lib/transition-control-plane/applicable-policy';
 
 const DIGEST = `sha256:${'a'.repeat(64)}` as const;
+const OTHER_DIGEST = `sha256:${'b'.repeat(64)}` as const;
 const source = {
   uri: 't3x://projects/project-1/materials/source-1',
   mediaType: 'text/plain;charset=utf-8',
@@ -197,13 +200,12 @@ describe('Proposal generation posture provider', () => {
   });
 
   it('uses canonical YOps match paths when detecting an explicit Base replacement', async () => {
-    const result = await verify(
-      graph({
-        base: { users: [{ name: 'alice', role: 'viewer' }] },
-        path: 'users/[name=alice]/role',
-        value: 'enterprise operators',
-      })
-    );
+    const built = graph({
+      base: { users: [{ name: 'alice', role: 'viewer' }] },
+      path: 'users/[name=alice]/role',
+      value: 'enterprise operators',
+    });
+    const result = await verify(built);
     expect(result.outcome).toBe('statement');
     if (result.outcome !== 'statement') return;
     const predicate = parseRunnerValidationStatement(result.statement).predicate;
@@ -211,6 +213,18 @@ describe('Proposal generation posture provider', () => {
     expect(predicate.findings.map((finding) => finding.code)).toEqual(
       expect.arrayContaining(['SOURCE_REPLACEMENT_NOT_ALLOWED', 'BASE_VALUE_CONFLICT'])
     );
+    const projection = projectProposalGenerationReview({
+      preparationFacts: built.preparation as unknown as ProtocolValue,
+      operations: built.generated.effect.operations,
+      base: built.base.value,
+      result: built.generated.result.value,
+      observations: [],
+    });
+    expect(projection?.groups[0]?.values[0]).toMatchObject({
+      before: { availability: 'available', value: 'viewer' },
+      after: { availability: 'available', value: 'enterprise operators' },
+      changed: true,
+    });
   });
 
   it('does not treat nested data keys named path as YOps routing metadata', async () => {
@@ -265,7 +279,13 @@ describe('Proposal generation posture provider', () => {
       operations: built.generated.effect.operations,
       base: built.base.value,
       result: built.generated.result.value,
-      statements: [verified.statement],
+      observations: [
+        {
+          statement: verified.statement,
+          source: PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+          issuer: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+        },
+      ],
     });
 
     expect(projection).toMatchObject({
@@ -291,6 +311,69 @@ describe('Proposal generation posture provider', () => {
     });
   });
 
+  it('ignores runner lookalikes without the exact trusted membership and manifest', async () => {
+    const built = graph({});
+    const verified = await verify(built);
+    if (verified.outcome !== 'statement') throw new Error('Expected posture Statement');
+    const valid = parseRunnerValidationStatement(verified.statement).predicate;
+    const wrongWorkflow = buildRunnerValidationStatement({
+      state: built.generated.result,
+      actor: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+      predicate: {
+        ...valid,
+        workflow: { ...valid.workflow, digest: OTHER_DIGEST },
+      },
+    });
+    const staleManifest = buildRunnerValidationStatement({
+      state: built.generated.result,
+      actor: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+      predicate: {
+        ...valid,
+        inputManifest: { ...valid.inputManifest, digest: OTHER_DIGEST },
+      },
+    });
+    const projectionInput = {
+      preparationFacts: built.preparation as unknown as ProtocolValue,
+      operations: built.generated.effect.operations,
+      base: built.base.value,
+      result: built.generated.result.value,
+    };
+    expect(
+      projectProposalGenerationReview({
+        ...projectionInput,
+        observations: [
+          {
+            statement: verified.statement,
+            source: 'native:lookalike',
+            issuer: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+          },
+          {
+            statement: wrongWorkflow,
+            source: PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+            issuer: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+          },
+          {
+            statement: staleManifest,
+            source: PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+            issuer: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+          },
+        ],
+      })?.verification.status
+    ).toBe('pending');
+    expect(
+      projectProposalGenerationReview({
+        ...projectionInput,
+        observations: [
+          {
+            statement: verified.statement,
+            source: PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+            issuer: PROPOSAL_POSTURE_VERIFIER_ACTOR,
+          },
+        ],
+      })?.verification.status
+    ).toBe('passed');
+  });
+
   it('marks absent prior lineage as unavailable instead of inventing evidence', () => {
     const built = graph({ posture: 'recommend' });
     const preparation = structuredClone(built.preparation);
@@ -298,7 +381,7 @@ describe('Proposal generation posture provider', () => {
       {
         path: 'prd/audience',
         priorValue: 'existing audience',
-        priorEvidence: [],
+        priorEvidence: structuredClone(preparation.bindings[0]!.evidence),
         reason: 'Recommend a narrower audience',
         impactPaths: ['prd/audience'],
       },
@@ -308,11 +391,13 @@ describe('Proposal generation posture provider', () => {
       operations: built.generated.effect.operations,
       base: built.base.value,
       result: built.generated.result.value,
-      statements: [],
+      observations: [],
     });
 
     expect(projection?.verification.status).toBe('pending');
     expect(projection?.groups[0]?.challenges[0]).toMatchObject({
+      before: { availability: 'unavailable' },
+      after: { availability: 'available', value: 'enterprise operators' },
       priorEvidence: [],
       priorEvidenceAvailability: 'unavailable',
     });

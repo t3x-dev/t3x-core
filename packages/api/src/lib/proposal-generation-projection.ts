@@ -1,37 +1,65 @@
-import { parseProposalGenerationPreparation, parseRunnerValidationStatement } from '@t3x-dev/core';
+import {
+  generationValueAtPath,
+  PROPOSAL_GENERATION_PREPARATION_MEDIA_TYPE,
+  parseProposalGenerationPreparation,
+  parseRunnerValidationStatement,
+  proposalGenerationPreparationDigest,
+} from '@t3x-dev/core';
 import { canonicalizeProtocolValue, type ProtocolValue, type Statement } from '@t3x-dev/transition';
-import { PROPOSAL_POSTURE_VERIFIER_TOOL } from './transition-control-plane/applicable-policy';
+import {
+  PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+  PROPOSAL_POSTURE_VERIFIER_ACTOR,
+  PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT,
+  PROPOSAL_POSTURE_VERIFIER_TOOL,
+  PROPOSAL_POSTURE_VERIFIER_WORKFLOW,
+} from './transition-control-plane/applicable-policy';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function parts(path: string): string[] {
-  if (path === '$' || path === '') return [];
-  return path
-    .replace(/^\$\.?/, '')
-    .split(/[/.]/)
-    .filter(Boolean);
-}
-
-function valueAt(root: ProtocolValue, path: string): ProtocolValue | undefined {
-  let cursor: ProtocolValue | undefined = root;
-  for (const part of parts(path)) {
-    if (Array.isArray(cursor)) {
-      const index = Number(part);
-      if (!Number.isInteger(index)) return undefined;
-      cursor = cursor[index];
-      continue;
-    }
-    if (!isRecord(cursor)) return undefined;
-    cursor = cursor[part] as ProtocolValue | undefined;
-  }
-  return cursor;
-}
-
 function sameValue(left: ProtocolValue | undefined, right: ProtocolValue | undefined): boolean {
   if (left === undefined || right === undefined) return left === right;
   return canonicalizeProtocolValue(left) === canonicalizeProtocolValue(right);
+}
+
+function samePortable(left: unknown, right: unknown): boolean {
+  return (
+    canonicalizeProtocolValue(left as ProtocolValue) ===
+    canonicalizeProtocolValue(right as ProtocolValue)
+  );
+}
+
+type TrustedStatementObservation = {
+  statement: Statement;
+  source: string;
+  issuer: Statement['actor'];
+};
+
+function exactPostureRunner(
+  observation: TrustedStatementObservation,
+  preparation: ReturnType<typeof parseProposalGenerationPreparation>
+) {
+  if (
+    observation.source !== PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE ||
+    !samePortable(observation.issuer, PROPOSAL_POSTURE_VERIFIER_ACTOR) ||
+    !samePortable(observation.statement.actor, PROPOSAL_POSTURE_VERIFIER_ACTOR) ||
+    observation.statement.predicateType !== 't3x.dev/runner-validation/v1'
+  ) {
+    return null;
+  }
+  try {
+    const parsed = parseRunnerValidationStatement(observation.statement);
+    return samePortable(parsed.predicate.tool, PROPOSAL_POSTURE_VERIFIER_TOOL) &&
+      samePortable(parsed.predicate.workflow, PROPOSAL_POSTURE_VERIFIER_WORKFLOW) &&
+      samePortable(parsed.predicate.environment, PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT) &&
+      parsed.predicate.inputManifest.mediaType === PROPOSAL_GENERATION_PREPARATION_MEDIA_TYPE &&
+      parsed.predicate.inputManifest.digest === proposalGenerationPreparationDigest(preparation)
+      ? parsed.predicate
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ProposalGenerationReviewProjection {
@@ -61,9 +89,10 @@ export interface ProposalGenerationReviewProjection {
     reason: string;
     challenges: Array<{
       path: string;
-      priorValue: ProtocolValue;
+      before: { availability: 'available'; value: ProtocolValue } | { availability: 'unavailable' };
+      after: { availability: 'available'; value: ProtocolValue } | { availability: 'unavailable' };
       priorEvidence: unknown[];
-      priorEvidenceAvailability: 'trusted' | 'unavailable';
+      priorEvidenceAvailability: 'unavailable';
       reason: string;
       impactPaths: string[];
     }>;
@@ -85,7 +114,7 @@ export function projectProposalGenerationReview(input: {
   operations: ProtocolValue[];
   base: ProtocolValue;
   result: ProtocolValue;
-  statements: readonly Statement[];
+  observations: readonly TrustedStatementObservation[];
 }): ProposalGenerationReviewProjection | null {
   if (
     !isRecord(input.preparationFacts) ||
@@ -94,14 +123,26 @@ export function projectProposalGenerationReview(input: {
     return null;
   }
   const preparation = parseProposalGenerationPreparation(input.preparationFacts);
-  const runner = input.statements.flatMap((statement) => {
-    if (statement.predicateType !== 't3x.dev/runner-validation/v1') return [];
-    const parsed = parseRunnerValidationStatement(statement);
-    return parsed.predicate.tool.name === PROPOSAL_POSTURE_VERIFIER_TOOL.name &&
-      parsed.predicate.tool.version === PROPOSAL_POSTURE_VERIFIER_TOOL.version
-      ? [parsed.predicate]
-      : [];
-  })[0];
+  const runners = input.observations.flatMap((observation) => {
+    const runner = exactPostureRunner(observation, preparation);
+    return runner === null ? [] : [runner];
+  });
+  const runnerOutcomes = new Set(runners.map((runner) => runner.outcome));
+  const verificationStatus =
+    runnerOutcomes.size === 0
+      ? ('pending' as const)
+      : runnerOutcomes.has('failed')
+        ? ('failed' as const)
+        : ('passed' as const);
+  const verificationFindings = runners.flatMap((runner) => structuredClone(runner.findings));
+  if (runnerOutcomes.has('passed') && runnerOutcomes.has('failed')) {
+    verificationFindings.push({
+      severity: 'error',
+      code: 'RUNNER_CONFLICT',
+      message: 'Conflicting trusted proposal posture verification Statements were observed.',
+      path: '$.statements',
+    });
+  }
   const counts = { sourceBacked: 0, inferred: 0, recommended: 0, challenges: 0 };
   const groups: ProposalGenerationReviewProjection['groups'] = preparation.bindings.map(
     (binding) => {
@@ -118,8 +159,8 @@ export function projectProposalGenerationReview(input: {
         ),
         paths: [...binding.paths],
         values: binding.paths.map((path) => {
-          const before = valueAt(input.base, path);
-          const after = valueAt(input.result, path);
+          const before = generationValueAtPath(input.base, path);
+          const after = generationValueAtPath(input.result, path);
           return {
             path,
             before:
@@ -137,15 +178,25 @@ export function projectProposalGenerationReview(input: {
         basis: structuredClone(binding.basis),
         assumptions: [...binding.assumptions],
         reason: binding.reason,
-        challenges: binding.challenges.map((challenge) => ({
-          path: challenge.path,
-          priorValue: structuredClone(challenge.priorValue),
-          priorEvidence: structuredClone(challenge.priorEvidence),
-          priorEvidenceAvailability:
-            challenge.priorEvidence.length > 0 ? ('trusted' as const) : ('unavailable' as const),
-          reason: challenge.reason,
-          impactPaths: [...challenge.impactPaths],
-        })),
+        challenges: binding.challenges.map((challenge) => {
+          const before = generationValueAtPath(input.base, challenge.path);
+          const after = generationValueAtPath(input.result, challenge.path);
+          return {
+            path: challenge.path,
+            before:
+              before === undefined
+                ? ({ availability: 'unavailable' } as const)
+                : ({ availability: 'available', value: structuredClone(before) } as const),
+            after:
+              after === undefined
+                ? ({ availability: 'unavailable' } as const)
+                : ({ availability: 'available', value: structuredClone(after) } as const),
+            priorEvidence: [],
+            priorEvidenceAvailability: 'unavailable' as const,
+            reason: challenge.reason,
+            impactPaths: [...challenge.impactPaths],
+          };
+        }),
       };
     }
   );
@@ -161,8 +212,8 @@ export function projectProposalGenerationReview(input: {
     groups,
     warnings: [...preparation.warnings],
     verification: {
-      status: runner?.outcome ?? 'pending',
-      findings: runner === undefined ? [] : structuredClone(runner.findings),
+      status: verificationStatus,
+      findings: verificationFindings,
     },
   };
 }

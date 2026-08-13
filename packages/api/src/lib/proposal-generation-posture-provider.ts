@@ -11,14 +11,14 @@ import {
 import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
 import type { TransitionNativeStatementProvider } from './transition-control-plane';
 import {
+  PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
   PROPOSAL_POSTURE_VERIFIER_ACTOR,
   PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT,
   PROPOSAL_POSTURE_VERIFIER_TOOL,
   PROPOSAL_POSTURE_VERIFIER_WORKFLOW,
 } from './transition-control-plane/applicable-policy';
 
-export const PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE =
-  'native:proposal-generation-posture/v1' as const;
+export { PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE } from './transition-control-plane/applicable-policy';
 
 export interface ProposalGenerationSupportVerifier {
   /** Must identify a model/provider independent from the generator recorded in the Manifest. */
