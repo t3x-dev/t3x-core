@@ -7,7 +7,18 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { usePinsStore } from '@/store/pinsStore';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceProposalGenerationView } from '@/types/workspaces';
+
+const proposalGenerationMocks = vi.hoisted(() => ({
+  commit: vi.fn(),
+  decide: vi.fn(),
+  generate: vi.fn(),
+  verify: vi.fn(),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceProposalGeneration', () => ({
+  useWorkspaceProposalGeneration: () => proposalGenerationMocks,
+}));
 
 vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
   WorkspaceYOpsEditor: ({
@@ -391,6 +402,60 @@ const workspaceCandidates: WorkspaceCandidate[] = [
   },
 ];
 
+function governedProposalView(): WorkspaceProposalGenerationView {
+  return {
+    transition_id: 'transition_governed',
+    project_id: 'proj_1',
+    workspace_id: 'workspace_ready',
+    request_id: 'proposal-generation:test',
+    created_at: '2026-08-13T00:00:00.000Z',
+    precondition: {
+      ...transitionPrecondition,
+      ref_name: 'dev',
+    },
+    transition: workspaceTransitionView(),
+    statements: [],
+    generation: {
+      posture: 'guided',
+      profileResource: {
+        uri: 't3x://proposal-generation-profiles/guided/v1',
+        mediaType: 'application/json',
+        digest: transitionDigest('e'),
+      },
+      requestedBy: { kind: 'human', id: 'human:test' },
+      generator: { kind: 'service', id: 'service:test' },
+      provider: 'test-provider',
+      model: 'test-model',
+      run: { id: 'run_test', recordedAt: '2026-08-13T00:00:00.000Z' },
+      counts: { sourceBacked: 0, inferred: 1, recommended: 0, challenges: 0 },
+      groups: [
+        {
+          id: 'audience',
+          origin: 'inferred',
+          operationIndexes: [0],
+          operations: [{ set: { path: 'prd/summary/audience', value: 'Reviewers' } }],
+          paths: ['prd/summary/audience'],
+          values: [
+            {
+              path: 'prd/summary/audience',
+              before: { availability: 'unavailable' },
+              after: { availability: 'available', value: 'Reviewers' },
+              changed: true,
+            },
+          ],
+          evidence: [],
+          basis: [{ uri: 't3x://basis/workspace' }],
+          assumptions: [],
+          reason: 'The workspace scope supports this inference.',
+          challenges: [],
+        },
+      ],
+      warnings: [],
+      verification: { status: 'passed', findings: [] },
+    },
+  };
+}
+
 afterEach(() => {
   window.localStorage.removeItem('t3x:workspace-source-chat:proj_1:workspace_ready');
   window.localStorage.removeItem(
@@ -400,6 +465,7 @@ afterEach(() => {
     't3x:workspace-source-chat:proj_1:workspace_ready:sha256:merged-main-head'
   );
   usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
+  Object.values(proposalGenerationMocks).forEach((mock) => mock.mockReset());
   vi.restoreAllMocks();
 });
 
@@ -410,6 +476,57 @@ function activateTab(name: string | RegExp) {
 }
 
 describe('WorkspaceWorkbench', () => {
+  it('retries Commit without creating a second accepted Decision', async () => {
+    const view = governedProposalView();
+    proposalGenerationMocks.generate.mockResolvedValue({
+      transition_id: view.transition_id,
+      reused: false,
+      view,
+    });
+    proposalGenerationMocks.verify.mockResolvedValue({
+      transition_id: view.transition_id,
+      reused: false,
+      view,
+      statements: [],
+      operational_results: [],
+    });
+    proposalGenerationMocks.decide.mockResolvedValue({
+      transition_id: view.transition_id,
+      reused: false,
+      view,
+      decision_digest: transitionDigest('f'),
+      decision: {},
+    });
+    proposalGenerationMocks.commit
+      .mockRejectedValueOnce(new Error('Temporary commit failure.'))
+      .mockResolvedValueOnce({
+        transition_id: view.transition_id,
+        reused: false,
+        commit_digest: transitionDigest('9'),
+        commit: {},
+        transition: {},
+      });
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate governed proposal' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Governed proposal review' })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Accept and commit' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Commit accepted proposal' })).toBeEnabled()
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Temporary commit failure.');
+    fireEvent.click(screen.getByRole('button', { name: 'Commit accepted proposal' }));
+
+    await waitFor(() => expect(screen.getAllByText('Committed').length).toBeGreaterThan(0));
+    expect(proposalGenerationMocks.decide).toHaveBeenCalledTimes(1);
+    expect(proposalGenerationMocks.commit).toHaveBeenCalledTimes(2);
+  });
+
   it('renders current workspace detail without an internal workspace selector', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
@@ -1507,6 +1624,69 @@ describe('WorkspaceWorkbench', () => {
         ],
       },
     });
+  });
+
+  it('stabilizes selected chat evidence alongside material sources', async () => {
+    const mixedSourceCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      sourceBundle: [workspaceCandidates[0]!.sourceBundle[1]!],
+    };
+    const pinsUrl = 'http://localhost:8000/api/v1/projects/proj_1/pins';
+    const turnsUrl = 'http://localhost:8000/api/v1/turns?';
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_1');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith(turnsUrl)) {
+        return jsonResponse({
+          success: true,
+          data: {
+            turns: [
+              {
+                turn_hash: 'turn_persisted_1',
+                project_id: 'proj_1',
+                conversation_id: 'conv_1',
+                role: 'assistant',
+                content: 'Persisted turn ready to include as source evidence.',
+                created_at: '2026-07-03T00:00:00.000Z',
+              },
+            ],
+            limit: 100,
+            offset: 0,
+          },
+        });
+      }
+      if (url === pinsUrl && init?.method !== 'POST') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              id: 'pin_turn_1',
+              project_id: 'proj_1',
+              type: 'conversation_turn',
+              ref_id: 'turn_persisted_1',
+              selected_assertion_ids: null,
+              pinned_at: '2026-07-03T00:00:00.000Z',
+              pinned_by: null,
+            },
+          ],
+        });
+      }
+      return jsonResponse({ success: true, data: {} });
+    });
+
+    render(<WorkspaceWorkbench candidates={[mixedSourceCandidate]} projectId="proj_1" />);
+
+    const detail = screen.getByRole('region', { name: 'Workspace detail' });
+    const chatTab = within(detail).getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+
+    expect(
+      await within(detail).findByText('Persisted turn ready to include as source evidence.')
+    ).toBeInTheDocument();
+    await within(detail).findByText('1 selected source turns');
+    await screen.findByText('2 sources');
+    expect(screen.getByRole('button', { name: 'Generate candidate proposal' })).toBeEnabled();
   });
 
   it('starts a clean source round when the stored conversation belongs to an older head', async () => {

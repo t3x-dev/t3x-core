@@ -1,4 +1,4 @@
-import type { SourcedYOp } from '@t3x-dev/core';
+import type { SourcedYOp, TransitionViewV1 } from '@t3x-dev/core';
 import type { SchemaCompositionDraft } from './schemaModules';
 import type { WorkspaceYOpsValue } from './workspaceYops';
 
@@ -125,6 +125,81 @@ export interface WorkspaceSchemaReview {
 }
 
 export type WorkspaceProposalMode = 'fixture' | 'deterministic_scaffold' | 'llm';
+
+export type WorkspaceProposalPosture = 'source_only' | 'guided' | 'recommend';
+
+export type WorkspaceProposalOrigin = 'source_backed' | 'inferred' | 'recommended';
+
+export interface WorkspaceProposalGenerationValue {
+  path: string;
+  before: { availability: 'available'; value: unknown } | { availability: 'unavailable' };
+  after: { availability: 'available'; value: unknown } | { availability: 'unavailable' };
+  changed: boolean;
+}
+
+export interface WorkspaceProposalGenerationGroup {
+  id: string;
+  origin: WorkspaceProposalOrigin;
+  operationIndexes: number[];
+  operations: unknown[];
+  paths: string[];
+  values: WorkspaceProposalGenerationValue[];
+  evidence: unknown[];
+  basis: unknown[];
+  assumptions: string[];
+  reason: string;
+  challenges: Array<{
+    path: string;
+    before: { availability: 'available'; value: unknown } | { availability: 'unavailable' };
+    after: { availability: 'available'; value: unknown } | { availability: 'unavailable' };
+    priorEvidence: unknown[];
+    priorEvidenceAvailability: 'unavailable';
+    reason: string;
+    impactPaths: string[];
+  }>;
+}
+
+export interface WorkspaceProposalGenerationProjection {
+  posture: WorkspaceProposalPosture;
+  profileResource: { uri: string; mediaType: string; digest: string };
+  requestedBy: { kind: 'human' | 'agent' | 'service'; id: string };
+  generator: { kind: 'human' | 'agent' | 'service'; id: string };
+  provider: string;
+  model: string;
+  run: { id: string; recordedAt: string };
+  counts: { sourceBacked: number; inferred: number; recommended: number; challenges: number };
+  groups: WorkspaceProposalGenerationGroup[];
+  warnings: string[];
+  verification: {
+    status: 'pending' | 'passed' | 'failed';
+    findings: Array<{
+      severity: 'error' | 'warning' | 'info';
+      code: string;
+      message: string;
+      path?: string;
+    }>;
+  };
+}
+
+export interface WorkspaceProposalGenerationView {
+  transition_id: string;
+  project_id: string;
+  workspace_id: string;
+  request_id: string;
+  created_at: string;
+  precondition: {
+    workspace_revision: number;
+    ref_name: string;
+    ref_head: string | null;
+    effect_digest: string;
+    proposal_digest: string;
+    statement_digests: string[];
+    policy_digest: string | null;
+  };
+  transition: TransitionViewV1;
+  statements: unknown[];
+  generation: WorkspaceProposalGenerationProjection;
+}
 
 export type WorkspaceSchemaFieldStatus =
   | 'covered'

@@ -31,6 +31,8 @@ import {
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
+  WorkspaceProposalGenerationView,
+  WorkspaceProposalPosture,
   WorkspaceSchemaFieldStatus,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
@@ -42,6 +44,7 @@ import type {
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
+import type { ProposalGenerationAction } from './ProposalGenerationReviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
@@ -58,11 +61,19 @@ export function YOpsDraftTab({
   onApplied,
   onCommitted,
   onContinueFromCommit,
+  onGenerateProposal,
+  onProposalAction,
+  onProposalPostureChange,
   onSendToYOps,
+  onVerifyProposal,
   onYOpsScriptSave,
   onViewCommitInState,
   onViewChange,
   sendingToYOps,
+  proposalDecisionState,
+  proposalGeneration,
+  proposalGenerationBusy,
+  proposalPosture,
   view = 'ops',
   yopsDraftSent,
 }: {
@@ -78,11 +89,19 @@ export function YOpsDraftTab({
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void> | void;
+  onGenerateProposal?: () => Promise<void> | void;
+  onProposalAction?: (action: ProposalGenerationAction) => Promise<void> | void;
+  onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
   onSendToYOps?: () => Promise<void> | void;
+  onVerifyProposal?: () => Promise<void> | void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
+  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalPosture?: WorkspaceProposalPosture;
   view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
 }) {
@@ -462,9 +481,17 @@ export function YOpsDraftTab({
             candidate={candidate}
             flowError={visibleErrorMessage}
             onContinueToValidation={() => onViewChange?.('validation')}
+            onGenerateProposal={onGenerateProposal}
+            onProposalAction={onProposalAction}
+            onProposalPostureChange={onProposalPostureChange}
             onSendToYOps={onSendToYOps}
             onSaveYOpsScript={handleSaveYOpsScript}
+            onVerifyProposal={onVerifyProposal}
             proposalMode={proposalMode}
+            proposalDecisionState={proposalDecisionState}
+            proposalGeneration={proposalGeneration}
+            proposalGenerationBusy={proposalGenerationBusy}
+            proposalPosture={proposalPosture}
             sendingToYOps={Boolean(sendingToYOps)}
             statusText={statusText}
             yopsDraftSent={Boolean(yopsDraftSent)}

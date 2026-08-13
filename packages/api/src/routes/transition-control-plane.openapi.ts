@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, ProposalGenerationDraftSchema } from '@t3x-dev/core';
+import { type ApiKey, LLMProviderError, ProposalGenerationDraftSchema } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -451,6 +451,12 @@ function controlPlaneError(c: Context, error: unknown) {
     return errorResponse(c, 'GENERATION_FAILED', error.message, {
       protocol_code: error.code,
       issues: error.issues,
+    });
+  }
+  if (error instanceof LLMProviderError) {
+    return errorResponse(c, 'GENERATION_FAILED', error.message, {
+      provider_code: error.code,
+      issues: error.details.issues,
     });
   }
   if (
