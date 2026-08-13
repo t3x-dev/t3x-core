@@ -8,7 +8,11 @@ import {
   type SourceSupportAssessment,
   verifyProposalGenerationPosture,
 } from '@t3x-dev/core';
-import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
+import {
+  canonicalizeProtocolValue,
+  type ProposalStatement,
+  type ProtocolValue,
+} from '@t3x-dev/transition';
 import type { TransitionNativeStatementProvider } from './transition-control-plane';
 import {
   PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
@@ -89,7 +93,7 @@ function deterministicSupport(operations: readonly ProtocolValue[], quotes: read
   }
   const values = operations.flatMap((operation) =>
     generationOperationIntroducedScalars(
-      operation as Parameters<typeof generationOperationIntroducedScalars>[0]
+      operation as unknown as Parameters<typeof generationOperationIntroducedScalars>[0]
     )
   );
   return (
@@ -123,7 +127,7 @@ function independentVerifier(
 }
 
 function proposalClaim(
-  proposal: { predicate: ProtocolValue },
+  proposal: ProposalStatement,
   claim: 'intent' | 'rationale'
 ):
   | { mode: 'unspecified' }
@@ -133,23 +137,12 @@ function proposalClaim(
       evidence: Array<{ locator: { scheme: string; value: ProtocolValue } }>;
     }
   | null {
-  if (!isRecord(proposal.predicate)) return null;
   const value = proposal.predicate[claim];
-  if (!isRecord(value) || typeof value.mode !== 'string') return null;
   if (value.mode === 'unspecified') return { mode: 'unspecified' };
-  if (
-    !['stated', 'inferred', 'authored'].includes(value.mode) ||
-    typeof value.value !== 'string' ||
-    !Array.isArray(value.evidence)
-  ) {
-    return null;
-  }
   return {
-    mode: value.mode as 'stated' | 'inferred' | 'authored',
+    mode: value.mode,
     value: value.value,
-    evidence: value.evidence as Array<{
-      locator: { scheme: string; value: ProtocolValue };
-    }>,
+    evidence: value.evidence,
   };
 }
 
