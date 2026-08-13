@@ -274,10 +274,7 @@ function generationFlights(
   const key = db as unknown as object;
   const existing = inFlightByDatabase.get(key);
   if (existing !== undefined) return existing;
-  const created = new Map<
-    string,
-    Promise<{ view: TransitionControlPlaneView; reused: boolean }>
-  >();
+  const created = new Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>();
   inFlightByDatabase.set(key, created);
   return created;
 }
