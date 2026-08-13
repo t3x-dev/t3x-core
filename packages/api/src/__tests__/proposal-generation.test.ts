@@ -151,6 +151,15 @@ function model(generate = vi.fn(async () => draft())): ProposalGenerationModel {
   return { provider: 'test', model: 'test-model', generate };
 }
 
+function databaseFacade(target: AnyDB): AnyDB {
+  return new Proxy(target as unknown as object, {
+    get(object, property, receiver) {
+      const value = Reflect.get(object, property, receiver);
+      return typeof value === 'function' ? value.bind(object) : value;
+    },
+  }) as AnyDB;
+}
+
 beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
@@ -304,5 +313,48 @@ describe('governed Proposal generation', () => {
       })
     ).rejects.toBeInstanceOf(TransitionRequestConflictError);
     expect(resolveModel).not.toHaveBeenCalled();
+  });
+
+  it('returns the durable winner when independent workers race to materialize one request', async () => {
+    const data = await fixture('Generation worker race');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const generate = vi.fn(async () => {
+      await gate;
+      return draft();
+    });
+    const common = {
+      projectId: data.projectId,
+      requestId: 'generation:worker-race',
+      requester: { kind: 'human' as const, id: 'user:worker-race' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided' as const,
+        instruction: 'Structure the launch audience.',
+        sourceMaterialIds: [data.material.id],
+        expectedRevision: data.workspace.revision,
+      },
+      resolveModel: async () => model(generate),
+      now: () => new Date('2026-08-13T01:00:00.000Z'),
+    };
+    let run = 0;
+    const first = generateTransitionProposal({
+      ...common,
+      db: databaseFacade(db),
+      runId: () => `run:worker-${++run}`,
+    });
+    const second = generateTransitionProposal({
+      ...common,
+      db: databaseFacade(db),
+      runId: () => `run:worker-${++run}`,
+    });
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
+    release();
+
+    const [left, right] = await Promise.all([first, second]);
+    expect(left.view.transitionId).toBe(right.view.transitionId);
+    expect([left.reused, right.reused]).toContain(true);
   });
 });

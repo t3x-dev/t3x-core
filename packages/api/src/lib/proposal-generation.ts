@@ -263,7 +263,24 @@ async function resolveSources(
   });
 }
 
-const inFlight = new Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>();
+const inFlightByDatabase = new WeakMap<
+  object,
+  Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>
+>();
+
+function generationFlights(
+  db: AnyDB
+): Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>> {
+  const key = db as unknown as object;
+  const existing = inFlightByDatabase.get(key);
+  if (existing !== undefined) return existing;
+  const created = new Map<
+    string,
+    Promise<{ view: TransitionControlPlaneView; reused: boolean }>
+  >();
+  inFlightByDatabase.set(key, created);
+  return created;
+}
 
 async function existingGeneration(input: {
   db: AnyDB;
@@ -321,6 +338,7 @@ export async function generateTransitionProposal(input: {
   });
   if (existing !== null) return existing;
 
+  const inFlight = generationFlights(input.db);
   const flightKey = `${input.projectId}\u0000${membershipRequestId}`;
   const active = inFlight.get(flightKey);
   if (active !== undefined) return active;
@@ -428,23 +446,38 @@ export async function generateTransitionProposal(input: {
       actor: PROPOSAL_GENERATOR_ACTOR,
       proposalDraft: compiled.proposalDraft,
     });
-    const created = await materializeTransitionProposal({
-      db: input.db,
-      projectId: input.projectId,
-      workspaceId: built.workspaceId,
-      workspaceRevision: built.workspaceRevision,
-      refName: built.refName,
-      refHead: built.refHead,
-      requestKind: 'structured_yops',
-      requestFacts,
-      preparationFacts: compiled.preparation as unknown as ProtocolValue,
-      requestId: membershipRequestId,
-      actor: PROPOSAL_GENERATOR_ACTOR,
-      base: built.base,
-      result: built.result,
-      effect: built.effect,
-      proposal: built.proposal,
-    });
+    let created: Awaited<ReturnType<typeof materializeTransitionProposal>>;
+    try {
+      created = await materializeTransitionProposal({
+        db: input.db,
+        projectId: input.projectId,
+        workspaceId: built.workspaceId,
+        workspaceRevision: built.workspaceRevision,
+        refName: built.refName,
+        refHead: built.refHead,
+        requestKind: 'structured_yops',
+        requestFacts,
+        preparationFacts: compiled.preparation as unknown as ProtocolValue,
+        requestId: membershipRequestId,
+        actor: PROPOSAL_GENERATOR_ACTOR,
+        base: built.base,
+        result: built.result,
+        effect: built.effect,
+        proposal: built.proposal,
+      });
+    } catch (error) {
+      if (error instanceof TransitionRequestConflictError) {
+        const winner = await existingGeneration({
+          db: input.db,
+          projectId: input.projectId,
+          membershipRequestId,
+          requestDigest: request.digest,
+          requester: input.requester,
+        });
+        if (winner !== null) return winner;
+      }
+      throw error;
+    }
     return {
       view: await inspectTransition({
         db: input.db,
