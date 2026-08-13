@@ -2,7 +2,6 @@
 
 import { useCallback } from 'react';
 import {
-  applyWorkspaceYSchemaComposition,
   publishWorkspaceYSchemaComposition,
   saveWorkspaceYSchemaComposition,
 } from '@/infrastructure/schemaComposition';
@@ -25,24 +24,6 @@ export function useSchemaCompositionDraft() {
     []
   );
 
-  const apply = useCallback(
-    (
-      projectId: string,
-      workspaceId: string,
-      workspaceRevision: number,
-      compositionRevision: number,
-      compositionHash: string
-    ): Promise<WorkspaceSchemaCompositionResult> =>
-      applyWorkspaceYSchemaComposition(
-        projectId,
-        workspaceId,
-        workspaceRevision,
-        compositionRevision,
-        compositionHash
-      ),
-    []
-  );
-
   const publish = useCallback(
     (
       projectId: string,
@@ -53,5 +34,5 @@ export function useSchemaCompositionDraft() {
     []
   );
 
-  return { apply, publish, save };
+  return { publish, save };
 }

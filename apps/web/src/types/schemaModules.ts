@@ -118,7 +118,6 @@ export interface SchemaCompositionWorkspaceContext {
   workspaceRevision: number;
   composition?: SchemaCompositionDraft;
   onSaved?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
-  onApplied?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
   onPublished?: (version: PublishedSchemaVersionManifest) => void | Promise<void>;
   appliedCompositionRevision?: number;
   appliedSchemaHash?: string;

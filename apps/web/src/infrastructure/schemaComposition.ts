@@ -122,30 +122,6 @@ export async function saveWorkspaceYSchemaComposition(
   return handleResponse(response);
 }
 
-export async function applyWorkspaceYSchemaComposition(
-  projectId: string,
-  workspaceId: string,
-  workspaceRevision: number,
-  compositionRevision: number,
-  compositionHash: string
-): Promise<WorkspaceSchemaCompositionResult> {
-  const response = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
-      workspaceId
-    )}/schema-composition/apply`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        if_revision: workspaceRevision,
-        composition_revision: compositionRevision,
-        composition_hash: compositionHash,
-      }),
-    }
-  );
-  return handleResponse(response);
-}
-
 export async function publishWorkspaceYSchemaComposition(
   projectId: string,
   workspaceId: string,

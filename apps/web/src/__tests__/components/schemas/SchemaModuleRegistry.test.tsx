@@ -216,6 +216,9 @@ describe('SchemaModuleRegistry', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add Frontend Design to composition' }));
     expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Apply verified composition' })
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Verify composition' })).toBeDisabled();
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1), { timeout: 2_000 });

@@ -103,7 +103,7 @@ export function SchemaModuleRegistry({
         ),
     [registry.artifacts, registryArtifacts]
   );
-  const { apply, publish, save } = useSchemaCompositionDraft();
+  const { publish, save } = useSchemaCompositionDraft();
   const previewState = useSchemaCompositionPreview();
   const [nameQuery, setNameQuery] = useState('');
   const [activeTagGroup, setActiveTagGroup] = useState<TagGroupId>('main');
@@ -319,27 +319,6 @@ export function SchemaModuleRegistry({
     if (preview)
       setFeedback(preview.report.valid ? 'Composition is valid.' : 'Review blocking issues.');
     return preview;
-  }
-
-  async function applyComposition() {
-    if (
-      !workspace ||
-      workspaceRevision === undefined ||
-      compositionRevision < 1 ||
-      !previewState.result?.report.valid
-    ) {
-      return;
-    }
-    const result = await apply(
-      workspace.projectId,
-      workspace.workspaceId,
-      workspaceRevision,
-      compositionRevision,
-      previewState.result.compositionHash
-    );
-    setWorkspaceRevision(result.workspaceRevision);
-    setFeedback('Verified Composition applied to this Workspace.');
-    await workspace.onApplied?.(result);
   }
 
   async function publishSchemaVersion() {
@@ -711,21 +690,6 @@ export function SchemaModuleRegistry({
             <ShieldCheck className="size-4" />{' '}
             {previewState.pending ? 'Compiling…' : 'Verify composition'}
           </Button>
-          {workspaceRevision !== undefined && compositionRevision > 0 ? (
-            <Button
-              className="w-full"
-              disabled={
-                autoSavePending ||
-                dirty ||
-                Boolean(autoSaveError) ||
-                !previewState.result?.report.valid
-              }
-              onClick={applyComposition}
-              type="button"
-            >
-              Apply verified composition
-            </Button>
-          ) : null}
           {workspaceRevision !== undefined ? (
             <Button
               className="w-full"

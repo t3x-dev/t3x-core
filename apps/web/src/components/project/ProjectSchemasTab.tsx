@@ -156,16 +156,6 @@ export function ProjectSchemasTab({ projectId, schemaBindings }: ProjectSchemasT
               onPublished: async () => {
                 await publishedVersions.refresh();
               },
-              onApplied: async (result) => {
-                if (result.binding) {
-                  bindSchema({
-                    binding: result.binding,
-                    projectId,
-                    workspaceId: workspaceTarget.id,
-                  });
-                }
-                await projectWorkspaces.refresh();
-              },
             }
           : undefined
       }
