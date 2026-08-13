@@ -26,6 +26,7 @@ import {
   ProposalGenerationProviderError,
   type ProposalGenerationRequest,
 } from '../lib/proposal-generation';
+import { createProposalGenerationPostureProvider } from '../lib/proposal-generation-posture-provider';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import {
   requireTransitionAuthority,
@@ -707,6 +708,15 @@ const commitRoute = createRoute({
 
 export function createTransitionControlPlaneRoutes(options?: TransitionControlPlaneOptions) {
   const routes = new OpenAPIHono({ defaultHook: zodErrorHook });
+  const controlPlaneOptions: TransitionControlPlaneOptions = {
+    ...options,
+    nativeProviders: [
+      ...(options?.nativeProviders ?? []),
+      createProposalGenerationPostureProvider({
+        supportVerifier: options?.proposalGeneration?.supportVerifier,
+      }),
+    ],
+  };
 
   routes.openapi(generateProposalRoute, async (c) => {
     const { projectId } = c.req.valid('param');
@@ -841,7 +851,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         transitionId,
         requestId: body.request_id,
         actor: principal.actor,
-        options,
+        options: controlPlaneOptions,
       });
       return c.json(
         {
@@ -884,7 +894,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
           predicate: body.predicate,
           subjects: body.subjects,
         },
-        options,
+        options: controlPlaneOptions,
       });
       return c.json(
         {

@@ -37,6 +37,7 @@ import {
   verifyEffect,
 } from '@t3x-dev/transition';
 import type { ProposalGenerationModel, ProposalGenerationRequest } from '../proposal-generation';
+import type { ProposalGenerationSupportVerifier } from '../proposal-generation-posture-provider';
 import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
@@ -192,6 +193,7 @@ export interface TransitionControlPlaneOptions {
       requester: ActorRef;
       request: ProposalGenerationRequest;
     }): Promise<ProposalGenerationModel>;
+    supportVerifier?: ProposalGenerationSupportVerifier;
   };
 }
 
