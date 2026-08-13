@@ -503,7 +503,10 @@ function SchemaLibrary({
           <option value="archived">Archived</option>
         </select>
       </header>
-      <div className="grid max-h-[420px] gap-1 overflow-auto p-2 min-[961px]:max-h-[610px]">
+      <section
+        aria-label="Schema results"
+        className="grid max-h-[420px] content-start gap-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-2 [scrollbar-gutter:stable] min-[961px]:max-h-[610px]"
+      >
         {families.map((family) => {
           return (
             <button
@@ -548,7 +551,7 @@ function SchemaLibrary({
             No Schemas match this search or status.
           </p>
         ) : null}
-      </div>
+      </section>
     </aside>
   );
 }

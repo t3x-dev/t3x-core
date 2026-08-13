@@ -56,6 +56,37 @@ describe('SchemaRegistry', () => {
     expect(screen.getByRole('heading', { name: 'PRD Schema' })).toBeInTheDocument();
   });
 
+  it('keeps long Schema and version collections inside bounded scroll regions', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const baseFamily = preview.families[0]!;
+    const baseRelease = baseFamily.releases[0]!;
+    const releases = Array.from({ length: 20 }, (_, index) => ({
+      ...baseRelease,
+      id: `release_${index}`,
+      version: `1.0.${index}`,
+    }));
+    const families = Array.from({ length: 16 }, (_, index) => ({
+      ...baseFamily,
+      id: `schema_${index}`,
+      name: `Schema ${index}`,
+      canonicalName: `t3x/schema-${index}`,
+      releases: index === 0 ? releases : baseFamily.releases,
+    }));
+
+    render(<SchemaRegistry defaultFamilyId="schema_0" families={families} />);
+
+    expect(screen.getByLabelText('Schema results')).toHaveClass(
+      'overflow-y-auto',
+      '[scrollbar-gutter:stable]'
+    );
+    expect(screen.getByRole('button', { name: /Schema 15/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Schema version results')).toHaveClass(
+      'overflow-x-auto',
+      'min-[1101px]:overflow-y-auto'
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(20);
+  });
+
   it('shows version details only after the user selects an exact version', () => {
     renderRegistry();
 

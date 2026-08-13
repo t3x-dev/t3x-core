@@ -32,7 +32,10 @@ export function SchemaReleaseList({
             {releases.length} {releases.length === 1 ? 'version' : 'versions'}
           </Badge>
         </header>
-        <div className="grid grid-cols-[repeat(3,minmax(220px,1fr))] overflow-x-auto min-[961px]:grid-cols-1">
+        <section
+          aria-label="Schema version results"
+          className="grid max-w-full grid-flow-col auto-cols-[minmax(220px,1fr)] overflow-x-auto overflow-y-hidden overscroll-x-contain [contain:inline-size_paint] [scrollbar-gutter:stable] min-[1101px]:max-h-[552px] min-[1101px]:grid-flow-row min-[1101px]:grid-cols-1 min-[1101px]:auto-cols-auto min-[1101px]:overflow-x-hidden min-[1101px]:overflow-y-auto min-[1101px]:overscroll-y-contain"
+        >
           {releases.map((release) => {
             const isSelected = release.id === selectedReleaseId;
             const statusLabel = getSchemaStatusLabel(release.status);
@@ -52,7 +55,7 @@ export function SchemaReleaseList({
                 />
                 <span
                   className={cn(
-                    'flex min-h-[70px] w-full flex-col justify-center border-0 border-r border-[var(--stroke-divider)] bg-transparent px-[14px] py-[11px] text-left text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] peer-focus-visible:relative peer-focus-visible:z-10 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-[var(--ring)] min-[961px]:border-r-0 min-[961px]:border-b',
+                    'flex min-h-[70px] w-full flex-col justify-center border-0 border-r border-[var(--stroke-divider)] bg-transparent px-[14px] py-[11px] text-left text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] peer-focus-visible:relative peer-focus-visible:z-10 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-[var(--ring)] min-[1101px]:border-r-0 min-[1101px]:border-b',
                     isSelected &&
                       'bg-[var(--accent-commit-soft)] shadow-[inset_3px_0_0_var(--accent-commit)]'
                   )}
@@ -81,7 +84,7 @@ export function SchemaReleaseList({
               </label>
             );
           })}
-        </div>
+        </section>
       </fieldset>
     </aside>
   );
