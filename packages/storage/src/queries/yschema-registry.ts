@@ -22,7 +22,7 @@ export interface UpsertYSchemaArtifactVersionInput {
   owner_project_id?: string;
   visibility: YSchemaArtifactVisibility;
   version: string;
-  status: 'active' | 'deprecated' | 'draft';
+  status: 'active' | 'published' | 'deprecated' | 'draft';
   manifest_json: Record<string, unknown>;
   artifact_hash: string;
   path_count: number;
@@ -80,7 +80,7 @@ export interface ListProjectYSchemaVersionHistoryOptions {
 export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifactVersionInput {
   owner_project_id: string;
   visibility: 'private' | 'team';
-  status: 'active';
+  status: 'active' | 'published';
 }
 
 export interface UpdateYSchemaArtifactIdentityInput {
@@ -355,15 +355,19 @@ export async function publishYSchemaArtifactVersion(
       }
     }
 
-    await tx
-      .update(yschemaArtifactVersions)
-      .set({ status: 'deprecated' })
-      .where(
-        and(
-          eq(yschemaArtifactVersions.artifactId, input.artifact_id),
-          eq(yschemaArtifactVersions.status, 'active')
-        )
-      );
+    // Published Schema versions do not have an implicit "current" pointer. Only
+    // registry Artifacts using the explicit active status rotate their active version.
+    if (input.status === 'active') {
+      await tx
+        .update(yschemaArtifactVersions)
+        .set({ status: 'deprecated' })
+        .where(
+          and(
+            eq(yschemaArtifactVersions.artifactId, input.artifact_id),
+            eq(yschemaArtifactVersions.status, 'active')
+          )
+        );
+    }
 
     const published = await upsertYSchemaArtifactVersion(tx, input);
     await tx

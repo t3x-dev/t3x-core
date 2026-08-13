@@ -10,7 +10,6 @@ describe('project workspace schema bindings store', () => {
     useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
       projectId: 'proj_1',
       workspaceId: 'workspace_prd',
-      scope: 'current_workspace',
       binding: { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
     });
 
@@ -20,24 +19,23 @@ describe('project workspace schema bindings store', () => {
     ).toEqual({ schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' });
   });
 
-  it('tracks project default bindings separately from pinned workspace bindings', () => {
+  it('tracks exact bindings independently for each Workspace', () => {
     const store = useProjectWorkspaceSchemaBindingsStore.getState();
     store.bindSchema({
       projectId: 'proj_1',
       workspaceId: 'workspace_prd',
-      scope: 'current_workspace',
       binding: { schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
     });
     store.bindSchema({
       projectId: 'proj_1',
-      scope: 'project_default',
-      binding: { schemaName: 'Docker Compose', version: 'v2', mode: 'project_default' },
+      workspaceId: 'workspace_docs',
+      binding: { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
     });
 
     expect(useProjectWorkspaceSchemaBindingsStore.getState().bindingsByProjectId.proj_1).toEqual({
-      projectDefault: { schemaName: 'Docker Compose', version: 'v2', mode: 'project_default' },
       byWorkspaceId: {
         workspace_prd: { schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
+        workspace_docs: { schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' },
       },
     });
   });

@@ -146,7 +146,7 @@ export interface PublishedYSchemaBlueprintV1 {
   version: string;
   title: string;
   description: string;
-  status: 'active' | 'deprecated';
+  status: 'published' | 'deprecated';
   source: 'team';
   tags: string[];
   blueprint: {
@@ -166,5 +166,14 @@ export interface PublishedYSchemaBlueprintV1 {
     renderPlan: YSchemaCompositionRenderEntryV2[];
     originsByPath: Record<string, YSchemaCompositionOriginV2>;
     releaseNotes: string;
+    comparison?: {
+      baseVersion: string;
+      baseSchemaHash: string;
+      changes: Array<{
+        kind: 'ADD' | 'CHANGE' | 'REMOVE';
+        path: string;
+        summary: string;
+      }>;
+    };
   };
 }

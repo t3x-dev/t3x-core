@@ -54,6 +54,8 @@ export type {
   YSchemaModuleSuggestionV2,
 } from './composition-v2';
 export { compileYSchemaCompositionV2 } from './composition-v2';
+export type { YSchemaContractChange, YSchemaContractChangeKind } from './diff';
+export { diffYSchemas } from './diff';
 export type {
   ContentKind,
   DiffValidationResultsInput,

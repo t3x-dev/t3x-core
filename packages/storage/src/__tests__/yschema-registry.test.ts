@@ -160,6 +160,45 @@ describe('YSchema Registry storage', () => {
     expect(historical?.manifest).toMatchObject({ version: '1.0.0' });
   });
 
+  it('keeps every published Schema version available without creating a current pointer', async () => {
+    const canonicalName = `projects/${projectId}/versioned-schema`;
+    const publishVersion = (version: string, hashCharacter: string) =>
+      publishYSchemaArtifactVersion(db, {
+        artifact_id: `ysa_versioned_${projectId}`,
+        artifact_version_id: `ysav_versioned_${projectId}_${version.replaceAll('.', '_')}`,
+        canonical_name: canonicalName,
+        family: 'open',
+        kind: 'schema',
+        owner_project_id: projectId,
+        visibility: 'private',
+        version,
+        status: 'published',
+        manifest_json: {
+          apiVersion: 't3x.dev/yschema-blueprint/v1',
+          canonicalName,
+          version,
+          status: 'published',
+        },
+        artifact_hash: `sha256:${hashCharacter.repeat(64)}`,
+        path_count: 0,
+        provides: [],
+        requires: [],
+      });
+
+    await publishVersion('1.0.0', 'b');
+    await publishVersion('1.1.0', 'c');
+
+    const history = await listProjectYSchemaVersionHistory(db, {
+      project_id: projectId,
+      kind: 'schema',
+    });
+    const versionedHistory = history.filter((item) => item.canonicalName === canonicalName);
+    expect(versionedHistory.map((item) => [item.version, item.status])).toEqual([
+      ['1.1.0', 'published'],
+      ['1.0.0', 'published'],
+    ]);
+  });
+
   it('updates and archives Schema identity metadata without mutating its version', async () => {
     const canonicalName = `projects/${projectId}/managed-schema`;
     const published = await publishYSchemaArtifactVersion(db, {
@@ -174,7 +213,7 @@ describe('YSchema Registry storage', () => {
       owner_project_id: projectId,
       visibility: 'private',
       version: '1.0.0',
-      status: 'active',
+      status: 'published',
       manifest_json: {
         apiVersion: 't3x.dev/yschema-blueprint/v1',
         canonicalName,

@@ -338,7 +338,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         fileName: 'release.md',
       },
     ],
-    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'pinned' }],
     schemaCandidate: {
       summary: 'Release-note candidate still needs required release metadata.',
       fields: [

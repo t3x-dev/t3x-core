@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 63;
+const SCHEMA_VERSION = 64;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1967,6 +1967,40 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS metadata_revision INTEGER NOT NULL DEFAULT 1;
     CREATE INDEX IF NOT EXISTS idx_yschema_artifacts_catalog
       ON yschema_artifacts(owner_project_id, kind, lifecycle_status, updated_at DESC);
+  `);
+
+  // ── Schema v64: Workspace-only Schema bindings ──
+  await sql.unsafe(`
+    UPDATE projects
+    SET metadata_json = (metadata_json::jsonb - 'default_schema_binding')::text
+    WHERE metadata_json IS NOT NULL
+      AND jsonb_typeof(metadata_json::jsonb) = 'object'
+      AND metadata_json::jsonb ? 'default_schema_binding';
+
+    UPDATE drafts
+    SET workspace_state_json = jsonb_set(
+      workspace_state_json,
+      '{schemaBindings}',
+      (
+        SELECT jsonb_agg(
+          CASE
+            WHEN binding->>'mode' = 'project_default'
+              THEN jsonb_set(binding, '{mode}', '"pinned"'::jsonb)
+            ELSE binding
+          END
+          ORDER BY position
+        )
+        FROM jsonb_array_elements(workspace_state_json->'schemaBindings')
+          WITH ORDINALITY AS entries(binding, position)
+      ),
+      false
+    )
+    WHERE jsonb_typeof(workspace_state_json->'schemaBindings') = 'array'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(workspace_state_json->'schemaBindings') AS entries(binding)
+        WHERE binding->>'mode' = 'project_default'
+      );
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

@@ -13,6 +13,7 @@ import {
   builtInYSchemaModules,
   compileYSchemaComposition,
   compileYSchemaCompositionV2,
+  diffYSchemas,
   type NodeSchema,
   normalizeYSchemaObject,
   type PublishedYSchemaBlueprintV1,
@@ -906,13 +907,21 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       description: input.description || preview.schema.description,
     });
     const schemaHash = await sha256CompositionValue(schema);
+    const comparison = await findCompositionComparison({
+      canonicalName: input.canonical_name,
+      compositionId: persisted.composition.id,
+      compositionRevision: persisted.composition.revision,
+      db,
+      projectId,
+      schema,
+    });
     const manifest: PublishedYSchemaBlueprintV1 = {
       apiVersion: 't3x.dev/yschema-blueprint/v1',
       canonicalName: input.canonical_name,
       version: input.version,
       title: input.title,
       description: input.description || `Published from ${persisted.composition.id}.`,
-      status: 'active',
+      status: 'published',
       source: 'team',
       tags: Array.from(new Set(input.tags ?? [])).sort(),
       blueprint: {
@@ -932,6 +941,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         renderPlan: preview.renderPlan,
         originsByPath: preview.originsByPath,
         releaseNotes: input.release_notes ?? '',
+        ...(comparison ? { comparison } : {}),
       },
     };
     const artifactHash = await sha256CompositionValue(manifest);
@@ -948,7 +958,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         owner_project_id: projectId,
         visibility: 'private',
         version: input.version,
-        status: 'active',
+        status: 'published',
         manifest_json: manifest as unknown as Record<string, unknown>,
         artifact_hash: artifactHash,
         path_count: countSchemaNodePaths(schema.nodes),
@@ -1004,6 +1014,14 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || preview.schema.description,
   });
   const schemaHash = await sha256CompositionValue(schema);
+  const comparison = await findCompositionComparison({
+    canonicalName: input.canonical_name,
+    compositionId: persisted.composition.id,
+    compositionRevision: persisted.composition.revision,
+    db,
+    projectId,
+    schema,
+  });
   const provides = Array.from(
     new Set([...artifacts.core.provides, ...artifacts.modules.flatMap((module) => module.provides)])
   ).sort();
@@ -1014,7 +1032,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     family: persisted.composition.family,
     title: input.title,
     description: input.description || `Published from ${persisted.composition.id}.`,
-    status: 'active',
+    status: 'published',
     source: 'team',
     provides,
     extensionSlots: artifacts.core.extensionSlots,
@@ -1031,6 +1049,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       originsByPath: preview.originsByPath,
       modules: persisted.composition.modules,
       releaseNotes: input.release_notes ?? '',
+      ...(comparison ? { comparison } : {}),
     },
   };
   const artifactHash = await sha256CompositionValue(manifest);
@@ -1047,7 +1066,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       owner_project_id: projectId,
       visibility: 'private',
       version: input.version,
-      status: 'active',
+      status: 'published',
       manifest_json: manifest as unknown as Record<string, unknown>,
       artifact_hash: artifactHash,
       path_count: countSchemaNodePaths(schema.nodes),
@@ -1315,6 +1334,76 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+async function findCompositionComparison({
+  canonicalName,
+  compositionId,
+  compositionRevision,
+  db,
+  projectId,
+  schema,
+}: {
+  canonicalName: string;
+  compositionId: string;
+  compositionRevision: number;
+  db: Parameters<typeof listProjectYSchemaVersionHistory>[0];
+  projectId: string;
+  schema: ReturnType<typeof normalizeYSchemaObject>;
+}) {
+  const history = await listProjectYSchemaVersionHistory(db, {
+    project_id: projectId,
+    kind: 'schema',
+  });
+  const candidates = history
+    .filter((item) => item.canonicalName === canonicalName)
+    .map((item) => {
+      const manifest = asRecord(item.manifest);
+      const lineage = publishedCompositionLineage(manifest);
+      const baseSchema = asRecord(manifest?.schema);
+      const registry = asRecord(manifest?.registry);
+      return { item, lineage, baseSchema, registry };
+    })
+    .filter(
+      (candidate) =>
+        candidate.lineage?.compositionId === compositionId &&
+        candidate.lineage.compositionRevision < compositionRevision &&
+        candidate.baseSchema !== null
+    )
+    .sort(
+      (left, right) =>
+        (right.lineage?.compositionRevision ?? 0) - (left.lineage?.compositionRevision ?? 0) ||
+        right.item.createdAt.getTime() - left.item.createdAt.getTime()
+    );
+  const base = candidates[0];
+  if (!base?.baseSchema) return null;
+  const baseSchema = normalizeYSchemaObject(base.baseSchema);
+  const recordedSchemaHash = base.registry?.schemaHash;
+  return {
+    baseVersion: base.item.version,
+    baseSchemaHash:
+      typeof recordedSchemaHash === 'string' ? recordedSchemaHash : base.item.artifactHash,
+    changes: diffYSchemas(baseSchema, schema),
+  };
+}
+
+function publishedCompositionLineage(manifest: Record<string, unknown> | null):
+  | {
+      compositionId: string;
+      compositionRevision: number;
+    }
+  | undefined {
+  if (!manifest) return undefined;
+  const source =
+    manifest.apiVersion === 't3x.dev/yschema-blueprint/v1'
+      ? asRecord(manifest.blueprint)
+      : asRecord(manifest.registry);
+  const compositionId = source?.compositionId;
+  const compositionRevision = source?.compositionRevision;
+  if (typeof compositionId !== 'string' || typeof compositionRevision !== 'number') {
+    return undefined;
+  }
+  return { compositionId, compositionRevision };
 }
 
 function yschemaArtifactId(canonicalName: string): string {

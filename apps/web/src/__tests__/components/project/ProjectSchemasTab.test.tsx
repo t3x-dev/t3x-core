@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { updateProject } from '@/commands/projects';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -15,7 +14,6 @@ let workspaces: WorkspaceCandidate[] = [];
 const PROMPT_SCHEMA_HASH =
   'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
 
-vi.mock('@/commands/projects', () => ({ updateProject: vi.fn() }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
     error: null,
@@ -57,11 +55,6 @@ beforeEach(() => {
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
   saveDraft.mockReset();
   extractCandidate.mockReset();
-  vi.mocked(updateProject).mockReset().mockResolvedValue({
-    project_id: 'proj_test',
-    name: 'Test project',
-    created_at: '2026-07-20T00:00:00.000Z',
-  });
   useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
 });
 
@@ -78,17 +71,21 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Skill Schema/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Prompt Schema/ })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
+    expect(screen.getAllByRole('radio').every((radio) => !radio.hasAttribute('checked'))).toBe(
+      true
+    );
     expect(screen.queryByText('Docker Compose')).not.toBeInTheDocument();
   });
 
-  it('uses the registry current pointer independently of workspace preview bindings', () => {
+  it('does not infer a project default version from release status or order', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
-    const currentVersionFact = screen.getByText('Current version').parentElement;
-    expect(currentVersionFact).not.toBeNull();
-    expect(within(currentVersionFact as HTMLElement).getByText('v2')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    expect(screen.queryByText('Current version')).not.toBeInTheDocument();
+    expect(screen.getByText(/Versions are not project defaults/)).toBeInTheDocument();
+    expect(screen.getAllByRole('radio').every((radio) => !radio.hasAttribute('checked'))).toBe(
+      true
+    );
   });
 
   it('keeps official Schemas out of the My Schemas scope', () => {
@@ -98,76 +95,6 @@ describe('ProjectSchemasTab', () => {
 
     expect(screen.queryByRole('button', { name: /PRD Schema/ })).not.toBeInTheDocument();
     expect(screen.getByText('No Schemas match this search or status.')).toBeInTheDocument();
-  });
-
-  it('persists the selected current release as the project default', async () => {
-    render(
-      <ProjectSchemasTab projectId="proj_test" projectMetadata={{ description: 'Test project' }} />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as project default' }));
-
-    await waitFor(() => {
-      expect(updateProject).toHaveBeenCalledWith('proj_test', {
-        metadata: expect.objectContaining({
-          description: 'Test project',
-          default_schema_binding: expect.objectContaining({
-            canonicalName: 't3x/prompt',
-            mode: 'project_default',
-            schemaHash: PROMPT_SCHEMA_HASH,
-            schemaName: 'Prompt Schema',
-            version: 'v1',
-          }),
-        }),
-      });
-    });
-    expect(screen.getByText(/will be used by new Workspaces/)).toBeInTheDocument();
-  });
-
-  it('updates and regenerates the current persisted Workspace with the new project default', async () => {
-    workspaces = [{ ...workspace, revision: 125 }];
-    saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: { ...candidate, revision: 126 },
-    }));
-    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: {
-        ...candidate,
-        revision: 127,
-        schemaCandidate: { summary: 'Regenerated with project default', fields: [] },
-      },
-    }));
-
-    render(<ProjectSchemasTab projectId="proj_test" />);
-    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as project default' }));
-
-    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
-    expect(saveDraft.mock.calls[0][0]).toMatchObject({
-      id: 'workspace_main',
-      revision: 125,
-      schemaBindings: [
-        {
-          canonicalName: 't3x/prompt',
-          schemaHash: PROMPT_SCHEMA_HASH,
-          schemaName: 'Prompt Schema',
-          version: 'v1',
-          mode: 'pinned',
-        },
-      ],
-      schemaReview: { verdict: 'needs_review' },
-      yopsDraft: { operations: [] },
-    });
-    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
-    expect(updateProject).toHaveBeenCalledTimes(1);
-    expect(refreshWorkspaces).toHaveBeenCalledTimes(1);
-    expect(
-      await screen.findByText(/is now the project default and Main workspace was regenerated/)
-    ).toBeInTheDocument();
   });
 
   it('saves a stale binding before regenerating the current Workspace candidate', async () => {
@@ -187,6 +114,7 @@ describe('ProjectSchemasTab', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
@@ -216,6 +144,7 @@ describe('ProjectSchemasTab', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     expect(await screen.findByText(/regeneration failed/)).toBeInTheDocument();
@@ -259,6 +188,7 @@ describe('ProjectSchemasTab', () => {
 
     render(<ProjectSchemasTab projectId="proj_test" />);
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
 
     expect(screen.getByRole('button', { name: 'Applied to Main workspace' })).toBeDisabled();
   });

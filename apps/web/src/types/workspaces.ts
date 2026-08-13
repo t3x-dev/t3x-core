@@ -59,7 +59,7 @@ export interface SourceConversationTurn {
   pinnable?: boolean;
 }
 
-export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';
+export type SchemaBindingMode = 'pinned' | 'draft_override';
 
 export interface WorkspaceSchemaBinding {
   canonicalName?: string;

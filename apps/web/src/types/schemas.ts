@@ -1,4 +1,4 @@
-export type SchemaReleaseStatus = 'draft' | 'active' | 'deprecated';
+export type SchemaReleaseStatus = 'draft' | 'active' | 'published' | 'deprecated';
 
 export type SchemaBreakingChangeLevel = 'none' | 'minor' | 'breaking';
 
@@ -74,7 +74,7 @@ export interface SchemaReleasePreview extends SchemaRelease {
   changes: SchemaContractChange[];
 }
 
-/** One selectable Schema family with an explicit published-version pointer. */
+/** One selectable Schema identity with immutable, independently bindable versions. */
 export interface SchemaFamilyPreview {
   id: string;
   artifactId?: string;
@@ -86,7 +86,6 @@ export interface SchemaFamilyPreview {
   lifecycleStatus?: 'active' | 'archived';
   metadataRevision?: number;
   updatedAt?: string;
-  currentReleaseId: string;
   releases: SchemaReleasePreview[];
 }
 

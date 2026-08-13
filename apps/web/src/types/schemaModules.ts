@@ -26,7 +26,7 @@ export interface SchemaArtifactPreview {
   description: string;
   domain: string;
   source: 'official' | 'team' | 'community';
-  status: 'active' | 'draft' | 'deprecated';
+  status: 'active' | 'published' | 'draft' | 'deprecated';
   provides: string[];
   requires: string[];
   placement: string;
@@ -145,7 +145,7 @@ export interface PublishedSchemaVersionManifest extends Record<string, unknown> 
   family?: YSchemaArtifactFamily | 'open';
   title: string;
   description: string;
-  status: 'active' | 'deprecated' | 'draft';
+  status: 'active' | 'published' | 'deprecated' | 'draft';
   source: 'official' | 'team' | 'community';
   artifactHash?: string;
   artifactId?: string;

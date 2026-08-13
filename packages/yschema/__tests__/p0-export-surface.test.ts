@@ -22,6 +22,7 @@ describe('YSchema public export surface', () => {
       'defaultPromptCompositionModuleOrder',
       'defaultSkillCompositionModuleOrder',
       'diffValidationResults',
+      'diffYSchemas',
       'generatePromptContract',
       'normalizeYSchemaObject',
       'parseYSchema',

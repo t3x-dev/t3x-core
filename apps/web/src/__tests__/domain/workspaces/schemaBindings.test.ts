@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
   applyProjectWorkspaceSchemaBindings,
-  getProjectDefaultSchemaBinding,
   mergeProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
-  withProjectDefaultSchemaBinding,
 } from '@/domain/workspaces/schemaBindings';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -47,7 +45,7 @@ const candidates: WorkspaceCandidate[] = [
     ...baseCandidate,
     id: 'workspace_default',
     title: 'Default workspace',
-    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'pinned' }],
   },
 ];
 
@@ -90,64 +88,15 @@ describe('workspace schema bindings', () => {
     expect(updated[1].schemaBindings).toEqual(candidates[1].schemaBindings);
   });
 
-  it('uses project defaults only for new workspaces without overriding persisted bindings', () => {
-    const updated = applyProjectWorkspaceSchemaBindings(candidates, {
-      projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
-      byWorkspaceId: {},
-    });
-
-    expect(updated[0].schemaBindings).toEqual(candidates[0].schemaBindings);
-    expect(updated[1].schemaBindings).toEqual(candidates[1].schemaBindings);
-
-    const newWorkspace = { ...candidates[1], id: 'workspace_new', revision: undefined };
-    const [initialized] = applyProjectWorkspaceSchemaBindings([newWorkspace], {
-      projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
-      byWorkspaceId: {},
-    });
-    expect(initialized.schemaBindings).toEqual([
-      {
-        canonicalName: 't3x/prompt',
-        schemaHash: PROMPT_SCHEMA_HASH,
-        schemaName: 'Prompt Schema',
-        version: 'v1',
-        mode: 'project_default',
-      },
-    ]);
-
-    const draftOverride = {
-      ...newWorkspace,
-      id: 'workspace_draft_override',
-      schemaBindings: [
-        { schemaName: 'Draft Schema', version: 'v3', mode: 'draft_override' as const },
-      ],
-    };
-    expect(
-      applyProjectWorkspaceSchemaBindings([draftOverride], {
-        projectDefault: schemaReleaseToWorkspaceBinding(release, 'project_default'),
-        byWorkspaceId: {},
-      })[0].schemaBindings
-    ).toEqual(draftOverride.schemaBindings);
-  });
-
-  it('round-trips the project default through project metadata without dropping other metadata', () => {
-    const binding = schemaReleaseToWorkspaceBinding(release, 'project_default');
-    const metadata = withProjectDefaultSchemaBinding({ description: 'Infra project' }, binding);
-
-    expect(metadata.description).toBe('Infra project');
-    expect(getProjectDefaultSchemaBinding(metadata)).toEqual(binding);
-  });
-
-  it('merges persisted project defaults with live workspace overrides', () => {
-    const projectDefault = schemaReleaseToWorkspaceBinding(release, 'project_default');
+  it('merges only live Workspace-specific bindings', () => {
     const workspaceBinding = schemaReleaseToWorkspaceBinding(release, 'pinned');
 
     expect(
       mergeProjectWorkspaceSchemaBindings(
-        { projectDefault, byWorkspaceId: {} },
+        { byWorkspaceId: {} },
         { byWorkspaceId: { workspace_pinned: workspaceBinding } }
       )
     ).toEqual({
-      projectDefault,
       byWorkspaceId: { workspace_pinned: workspaceBinding },
     });
   });

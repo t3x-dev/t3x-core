@@ -45,7 +45,6 @@ export function mergePublishedSchemaVersions(
         const releases = versions.map((manifest) =>
           publishedManifestToRelease(manifest, projectId)
         );
-        const current = releases.find((release) => release.status === 'active') ?? releases[0];
         return {
           id: blueprintFamilyId(canonicalName),
           artifactId: versions[0]?.artifactId,
@@ -60,7 +59,6 @@ export function mergePublishedSchemaVersions(
           lifecycleStatus: versions[0]?.lifecycleStatus ?? 'active',
           metadataRevision: versions[0]?.metadataRevision ?? 1,
           updatedAt: versions[0]?.updatedAt,
-          currentReleaseId: current?.id ?? '',
           releases,
         };
       }),
@@ -87,6 +85,8 @@ export function publishedManifestToRelease(
   const requiredFields = structure.filter((path) => path.required).map((path) => path.path);
   const updatedAt = stringValue(registry.updatedAt) || stringValue(manifest.updatedAt);
   const releaseNotes = stringValue(registry.releaseNotes);
+  const comparison = recordValue(registry.comparison);
+  const comparisonBaseVersion = stringValue(comparison.baseVersion);
   return {
     id: publishedSchemaReleaseId(manifest.canonicalName, manifest.version),
     projectId,
@@ -113,9 +113,23 @@ export function publishedManifestToRelease(
     structure,
     relationTypes: relationPreviews(recordValue(schema.relationTypes)),
     rules: rulePreviews(schema.rules),
-    changesBaseReleaseId: '',
-    changes: [],
+    changesBaseReleaseId: comparisonBaseVersion
+      ? publishedSchemaReleaseId(manifest.canonicalName, comparisonBaseVersion)
+      : '',
+    changes: changePreviews(comparison.changes),
   };
+}
+
+function changePreviews(value: unknown): SchemaReleasePreview['changes'] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const change = recordValue(item);
+    const kind = stringValue(change.kind);
+    const path = stringValue(change.path);
+    const summary = stringValue(change.summary);
+    if (!['ADD', 'CHANGE', 'REMOVE'].includes(kind) || !path || !summary) return [];
+    return [{ kind: kind as 'ADD' | 'CHANGE' | 'REMOVE', path, summary }];
+  });
 }
 
 function familyLabel(family: PublishedSchemaVersionManifest['family']): string {

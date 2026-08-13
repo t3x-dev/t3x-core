@@ -256,7 +256,7 @@ describe('Workspace YSchema Composition persistence', () => {
       canonicalName: 'projects/proj_modules/prd',
       version: '1.0.0',
       title: 'Module Workspace PRD',
-      status: 'active',
+      status: 'published',
     });
     expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenCalledWith(
       expect.anything(),
@@ -264,7 +264,7 @@ describe('Workspace YSchema Composition persistence', () => {
         owner_project_id: 'proj_modules',
         visibility: 'private',
         version: '1.0.0',
-        status: 'active',
+        status: 'published',
       })
     );
   });
@@ -315,8 +315,69 @@ describe('Workspace YSchema Composition persistence', () => {
     });
     expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenLastCalledWith(
       expect.anything(),
-      expect.objectContaining({ kind: 'schema', family: 'open' })
+      expect.objectContaining({ kind: 'schema', family: 'open', status: 'published' })
     );
+  });
+
+  it('records a deterministic comparison against the prior Composition revision', async () => {
+    storageMock.listProjectYSchemaVersionHistory.mockResolvedValueOnce([
+      {
+        canonicalName: 'projects/proj_modules/product-schema',
+        version: '1.0.0',
+        artifactHash: `sha256:${'a'.repeat(64)}`,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        manifest: {
+          apiVersion: 't3x.dev/yschema-blueprint/v1',
+          canonicalName: 'projects/proj_modules/product-schema',
+          version: '1.0.0',
+          blueprint: {
+            compositionId: 'composition:workspace_modules',
+            compositionRevision: 0,
+          },
+          schema: {
+            yschema: '0.1',
+            name: 'projects/proj_modules/product-schema',
+            version: '1.0.0',
+            nodes: {},
+          },
+          registry: { schemaHash: `sha256:${'b'.repeat(64)}` },
+        },
+      },
+    ]);
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: openComposition(), if_revision: 4 }),
+      }
+    );
+    const saved: any = await savedResponse.json();
+
+    const response = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/product-schema',
+          version: '1.1.0',
+          title: 'Product Schema',
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data.registry.comparison).toMatchObject({
+      baseVersion: '1.0.0',
+      baseSchemaHash: `sha256:${'b'.repeat(64)}`,
+      changes: expect.arrayContaining([
+        expect.objectContaining({ kind: 'ADD', path: 'nodes.problem' }),
+      ]),
+    });
   });
 
   it('lists the project-owned immutable Schema version history', async () => {

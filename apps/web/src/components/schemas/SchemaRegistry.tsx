@@ -3,7 +3,6 @@
 import {
   Archive,
   ArrowLeft,
-  CheckCircle2,
   Copy,
   FilePlus2,
   MoreHorizontal,
@@ -137,14 +136,15 @@ export function SchemaRegistry({
   }, [families, lifecycle, query, scope]);
 
   const selectedFamily = families.find((family) => family.id === selectedFamilyId) ?? initialFamily;
-  const currentRelease = getCurrentRelease(selectedFamily);
   const selectedRelease = selectedFamily
     ? (selectedFamily.releases.find(
         (release) => release.id === selectedReleaseIds[selectedFamily.id]
-      ) ??
-      currentRelease ??
-      selectedFamily.releases[0] ??
-      null)
+      ) ?? null)
+    : null;
+  const comparisonBaseRelease = selectedRelease
+    ? (selectedFamily?.releases.find(
+        (release) => release.id === selectedRelease.changesBaseReleaseId
+      ) ?? null)
     : null;
 
   function handleSelectFamily(familyId: string) {
@@ -269,44 +269,53 @@ export function SchemaRegistry({
             scope={scope}
           />
 
-          {selectedFamily && selectedRelease ? (
+          {selectedFamily ? (
             <div className="min-w-0">
               <SchemaIdentityHeader
-                bindingActions={bindingActions}
-                currentRelease={currentRelease}
                 identityPending={identityPending}
                 onEdit={selectedFamily.artifactId ? openIdentityEditor : undefined}
-                onSetProjectDefault={
-                  bindingActions
-                    ? () => bindingActions.onSetProjectDefault(selectedRelease)
-                    : undefined
-                }
                 onToggleArchive={selectedFamily.artifactId ? toggleArchive : undefined}
                 selectedFamily={selectedFamily}
-                selectedRelease={selectedRelease}
               />
               {identityFeedback ? (
                 <output className="block border-t border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">
                   {identityFeedback}
                 </output>
               ) : null}
-              {bindingActions ? (
-                <SchemaBindingActions actions={bindingActions} selectedRelease={selectedRelease} />
-              ) : null}
               <section className="grid min-h-[600px] border-t border-[var(--stroke-divider)] min-[1101px]:grid-cols-[250px_minmax(0,1fr)]">
                 <SchemaReleaseList
-                  currentRelease={currentRelease}
                   onSelectRelease={handleSelectRelease}
                   releases={selectedFamily.releases}
-                  selectedReleaseId={selectedRelease.id}
+                  selectedReleaseId={selectedRelease?.id}
                 />
-                <SchemaReleaseDetail
-                  activeView={activeView}
-                  currentRelease={currentRelease}
-                  onCompareWithCurrent={() => setActiveView('changes')}
-                  onViewChange={setActiveView}
-                  release={selectedRelease}
-                />
+                {selectedRelease ? (
+                  <SchemaReleaseDetail
+                    activeView={activeView}
+                    actions={
+                      bindingActions ? (
+                        <SchemaBindingActions
+                          actions={bindingActions}
+                          selectedRelease={selectedRelease}
+                        />
+                      ) : undefined
+                    }
+                    comparisonBaseRelease={comparisonBaseRelease}
+                    onViewChange={setActiveView}
+                    release={selectedRelease}
+                  />
+                ) : (
+                  <div className="grid min-h-[420px] place-items-center p-8 text-center">
+                    <div className="max-w-sm">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                        Select a Schema version
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                        Versions are not project defaults. Select an exact version to inspect it or
+                        apply it to a Workspace.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </section>
             </div>
           ) : (
@@ -455,7 +464,7 @@ function SchemaLibrary({
           {(['all', 'mine', 'official'] as const).map((value) => (
             <button
               className={cn(
-                'h-7 rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)]',
+                'inline-flex h-7 items-center justify-center rounded-[var(--radius-sm)] text-[10px] font-semibold leading-none text-[var(--text-secondary)]',
                 scope === value && 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
               )}
               key={value}
@@ -479,7 +488,6 @@ function SchemaLibrary({
       </header>
       <div className="grid max-h-[420px] gap-1 overflow-auto p-2 min-[961px]:max-h-[610px]">
         {families.map((family) => {
-          const current = getCurrentRelease(family);
           return (
             <button
               className={cn(
@@ -494,7 +502,7 @@ function SchemaLibrary({
               <span className="flex items-start justify-between gap-2">
                 <strong className="truncate text-xs">{family.name}</strong>
                 <Badge className="font-mono text-[9px]" variant="outline">
-                  {current?.version ?? family.releases[0]?.version ?? '—'}
+                  {family.releases.length}v
                 </Badge>
               </span>
               <span className="mt-1 block truncate font-mono text-[9px] text-[var(--text-tertiary)]">
@@ -527,25 +535,28 @@ function SchemaLibrary({
 }
 
 function SchemaIdentityHeader({
-  bindingActions,
-  currentRelease,
   identityPending,
   onEdit,
-  onSetProjectDefault,
   onToggleArchive,
   selectedFamily,
-  selectedRelease,
 }: {
-  bindingActions?: SchemaBindingActionsState;
-  currentRelease: SchemaReleasePreview | null;
   identityPending: boolean;
   onEdit?: () => void;
-  onSetProjectDefault?: () => Promise<void>;
   onToggleArchive?: () => Promise<void>;
   selectedFamily: SchemaFamilyPreview;
-  selectedRelease: SchemaReleasePreview;
 }) {
   const archived = selectedFamily.lifecycleStatus === 'archived';
+  const publishedCount = selectedFamily.releases.filter(
+    (release) => release.status !== 'draft'
+  ).length;
+  const workspaceCount = selectedFamily.releases.reduce(
+    (total, release) => total + release.usedByWorkspaceCount,
+    0
+  );
+  const commitCount = selectedFamily.releases.reduce(
+    (total, release) => total + release.usedByCommitCount,
+    0
+  );
   return (
     <header>
       <div className="flex items-start justify-between gap-4 p-4">
@@ -590,14 +601,6 @@ function SchemaIdentityHeader({
                 <Settings2 /> Edit name, description &amp; tags
               </DropdownMenuItem>
             ) : null}
-            {onSetProjectDefault ? (
-              <DropdownMenuItem
-                disabled={bindingActions?.pending !== null}
-                onClick={() => void onSetProjectDefault()}
-              >
-                <CheckCircle2 /> Set as project default
-              </DropdownMenuItem>
-            ) : null}
             <DropdownMenuItem
               onClick={() => void navigator.clipboard.writeText(selectedFamily.canonicalName)}
             >
@@ -615,15 +618,12 @@ function SchemaIdentityHeader({
         </DropdownMenu>
       </div>
       <dl className="grid gap-px border-t border-[var(--stroke-divider)] bg-[var(--stroke-divider)] min-[481px]:grid-cols-2 min-[721px]:grid-cols-4">
-        <SchemaFact label="Current version" value={currentRelease?.version ?? 'Not set'} mono />
-        <SchemaFact label="Root" value={selectedRelease.rootKey} mono />
-        <SchemaFact
-          label="Usage"
-          value={`${selectedRelease.usedByCommitCount} commits · ${selectedRelease.usedByWorkspaceCount} workspaces`}
-        />
+        <SchemaFact label="Versions" value={String(selectedFamily.releases.length)} mono />
+        <SchemaFact label="Published" value={String(publishedCount)} mono />
+        <SchemaFact label="Usage" value={`${commitCount} commits · ${workspaceCount} workspaces`} />
         <SchemaFact
           label="Updated"
-          value={selectedFamily.updatedAt ?? selectedRelease.updatedLabel}
+          value={selectedFamily.updatedAt ?? selectedFamily.releases[0]?.updatedLabel ?? '—'}
         />
       </dl>
     </header>
@@ -643,14 +643,6 @@ function SchemaFact({ label, mono, value }: { label: string; mono?: boolean; val
 
 function schemaArtifactFamily(value?: string): YSchemaArtifactFamily {
   return value === 'skill' || value === 'prompt' || value === 'esphome-device' ? value : 'prd';
-}
-
-function getCurrentRelease(family: SchemaFamilyPreview | null): SchemaReleasePreview | null {
-  return (
-    family?.releases.find(
-      (release) => release.id === family.currentReleaseId && release.status === 'active'
-    ) ?? null
-  );
 }
 
 function suggestNextVersion(releases: SchemaReleasePreview[]): string {

@@ -46,7 +46,40 @@ describe('published Schema version projections', () => {
     expect(isSchemaReleaseBindable(release)).toBe(true);
   });
 
-  it('places published versions into their Family history without changing current pointers', () => {
+  it('projects a recorded comparison into version history', () => {
+    const compared = publishedManifestToRelease(
+      {
+        ...manifest,
+        version: '1.1.0',
+        registry: {
+          schemaHash: `sha256:${'b'.repeat(64)}`,
+          comparison: {
+            baseVersion: '1.0.0',
+            baseSchemaHash: `sha256:${'a'.repeat(64)}`,
+            changes: [
+              {
+                kind: 'ADD',
+                path: 'nodes.summary.slots.audience',
+                summary: 'Contract path added.',
+              },
+            ],
+          },
+        },
+      },
+      'proj_test'
+    );
+
+    expect(compared.changesBaseReleaseId).toBe('published:projects/proj_test/prd@1.0.0');
+    expect(compared.changes).toEqual([
+      {
+        kind: 'ADD',
+        path: 'nodes.summary.slots.audience',
+        summary: 'Contract path added.',
+      },
+    ]);
+  });
+
+  it('places published versions into their Schema history without creating a default pointer', () => {
     const registry = {
       defaultFamilyId: 'prd',
       families: [
@@ -55,7 +88,6 @@ describe('published Schema version projections', () => {
           name: 'PRD',
           canonicalName: 't3x/prd',
           description: 'PRD contracts',
-          currentReleaseId: 'official-current',
           releases: [],
         },
         {
@@ -63,7 +95,6 @@ describe('published Schema version projections', () => {
           name: 'Prompt',
           canonicalName: 't3x/prompt',
           description: 'Prompt contracts',
-          currentReleaseId: 'prompt-current',
           releases: [],
         },
       ],
@@ -78,12 +109,10 @@ describe('published Schema version projections', () => {
 
     const merged = mergePublishedSchemaVersions(registry, [manifest, promptManifest], 'proj_test');
 
-    expect(merged.families[0]?.currentReleaseId).toBe('official-current');
     expect(merged.families[0]?.releases[0]).toMatchObject({
       canonicalName: manifest.canonicalName,
       version: manifest.version,
     });
-    expect(merged.families[1]?.currentReleaseId).toBe('prompt-current');
     expect(merged.families[1]?.releases[0]).toMatchObject({
       canonicalName: promptManifest.canonicalName,
       version: promptManifest.version,
@@ -99,7 +128,6 @@ describe('published Schema version projections', () => {
           name: 'PRD',
           canonicalName: 't3x/prd',
           description: 'PRD contracts',
-          currentReleaseId: 'official-current',
           releases: [],
         },
       ],
