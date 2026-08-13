@@ -1502,6 +1502,13 @@
     {
       "source": "transition-control-plane.openapi.ts",
       "method": "POST",
+      "path": "/v1/projects/{projectId}/proposal-generations",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "transition-control-plane.openapi.ts",
+      "method": "POST",
       "path": "/v1/projects/{projectId}/transitions",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."

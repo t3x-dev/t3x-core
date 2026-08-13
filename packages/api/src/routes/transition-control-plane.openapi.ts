@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
+import { type ApiKey, ProposalGenerationDraftSchema } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -18,6 +18,15 @@ import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import {
+  generateTransitionProposal,
+  ProposalGenerationContextError,
+  ProposalGenerationDraftError,
+  type ProposalGenerationModel,
+  ProposalGenerationProviderError,
+  type ProposalGenerationRequest,
+} from '../lib/proposal-generation';
+import { resolveProviderAndModel } from '../lib/provider-resolver';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -171,6 +180,19 @@ const ProposeRequestSchema = z
       });
     }
   });
+
+const ProposalGenerationRequestSchema = z
+  .object({
+    request_id: RequestIdSchema,
+    workspace_id: WorkspaceIdSchema,
+    posture: z.enum(['source_only', 'guided', 'recommend']).default('guided'),
+    instruction: z.string().trim().min(1).max(20_000),
+    source_material_ids: z.array(z.string().trim().min(1).max(200)).max(256).default([]),
+    if_revision: z.number().int().min(1).optional(),
+    provider: z.string().trim().min(1).max(100).optional(),
+    model: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
 
 const VerifyRequestSchema = z.object({ request_id: RequestIdSchema }).strict();
 const AttachStatementRequestSchema = z
@@ -340,6 +362,17 @@ function wireReviewPrecondition(precondition: z.infer<typeof TransitionReviewPre
 }
 
 function controlPlaneError(c: Context, error: unknown) {
+  if (error instanceof ProposalGenerationProviderError) {
+    return errorResponse(c, 'GENERATION_NOT_CONFIGURED', error.message, {
+      protocol_code: error.code,
+    });
+  }
+  if (error instanceof ProposalGenerationDraftError) {
+    return errorResponse(c, 'GENERATION_FAILED', error.message, {
+      protocol_code: error.code,
+      issues: error.issues,
+    });
+  }
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError ||
@@ -384,6 +417,7 @@ function controlPlaneError(c: Context, error: unknown) {
     error instanceof WorkspaceSourceArtifactError ||
     error instanceof WorkspaceSourceInputsError ||
     error instanceof WorkspaceSourceRevertUnavailableError ||
+    error instanceof ProposalGenerationContextError ||
     error instanceof TypeError
   ) {
     return errorResponse(c, 'INVALID_REQUEST', error.message, {
@@ -393,6 +427,96 @@ function controlPlaneError(c: Context, error: unknown) {
   pinoLogger.error({ err: error }, 'Transition control-plane operation failed');
   return errorResponse(c, 'INTERNAL_ERROR', 'Transition control-plane operation failed');
 }
+
+async function defaultProposalGenerationModel(input: {
+  db: Awaited<ReturnType<typeof getDB>>;
+  projectId: string;
+  request: ProposalGenerationRequest;
+}): Promise<ProposalGenerationModel> {
+  const resolved = await resolveProviderAndModel({
+    db: input.db,
+    projectId: input.projectId,
+    requestedProvider: input.request.requestedProvider,
+    requestedModel: input.request.requestedModel,
+    unavailableMessage: 'No configured Proposal generation provider is available',
+  });
+  if (!resolved.ok) throw new ProposalGenerationProviderError(resolved.message);
+  const provider = resolved.provider;
+  if (!('generateStructured' in provider) || typeof provider.generateStructured !== 'function') {
+    throw new ProposalGenerationProviderError(
+      `Provider ${resolved.providerId} does not support strict structured generation`
+    );
+  }
+  return {
+    provider: resolved.providerId,
+    model: resolved.model,
+    async generate(generation) {
+      const result = await provider.generateStructured!(
+        {
+          system: generation.prompt,
+          messages: [
+            {
+              role: 'user',
+              content: JSON.stringify({
+                profile: generation.profile,
+                context: generation.context,
+                base: generation.base,
+                yschema: generation.yschema.value,
+                sources: generation.sources.map((source, sourceIndex) => ({
+                  sourceIndex,
+                  resource: source.resource,
+                  title: source.title,
+                  content: source.content,
+                })),
+                instruction: generation.instruction,
+              }),
+            },
+          ],
+        },
+        ProposalGenerationDraftSchema,
+        { model: resolved.model, temperature: 0, maxTokens: 16_000 }
+      );
+      return result.data;
+    },
+  };
+}
+
+const generateProposalRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/proposal-generations',
+  tags: ['Transition'],
+  summary: 'Generate one governed Proposal under a server-owned posture',
+  request: {
+    params: ProjectParamsSchema,
+    body: { content: { 'application/json': { schema: ProposalGenerationRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Generated immutable Transition Proposal',
+      content: { 'application/json': { schema: SuccessResponseSchema(TransitionEnvelopeSchema) } },
+    },
+    400: {
+      description: 'Invalid context, model selection, or generated Draft',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Forbidden',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project or workspace not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Idempotency, policy, or Workspace conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Generation provider returned an invalid Draft',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
 
 const proposeRoute = createRoute({
   method: 'post',
@@ -583,6 +707,57 @@ const commitRoute = createRoute({
 
 export function createTransitionControlPlaneRoutes(options?: TransitionControlPlaneOptions) {
   const routes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+  routes.openapi(generateProposalRoute, async (c) => {
+    const { projectId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    try {
+      const db = await getDB();
+      const access = await assertProjectAccess(c, db, projectId);
+      if (access instanceof Response) return access;
+      const principal = requireTransitionAuthority({
+        apiKey: apiKey(c),
+        projectId,
+        scope: 'transition:propose',
+      });
+      const request: ProposalGenerationRequest = {
+        workspaceId: body.workspace_id,
+        posture: body.posture,
+        instruction: body.instruction,
+        sourceMaterialIds: body.source_material_ids,
+        ...(body.if_revision === undefined ? {} : { expectedRevision: body.if_revision }),
+        ...(body.provider === undefined ? {} : { requestedProvider: body.provider }),
+        ...(body.model === undefined ? {} : { requestedModel: body.model }),
+      };
+      const result = await generateTransitionProposal({
+        db,
+        projectId,
+        requestId: body.request_id,
+        requester: principal.actor,
+        request,
+        resolveModel: () =>
+          options?.proposalGeneration?.resolveModel({
+            db,
+            projectId,
+            requester: principal.actor,
+            request,
+          }) ?? defaultProposalGenerationModel({ db, projectId, request }),
+      });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            transition_id: result.view.transitionId,
+            reused: result.reused,
+            view: wireView(result.view),
+          },
+        },
+        200
+      );
+    } catch (error) {
+      return controlPlaneError(c, error);
+    }
+  });
 
   routes.openapi(proposeRoute, async (c) => {
     const { projectId } = c.req.valid('param');
