@@ -141,6 +141,7 @@ describe('callExtractionLLM', () => {
         balanced: [{ define: { path: 'balanced_root' } }],
         detailed: [{ define: { path: 'detailed_root' } }],
       },
+      outcome: { kind: 'ok', warnings: [] },
     });
   });
 

@@ -1,11 +1,31 @@
-import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
+import type {
+  DroppedExtractionItem,
+  ExtractionWarning,
+  SourcedYOp,
+  ValidationTurn,
+} from '@t3x-dev/core';
 
 export type ExtractionPreset = 'concise' | 'balanced' | 'detailed';
 export type ExtractionVariants = Partial<Record<ExtractionPreset, SourcedYOp[]>>;
 
+export type ExtractionLLMOutcome =
+  | {
+      kind: 'ok';
+      warnings: ExtractionWarning[];
+    }
+  | {
+      kind: 'partial';
+      warnings: ExtractionWarning[];
+      dropped: DroppedExtractionItem[];
+      reason: string;
+      message: string;
+      details?: Record<string, unknown>;
+    };
+
 export interface ExtractionLLMResult {
   ops: SourcedYOp[];
   variants?: ExtractionVariants;
+  outcome?: ExtractionLLMOutcome;
 }
 
 export type ExtractionFailureReason =

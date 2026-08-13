@@ -1,4 +1,11 @@
-import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
+import type {
+  DroppedExtractionItem,
+  ExtractionFailureCode,
+  ExtractionWarning,
+  SemanticContent,
+  Source,
+  SourcedYOp,
+} from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -20,6 +27,19 @@ export interface WorkspaceTurn {
 
 export type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing' | 'error';
 export type SelectionSource = 'chat' | 'script' | 'before' | 'after' | null;
+export type DraftExtractionOutcome =
+  | {
+      kind: 'ok';
+      warnings: ExtractionWarning[];
+    }
+  | {
+      kind: 'partial';
+      warnings: ExtractionWarning[];
+      dropped: DroppedExtractionItem[];
+      reason: string;
+      message: string;
+      details?: Record<string, unknown>;
+    };
 
 /**
  * Surfaced when initial replay failed after making partial progress.
@@ -209,6 +229,12 @@ interface WorkspaceState {
    * none. Keys: 'concise' | 'balanced' | 'detailed'.
    */
   draftVariants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
+  /**
+   * Outcome metadata from the server extraction that produced the current
+   * staged draft. Kept with the proposal so partial warnings/dropped items
+   * do not disappear after the adapter/worker boundary.
+   */
+  draftOutcome: DraftExtractionOutcome | null;
 
   // ── Script editor state ──
   /**
@@ -326,6 +352,7 @@ interface WorkspaceState {
     ops: SourcedYOp[];
     tree: SemanticContent;
     variants?: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>>;
+    outcome?: DraftExtractionOutcome;
   }) => void;
   clearDraft: () => void;
 
@@ -360,6 +387,7 @@ interface WorkspaceState {
 
 export interface PersistedDraft {
   ops: SourcedYOp[];
+  outcome?: DraftExtractionOutcome | null;
   /**
    * Manual override of the canonical YAML mirror. `null` (or absent) means
    * the user hadn't typed anything — restore from canonical. A string means
@@ -496,6 +524,7 @@ function conversationResetState() {
     draftVariants: null as Partial<
       Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>
     > | null,
+    draftOutcome: null as DraftExtractionOutcome | null,
   };
 }
 
@@ -533,6 +562,7 @@ export const DRAFT_PERSISTENCE_CAP = 50;
  *   draftOps              → AfterPanel render
  *   draftTree             → AfterPanel preview
  *   draftVariants         → chip swap (cached preset variants)
+ *   draftOutcome          → extraction outcome/warnings for the staged draft
  *   scriptText            → Apply commits THIS
  *   scriptDirty           → "is the editor source of truth?"
  *   draftsByConversation  → refresh restore
@@ -542,14 +572,14 @@ export const DRAFT_PERSISTENCE_CAP = 50;
  * impossible-by-construction rather than convention-by-review, ALL
  * proposal mutations route through this function. The boundary test
  * (`workspaceStore-proposal-boundary.test.ts`) AST-scans this file and
- * fails CI if any of those six fields is written outside the whitelist.
+ * fails CI if any proposal mirror field is written outside the whitelist.
  *
  * Whitelist for the structural fields (draftOps / draftTree /
- * draftVariants): only this function, `clearDraft`, `restoreDraftFor`,
- * and `conversationResetState`. `setScriptText` / `setScriptDirty` are
- * allowed to touch their own field plus the snapshot, but NOT the
- * structural triple. The boundary test enforces per-field, not per-
- * function.
+ * draftVariants / draftOutcome): only this function, `clearDraft`,
+ * `restoreDraftFor`, and `conversationResetState`. `setScriptText` /
+ * `setScriptDirty` are allowed to touch their own field plus the
+ * snapshot, but NOT the structural mirror. The boundary test enforces
+ * per-field, not per-function.
  *
  * Returns a Partial<WorkspaceState> rather than calling set() directly
  * so callers can compose it with their own writes (e.g.
@@ -562,6 +592,7 @@ function writeDraftProposal(
     ops: SourcedYOp[];
     tree: SemanticContent | null;
     variants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
+    outcome: DraftExtractionOutcome | null;
     // `override` is the manual editor text. `null` = no override, the
     // editor renders the canonical YAML mirror via `selectScriptText`.
     // A string = the user typed in the editor and the override should
@@ -576,13 +607,14 @@ function writeDraftProposal(
     draftOps: next.ops,
     draftTree: next.tree,
     draftVariants: hasDraft ? next.variants : null,
+    draftOutcome: hasDraft ? next.outcome : null,
     editorOverride: next.override,
     hasDraft,
     retainedDraftFailure: null,
   };
   if (!s.conversationId) return baseUpdate;
   const snapshot: PersistedDraft | null = hasDraft
-    ? { ops: next.ops, editorOverride: next.override }
+    ? { ops: next.ops, outcome: next.outcome, editorOverride: next.override }
     : null;
   return {
     ...baseUpdate,
@@ -824,6 +856,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             ops: cached,
             tree: previewTree,
             variants: s.draftVariants,
+            outcome: s.draftOutcome,
             override: null,
           }),
         });
@@ -846,6 +879,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             editorOverride: text,
             draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
               ops: s.draftOps,
+              outcome: s.draftOutcome,
               editorOverride: text,
             }),
           });
@@ -864,6 +898,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             editorOverride: null,
             draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
               ops: s.draftOps,
+              outcome: s.draftOutcome,
               editorOverride: null,
             }),
           });
@@ -874,7 +909,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setRecentScriptApplyLineNumbers: (recentScriptApplyLineNumbers) =>
         set({ recentScriptApplyLineNumbers }),
 
-      setDraft: ({ ops, tree, variants }) => {
+      setDraft: ({ ops, tree, variants, outcome }) => {
         // A new draft replaces any prior override. The editor renders
         // the canonical YAML mirror of the fresh ops via
         // `selectScriptText`; manual edits, if needed, come AFTER the
@@ -885,6 +920,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             ops,
             tree,
             variants: variants ?? null,
+            outcome: outcome ?? null,
             override: null,
           })
         );
@@ -903,6 +939,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             ops: [],
             tree: null,
             variants: null,
+            outcome: null,
             override: null,
           })
         );
@@ -944,6 +981,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             ops: snapshot.ops,
             tree: previewTree,
             variants: null,
+            outcome: snapshot.outcome ?? null,
             override: restoredOverride,
           })
         );
