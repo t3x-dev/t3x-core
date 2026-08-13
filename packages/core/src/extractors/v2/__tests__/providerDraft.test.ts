@@ -465,6 +465,9 @@ describe('normalizeLooseProviderDraft (F6)', () => {
       items: [
         {
           id: 'dest_hangzhou',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
           type: 'destination',
           label: 'Hangzhou',
           candidate: { value_json: '"Hangzhou"' },
@@ -501,6 +504,9 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     const loose = {
       items: [
         {
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
           candidate: { name: 'trip_overview', kind: 'object' },
           evidence: [{ turn_tag: 'T1', quote: 'overview', role: 'primary' }],
         },
@@ -518,6 +524,9 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     const loose = {
       items: [
         {
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
           candidate: { name: 'trip' },
           evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
           children_json: '[{"key":"day1"}]',
@@ -535,10 +544,16 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     const loose = {
       items: [
         {
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
           candidate: { name: 'a' },
           evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
         },
         {
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
           candidate: { name: 'b' },
           evidence: [{ turn_tag: 'T1', quote: 'y', role: 'primary' }],
         },
@@ -552,7 +567,7 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     expect(parsed.data.items[1]?.id).toBe('item_2');
   });
 
-  it('defaults invalid intent/reasoning_type without losing data', () => {
+  it('does not fabricate invalid semantic fields into a valid mutation', () => {
     const loose = {
       items: [
         {
@@ -565,10 +580,7 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     };
     const normalized = normalizeLooseProviderDraft(loose);
     const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect(parsed.data.items[0]?.intent).toBe('add');
-    expect(parsed.data.items[0]?.reasoning_type).toBe('direct');
+    expect(parsed.success).toBe(false);
   });
 
   it('returns raw value unchanged for non-object input (safe pass-through)', () => {

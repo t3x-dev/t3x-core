@@ -70,8 +70,9 @@ export type ProviderExtractionDraft = z.infer<typeof ProviderExtractionDraftSche
  * - schema: "ProviderExtractionDraft" / "ExtractionDraft" → "t3x/provider-extraction-draft"
  * - version: "1.0" | "1" | 1.0 → 1
  * - mode: default to "bootstrap" when missing or invalid
- * - items missing required fields (id/intent/confidence/reasoning_type/target_ref)
- *   get sensible defaults (add / 0.8 / direct / all-nulls)
+ * - items missing structural fields (id/target_ref) get safe shape defaults;
+ *   semantic fields (intent/confidence/reasoning_type) are preserved as-is so
+ *   strict schema validation can fail/reask instead of inventing a mutation.
  * - candidate.name → candidate.key (like F1, but at item level)
  * - item-level children_json → candidate.children_json (Claude often puts it
  *   at the item level rather than inside candidate)
@@ -93,26 +94,6 @@ function coerceVersion(raw: unknown): number {
 
 function coerceMode(raw: unknown): 'bootstrap' | 'incremental' {
   return raw === 'incremental' ? 'incremental' : 'bootstrap';
-}
-
-function coerceIntent(raw: unknown): 'add' | 'update' | 'remove' | 'reinforce' | 'noop' {
-  if (
-    raw === 'add' ||
-    raw === 'update' ||
-    raw === 'remove' ||
-    raw === 'reinforce' ||
-    raw === 'noop'
-  ) {
-    return raw;
-  }
-  return 'add';
-}
-
-function coerceReasoningType(raw: unknown): 'direct' | 'paraphrase' | 'cross_turn' | 'implicit' {
-  if (raw === 'direct' || raw === 'paraphrase' || raw === 'cross_turn' || raw === 'implicit') {
-    return raw;
-  }
-  return 'direct';
 }
 
 function pickStringOrNull(record: Record<string, unknown>, keys: string[]): string | null {
@@ -183,17 +164,12 @@ function coerceItem(raw: unknown, index: number): unknown {
   const input = raw as Record<string, unknown>;
 
   const id = typeof input.id === 'string' && input.id.length > 0 ? input.id : `item_${index + 1}`;
-  const confidence =
-    typeof input.confidence === 'number' && input.confidence >= 0 && input.confidence <= 1
-      ? input.confidence
-      : 0.8;
-
   const rawEvidence = Array.isArray(input.evidence) ? input.evidence : [];
   return {
     id,
-    intent: coerceIntent(input.intent),
-    confidence,
-    reasoning_type: coerceReasoningType(input.reasoning_type),
+    intent: input.intent,
+    confidence: input.confidence,
+    reasoning_type: input.reasoning_type,
     target_ref: coerceTargetRef(input.target_ref),
     candidate: coerceCandidate(input.candidate, input),
     evidence: rawEvidence.map(coerceEvidenceEntry),

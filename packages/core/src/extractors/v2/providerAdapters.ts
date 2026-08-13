@@ -87,6 +87,18 @@ export function mapProviderErrorToExtractionFailure(
     });
   }
 
+  if (providerCode === 'REFUSAL') {
+    return createExtractionFailure('refusal', error.message, {
+      provider,
+      cause: error,
+      details: {
+        statusCode,
+        providerCode,
+        ...providerDetails,
+      },
+    });
+  }
+
   return createExtractionFailure('transport', error.message, {
     provider,
     cause: error,

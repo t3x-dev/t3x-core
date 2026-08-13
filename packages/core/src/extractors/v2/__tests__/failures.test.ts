@@ -5,6 +5,7 @@ describe('extractors/v2 failures', () => {
   it('exposes the canonical failure taxonomy', () => {
     expect(EXTRACTION_FAILURE_CODES).toEqual([
       'transport',
+      'refusal',
       'draft_parse',
       'draft_schema',
       'provenance',

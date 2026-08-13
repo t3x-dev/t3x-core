@@ -44,6 +44,11 @@ export {
   extractAndApplyResilient,
   type ResilientExtractAndApplyResult,
 } from './v2/extract-and-apply-resilient';
+export {
+  type ExtractAndApplyWithRetryInput,
+  type ExtractionTransportRetryOptions,
+  extractAndApplyWithRetry,
+} from './v2/extract-and-apply-with-retry';
 export { type ExtractToOutcomeInput, extractToOutcome } from './v2/extractToOutcome';
 export {
   createExtractionFailure,

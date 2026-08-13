@@ -1,5 +1,6 @@
 export const EXTRACTION_FAILURE_CODES = [
   'transport',
+  'refusal',
   'draft_parse',
   'draft_schema',
   'provenance',
@@ -39,6 +40,7 @@ export interface ExtractionFailure {
 
 const RETRY_STRATEGIES: Record<ExtractionFailureCode, RetryDecision> = {
   transport: { retryable: true, strategy: 'backoff', maxAttempts: 3 },
+  refusal: { retryable: false, strategy: 'none', maxAttempts: 0 },
   draft_parse: { retryable: true, strategy: 'targeted_reask', maxAttempts: 2 },
   draft_schema: { retryable: true, strategy: 'targeted_reask', maxAttempts: 2 },
   provenance: { retryable: true, strategy: 'targeted_reask', maxAttempts: 2 },

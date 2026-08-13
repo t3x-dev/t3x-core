@@ -142,6 +142,43 @@ describe('extractors/v2 pipeline', () => {
     expect(result.compiled.ops).toHaveLength(2);
   });
 
+  it('threads provider warnings into the compiled plan', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [],
+            warnings: ['Source detail is ambiguous.'],
+          },
+          usage: { inputTokens: 10, outputTokens: 5 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [
+        {
+          turn_hash: 'sha256:t1',
+          role: 'user',
+          content: 'The source contains one concrete fact.',
+        },
+      ],
+      mode: 'bootstrap',
+      providerId: 'google',
+      model: 'gemini-3.1-flash-lite',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.compiled.warnings).toEqual(
+      expect.arrayContaining(['Provider warning: Source detail is ambiguous.'])
+    );
+  });
+
   it('compiles bare value_json add items into define plus value-slot set ops', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

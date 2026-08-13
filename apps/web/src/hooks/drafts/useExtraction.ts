@@ -305,7 +305,12 @@ export function useExtraction({
         // longer follow up with setScriptText / setScriptDirty: that
         // triplet was the drift surface PR #952's P1 exposed
         // (extractionWorker swapped ops without rewriting scriptText).
-        store.setDraft({ ops: stagedOps, tree: previewTree, variants: stagedVariants });
+        store.setDraft({
+          ops: stagedOps,
+          tree: previewTree,
+          variants: stagedVariants,
+          outcome: result.outcome,
+        });
         store.setMode('idle');
         toast.success(
           `Extracted ${stagedOps.length} op${stagedOps.length === 1 ? '' : 's'} — review and click Apply`,
