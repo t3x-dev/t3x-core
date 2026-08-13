@@ -72,15 +72,12 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Choose an immutable version to inspect, reuse, or apply. Create a new version by composing Core with ordered Modules.'
+        'Manage Schema identities and inspect immutable versions. Compose Modules to publish without changing existing history.'
       )
     ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'PRD Schema v2' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(screen.getByRole('tab', { name: 'Skill Schema v1' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Prompt Schema v1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skill Schema/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Prompt Schema/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
     expect(screen.queryByText('Docker Compose')).not.toBeInTheDocument();
   });
@@ -94,16 +91,23 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
+  it('keeps official Schemas out of the My Schemas scope', () => {
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
+
+    expect(screen.queryByRole('button', { name: /PRD Schema/ })).not.toBeInTheDocument();
+    expect(screen.getByText('No Schemas match this search or status.')).toBeInTheDocument();
+  });
+
   it('persists the selected current release as the project default', async () => {
     render(
       <ProjectSchemasTab projectId="proj_test" projectMetadata={{ description: 'Test project' }} />
     );
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use for new Workspaces' }));
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as project default' }));
 
     await waitFor(() => {
       expect(updateProject).toHaveBeenCalledWith('proj_test', {
@@ -138,11 +142,9 @@ describe('ProjectSchemasTab', () => {
     }));
 
     render(<ProjectSchemasTab projectId="proj_test" />);
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use in current & new Workspaces' }));
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as project default' }));
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
     expect(saveDraft.mock.calls[0][0]).toMatchObject({
@@ -184,10 +186,7 @@ describe('ProjectSchemasTab', () => {
     }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
@@ -216,10 +215,7 @@ describe('ProjectSchemasTab', () => {
     extractCandidate.mockRejectedValue(new Error('Prompt source could not be regenerated'));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
     expect(await screen.findByText(/regeneration failed/)).toBeInTheDocument();
@@ -262,10 +258,7 @@ describe('ProjectSchemasTab', () => {
     useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
 
     render(<ProjectSchemasTab projectId="proj_test" />);
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prompt Schema v1' }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
 
     expect(screen.getByRole('button', { name: 'Applied to Main workspace' })).toBeDisabled();
   });

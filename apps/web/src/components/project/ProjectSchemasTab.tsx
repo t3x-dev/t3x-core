@@ -19,6 +19,7 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectSchemaDefault } from '@/hooks/projects/useProjectSchemaDefault';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
+import { useYSchemaIdentityManagement } from '@/hooks/schemas/useYSchemaIdentityManagement';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
@@ -47,6 +48,7 @@ export function ProjectSchemasTab({
 }: ProjectSchemasTabProps) {
   const searchParams = useSearchParams();
   const publishedVersions = useProjectYSchemaVersions(projectId);
+  const identityManagement = useYSchemaIdentityManagement(projectId, publishedVersions.refresh);
   const registry = useMemo(
     () =>
       mergePublishedSchemaVersions(
@@ -209,6 +211,9 @@ export function ProjectSchemasTab({
     <SchemaRegistry
       key={projectId}
       {...registry}
+      onArchiveIdentity={(family) => identityManagement.setLifecycle(family, 'archive')}
+      onRestoreIdentity={(family) => identityManagement.setLifecycle(family, 'restore')}
+      onUpdateIdentity={identityManagement.updateIdentity}
       compositionWorkspace={
         workspaceTarget?.revision
           ? {

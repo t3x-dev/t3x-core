@@ -48,9 +48,18 @@ export function mergePublishedSchemaVersions(
         const current = releases.find((release) => release.status === 'active') ?? releases[0];
         return {
           id: blueprintFamilyId(canonicalName),
-          name: versions[0]?.title ?? canonicalName,
+          artifactId: versions[0]?.artifactId,
+          name: versions[0]?.displayName ?? versions[0]?.title ?? canonicalName,
           canonicalName,
-          description: versions[0]?.description ?? 'Published open Module Schema.',
+          description:
+            versions[0]?.catalogDescription ??
+            versions[0]?.description ??
+            'Published open Module Schema.',
+          tags: versions[0]?.catalogTags ?? versions[0]?.tags ?? [],
+          source: versions[0]?.source,
+          lifecycleStatus: versions[0]?.lifecycleStatus ?? 'active',
+          metadataRevision: versions[0]?.metadataRevision ?? 1,
+          updatedAt: versions[0]?.updatedAt,
           currentReleaseId: current?.id ?? '',
           releases,
         };

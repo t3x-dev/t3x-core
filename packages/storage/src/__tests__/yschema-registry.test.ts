@@ -8,6 +8,7 @@ import {
   listYSchemaArtifactVersions,
   publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
+  updateYSchemaArtifactIdentity,
   upsertYSchemaArtifactVersion,
 } from '../queries/yschema-registry';
 import { createTestDB, testData } from './setup';
@@ -157,6 +158,69 @@ describe('YSchema Registry storage', () => {
     });
     expect(historical?.status).toBe('deprecated');
     expect(historical?.manifest).toMatchObject({ version: '1.0.0' });
+  });
+
+  it('updates and archives Schema identity metadata without mutating its version', async () => {
+    const canonicalName = `projects/${projectId}/managed-schema`;
+    const published = await publishYSchemaArtifactVersion(db, {
+      artifact_id: `ysa_managed_${projectId}`,
+      artifact_version_id: `ysav_managed_${projectId}_1_0_0`,
+      canonical_name: canonicalName,
+      family: 'open',
+      kind: 'schema',
+      display_name: 'Managed Schema',
+      description: 'Initial catalog metadata',
+      tags: ['initial'],
+      owner_project_id: projectId,
+      visibility: 'private',
+      version: '1.0.0',
+      status: 'active',
+      manifest_json: {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        canonicalName,
+        version: '1.0.0',
+      },
+      artifact_hash: `sha256:${'a'.repeat(64)}`,
+      path_count: 0,
+      provides: [],
+      requires: [],
+    });
+
+    const renamed = await updateYSchemaArtifactIdentity(db, {
+      artifact_id: published.artifactId,
+      project_id: projectId,
+      if_revision: 1,
+      display_name: 'Checkout Schema',
+      description: 'Updated catalog metadata',
+      tags: ['checkout', 'team'],
+    });
+    expect(renamed).toMatchObject({
+      displayName: 'Checkout Schema',
+      description: 'Updated catalog metadata',
+      tags: ['checkout', 'team'],
+      metadataRevision: 2,
+      lifecycleStatus: 'active',
+      artifactHash: `sha256:${'a'.repeat(64)}`,
+    });
+
+    const archived = await updateYSchemaArtifactIdentity(db, {
+      artifact_id: published.artifactId,
+      project_id: projectId,
+      if_revision: 2,
+      lifecycle_status: 'archived',
+    });
+    expect(archived?.lifecycleStatus).toBe('archived');
+    expect(archived?.archivedAt).toEqual(expect.any(Date));
+    expect(archived?.manifest).toMatchObject({ version: '1.0.0' });
+
+    await expect(
+      updateYSchemaArtifactIdentity(db, {
+        artifact_id: published.artifactId,
+        project_id: projectId,
+        if_revision: 2,
+        display_name: 'Stale update',
+      })
+    ).resolves.toBeNull();
   });
 
   function publishArtifact(input: {

@@ -6,6 +6,7 @@ import {
   listYSchemaArtifactVersions,
   publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
+  updateYSchemaArtifactIdentity,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
@@ -297,6 +298,80 @@ const listProjectVersionsRoute = createRoute({
   },
 });
 
+const SchemaIdentityParamsSchema = z.object({
+  projectId: z.string().min(1),
+  artifactId: z.string().min(1),
+});
+
+const UpdateSchemaIdentityRequestSchema = z
+  .object({
+    if_revision: z.number().int().positive(),
+    display_name: z.string().trim().min(1).max(80).optional(),
+    description: z.string().trim().max(500).optional(),
+    tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
+  })
+  .strict();
+
+const updateSchemaIdentityRoute = createRoute({
+  method: 'patch',
+  path: '/v1/projects/{projectId}/yschemas/{artifactId}',
+  tags: ['YSchema'],
+  summary: 'Update mutable Schema identity metadata',
+  request: {
+    params: SchemaIdentityParamsSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: UpdateSchemaIdentityRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated Schema identity without modifying immutable versions',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Metadata revision conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const setSchemaLifecycleRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/yschemas/{artifactId}/{action}',
+  tags: ['YSchema'],
+  summary: 'Archive or restore a Schema identity',
+  request: {
+    params: SchemaIdentityParamsSchema.extend({ action: z.enum(['archive', 'restore']) }),
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z.object({ if_revision: z.number().int().positive() }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated Schema lifecycle; immutable versions remain addressable',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Metadata revision conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 const previewCompositionRoute = createRoute({
   method: 'post',
   path: '/v1/yschema/compositions/preview',
@@ -538,6 +613,44 @@ yschemaCompositionRoutes.openapi(listProjectVersionsRoute, async (c) => {
     { success: true as const, data: { items: items.map(artifactViewToManifest) } },
     200
   );
+});
+
+yschemaCompositionRoutes.openapi(updateSchemaIdentityRoute, async (c) => {
+  const { projectId, artifactId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const updated = await updateYSchemaArtifactIdentity(db, {
+    artifact_id: artifactId,
+    project_id: projectId,
+    if_revision: input.if_revision,
+    display_name: input.display_name,
+    description: input.description,
+    tags: input.tags,
+  });
+  if (!updated) {
+    return errorResponse(c, 'CONFLICT', 'Schema metadata changed or the Schema is unavailable.');
+  }
+  return c.json({ success: true as const, data: artifactViewToManifest(updated) }, 200);
+});
+
+yschemaCompositionRoutes.openapi(setSchemaLifecycleRoute, async (c) => {
+  const { projectId, artifactId, action } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const updated = await updateYSchemaArtifactIdentity(db, {
+    artifact_id: artifactId,
+    project_id: projectId,
+    if_revision: input.if_revision,
+    lifecycle_status: action === 'archive' ? 'archived' : 'active',
+  });
+  if (!updated) {
+    return errorResponse(c, 'CONFLICT', 'Schema metadata changed or the Schema is unavailable.');
+  }
+  return c.json({ success: true as const, data: artifactViewToManifest(updated) }, 200);
 });
 
 yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
@@ -829,6 +942,9 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         canonical_name: input.canonical_name,
         family: 'open',
         kind: 'schema',
+        display_name: input.title,
+        description: input.description ?? '',
+        tags: input.tags ?? [],
         owner_project_id: projectId,
         visibility: 'private',
         version: input.version,
@@ -926,6 +1042,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       canonical_name: input.canonical_name,
       family: persisted.composition.family,
       kind: 'core',
+      display_name: input.title,
+      description: input.description ?? '',
       owner_project_id: projectId,
       visibility: 'private',
       version: input.version,

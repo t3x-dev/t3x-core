@@ -178,6 +178,8 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
   ];
   return {
     ...manifest,
+    artifactId: view.artifactId,
+    artifactVersionId: view.artifactVersionId,
     canonicalName: view.canonicalName,
     version: view.version,
     status: view.status,
@@ -185,6 +187,12 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
     updatedAt: view.createdAt.toISOString(),
     visibility: view.visibility,
     ownerProjectId: view.ownerProjectId,
+    displayName: view.displayName ?? manifest.title ?? view.canonicalName,
+    catalogDescription: view.description ?? manifest.description ?? '',
+    catalogTags: view.tags,
+    lifecycleStatus: view.lifecycleStatus,
+    archivedAt: view.archivedAt?.toISOString() ?? null,
+    metadataRevision: view.metadataRevision,
     declaredTags,
     derivedTags,
     tags: Array.from(new Set([...declaredTags, ...derivedTags])).sort(),

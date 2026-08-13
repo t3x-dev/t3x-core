@@ -630,6 +630,12 @@ export const yschemaArtifacts = pgTable(
     canonicalName: text('canonical_name').notNull().unique(),
     family: text('family').notNull(),
     kind: text('kind').notNull(),
+    displayName: text('display_name'),
+    description: text('description'),
+    tags: jsonb('tags').notNull().default([]).$type<string[]>(),
+    lifecycleStatus: text('lifecycle_status').notNull().default('active'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    metadataRevision: integer('metadata_revision').notNull().default(1),
     ownerProjectId: text('owner_project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
     }),
@@ -644,6 +650,12 @@ export const yschemaArtifacts = pgTable(
       table.visibility
     ),
     index('idx_yschema_artifacts_owner').on(table.ownerProjectId),
+    index('idx_yschema_artifacts_catalog').on(
+      table.ownerProjectId,
+      table.kind,
+      table.lifecycleStatus,
+      table.updatedAt
+    ),
   ]
 );
 

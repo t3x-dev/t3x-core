@@ -48,6 +48,49 @@ export async function loadProjectYSchemaVersions(
   return handleResponse(response);
 }
 
+export async function updateProjectYSchemaIdentity(
+  projectId: string,
+  artifactId: string,
+  input: {
+    ifRevision: number;
+    displayName?: string;
+    description?: string;
+    tags?: string[];
+  }
+): Promise<PublishedSchemaVersionManifest> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschemas/${encodeURIComponent(artifactId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        if_revision: input.ifRevision,
+        display_name: input.displayName,
+        description: input.description,
+        tags: input.tags,
+      }),
+    }
+  );
+  return handleResponse(response);
+}
+
+export async function setProjectYSchemaLifecycle(
+  projectId: string,
+  artifactId: string,
+  action: 'archive' | 'restore',
+  ifRevision: number
+): Promise<PublishedSchemaVersionManifest> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschemas/${encodeURIComponent(artifactId)}/${action}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ if_revision: ifRevision }),
+    }
+  );
+  return handleResponse(response);
+}
+
 export async function loadWorkspaceYSchemaComposition(
   projectId: string,
   workspaceId: string

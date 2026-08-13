@@ -148,6 +148,16 @@ export interface PublishedSchemaVersionManifest extends Record<string, unknown> 
   status: 'active' | 'deprecated' | 'draft';
   source: 'official' | 'team' | 'community';
   artifactHash?: string;
+  artifactId?: string;
+  artifactVersionId?: string;
+  displayName?: string;
+  catalogDescription?: string;
+  catalogTags?: string[];
+  lifecycleStatus?: 'active' | 'archived';
+  archivedAt?: string | null;
+  metadataRevision?: number;
+  ownerProjectId?: string | null;
+  updatedAt?: string;
   tags?: string[];
   schema?: Record<string, unknown>;
 }

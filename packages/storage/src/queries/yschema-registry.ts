@@ -16,6 +16,9 @@ export interface UpsertYSchemaArtifactVersionInput {
   canonical_name: string;
   family: string;
   kind: 'core' | 'module' | 'schema';
+  display_name?: string;
+  description?: string;
+  tags?: string[];
   owner_project_id?: string;
   visibility: YSchemaArtifactVisibility;
   version: string;
@@ -34,6 +37,12 @@ export interface YSchemaArtifactVersionView {
   canonicalName: string;
   family: string;
   kind: string;
+  displayName: string | null;
+  description: string | null;
+  tags: string[];
+  lifecycleStatus: string;
+  archivedAt: Date | null;
+  metadataRevision: number;
   ownerProjectId: string | null;
   visibility: string;
   version: string;
@@ -74,6 +83,16 @@ export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifac
   status: 'active';
 }
 
+export interface UpdateYSchemaArtifactIdentityInput {
+  artifact_id: string;
+  project_id: string;
+  if_revision: number;
+  display_name?: string;
+  description?: string;
+  tags?: string[];
+  lifecycle_status?: 'active' | 'archived';
+}
+
 export async function upsertYSchemaArtifactVersion(
   db: AnyDB,
   input: UpsertYSchemaArtifactVersionInput
@@ -86,6 +105,9 @@ export async function upsertYSchemaArtifactVersion(
       canonicalName: input.canonical_name,
       family: input.family,
       kind: input.kind,
+      displayName: input.display_name ?? null,
+      description: input.description ?? null,
+      tags: input.tags ?? [],
       ownerProjectId: input.owner_project_id ?? null,
       visibility: input.visibility,
       createdAt: now,
@@ -150,6 +172,60 @@ export async function upsertYSchemaArtifactVersion(
   }
 
   return joinedArtifactView(artifact, version);
+}
+
+/** Update mutable catalog metadata without touching any immutable version payload. */
+export async function updateYSchemaArtifactIdentity(
+  db: AnyDB,
+  input: UpdateYSchemaArtifactIdentityInput
+): Promise<YSchemaArtifactVersionView | null> {
+  const [artifact] = await db
+    .select()
+    .from(yschemaArtifacts)
+    .where(
+      and(
+        eq(yschemaArtifacts.artifactId, input.artifact_id),
+        eq(yschemaArtifacts.ownerProjectId, input.project_id),
+        eq(yschemaArtifacts.kind, 'schema'),
+        eq(yschemaArtifacts.metadataRevision, input.if_revision)
+      )
+    )
+    .limit(1);
+  if (!artifact) return null;
+
+  const lifecycleStatus = input.lifecycle_status ?? artifact.lifecycleStatus;
+  const [updated] = await db
+    .update(yschemaArtifacts)
+    .set({
+      ...(input.display_name !== undefined ? { displayName: input.display_name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
+      lifecycleStatus,
+      archivedAt:
+        lifecycleStatus === 'archived'
+          ? (artifact.archivedAt ?? new Date())
+          : input.lifecycle_status === 'active'
+            ? null
+            : artifact.archivedAt,
+      metadataRevision: artifact.metadataRevision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(yschemaArtifacts.artifactId, artifact.artifactId),
+        eq(yschemaArtifacts.metadataRevision, input.if_revision)
+      )
+    )
+    .returning();
+  if (!updated) return null;
+
+  const [version] = await db
+    .select()
+    .from(yschemaArtifactVersions)
+    .where(eq(yschemaArtifactVersions.artifactId, artifact.artifactId))
+    .orderBy(desc(yschemaArtifactVersions.createdAt))
+    .limit(1);
+  return version ? joinedArtifactView(updated, version) : null;
 }
 
 export async function listYSchemaArtifactVersions(
@@ -449,6 +525,12 @@ function joinedArtifactView(
     canonicalName: artifact.canonicalName,
     family: artifact.family,
     kind: artifact.kind,
+    displayName: artifact.displayName,
+    description: artifact.description,
+    tags: artifact.tags,
+    lifecycleStatus: artifact.lifecycleStatus,
+    archivedAt: artifact.archivedAt,
+    metadataRevision: artifact.metadataRevision,
     ownerProjectId: artifact.ownerProjectId,
     visibility: artifact.visibility,
     version: version.version,

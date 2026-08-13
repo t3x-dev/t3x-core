@@ -62,6 +62,17 @@ const storageMock = vi.hoisted(() => {
       Promise.resolve({ manifest: input.manifest_json })
     ),
     listProjectYSchemaVersionHistory: vi.fn(() => Promise.resolve([])),
+    updateYSchemaArtifactIdentity: vi.fn((_db, input) =>
+      Promise.resolve({
+        artifactId: input.artifact_id,
+        manifest: {
+          apiVersion: 't3x.dev/yschema-blueprint/v1',
+          canonicalName: 'projects/proj_modules/schema',
+          version: '1.0.0',
+          title: input.display_name ?? 'Module Workspace Schema',
+        },
+      })
+    ),
     state: () => workspaceState,
   };
 });
@@ -76,6 +87,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     publishYSchemaArtifactVersion: storageMock.publishYSchemaArtifactVersion,
     saveYSchemaCompositionSnapshot: storageMock.saveYSchemaCompositionSnapshot,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
+    updateYSchemaArtifactIdentity: storageMock.updateYSchemaArtifactIdentity,
   };
 });
 
@@ -331,6 +343,50 @@ describe('Workspace YSchema Composition persistence', () => {
       family: 'prd',
       kind: 'core',
     });
+  });
+
+  it('updates mutable Schema identity metadata without publishing a new version', async () => {
+    const response = await app.request('/v1/projects/proj_modules/yschemas/schema_product', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        if_revision: 3,
+        display_name: 'Product delivery Schema',
+        description: 'Shared contract for the product team.',
+        tags: ['product', 'team:delivery'],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(storageMock.updateYSchemaArtifactIdentity).toHaveBeenCalledWith(expect.anything(), {
+      artifact_id: 'schema_product',
+      project_id: 'proj_modules',
+      if_revision: 3,
+      display_name: 'Product delivery Schema',
+      description: 'Shared contract for the product team.',
+      tags: ['product', 'team:delivery'],
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
+  });
+
+  it('archives a Schema identity while retaining its immutable version history', async () => {
+    const response = await app.request(
+      '/v1/projects/proj_modules/yschemas/schema_product/archive',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ if_revision: 4 }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(storageMock.updateYSchemaArtifactIdentity).toHaveBeenCalledWith(expect.anything(), {
+      artifact_id: 'schema_product',
+      project_id: 'proj_modules',
+      if_revision: 4,
+      lifecycle_status: 'archived',
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate order values instead of normalizing ambiguous input', async () => {

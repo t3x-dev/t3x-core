@@ -77,9 +77,15 @@ export interface SchemaReleasePreview extends SchemaRelease {
 /** One selectable Schema family with an explicit published-version pointer. */
 export interface SchemaFamilyPreview {
   id: string;
+  artifactId?: string;
   name: string;
   canonicalName: string;
   description: string;
+  tags?: string[];
+  source?: 'official' | 'team' | 'community';
+  lifecycleStatus?: 'active' | 'archived';
+  metadataRevision?: number;
+  updatedAt?: string;
   currentReleaseId: string;
   releases: SchemaReleasePreview[];
 }

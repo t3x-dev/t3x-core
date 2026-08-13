@@ -499,6 +499,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       canonical_name TEXT NOT NULL UNIQUE,
       family TEXT NOT NULL,
       kind TEXT NOT NULL,
+      display_name TEXT,
+      description TEXT,
+      tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      lifecycle_status TEXT NOT NULL DEFAULT 'active',
+      archived_at TIMESTAMPTZ,
+      metadata_revision INTEGER NOT NULL DEFAULT 1,
       owner_project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       visibility TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1949,6 +1955,18 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (project_id, transition_id, request_id)
     );
+  `);
+
+  // ── Schema v63: mutable Schema identity catalog metadata ──
+  await sql.unsafe(`
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'active';
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS metadata_revision INTEGER NOT NULL DEFAULT 1;
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifacts_catalog
+      ON yschema_artifacts(owner_project_id, kind, lifecycle_status, updated_at DESC);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
