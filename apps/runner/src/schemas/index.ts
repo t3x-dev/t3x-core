@@ -10,6 +10,10 @@ export {
   AgentConfigSchema,
   type AgentInput,
   AgentInputSchema,
+  type ProjectScopedAgentConfig,
+  ProjectScopedAgentConfigSchema,
+  type ProjectScopedAgentInput,
+  ProjectScopedAgentInputSchema,
 } from './agent.js';
 // Engine integration schemas
 export {

@@ -227,6 +227,34 @@ describe('runner server routes', () => {
     expect(body.error.message).toContain('boom');
   });
 
+  it('POST /runs requires project scope', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-without-project',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /runs accepts an explicitly project-scoped engine run', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-project-a',
+        project_id: 'project-a',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { status: 'running' } });
+  });
+
   it('GET /debug/n8n-check returns 404 when debug routes are disabled', async () => {
     const res = await requestJson(server, '/debug/n8n-check');
     const body = res.body as { error: { code: string } };
@@ -283,6 +311,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'webhook-agent',
         name: 'Webhook Agent',
         endpoint: 'http://127.0.0.1:9000/run',
@@ -301,6 +330,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,
@@ -337,6 +367,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'private-agent',
         name: 'Private Agent',
         endpoint: 'http://169.254.169.254/latest/meta-data',
@@ -351,11 +382,54 @@ describe('runner server routes', () => {
     expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
   });
 
+  it('POST /run returns the RunRecord under the web-client trace contract', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        id: 'proxy-agent',
+        name: 'Proxy Agent',
+        endpoint: 'http://127.0.0.1:9000/proxy',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: 'ok' }),
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        agent_id: 'proxy-agent',
+        input: { prompt: 'hello' },
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      data: { run_id: string; output: unknown; trace: { run_id: string; status: string } };
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.run_id).toMatch(/^run_[0-9a-f-]{36}$/);
+    expect(body.data.output).toEqual({ answer: 'ok' });
+    expect(body.data.trace).toMatchObject({
+      run_id: body.data.run_id,
+      status: 'completed',
+    });
+  });
+
   it('POST /run revalidates an endpoint after its private-origin authorization is removed', async () => {
     process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'revoked-private-agent',
         name: 'Revoked Private Agent',
         endpoint: 'http://127.0.0.1:9000/run',
@@ -370,7 +444,11 @@ describe('runner server routes', () => {
 
     const res = await requestJson(server, '/run', {
       method: 'POST',
-      body: { agent_id: 'revoked-private-agent', input: { prompt: 'hello' } },
+      body: {
+        project_id: 'project-a',
+        agent_id: 'revoked-private-agent',
+        input: { prompt: 'hello' },
+      },
     });
     const body = res.body as { success: boolean; error: { code: string; message: string } };
 
@@ -385,6 +463,7 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-proxy-agent',
         name: 'Failing Proxy Agent',
         endpoint: 'http://127.0.0.1:9000/fail',
@@ -403,6 +482,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-proxy-agent',
         input: { prompt: 'hello' },
       },
@@ -410,21 +490,22 @@ describe('runner server routes', () => {
     const body = res.body as {
       success: boolean;
       error: { code: string; message: string };
-      data: { record: { status: string; error: { message: string } } };
+      data: { trace: { status: string; error: { message: string } } };
     };
 
     expect(res.status).toBe(500);
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('RUN_FAILED');
     expect(body.error.message).toContain('Agent request failed with 502');
-    expect(body.data.record.status).toBe('failed');
-    expect(body.data.record.error.message).toContain('Agent request failed with 502');
+    expect(body.data.trace.status).toBe('failed');
+    expect(body.data.trace.error.message).toContain('Agent request failed with 502');
   });
 
   it('POST /webhook/run fails the trace when the registered agent returns a non-2xx response', async () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-webhook-agent',
         name: 'Failing Webhook Agent',
         endpoint: 'http://127.0.0.1:9000/fail-webhook',
@@ -443,6 +524,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,

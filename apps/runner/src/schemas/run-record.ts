@@ -129,6 +129,7 @@ export type StepRecord = z.infer<typeof StepRecordSchema>;
  */
 export const RunRecordSchema = z.object({
   run_id: z.string(),
+  project_id: z.string(),
   status: z.enum(['pending', 'running', 'completed', 'failed']),
 
   // Input/Output

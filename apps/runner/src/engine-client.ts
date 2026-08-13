@@ -45,7 +45,7 @@ export interface EngineRun {
  */
 export interface ParsedRun {
   run_id: string;
-  project_id: string | null;
+  project_id: string;
   runner_run_id: string | null;
   commit_ref: string | null;
   leaf: {
@@ -112,6 +112,10 @@ export async function getRunByRunnerRunId(runnerRunId: string): Promise<ParsedRu
 
     // Parse JSON fields
     const run = result.data;
+    if (!run.projectId) {
+      logger.warn({ runnerRunId, run_id: run.runId }, 'Engine run is missing a project boundary');
+      return null;
+    }
     const parsed: ParsedRun = {
       run_id: run.runId,
       project_id: run.projectId,

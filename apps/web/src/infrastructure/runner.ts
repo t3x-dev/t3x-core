@@ -3,6 +3,7 @@
  */
 
 import {
+  API_BASE,
   API_V1,
   ApiError,
   buildQueryString,
@@ -12,7 +13,7 @@ import {
 } from './core';
 import type { ApiResponse } from './types';
 
-const RUNNER_URL = process.env.NEXT_PUBLIC_RUNNER_API_URL || 'http://localhost:8080';
+const RUNNER_API = `${API_BASE}/api/runner`;
 
 // ============================================================================
 // Runner Types
@@ -35,31 +36,37 @@ export interface AgentConfig {
 // Run trace
 export interface RunTrace {
   run_id: string;
-  agent_id: string;
-  started_at: string;
-  completed_at?: string;
-  status: 'running' | 'completed' | 'failed' | 'timeout';
-  input: Record<string, unknown>;
+  project_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  inputs: Record<string, unknown>;
   output?: unknown;
-  events: Array<{
-    id: string;
-    timestamp: string;
-    type: 'llm_call' | 'tool_call' | 'agent_input' | 'agent_output' | 'error';
-    data: {
-      input?: unknown;
-      output?: unknown;
-      model?: string;
-      tool_name?: string;
-      latency_ms?: number;
-      error?: string;
+  steps: Array<{
+    step_id: string;
+    step_index: number;
+    name: string;
+    type: string;
+    parent_step_id?: string;
+    span_kind?: 'chain' | 'llm' | 'tool' | 'retriever' | 'workflow';
+    input: unknown;
+    output: unknown;
+    latency_ms: number;
+    status: 'ok' | 'error';
+    error?: string;
+    tokens?: { in: number; out: number };
+    llm?: {
+      model: string;
+      provider?: string;
+      tokens: { prompt: number; completion: number; total: number };
     };
+    tool?: { tool_name: string; tool_input: unknown; tool_output: unknown };
   }>;
-  metrics?: {
-    total_latency_ms?: number;
-    llm_calls: number;
-    tool_calls: number;
-    tokens_used?: number;
+  timing: {
+    started_at: string;
+    ended_at?: string;
+    total_ms?: number;
   };
+  error?: { code: string; message: string; step_id?: string };
+  source?: { system: 'n8n' | 'langchain' | 'custom'; execution_id?: string };
 }
 
 export interface RunAgentResult {
@@ -73,19 +80,46 @@ export interface RunAgentResult {
 }
 
 // Test step
-export interface TestStep {
+export interface EvalRule {
   id: string;
-  name: string;
-  type: 'contains' | 'not_contains' | 'regex' | 'json_path' | 'semantic' | 'custom';
-  target: 'input' | 'output' | 'llm_call' | 'tool_call' | 'trace';
-  assertion: {
-    value?: string;
-    pattern?: string;
-    path?: string;
-    threshold?: number;
-    fn?: string;
-  };
-  severity: 'error' | 'warning' | 'info';
+  name?: string;
+  type?: 'basic' | 'tool_use' | 'trajectory' | 'cost' | 'performance';
+  target: string;
+  check:
+    | 'exists'
+    | 'not_empty'
+    | 'equals'
+    | 'not_equals'
+    | 'contains'
+    | 'not_contains'
+    | 'regex'
+    | 'range'
+    | 'some'
+    | 'all'
+    | 'none'
+    | 'expected_tools'
+    | 'no_unknown_tools'
+    | 'step_count'
+    | 'no_repeated_steps'
+    | 'total_tokens'
+    | 'total_latency_ms';
+  value?: unknown;
+  pattern?: string;
+  min?: number;
+  max?: number;
+  condition?: Record<string, unknown>;
+  expected?: string[];
+  skip_if_empty?: boolean;
+  weight: number;
+  severity?: 'error' | 'warning';
+}
+
+export interface EvalRules {
+  version: string;
+  name?: string;
+  description?: string;
+  rules: EvalRule[];
+  pass_threshold: number;
 }
 
 // Test result
@@ -125,18 +159,21 @@ export interface EvalResponse {
  * Check runner health
  */
 export async function checkRunnerHealth(): Promise<{ status: string; service: string }> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/health`, undefined, 5000);
+  const res = await fetchWithTimeout(`${RUNNER_API}/health`, undefined, 5000);
   return handleResponse(res);
 }
 
 /**
  * Register an agent with the runner
  */
-export async function registerAgent(config: AgentConfig): Promise<{ agent_id: string }> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/agents`, {
+export async function registerAgent(
+  projectId: string,
+  config: AgentConfig
+): Promise<{ agent_id: string }> {
+  const res = await fetchWithTimeout(`${RUNNER_API}/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
+    body: JSON.stringify({ ...config, project_id: projectId }),
   });
   return handleResponse(res);
 }
@@ -144,8 +181,9 @@ export async function registerAgent(config: AgentConfig): Promise<{ agent_id: st
 /**
  * Get agent configuration
  */
-export async function getAgent(agentId: string): Promise<AgentConfig> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/agents/${encodeURIComponent(agentId)}`);
+export async function getAgent(projectId: string, agentId: string): Promise<AgentConfig> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${RUNNER_API}/agents/${encodeURIComponent(agentId)}${query}`);
   return handleResponse(res);
 }
 
@@ -153,16 +191,18 @@ export async function getAgent(agentId: string): Promise<AgentConfig> {
  * Run an agent
  */
 export async function runAgent(
+  projectId: string,
   agentId: string,
   input: Record<string, unknown>,
   config?: { timeout_ms?: number }
 ): Promise<RunAgentResult> {
   const res = await fetchWithTimeout(
-    `${RUNNER_URL}/run`,
+    `${RUNNER_API}/run`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        project_id: projectId,
         agent_id: agentId,
         input,
         config,
@@ -193,17 +233,21 @@ export async function runAgent(
 /**
  * Get run trace
  */
-export async function getRunTrace(runId: string): Promise<RunTrace> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/run/${encodeURIComponent(runId)}`);
+export async function getRunTrace(projectId: string, runId: string): Promise<RunTrace> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${RUNNER_API}/run/${encodeURIComponent(runId)}${query}`);
   return handleResponse(res);
 }
 
 /**
  * List runs
  */
-export async function listRuns(agentId?: string): Promise<{ runs: RunTrace[] }> {
-  const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
-  const res = await fetchWithTimeout(`${RUNNER_URL}/runs${query}`);
+export async function listRuns(
+  projectId: string,
+  system?: 'n8n' | 'langchain' | 'custom'
+): Promise<{ runs: RunTrace[] }> {
+  const query = buildQueryString({ project_id: projectId, system });
+  const res = await fetchWithTimeout(`${RUNNER_API}/runs${query}`);
   return handleResponse(res);
 }
 
@@ -211,17 +255,17 @@ export async function listRuns(agentId?: string): Promise<{ runs: RunTrace[] }> 
  * Run evaluation
  */
 export async function runEval(
+  projectId: string,
   runId: string,
-  testSteps: TestStep[],
-  options?: { stop_on_first_failure?: boolean; generate_suggestions?: boolean }
+  rules: EvalRules
 ): Promise<EvalResponse> {
-  const res = await fetchWithTimeout(`${RUNNER_URL}/eval`, {
+  const res = await fetchWithTimeout(`${RUNNER_API}/eval`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      project_id: projectId,
       run_id: runId,
-      test_steps: testSteps,
-      options,
+      rules,
     }),
   });
   return handleResponse(res);
@@ -231,9 +275,10 @@ export async function runEval(
  * Run agent with auto-eval (webhook mode)
  */
 export async function runAgentWithEval(
+  projectId: string,
   agentId: string,
   input: Record<string, unknown>,
-  testSteps: TestStep[]
+  rules: EvalRules
 ): Promise<{
   run_id: string;
   output: unknown;
@@ -241,15 +286,16 @@ export async function runAgentWithEval(
   eval_result: EvalResponse | null;
 }> {
   const res = await fetchWithTimeout(
-    `${RUNNER_URL}/webhook/run`,
+    `${RUNNER_API}/webhook/run`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        project_id: projectId,
         agent_id: agentId,
         input,
         auto_eval: true,
-        test_steps: testSteps,
+        rules,
       }),
     },
     120000

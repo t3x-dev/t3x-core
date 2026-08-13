@@ -154,8 +154,20 @@ describe('Runs Routes', () => {
         expect.stringContaining('/runs'),
         expect.objectContaining({
           headers: expect.objectContaining({ Authorization: 'Bearer runner-test-secret' }),
+          body: expect.stringContaining(`"project_id":"${projectId}"`),
         })
       );
+    });
+
+    it('rejects a run without project scope', async () => {
+      const res = await app.request('/v1/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockFetchFn).not.toHaveBeenCalled();
     });
   });
 

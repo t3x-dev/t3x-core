@@ -15,6 +15,7 @@ import type { RunRecord } from '../schemas/run-record.js';
 function makeRecord(overrides: Partial<RunRecord> = {}): RunRecord {
   return {
     run_id: 'run_test001',
+    project_id: 'project-test',
     status: 'completed',
     inputs: { query: 'hello' },
     output: 'test output',

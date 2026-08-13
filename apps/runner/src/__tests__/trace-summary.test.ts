@@ -5,6 +5,7 @@ import { buildTraceSummary } from '../trace/trace-summary.js';
 function makeRecord(steps: RunRecord['steps'] = []): RunRecord {
   return {
     run_id: 'run_test',
+    project_id: 'project-test',
     status: 'completed',
     inputs: {},
     steps,
