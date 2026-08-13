@@ -39,7 +39,10 @@ import {
   type ProtocolValue,
   type StringClaim,
 } from '@t3x-dev/transition';
-import { resolveApplicableTransitionPolicy } from './applicable-policy';
+import {
+  assertGenerationDecisionActor,
+  resolveApplicableTransitionPolicy,
+} from './applicable-policy';
 import { inspectTransition, type TransitionControlPlaneView } from './index';
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
@@ -331,6 +334,21 @@ export async function decideTransition(input: {
 }): Promise<DecideTransitionResult> {
   if (input.outcome === 'overridden' && input.actor.kind !== 'human') {
     throw new TransitionAutomatedOverrideDeniedError();
+  }
+  if (input.actor.kind !== 'human') {
+    const graph = await resolveTransitionProposalGraph(
+      input.db,
+      input.projectId,
+      input.transitionId
+    );
+    assertGenerationDecisionActor({
+      actor: input.actor,
+      requestKind: graph.membership.requestKind,
+      preparationFacts:
+        graph.preparation === null
+          ? null
+          : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
+    });
   }
   const normalized: ProtocolValue = {
     operation: 'decide',

@@ -8,6 +8,8 @@ import type { TransitionPolicyBinding } from '@t3x-dev/storage';
 import type { ProtocolValue, ResourceDescriptor } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
 import {
+  assertGenerationDecisionActor,
+  GenerationHumanDecisionRequiredError,
   GenerationPolicyIncompatibleError,
   GenerationPolicyIntegrityError,
   PROPOSAL_POSTURE_VERIFIER_ACTOR,
@@ -128,6 +130,26 @@ function preparation(posture: 'source_only' | 'guided' | 'recommend' = 'guided')
 }
 
 describe('resolveApplicableTransitionPolicy', () => {
+  it.each(['agent', 'service'] as const)(
+    'requires a human Decision for generated Proposals and rejects %s actors',
+    (kind) => {
+      expect(() =>
+        assertGenerationDecisionActor({
+          actor: { kind, id: `${kind}:reviewer` },
+          requestKind: 'structured_yops',
+          preparationFacts: preparation() as unknown as ProtocolValue,
+        })
+      ).toThrow(GenerationHumanDecisionRequiredError);
+      expect(() =>
+        assertGenerationDecisionActor({
+          actor: { kind: 'human', id: 'human:reviewer' },
+          requestKind: 'structured_yops',
+          preparationFacts: preparation() as unknown as ProtocolValue,
+        })
+      ).not.toThrow();
+    }
+  );
+
   it('preserves the exact ref policy for ordinary Transition memberships', () => {
     const ref = refPolicyBinding();
     const applicable = resolveApplicableTransitionPolicy({

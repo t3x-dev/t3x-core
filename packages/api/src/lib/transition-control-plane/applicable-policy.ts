@@ -79,6 +79,15 @@ export class GenerationPolicyIntegrityError extends Error {
   }
 }
 
+export class GenerationHumanDecisionRequiredError extends Error {
+  readonly code = 'GENERATION_HUMAN_DECISION_REQUIRED';
+
+  constructor() {
+    super('Generated Proposals require a human Decision');
+    this.name = 'GenerationHumanDecisionRequiredError';
+  }
+}
+
 export interface ApplicableTransitionPolicy {
   policy: AcceptancePolicy;
   resource: ResourceDescriptor;
@@ -108,6 +117,17 @@ function generationPreparation(input: {
     throw new GenerationPolicyIntegrityError(
       error instanceof Error ? error.message : 'Proposal Generation preparation facts are invalid'
     );
+  }
+}
+
+/** Enforce the server-owned profile's Alpha human-decision boundary. */
+export function assertGenerationDecisionActor(input: {
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  requestKind: TransitionRequestKind;
+  preparationFacts: ProtocolValue | null;
+}): void {
+  if (generationPreparation(input) !== null && input.actor.kind !== 'human') {
+    throw new GenerationHumanDecisionRequiredError();
   }
 }
 

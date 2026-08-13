@@ -32,6 +32,7 @@ import {
   verifyTransition,
 } from '../lib/transition-control-plane';
 import {
+  GenerationHumanDecisionRequiredError,
   GenerationPolicyIncompatibleError,
   GenerationPolicyIntegrityError,
 } from '../lib/transition-control-plane/applicable-policy';
@@ -342,6 +343,7 @@ function controlPlaneError(c: Context, error: unknown) {
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError ||
+    error instanceof GenerationHumanDecisionRequiredError ||
     error instanceof TransitionAutomatedOverrideDeniedError ||
     error instanceof DecisionNotAuthorizedError
   ) {
