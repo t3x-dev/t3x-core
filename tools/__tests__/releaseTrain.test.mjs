@@ -9,9 +9,11 @@ import {
 import {
   buildPackagePlan,
   buildPullRequestBody,
+  forceWithLeaseArg,
   isReleasePlanNoOp,
   normalizeCommandOutput,
   normalizeVersionInput as normalizePrepareVersionInput,
+  parseLsRemoteHead,
   resolveVersion,
 } from '../release-train/prepare-release-pr.mjs';
 
@@ -238,6 +240,21 @@ test('release train normalizes fullwidth manual version and package selection in
 test('release train command output helper tolerates inherited stdio', () => {
   assert.equal(normalizeCommandOutput(' release/1.2.0\n'), 'release/1.2.0');
   assert.equal(normalizeCommandOutput(null), '');
+});
+
+test('release train uses explicit force-with-lease expectations for release branches', () => {
+  const remoteHead = parseLsRemoteHead('abc1234567890abcdef\trefs/heads/release/1.2.0\n');
+
+  assert.equal(remoteHead, 'abc1234567890abcdef');
+  assert.equal(parseLsRemoteHead(''), null);
+  assert.equal(
+    forceWithLeaseArg('release/1.2.0', remoteHead),
+    '--force-with-lease=refs/heads/release/1.2.0:abc1234567890abcdef'
+  );
+  assert.equal(
+    forceWithLeaseArg('release/1.2.0', null),
+    '--force-with-lease=refs/heads/release/1.2.0:'
+  );
 });
 
 test('release train first-publish selection is release-worthy without file changes', () => {
