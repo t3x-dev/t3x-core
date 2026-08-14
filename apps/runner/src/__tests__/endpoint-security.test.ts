@@ -7,6 +7,13 @@ import {
   UnsafeAgentEndpointError,
 } from '../endpoint-security.js';
 
+function credentialBearingEndpoint() {
+  const endpoint = new URL('https://agent.example');
+  endpoint.username = 'user';
+  endpoint.password = 'pass';
+  return endpoint.href;
+}
+
 describe('runner endpoint security', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -108,7 +115,7 @@ describe('runner endpoint security', () => {
   it.each([
     'file:///etc/passwd',
     'ftp://agent.example/run',
-    'https://user:pass@agent.example',
+    credentialBearingEndpoint(),
   ])('rejects unsupported or credential-bearing endpoint %s', async (endpoint) => {
     await expect(assertSafeAgentEndpoint(endpoint)).rejects.toBeInstanceOf(
       UnsafeAgentEndpointError
