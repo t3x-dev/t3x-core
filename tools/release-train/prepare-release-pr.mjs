@@ -138,21 +138,29 @@ function parseArgs(argv) {
   return options;
 }
 
+export function normalizeCommandOutput(output) {
+  return typeof output === 'string' ? output.trim() : '';
+}
+
 function git(args, options = {}) {
-  return execFileSync('git', args, {
-    cwd: rootPath,
-    encoding: 'utf8',
-    stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return normalizeCommandOutput(
+    execFileSync('git', args, {
+      cwd: rootPath,
+      encoding: 'utf8',
+      stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
+    })
+  );
 }
 
 function gh(args, options = {}) {
-  return execFileSync('gh', args, {
-    cwd: rootPath,
-    encoding: 'utf8',
-    env: { ...process.env, ...options.env },
-    stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return normalizeCommandOutput(
+    execFileSync('gh', args, {
+      cwd: rootPath,
+      encoding: 'utf8',
+      env: { ...process.env, ...options.env },
+      stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
+    })
+  );
 }
 
 function ensureGitRef(ref) {

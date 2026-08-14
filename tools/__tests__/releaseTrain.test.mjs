@@ -9,6 +9,7 @@ import {
 import {
   buildPackagePlan,
   buildPullRequestBody,
+  normalizeCommandOutput,
   normalizeVersionInput as normalizePrepareVersionInput,
   resolveVersion,
 } from '../release-train/prepare-release-pr.mjs';
@@ -231,6 +232,11 @@ test('release train normalizes fullwidth manual version and package selection in
   assert.equal(normalizeChangesetVersionInput(' 1｡2。3 '), '1.2.3');
   assert.equal(normalizePrepareVersionInput(' auto '), 'auto');
   assert.equal(normalizePackageSelectionInput(' yops, transition '), 'yops, transition');
+});
+
+test('release train command output helper tolerates inherited stdio', () => {
+  assert.equal(normalizeCommandOutput(' release/1.2.0\n'), 'release/1.2.0');
+  assert.equal(normalizeCommandOutput(null), '');
 });
 
 test('release train rejects package target versions that cannot be produced by one bump', () => {
