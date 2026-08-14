@@ -1137,6 +1137,10 @@ function SourceChatPanel({
     provider: selectedProvider ?? undefined,
     model: selectedModel ?? undefined,
     parentCommitHash,
+    sourceDraftReply: {
+      workspaceId: candidate.id,
+      workspaceRevision: candidate.revision,
+    },
     onConversationCreated: handleConversationCreated,
   });
 
@@ -1179,25 +1183,31 @@ function SourceChatPanel({
     return map;
   }, [pins]);
 
-  const selectedSourceTurns = useMemo(
-    () =>
-      chatTurns
-        .filter((turn) => turn.pinnable && turnPinsByRefId.has(turn.id))
-        .map((turn) => ({
-          ...turn,
-          conversationId:
-            turn.conversationId ?? sourceConversationId ?? selectedSource?.conversationId,
-          projectId: turn.projectId ?? candidate.projectId,
-          pinnable: true,
-        })),
-    [
-      candidate.projectId,
-      chatTurns,
-      selectedSource?.conversationId,
-      sourceConversationId,
-      turnPinsByRefId,
-    ]
-  );
+  const selectedSourceTurns = useMemo(() => {
+    const selectedTurnIds = new Set(turnPinsByRefId.keys());
+    for (const turn of chatTurns) {
+      if (!turn.pinnable || selectedTurnIds.has(turn.id)) continue;
+      if (sourceDraftReferencesSelectedTurn(turn, selectedTurnIds)) {
+        selectedTurnIds.add(turn.id);
+      }
+    }
+
+    return chatTurns
+      .filter((turn) => turn.pinnable && selectedTurnIds.has(turn.id))
+      .map((turn) => ({
+        ...turn,
+        conversationId:
+          turn.conversationId ?? sourceConversationId ?? selectedSource?.conversationId,
+        projectId: turn.projectId ?? candidate.projectId,
+        pinnable: true,
+      }));
+  }, [
+    candidate.projectId,
+    chatTurns,
+    selectedSource?.conversationId,
+    sourceConversationId,
+    turnPinsByRefId,
+  ]);
   const selectedTurnCount = selectedSourceTurns.length;
 
   useEffect(() => {
@@ -1440,11 +1450,32 @@ function chatMessageToSourceTurn(
     conversationId: message.conversationId,
     projectId: message.projectId,
     pinnable: isPersistedTurnId(id),
+    ...(message.rings ? { rings: message.rings } : {}),
   };
 }
 
 function isPersistedTurnId(id: string): boolean {
   return Boolean(id) && !id.startsWith('msg-') && !id.endsWith('_streaming_assistant');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sourceDraftReferencesSelectedTurn(
+  turn: SourceConversationTurn,
+  selectedTurnIds: ReadonlySet<string>
+): boolean {
+  if (turn.role !== 'assistant' || !isRecord(turn.rings)) return false;
+  const draft = turn.rings.source_chat_draft;
+  if (!isRecord(draft) || draft.schema !== 't3x/source-chat-draft-v1' || draft.version !== 1) {
+    return false;
+  }
+  if (!Array.isArray(draft.source_items)) return false;
+  return draft.source_items.some((item) => {
+    if (!isRecord(item) || typeof item.source_turn_hash !== 'string') return false;
+    return selectedTurnIds.has(item.source_turn_hash);
+  });
 }
 
 function getImportActionTitle(
@@ -1529,7 +1560,7 @@ function SourceTurnBubble({
                   : 'Saving turn'}
           </Button>
         </div>
-        <p>{turn.content}</p>
+        <p className="whitespace-pre-line break-words">{turn.content}</p>
       </div>
       {isUser && <SourceAvatar label="YX" tone="user" />}
     </article>
