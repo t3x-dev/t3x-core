@@ -6,7 +6,6 @@
 
 - Updated dependencies []:
   - @t3x-dev/core@1.0.2
-  - @t3x-dev/yschema@1.1.1
   - @t3x-dev/storage@1.0.2
 
 ## 1.0.1
