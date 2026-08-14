@@ -36,7 +36,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.transition_verification_receipts')::text AS verification_receipts
     `);
 
-    expect(version?.version).toBe(63);
+    expect(version?.version).toBe(64);
     expect(tables).toEqual({
       preparations: 'transition_proposal_preparations',
       verification_receipts: 'transition_verification_receipts',
@@ -80,7 +80,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.yschema_composition_snapshots')::text AS "compositionSnapshots"
     `);
 
-    expect(version?.version).toBe(63);
+    expect(version?.version).toBe(64);
     expect(tables).toEqual({
       artifacts: 'yschema_artifacts',
       artifactVersions: 'yschema_artifact_versions',
@@ -126,7 +126,7 @@ describe('PostgreSQL schema migrations', () => {
       WHERE template_id = 'tmpl_v62_legacy'
     `);
 
-    expect(version?.version).toBe(63);
+    expect(version?.version).toBe(64);
     expect(template).toEqual({
       owner_id: null,
       provenance: {
