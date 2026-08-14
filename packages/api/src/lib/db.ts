@@ -5,16 +5,22 @@
  * 1. PostgreSQL: When DATABASE_URL is set (Docker/production)
  * 2. Embedded PostgreSQL: Default for local development (crash-safe)
  */
-import type { AnyDB } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  closePostgresStorage,
+  createPostgresStorage,
+  getPostgresClient,
+} from '@t3x-dev/storage';
+import {
+  closeEmbeddedStorage,
+  createEmbeddedStorage,
+  getEmbeddedPostgresClient,
+} from '@t3x-dev/storage/embedded';
 import { pinoLogger } from '../middleware/logger';
 
 let db: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
 let closeFunction: (() => Promise<void>) | null = null;
-
-function unwrapStorageModule<T extends Record<string, unknown>>(mod: T): T {
-  return ((mod as { default?: T }).default ?? mod) as T;
-}
 
 export async function getDB(): Promise<AnyDB> {
   if (db) return db;
@@ -28,18 +34,12 @@ async function initializeDB(): Promise<AnyDB> {
 
   if (databaseUrl) {
     pinoLogger.info({ url: databaseUrl.replace(/:[^:@]+@/, ':****@') }, 'using PostgreSQL');
-    const { createPostgresStorage, closePostgresStorage } = unwrapStorageModule(
-      await import('@t3x-dev/storage')
-    );
     db = await createPostgresStorage({ connectionString: databaseUrl });
     closeFunction = closePostgresStorage;
   } else {
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/pg-data';
     const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
     pinoLogger.info({ data_dir: dataDir, port }, 'using embedded PostgreSQL');
-    const { createEmbeddedStorage, closeEmbeddedStorage } = unwrapStorageModule(
-      await import('@t3x-dev/storage/embedded')
-    );
     db = await createEmbeddedStorage({ dataDir, port });
     closeFunction = closeEmbeddedStorage;
   }
@@ -54,4 +54,13 @@ export async function closeDB(): Promise<void> {
   }
   db = null;
   initPromise = null;
+}
+
+/**
+ * Return the postgres.js client from the same package entry point that getDB()
+ * initialized. Bundled standalone runtimes contain separate root and embedded
+ * storage entry points, so selecting explicitly preserves adapter singleton state.
+ */
+export function getRuntimePostgresClient() {
+  return process.env.DATABASE_URL ? getPostgresClient() : getEmbeddedPostgresClient();
 }

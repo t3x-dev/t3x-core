@@ -24,6 +24,7 @@ import { getEngineCallbackUrl, getEngineUrl, getRunByRunnerRunId } from '../engi
 describe('engine-client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
   });
 
   describe('getEngineUrl', () => {
@@ -113,7 +114,7 @@ describe('engine-client', () => {
       expect(result).toBeNull();
     });
 
-    it('handles null JSON fields', async () => {
+    it('rejects legacy runs without project scope', async () => {
       mockFetchWithRetry.mockResolvedValue({
         ok: true,
         status: 200,
@@ -140,10 +141,7 @@ describe('engine-client', () => {
       });
 
       const result = await getRunByRunnerRunId('runner_empty');
-      expect(result).not.toBeNull();
-      expect(result!.leaf).toBeNull();
-      expect(result!.inputs).toEqual({});
-      expect(result!.workflow).toBeNull();
+      expect(result).toBeNull();
     });
 
     it('re-throws fetch errors', async () => {
@@ -161,7 +159,7 @@ describe('engine-client', () => {
             success: true,
             data: {
               runId: 'run_1',
-              projectId: null,
+              projectId: 'project-1',
               runnerRunId: 'runner_1',
               commitRef: null,
               leafJson: null,
@@ -184,7 +182,10 @@ describe('engine-client', () => {
         expect.stringContaining('/api/v1/runs/by-runner-id/runner_1'),
         expect.objectContaining({
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer runner-test-secret',
+          },
         }),
         expect.objectContaining({ maxRetries: 3 })
       );

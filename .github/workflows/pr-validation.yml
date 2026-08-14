@@ -76,14 +76,28 @@ jobs:
       - name: Lint and format check
         run: pnpm check
 
+      - name: Typecheck production sources
+        run: pnpm typecheck
+
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+
       - name: Check release surface
         run: pnpm check:release-surface
 
       - name: Check Transition boundaries
         run: pnpm check:transition-boundaries
 
+      - name: Check API route policy inventory
+        run: pnpm check:route-policy
+
       - name: Build packages
         run: pnpm build
+
+      - name: Run authenticated security smoke
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:security-smoke
 
       - name: Run tests
         env:

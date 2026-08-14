@@ -38,11 +38,13 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { findConversationById, touchLastUsed } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import { replayEventsSince } from '../lib/event-replay';
+import { evaluateProjectAccess } from '../lib/project-access';
 import { type RoomConnection, roomManager } from '../lib/room-manager';
 import { verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
@@ -78,28 +80,39 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
         if (!principal) {
           return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
         }
-        if (projectId) {
+
+        let authorizedProjectId = projectId;
+        if (conversationId) {
+          const conversation = await findConversationById(db, conversationId);
+          if (!conversation) {
+            return c.json(
+              createError('NOT_FOUND', `Conversation ${conversationId} not found`),
+              404
+            );
+          }
+          if (projectId && conversation.projectId !== projectId) {
+            return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+          }
+          authorizedProjectId = conversation.projectId;
+        }
+
+        if (authorizedProjectId) {
           if (
             principal.principalKind !== 'human' &&
             principal.projectId !== null &&
-            principal.projectId !== projectId
+            principal.projectId !== authorizedProjectId
           ) {
             return c.json(createError('FORBIDDEN', 'Access denied'), 403);
           }
-          const { findProjectById } = await import('@t3x-dev/storage');
-          const project = await findProjectById(db, projectId);
-          if (!project) {
-            return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
-          }
-          if (principal.userId && project.ownerId && project.ownerId !== principal.userId) {
-            return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+          const decision = await evaluateProjectAccess(db, authorizedProjectId, principal);
+          if (!decision.allowed) {
+            return c.json(createError(decision.code, decision.message), decision.status);
           }
         }
         // Fire-and-forget: update last_used_at on the API key.
         // `verifyBearerToken` is intentionally side-effect-free, so we mirror
         // the bookkeeping done by `authMiddleware` here. Errors are swallowed
         // so a DB hiccup during touch doesn't poison the handshake.
-        const { touchLastUsed } = await import('@t3x-dev/storage');
         touchLastUsed(db, principal.keyId).catch(() => {});
       } catch (err) {
         pinoLogger.error({ err }, 'ws auth failed');

@@ -83,6 +83,20 @@ Common deployment variables:
 - `AUTH_DISABLED=false` to keep auth enabled explicitly.
 - `WEBUI_PORT` and `POSTGRES_PORT` to override Docker Compose host ports.
 
+Before saving provider keys or deploy-agent tokens through the API, configure
+`T3X_CREDENTIAL_ENCRYPTION_KEY` as a base64-encoded 32-byte key:
+
+```bash
+openssl rand -base64 32
+```
+
+Keep this key outside the database and its backups. To rotate it, set the new
+value as `T3X_CREDENTIAL_ENCRYPTION_KEY` and keep the old value temporarily in
+the comma-separated `T3X_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS`. Credentials are
+rewrapped with the current key when they are next read. Remove previous keys
+only after all stored credentials have been accessed or replaced. Losing every
+key that matches an existing envelope makes that credential unrecoverable.
+
 Do not commit provider keys, database passwords, or generated local config.
 
 ## Production Caveats

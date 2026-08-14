@@ -253,10 +253,13 @@ Grey-box agent evaluator.
 ```ts
 import { observer, evalEngine } from '@t3x-dev/runner';
 
-observer.registerAgent({ id: 'my-agent', endpoint: '...', type: 'http' });
-const runId = observer.startRun('my-agent', { input: { query: 'hello' } });
-observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
-const trace = observer.completeRun(runId, output, 'completed');
+observer.registerAgent('project-id', { id: 'my-agent', endpoint: '...', type: 'http' });
+const runId = observer.startRun('project-id', 'my-agent', {
+  agent_id: 'my-agent',
+  input: { query: 'hello' },
+});
+observer.recordLLMCall('project-id', runId, prompt, response, 'gpt-4', 500);
+const trace = observer.completeRun('project-id', runId, output, 'completed');
 const result = await evalEngine.evaluate({ trace, test_steps: [...] });
 ```
 

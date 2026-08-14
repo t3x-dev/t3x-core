@@ -138,21 +138,42 @@ function parseArgs(argv) {
   return options;
 }
 
+export function normalizeCommandOutput(output) {
+  return typeof output === 'string' ? output.trim() : '';
+}
+
 function git(args, options = {}) {
-  return execFileSync('git', args, {
-    cwd: rootPath,
-    encoding: 'utf8',
-    stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return normalizeCommandOutput(
+    execFileSync('git', args, {
+      cwd: rootPath,
+      encoding: 'utf8',
+      stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
+    })
+  );
 }
 
 function gh(args, options = {}) {
-  return execFileSync('gh', args, {
-    cwd: rootPath,
-    encoding: 'utf8',
-    env: { ...process.env, ...options.env },
-    stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return normalizeCommandOutput(
+    execFileSync('gh', args, {
+      cwd: rootPath,
+      encoding: 'utf8',
+      env: { ...process.env, ...options.env },
+      stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
+    })
+  );
+}
+
+export function parseLsRemoteHead(output) {
+  const normalized = normalizeCommandOutput(output);
+  if (!normalized) {
+    return null;
+  }
+  return normalized.split('\n')[0]?.split(/\s+/)[0] ?? null;
+}
+
+export function forceWithLeaseArg(branch, remoteHead) {
+  const expected = remoteHead ?? '';
+  return `--force-with-lease=refs/heads/${branch}:${expected}`;
 }
 
 function ensureGitRef(ref) {
@@ -177,6 +198,10 @@ function readChangedFiles(baseRef, headRef) {
     return [];
   }
   return output.split('\n').filter(Boolean).sort();
+}
+
+function readRemoteBranchHead(branch) {
+  return parseLsRemoteHead(git(['ls-remote', '--heads', 'origin', branch]));
 }
 
 function readPackageVersion(packagePath) {
@@ -595,6 +620,18 @@ function renderWarnings(warnings) {
     : '- Release train generated draft; review CI and readiness report before merge.';
 }
 
+export function isReleasePlanNoOp({
+  changesets = [],
+  effectiveChangedFiles = [],
+  firstPublishPackageNames = [],
+} = {}) {
+  return (
+    changesets.length === 0 &&
+    effectiveChangedFiles.length === 0 &&
+    firstPublishPackageNames.length === 0
+  );
+}
+
 export function buildPullRequestBody({
   baseRef,
   changesets,
@@ -695,7 +732,11 @@ function buildPlan(options) {
     mode: options.mode,
     releaseSurface,
   });
-  const noOp = changesets.length === 0 && effectiveChangedFiles.length === 0;
+  const noOp = isReleasePlanNoOp({
+    changesets,
+    effectiveChangedFiles,
+    firstPublishPackageNames,
+  });
   const version = resolveVersion({
     releaseSurface,
     requestedVersion: options.version,
@@ -792,9 +833,18 @@ function applyPlan(options, plan) {
       stdio: 'inherit',
     });
   }
-  git(['push', '--force-with-lease', 'origin', `HEAD:refs/heads/${plan.branch}`], {
-    stdio: 'inherit',
-  });
+  const remoteHead = readRemoteBranchHead(plan.branch);
+  git(
+    [
+      'push',
+      forceWithLeaseArg(plan.branch, remoteHead),
+      'origin',
+      `HEAD:refs/heads/${plan.branch}`,
+    ],
+    {
+      stdio: 'inherit',
+    }
+  );
 
   const tempDir = mkdtempSync(join(tmpdir(), 't3x-release-train-'));
   const bodyFile = join(tempDir, 'release-pr.md');
@@ -892,7 +942,9 @@ function printDryRun(options, plan) {
   if (plan.generatedChangesets.length > 0) {
     console.log(`- git commit generated release train changesets`);
   }
-  console.log(`- git push --force-with-lease origin HEAD:refs/heads/${plan.branch}`);
+  console.log(
+    `- git push --force-with-lease=refs/heads/${plan.branch}:<remote-sha-or-empty> origin HEAD:refs/heads/${plan.branch}`
+  );
   console.log(
     `- gh pr create/edit --base ${options.baseBranch} --head ${plan.branch}${
       options.draft ? ' --draft' : ''

@@ -18,6 +18,7 @@ export {
   closeEmbeddedStorage,
   createEmbeddedStorage,
   type EmbeddedConfig,
+  getEmbeddedPostgresClient,
   getEmbeddedRawClient,
 } from './adapters/embedded';
 // Backup & verification

@@ -21,26 +21,27 @@ export class Observer {
   /**
    * Register an agent for observation
    */
-  registerAgent(config: AgentConfig): void {
-    this.agents.set(config.id, config);
+  registerAgent(projectId: string, config: AgentConfig): void {
+    this.agents.set(this.agentKey(projectId, config.id), config);
   }
 
   /**
    * Get registered agent config
    */
-  getAgent(agentId: string): AgentConfig | undefined {
-    return this.agents.get(agentId);
+  getAgent(projectId: string, agentId: string): AgentConfig | undefined {
+    return this.agents.get(this.agentKey(projectId, agentId));
   }
 
   /**
    * Start a new run
    */
-  startRun(_agentId: string, input: AgentInput): string {
-    const runId = `run_${randomUUID().slice(0, 8)}`;
+  startRun(projectId: string, _agentId: string, input: AgentInput): string {
+    const runId = `run_${randomUUID()}`;
     const now = new Date().toISOString();
 
     const record: RunRecord = {
       run_id: runId,
+      project_id: projectId,
       status: 'running',
       inputs:
         typeof input.input === 'object' && input.input !== null
@@ -63,6 +64,7 @@ export class Observer {
    * Record an LLM call step
    */
   recordLLMCall(
+    projectId: string,
     runId: string,
     input: unknown,
     output: unknown,
@@ -70,14 +72,11 @@ export class Observer {
     latencyMs?: number,
     tokens?: { prompt: number; completion: number }
   ): void {
-    const record = this.runs.get(runId);
-    if (!record) {
-      throw new Error(`Run not found: ${runId}`);
-    }
+    const record = this.projectRun(projectId, runId);
 
     const stepIndex = record.steps.length;
     const step: StepRecord = {
-      step_id: `step_${randomUUID().slice(0, 8)}`,
+      step_id: `step_${randomUUID()}`,
       step_index: stepIndex,
       name: model ? `LLM Call (${model})` : 'LLM Call',
       type: 'llm_call',
@@ -103,20 +102,18 @@ export class Observer {
    * Record a tool call step
    */
   recordToolCall(
+    projectId: string,
     runId: string,
     toolName: string,
     input: unknown,
     output: unknown,
     latencyMs?: number
   ): void {
-    const record = this.runs.get(runId);
-    if (!record) {
-      throw new Error(`Run not found: ${runId}`);
-    }
+    const record = this.projectRun(projectId, runId);
 
     const stepIndex = record.steps.length;
     const step: StepRecord = {
-      step_id: `step_${randomUUID().slice(0, 8)}`,
+      step_id: `step_${randomUUID()}`,
       step_index: stepIndex,
       name: toolName,
       type: 'tool_call',
@@ -138,11 +135,8 @@ export class Observer {
   /**
    * Record an error
    */
-  recordError(runId: string, error: string, stepId?: string): void {
-    const record = this.runs.get(runId);
-    if (!record) {
-      throw new Error(`Run not found: ${runId}`);
-    }
+  recordError(projectId: string, runId: string, error: string, stepId?: string): void {
+    const record = this.projectRun(projectId, runId);
 
     // If stepId provided, mark that step as error
     if (stepId) {
@@ -165,14 +159,12 @@ export class Observer {
    * Complete a run
    */
   completeRun(
+    projectId: string,
     runId: string,
     output: unknown,
     status: 'completed' | 'failed' | 'timeout' = 'completed'
   ): RunRecord {
-    const record = this.runs.get(runId);
-    if (!record) {
-      throw new Error(`Run not found: ${runId}`);
-    }
+    const record = this.projectRun(projectId, runId);
 
     const now = new Date().toISOString();
     record.timing.ended_at = now;
@@ -198,15 +190,16 @@ export class Observer {
   /**
    * Get a run record
    */
-  getRun(runId: string): RunRecord | undefined {
-    return this.runs.get(runId);
+  getRun(projectId: string, runId: string): RunRecord | undefined {
+    const record = this.runs.get(runId);
+    return record?.project_id === projectId ? record : undefined;
   }
 
   /**
    * List all runs (optionally filtered by source system)
    */
-  listRuns(system?: 'n8n' | 'langchain' | 'custom'): RunRecord[] {
-    const runs = Array.from(this.runs.values());
+  listRuns(projectId: string, system?: 'n8n' | 'langchain' | 'custom'): RunRecord[] {
+    const runs = Array.from(this.runs.values()).filter((run) => run.project_id === projectId);
     if (system) {
       return runs.filter((r) => r.source?.system === system);
     }
@@ -238,17 +231,17 @@ export class Observer {
   /**
    * @deprecated Use getRun() instead
    */
-  getTrace(runId: string): RunRecord | undefined {
-    return this.getRun(runId);
+  getTrace(projectId: string, runId: string): RunRecord | undefined {
+    return this.getRun(projectId, runId);
   }
 
   /**
    * @deprecated Use listRuns() instead
    */
-  listTraces(_agentId?: string): RunRecord[] {
+  listTraces(projectId: string, _agentId?: string): RunRecord[] {
     // Note: agentId filtering is no longer supported in RunRecord
     // (agent_id was removed from the schema)
-    return this.listRuns();
+    return this.listRuns(projectId);
   }
 
   /**
@@ -256,6 +249,16 @@ export class Observer {
    */
   clearOldTraces(maxAgeMs?: number): number {
     return this.clearOldRuns(maxAgeMs);
+  }
+
+  private agentKey(projectId: string, agentId: string): string {
+    return `${projectId}\0${agentId}`;
+  }
+
+  private projectRun(projectId: string, runId: string): RunRecord {
+    const record = this.getRun(projectId, runId);
+    if (!record) throw new Error(`Run not found: ${runId}`);
+    return record;
   }
 }
 

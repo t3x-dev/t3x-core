@@ -15,6 +15,10 @@ export const CreateShareLinkRequest = z
       .enum(['leaf', 'run', 'comparison', 'commit'])
       .openapi({ description: 'Type of entity to share' }),
     entity_id: z.string().min(1).openapi({ description: 'ID of the entity to share' }),
+    project_id: z
+      .string()
+      .optional()
+      .openapi({ description: 'Project membership required when a commit hash is ambiguous' }),
   })
   .openapi('CreateShareLinkRequest');
 

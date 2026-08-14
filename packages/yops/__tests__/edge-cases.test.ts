@@ -592,6 +592,32 @@ describe('set — edge cases', () => {
     expect((r.doc as any).items).toEqual(['a', 'B', 'c']);
   });
 
+  it.each([
+    'items/[1]',
+    'items/[3]',
+    'items/[9007199254740991]',
+  ])('rejects sparse sequence write at %s atomically', (path) => {
+    const doc: YValue = { items: ['a'] };
+    const r = applyYOps(doc, [{ set: { path, value: 'B' } }]);
+    expect(r).toMatchObject({
+      ok: false,
+      doc,
+      applied: 0,
+      error: { code: 'INVALID_PATH', op_index: 0 },
+    });
+  });
+
+  it('rejects an out-of-bounds intermediate sequence write atomically', () => {
+    const doc: YValue = { items: [{ name: 'first' }] };
+    const r = applyYOps(doc, [{ set: { path: 'items/[2]/name', value: 'third' } }]);
+    expect(r).toMatchObject({
+      ok: false,
+      doc,
+      applied: 0,
+      error: { code: 'INVALID_PATH', op_index: 0 },
+    });
+  });
+
   // 12. Set value via match path
   it('sets nested value via match path', () => {
     const doc: YValue = {

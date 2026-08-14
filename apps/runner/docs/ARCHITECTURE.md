@@ -200,7 +200,7 @@ apps/runner/
 import { observer } from '@t3x-dev/runner';
 
 // Register Agent
-observer.registerAgent({
+observer.registerAgent('project-id', {
   id: 'my-agent',
   name: 'My Agent',
   endpoint: 'http://localhost:3000/agent',
@@ -208,16 +208,19 @@ observer.registerAgent({
 });
 
 // Start a run
-const runId = observer.startRun('my-agent', { agent_id: 'my-agent', input: { query: 'hello' } });
+const runId = observer.startRun('project-id', 'my-agent', {
+  agent_id: 'my-agent',
+  input: { query: 'hello' },
+});
 
 // Record LLM call
-observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
+observer.recordLLMCall('project-id', runId, prompt, response, 'gpt-4', 500);
 
 // Record tool call
-observer.recordToolCall(runId, 'search', { query: 'test' }, { results: [] }, 100);
+observer.recordToolCall('project-id', runId, 'search', { query: 'test' }, { results: [] }, 100);
 
 // Complete run
-const record = observer.completeRun(runId, output, 'completed');
+const record = observer.completeRun('project-id', runId, output, 'completed');
 ```
 
 **Key Classes**:
@@ -637,6 +640,14 @@ passed = score >= pass_threshold
 | `N8N_WEBHOOK_URL` | `http://n8n:5678/webhook` | n8n Webhook base URL |
 | `ENGINE_CALLBACK_URL` | `{T3X_ENGINE_URL}/api/v1/runs/ingest` | Engine callback URL |
 | `ANTHROPIC_API_KEY` | (none) | Claude API Key (for assertion generation) |
+| `RUNNER_ENDPOINT_ALLOWLIST` | (none) | Comma-separated exact private origins Runner may call, for example `http://127.0.0.1:9000` |
+| `RUNNER_HOST` | `127.0.0.1` | Standalone server bind address. Set explicitly for a trusted container network; keep published host ports loopback-only. |
+| `RUNNER_SERVICE_TOKEN` | (required for business routes) | Random shared credential for the narrow API-to-Runner control plane. The Runner derives per-run HMAC callback capabilities for n8n instead of sharing this token with workflows. |
+
+Agent registration and execution allow public HTTP(S) endpoints by default. Loopback,
+private, link-local, and reserved targets require an exact origin in
+`RUNNER_ENDPOINT_ALLOWLIST`. Runner revalidates the endpoint on every execution and
+does not automatically follow agent redirects.
 
 ---
 

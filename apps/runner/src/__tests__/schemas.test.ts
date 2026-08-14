@@ -217,6 +217,7 @@ describe('schemas', () => {
     it('accepts valid run record', () => {
       const record = {
         run_id: 'run_001',
+        project_id: 'project-a',
         status: 'completed',
         inputs: { query: 'hello' },
         steps: [],
@@ -229,6 +230,7 @@ describe('schemas', () => {
     it('accepts record with all optional fields', () => {
       const record = {
         run_id: 'run_002',
+        project_id: 'project-a',
         status: 'failed',
         inputs: { query: 'hello' },
         output: { error: 'fail' },

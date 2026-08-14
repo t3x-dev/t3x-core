@@ -1,4 +1,6 @@
-import { getEffectiveApiKey, resolveLocalConfigState } from './local-config';
+import { fetchAgentEndpoint } from '@t3x-dev/runner';
+import { getEffectiveApiCredential, getHttpOrigin, resolveLocalConfigState } from './local-config';
+import { isInternalUrlResolved } from './ssrf';
 
 export interface LocalAccessCheckResult {
   ok: boolean;
@@ -6,6 +8,8 @@ export interface LocalAccessCheckResult {
     | 'ACCESS_OK'
     | 'AUTH_NOT_REQUIRED'
     | 'MISSING_API_KEY'
+    | 'CREDENTIAL_ORIGIN_MISMATCH'
+    | 'UNSAFE_API_URL'
     | 'INVALID_API_KEY'
     | 'API_UNREACHABLE'
     | 'API_ERROR';
@@ -21,20 +25,61 @@ function buildStatusUrl(apiUrl: string): string {
   return `${apiUrl.replace(/\/+$/, '')}/v1/status`;
 }
 
+function isCurrentApiLoopbackOrigin(apiUrl: string): boolean {
+  try {
+    const url = new URL(apiUrl);
+    const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const expectedPort = process.env.PORT || '8000';
+    return (
+      url.protocol === 'http:' &&
+      ['localhost', '127.0.0.1', '::1'].includes(hostname) &&
+      (url.port || '80') === expectedPort
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function isUnsafeStatusTarget(apiUrl: string): Promise<boolean> {
+  if (!getHttpOrigin(apiUrl)) return true;
+  if (isCurrentApiLoopbackOrigin(apiUrl)) return false;
+  return isInternalUrlResolved(apiUrl);
+}
+
 async function requestStatus(url: string, apiKey?: string): Promise<Response> {
   const headers = new Headers();
   if (apiKey) headers.set('Authorization', `Bearer ${apiKey}`);
-  return fetch(url, {
-    method: 'GET',
-    headers,
-    signal: AbortSignal.timeout(5000),
-  });
+  const allowlist = isCurrentApiLoopbackOrigin(url) ? new URL(url).origin : undefined;
+  return fetchAgentEndpoint(
+    url,
+    {
+      method: 'GET',
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(5000),
+    },
+    { allowlist }
+  );
 }
 
 export async function checkLocalAccess(): Promise<LocalAccessCheckResult> {
   const state = resolveLocalConfigState();
-  const apiKey = getEffectiveApiKey();
+  const credential = getEffectiveApiCredential();
   const statusUrl = buildStatusUrl(state.api_url);
+
+  if (await isUnsafeStatusTarget(state.api_url)) {
+    return {
+      ok: false,
+      code: 'UNSAFE_API_URL',
+      auth_mode: 'unreachable',
+      message:
+        'The target API URL resolves to a private or reserved address outside the current local API origin.',
+      api_url: state.api_url,
+      api_key_present: state.api_key_present,
+      api_key_source: state.api_key_source,
+      status_code: null,
+    };
+  }
 
   let probeResponse: Response;
   try {
@@ -81,7 +126,7 @@ export async function checkLocalAccess(): Promise<LocalAccessCheckResult> {
     };
   }
 
-  if (!apiKey) {
+  if (!credential.apiKey) {
     return {
       ok: false,
       code: 'MISSING_API_KEY',
@@ -94,8 +139,23 @@ export async function checkLocalAccess(): Promise<LocalAccessCheckResult> {
     };
   }
 
+  const targetOrigin = getHttpOrigin(state.api_url);
+  if (!targetOrigin || targetOrigin !== credential.trustedOrigin) {
+    return {
+      ok: false,
+      code: 'CREDENTIAL_ORIGIN_MISMATCH',
+      auth_mode: 'protected',
+      message:
+        'The configured key is bound to a different API origin. Save the key again for this API URL before retrying.',
+      api_url: state.api_url,
+      api_key_present: state.api_key_present,
+      api_key_source: state.api_key_source,
+      status_code: probeResponse.status,
+    };
+  }
+
   try {
-    const authResponse = await requestStatus(statusUrl, apiKey);
+    const authResponse = await requestStatus(statusUrl, credential.apiKey);
     if (authResponse.ok) {
       return {
         ok: true,

@@ -8,9 +8,9 @@
  * This is what makes MCP / CLI / future workers' writes propagate to WebUI
  * without those processes knowing anything about WebSocket.
  */
-import { getPostgresClient } from '@t3x-dev/storage';
 import type postgres from 'postgres';
 import { pinoLogger } from '../middleware/logger';
+import { getRuntimePostgresClient } from './db';
 import { eventBus, type RealtimeEvent, type RealtimeEventType } from './event-bus';
 
 export interface FetchedEvent {
@@ -79,7 +79,7 @@ export async function stopRealtimeListener(): Promise<void> {
  *   });
  */
 export async function defaultFetchEventById(id: bigint): Promise<FetchedEvent | null> {
-  const client = getPostgresClient();
+  const client = getRuntimePostgresClient();
   // Use raw postgres.js to sidestep drizzle-orm type resolution across package boundaries.
   // Schema must stay in sync with packages/storage/src/schema-events.ts
   const rows = await client<

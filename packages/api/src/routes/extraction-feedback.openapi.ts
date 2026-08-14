@@ -12,6 +12,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getAdaptiveFeedbackStats } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const extractionFeedbackRoutes = new OpenAPIHono({
@@ -80,6 +81,8 @@ extractionFeedbackRoutes.openapi(feedbackStatsRoute, async (c) => {
   try {
     const { projectId } = c.req.valid('param');
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
     const stats = await getAdaptiveFeedbackStats(db, projectId);
 
     // Map camelCase internal format to snake_case API format

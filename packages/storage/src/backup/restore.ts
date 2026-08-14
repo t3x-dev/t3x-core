@@ -26,6 +26,11 @@ export interface RestoreResult {
   errors: RestoreError[];
 }
 
+export interface RestoreOptions {
+  /** Owner assigned to the newly-created project. Omit for local/public restores. */
+  ownerId?: string;
+}
+
 /**
  * Restore a cfpack archive into the database.
  *
@@ -35,10 +40,15 @@ export interface RestoreResult {
  * Fix 10: Import errors are now collected in `result.errors` instead of being
  * silently swallowed. All items are still attempted (best-effort restore).
  */
-export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<RestoreResult> {
+export async function restoreFromCfpack(
+  db: AnyDB,
+  cfpack: CfpackData,
+  options: RestoreOptions = {}
+): Promise<RestoreResult> {
   // Create new project (generates new project ID)
   const project = await insertProject(db, {
     name: cfpack.project.name,
+    ownerId: options.ownerId,
   });
 
   const newProjectId = project.projectId;

@@ -10,6 +10,7 @@
  */
 
 import type { CommitAuthor } from '@t3x-dev/core';
+import { findUserById } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { getDB } from './db';
 
@@ -26,7 +27,6 @@ export async function getAuthorFromContext(
   const userId = c.get('userId') as string | undefined;
 
   if (userId) {
-    const { findUserById } = await import('@t3x-dev/storage');
     const db = await getDB();
     const user = await findUserById(db, userId);
     return {

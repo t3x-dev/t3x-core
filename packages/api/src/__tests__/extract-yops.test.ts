@@ -24,11 +24,23 @@ vi.mock('undici', () => ({
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
+const { findTurnsByHashes, requestTurns } = vi.hoisted(() => ({
+  findTurnsByHashes: vi.fn(),
+  requestTurns: { current: [] as Array<{ turn_hash: string; role?: string; content: string }> },
+}));
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
 }));
+
+vi.mock('@t3x-dev/storage', async () => {
+  const actual = await vi.importActual<typeof import('@t3x-dev/storage')>('@t3x-dev/storage');
+  return {
+    ...actual,
+    findTurnsByHashes,
+  };
+});
 
 // Import routes after mocking
 import { resetProviderRegistry } from '../lib/provider-registry';
@@ -36,6 +48,14 @@ import { extractYopsRoutes } from '../routes/extract-yops.openapi';
 
 const app = new Hono();
 app.route('/', extractYopsRoutes);
+const rawAppRequest = app.request.bind(app);
+app.request = ((input: RequestInfo | URL, init?: RequestInit) => {
+  if (typeof input === 'string' && input === '/v1/extract-yops' && typeof init?.body === 'string') {
+    const body = JSON.parse(init.body) as { turns?: typeof requestTurns.current };
+    requestTurns.current = body.turns ?? [];
+  }
+  return rawAppRequest(input, init);
+}) as typeof app.request;
 const originalEnv = { ...process.env };
 const envKeys = [
   'ANTHROPIC_API_KEY',
@@ -106,6 +126,20 @@ describe('POST /v1/extract-yops', () => {
   beforeEach(async () => {
     resetProviderRegistry();
     vi.restoreAllMocks();
+    findTurnsByHashes.mockImplementation(
+      async (
+        _db: unknown,
+        input: { turnHashes: readonly string[] }
+      ): Promise<Array<{ turnHash: string; role: string; content: string }>> =>
+        input.turnHashes.map((hash) => {
+          const requested = requestTurns.current.find((turn) => turn.turn_hash === hash);
+          return {
+            turnHash: hash,
+            role: requested?.role ?? 'user',
+            content: requested?.content ?? '',
+          };
+        })
+    );
     for (const key of envKeys) {
       delete process.env[key];
     }

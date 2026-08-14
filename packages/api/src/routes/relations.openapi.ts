@@ -10,7 +10,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertRepositoryCommitAccess } from '../lib/project-access';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -37,7 +37,10 @@ const getRelationsRoute = createRoute({
   path: '/v1/commits/{hash}/relations',
   tags: ['Relations'],
   summary: 'Get relations for a commit (read from content.relations)',
-  request: { params: CommitHashParam },
+  request: {
+    params: CommitHashParam,
+    query: z.object({ project_id: z.string().optional() }),
+  },
   responses: {
     200: {
       description: 'Relations found',
@@ -59,16 +62,17 @@ const getRelationsRoute = createRoute({
 
 relationsRoutes.openapi(getRelationsRoute, async (c) => {
   const { hash } = c.req.valid('param');
+  const { project_id } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await getRepositorySemanticCommit(db, decodedHash);
+    const projectId = await assertRepositoryCommitAccess(c, db, decodedHash, project_id);
+    if (projectId instanceof Response) return projectId;
+
+    const commit = await getRepositorySemanticCommit(db, decodedHash, projectId);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
-    // Verify project ownership
-    const accessResult = await assertProjectAccess(c, db, commit.projectId);
-    if (accessResult instanceof Response) return accessResult;
     const relations = commit.semanticContent.relations;
     return c.json({ success: true as const, data: { relations } }, 200);
   } catch (err) {

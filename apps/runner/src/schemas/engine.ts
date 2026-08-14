@@ -5,6 +5,7 @@ import { z } from 'zod';
  */
 export const EngineRunRequestSchema = z.object({
   run_id: z.string(),
+  project_id: z.string().min(1),
   commit_ref: z.string().optional(),
   leaf: z
     .object({

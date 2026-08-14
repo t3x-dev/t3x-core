@@ -5,10 +5,12 @@
  * so consumers (apps/api thin launcher, t3x_cloud) can import from '@t3x-dev/api'.
  */
 
+// Standalone runtime database maintenance.
+export { cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
 export { createApp } from './app';
 // Database
-export { closeDB, getDB } from './lib/db';
+export { closeDB, getDB, getRuntimePostgresClient } from './lib/db';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
 // Background tasks

@@ -3,9 +3,10 @@
  *
  * CRUD operations for reusable prompt templates.
  */
-import { and, desc, eq, ilike, inArray, lt, or } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, asc, desc, eq, ilike, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type Template, templates } from '../schema';
+import { type Template, templateAuditLog, templates } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
@@ -34,6 +35,20 @@ export interface CreateTemplateInput {
     value: string;
   }>;
   semantic_threshold?: { require: number; exclude: number };
+  owner_id?: string | null;
+  provenance?: TemplateProvenance;
+  audit_actor?: TemplateAuditActor;
+}
+
+export interface TemplateProvenance {
+  source: 'builtin' | 'human' | 'local' | 'legacy';
+  actor_kind: 'human' | 'system' | 'local';
+  actor_id: string;
+}
+
+export interface TemplateAuditActor {
+  kind: 'human' | 'system' | 'local';
+  id: string;
 }
 
 export interface ListTemplatesOptions {
@@ -56,26 +71,51 @@ export interface ListTemplatesOptions {
  */
 export async function createTemplate(db: AnyDB, input: CreateTemplateInput) {
   const now = new Date();
-  const [row] = await db
-    .insert(templates)
-    .values({
-      templateId: input.template_id,
-      title: input.title,
-      description: input.description,
-      category: input.category,
-      leafType: input.leaf_type,
-      systemPrompt: input.system_prompt,
-      userPrompt: input.user_prompt,
-      variables: input.variables,
-      tags: input.tags ?? [],
-      isBuiltin: input.is_builtin ?? false,
-      defaultConstraints: input.default_constraints ?? [],
-      semanticThreshold: input.semantic_threshold ?? null,
+  const actor = input.audit_actor ?? { kind: 'system' as const, id: 'storage-api' };
+  const provenance =
+    input.provenance ??
+    ({
+      source: input.is_builtin ? 'builtin' : 'legacy',
+      actor_kind: actor.kind,
+      actor_id: actor.id,
+    } satisfies TemplateProvenance);
+
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(templates)
+      .values({
+        templateId: input.template_id,
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        leafType: input.leaf_type,
+        systemPrompt: input.system_prompt,
+        userPrompt: input.user_prompt,
+        variables: input.variables,
+        tags: input.tags ?? [],
+        isBuiltin: input.is_builtin ?? false,
+        ownerId: input.owner_id ?? null,
+        provenance,
+        defaultConstraints: input.default_constraints ?? [],
+        semanticThreshold: input.semantic_threshold ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    await tx.insert(templateAuditLog).values({
+      auditId: `tma_${randomUUID().replaceAll('-', '')}`,
+      templateId: row.templateId,
+      action: 'create',
+      actorKind: actor.kind,
+      actorId: actor.id,
+      ownerId: row.ownerId,
+      provenance: row.provenance,
+      snapshot: row,
       createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
-  return row;
+    });
+    return row;
+  });
 }
 
 /**
@@ -167,7 +207,37 @@ export async function listTemplates(
 /**
  * Delete a template by ID. Returns true if a row was deleted.
  */
-export async function deleteTemplate(db: AnyDB, templateId: string): Promise<boolean> {
-  const result = await db.delete(templates).where(eq(templates.templateId, templateId)).returning();
-  return result.length > 0;
+export async function deleteTemplate(
+  db: AnyDB,
+  templateId: string,
+  auditActor: TemplateAuditActor = { kind: 'system', id: 'storage-api' }
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(templates)
+      .where(eq(templates.templateId, templateId))
+      .returning();
+    if (!row) return false;
+
+    await tx.insert(templateAuditLog).values({
+      auditId: `tma_${randomUUID().replaceAll('-', '')}`,
+      templateId: row.templateId,
+      action: 'delete',
+      actorKind: auditActor.kind,
+      actorId: auditActor.id,
+      ownerId: row.ownerId,
+      provenance: row.provenance,
+      snapshot: row,
+      createdAt: new Date(),
+    });
+    return true;
+  });
+}
+
+export async function listTemplateAudit(db: AnyDB, templateId: string) {
+  return db
+    .select()
+    .from(templateAuditLog)
+    .where(eq(templateAuditLog.templateId, templateId))
+    .orderBy(asc(templateAuditLog.createdAt), asc(templateAuditLog.auditId));
 }

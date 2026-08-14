@@ -301,6 +301,45 @@ function sortRecordValues(values: Record<string, unknown>): Record<string, YValu
   );
 }
 
+function collectCandidateText(value: unknown, out: string[]): void {
+  if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) {
+    out.push(String(value));
+  } else if (Array.isArray(value)) {
+    value.forEach((entry) => collectCandidateText(entry, out));
+  } else if (value && typeof value === 'object') {
+    Object.values(value).forEach((entry) => collectCandidateText(entry, out));
+  }
+}
+
+function evidenceSupportScore(evidence: DraftEvidence, values: readonly string[]): number {
+  const quote = evidence.quote.normalize('NFKC').toLowerCase();
+  let score = 0;
+  for (const value of values) {
+    const normalized = value.normalize('NFKC').toLowerCase();
+    if (normalized && quote.includes(normalized)) score += 2;
+    for (const token of normalized.match(/[a-z0-9]{3,}/g) ?? []) {
+      if (quote.includes(token)) score += 1;
+    }
+  }
+  return score;
+}
+
+function selectSourceEvidence(item: ExtractionDraftItem): DraftEvidence | undefined {
+  const primary = item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
+  if (!primary || item.evidence.length === 1) return primary;
+
+  const values: string[] = [];
+  collectCandidateText(item.candidate.value, values);
+  collectCandidateText(item.candidate.values, values);
+  collectCandidateText(item.candidate.children, values);
+
+  return item.evidence.reduce(
+    (best, evidence) =>
+      evidenceSupportScore(evidence, values) > evidenceSupportScore(best, values) ? evidence : best,
+    primary
+  );
+}
+
 function buildSource(
   evidence: DraftEvidence,
   input: Pick<CompileInput, 'sourceModel' | 'extractedAt' | 'turnHashByTag'>
@@ -414,6 +453,19 @@ function synthesizeAddPath(item: ExtractionDraftItem): string {
   return slug.length > 0 ? slug : 'item';
 }
 
+const GENERIC_ADD_PATHS = new Set(['root', 'roots', 'items', 'data', 'content', 'facts']);
+
+function concreteAddPathOverride(item: ExtractionDraftItem): string | null {
+  const pathHint = normalizeCreatePath(item.candidate.path_hint);
+  if (pathHint.kind !== 'ok' || !GENERIC_ADD_PATHS.has(pathHint.path)) return null;
+
+  const targetPath = normalizeCreatePath(item.target_ref?.path);
+  const candidateKey = normalizeCreatePath(item.candidate.key);
+  if (targetPath.kind !== 'ok' || candidateKey.kind !== 'ok') return null;
+  if (targetPath.path.includes('/') || GENERIC_ADD_PATHS.has(targetPath.path)) return null;
+  return candidateKey.path === targetPath.path ? targetPath.path : null;
+}
+
 function getTargetSlot(item: ExtractionDraftItem): string | null {
   if (item.candidate.slot) {
     return item.candidate.slot;
@@ -515,9 +567,15 @@ function compileItem(
   input: CompileInput,
   baselineIndex: BaselineIndex
 ): CompileResult {
-  const primaryEvidence =
-    item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
-  const source = buildSource(primaryEvidence, input);
+  const sourceEvidence = selectSourceEvidence(item);
+  if (!sourceEvidence) {
+    return {
+      ok: false,
+      failure: createExtractionFailure('provenance', `Missing evidence on item ${item.id}`),
+      warnings: [],
+    };
+  }
+  const source = buildSource(sourceEvidence, input);
   if ('code' in source) {
     return { ok: false, failure: source, warnings: [] };
   }
@@ -560,40 +618,44 @@ function compileItem(
       );
     }
 
-    const resolved = resolvePathFromCandidates(item.id, addCandidates, {
-      normalizer: normalizeCreatePath,
-    });
-    if (resolved.kind === 'invalid') {
-      return { ok: false, failure: resolved.failure, warnings };
-    }
-
     let path: string;
-    if (resolved.kind === 'ok') {
-      path = resolved.path;
-    } else {
-      // F8a: synthesize a deterministic path when the model omitted every
-      // path source instead of hard-failing compile. The slug regex in
-      // `synthesizeAddPath` already produces SNAKE_CASE_KEY-safe output;
-      // we still funnel through `normalizePath` for symmetry. The
-      // synthesised slug should always be `ok`; if it weren't, we'd
-      // rather hard-fail than ship a bad path.
-      const synthesized = synthesizeAddPath(item);
-      const synthResult = normalizePath(synthesized);
-      if (synthResult.kind !== 'ok') {
-        return {
-          ok: false,
-          failure: createExtractionFailure(
-            'compile',
-            `Could not derive a valid path for add item ${item.id} (synthesised "${synthesized}")`,
-            { details: { item_id: item.id, synthesized } }
-          ),
-          warnings,
-        };
-      }
-      path = synthResult.path;
+    const concreteOverride = concreteAddPathOverride(item);
+    if (concreteOverride) {
+      path = concreteOverride;
       warnings.push(
-        `Synthesized path "${path}" for add intent (item ${item.id}) lacking candidate.key and path_hint`
+        `Replaced generic candidate.path_hint with agreeing target_ref.path and candidate.key "${path}" (item ${item.id})`
       );
+    } else {
+      const resolved = resolvePathFromCandidates(item.id, addCandidates, {
+        normalizer: normalizeCreatePath,
+      });
+      if (resolved.kind === 'invalid') {
+        return { ok: false, failure: resolved.failure, warnings };
+      }
+
+      if (resolved.kind === 'ok') {
+        path = resolved.path;
+      } else {
+        // F8a: synthesize a deterministic path when the model omitted every
+        // path source instead of hard-failing compile.
+        const synthesized = synthesizeAddPath(item);
+        const synthResult = normalizePath(synthesized);
+        if (synthResult.kind !== 'ok') {
+          return {
+            ok: false,
+            failure: createExtractionFailure(
+              'compile',
+              `Could not derive a valid path for add item ${item.id} (synthesised "${synthesized}")`,
+              { details: { item_id: item.id, synthesized } }
+            ),
+            warnings,
+          };
+        }
+        path = synthResult.path;
+        warnings.push(
+          `Synthesized path "${path}" for add intent (item ${item.id}) lacking candidate.key and path_hint`
+        );
+      }
     }
 
     if (promotedFrom) {

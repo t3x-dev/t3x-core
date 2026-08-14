@@ -2,6 +2,7 @@ import type { LLMPrompt, LLMProvider } from '../../llm/types';
 import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { serializeForPrompt } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
+import { applyYOps } from '../../t3x-yops/engine';
 import {
   type FailingOp,
   normalizeOpTurnHashes,
@@ -29,7 +30,18 @@ import {
 import type { CompiledMutationPlan, ExtractionDraft, ExtractionMode } from './types';
 
 export interface ExtractionV2PipelineInput {
+  /**
+   * Turns shown to the model. API callers may pass a selected verbatim
+   * substring here to keep the prompt focused; source verification can
+   * still bind to the full stored turn via `sourceTurns`.
+   */
   turns: PromptTurnInput[];
+  /**
+   * Authoritative turns used for source quote validation. When omitted,
+   * validation falls back to `turns` for backwards-compatible direct
+   * core callers.
+   */
+  sourceTurns?: PromptTurnInput[];
   mode: ExtractionMode;
   providerId: string;
   provider: Pick<LLMProvider, 'generate' | 'generateFromPrompt' | 'generateStructured'>;
@@ -54,7 +66,7 @@ export type ExtractionV2PipelineResult =
       ok: true;
       draft: ExtractionDraft;
       compiled: CompiledMutationPlan;
-      variants?: Record<PresetName, CompiledMutationPlan>;
+      variants?: Partial<Record<PresetName, CompiledMutationPlan>>;
       turnHashByTag: Record<string, string>;
     }
   | {
@@ -148,6 +160,11 @@ function selectionWarningLine(droppedIds: string[], maxItems: number, totalItems
 }
 
 const PRESET_PREFIX = 'Extraction style cap: ';
+const PROVIDER_DRAFT_WARNING_PREFIX = 'Provider warning: ';
+
+function providerWarningLine(message: string): string {
+  return `${PROVIDER_DRAFT_WARNING_PREFIX}${message}`;
+}
 
 /**
  * Granularity-specific guidance prepended to the system prompt's quality
@@ -351,8 +368,10 @@ function compilePlanForStyle(input: {
   model: string;
   extractedAt?: string;
   turns: readonly PromptTurnInput[];
+  sourceTurns?: readonly PromptTurnInput[];
   turnHashByTag: Record<string, string>;
   modeWarnings: string[];
+  draftWarnings: string[];
 }):
   | { ok: true; draft: ExtractionDraft; compiled: CompiledMutationPlan }
   | { ok: false; failure: ExtractionFailure } {
@@ -374,9 +393,18 @@ function compilePlanForStyle(input: {
 
   const plan: CompiledMutationPlan = {
     ops: compiled.ops,
-    warnings: [...input.modeWarnings, ...selectionWarnings, ...compiled.warnings],
+    warnings: [
+      ...input.modeWarnings,
+      ...input.draftWarnings.map(providerWarningLine),
+      ...selectionWarnings,
+      ...compiled.warnings,
+    ],
   };
-  const validation = validateCompiledPlanSources(plan, input.turns, input.turnHashByTag);
+  const validation = validateCompiledPlanSources(
+    plan,
+    input.sourceTurns ?? input.turns,
+    input.turnHashByTag
+  );
   if (!validation.ok) return validation;
 
   return { ok: true, draft: selection.draft, compiled: plan };
@@ -388,22 +416,39 @@ function buildPresetVariants(input: {
   model: string;
   extractedAt?: string;
   turns: readonly PromptTurnInput[];
+  sourceTurns?: readonly PromptTurnInput[];
   turnHashByTag: Record<string, string>;
   modeWarnings: string[];
-}): Record<PresetName, CompiledMutationPlan> | undefined {
-  const variants = {} as Record<PresetName, CompiledMutationPlan>;
+  draftWarnings: string[];
+}): { variants: Partial<Record<PresetName, CompiledMutationPlan>>; warnings: string[] } {
+  const variants: Partial<Record<PresetName, CompiledMutationPlan>> = {};
+  const warnings: string[] = [];
   const presetNames: PresetName[] = ['concise', 'balanced', 'detailed'];
+  const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
 
   for (const name of presetNames) {
     const compiled = compilePlanForStyle({
       ...input,
       style: PRESETS[name],
     });
-    if (!compiled.ok) return undefined;
+    if (!compiled.ok) {
+      const warning = `Extraction variant "${name}" rejected at ${compiled.failure.code}: ${compiled.failure.message}`;
+      warnings.push(warning);
+      continue;
+    }
+
+    const replay = applyYOps(baseSnapshot, compiled.compiled.ops);
+    if (!replay.ok) {
+      const message = replay.error?.message ?? 'Variant failed Replay';
+      const warning = `Extraction variant "${name}" rejected at executable_structure: ${message}`;
+      warnings.push(warning);
+      continue;
+    }
+
     variants[name] = compiled.compiled;
   }
 
-  return variants;
+  return { variants, warnings };
 }
 
 /**
@@ -749,6 +794,7 @@ export async function runExtractionV2Pipeline(
   input: ExtractionV2PipelineInput
 ): Promise<ExtractionV2PipelineResult> {
   const { taggedTurns, turnHashByTag } = buildPromptTurnMap(input.turns);
+  const sourceTurns = input.sourceTurns ?? input.turns;
   const requestedPreset = input.style ? matchPreset(input.style) : null;
   const generationStyle = requestedPreset ? PRESETS.detailed : input.style;
   const basePrompt = buildDraftPrompt({
@@ -804,6 +850,7 @@ export async function runExtractionV2Pipeline(
       selection.droppedIds.length > 0 && input.style?.max_items !== undefined
         ? [selectionWarningLine(selection.droppedIds, input.style.max_items, totalItemsFromModel)]
         : [];
+    const draftWarnings = authoritativeDraft.warnings ?? [];
 
     const compiled = compileExtractionDraft({
       draft: selection.draft,
@@ -856,9 +903,10 @@ export async function runExtractionV2Pipeline(
           // its own validation pass; reask budget is already spent,
           // so failure here is terminal (no further retries).
           const partialOps = partial.ops as SourcedYOp[];
-          normalizeOpTurnHashes(partialOps, validationTurnsFor(input.turns));
-          repairOpQuotes(partialOps, validationTurnsFor(input.turns));
-          const partialSourceCheck = validateSource(partialOps, validationTurnsFor(input.turns));
+          const partialValidationTurns = validationTurnsFor(sourceTurns);
+          normalizeOpTurnHashes(partialOps, partialValidationTurns);
+          repairOpQuotes(partialOps, partialValidationTurns);
+          const partialSourceCheck = validateSource(partialOps, partialValidationTurns);
           if (!partialSourceCheck.ok) {
             return {
               ok: false,
@@ -873,6 +921,7 @@ export async function runExtractionV2Pipeline(
               ops: partial.ops,
               warnings: [
                 ...modeWarnings,
+                ...draftWarnings.map(providerWarningLine),
                 ...selectionWarnings,
                 `Partial compile after reask exhaustion: ${compiled.failure.message}`,
                 ...partial.warnings,
@@ -904,7 +953,7 @@ export async function runExtractionV2Pipeline(
     // Mutates ops in place: hash-prefix expansion + deterministic quote
     // repair (markdown / smart-quote / punct / case+whitespace variants).
     // Quotes that can't be repaired stay untouched and fail validation.
-    const sourceCheck = validateCompiledPlanSources(compiled, input.turns, turnHashByTag);
+    const sourceCheck = validateCompiledPlanSources(compiled, sourceTurns, turnHashByTag);
 
     if (!sourceCheck.ok) {
       // Same retry shape as compile/provenance failures: budget aware,
@@ -921,16 +970,17 @@ export async function runExtractionV2Pipeline(
         turnHashByTag,
       };
     }
-
-    const variants = requestedPreset
+    const variantResult = requestedPreset
       ? buildPresetVariants({
           draft: authoritativeDraft,
           snapshot: input.snapshot,
           model: input.model,
           extractedAt,
           turns: input.turns,
+          sourceTurns,
           turnHashByTag,
           modeWarnings,
+          draftWarnings,
         })
       : undefined;
 
@@ -941,9 +991,15 @@ export async function runExtractionV2Pipeline(
         ops: compiled.ops,
         // Selection warnings precede compile warnings so a reader
         // sees the cap action before any downstream notes.
-        warnings: [...modeWarnings, ...selectionWarnings, ...compiled.warnings],
+        warnings: [
+          ...modeWarnings,
+          ...draftWarnings.map(providerWarningLine),
+          ...selectionWarnings,
+          ...compiled.warnings,
+          ...(variantResult?.warnings ?? []),
+        ],
       },
-      ...(variants ? { variants } : {}),
+      ...(variantResult ? { variants: variantResult.variants } : {}),
       turnHashByTag,
     };
   }

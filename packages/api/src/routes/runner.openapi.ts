@@ -13,23 +13,69 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  AgentConfigSchema,
-  AgentInputSchema,
-  DEFAULT_RULES,
-  type EvalRules,
   EvalRulesSchema,
-  evalEngine,
-  observer,
-  parseRulesFromLeaf,
+  ProjectScopedAgentConfigSchema,
+  ProjectScopedAgentInputSchema,
   RuleSchema,
-  type RunRecord,
   RunRecordSchema,
 } from '@t3x-dev/runner';
+import type { Context } from 'hono';
+import { getDB } from '../lib/db';
 import { errorJson, formatZodErrors, successJson, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
+import { runnerServiceToken } from '../lib/runner-service-auth';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const runnerRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
+
+function runnerProxyError(code: string, message: string, status: 502 | 503): Response {
+  return Response.json({ success: false, error: { code, message } }, { status });
+}
+
+async function authorizeRunnerProject(c: Context, projectId: unknown): Promise<Response | null> {
+  if (typeof projectId !== 'string' || !projectId) {
+    return errorJson(c, 'INVALID_REQUEST', 'project_id is required', 400);
+  }
+  const access = await assertProjectAccess(c, await getDB(), projectId);
+  return access instanceof Response ? access : null;
+}
+
+async function forwardRunner(
+  _c: Context,
+  path: string,
+  init?: { method?: string; body?: unknown }
+): Promise<Response> {
+  const token = runnerServiceToken();
+  if (!token) {
+    return runnerProxyError(
+      'SERVICE_AUTH_NOT_CONFIGURED',
+      'RUNNER_SERVICE_TOKEN is not configured',
+      503
+    );
+  }
+
+  try {
+    const response = await fetch(RUNNER_URL + path, {
+      method: init?.method ?? 'GET',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(init?.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      signal: AbortSignal.timeout(120000),
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: { 'Content-Type': response.headers.get('Content-Type') ?? 'application/json' },
+    });
+  } catch (error) {
+    pinoLogger.error({ err: error, path }, 'Runner proxy request failed');
+    return runnerProxyError('RUNNER_UNAVAILABLE', 'Runner service is unavailable', 502);
+  }
+}
 
 // ============================================
 // Local Schemas
@@ -37,6 +83,7 @@ export const runnerRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
 // Request schema for /runner/eval
 const EvalRequestSchema = z.object({
+  project_id: z.string(),
   // Option 1: Provide run_id to fetch from observer
   run_id: z.string().optional(),
   // Option 2: Provide run_record directly
@@ -44,6 +91,22 @@ const EvalRequestSchema = z.object({
   // Rules: inline rules or reference to rules file
   rules: EvalRulesSchema.optional(),
   rules_ref: z.string().optional(),
+});
+
+const RunEventSchema = z.object({
+  type: z.enum(['llm_call', 'tool_call', 'error']),
+  data: z.record(z.string(), z.unknown()),
+});
+
+const WebhookRunRequestSchema = ProjectScopedAgentInputSchema.extend({
+  auto_eval: z.boolean().optional(),
+  rules: EvalRulesSchema.optional(),
+  rules_ref: z.string().optional(),
+});
+
+const ValidateRulesRequestSchema = z.object({
+  rules: z.array(z.unknown()).optional(),
+  test_steps: z.array(z.unknown()).optional(),
 });
 
 const hasZodIssues = (
@@ -65,6 +128,19 @@ const errorMessage = (error: unknown): string => {
 // Route Definitions
 // ============================================
 
+const runnerHealthRoute = createRoute({
+  method: 'get',
+  path: '/runner/health',
+  tags: ['Runner'],
+  summary: 'Check Runner service health through the API boundary',
+  responses: {
+    200: {
+      description: 'Runner health',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+  },
+});
+
 const registerAgentRoute = createRoute({
   method: 'post',
   path: '/runner/agents',
@@ -72,7 +148,7 @@ const registerAgentRoute = createRoute({
   summary: 'Register an agent',
   request: {
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: ProjectScopedAgentConfigSchema } },
       required: true,
     },
   },
@@ -103,6 +179,7 @@ const getAgentRoute = createRoute({
   summary: 'Get agent config',
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({ project_id: z.string() }),
   },
   responses: {
     200: {
@@ -132,7 +209,7 @@ const executeRunRoute = createRoute({
   description: 'Receives input, forwards to agent, captures I/O',
   request: {
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: ProjectScopedAgentInputSchema } },
       required: true,
     },
   },
@@ -180,8 +257,9 @@ const addRunEventRoute = createRoute({
   description: 'For SDK integration — agent reports events directly',
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({ project_id: z.string() }),
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: RunEventSchema } },
       required: true,
     },
   },
@@ -212,6 +290,7 @@ const getRunRoute = createRoute({
   summary: 'Get run record',
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({ project_id: z.string() }),
   },
   responses: {
     200: {
@@ -238,6 +317,12 @@ const listRunsRoute = createRoute({
   path: '/runner/runs',
   tags: ['Runner'],
   summary: 'List runs',
+  request: {
+    query: z.object({
+      project_id: z.string(),
+      system: z.enum(['n8n', 'langchain', 'custom']).optional(),
+    }),
+  },
   responses: {
     200: {
       description: 'List of runs',
@@ -258,7 +343,7 @@ const evalRoute = createRoute({
   description: 'v2.0: Uses RunRecord + EvalRules instead of legacy TestStep format',
   request: {
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: EvalRequestSchema } },
       required: true,
     },
   },
@@ -298,7 +383,7 @@ const validateRulesRoute = createRoute({
   description: 'v2.0: Validates Rule objects instead of legacy TestStep format',
   request: {
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: ValidateRulesRequestSchema } },
       required: true,
     },
   },
@@ -330,7 +415,7 @@ const webhookRunRoute = createRoute({
   description: 'v2.0: Uses EvalRules instead of legacy TestStep format',
   request: {
     body: {
-      content: { 'application/json': { schema: z.any() } },
+      content: { 'application/json': { schema: WebhookRunRequestSchema } },
       required: true,
     },
   },
@@ -358,16 +443,18 @@ const webhookRunRoute = createRoute({
 // Route Handlers
 // ============================================
 
+runnerRoutes.openapi(runnerHealthRoute, (c: any): any => forwardRunner(c, '/health'));
+
 /**
  * POST /runner/agents - Register an agent
  */
 runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
-    const config = AgentConfigSchema.parse(body);
-    observer.registerAgent(config);
-    pinoLogger.info({ agent_id: config.id }, 'agent registered');
-    return successJson(c, { agent_id: config.id });
+    const config = ProjectScopedAgentConfigSchema.parse(body);
+    const accessError = await authorizeRunnerProject(c, config.project_id);
+    if (accessError) return accessError;
+    return forwardRunner(c, '/agents', { method: 'POST', body: config });
   } catch (error) {
     return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
@@ -377,11 +464,18 @@ runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
  * GET /runner/agents/:id - Get agent config
  */
 runnerRoutes.openapi(getAgentRoute, (c: any): any => {
-  const agent = observer.getAgent(c.req.param('id'));
-  if (!agent) {
-    return errorJson(c, 'NOT_FOUND', 'Agent not found', 404);
-  }
-  return successJson(c, agent);
+  return (async () => {
+    const projectId = c.req.valid('query').project_id;
+    const accessError = await authorizeRunnerProject(c, projectId);
+    if (accessError) return accessError;
+    return forwardRunner(
+      c,
+      '/agents/' +
+        encodeURIComponent(c.req.param('id')) +
+        '?project_id=' +
+        encodeURIComponent(projectId)
+    );
+  })();
 });
 
 /**
@@ -390,55 +484,10 @@ runnerRoutes.openapi(getAgentRoute, (c: any): any => {
 runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
-    const input = AgentInputSchema.parse(body);
-    const agent = observer.getAgent(input.agent_id);
-
-    if (!agent) {
-      return errorJson(c, 'NOT_FOUND', `Agent not found: ${input.agent_id}`, 404);
-    }
-
-    // Start observing
-    const runId = observer.startRun(input.agent_id, input);
-    pinoLogger.info({ run_id: runId, agent_id: input.agent_id }, 'run started');
-
-    try {
-      // Forward to agent
-      const startTime = Date.now();
-      const response = await fetch(agent.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(agent.auth?.type === 'bearer' && agent.auth.token
-            ? { Authorization: `Bearer ${agent.auth.token}` }
-            : {}),
-          ...(agent.auth?.type === 'api_key' && agent.auth.token && agent.auth.header
-            ? { [agent.auth.header]: agent.auth.token }
-            : {}),
-        },
-        body: JSON.stringify(input.input),
-        signal: AbortSignal.timeout(input.config?.timeout_ms ?? 30000),
-      });
-
-      const output = await response.json();
-      const latencyMs = Date.now() - startTime;
-
-      // Complete the run
-      const record = observer.completeRun(runId, output, 'completed');
-      pinoLogger.info({ run_id: runId, latency_ms: latencyMs }, 'run completed');
-
-      return successJson(c, {
-        run_id: runId,
-        output,
-        record,
-      });
-    } catch (error) {
-      const errorMsg = errorMessage(error);
-      observer.recordError(runId, errorMsg);
-      const record = observer.completeRun(runId, null, 'failed');
-
-      pinoLogger.error({ run_id: runId, err: errorMsg }, 'run failed');
-      return errorJson(c, 'INTERNAL_ERROR', errorMsg, 500, { run_id: runId, record });
-    }
+    const input = ProjectScopedAgentInputSchema.parse(body);
+    const accessError = await authorizeRunnerProject(c, input.project_id);
+    if (accessError) return accessError;
+    return forwardRunner(c, '/run', { method: 'POST', body: input });
   } catch (error) {
     return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
@@ -449,18 +498,13 @@ runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
  */
 runnerRoutes.openapi(addRunEventRoute, async (c: any): Promise<any> => {
   try {
-    const runId = c.req.param('id');
-    const { type, data } = await c.req.json();
-
-    if (type === 'llm_call') {
-      observer.recordLLMCall(runId, data.input, data.output, data.model, data.latency_ms);
-    } else if (type === 'tool_call') {
-      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
-    } else if (type === 'error') {
-      observer.recordError(runId, data.error);
-    }
-
-    return successJson(c, { recorded: true });
+    const projectId = c.req.valid('query').project_id;
+    const accessError = await authorizeRunnerProject(c, projectId);
+    if (accessError) return accessError;
+    return forwardRunner(c, '/run/' + encodeURIComponent(c.req.param('id')) + '/event', {
+      method: 'POST',
+      body: { ...(await c.req.json()), project_id: projectId },
+    });
   } catch (error) {
     return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
@@ -470,19 +514,32 @@ runnerRoutes.openapi(addRunEventRoute, async (c: any): Promise<any> => {
  * GET /runner/run/:id - Get run record
  */
 runnerRoutes.openapi(getRunRoute, (c: any): any => {
-  const record = observer.getRun(c.req.param('id'));
-  if (!record) {
-    return errorJson(c, 'NOT_FOUND', 'Run not found', 404);
-  }
-  return successJson(c, record);
+  return (async () => {
+    const projectId = c.req.valid('query').project_id;
+    const accessError = await authorizeRunnerProject(c, projectId);
+    if (accessError) return accessError;
+    return forwardRunner(
+      c,
+      '/run/' +
+        encodeURIComponent(c.req.param('id')) +
+        '?project_id=' +
+        encodeURIComponent(projectId)
+    );
+  })();
 });
 
 /**
  * GET /runner/runs - List runs
  */
 runnerRoutes.openapi(listRunsRoute, (c: any): any => {
-  const runs = observer.listRuns();
-  return successJson(c, { runs });
+  return (async () => {
+    const query = c.req.valid('query');
+    const accessError = await authorizeRunnerProject(c, query.project_id);
+    if (accessError) return accessError;
+    const params = new URLSearchParams({ project_id: query.project_id });
+    if (query.system) params.set('system', query.system);
+    return forwardRunner(c, '/runs?' + params.toString());
+  })();
 });
 
 /**
@@ -494,39 +551,15 @@ runnerRoutes.openapi(evalRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const request = EvalRequestSchema.parse(body);
-
-    // Get RunRecord: from request or fetch by run_id
-    let runRecord: RunRecord | undefined = request.run_record;
-
-    if (!runRecord && request.run_id) {
-      runRecord = observer.getRun(request.run_id);
-      if (!runRecord) {
-        return errorJson(c, 'NOT_FOUND', `Run not found: ${request.run_id}`, 404);
-      }
-    }
-
-    if (!runRecord) {
+    if (!request.run_record && !request.run_id) {
       return errorJson(c, 'INVALID_REQUEST', 'Either run_id or run_record is required', 400);
     }
-
-    // Get rules: from request or use default
-    let rules: EvalRules;
-    if (request.rules) {
-      rules = request.rules;
-    } else if (request.rules_ref) {
-      rules = parseRulesFromLeaf({ rules_ref: request.rules_ref });
-    } else {
-      rules = DEFAULT_RULES;
+    if (request.run_record && request.run_record.project_id !== request.project_id) {
+      return errorJson(c, 'INVALID_REQUEST', 'run_record does not belong to project_id', 400);
     }
-
-    // Run evaluation
-    const result = evalEngine.evaluate(runRecord, rules);
-    pinoLogger.info(
-      { run_id: result.run_id, passed: result.passed, score: result.score },
-      'eval completed'
-    );
-
-    return successJson(c, result);
+    const accessError = await authorizeRunnerProject(c, request.project_id);
+    if (accessError) return accessError;
+    return forwardRunner(c, '/eval', { method: 'POST', body: request });
   } catch (error) {
     return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
@@ -568,48 +601,11 @@ runnerRoutes.openapi(validateRulesRoute, async (c: any): Promise<any> => {
  */
 runnerRoutes.openapi(webhookRunRoute, async (c: any): Promise<any> => {
   try {
-    const { agent_id, input, rules, rules_ref, auto_eval } = await c.req.json();
-
-    // Run agent
-    const agent = observer.getAgent(agent_id);
-    if (!agent) {
-      return errorJson(c, 'NOT_FOUND', `Agent not found: ${agent_id}`, 404);
-    }
-
-    const runId = observer.startRun(agent_id, { agent_id, input });
-
-    const response = await fetch(agent.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-
-    const output = await response.json();
-    const runRecord = observer.completeRun(runId, output, 'completed');
-
-    // Auto-eval if enabled
-    let evalResult = null;
-    if (auto_eval) {
-      // Get rules: from request or use default
-      let evalRules: EvalRules;
-      if (rules) {
-        evalRules = EvalRulesSchema.parse(rules);
-      } else if (rules_ref) {
-        evalRules = parseRulesFromLeaf({ rules_ref });
-      } else {
-        evalRules = DEFAULT_RULES;
-      }
-
-      evalResult = evalEngine.evaluate(runRecord, evalRules);
-    }
-
-    return successJson(c, {
-      run_id: runId,
-      output,
-      record: runRecord,
-      eval_result: evalResult,
-    });
+    const input = WebhookRunRequestSchema.parse(await c.req.json());
+    const accessError = await authorizeRunnerProject(c, input.project_id);
+    if (accessError) return accessError;
+    return forwardRunner(c, '/webhook/run', { method: 'POST', body: input });
   } catch (error) {
-    return errorJson(c, 'INTERNAL_ERROR', errorMessage(error), 500);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });

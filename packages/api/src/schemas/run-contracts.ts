@@ -12,7 +12,7 @@ import { z } from '@hono/zod-openapi';
 
 export const CreateRunRequest = z
   .object({
-    project_id: z.string().optional().openapi({ description: 'Project ID to scope the run' }),
+    project_id: z.string().min(1).openapi({ description: 'Project ID that scopes the run' }),
     commit_ref: z.string().optional().openapi({ description: 'Commit hash reference' }),
     leaf_id: z
       .string()

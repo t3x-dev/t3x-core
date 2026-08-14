@@ -43,6 +43,16 @@ describe('extractors/v2 provider adapters', () => {
     expect(failure.retry.strategy).toBe('backoff');
   });
 
+  it('maps explicit provider refusals without retrying them as transport', () => {
+    const failure = mapProviderErrorToExtractionFailure(
+      'openai',
+      new LLMProviderError('openai', undefined, 'refused', 'REFUSAL')
+    );
+
+    expect(failure.code).toBe('refusal');
+    expect(failure.retry).toMatchObject({ retryable: false, strategy: 'none' });
+  });
+
   it('maps provider JSON parse errors to draft_parse failures', () => {
     const failure = mapProviderErrorToExtractionFailure(
       'openai',

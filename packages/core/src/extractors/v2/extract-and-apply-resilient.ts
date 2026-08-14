@@ -67,6 +67,7 @@ export interface ResilientExtractAndApplyResult {
 function inferStage(code: ExtractionFailureCode): DegradationStage {
   switch (code) {
     case 'transport':
+    case 'refusal':
     case 'draft_parse':
     case 'draft_schema':
     case 'provenance':

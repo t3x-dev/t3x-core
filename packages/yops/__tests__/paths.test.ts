@@ -160,6 +160,25 @@ describe('tryParsePath', () => {
     if (!r.ok) return;
     expect(r.segments).toEqual([]);
   });
+
+  it.each([
+    ['items/[abc]', 'INVALID_INDEX_SYNTAX'],
+    ['items/[1', 'INVALID_INDEX_SYNTAX'],
+    ['users/[=alice]', 'INVALID_MATCH_SYNTAX'],
+    ['users/[name=alice', 'INVALID_MATCH_SYNTAX'],
+  ])('rejects malformed bracket segment %s', (path, code) => {
+    const r = tryParsePath(path);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe(code);
+  });
+
+  it('rejects indexes outside the safe integer range', () => {
+    const r = tryParsePath('items/[999999999999999999999999999999]');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('INDEX_OUT_OF_RANGE');
+  });
 });
 
 describe('deepClone', () => {
@@ -310,6 +329,22 @@ describe('setAtPath', () => {
     const doc: YValue = { items: ['x', 'y', 'z'] };
     const result = setAtPath(doc, 'items/[1]', 'Y');
     expect(result).toEqual({ items: ['x', 'Y', 'z'] });
+  });
+
+  it.each([
+    1,
+    3,
+    Number.MAX_SAFE_INTEGER,
+  ])('rejects an out-of-bounds array index without mutating the input: %s', (index) => {
+    const doc: YValue = { items: ['x'] };
+    expect(() => setAtPath(doc, `items/[${index}]`, 'Y')).toThrow(/out of bounds/);
+    expect(doc).toEqual({ items: ['x'] });
+  });
+
+  it('rejects an out-of-bounds intermediate array index', () => {
+    const doc: YValue = { items: [{ name: 'first' }] };
+    expect(() => setAtPath(doc, 'items/[2]/name', 'third')).toThrow(/out of bounds/);
+    expect(doc).toEqual({ items: [{ name: 'first' }] });
   });
 
   it('set via key match', () => {

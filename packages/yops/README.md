@@ -144,6 +144,14 @@ items/[0]                     # array by index
 users/[name=alice]/role       # array by key match (with type coercion)
 ```
 
+Quoted segments address keys containing reserved characters, for example
+`config/"db/prod"/host`. Runtime operations reject malformed quoted or bracket
+segments before mutation.
+
+An index path such as `items/[0]` addresses an existing sequence element.
+`set` rejects indexes outside the current sequence instead of creating sparse
+arrays; use `append` to add a new final element.
+
 ## Execution Model
 
 - Sequential — each op sees the result of previous ops

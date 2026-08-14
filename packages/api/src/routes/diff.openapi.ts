@@ -10,6 +10,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { collectResult, diffCommits, runOperation, type TreeDiff } from '@t3x-dev/core';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertRepositoryCommitAccess } from '../lib/project-access';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { buildPipelineContext } from '../ops/context';
 import { diffOp } from '../ops/diff';
@@ -59,6 +60,7 @@ const ThreeWayBodySchema = z.object({
 const FrameBodySchema = z.object({
   base_commit_hash: z.string().optional(),
   target_commit_hash: z.string().optional(),
+  project_id: z.string().optional(),
 });
 
 // ============================================================================
@@ -84,6 +86,17 @@ const twoWayRoute = createRoute({
     },
     400: {
       description: 'Bad request',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
       content: {
         'application/json': {
           schema: z.object({
@@ -199,6 +212,17 @@ const frameRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Project access denied',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
     404: {
       description: 'Not found',
       content: {
@@ -249,15 +273,26 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
   // Mode 1: commit_hash mode (unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
     const db = await getDB();
-    const baseCommit = await getRepositorySemanticCommit(
+    const baseProjectId = await assertRepositoryCommitAccess(
+      c,
       db,
       body.base_commit_hash,
       body.project_id
     );
-    const targetCommit = await getRepositorySemanticCommit(
+    if (baseProjectId instanceof Response) return baseProjectId;
+    const targetProjectId = await assertRepositoryCommitAccess(
+      c,
       db,
       body.target_commit_hash,
       body.project_id
+    );
+    if (targetProjectId instanceof Response) return targetProjectId;
+
+    const baseCommit = await getRepositorySemanticCommit(db, body.base_commit_hash, baseProjectId);
+    const targetCommit = await getRepositorySemanticCommit(
+      db,
+      body.target_commit_hash,
+      targetProjectId
     );
 
     if (baseCommit && targetCommit) {
@@ -346,14 +381,31 @@ diffRoutes.openapi(frameRoute, async (c) => {
   }
 
   try {
-    // projectId is not relevant for diff (read-only, cross-project OK) — pass empty string
-    const ctx = await buildPipelineContext(c, '');
+    const db = await getDB();
+    const baseProjectId = await assertRepositoryCommitAccess(
+      c,
+      db,
+      body.base_commit_hash,
+      body.project_id
+    );
+    if (baseProjectId instanceof Response) return baseProjectId;
+    const targetProjectId = await assertRepositoryCommitAccess(
+      c,
+      db,
+      body.target_commit_hash,
+      body.project_id
+    );
+    if (targetProjectId instanceof Response) return targetProjectId;
+
+    const ctx = await buildPipelineContext(c, baseProjectId);
     const result = await collectResult(
       runOperation(
         diffOp,
         {
           base_commit_hash: body.base_commit_hash,
           target_commit_hash: body.target_commit_hash,
+          base_project_id: baseProjectId,
+          target_project_id: targetProjectId,
         },
         ctx
       )

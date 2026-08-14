@@ -21,7 +21,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, assertRepositoryCommitAccess } from '../lib/project-access';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -102,11 +102,19 @@ shareRoutes.openapi(createShareRoute, async (c) => {
       }
       projectId = comparison.projectId || undefined;
     } else if (body.entity_type === 'commit') {
-      const commit = await getRepositorySemanticCommit(db, body.entity_id);
+      const commitProjectId = await assertRepositoryCommitAccess(
+        c,
+        db,
+        body.entity_id,
+        body.project_id
+      );
+      if (commitProjectId instanceof Response) return commitProjectId;
+
+      const commit = await getRepositorySemanticCommit(db, body.entity_id, commitProjectId);
       if (!commit) {
         return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Commit not found: ${body.entity_id}`);
       }
-      projectId = commit.projectId;
+      projectId = commitProjectId;
     }
 
     if (!projectId) {
@@ -114,8 +122,10 @@ shareRoutes.openapi(createShareRoute, async (c) => {
     }
 
     // Verify project access
-    const accessResult = await assertProjectAccess(c, db, projectId);
-    if (accessResult instanceof Response) return accessResult;
+    if (body.entity_type !== 'commit') {
+      const accessResult = await assertProjectAccess(c, db, projectId);
+      if (accessResult instanceof Response) return accessResult;
+    }
 
     const shareToken = await createShareToken(db, {
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler

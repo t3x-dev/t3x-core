@@ -17,6 +17,7 @@
     "api-extract:verify": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --verify",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretypecheck": "tsx scripts/generate-spec-data.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
@@ -26,7 +27,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

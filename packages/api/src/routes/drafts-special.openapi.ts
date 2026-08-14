@@ -12,6 +12,7 @@ import {
   ConflictError,
   findDraftById,
   insertExtractionFeedback,
+  insertNodeModification,
   promoteDraft,
   updateDraft,
 } from '@t3x-dev/storage';
@@ -182,7 +183,6 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
 
     // Record node modification audit trail — fire-and-forget
     try {
-      const { insertNodeModification } = await import('@t3x-dev/storage');
       await insertNodeModification(db, {
         draft_id: draftId,
         sp_id: sp_id,

@@ -55,7 +55,7 @@ stages:
     input: { prompt, model, provider }
     output: { ok, draft | failure }
     calls: LLMProvider.generateStructured → fallback to generateFromPrompt → fallback to generate
-    may_emit_failures: [transport, draft_parse, draft_schema]
+    may_emit_failures: [transport, refusal, draft_parse, draft_schema]
 
   - id: validate_draft
     role: Zod-validate ProviderExtractionDraft, lift to canonical ExtractionDraft
@@ -103,6 +103,13 @@ failures:
     examples:
       - "[claude] API request failed: 401 invalid x-api-key"
       - "[google-ai] No content in response"
+  - code: refusal
+    when: LLM provider explicitly refuses to produce structured extraction output
+    retry: none
+    reaskable: false
+    model_scope: openai structured output path and provider adapters
+    examples:
+      - "Model refused to produce structured output: <refusal text>"
 
   - code: draft_parse
     when: Provider returned text that is not valid JSON, or a *_json field contains invalid JSON
@@ -394,7 +401,7 @@ architecture_review:
   - id: openai_refusal_first_class
     severity: observability
     status: resolved_by_F14
-    site: packages/core/src/providers/llm/openai.ts + extract-and-apply-resilient.ts
+    site: packages/core/src/providers/llm/openai.ts + providerAdapters.ts + strict/resilient extraction adapters
     problem: >
       OpenAI's Structured Outputs API returns a `refusal` field on the
       assistant message when the model declines to produce structured
@@ -405,12 +412,13 @@ architecture_review:
     progress: >
       F14 detects message.refusal in the OpenAI structured response path
       and throws an LLMProviderError with code='REFUSAL' and
-      details.refusalText = the refusal string. The outer
+      details.refusalText = the refusal string. Provider adapter mapping
+      promotes REFUSAL to failure.code='refusal' instead of transport, so
+      strict API callers receive a 200 kind='failed' domain outcome, while
+      extractAndApplyResilient reports stage='refusal'. The outer
       generateStructured catch does NOT route refusals into the plain-text
-      fallback (retrying the same prompt won't help). extractAndApplyResilient
-      promotes the failure to stage='refusal' in the degraded result and
-      carries the refusalText through for UI surfaces to render verbatim.
-      Users see WHY the model refused instead of a generic error.
+      fallback (retrying the same prompt won't help). Users see WHY the
+      model refused instead of a generic provider-unavailable error.
 
   - id: reask_missing_prior_context
     severity: resilience

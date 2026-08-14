@@ -13,6 +13,7 @@ import {
   createTemplate,
   deleteTemplate,
   findTemplateById,
+  listTemplateAudit,
   listTemplates,
 } from '../queries/templates';
 import { createTestDB } from './setup';
@@ -45,8 +46,16 @@ describe('templates with constraints', () => {
         { type: 'require', match_mode: 'exact', value: 'Must be 280 chars or fewer' },
       ],
       semantic_threshold: { require: 0.85, exclude: 0.8 },
+      owner_id: 'user_template_owner',
+      provenance: {
+        source: 'human',
+        actor_kind: 'human',
+        actor_id: 'user_template_owner',
+      },
+      audit_actor: { kind: 'human', id: 'user_template_owner' },
     });
     expect(row.templateId).toBe('tmpl_test001');
+    expect(row.ownerId).toBe('user_template_owner');
   });
 
   test('find template returns new columns', async () => {
@@ -54,6 +63,11 @@ describe('templates with constraints', () => {
     expect(found).not.toBeNull();
     expect(found?.defaultConstraints).toHaveLength(1);
     expect(found?.semanticThreshold).toEqual({ require: 0.85, exclude: 0.8 });
+    expect(found?.provenance).toEqual({
+      source: 'human',
+      actor_kind: 'human',
+      actor_id: 'user_template_owner',
+    });
   });
 
   test('create template without new columns uses defaults', async () => {
@@ -86,10 +100,18 @@ describe('templates with constraints', () => {
   });
 
   test('delete template', async () => {
-    const deleted = await deleteTemplate(db, 'tmpl_test001');
+    const deleted = await deleteTemplate(db, 'tmpl_test001', {
+      kind: 'human',
+      id: 'user_template_owner',
+    });
     expect(deleted).toBe(true);
 
     const found = await findTemplateById(db, 'tmpl_test001');
     expect(found).toBeNull();
+
+    const audit = await listTemplateAudit(db, 'tmpl_test001');
+    expect(audit.map((entry) => entry.action)).toEqual(['create', 'delete']);
+    expect(audit.every((entry) => entry.ownerId === 'user_template_owner')).toBe(true);
+    expect(audit[1]?.snapshot).toMatchObject({ templateId: 'tmpl_test001' });
   });
 });

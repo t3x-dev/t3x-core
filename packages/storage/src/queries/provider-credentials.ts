@@ -1,5 +1,6 @@
 import type { ResolvedConfig } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
+import { decryptCredential, encryptCredential } from '../lib/credential-encryption';
 import { deleteGlobalSetting, getGlobalSetting, setGlobalSetting } from './global-settings';
 
 const PROVIDER_CREDENTIAL_KEY_PREFIX = 'local_provider_credentials_v1_';
@@ -18,6 +19,13 @@ interface StoredProviderCredential {
   lastTestStatus: ProviderTestStatus | null;
   lastTestedAt: string | null;
   lastTestError: string | null;
+}
+
+interface PersistedProviderCredential extends Omit<StoredProviderCredential, 'apiKey'> {
+  credentialVersion?: 2;
+  encryptedApiKey?: string;
+  /** Legacy v1 field, migrated on first read when an encryption key is configured. */
+  apiKey?: string;
 }
 
 type ProviderCredentialSafe = {
@@ -107,10 +115,31 @@ async function readProviderCredential(
   db: AnyDB,
   providerId: LocalProviderId
 ): Promise<StoredProviderCredential | null> {
-  return (
-    (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ??
-    null
+  const persisted = await getGlobalSetting<PersistedProviderCredential>(
+    db,
+    providerCredentialKey(providerId)
   );
+  if (!persisted) return null;
+
+  const storedSecret = persisted.encryptedApiKey ?? persisted.apiKey;
+  if (!storedSecret) return null;
+  if (persisted.encryptedApiKey && !persisted.encryptedApiKey.startsWith('t3xenc:v1:')) {
+    throw new Error(`Encrypted provider credential is malformed for ${providerId}`);
+  }
+  const decrypted = decryptCredential(storedSecret, `provider:${providerId}:api-key`);
+  const credential: StoredProviderCredential = {
+    apiKey: decrypted.plaintext,
+    defaultModel: persisted.defaultModel ?? null,
+    updatedAt: persisted.updatedAt,
+    lastTestStatus: persisted.lastTestStatus ?? null,
+    lastTestedAt: persisted.lastTestedAt ?? null,
+    lastTestError: persisted.lastTestError ?? null,
+  };
+
+  if (persisted.apiKey !== undefined || decrypted.needsRotation) {
+    await writeProviderCredential(db, providerId, credential);
+  }
+  return credential;
 }
 
 async function writeProviderCredential(
@@ -118,7 +147,12 @@ async function writeProviderCredential(
   providerId: LocalProviderId,
   credential: StoredProviderCredential
 ): Promise<void> {
-  await setGlobalSetting(db, providerCredentialKey(providerId), credential);
+  const { apiKey, ...metadata } = credential;
+  await setGlobalSetting(db, providerCredentialKey(providerId), {
+    credentialVersion: 2,
+    encryptedApiKey: encryptCredential(apiKey, `provider:${providerId}:api-key`),
+    ...metadata,
+  } satisfies PersistedProviderCredential);
 }
 
 export async function getProviderCredentialBundle(db: AnyDB): Promise<ProviderCredentialBundle> {

@@ -578,7 +578,9 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     const rlKnowledge = unifiedCommit.semanticContent;
 
     // Collect lessons from failed assertions on this leaf and siblings
-    const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+    const allLeaves = await findLeavesByCommit(db, leaf.commit_hash, {
+      projectId: leaf.project_id,
+    });
     const lessons = collectLessonsFromAssertions(
       allLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
     );
