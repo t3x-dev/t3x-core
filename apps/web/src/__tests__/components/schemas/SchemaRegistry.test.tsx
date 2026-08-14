@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SchemaRegistry } from '@/components/schemas';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -57,6 +57,61 @@ describe('SchemaRegistry', () => {
     expect(screen.getByRole('button', { name: /^PRD Schema/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Project PRD/ })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PRD Schema' })).toBeInTheDocument();
+  });
+
+  it('allows project Schema metadata to be renamed while keeping Official identities read-only', async () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const baseFamily = preview.families[0]!;
+    const onUpdateIdentity = vi.fn().mockResolvedValue(undefined);
+    const officialFamily = {
+      ...baseFamily,
+      artifactId: 'ysa_official_prd',
+      metadataRevision: 2,
+      source: 'official' as const,
+      tags: ['source:official'],
+    };
+    const projectFamily = {
+      ...baseFamily,
+      id: 'published:projects/proj_test/prd',
+      artifactId: 'ysa_project_prd',
+      metadataRevision: 3,
+      name: 'Project PRD',
+      canonicalName: 'projects/proj_test/prd',
+      source: 'team' as const,
+      tags: ['source:team'],
+    };
+
+    const { rerender } = render(
+      <SchemaRegistry
+        defaultFamilyId={officialFamily.id}
+        families={[officialFamily]}
+        onUpdateIdentity={onUpdateIdentity}
+      />
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
+    expect(screen.queryByRole('menuitem', { name: /Edit name/i })).not.toBeInTheDocument();
+
+    rerender(
+      <SchemaRegistry
+        defaultFamilyId={projectFamily.id}
+        families={[projectFamily]}
+        onUpdateIdentity={onUpdateIdentity}
+      />
+    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Schema management menu' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Edit name/i }));
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'Checkout Schema' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save metadata' }));
+
+    await waitFor(() =>
+      expect(onUpdateIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({ artifactId: 'ysa_project_prd', source: 'team' }),
+        expect.objectContaining({ displayName: 'Checkout Schema' })
+      )
+    );
   });
 
   it('shows archived Schema identities without a separate status filter', () => {

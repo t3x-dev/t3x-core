@@ -262,6 +262,39 @@ describe('YSchema Registry storage', () => {
     ).resolves.toBeNull();
   });
 
+  it('keeps Official Schema identity metadata read-only to projects', async () => {
+    const canonicalName = 't3x/official-managed-schema';
+    const published = await publishYSchemaArtifactVersion(db, {
+      artifact_id: 'ysa_official_managed_schema',
+      artifact_version_id: 'ysav_official_managed_schema_1_0_0',
+      canonical_name: canonicalName,
+      family: 'open',
+      kind: 'schema',
+      display_name: 'Official Managed Schema',
+      visibility: 'official',
+      version: '1.0.0',
+      status: 'published',
+      manifest_json: {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        canonicalName,
+        version: '1.0.0',
+      },
+      artifact_hash: `sha256:${'f'.repeat(64)}`,
+      path_count: 0,
+      provides: [],
+      requires: [],
+    });
+
+    await expect(
+      updateYSchemaArtifactIdentity(db, {
+        artifact_id: published.artifactId,
+        project_id: projectId,
+        if_revision: 1,
+        display_name: 'Project override',
+      })
+    ).resolves.toBeNull();
+  });
+
   it('archives a project-owned legacy Core published as a Schema identity', async () => {
     const canonicalName = `projects/${projectId}/legacy-schema`;
     const published = await publishYSchemaArtifactVersion(db, {

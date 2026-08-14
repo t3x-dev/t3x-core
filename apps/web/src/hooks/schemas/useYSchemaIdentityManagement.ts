@@ -13,7 +13,13 @@ export function useYSchemaIdentityManagement(projectId: string, refresh: () => P
       family: SchemaFamilyPreview,
       update: { displayName: string; description: string; tags: string[] }
     ) => {
-      if (!family.artifactId || !family.metadataRevision) return;
+      if (
+        !family.artifactId ||
+        !family.metadataRevision ||
+        (family.source !== 'team' && family.source !== 'community')
+      ) {
+        return;
+      }
       await updateProjectYSchemaIdentity(projectId, family.artifactId, {
         ifRevision: family.metadataRevision,
         ...update,
@@ -25,7 +31,13 @@ export function useYSchemaIdentityManagement(projectId: string, refresh: () => P
 
   const setLifecycle = useCallback(
     async (family: SchemaFamilyPreview, action: 'archive' | 'restore') => {
-      if (!family.artifactId || !family.metadataRevision) return;
+      if (
+        !family.artifactId ||
+        !family.metadataRevision ||
+        (family.source !== 'team' && family.source !== 'community')
+      ) {
+        return;
+      }
       await setProjectYSchemaLifecycle(
         projectId,
         family.artifactId,

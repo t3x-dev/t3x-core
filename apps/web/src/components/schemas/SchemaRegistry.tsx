@@ -149,6 +149,7 @@ export function SchemaRegistry({
         (release) => release.id === selectedRelease.changesBaseReleaseId
       ) ?? null)
     : null;
+  const canManageSelectedIdentity = isUserManagedSchema(selectedFamily);
 
   function handleSelectFamily(familyId: string) {
     setSelectedFamilyId(familyId);
@@ -271,8 +272,8 @@ export function SchemaRegistry({
             <div className="min-w-0">
               <SchemaIdentityHeader
                 identityPending={identityPending}
-                onEdit={selectedFamily.artifactId ? openIdentityEditor : undefined}
-                onToggleArchive={selectedFamily.artifactId ? toggleArchive : undefined}
+                onEdit={canManageSelectedIdentity ? openIdentityEditor : undefined}
+                onToggleArchive={canManageSelectedIdentity ? toggleArchive : undefined}
                 selectedFamily={selectedFamily}
               />
               {identityFeedback ? (
@@ -389,6 +390,14 @@ function schemaSourceTag(tags: string[] | undefined): 'official' | 'team' | 'com
 
 function userEditableSchemaTags(tags: string[] | undefined): string[] {
   return (tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:'));
+}
+
+function isUserManagedSchema(family: SchemaFamilyPreview | null): boolean {
+  return Boolean(
+    family?.artifactId &&
+      family.metadataRevision &&
+      (family.source === 'team' || family.source === 'community')
+  );
 }
 
 function SchemaRegistryHeader({
