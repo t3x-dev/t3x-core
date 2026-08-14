@@ -20,7 +20,7 @@ export function SchemaReleaseList({
   return (
     <aside
       aria-label="Schema versions"
-      className="min-w-0 overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm"
+      className="min-w-0 overflow-hidden rounded-none border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm"
     >
       <fieldset className="m-0 min-w-0 border-0 p-0">
         <legend className="sr-only">Schema versions</legend>

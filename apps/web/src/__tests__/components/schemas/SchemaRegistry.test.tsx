@@ -22,6 +22,9 @@ describe('SchemaRegistry', () => {
     expect(screen.queryByText('Version behavior')).not.toBeInTheDocument();
     expect(screen.queryByText('0 commits')).not.toBeInTheDocument();
     expect(screen.queryByText(/Published from composition:/)).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Schema versions' })).toHaveClass(
+      'rounded-none'
+    );
     for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 
