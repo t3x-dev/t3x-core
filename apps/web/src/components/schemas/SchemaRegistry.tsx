@@ -62,7 +62,6 @@ interface SchemaRegistryProps {
 }
 
 type LibraryScope = 'all' | 'mine' | 'official';
-type LifecycleFilter = 'active' | 'all' | 'archived';
 
 export function SchemaRegistry({
   bindingActions,
@@ -85,7 +84,6 @@ export function SchemaRegistry({
   }>();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<LibraryScope>('all');
-  const [lifecycle, setLifecycle] = useState<LifecycleFilter>('active');
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -121,7 +119,6 @@ export function SchemaRegistry({
     const normalizedQuery = query.trim().toLowerCase();
     return families.filter((family) => {
       const source = schemaSourceTag(family.tags);
-      const status = family.lifecycleStatus ?? 'active';
       const searchable = [family.name, family.canonicalName, ...(family.tags ?? [])]
         .join(' ')
         .toLowerCase();
@@ -129,11 +126,10 @@ export function SchemaRegistry({
         (!normalizedQuery || searchable.includes(normalizedQuery)) &&
         (scope === 'all' ||
           (scope === 'mine' && source === 'team') ||
-          (scope === 'official' && source === 'official')) &&
-        (lifecycle === 'all' || status === lifecycle)
+          (scope === 'official' && source === 'official'))
       );
     });
-  }, [families, lifecycle, query, scope]);
+  }, [families, query, scope]);
 
   useEffect(() => {
     if (visibleFamilies.some((family) => family.id === selectedFamilyId)) return;
@@ -264,8 +260,6 @@ export function SchemaRegistry({
           <SchemaLibrary
             activeFamilyId={selectedFamily?.id ?? ''}
             families={visibleFamilies}
-            lifecycle={lifecycle}
-            onLifecycleChange={setLifecycle}
             onQueryChange={setQuery}
             onScopeChange={setScope}
             onSelect={handleSelectFamily}
@@ -438,8 +432,6 @@ function SchemaRegistryHeader({
 function SchemaLibrary({
   activeFamilyId,
   families,
-  lifecycle,
-  onLifecycleChange,
   onQueryChange,
   onScopeChange,
   onSelect,
@@ -448,8 +440,6 @@ function SchemaLibrary({
 }: {
   activeFamilyId: string;
   families: SchemaFamilyPreview[];
-  lifecycle: LifecycleFilter;
-  onLifecycleChange: (value: LifecycleFilter) => void;
   onQueryChange: (value: string) => void;
   onScopeChange: (value: LibraryScope) => void;
   onSelect: (familyId: string) => void;
@@ -492,16 +482,6 @@ function SchemaLibrary({
             </button>
           ))}
         </div>
-        <select
-          aria-label="Filter by Schema status"
-          className="mt-2 h-8 w-full rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 text-[11px] text-[var(--text-secondary)]"
-          onChange={(event) => onLifecycleChange(event.target.value as LifecycleFilter)}
-          value={lifecycle}
-        >
-          <option value="active">Active</option>
-          <option value="all">Any status</option>
-          <option value="archived">Archived</option>
-        </select>
       </header>
       <section
         aria-label="Schema results"

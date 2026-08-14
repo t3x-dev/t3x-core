@@ -56,6 +56,22 @@ describe('SchemaRegistry', () => {
     expect(screen.getByRole('heading', { name: 'PRD Schema' })).toBeInTheDocument();
   });
 
+  it('shows archived Schema identities without a separate status filter', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const archivedFamily = {
+      ...preview.families[0]!,
+      lifecycleStatus: 'archived' as const,
+    };
+
+    render(<SchemaRegistry defaultFamilyId={archivedFamily.id} families={[archivedFamily]} />);
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Filter by Schema status' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+  });
+
   it('keeps long Schema and version collections inside bounded scroll regions', () => {
     const preview = getSchemaRegistryPreview('proj_test');
     const baseFamily = preview.families[0]!;
