@@ -1,10 +1,10 @@
+import type { ReactNode } from 'react';
 import { SchemaChangesView } from '@/components/schemas/SchemaChangesView';
 import { SchemaRelationsView } from '@/components/schemas/SchemaRelationsView';
 import { SchemaRulesView } from '@/components/schemas/SchemaRulesView';
 import { SchemaStructureView } from '@/components/schemas/SchemaStructureView';
 import { SchemaVersionBadge } from '@/components/schemas/SchemaVersionBadge';
 import { SchemaYamlView } from '@/components/schemas/SchemaYamlView';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { SchemaReleasePreview } from '@/types/schemas';
 
@@ -20,25 +20,23 @@ const DETAIL_VIEWS: Array<{ id: SchemaDetailView; label: string }> = [
 
 interface SchemaReleaseDetailProps {
   activeView: SchemaDetailView;
-  currentRelease: SchemaReleasePreview | null;
-  onCompareWithCurrent: () => void;
+  actions?: ReactNode;
+  comparisonBaseRelease: SchemaReleasePreview | null;
   onViewChange: (view: SchemaDetailView) => void;
   release: SchemaReleasePreview;
 }
 
 export function SchemaReleaseDetail({
   activeView,
-  currentRelease,
-  onCompareWithCurrent,
+  actions,
+  comparisonBaseRelease,
   onViewChange,
   release,
 }: SchemaReleaseDetailProps) {
-  const isCurrent = release.id === currentRelease?.id;
-  const canCompare =
-    currentRelease !== null && !isCurrent && release.changesBaseReleaseId === currentRelease.id;
   const visibleViews = DETAIL_VIEWS.filter((view) => {
     if (view.id === 'relations') return release.relationTypes.length > 0;
     if (view.id === 'rules') return release.rules.length > 0;
+    if (view.id === 'changes') return comparisonBaseRelease !== null;
     return true;
   });
   const activeViewLabel = visibleViews.find((view) => view.id === activeView)?.label ?? activeView;
@@ -48,31 +46,24 @@ export function SchemaReleaseDetail({
       aria-label="Selected schema version"
       className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm"
     >
-      <header className="flex flex-col items-start justify-between gap-5 border-b border-[var(--stroke-divider)] p-4 min-[721px]:flex-row">
+      <header className="grid items-start gap-3 border-b border-[var(--stroke-divider)] p-4 min-[721px]:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
           <p className="mb-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
             Selected version
           </p>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h3 className="text-lg font-semibold leading-[1.35] text-[var(--text-primary)]">
-              <SchemaVersionBadge isCurrent={isCurrent} release={release} />
+              <SchemaVersionBadge release={release} />
             </h3>
           </div>
-          <p className="mt-[7px] max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
-            {release.description}
-          </p>
         </div>
 
-        {canCompare ? (
-          <Button
-            className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650]"
-            onClick={onCompareWithCurrent}
-            type="button"
-            variant="commit"
-          >
-            Compare with {currentRelease.version}
-          </Button>
-        ) : null}
+        <div className="flex flex-none flex-wrap items-start gap-2 min-[721px]:justify-end">
+          {actions}
+        </div>
+        <p className="max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)] min-[721px]:col-span-2">
+          {release.description}
+        </p>
       </header>
 
       <p aria-live="polite" className="sr-only">
@@ -94,13 +85,15 @@ export function SchemaReleaseDetail({
               key={view.id}
               value={view.id}
             >
-              {view.label}
+              {view.id === 'changes' && comparisonBaseRelease
+                ? `Changes vs ${comparisonBaseRelease.version}`
+                : view.label}
             </TabsTrigger>
           ))}
         </TabsList>
 
         <TabsContent className="m-0 min-h-0 flex-1 p-4" value="structure">
-          <SchemaStructureView currentRelease={currentRelease} release={release} />
+          <SchemaStructureView release={release} />
         </TabsContent>
         <TabsContent className="m-0 min-h-0 flex-1 p-4" value="relations">
           <SchemaRelationsView release={release} />
@@ -112,7 +105,7 @@ export function SchemaReleaseDetail({
           <SchemaYamlView release={release} />
         </TabsContent>
         <TabsContent className="m-0 min-h-0 flex-1 p-4" value="changes">
-          <SchemaChangesView currentRelease={currentRelease} release={release} />
+          <SchemaChangesView comparisonBaseRelease={comparisonBaseRelease} release={release} />
         </TabsContent>
       </Tabs>
     </section>

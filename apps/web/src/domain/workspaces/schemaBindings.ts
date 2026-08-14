@@ -1,14 +1,9 @@
 import type { SchemaReleasePreview } from '@/types/schemas';
 import type { WorkspaceCandidate, WorkspaceSchemaBinding } from '@/types/workspaces';
 
-export const PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY = 'default_schema_binding';
-
 export interface ProjectWorkspaceSchemaBindings {
-  projectDefault?: WorkspaceSchemaBinding;
   byWorkspaceId: Record<string, WorkspaceSchemaBinding>;
 }
-
-export type WorkspaceSchemaBindingScope = 'project_default' | 'current_workspace';
 
 export const EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS: ProjectWorkspaceSchemaBindings = {
   byWorkspaceId: {},
@@ -42,34 +37,12 @@ export function isSchemaReleaseBindable(release: SchemaReleasePreview): boolean 
   return release.status !== 'draft' && release.runtimeAvailable;
 }
 
-export function getProjectDefaultSchemaBinding(
-  metadata: Record<string, unknown> | null | undefined
-): WorkspaceSchemaBinding | undefined {
-  const value = metadata?.[PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY];
-  if (!isWorkspaceSchemaBinding(value)) return undefined;
-  return { ...value, mode: 'project_default' };
-}
-
-export function withProjectDefaultSchemaBinding(
-  metadata: Record<string, unknown> | null | undefined,
-  binding: WorkspaceSchemaBinding
-): Record<string, unknown> {
-  return {
-    ...(metadata ?? {}),
-    [PROJECT_DEFAULT_SCHEMA_BINDING_METADATA_KEY]: {
-      ...binding,
-      mode: 'project_default',
-    },
-  };
-}
-
 export function mergeProjectWorkspaceSchemaBindings(
   persisted: ProjectWorkspaceSchemaBindings,
   live: ProjectWorkspaceSchemaBindings | undefined
 ): ProjectWorkspaceSchemaBindings {
   if (!live) return persisted;
   return {
-    projectDefault: live.projectDefault ?? persisted.projectDefault,
     byWorkspaceId: {
       ...persisted.byWorkspaceId,
       ...live.byWorkspaceId,
@@ -127,7 +100,7 @@ export function applyProjectWorkspaceSchemaBindings(
   candidates: WorkspaceCandidate[],
   bindings: ProjectWorkspaceSchemaBindings
 ): WorkspaceCandidate[] {
-  if (!bindings.projectDefault && Object.keys(bindings.byWorkspaceId).length === 0) {
+  if (Object.keys(bindings.byWorkspaceId).length === 0) {
     return candidates;
   }
 
@@ -137,25 +110,8 @@ export function applyProjectWorkspaceSchemaBindings(
       return rebindWorkspaceCandidate(candidate, workspaceBinding);
     }
 
-    if (!bindings.projectDefault || candidate.revision !== undefined) return candidate;
-    const nextBindings = replaceProjectDefaultBinding(
-      candidate.schemaBindings,
-      bindings.projectDefault
-    );
-    const nextBinding = nextBindings[0];
-    return nextBinding ? rebindWorkspaceCandidate(candidate, nextBinding) : candidate;
+    return candidate;
   });
-}
-
-function isWorkspaceSchemaBinding(value: unknown): value is WorkspaceSchemaBinding {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.schemaName === 'string' &&
-    record.schemaName.trim().length > 0 &&
-    typeof record.version === 'string' &&
-    record.version.trim().length > 0
-  );
 }
 
 function replaceCurrentWorkspaceBinding(
@@ -163,15 +119,4 @@ function replaceCurrentWorkspaceBinding(
   nextBinding: WorkspaceSchemaBinding
 ): WorkspaceSchemaBinding[] {
   return [nextBinding];
-}
-
-function replaceProjectDefaultBinding(
-  bindings: WorkspaceSchemaBinding[],
-  nextBinding: WorkspaceSchemaBinding
-): WorkspaceSchemaBinding[] {
-  if (bindings.some((binding) => binding.mode === 'pinned' || binding.mode === 'draft_override')) {
-    return bindings;
-  }
-
-  return [nextBinding, ...bindings.filter((binding) => binding.mode !== 'project_default')];
 }

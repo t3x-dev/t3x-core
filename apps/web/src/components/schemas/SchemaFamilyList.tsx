@@ -30,7 +30,6 @@ export function SchemaFamilyList({
       </header>
       <div className="p-2">
         {families.map((family) => {
-          const activeRelease = family.releases.find((release) => release.status === 'active');
           const latestRelease = family.releases[0];
           const isSelected = family.name === selectedFamilyName;
 
@@ -63,9 +62,7 @@ export function SchemaFamilyList({
               <span className="flex w-full flex-wrap items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
                 <Badge variant="outline">{latestRelease.category}</Badge>
                 <span>{formatVersionCount(family.releases.length)}</span>
-                <span>
-                  {activeRelease ? `${activeRelease.version} current` : 'No current version'}
-                </span>
+                <span>Applied per Workspace</span>
               </span>
             </button>
           );

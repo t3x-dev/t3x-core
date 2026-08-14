@@ -13,22 +13,57 @@ export function mergePublishedSchemaVersions(
   manifests: PublishedSchemaVersionManifest[],
   projectId: string
 ): SchemaRegistryPreview {
-  if (manifests.length === 0) return registry;
-  const published = manifests.map((manifest) => ({
-    family: manifest.family,
-    release: publishedManifestToRelease(manifest, projectId),
-  }));
+  const projectFamilies = new Map<string, PublishedSchemaVersionManifest[]>();
+  for (const manifest of manifests.filter((item) => item.status !== 'draft')) {
+    projectFamilies.set(manifest.canonicalName, [
+      ...(projectFamilies.get(manifest.canonicalName) ?? []),
+      manifest,
+    ]);
+  }
   return {
     ...registry,
-    families: registry.families.map((family) => {
-      const familyPublished = published
-        .filter((item) => item.family === family.id)
-        .map((item) => item.release);
-      return familyPublished.length > 0
-        ? { ...family, releases: [...familyPublished, ...family.releases] }
-        : family;
-    }),
+    families: [
+      ...registry.families.map((family) => ({
+        ...family,
+        source: 'official' as const,
+        tags: withSourceTag(family.tags, 'official'),
+      })),
+      ...[...projectFamilies.entries()].map(([canonicalName, versions]) => {
+        const releases = versions.map((manifest) =>
+          publishedManifestToRelease(manifest, projectId)
+        );
+        return {
+          id: publishedSchemaFamilyId(canonicalName),
+          artifactId: versions[0]?.artifactId,
+          name: versions[0]?.displayName ?? versions[0]?.title ?? canonicalName,
+          canonicalName,
+          description:
+            versions[0]?.catalogDescription ??
+            versions[0]?.description ??
+            'Published project Schema.',
+          tags: withSourceTag(versions[0]?.catalogTags ?? versions[0]?.tags ?? [], 'team'),
+          source: 'team' as const,
+          lifecycleStatus: versions[0]?.lifecycleStatus ?? 'active',
+          metadataRevision: versions[0]?.metadataRevision ?? 1,
+          updatedAt: versions[0]?.updatedAt,
+          releases,
+        };
+      }),
+    ],
   };
+}
+
+export function publishedSchemaFamilyId(canonicalName: string): string {
+  return `published:${canonicalName}`;
+}
+
+function withSourceTag(tags: string[] | undefined, source: 'official' | 'team'): string[] {
+  return Array.from(
+    new Set([
+      ...(tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:')),
+      `source:${source}`,
+    ])
+  ).sort();
 }
 
 export function publishedSchemaReleaseId(canonicalName: string, version: string): string {
@@ -46,6 +81,8 @@ export function publishedManifestToRelease(
   const requiredFields = structure.filter((path) => path.required).map((path) => path.path);
   const updatedAt = stringValue(registry.updatedAt) || stringValue(manifest.updatedAt);
   const releaseNotes = stringValue(registry.releaseNotes);
+  const comparison = recordValue(registry.comparison);
+  const comparisonBaseVersion = stringValue(comparison.baseVersion);
   return {
     id: publishedSchemaReleaseId(manifest.canonicalName, manifest.version),
     projectId,
@@ -64,7 +101,7 @@ export function publishedManifestToRelease(
     rootKey: Object.keys(nodes)[0] ?? 'document',
     requiredFields,
     compatibleWith: compatibleSurfaces(manifest.family),
-    migrationSummary: releaseNotes || 'Published from a verified Core + Module Composition draft.',
+    migrationSummary: releaseNotes || 'Published from a verified Core + Module Composition.',
     canonicalName: manifest.canonicalName,
     schemaHash: stringValue(registry.schemaHash),
     updatedLabel: updatedAt ? formatDate(updatedAt) : 'Published version',
@@ -72,17 +109,34 @@ export function publishedManifestToRelease(
     structure,
     relationTypes: relationPreviews(recordValue(schema.relationTypes)),
     rules: rulePreviews(schema.rules),
-    changesBaseReleaseId: '',
-    changes: [],
+    changesBaseReleaseId: comparisonBaseVersion
+      ? publishedSchemaReleaseId(manifest.canonicalName, comparisonBaseVersion)
+      : '',
+    changes: changePreviews(comparison.changes),
   };
 }
 
+function changePreviews(value: unknown): SchemaReleasePreview['changes'] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const change = recordValue(item);
+    const kind = stringValue(change.kind);
+    const path = stringValue(change.path);
+    const summary = stringValue(change.summary);
+    if (!['ADD', 'CHANGE', 'REMOVE'].includes(kind) || !path || !summary) return [];
+    return [{ kind: kind as 'ADD' | 'CHANGE' | 'REMOVE', path, summary }];
+  });
+}
+
 function familyLabel(family: PublishedSchemaVersionManifest['family']): string {
+  if (!family || family === 'open') return 'open Module';
   if (family === 'esphome-device') return 'ESPHome device';
   return family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1);
 }
 
 function compatibleSurfaces(family: PublishedSchemaVersionManifest['family']): string[] {
+  if (!family || family === 'open')
+    return ['YSchema validation', 'Composition replay', 'Workspace'];
   if (family === 'skill') return ['YSchema validation', 'SKILL.md adapter', 'Skill package'];
   if (family === 'prompt') return ['YSchema validation', 'Prompt compiler', 'Prompt text'];
   if (family === 'esphome-device') {

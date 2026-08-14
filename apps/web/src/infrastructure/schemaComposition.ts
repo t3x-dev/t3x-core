@@ -27,14 +27,13 @@ export async function previewYSchemaComposition(
 
 export async function loadYSchemaArtifactRegistry(
   projectId?: string,
-  family: YSchemaArtifactFamily = 'prd'
+  family?: YSchemaArtifactFamily
 ): Promise<YSchemaArtifactRegistryPage> {
   const path = projectId
     ? `/projects/${encodeURIComponent(projectId)}/yschema/artifacts`
     : '/yschema/artifacts';
-  const response = await fetchWithTimeout(
-    `${API_V1}${path}?family=${encodeURIComponent(family)}&limit=100`
-  );
+  const query = family ? `family=${encodeURIComponent(family)}&limit=100` : 'limit=100';
+  const response = await fetchWithTimeout(`${API_V1}${path}?${query}`);
   return handleResponse(response);
 }
 
@@ -45,6 +44,49 @@ export async function loadProjectYSchemaVersions(
   const query = family ? `?family=${encodeURIComponent(family)}` : '';
   const response = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/versions${query}`
+  );
+  return handleResponse(response);
+}
+
+export async function updateProjectYSchemaIdentity(
+  projectId: string,
+  artifactId: string,
+  input: {
+    ifRevision: number;
+    displayName?: string;
+    description?: string;
+    tags?: string[];
+  }
+): Promise<PublishedSchemaVersionManifest> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschemas/${encodeURIComponent(artifactId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        if_revision: input.ifRevision,
+        display_name: input.displayName,
+        description: input.description,
+        tags: input.tags,
+      }),
+    }
+  );
+  return handleResponse(response);
+}
+
+export async function setProjectYSchemaLifecycle(
+  projectId: string,
+  artifactId: string,
+  action: 'archive' | 'restore',
+  ifRevision: number
+): Promise<PublishedSchemaVersionManifest> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/yschemas/${encodeURIComponent(artifactId)}/${action}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ if_revision: ifRevision }),
+    }
   );
   return handleResponse(response);
 }
@@ -80,30 +122,6 @@ export async function saveWorkspaceYSchemaComposition(
   return handleResponse(response);
 }
 
-export async function applyWorkspaceYSchemaComposition(
-  projectId: string,
-  workspaceId: string,
-  workspaceRevision: number,
-  compositionRevision: number,
-  compositionHash: string
-): Promise<WorkspaceSchemaCompositionResult> {
-  const response = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
-      workspaceId
-    )}/schema-composition/apply`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        if_revision: workspaceRevision,
-        composition_revision: compositionRevision,
-        composition_hash: compositionHash,
-      }),
-    }
-  );
-  return handleResponse(response);
-}
-
 export async function publishWorkspaceYSchemaComposition(
   projectId: string,
   workspaceId: string,
@@ -124,6 +142,7 @@ export async function publishWorkspaceYSchemaComposition(
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.tags?.length ? { tags: input.tags } : {}),
       }),
     }
   );

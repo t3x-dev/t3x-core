@@ -62,6 +62,17 @@ const storageMock = vi.hoisted(() => {
       Promise.resolve({ manifest: input.manifest_json })
     ),
     listProjectYSchemaVersionHistory: vi.fn(() => Promise.resolve([])),
+    updateYSchemaArtifactIdentity: vi.fn((_db, input) =>
+      Promise.resolve({
+        artifactId: input.artifact_id,
+        manifest: {
+          apiVersion: 't3x.dev/yschema-blueprint/v1',
+          canonicalName: 'projects/proj_modules/schema',
+          version: '1.0.0',
+          title: input.display_name ?? 'Module Workspace Schema',
+        },
+      })
+    ),
     state: () => workspaceState,
   };
 });
@@ -76,6 +87,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     publishYSchemaArtifactVersion: storageMock.publishYSchemaArtifactVersion,
     saveYSchemaCompositionSnapshot: storageMock.saveYSchemaCompositionSnapshot,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
+    updateYSchemaArtifactIdentity: storageMock.updateYSchemaArtifactIdentity,
   };
 });
 
@@ -86,6 +98,24 @@ vi.mock('../lib/yschema-artifact-registry', async () => {
     ensureBuiltInYSchemaArtifacts: vi.fn(() => Promise.resolve()),
     resolveCompositionArtifacts: vi.fn(() =>
       Promise.resolve({ core: builtInPrdCoreArtifact, modules: builtInPrdModules })
+    ),
+    resolveCompositionArtifactsV2: vi.fn(() =>
+      Promise.resolve([
+        {
+          apiVersion: 't3x.dev/yschema-module/v2',
+          canonicalName: 'team/problem',
+          version: '1.0.0',
+          title: 'Problem',
+          description: 'Problem contract',
+          status: 'active',
+          source: 'team',
+          tags: ['type:product'],
+          compatibility: { yschema: ['0.1'] },
+          provides: [],
+          imports: [],
+          contribution: { nodes: { problem: { slots: { statement: { type: 'string' } } } } },
+        },
+      ])
     ),
   };
 });
@@ -110,6 +140,22 @@ function composition(revision = 0) {
         canonicalName: 't3x/prd-system-architecture',
         version: '1.0.0',
         order: 5,
+      },
+    ],
+  };
+}
+
+function openComposition(revision = 0) {
+  return {
+    apiVersion: 't3x.dev/yschema-composition/v2',
+    id: 'composition:workspace_modules',
+    revision,
+    status: 'draft',
+    modules: [
+      {
+        canonicalName: 'team/problem',
+        version: '1.0.0',
+        presentationOrder: 10,
       },
     ],
   };
@@ -210,7 +256,7 @@ describe('Workspace YSchema Composition persistence', () => {
       canonicalName: 'projects/proj_modules/prd',
       version: '1.0.0',
       title: 'Module Workspace PRD',
-      status: 'active',
+      status: 'published',
     });
     expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenCalledWith(
       expect.anything(),
@@ -218,9 +264,125 @@ describe('Workspace YSchema Composition persistence', () => {
         owner_project_id: 'proj_modules',
         visibility: 'private',
         version: '1.0.0',
-        status: 'active',
+        status: 'published',
       })
     );
+  });
+
+  it('publishes an open Composition as a Blueprint-backed Schema rather than a Module', async () => {
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: openComposition(), if_revision: 4 }),
+      }
+    );
+    const saved: any = await savedResponse.json();
+    const response = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/product-schema',
+          version: '1.0.0',
+          title: 'Product Schema',
+          tags: ['product', 'source:official', 'team'],
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data).toMatchObject({
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName: 'projects/proj_modules/product-schema',
+      version: '1.0.0',
+      tags: ['product', 'source:team', 'team'],
+      blueprint: {
+        compositionApiVersion: 't3x.dev/yschema-composition/v2',
+        modules: [
+          expect.objectContaining({
+            canonicalName: 'team/problem',
+            version: '1.0.0',
+            hash: expect.stringMatching(/^sha256:/),
+          }),
+        ],
+      },
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        kind: 'schema',
+        family: 'open',
+        status: 'published',
+        tags: ['product', 'source:team', 'team'],
+      })
+    );
+  });
+
+  it('records a deterministic comparison against the prior Composition revision', async () => {
+    storageMock.listProjectYSchemaVersionHistory.mockResolvedValueOnce([
+      {
+        canonicalName: 'projects/proj_modules/product-schema',
+        version: '1.0.0',
+        artifactHash: `sha256:${'a'.repeat(64)}`,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        manifest: {
+          apiVersion: 't3x.dev/yschema-blueprint/v1',
+          canonicalName: 'projects/proj_modules/product-schema',
+          version: '1.0.0',
+          blueprint: {
+            compositionId: 'composition:workspace_modules',
+            compositionRevision: 0,
+          },
+          schema: {
+            yschema: '0.1',
+            name: 'projects/proj_modules/product-schema',
+            version: '1.0.0',
+            nodes: {},
+          },
+          registry: { schemaHash: `sha256:${'b'.repeat(64)}` },
+        },
+      },
+    ]);
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: openComposition(), if_revision: 4 }),
+      }
+    );
+    const saved: any = await savedResponse.json();
+
+    const response = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/product-schema',
+          version: '1.1.0',
+          title: 'Product Schema',
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.data.registry.comparison).toMatchObject({
+      baseVersion: '1.0.0',
+      baseSchemaHash: `sha256:${'b'.repeat(64)}`,
+      changes: expect.arrayContaining([
+        expect.objectContaining({ kind: 'ADD', path: 'nodes.problem' }),
+      ]),
+    });
   });
 
   it('lists the project-owned immutable Schema version history', async () => {
@@ -247,6 +409,50 @@ describe('Workspace YSchema Composition persistence', () => {
       family: 'prd',
       kind: 'core',
     });
+  });
+
+  it('updates mutable Schema identity metadata without publishing a new version', async () => {
+    const response = await app.request('/v1/projects/proj_modules/yschemas/schema_product', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        if_revision: 3,
+        display_name: 'Product delivery Schema',
+        description: 'Shared contract for the product team.',
+        tags: ['product', 'team:delivery'],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(storageMock.updateYSchemaArtifactIdentity).toHaveBeenCalledWith(expect.anything(), {
+      artifact_id: 'schema_product',
+      project_id: 'proj_modules',
+      if_revision: 3,
+      display_name: 'Product delivery Schema',
+      description: 'Shared contract for the product team.',
+      tags: ['product', 'source:team', 'team:delivery'],
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
+  });
+
+  it('archives a Schema identity while retaining its immutable version history', async () => {
+    const response = await app.request(
+      '/v1/projects/proj_modules/yschemas/schema_product/archive',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ if_revision: 4 }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(storageMock.updateYSchemaArtifactIdentity).toHaveBeenCalledWith(expect.anything(), {
+      artifact_id: 'schema_product',
+      project_id: 'proj_modules',
+      if_revision: 4,
+      lifecycle_status: 'archived',
+    });
+    expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate order values instead of normalizing ambiguous input', async () => {

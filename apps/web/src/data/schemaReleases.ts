@@ -4,10 +4,11 @@ import type {
   SchemaReleasePreview,
 } from '@/types/schemas';
 
-const PRD_CURRENT_RELEASE_ID = 'schema_prd_v2';
-const PROMPT_CURRENT_RELEASE_ID = 'schema_prompt_v1';
-const SKILL_CURRENT_RELEASE_ID = 'schema_skill_v1';
-const ESPHOME_DEVICE_CURRENT_RELEASE_ID = 'schema_esphome_device_v1';
+const PRD_V2_RELEASE_ID = 'schema_prd_v2';
+const PRD_V1_RELEASE_ID = 'schema_prd_v1';
+const PROMPT_V1_RELEASE_ID = 'schema_prompt_v1';
+const SKILL_V1_RELEASE_ID = 'schema_skill_v1';
+const ESPHOME_DEVICE_V1_RELEASE_ID = 'schema_esphome_device_v1';
 
 const prdSchemaReleases: SchemaReleasePreview[] = [
   {
@@ -16,9 +17,9 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     name: 'PRD Schema',
     version: 'v3',
     description:
-      'Draft version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
-    status: 'draft',
-    runtimeAvailable: false,
+      'Published version adds explicit acceptance coverage and keeps the existing PRD summary contract.',
+    status: 'published',
+    runtimeAvailable: true,
     usedByCommitCount: 0,
     usedByWorkspaceCount: 1,
     breakingChangeLevel: 'minor',
@@ -28,7 +29,7 @@ const prdSchemaReleases: SchemaReleasePreview[] = [
     requiredFields: ['summary.problem', 'summary.audience', 'summary.outcome', 'requirements.*'],
     compatibleWith: ['YSchema review', 'YOps apply', 'Leaf document'],
     migrationSummary:
-      'Comparison only. Existing v2 commits remain valid; one workspace is testing this draft without changing the current version.',
+      'Existing v2 commits remain valid; Workspaces adopt this version only when it is explicitly applied.',
     canonicalName: 't3x/prd',
     relationTypes: [],
     rules: [],
@@ -112,7 +113,7 @@ nodes:
       evidence:
         type: array
         provenanceRequired: true`,
-    changesBaseReleaseId: PRD_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: PRD_V2_RELEASE_ID,
     changes: [
       {
         kind: 'ADD',
@@ -137,7 +138,7 @@ nodes:
     name: 'PRD Schema',
     version: 'v2',
     description:
-      'Current project contract for product requirements, source-backed summaries, and structured requirement nodes.',
+      'Published contract for product requirements, source-backed summaries, and structured requirement nodes.',
     status: 'active',
     runtimeAvailable: true,
     releasedAt: '2026-06-20T00:00:00.000Z',
@@ -151,7 +152,7 @@ nodes:
     requiredFields: ['summary.problem', 'summary.audience', 'summary.outcome'],
     compatibleWith: ['YSchema review', 'YOps apply', 'Leaf document'],
     migrationSummary:
-      'Current version. New workspaces use v2; existing commits retain the exact version they were validated against.',
+      'Apply this exact version to a Workspace when its contract matches the work being performed.',
     canonicalName: 't3x/prd',
     relationTypes: [],
     rules: [],
@@ -229,11 +230,11 @@ nodes:
       acceptance:
         type: array
         provenanceRequired: true`,
-    changesBaseReleaseId: PRD_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: PRD_V1_RELEASE_ID,
     changes: [],
   },
   {
-    id: 'schema_prd_v1',
+    id: PRD_V1_RELEASE_ID,
     projectId: 'preview_project',
     name: 'PRD Schema',
     version: 'v1',
@@ -308,7 +309,7 @@ nodes:
     required: true
     repeated: true
     requiredSlots: [title]`,
-    changesBaseReleaseId: PRD_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: '',
     changes: [
       {
         kind: 'REMOVE',
@@ -331,7 +332,7 @@ nodes:
 
 const skillSchemaReleases: SchemaReleasePreview[] = [
   {
-    id: SKILL_CURRENT_RELEASE_ID,
+    id: SKILL_V1_RELEASE_ID,
     projectId: 'preview_project',
     name: 'Skill Schema',
     version: 'v1',
@@ -656,14 +657,14 @@ relation_types:
   instruction_uses_resource: { from: instructions/*, to: resources/* }
   requires: { from: workflows/*, to: dependencies/* }
   verifies: { from: checks/*, to: workflows/* }`,
-    changesBaseReleaseId: SKILL_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: '',
     changes: [],
   },
 ];
 
 const promptSchemaReleases: SchemaReleasePreview[] = [
   {
-    id: PROMPT_CURRENT_RELEASE_ID,
+    id: PROMPT_V1_RELEASE_ID,
     projectId: 'preview_project',
     name: 'Prompt Schema',
     version: 'v1',
@@ -1132,14 +1133,14 @@ rules:
   - id: prompt.resources_resolvable
   - id: prompt.output_schema_resolvable
   - id: prompt.blocking_check_required`,
-    changesBaseReleaseId: PROMPT_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: '',
     changes: [],
   },
 ];
 
 const esphomeDeviceSchemaReleases: SchemaReleasePreview[] = [
   {
-    id: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
+    id: ESPHOME_DEVICE_V1_RELEASE_ID,
     projectId: 'preview_project',
     name: 'ESPHome Device',
     version: 'v1',
@@ -1243,7 +1244,7 @@ nodes:
   api:
     required: false
 rules: []`,
-    changesBaseReleaseId: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
+    changesBaseReleaseId: '',
     changes: [],
   },
 ];
@@ -1254,7 +1255,6 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     name: 'PRD Schema',
     canonicalName: 't3x/prd',
     description: 'Product requirements, source-backed summaries, and acceptance contracts.',
-    currentReleaseId: PRD_CURRENT_RELEASE_ID,
     releases: prdSchemaReleases,
   },
   {
@@ -1262,7 +1262,6 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     name: 'Skill Schema',
     canonicalName: 't3x/skill',
     description: 'Portable agent capabilities, workflow routing, resources, checks, and evals.',
-    currentReleaseId: SKILL_CURRENT_RELEASE_ID,
     releases: skillSchemaReleases,
   },
   {
@@ -1270,7 +1269,6 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     name: 'Prompt Schema',
     canonicalName: 't3x/prompt',
     description: 'Typed messages, variables, resources, output contracts, checks, and evals.',
-    currentReleaseId: PROMPT_CURRENT_RELEASE_ID,
     releases: promptSchemaReleases,
   },
   {
@@ -1278,7 +1276,6 @@ const schemaFamilies: SchemaFamilyPreview[] = [
     name: 'ESPHome Device',
     canonicalName: 't3x/esphome-device',
     description: 'ESPHome device YAML state for config validation and local runtime checks.',
-    currentReleaseId: ESPHOME_DEVICE_CURRENT_RELEASE_ID,
     releases: esphomeDeviceSchemaReleases,
   },
 ];

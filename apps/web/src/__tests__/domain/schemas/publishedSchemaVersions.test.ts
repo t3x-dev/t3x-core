@@ -46,7 +46,40 @@ describe('published Schema version projections', () => {
     expect(isSchemaReleaseBindable(release)).toBe(true);
   });
 
-  it('places published versions into their Family history without changing current pointers', () => {
+  it('projects a recorded comparison into version history', () => {
+    const compared = publishedManifestToRelease(
+      {
+        ...manifest,
+        version: '1.1.0',
+        registry: {
+          schemaHash: `sha256:${'b'.repeat(64)}`,
+          comparison: {
+            baseVersion: '1.0.0',
+            baseSchemaHash: `sha256:${'a'.repeat(64)}`,
+            changes: [
+              {
+                kind: 'ADD',
+                path: 'nodes.summary.slots.audience',
+                summary: 'Contract path added.',
+              },
+            ],
+          },
+        },
+      },
+      'proj_test'
+    );
+
+    expect(compared.changesBaseReleaseId).toBe('published:projects/proj_test/prd@1.0.0');
+    expect(compared.changes).toEqual([
+      {
+        kind: 'ADD',
+        path: 'nodes.summary.slots.audience',
+        summary: 'Contract path added.',
+      },
+    ]);
+  });
+
+  it('keeps project versions out of Official families and groups them by canonical name', () => {
     const registry = {
       defaultFamilyId: 'prd',
       families: [
@@ -55,7 +88,6 @@ describe('published Schema version projections', () => {
           name: 'PRD',
           canonicalName: 't3x/prd',
           description: 'PRD contracts',
-          currentReleaseId: 'official-current',
           releases: [],
         },
         {
@@ -63,7 +95,6 @@ describe('published Schema version projections', () => {
           name: 'Prompt',
           canonicalName: 't3x/prompt',
           description: 'Prompt contracts',
-          currentReleaseId: 'prompt-current',
           releases: [],
         },
       ],
@@ -78,15 +109,80 @@ describe('published Schema version projections', () => {
 
     const merged = mergePublishedSchemaVersions(registry, [manifest, promptManifest], 'proj_test');
 
-    expect(merged.families[0]?.currentReleaseId).toBe('official-current');
-    expect(merged.families[0]?.releases[0]).toMatchObject({
+    expect(merged.families[0]).toMatchObject({ source: 'official', tags: ['source:official'] });
+    expect(merged.families[0]?.releases).toEqual([]);
+    expect(merged.families[1]?.releases).toEqual([]);
+    expect(merged.families[2]).toMatchObject({
+      id: 'published:projects/proj_test/prd',
       canonicalName: manifest.canonicalName,
-      version: manifest.version,
+      source: 'team',
+      tags: ['source:team'],
+      releases: [expect.objectContaining({ version: manifest.version })],
     });
-    expect(merged.families[1]?.currentReleaseId).toBe('prompt-current');
-    expect(merged.families[1]?.releases[0]).toMatchObject({
+    expect(merged.families[3]).toMatchObject({
+      id: 'published:projects/proj_test/prompt',
       canonicalName: promptManifest.canonicalName,
-      version: promptManifest.version,
+      source: 'team',
+      tags: ['source:team'],
+      releases: [expect.objectContaining({ version: promptManifest.version })],
     });
+  });
+
+  it('creates a separate Schema history for Blueprint versions', () => {
+    const registry = {
+      defaultFamilyId: 'prd',
+      families: [
+        {
+          id: 'prd',
+          name: 'PRD',
+          canonicalName: 't3x/prd',
+          description: 'PRD contracts',
+          releases: [],
+        },
+      ],
+    };
+    const blueprint: PublishedSchemaVersionManifest = {
+      ...manifest,
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName: 'projects/proj_test/product-schema',
+      title: 'Product Schema',
+      status: 'active',
+      family: undefined,
+    };
+
+    const merged = mergePublishedSchemaVersions(registry, [blueprint], 'proj_test');
+
+    expect(merged.families).toHaveLength(2);
+    expect(merged.families[1]).toMatchObject({
+      id: 'published:projects/proj_test/product-schema',
+      name: 'Product Schema',
+      canonicalName: 'projects/proj_test/product-schema',
+      source: 'team',
+      tags: ['source:team'],
+    });
+    expect(merged.families[1]?.releases[0]).toMatchObject({ version: '1.0.0' });
+  });
+
+  it('does not project legacy Draft manifests into Schema version history', () => {
+    const registry = {
+      defaultFamilyId: 'prd',
+      families: [
+        {
+          id: 'prd',
+          name: 'PRD',
+          canonicalName: 't3x/prd',
+          description: 'PRD contracts',
+          releases: [],
+        },
+      ],
+    };
+
+    const merged = mergePublishedSchemaVersions(
+      registry,
+      [{ ...manifest, status: 'draft' }],
+      'proj_test'
+    );
+
+    expect(merged.families[0]?.releases).toEqual([]);
   });
 });

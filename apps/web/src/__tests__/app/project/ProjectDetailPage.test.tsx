@@ -530,8 +530,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Schema versions' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Selected schema version' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    expect(
+      screen.queryByRole('region', { name: 'Selected schema version' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
+    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 
   it('keeps repository State visible while Canvas is loading', async () => {

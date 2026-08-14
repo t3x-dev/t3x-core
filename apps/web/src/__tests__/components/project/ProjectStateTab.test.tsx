@@ -4,9 +4,11 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
+import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit, SkillArtifact } from '@/types/api';
+import type { SchemaArtifactPreview } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
@@ -20,6 +22,7 @@ const hookMocks = vi.hoisted(() => ({
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
   saveDraft: vi.fn(),
+  schemaArtifacts: [] as SchemaArtifactPreview[],
   skillArtifact: null as SkillArtifact | null,
 }));
 
@@ -106,6 +109,14 @@ vi.mock('@/hooks/projects/useSkillArtifact', () => ({
     artifact: hookMocks.skillArtifact,
     error: null,
     loading: false,
+  }),
+}));
+
+vi.mock('@/hooks/schemas/useSchemaArtifactRegistry', () => ({
+  useSchemaArtifactRegistry: () => ({
+    artifacts: hookMocks.schemaArtifacts,
+    error: undefined,
+    pending: false,
   }),
 }));
 
@@ -489,6 +500,7 @@ describe('ProjectStateTab', () => {
       navigationMocks.search = url.search;
     });
     setupHookMocks();
+    hookMocks.schemaArtifacts = [];
     hookMocks.skillArtifact = null;
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({
@@ -791,15 +803,15 @@ describe('ProjectStateTab', () => {
     const inspectorSeparator = screen.getByRole('separator', {
       name: 'Resize PRD inspector',
     });
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '220');
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '252');
     expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
     fireEvent.keyDown(outlineSeparator, { key: 'ArrowRight' });
     fireEvent.keyDown(inspectorSeparator, { key: 'ArrowLeft' });
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '236');
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '268');
     expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '326');
     fireEvent.doubleClick(outlineSeparator);
     fireEvent.doubleClick(inspectorSeparator);
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '220');
+    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '252');
     expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
 
     vi.spyOn(
@@ -816,7 +828,7 @@ describe('ProjectStateTab', () => {
       y: 120,
       toJSON: () => ({}),
     });
-    fireEvent.mouseDown(outlineSeparator, { clientX: 220 });
+    fireEvent.mouseDown(outlineSeparator, { clientX: 252 });
     fireEvent.mouseMove(document, { clientX: 270 });
     expect(outlineSeparator).toHaveAttribute('aria-valuenow', '270');
     fireEvent.mouseUp(document);
@@ -856,6 +868,79 @@ describe('ProjectStateTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'raw' }));
     expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
+  });
+
+  it('uses a current Workspace composition when the rendered HEAD has no committed composition', async () => {
+    const rolloutArtifact = PRD_MODULE_ARTIFACTS.find(
+      (artifact) => artifact.canonicalName === 't3x/prd-rollout-operations'
+    )!;
+    hookMocks.schemaArtifacts = [
+      PRD_CORE_ARTIFACT,
+      { ...rolloutArtifact, nodePaths: ['rollout_plan'] },
+    ];
+    hookMocks.projectWorkspaces = [
+      {
+        id: 'workspace_current_prd',
+        projectId: 'proj_test',
+        title: 'Current PRD workspace',
+        summary: 'Draft composition based on the rendered HEAD',
+        status: 'draft',
+        updatedAt: '2026-07-09T08:00:00.000Z',
+        baseCommitHash: PRD_COMMIT.hash,
+        targetBranch: 'main',
+        sourceBundle: [],
+        schemaBindings: [],
+        schemaComposition: {
+          apiVersion: 't3x.dev/yschema-composition/v1',
+          id: 'composition:workspace_current_prd',
+          revision: 2,
+          family: 'prd',
+          status: 'draft',
+          core: {
+            canonicalName: PRD_CORE_ARTIFACT.canonicalName,
+            version: PRD_CORE_ARTIFACT.version,
+          },
+          modules: [
+            {
+              canonicalName: rolloutArtifact.canonicalName,
+              version: rolloutArtifact.version,
+              order: 0,
+              slot: 'operations',
+            },
+          ],
+        },
+        schemaCandidate: { summary: 'Current Workspace', fields: [] },
+        schemaReview: { verdict: 'ready', summary: 'Ready', gaps: [] },
+        yopsDraft: { id: 'draft_current_prd', operations: [] },
+        outputTargets: [],
+      },
+    ];
+
+    renderStateTab();
+    await screen.findByText('Path / Key');
+    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+
+    expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'modules' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('1 Module used')).toBeInTheDocument();
+    expect(screen.getByText('Workspace composition')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'PRD Module navigation' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Go to Rollout & Operations instance' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open Rollout & Operations in YSchema' })
+    ).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/schemas?family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
+    );
+    expect(
+      screen.getByText('Mapped by Workspace composition t3x/prd-rollout-operations@1.0.0')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'outline' }));
+    expect(screen.getByRole('navigation', { name: 'PRD semantic nodes' })).toBeInTheDocument();
+    expect(screen.getByText('Rollout Plan')).toBeInTheDocument();
   });
 
   it('uses Skill-specific state labels and the Skill reader for a Skill commit', async () => {

@@ -5,12 +5,10 @@ import type { SchemaContractPath, SchemaReleasePreview } from '@/types/schemas';
 import { cn } from '@/utils/cn';
 
 interface SchemaStructureViewProps {
-  currentRelease: SchemaReleasePreview | null;
   release: SchemaReleasePreview;
 }
 
-export function SchemaStructureView({ currentRelease, release }: SchemaStructureViewProps) {
-  const isCurrent = release.id === currentRelease?.id;
+export function SchemaStructureView({ release }: SchemaStructureViewProps) {
   const groups = groupContractPaths(release.structure);
   const expandGroupsByDefault = release.structure.length <= 12;
   const [expandedByGroup, setExpandedByGroup] = useState<Record<string, boolean>>({});
@@ -109,16 +107,7 @@ export function SchemaStructureView({ currentRelease, release }: SchemaStructure
           <dl className="grid gap-2">
             <MetadataRow label="Commits" value={String(release.usedByCommitCount)} />
             <MetadataRow label="Workspaces" value={String(release.usedByWorkspaceCount)} />
-            <MetadataRow
-              label="New workspaces"
-              value={
-                isCurrent
-                  ? `Use ${release.version}`
-                  : currentRelease
-                    ? `Use current ${currentRelease.version}`
-                    : 'No current version set'
-              }
-            />
+            <MetadataRow label="Binding" value="Applied explicitly per Workspace" />
           </dl>
         </section>
 

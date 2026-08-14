@@ -37,7 +37,8 @@ describe('project foundation previews', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
+    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 
   it('reflects schema bindings from the schema tab in the workspace preview', async () => {
