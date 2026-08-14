@@ -3,6 +3,7 @@ import type { LocalPaths } from './paths.js';
 
 export const DEFAULT_API_PORT = 8000;
 export const DEFAULT_WEB_PORT = 3000;
+export const LOCAL_RUNTIME_HOST = '127.0.0.1';
 
 export interface StartOptionsInput {
   dataDir?: string;
@@ -46,6 +47,7 @@ export function buildApiEnv(
     ...baseEnv,
     NODE_ENV: 'development',
     PORT: String(options.apiPort),
+    HOST: LOCAL_RUNTIME_HOST,
     AUTH_DISABLED: 'true',
     NEXT_PUBLIC_AUTH_DISABLED: 'true',
     T3X_DATA_DIR: options.dataDir,
@@ -60,10 +62,10 @@ export function buildWebEnv(
     ...baseEnv,
     NODE_ENV: 'production',
     PORT: String(options.webPort),
-    HOSTNAME: '0.0.0.0',
+    HOSTNAME: LOCAL_RUNTIME_HOST,
     AUTH_DISABLED: 'true',
     NEXT_PUBLIC_AUTH_DISABLED: 'true',
-    NEXT_PUBLIC_API_URL: `http://localhost:${options.apiPort}`,
+    NEXT_PUBLIC_API_URL: `http://${LOCAL_RUNTIME_HOST}:${options.apiPort}`,
   };
 }
 

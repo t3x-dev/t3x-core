@@ -14,7 +14,12 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
-import { closePostgresStorage, createPostgresStorage, type PostgresDB } from './postgres';
+import {
+  closePostgresStorage,
+  createPostgresStorage,
+  getPostgresClient,
+  type PostgresDB,
+} from './postgres';
 
 const DEFAULT_PORT = 5445;
 const DEFAULT_DATABASE = 't3x';
@@ -210,6 +215,11 @@ export function getEmbeddedRawClient() {
     rawClient = client;
   }
   return rawClient;
+}
+
+/** Return the postgres.js client owned by this embedded entry point. */
+export function getEmbeddedPostgresClient() {
+  return getPostgresClient();
 }
 
 /**

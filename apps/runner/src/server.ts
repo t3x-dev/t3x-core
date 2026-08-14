@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
 import { isEnabledEnv, isTrustedLoopbackRequest } from './debug-access.js';
+import { assertSafeAgentEndpoint, fetchAgentEndpoint } from './endpoint-security.js';
 import {
   getEngineCallbackUrl,
   getEngineUrl,
@@ -12,15 +13,25 @@ import {
 import { evalEngine } from './evaluator/index.js';
 import { logger } from './lib/logger.js';
 import { triggerN8nWorkflow } from './n8n.js';
+import { resolveRunnerHost, resolveRunnerPort } from './network.js';
 import { observer } from './observer.js';
 import type { EvalResult } from './schemas/eval-result.js';
 import {
-  AgentConfigSchema,
-  AgentInputSchema,
   EngineRunRequestSchema,
+  EvalRulesSchema,
   N8nCallbackSchema,
+  ProjectScopedAgentConfigSchema,
+  ProjectScopedAgentInputSchema,
+  RunRecordSchema,
 } from './schemas/index.js';
 import type { RunRecord } from './schemas/run-record.js';
+import {
+  buildSignedN8nCallbackUrl,
+  runnerServiceToken,
+  runnerSignatureQuery,
+  verifyN8nCallbackSignature,
+  verifyRunnerBearer,
+} from './service-auth.js';
 import {
   buildTraceSummary,
   mapN8nExecutionToRunRecord,
@@ -66,7 +77,11 @@ function ensureDebugAccess(req: Request, res: Response): boolean {
     return false;
   }
 
-  if (req.header('authorization') !== `Bearer ${debugToken}`) {
+  const providedDebugToken = req.header('x-runner-debug-token') ?? req.header('authorization');
+  const normalizedDebugToken = providedDebugToken?.startsWith('Bearer ')
+    ? providedDebugToken.slice(7)
+    : providedDebugToken;
+  if (normalizedDebugToken !== debugToken) {
     res.status(401).json({
       success: false,
       error: { code: 'UNAUTHORIZED', message: 'Missing or invalid debug bearer token' },
@@ -92,6 +107,46 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const reqId = randomUUID().replace(/-/g, '').slice(0, 12);
   (req as Request & { id: string }).id = reqId;
   res.setHeader('X-Request-Id', reqId);
+  next();
+});
+
+// Every standalone business route uses a service identity. Health and service
+// metadata stay public for orchestrators; n8n receives a per-run HMAC callback
+// capability instead of the shared secret itself.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/' || req.path === '/health' || req.path === '/ready') return next();
+
+  let authentication: 'ok' | 'missing-config' | 'invalid';
+  if (req.path === '/callbacks/n8n') {
+    const signature =
+      typeof req.query[runnerSignatureQuery] === 'string'
+        ? req.query[runnerSignatureQuery]
+        : undefined;
+    const signedCallback = verifyN8nCallbackSignature(
+      signature,
+      typeof req.body?.run_id === 'string' ? req.body.run_id : undefined,
+      typeof req.body?.runner_run_id === 'string' ? req.body.runner_run_id : undefined
+    );
+    const bearer = verifyRunnerBearer(req.header('authorization'));
+    authentication = signedCallback === 'ok' || bearer === 'ok' ? 'ok' : signedCallback;
+  } else {
+    authentication = verifyRunnerBearer(req.header('authorization'));
+  }
+
+  if (authentication === 'missing-config') {
+    res.status(503).json({
+      success: false,
+      error: { code: 'SERVICE_AUTH_NOT_CONFIGURED', message: 'RUNNER_SERVICE_TOKEN is required' },
+    });
+    return;
+  }
+  if (authentication !== 'ok') {
+    res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Invalid or missing Runner service identity' },
+    });
+    return;
+  }
   next();
 });
 
@@ -238,11 +293,12 @@ app.get('/debug/n8n-check', async (req, res) => {
 /**
  * POST /agents - Register an agent
  */
-app.post('/agents', (req, res) => {
+app.post('/agents', async (req, res) => {
   try {
-    const config = AgentConfigSchema.parse(req.body);
-    observer.registerAgent(config);
-    logger.info({ agent_id: config.id }, 'Agent registered');
+    const { project_id: projectId, ...config } = ProjectScopedAgentConfigSchema.parse(req.body);
+    await assertSafeAgentEndpoint(config.endpoint);
+    observer.registerAgent(projectId, config);
+    logger.info({ project_id: projectId, agent_id: config.id }, 'Agent registered');
     res.json({ success: true, data: { agent_id: config.id } });
   } catch (error) {
     res
@@ -255,7 +311,14 @@ app.post('/agents', (req, res) => {
  * GET /agents/:id - Get agent config
  */
 app.get('/agents/:id', (req, res) => {
-  const agent = observer.getAgent(req.params.id);
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
+  const agent = observer.getAgent(projectId, req.params.id);
   if (!agent) {
     return res
       .status(404)
@@ -276,8 +339,8 @@ app.get('/agents/:id', (req, res) => {
  */
 app.post('/run', async (req, res) => {
   try {
-    const input = AgentInputSchema.parse(req.body);
-    const agent = observer.getAgent(input.agent_id);
+    const input = ProjectScopedAgentInputSchema.parse(req.body);
+    const agent = observer.getAgent(input.project_id, input.agent_id);
 
     if (!agent) {
       return res.status(404).json({
@@ -287,13 +350,16 @@ app.post('/run', async (req, res) => {
     }
 
     // Start observing
-    const runId = observer.startRun(input.agent_id, input);
-    logger.info({ run_id: runId, agent_id: input.agent_id }, 'Run started');
+    const runId = observer.startRun(input.project_id, input.agent_id, input);
+    logger.info(
+      { project_id: input.project_id, run_id: runId, agent_id: input.agent_id },
+      'Run started'
+    );
 
     try {
       // Forward to agent
       const startTime = Date.now();
-      const response = await fetch(agent.endpoint, {
+      const response = await fetchAgentEndpoint(agent.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -312,23 +378,23 @@ app.post('/run', async (req, res) => {
       const latencyMs = Date.now() - startTime;
 
       // Complete the run
-      const record = observer.completeRun(runId, output, 'completed');
+      const record = observer.completeRun(input.project_id, runId, output, 'completed');
       logger.info({ run_id: runId, latency_ms: latencyMs }, 'Run completed');
 
       res.json({
         success: true,
-        data: { run_id: runId, output, record },
+        data: { run_id: runId, output, trace: record },
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      observer.recordError(runId, errorMsg);
-      const record = observer.completeRun(runId, null, 'failed');
+      observer.recordError(input.project_id, runId, errorMsg);
+      const record = observer.completeRun(input.project_id, runId, null, 'failed');
 
       logger.error({ run_id: runId, error: errorMsg }, 'Run failed');
       res.status(500).json({
         success: false,
         error: { code: 'RUN_FAILED', message: errorMsg },
-        data: { run_id: runId, record },
+        data: { run_id: runId, trace: record },
       });
     }
   } catch (error) {
@@ -346,10 +412,12 @@ app.post('/run', async (req, res) => {
 app.post('/run/:id/step', (req, res) => {
   try {
     const runId = req.params.id;
-    const { type, data } = req.body;
+    const { project_id: projectId, type, data } = req.body;
+    if (typeof projectId !== 'string' || !projectId) throw new Error('project_id is required');
 
     if (type === 'llm_call') {
       observer.recordLLMCall(
+        projectId,
         runId,
         data.input,
         data.output,
@@ -358,12 +426,19 @@ app.post('/run/:id/step', (req, res) => {
         data.tokens
       );
     } else if (type === 'tool_call') {
-      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
+      observer.recordToolCall(
+        projectId,
+        runId,
+        data.tool_name,
+        data.input,
+        data.output,
+        data.latency_ms
+      );
     } else if (type === 'error') {
-      observer.recordError(runId, data.error, data.step_id);
+      observer.recordError(projectId, runId, data.error, data.step_id);
     }
 
-    res.json({ success: true, data: {} });
+    res.json({ success: true, data: { recorded: true } });
   } catch (error) {
     res
       .status(400)
@@ -378,17 +453,32 @@ app.post('/run/:id/step', (req, res) => {
 app.post('/run/:id/event', (req, res) => {
   try {
     const runId = req.params.id;
-    const { type, data } = req.body;
+    const { project_id: projectId, type, data } = req.body;
+    if (typeof projectId !== 'string' || !projectId) throw new Error('project_id is required');
 
     if (type === 'llm_call') {
-      observer.recordLLMCall(runId, data.input, data.output, data.model, data.latency_ms);
+      observer.recordLLMCall(
+        projectId,
+        runId,
+        data.input,
+        data.output,
+        data.model,
+        data.latency_ms
+      );
     } else if (type === 'tool_call') {
-      observer.recordToolCall(runId, data.tool_name, data.input, data.output, data.latency_ms);
+      observer.recordToolCall(
+        projectId,
+        runId,
+        data.tool_name,
+        data.input,
+        data.output,
+        data.latency_ms
+      );
     } else if (type === 'error') {
-      observer.recordError(runId, data.error);
+      observer.recordError(projectId, runId, data.error);
     }
 
-    res.json({ success: true, data: {} });
+    res.json({ success: true, data: { recorded: true } });
   } catch (error) {
     res
       .status(400)
@@ -400,7 +490,14 @@ app.post('/run/:id/event', (req, res) => {
  * GET /run/:id - Get run record
  */
 app.get('/run/:id', (req, res) => {
-  const record = observer.getRun(req.params.id);
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
+  const record = observer.getRun(projectId, req.params.id);
   if (!record) {
     return res
       .status(404)
@@ -413,8 +510,15 @@ app.get('/run/:id', (req, res) => {
  * GET /runs - List runs
  */
 app.get('/runs', (req, res) => {
+  const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
+    });
+  }
   const system = req.query.system as 'n8n' | 'langchain' | 'custom' | undefined;
-  const runs = observer.listRuns(system);
+  const runs = observer.listRuns(projectId, system);
   res.json({ success: true, data: { runs } });
 });
 
@@ -434,7 +538,7 @@ app.get('/runs', (req, res) => {
 app.post('/runs', async (req, res) => {
   try {
     const data = EngineRunRequestSchema.parse(req.body);
-    const runner_run_id = `runner_run_${randomUUID().slice(0, 8)}`;
+    const runner_run_id = `runner_run_${randomUUID()}`;
 
     // Note: No longer storing in pendingRuns Map
     // Run info is stored in Engine's PostgreSQL and fetched on callback
@@ -443,9 +547,16 @@ app.post('/runs', async (req, res) => {
 
     // Trigger n8n workflow (async, fire-and-forget)
     if (data.workflow?.webhook_id) {
-      triggerN8nWorkflow(data, runner_run_id).catch((err) => {
-        logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
-      });
+      const signedCallbackUrl = buildSignedN8nCallbackUrl(
+        data.callback_url,
+        data.run_id,
+        runner_run_id
+      );
+      triggerN8nWorkflow({ ...data, callback_url: signedCallbackUrl }, runner_run_id).catch(
+        (err) => {
+          logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
+        }
+      );
     }
 
     res.json({ success: true, data: { runner_run_id, status: 'running' } });
@@ -593,6 +704,7 @@ async function processN8nCallback(data: {
 
       runRecord = mapN8nExecutionToRunRecord(execution, {
         runId: runInfo.run_id,
+        projectId: runInfo.project_id,
       });
       logger.info(
         {
@@ -766,7 +878,10 @@ async function processN8nCallback(data: {
       engineCallbackUrl,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
+        },
         body: JSON.stringify(ingestPayload),
         signal: AbortSignal.timeout(10000),
       },
@@ -807,6 +922,7 @@ function buildRunRecordFromCallback(
   const now = new Date().toISOString();
   return {
     run_id: runInfo.run_id,
+    project_id: runInfo.project_id,
     status: data.error ? 'failed' : 'completed',
     inputs: runInfo.inputs || {},
     output: data.output || {},
@@ -856,12 +972,13 @@ function buildRunRecordFromCallback(
  */
 app.post('/webhook/run', async (req, res) => {
   try {
-    const input = AgentInputSchema.parse({
+    const input = ProjectScopedAgentInputSchema.parse({
+      project_id: req.body.project_id,
       agent_id: req.body.agent_id,
       input: req.body.input,
       config: req.body.config,
     });
-    const agent = observer.getAgent(input.agent_id);
+    const agent = observer.getAgent(input.project_id, input.agent_id);
 
     if (!agent) {
       return res.status(404).json({
@@ -870,11 +987,11 @@ app.post('/webhook/run', async (req, res) => {
       });
     }
 
-    const runId = observer.startRun(input.agent_id, input);
+    const runId = observer.startRun(input.project_id, input.agent_id, input);
     const startTime = Date.now();
 
     try {
-      const response = await fetch(agent.endpoint, {
+      const response = await fetchAgentEndpoint(agent.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -891,8 +1008,15 @@ app.post('/webhook/run', async (req, res) => {
 
       const output = await parseAgentResponse(response);
       const latencyMs = Date.now() - startTime;
-      observer.recordToolCall(runId, 'agent_http_request', input.input, output, latencyMs);
-      const record = observer.completeRun(runId, output, 'completed');
+      observer.recordToolCall(
+        input.project_id,
+        runId,
+        'agent_http_request',
+        input.input,
+        output,
+        latencyMs
+      );
+      const record = observer.completeRun(input.project_id, runId, output, 'completed');
       const evalResult =
         req.body.auto_eval === true
           ? evalEngine.evaluateWithLeaf(
@@ -907,8 +1031,8 @@ app.post('/webhook/run', async (req, res) => {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      observer.recordError(runId, errorMsg);
-      const record = observer.completeRun(runId, null, 'failed');
+      observer.recordError(input.project_id, runId, errorMsg);
+      const record = observer.completeRun(input.project_id, runId, null, 'failed');
 
       res.status(500).json({
         success: false,
@@ -935,23 +1059,40 @@ app.post('/webhook/run', async (req, res) => {
  */
 app.post('/eval', async (req, res) => {
   try {
-    const { run_record, rules_ref, rules } = req.body;
+    const { project_id: projectId, run_id: runId, run_record, rules_ref, rules } = req.body;
 
-    if (!run_record) {
+    if (typeof projectId !== 'string' || !projectId) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_REQUEST', message: 'run_record is required' },
+        error: { code: 'INVALID_REQUEST', message: 'project_id is required' },
       });
     }
 
-    // Build leaf-like object for evaluation
-    const leaf = rules_ref ? { rules_ref } : rules ? { rules_ref: undefined } : undefined;
+    const resolvedRecord =
+      run_record ?? (typeof runId === 'string' ? observer.getRun(projectId, runId) : undefined);
 
-    const evalResult = evalEngine.evaluateWithLeaf(run_record, leaf);
+    if (!resolvedRecord) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'run_id or run_record is required' },
+      });
+    }
+
+    const validatedRecord = RunRecordSchema.parse(resolvedRecord);
+    if (validatedRecord.project_id !== projectId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'run_record does not belong to project_id' },
+      });
+    }
+
+    const evalResult = rules
+      ? evalEngine.evaluate(validatedRecord, EvalRulesSchema.parse(rules))
+      : evalEngine.evaluateWithLeaf(validatedRecord, rules_ref ? { rules_ref } : undefined);
 
     logger.info(
       {
-        run_id: run_record.run_id,
+        run_id: validatedRecord.run_id,
         passed: evalResult.passed,
         score: evalResult.score.toFixed(2),
       },
@@ -983,9 +1124,18 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // Start Server
 // ============================================
 
-export function startServer(port: number | string = process.env.PORT || 8080) {
-  return app.listen(port, () => {
-    logger.info({ port }, 'T3X Runner started');
+export function startServer(
+  port: number | string = process.env.PORT || 8080,
+  host: string = resolveRunnerHost()
+) {
+  const numericPort = resolveRunnerPort(port);
+  const bindHost = resolveRunnerHost({ ...process.env, RUNNER_HOST: host });
+
+  return app.listen(numericPort, bindHost, () => {
+    logger.info(
+      { host: bindHost, port: numericPort, authentication: 'service-bearer' },
+      'T3X Runner started'
+    );
     logger.info('Endpoints:');
     logger.info('  GET  /health        - Health check');
     logger.info('  GET  /ready         - Readiness check');

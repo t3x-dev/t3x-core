@@ -24,6 +24,7 @@ import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
 import type {
+  ExtractionLLMOutcome,
   ExtractionLLMResult,
   ExtractionVariants,
   LLMCallInput,
@@ -59,6 +60,8 @@ export interface ExtractionResult {
   ops: SourcedYOp[];
   /** Preset variants derived from the same server extraction, when available. */
   variants?: ExtractionVariants;
+  /** API outcome metadata for the staged proposal, including partial warnings/dropped items. */
+  outcome?: ExtractionLLMOutcome;
   /**
    * True when the worker called `commitOps` itself (i.e. `commit !== false`).
    * Callers reading this can avoid double-applying.
@@ -169,10 +172,12 @@ export async function runExtraction({
   while (true) {
     let ops: SourcedYOp[];
     let variants: ExtractionVariants | undefined;
+    let outcome: ExtractionLLMOutcome | undefined;
     try {
       const llmResult = normalizeLLMResult(await llm({ turns, failingOps: prevFailing }));
       ops = llmResult.ops;
       variants = llmResult.variants;
+      outcome = llmResult.outcome;
     } catch (e) {
       attempt++;
 
@@ -246,7 +251,12 @@ export async function runExtraction({
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {
       if (commit) await commitOps(conversationId, ops);
-      return { ops, ...(variants ? { variants } : {}), committed: commit };
+      return {
+        ops,
+        ...(variants ? { variants } : {}),
+        ...(outcome ? { outcome } : {}),
+        committed: commit,
+      };
     }
 
     attempt++;
@@ -267,7 +277,12 @@ export async function runExtraction({
             }
           );
           if (commit) await commitOps(conversationId, repairedOps);
-          return { ops: repairedOps, committed: commit };
+          return {
+            ops: repairedOps,
+            ...(variants ? { variants } : {}),
+            ...(outcome ? { outcome } : {}),
+            committed: commit,
+          };
         }
 
         if (insertedDefinePaths.length > 0) {

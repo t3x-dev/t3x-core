@@ -81,6 +81,73 @@ describe('extractors/v2 compiler', () => {
     ]);
   });
 
+  it('uses the evidence quote that best supports the emitted value', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: { key: 'trip', values: { city: 'Hangzhou' } },
+          evidence: [
+            { turn_tag: 'T1', quote: 'Plan the trip.', role: 'primary' },
+            { turn_tag: 'T2', quote: 'The destination city is Hangzhou.', role: 'supporting' },
+          ],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'test-model',
+      extractedAt: '2026-08-13T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1', T2: 'sha256:turn-2' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops[0]?.source).toMatchObject({
+      turn_ref: { turn_hash: 'sha256:turn-2', quote: 'The destination city is Hangzhou.' },
+    });
+  });
+
+  it('prefers two agreeing concrete path fields over a generic path hint', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { path: 'project' },
+          candidate: { key: 'project', path_hint: 'root', values: { status: 'active' } },
+          evidence: [{ turn_tag: 'T1', quote: 'The project is active.', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'test-model',
+      extractedAt: '2026-08-13T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toEqual(
+      expect.arrayContaining([expect.objectContaining({ define: { path: 'project' } })])
+    );
+    expect(result.ops.some((op) => 'define' in op && op.define.path === 'root')).toBe(false);
+  });
+
   it('does not treat bootstrap target_ref paths as pre-existing ancestors', () => {
     const draft: ExtractionDraft = {
       schema: EXTRACTION_DRAFT_SCHEMA,

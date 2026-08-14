@@ -5,11 +5,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { DEMO_WORKSPACE_FIXTURE, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   branches,
+  claimUnownedProjects,
   conversations,
   deleteProject,
   ensureMainBranch,
   findProjects,
   findProjectWithStats,
+  findUnownedProjects,
   getBusinessRules,
   insertProject,
   leaves,
@@ -23,10 +25,14 @@ import {
   verifyHashChain,
 } from '@t3x-dev/storage';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import type { Context } from 'hono';
 import { getDB } from '../lib/db';
+import { errorResponse } from '../lib/errors';
+import { hasOperatorAccess } from '../lib/operator-access';
 import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
+  assertProjectCreationAccess,
   getUserId,
 } from '../lib/project-access';
 import {
@@ -46,6 +52,13 @@ import {
 } from '../schemas/projects';
 
 export const projectRoutes = new OpenAPIHono();
+
+function requireProjectOperator(c: Context): Response | null {
+  if (!hasOperatorAccess(c)) {
+    return errorResponse(c, 'FORBIDDEN', 'Legacy project recovery requires operator access');
+  }
+  return null;
+}
 
 function isDemoProject(project: { name: string; metadataJson: string | null }) {
   if (!project.metadataJson) return false;
@@ -200,6 +213,102 @@ async function seedDemoWorkspaceIfEmpty(
   }
 }
 
+const unownedProjectsResponse = SuccessResponseSchema(
+  z.object({ projects: z.array(ProjectSchema) })
+);
+
+const listUnownedProjectsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/unowned',
+  tags: ['Projects'],
+  summary: 'List active legacy projects without an owner',
+  description:
+    'Operator-only recovery endpoint. Unowned projects are inaccessible to authenticated humans until explicitly claimed.',
+  responses: {
+    200: {
+      description: 'Unowned projects',
+      content: { 'application/json': { schema: unownedProjectsResponse } },
+    },
+    403: {
+      description: 'Operator access required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler includes shared operator-denial response
+projectRoutes.openapi(listUnownedProjectsRoute, async (c) => {
+  const denied = requireProjectOperator(c);
+  if (denied) return denied;
+
+  try {
+    const db = await getDB();
+    const unowned = await findUnownedProjects(db);
+    return c.json({ success: true as const, data: { projects: unowned.map(toApiProject) } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
+  }
+});
+
+const claimUnownedProjectsRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/claim-unowned',
+  tags: ['Projects'],
+  summary: 'Claim active legacy projects for the current operator',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ project_ids: z.array(z.string().min(1)).min(1).max(100) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Projects claimed by the current operator',
+      content: { 'application/json': { schema: unownedProjectsResponse } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Operator access required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler includes shared operator-denial response
+projectRoutes.openapi(claimUnownedProjectsRoute, async (c) => {
+  const denied = requireProjectOperator(c);
+  if (denied) return denied;
+
+  const userId = getUserId(c);
+  if (!userId) {
+    return errorResponse(c, 'FORBIDDEN', 'A human operator identity is required to claim projects');
+  }
+
+  try {
+    const db = await getDB();
+    const claimed = await claimUnownedProjects(db, userId, c.req.valid('json').project_ids);
+    return c.json({ success: true as const, data: { projects: claimed.map(toApiProject) } }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
+  }
+});
+
 const ensureDemoWorkspaceRoute = createRoute({
   method: 'post',
   path: '/v1/projects/demo-workspace',
@@ -290,6 +399,14 @@ const createProjectRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Machine credentials cannot create projects',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -303,6 +420,9 @@ const createProjectRoute = createRoute({
 
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
+
+  const denied = assertProjectCreationAccess(c);
+  if (denied) return denied;
 
   try {
     const db = await getDB();

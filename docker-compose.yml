@@ -61,9 +61,14 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION=${AUTH_DISABLED:-false}
+      - T3X_OPERATOR_USER_IDS=${T3X_OPERATOR_USER_IDS:-}
+      - T3X_OPERATOR_KEY_IDS=${T3X_OPERATOR_KEY_IDS:-}
+      - RUNNER_SERVICE_TOKEN=${RUNNER_SERVICE_TOKEN:-}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
       - GOOGLE_AI_STUDIO_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_KEY
+      - T3X_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -83,7 +88,6 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_RUNNER_ENABLED: ${NEXT_PUBLIC_RUNNER_ENABLED:-true}
-        NEXT_PUBLIC_RUNNER_API_URL: ${NEXT_PUBLIC_RUNNER_API_URL:-http://localhost:8080}
         NEXT_PUBLIC_AUTH_DISABLED: ${AUTH_DISABLED:-false}
     container_name: t3x-webui
     ports:
@@ -96,7 +100,6 @@ services:
       - NEXT_PUBLIC_API_URL=http://t3x-api:8000
       # Server-side API URL for inter-container calls (NextAuth callback, SSR, etc.)
       - T3X_API_URL=http://t3x-api:8000
-      - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
       # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
       - HOSTNAME=0.0.0.0
       # Auth is on by default for Docker/self-hosted use.
@@ -130,14 +133,21 @@ services:
       dockerfile: apps/runner/Dockerfile
     container_name: t3x-runner
     ports:
-      - "8080:8080"
+      # Runner control routes are intentionally exposed only on host loopback.
+      - "127.0.0.1:${RUNNER_PORT:-8080}:8080"
     environment:
       - PORT=8080
+      # Inter-container callers need the service to listen on the Docker network.
+      - RUNNER_HOST=0.0.0.0
+      # Required for the authenticated API-to-Runner control plane.
+      - RUNNER_SERVICE_TOKEN=${RUNNER_SERVICE_TOKEN:-}
       - T3X_API_URL=http://t3x-api:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - N8N_API_URL=http://n8n:5678/api/v1
       - N8N_API_KEY=${N8N_API_KEY:-}
       - LOG_LEVEL=info
+      # Exact private origins Runner may call; public HTTP(S) origins do not need listing.
+      - RUNNER_ENDPOINT_ALLOWLIST=${RUNNER_ENDPOINT_ALLOWLIST:-http://agent-demo:9000}
       # Trace storage policy: always | on_failure | on_violation
       - TRACE_POLICY=${TRACE_POLICY:-always}
       # CORS: Allow WebUI access from common local origins

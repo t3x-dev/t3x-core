@@ -94,9 +94,9 @@ describe('Frontend API Endpoint References', () => {
     });
   });
 
-  describe('Runner API (should use RUNNER_URL)', () => {
-    // These functions should call RUNNER_URL, not API_V1
-    it('checkRunnerHealth calls Runner endpoint', () => {
+  describe('Runner API (should use authenticated API proxy)', () => {
+    // Browser code must never call the standalone Runner origin directly.
+    it('checkRunnerHealth calls the Runner API proxy', () => {
       // Look for the function and capture enough to include the URL
       const pattern = /export async function checkRunnerHealth[\s\S]{0,300}?handleResponse/m;
       const match = apiCode.match(pattern);
@@ -104,11 +104,12 @@ describe('Frontend API Endpoint References', () => {
 
       const functionCode = match![0];
 
-      expect(functionCode).toMatch(/RUNNER_URL/);
+      expect(functionCode).toMatch(/RUNNER_API/);
       expect(functionCode).not.toMatch(/API_V1/);
+      expect(apiCode).not.toMatch(/NEXT_PUBLIC_RUNNER_API_URL/);
     });
 
-    it('runEval calls Runner endpoint', () => {
+    it('runEval calls the project-scoped Runner API proxy', () => {
       // runEval is more complex, extend the search range
       const pattern = /export async function runEval[\s\S]{0,800}?handleResponse/m;
       const match = apiCode.match(pattern);
@@ -116,7 +117,8 @@ describe('Frontend API Endpoint References', () => {
 
       const functionCode = match![0];
 
-      expect(functionCode).toMatch(/RUNNER_URL/);
+      expect(functionCode).toMatch(/RUNNER_API/);
+      expect(functionCode).toMatch(/project_id: projectId/);
     });
   });
 

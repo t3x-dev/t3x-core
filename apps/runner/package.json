@@ -38,9 +38,10 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "cors": "^2.8.5",
     "express": "^4.22.2",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.1",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
+    "undici": "^6.28.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {
@@ -59,7 +60,7 @@
     "vitest": "^4.1.8"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.17.0"
   },
   "keywords": [
     "t3x",

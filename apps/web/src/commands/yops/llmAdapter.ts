@@ -16,6 +16,7 @@ import {
 import { postExtractYops } from '@/infrastructure/llm';
 import { ExtractionRequestError } from './errors';
 import type {
+  ExtractionLLMOutcome,
   ExtractionLLMResult,
   ExtractionPreset,
   ExtractionVariants,
@@ -151,12 +152,9 @@ export async function callExtractionLLM(
     );
   }
 
-  // 200 envelope carries an ExtractionOutcome discriminator. `failed`
-  // means the pipeline ran but couldn't produce a usable result —
-  // surface as ExtractionRequestError so the worker / UI flow handles
-  // it the same way it handles a 4xx-class failure today. `partial`
-  // and `ok` both yield ops; partial-vs-ok UX is a follow-up PR (PR 2)
-  // and the warnings are logged here so they don't silently disappear.
+  // A failed domain outcome is terminal: the server has already spent
+  // its targeted reask budget. Partial and ok outcomes both yield ops;
+  // retain their metadata so warnings do not disappear at this boundary.
   const outcome = body.data;
   if (outcome.kind === 'failed') {
     throw new ExtractionRequestError(
@@ -187,9 +185,24 @@ export async function callExtractionLLM(
     outcome.kind === 'ok' && outcome.variants
       ? (outcome.variants as ExtractionVariants)
       : undefined;
+  const outcomeMetadata: ExtractionLLMOutcome =
+    outcome.kind === 'partial'
+      ? {
+          kind: 'partial',
+          warnings: outcome.warnings,
+          dropped: outcome.dropped,
+          reason: outcome.reason,
+          message: outcome.message,
+          ...(outcome.details ? { details: outcome.details } : {}),
+        }
+      : {
+          kind: 'ok',
+          warnings: outcome.warnings,
+        };
 
   return {
     ops: outcome.ops as SourcedYOp[],
     ...(variants ? { variants } : {}),
+    outcome: outcomeMetadata,
   };
 }

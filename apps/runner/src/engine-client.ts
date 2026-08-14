@@ -9,6 +9,7 @@
  */
 
 import { logger } from './lib/logger.js';
+import { runnerServiceToken } from './service-auth.js';
 import { fetchWithRetry } from './utils/retry.js';
 
 // Engine API URL (support both T3X_ENGINE_URL and T3X_API_URL for compatibility)
@@ -44,7 +45,7 @@ export interface EngineRun {
  */
 export interface ParsedRun {
   run_id: string;
-  project_id: string | null;
+  project_id: string;
   runner_run_id: string | null;
   commit_ref: string | null;
   leaf: {
@@ -83,7 +84,10 @@ export async function getRunByRunnerRunId(runnerRunId: string): Promise<ParsedRu
       url,
       {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
+        },
         signal: AbortSignal.timeout(10000),
       },
       { maxRetries: 3, operationName: 'getRunByRunnerRunId' }
@@ -108,6 +112,10 @@ export async function getRunByRunnerRunId(runnerRunId: string): Promise<ParsedRu
 
     // Parse JSON fields
     const run = result.data;
+    if (!run.projectId) {
+      logger.warn({ runnerRunId, run_id: run.runId }, 'Engine run is missing a project boundary');
+      return null;
+    }
     const parsed: ParsedRun = {
       run_id: run.runId,
       project_id: run.projectId,

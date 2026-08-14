@@ -13,6 +13,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     globalSetup: ['./src/__tests__/globalSetup.ts'],
+    setupFiles: ['./src/__tests__/test-env.ts'],
     include: ['src/**/*.test.ts'],
     coverage: {
       provider: 'v8',
@@ -24,6 +25,7 @@ export default defineConfig({
     isolate: true,
     // Longer timeout for database operations
     testTimeout: 10000,
+    hookTimeout: 30000,
     // Limit parallel workers
     minWorkers: 1,
     maxWorkers: 4,

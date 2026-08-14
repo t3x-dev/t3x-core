@@ -6,11 +6,27 @@ vi.mock('pino', () => {
   return { default: () => logger };
 });
 
-const { mapN8nExecutionToRunRecord, mapN8nExecutionsToRunRecords } = await import(
-  '../trace/n8n-mapper.js'
-);
+const { mapN8nExecutionToRunRecord: mapSingle, mapN8nExecutionsToRunRecords: mapMany } =
+  await import('../trace/n8n-mapper.js');
 
 import type { N8nExecution, N8nNodeRun } from '../trace/types.js';
+
+type TestMapperOptions = {
+  runId?: string;
+  includeFullData?: boolean;
+  maxDataSize?: number;
+};
+
+function mapN8nExecutionToRunRecord(execution: N8nExecution, options: TestMapperOptions = {}) {
+  return mapSingle(execution, { projectId: 'project-test', ...options });
+}
+
+function mapN8nExecutionsToRunRecords(
+  executions: N8nExecution[],
+  options: Omit<TestMapperOptions, 'runId'> = {}
+) {
+  return mapMany(executions, { projectId: 'project-test', ...options });
+}
 
 function makeExecution(overrides: Partial<N8nExecution> = {}): N8nExecution {
   return {
@@ -49,6 +65,7 @@ describe('n8n-mapper', () => {
       const record = mapN8nExecutionToRunRecord(exec);
 
       expect(record.run_id).toBe('n8n_exec_001');
+      expect(record.project_id).toBe('project-test');
       expect(record.status).toBe('completed');
       expect(record.source?.system).toBe('n8n');
       expect(record.source?.execution_id).toBe('exec_001');

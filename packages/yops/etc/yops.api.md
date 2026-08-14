@@ -446,31 +446,29 @@ type PathSegment = {
     value: string;
 };
 /**
- * Result type for the strict parser. Used by the validator (which surfaces
- * `YOPS_PATH_UNCLOSED_QUOTE` and `YOPS_PATH_INVALID_ESCAPE` diagnostics)
- * when callers need to know about parse-level errors. `parsePath` itself
- * stays permissive — it's used by handlers that already accept whatever
- * shape the user gave them.
+ * Result type for the strict parser. Used by the validator and runtime engine
+ * when callers need typed quote, escape, bracket, or index-range errors.
+ * `parsePath` itself stays permissive for direct-call compatibility.
  */
 type ParsePathResult = {
     ok: true;
     segments: PathSegment[];
 } | {
     ok: false;
-    code: 'UNCLOSED_QUOTE' | 'INVALID_ESCAPE';
+    code: 'UNCLOSED_QUOTE' | 'INVALID_ESCAPE' | 'INVALID_INDEX_SYNTAX' | 'INVALID_MATCH_SYNTAX' | 'INDEX_OUT_OF_RANGE';
     message: string;
     offset: number;
 };
 /**
- * Strict parse: returns segments on success or a typed error on quoted-segment
- * malformation. Existing callers should keep using `parsePath` (which is
+ * Strict parse: returns segments on success or a typed syntax error. Existing
+ * callers should keep using `parsePath` (which is
  * permissive); this is the entry point the validator builds on.
  */
 declare function tryParsePath(path: string): ParsePathResult;
 /**
  * Parse a path string into an array of PathSegments.
  *
- * Permissive: invalid quoted-segment shapes fall back to the legacy
+ * Permissive: invalid path syntax falls back to the legacy
  * `path.split('/')` behaviour so existing callers see no change for any
  * path that doesn't use the new escape syntax. Callers that need to
  * detect parse errors (the validator) should use `tryParsePath` instead.
@@ -987,6 +985,7 @@ declare const YOPS_DIAGNOSTIC_CODES: {
     readonly YOPS_PATH_UNCLOSED_QUOTE: "YOPS_PATH_UNCLOSED_QUOTE";
     readonly YOPS_PATH_INVALID_ESCAPE: "YOPS_PATH_INVALID_ESCAPE";
     readonly YOPS_PATH_INVALID_INDEX_SYNTAX: "YOPS_PATH_INVALID_INDEX_SYNTAX";
+    readonly YOPS_PATH_INDEX_OUT_OF_RANGE: "YOPS_PATH_INDEX_OUT_OF_RANGE";
     readonly YOPS_PATH_INVALID_MATCH_SYNTAX: "YOPS_PATH_INVALID_MATCH_SYNTAX";
     readonly YOPS_PATH_LIKELY_DOUBLE_ESCAPED: "YOPS_PATH_LIKELY_DOUBLE_ESCAPED";
 };

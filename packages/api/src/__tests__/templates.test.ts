@@ -4,12 +4,14 @@
 
 import { type AnyDB, createTemplate } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown>;
 
 let mockDB: AnyDB;
+const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
+const originalOperatorKeyIds = process.env.T3X_OPERATOR_KEY_IDS;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -21,7 +23,49 @@ import { templatesRoutes } from '../routes/templates.openapi';
 describe('Templates Routes', () => {
   let cleanup: () => Promise<void>;
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+    (c as any).set('apiKey', {
+      id: 'ak_template_human',
+      user_id: 'user_template_operator',
+      project_id: null,
+      principal_kind: 'human',
+    });
+    return next();
+  });
   app.route('/', templatesRoutes);
+
+  function memberApp() {
+    const member = new Hono();
+    member.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: 'ak_template_member',
+        user_id: 'user_template_member',
+        project_id: null,
+        principal_kind: 'human',
+      });
+      return next();
+    });
+    member.route('/', templatesRoutes);
+    return member;
+  }
+
+  function machineApp() {
+    const machine = new Hono();
+    machine.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: 'ak_template_agent',
+        user_id: null,
+        project_id: 'proj_bound',
+        principal_kind: 'agent',
+      });
+      return next();
+    });
+    machine.route('/', templatesRoutes);
+    return machine;
+  }
 
   function makeCreateBody(overrides: Record<string, unknown> = {}) {
     return {
@@ -52,7 +96,16 @@ describe('Templates Routes', () => {
     cleanup = setup.cleanup;
   });
 
+  beforeEach(() => {
+    process.env.T3X_OPERATOR_USER_IDS = 'user_template_operator';
+    delete process.env.T3X_OPERATOR_KEY_IDS;
+  });
+
   afterAll(async () => {
+    if (originalOperatorUserIds === undefined) delete process.env.T3X_OPERATOR_USER_IDS;
+    else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
+    if (originalOperatorKeyIds === undefined) delete process.env.T3X_OPERATOR_KEY_IDS;
+    else process.env.T3X_OPERATOR_KEY_IDS = originalOperatorKeyIds;
     await cleanup();
   });
 
@@ -161,9 +214,39 @@ describe('Templates Routes', () => {
       expect(data.category).toBe('social');
       expect(data.leaf_type).toBe('tweet');
       expect(data.is_builtin).toBe(false);
+      expect(data.owner_id).toBe('user_template_operator');
+      expect(data.provenance).toEqual({
+        source: 'human',
+        actor_kind: 'human',
+        actor_id: 'user_template_operator',
+      });
       expect(data.tags).toEqual(['custom', 'tweet']);
       expect(data.created_at).toBeTruthy();
       expect(data.updated_at).toBeTruthy();
+    });
+
+    it('allows machine reads but rejects machine creation of global templates', async () => {
+      const machine = machineApp();
+      expect((await machine.request('/v1/templates')).status).toBe(200);
+
+      const create = await machine.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Machine Global Template' })),
+      });
+      expect(create.status).toBe(403);
+    });
+
+    it('allows member reads but rejects member creation of global templates', async () => {
+      const member = memberApp();
+      expect((await member.request('/v1/templates')).status).toBe(200);
+
+      const create = await member.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Member Global Template' })),
+      });
+      expect(create.status).toBe(403);
     });
 
     it('returns 400 for missing title', async () => {
@@ -296,6 +379,63 @@ describe('Templates Routes', () => {
       // Verify it's gone
       const getRes = await app.request(`/v1/templates/${tmplId}`);
       expect(getRes.status).toBe(404);
+    });
+
+    it('rejects machine deletion of a global custom template', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Human Managed Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      const machine = machineApp();
+      expect(
+        (await machine.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
+      ).toBe(403);
+      expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
+    });
+
+    it('rejects member deletion of a global custom template', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Operator Managed Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      const member = memberApp();
+      expect(
+        (await member.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status
+      ).toBe(403);
+      expect((await app.request(`/v1/templates/${templateId}`)).status).toBe(200);
+    });
+
+    it('retains operator-visible create and delete audit records after deletion', async () => {
+      const createRes = await app.request('/v1/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeCreateBody({ title: 'Audited Template' })),
+      });
+      const created = (await createRes.json()) as ApiResponse;
+      const templateId = (created.data as Record<string, unknown>).template_id as string;
+
+      expect((await app.request(`/v1/templates/${templateId}`, { method: 'DELETE' })).status).toBe(
+        200
+      );
+
+      const auditRes = await app.request(`/v1/templates/${templateId}/audit`);
+      expect(auditRes.status).toBe(200);
+      const auditJson = (await auditRes.json()) as ApiResponse;
+      const records = auditJson.data as Array<Record<string, unknown>>;
+      expect(records.map((record) => record.action)).toEqual(['create', 'delete']);
+      expect(records.every((record) => record.owner_id === 'user_template_operator')).toBe(true);
+      expect(records[1]?.snapshot).toMatchObject({ templateId });
+
+      expect((await memberApp().request(`/v1/templates/${templateId}/audit`)).status).toBe(403);
+      expect((await machineApp().request(`/v1/templates/${templateId}/audit`)).status).toBe(403);
     });
 
     it('returns 403 for builtin template', async () => {

@@ -23,6 +23,8 @@ import type { N8nExecution, N8nNodeRun, N8nRunData } from './types.js';
  * Mapping options
  */
 export interface MapperOptions {
+  /** Project boundary inherited from the Engine run. */
+  projectId: string;
   /** Custom run_id to use (otherwise uses n8n execution id) */
   runId?: string;
   /** Include full input/output data (may be large). Default: true */
@@ -31,7 +33,7 @@ export interface MapperOptions {
   maxDataSize?: number;
 }
 
-const DEFAULT_OPTIONS: Required<MapperOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<MapperOptions, 'projectId'>> = {
   runId: '',
   includeFullData: true,
   maxDataSize: 100 * 1024, // 100KB
@@ -547,9 +549,9 @@ function buildNodeTypeMap(execution: N8nExecution): Map<string, string> {
  */
 export function mapN8nExecutionToRunRecord(
   execution: N8nExecution,
-  options?: MapperOptions
+  options: MapperOptions
 ): RunRecord {
-  const opts: Required<MapperOptions> = { ...DEFAULT_OPTIONS, ...options };
+  const opts = { ...DEFAULT_OPTIONS, ...options };
   const runId = opts.runId || `n8n_${execution.id}`;
 
   logger.debug({ execution_id: execution.id, run_id: runId }, 'Mapping n8n execution to RunRecord');
@@ -569,6 +571,7 @@ export function mapN8nExecutionToRunRecord(
 
   const runRecord: RunRecord = {
     run_id: runId,
+    project_id: options.projectId,
     status: mapStatus(execution),
     inputs: extractInputs(execution),
     output: extractFinalOutput(execution),
@@ -604,7 +607,7 @@ export function mapN8nExecutionToRunRecord(
  */
 export function mapN8nExecutionsToRunRecords(
   executions: N8nExecution[],
-  options?: MapperOptions
+  options: MapperOptions
 ): RunRecord[] {
   return executions.map((execution) => mapN8nExecutionToRunRecord(execution, options));
 }

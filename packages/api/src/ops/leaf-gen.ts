@@ -84,7 +84,9 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
     }
     const knowledge = unifiedCommit.semanticContent;
 
-    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
+    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash, {
+      projectId: leaf.project_id,
+    });
 
     yield { type: 'step_done', step: 'load' };
 

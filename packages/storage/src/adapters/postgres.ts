@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 62;
+const SCHEMA_VERSION = 63;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -639,6 +639,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       variables JSONB NOT NULL,
       tags JSONB NOT NULL DEFAULT '[]',
       is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+      owner_id TEXT,
+      provenance JSONB NOT NULL DEFAULT '{"source":"legacy","actor_kind":"system","actor_id":"schema-migration"}'::jsonb,
       default_constraints JSONB DEFAULT '[]'::jsonb,
       semantic_threshold JSONB,
       created_at TIMESTAMPTZ NOT NULL,
@@ -650,6 +652,45 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add new columns to existing templates tables
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS default_constraints JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS semantic_threshold JSONB;
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS owner_id TEXT;
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS provenance JSONB;
+    UPDATE templates
+    SET provenance = CASE
+      WHEN is_builtin THEN '{"source":"builtin","actor_kind":"system","actor_id":"builtin-seed"}'::jsonb
+      ELSE '{"source":"legacy","actor_kind":"system","actor_id":"schema-migration"}'::jsonb
+    END
+    WHERE provenance IS NULL;
+    ALTER TABLE templates ALTER COLUMN provenance SET DEFAULT '{"source":"legacy","actor_kind":"system","actor_id":"schema-migration"}'::jsonb;
+    ALTER TABLE templates ALTER COLUMN provenance SET NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS template_audit_log (
+      audit_id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN ('create', 'delete', 'migrate', 'seed')),
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      owner_id TEXT,
+      provenance JSONB NOT NULL,
+      snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_template_audit_template
+      ON template_audit_log(template_id, created_at);
+    INSERT INTO template_audit_log (
+      audit_id, template_id, action, actor_kind, actor_id, owner_id, provenance, snapshot, created_at
+    )
+    SELECT
+      'tma_migrate_' || md5(template_id),
+      template_id,
+      'migrate',
+      'system',
+      'schema-migration',
+      owner_id,
+      provenance,
+      to_jsonb(templates),
+      NOW()
+    FROM templates
+    ON CONFLICT (audit_id) DO NOTHING;
 
     -- Auto-migrate: rename legacy drafts_v3 table if it exists
     ALTER TABLE IF EXISTS drafts_v3 RENAME TO drafts;

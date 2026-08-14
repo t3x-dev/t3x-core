@@ -6,6 +6,8 @@
 
 import { createTestDB } from '../../../storage/src/__tests__/setup';
 
+process.env.T3X_CREDENTIAL_ENCRYPTION_KEY ??= Buffer.alloc(32, 0x42).toString('base64');
+
 export async function setupTestDB(): Promise<{
   db: Awaited<ReturnType<typeof createTestDB>>['db'];
   /** Raw postgres.js Sql for direct SQL execution in tests */

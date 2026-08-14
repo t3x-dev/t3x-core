@@ -9,17 +9,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import {
+  cleanupOldEvents,
   closeDB,
   createApp,
   defaultFetchEventById,
   getDB,
+  getRuntimePostgresClient,
   pinoLogger,
   startRealtimeListener,
   startTimeoutChecker,
   stopRealtimeListener,
   stopTimeoutChecker,
 } from '@t3x-dev/api';
-import { cleanupOldEvents, getPostgresClient, getPostgresDB } from '@t3x-dev/storage';
+import { resolveApiAuthenticationMode, resolveApiHost } from './network.js';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -90,10 +92,11 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // Open-source: built-in local auth (username/password)
-const { app, injectWebSocket } = createApp({ enableLocalConfigRoutes: true });
+const { app, websocket } = createApp({ enableLocalConfigRoutes: true });
 
 // Server startup
 const port = parseInt(process.env.PORT || '8000', 10);
+const host = resolveApiHost();
 
 async function start() {
   try {
@@ -105,7 +108,7 @@ async function start() {
     // PostgreSQL modes, so every API runtime needs the LISTEN relay.
     try {
       await startRealtimeListener({
-        pg: getPostgresClient(),
+        pg: getRuntimePostgresClient(),
         fetchEventById: defaultFetchEventById,
       });
     } catch (err) {
@@ -117,7 +120,7 @@ async function start() {
     cleanupInterval = setInterval(
       async () => {
         try {
-          const count = await cleanupOldEvents(getPostgresDB(), { retentionDays: 7 });
+          const count = await cleanupOldEvents(await getDB(), { retentionDays: 7 });
           pinoLogger.info({ deleted: count }, 'events cleanup ran');
         } catch (err) {
           pinoLogger.warn({ err }, 'events cleanup failed');
@@ -131,14 +134,19 @@ async function start() {
 
     const server = serve({
       fetch: app.fetch,
+      hostname: host,
       port,
+      websocket,
     });
 
-    // Enable WebSocket connections on the HTTP server
-    injectWebSocket(server);
-
     pinoLogger.info(
-      { port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` },
+      {
+        host,
+        port,
+        url: `http://${host}:${port}`,
+        ws: `ws://${host}:${port}/ws`,
+        authentication: resolveApiAuthenticationMode(),
+      },
       'T3X API server running'
     );
 

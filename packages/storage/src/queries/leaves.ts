@@ -31,6 +31,8 @@ export interface ListLeavesOptions {
   limit?: number;
   offset?: number;
   type?: LeafType;
+  /** Restrict commit-based lookups to one authorized project membership. */
+  projectId?: string;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
   cursor?: string;
 }
@@ -123,6 +125,9 @@ export async function findLeavesByCommit(
   const limit = options.limit ?? 100;
 
   const conditions = [eq(leaves.commitHash, commitHash)];
+  if (options.projectId) {
+    conditions.push(eq(leaves.projectId, options.projectId));
+  }
   if (options.type) {
     conditions.push(eq(leaves.type, options.type));
   }

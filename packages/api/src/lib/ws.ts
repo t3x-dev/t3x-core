@@ -1,38 +1,27 @@
 /**
  * WebSocket Setup — Real-time communication layer.
  *
- * Provides `upgradeWebSocket` middleware for Hono routes and
- * `injectWebSocket` to attach to the HTTP server.
+ * Provides the Hono WebSocket upgrade middleware and the no-server `ws`
+ * instance consumed by `@hono/node-server` v2.
  *
  * Usage:
- *   const { upgradeWebSocket, injectWebSocket } = setupWebSocket(app);
+ *   const { upgradeWebSocket, websocket } = setupWebSocket();
  *   // ... register WS routes using upgradeWebSocket ...
- *   const server = serve(app);
- *   injectWebSocket(server);
+ *   const server = serve({ fetch: app.fetch, websocket });
  */
 
-import { createNodeWebSocket } from '@hono/node-ws';
-import type { Hono } from 'hono';
-
-let wsInstance: ReturnType<typeof createNodeWebSocket> | null = null;
+import { upgradeWebSocket } from '@hono/node-server';
+import { WebSocketServer } from 'ws';
 
 /**
- * Initialize WebSocket support for the Hono app.
+ * Initialize WebSocket support for the Node.js adapter.
  * Must be called BEFORE registering WS routes.
- * Returns upgradeWebSocket middleware for route handlers.
+ * Returns the route middleware and the `serve()` WebSocket option.
  */
-export function setupWebSocket(app: Hono) {
-  wsInstance = createNodeWebSocket({
-    app: app as Parameters<typeof createNodeWebSocket>[0]['app'],
-  });
-  return wsInstance;
-}
-
-/**
- * Get the injectWebSocket function for the HTTP server.
- * Call after setupWebSocket() and serve().
- */
-export function getWebSocketInjector() {
-  if (!wsInstance) throw new Error('setupWebSocket() must be called first');
-  return wsInstance.injectWebSocket;
+export function setupWebSocket() {
+  const server = new WebSocketServer({ noServer: true });
+  return {
+    upgradeWebSocket,
+    websocket: { server },
+  };
 }

@@ -14,6 +14,7 @@ import { validateConstraintsExactOnly } from '@t3x-dev/core';
 import { findLeavesByProject, getLeavesByIds } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { CheckRequest, CheckResponse, type CheckViolation } from '../schemas/integration-contracts';
@@ -73,6 +74,8 @@ checkRoutes.openapi(postCheckRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const access = await assertProjectAccess(c, db, project_id);
+    if (access instanceof Response) return access;
 
     // Fetch leaves: specific IDs or all project leaves
     let leaves: Leaf[];

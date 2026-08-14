@@ -1,6 +1,6 @@
 import http, { type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('pino', () => {
   const noop = () => {};
@@ -8,7 +8,10 @@ vi.mock('pino', () => {
   return { default: () => logger };
 });
 
-const { app } = await import('../server.js');
+const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
+process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
+
+const { app, startServer } = await import('../server.js');
 
 interface JsonResponse {
   status: number;
@@ -38,6 +41,7 @@ async function requestJson(
         path,
         method: options?.method ?? 'GET',
         headers: {
+          Authorization: 'Bearer runner-test-secret',
           ...options?.headers,
           ...(rawBody
             ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody) }
@@ -74,6 +78,7 @@ describe('runner server routes', () => {
   const originalEnv = {
     RUNNER_ENABLE_DEBUG_ROUTES: process.env.RUNNER_ENABLE_DEBUG_ROUTES,
     RUNNER_DEBUG_TOKEN: process.env.RUNNER_DEBUG_TOKEN,
+    RUNNER_ENDPOINT_ALLOWLIST: process.env.RUNNER_ENDPOINT_ALLOWLIST,
     N8N_API_KEY: process.env.N8N_API_KEY,
   };
 
@@ -84,10 +89,19 @@ describe('runner server routes', () => {
     });
   });
 
+  beforeEach(() => {
+    process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
     process.env.RUNNER_ENABLE_DEBUG_ROUTES = originalEnv.RUNNER_ENABLE_DEBUG_ROUTES;
     process.env.RUNNER_DEBUG_TOKEN = originalEnv.RUNNER_DEBUG_TOKEN;
+    if (originalEnv.RUNNER_ENDPOINT_ALLOWLIST === undefined) {
+      delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    } else {
+      process.env.RUNNER_ENDPOINT_ALLOWLIST = originalEnv.RUNNER_ENDPOINT_ALLOWLIST;
+    }
     process.env.N8N_API_KEY = originalEnv.N8N_API_KEY;
     vi.restoreAllMocks();
   });
@@ -100,6 +114,8 @@ describe('runner server routes', () => {
         else resolve();
       });
     });
+    if (originalRunnerServiceToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+    else process.env.RUNNER_SERVICE_TOKEN = originalRunnerServiceToken;
   });
 
   it('GET /health returns ok and request id header', async () => {
@@ -111,6 +127,40 @@ describe('runner server routes', () => {
       data: { status: 'ok', service: 't3x-runner' },
     });
     expect(res.headers['x-request-id']).toMatch(/^[a-f0-9]{12}$/);
+  });
+
+  it('rejects standalone business routes without a service identity', async () => {
+    const res = await requestJson(server, '/agents/missing', {
+      headers: { Authorization: '' },
+    });
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({
+      success: false,
+      error: { code: 'UNAUTHORIZED' },
+    });
+  });
+
+  it('rejects an unauthenticated non-loopback startup without the dangerous override', () => {
+    const originalToken = process.env.RUNNER_SERVICE_TOKEN;
+    const originalLegacyToken = process.env.RUNNER_SECRET;
+    const originalOverride = process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+    delete process.env.RUNNER_SERVICE_TOKEN;
+    delete process.env.RUNNER_SECRET;
+    delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+
+    try {
+      expect(() => startServer(8080, '0.0.0.0')).toThrow('RUNNER_SERVICE_TOKEN');
+    } finally {
+      if (originalToken === undefined) delete process.env.RUNNER_SERVICE_TOKEN;
+      else process.env.RUNNER_SERVICE_TOKEN = originalToken;
+      if (originalLegacyToken === undefined) delete process.env.RUNNER_SECRET;
+      else process.env.RUNNER_SECRET = originalLegacyToken;
+      if (originalOverride === undefined) {
+        delete process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK;
+      } else {
+        process.env.T3X_ALLOW_UNAUTHENTICATED_RUNNER_NETWORK = originalOverride;
+      }
+    }
   });
 
   it('GET / returns service metadata with docs link and hides debug routes by default', async () => {
@@ -177,6 +227,34 @@ describe('runner server routes', () => {
     expect(body.error.message).toContain('boom');
   });
 
+  it('POST /runs requires project scope', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-without-project',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /runs accepts an explicitly project-scoped engine run', async () => {
+    const res = await requestJson(server, '/runs', {
+      method: 'POST',
+      body: {
+        run_id: 'engine-run-project-a',
+        project_id: 'project-a',
+        callback_url: 'http://t3x-runner:8080/callbacks/n8n',
+        engine_callback_url: 'http://t3x-api:8000/api/v1/runs/ingest',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { status: 'running' } });
+  });
+
   it('GET /debug/n8n-check returns 404 when debug routes are disabled', async () => {
     const res = await requestJson(server, '/debug/n8n-check');
     const body = res.body as { error: { code: string } };
@@ -210,12 +288,10 @@ describe('runner server routes', () => {
     process.env.RUNNER_DEBUG_TOKEN = 'debug-secret';
 
     const res = await requestJson(server, '/debug/n8n-check', {
-      headers: { Host: 'runner.example.com' },
+      headers: { Host: 'runner.example.com', 'X-Runner-Debug-Token': 'debug-secret' },
     });
-    const body = res.body as { error: { code: string } };
 
-    expect(res.status).toBe(401);
-    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(res.status).toBe(200);
   });
 
   it('GET /debug/n8n-check fails closed when exposed off localhost without a configured token', async () => {
@@ -235,9 +311,10 @@ describe('runner server routes', () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'webhook-agent',
         name: 'Webhook Agent',
-        endpoint: 'http://agent.example/run',
+        endpoint: 'http://127.0.0.1:9000/run',
         type: 'http',
       },
     });
@@ -253,6 +330,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,
@@ -275,7 +353,7 @@ describe('runner server routes', () => {
     expect(body.data.trace.status).toBe('completed');
     expect(body.data.eval_result).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://agent.example/run',
+      'http://127.0.0.1:9000/run',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ prompt: 'hello' }),
@@ -283,13 +361,112 @@ describe('runner server routes', () => {
     );
   });
 
+  it('POST /agents rejects a private endpoint that was not explicitly allowlisted', async () => {
+    delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+
+    const res = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        id: 'private-agent',
+        name: 'Private Agent',
+        endpoint: 'http://169.254.169.254/latest/meta-data',
+        type: 'http',
+      },
+    });
+    const body = res.body as { success: boolean; error: { code: string; message: string } };
+
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_REQUEST');
+    expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
+  });
+
+  it('POST /run returns the RunRecord under the web-client trace contract', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        id: 'proxy-agent',
+        name: 'Proxy Agent',
+        endpoint: 'http://127.0.0.1:9000/proxy',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: 'ok' }),
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        agent_id: 'proxy-agent',
+        input: { prompt: 'hello' },
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      data: { run_id: string; output: unknown; trace: { run_id: string; status: string } };
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.run_id).toMatch(/^run_[0-9a-f-]{36}$/);
+    expect(body.data.output).toEqual({ answer: 'ok' });
+    expect(body.data.trace).toMatchObject({
+      run_id: body.data.run_id,
+      status: 'completed',
+    });
+  });
+
+  it('POST /run revalidates an endpoint after its private-origin authorization is removed', async () => {
+    process.env.RUNNER_ENDPOINT_ALLOWLIST = 'http://127.0.0.1:9000';
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        id: 'revoked-private-agent',
+        name: 'Revoked Private Agent',
+        endpoint: 'http://127.0.0.1:9000/run',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    delete process.env.RUNNER_ENDPOINT_ALLOWLIST;
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: {
+        project_id: 'project-a',
+        agent_id: 'revoked-private-agent',
+        input: { prompt: 'hello' },
+      },
+    });
+    const body = res.body as { success: boolean; error: { code: string; message: string } };
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('RUN_FAILED');
+    expect(body.error.message).toContain('RUNNER_ENDPOINT_ALLOWLIST');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('POST /run fails the trace when the registered agent returns a non-2xx response', async () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-proxy-agent',
         name: 'Failing Proxy Agent',
-        endpoint: 'http://agent.example/fail',
+        endpoint: 'http://127.0.0.1:9000/fail',
         type: 'http',
       },
     });
@@ -305,6 +482,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-proxy-agent',
         input: { prompt: 'hello' },
       },
@@ -312,24 +490,25 @@ describe('runner server routes', () => {
     const body = res.body as {
       success: boolean;
       error: { code: string; message: string };
-      data: { record: { status: string; error: { message: string } } };
+      data: { trace: { status: string; error: { message: string } } };
     };
 
     expect(res.status).toBe(500);
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('RUN_FAILED');
     expect(body.error.message).toContain('Agent request failed with 502');
-    expect(body.data.record.status).toBe('failed');
-    expect(body.data.record.error.message).toContain('Agent request failed with 502');
+    expect(body.data.trace.status).toBe('failed');
+    expect(body.data.trace.error.message).toContain('Agent request failed with 502');
   });
 
   it('POST /webhook/run fails the trace when the registered agent returns a non-2xx response', async () => {
     const registerRes = await requestJson(server, '/agents', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         id: 'failing-webhook-agent',
         name: 'Failing Webhook Agent',
-        endpoint: 'http://agent.example/fail-webhook',
+        endpoint: 'http://127.0.0.1:9000/fail-webhook',
         type: 'http',
       },
     });
@@ -345,6 +524,7 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/webhook/run', {
       method: 'POST',
       body: {
+        project_id: 'project-a',
         agent_id: 'failing-webhook-agent',
         input: { prompt: 'hello' },
         auto_eval: true,

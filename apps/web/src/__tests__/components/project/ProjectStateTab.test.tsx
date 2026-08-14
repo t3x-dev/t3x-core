@@ -708,7 +708,7 @@ describe('ProjectStateTab', () => {
     fireEvent.focus(window);
 
     await waitFor(() => expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('Just now')).toBeInTheDocument();
+    expect(await screen.findByText('Just now')).toBeInTheDocument();
     expect(hookMocks.refreshWorkspaces).not.toHaveBeenCalled();
   });
 

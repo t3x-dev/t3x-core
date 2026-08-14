@@ -29,7 +29,10 @@ describe('callExtractionLLM', () => {
         conversationId: 'conv_123',
         turns: [],
       })
-    ).resolves.toEqual({ ops: [{ define: { path: 'project' } }] });
+    ).resolves.toEqual({
+      ops: [{ define: { path: 'project' } }],
+      outcome: { kind: 'ok', warnings: [] },
+    });
   });
 
   it('returns preset variants on success when the API includes them', async () => {
@@ -65,6 +68,7 @@ describe('callExtractionLLM', () => {
         balanced: [{ define: { path: 'balanced_root' } }],
         detailed: [{ define: { path: 'detailed_root' } }],
       },
+      outcome: { kind: 'ok', warnings: [] },
     });
   });
 
@@ -92,8 +96,7 @@ describe('callExtractionLLM', () => {
     });
   });
 
-  it('treats kind:"partial" as success and surfaces ops, logging the salvage reason', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('treats kind:"partial" as success and returns partial outcome metadata', async () => {
     postExtractYopsMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -113,13 +116,14 @@ describe('callExtractionLLM', () => {
 
     await expect(callExtractionLLM({ conversationId: 'conv_123', turns: [] })).resolves.toEqual({
       ops: [{ define: { path: 'project' } }],
+      outcome: {
+        kind: 'partial',
+        warnings: [{ message: 'Style cap dropped 1 of 3' }],
+        dropped: [],
+        reason: 'compile',
+        message: 'compile failed for item_2',
+      },
     });
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[extract-yops] partial outcome',
-      expect.objectContaining({ reason: 'compile' })
-    );
-    warnSpy.mockRestore();
   });
 
   it('throws ExtractionRequestError when 200 envelope carries kind:"failed"', async () => {

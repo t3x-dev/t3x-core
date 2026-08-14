@@ -14,10 +14,12 @@
  */
 
 import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
-import type { AnyDB } from '@t3x-dev/storage';
+import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/runner-service-auth';
 import { pinoLogger } from './logger';
 
 /** Paths that never require authentication */
@@ -65,17 +67,26 @@ function isPublicPath(path: string, method?: string): boolean {
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
+  // Runner callbacks and lookups use a narrowly scoped service identity. Check
+  // this before AUTH_DISABLED so machine routes never become anonymous as a
+  // side effect of local-development settings.
+  if (isRunnerServiceRoute(c.req.path, c.req.method)) {
+    const authenticationError = runnerServiceAuthenticationError(c);
+    if (authenticationError) return authenticationError;
+    return next();
+  }
+
   // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive).
   // Production builds require an additional explicit opt-in so a stray
   // AUTH_DISABLED=true cannot silently expose a deployed API.
-  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
-    const allowProductionDisable =
-      process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION?.toLowerCase() === 'true';
-    if (process.env.NODE_ENV === 'production' && !allowProductionDisable) {
-      pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
-    } else {
-      return next();
-    }
+  if (isAuthenticationDisabled()) {
+    return next();
+  }
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.AUTH_DISABLED?.toLowerCase() === 'true'
+  ) {
+    pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
   }
 
   // Skip auth for public paths
@@ -109,8 +120,6 @@ export async function authMiddleware(c: Context, next: Next) {
   const keyValue = match[1];
 
   try {
-    // Dynamic import to avoid circular dependency
-    const { findApiKeyByValue, touchLastUsed } = await import('@t3x-dev/storage');
     const db = await getDB();
     const apiKey = await findApiKeyByValue(db, keyValue);
 
@@ -140,9 +149,7 @@ export async function authMiddleware(c: Context, next: Next) {
  *
  * Used by non-HTTP entry points (e.g. WebSocket upgrade) that need to
  * authenticate a raw token from a query parameter rather than an
- * Authorization header. Mirrors the dynamic-import pattern used by
- * `authMiddleware` above to preserve the circular-dependency boundary with
- * `@t3x-dev/storage`.
+ * Authorization header.
  */
 export async function verifyBearerToken(
   db: AnyDB,
@@ -155,7 +162,6 @@ export async function verifyBearerToken(
   transitionScopes: readonly TransitionScope[];
 } | null> {
   if (!token) return null;
-  const { findApiKeyByValue } = await import('@t3x-dev/storage');
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;
   return {

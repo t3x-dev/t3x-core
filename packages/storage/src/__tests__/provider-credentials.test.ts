@@ -129,8 +129,31 @@ describe('provider credentials', () => {
     );
     expect(persisted).toBeDefined();
     expect(JSON.stringify(persisted)).not.toContain(oldKey);
-    expect(JSON.stringify(persisted)).toContain(newKey);
+    expect(JSON.stringify(persisted)).not.toContain(newKey);
+    expect((persisted as { credentialVersion?: number }).credentialVersion).toBe(2);
+    expect((persisted as { encryptedApiKey?: string }).encryptedApiKey).toMatch(/^t3xenc:v1:/);
     expect((persisted as { lastTestError?: string }).lastTestError).toBe('[redacted]');
+  });
+
+  it('lazily migrates a legacy plaintext provider credential', async () => {
+    await queries.setGlobalSetting(db, 'local_provider_credentials_v1_openai', {
+      apiKey: 'legacy-provider-secret',
+      defaultModel: 'gpt-4o-mini',
+      updatedAt: new Date().toISOString(),
+      lastTestStatus: null,
+      lastTestedAt: null,
+      lastTestError: null,
+    });
+
+    const bundle = await getProviderCredentialBundle(db);
+    expect(bundle.secrets.OPENAI_API_KEY).toBe('legacy-provider-secret');
+
+    const persisted = await getGlobalSetting<Record<string, unknown>>(
+      db,
+      'local_provider_credentials_v1_openai'
+    );
+    expect(JSON.stringify(persisted)).not.toContain('legacy-provider-secret');
+    expect(persisted?.encryptedApiKey).toMatch(/^t3xenc:v1:/);
   });
 
   it('throws when updating test result for a missing provider credential', async () => {

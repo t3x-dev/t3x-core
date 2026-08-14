@@ -674,6 +674,8 @@ CREATE TABLE IF NOT EXISTS templates (
   variables JSONB NOT NULL,
   tags JSONB NOT NULL DEFAULT '[]',
   is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  owner_id TEXT,
+  provenance JSONB NOT NULL DEFAULT '{"source":"legacy","actor_kind":"system","actor_id":"schema-migration"}'::jsonb,
   default_constraints JSONB DEFAULT '[]'::jsonb,
   semantic_threshold JSONB,
   created_at TIMESTAMPTZ NOT NULL,
@@ -681,6 +683,20 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
 CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
+
+CREATE TABLE IF NOT EXISTS template_audit_log (
+  audit_id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('create', 'delete', 'migrate', 'seed')),
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  owner_id TEXT,
+  provenance JSONB NOT NULL,
+  snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_template_audit_template
+  ON template_audit_log(template_id, created_at);
 
 -- Drafts (Workbench / pre-commit working area)
 CREATE TABLE IF NOT EXISTS drafts (

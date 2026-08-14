@@ -16,9 +16,19 @@ import { setupTestDB, testData } from './setup';
 import { commitSemanticFixture } from './transition-fixture';
 
 let mockDB: AnyDB;
-const { extractAndApply } = vi.hoisted(() => ({
-  extractAndApply: vi.fn(),
-}));
+const { extractAndApplyWithRetry, findTurnsByHashes, requestTurns, storedTurnOverrides } =
+  vi.hoisted(() => ({
+    extractAndApplyWithRetry: vi.fn(),
+    findTurnsByHashes: vi.fn(),
+    requestTurns: { current: [] as Array<{ turn_hash: string; role?: string; content: string }> },
+    storedTurnOverrides: {
+      current: new Map<
+        string,
+        { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }
+      >(),
+    },
+  }));
+const extractAndApply = extractAndApplyWithRetry;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -29,7 +39,15 @@ vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
-    extractAndApply,
+    extractAndApplyWithRetry,
+  };
+});
+
+vi.mock('@t3x-dev/storage', async () => {
+  const actual = await vi.importActual<typeof import('@t3x-dev/storage')>('@t3x-dev/storage');
+  return {
+    ...actual,
+    findTurnsByHashes,
   };
 });
 
@@ -38,6 +56,14 @@ import { extractYopsRoutes } from '../routes/extract-yops.openapi';
 
 const app = new Hono();
 app.route('/', extractYopsRoutes);
+const rawAppRequest = app.request.bind(app);
+app.request = ((input: RequestInfo | URL, init?: RequestInit) => {
+  if (typeof input === 'string' && input === '/v1/extract-yops' && typeof init?.body === 'string') {
+    const body = JSON.parse(init.body) as { turns?: typeof requestTurns.current };
+    requestTurns.current = body.turns ?? [];
+  }
+  return rawAppRequest(input, init);
+}) as typeof app.request;
 
 describe('POST /v1/extract-yops (v2)', () => {
   let cleanup: () => Promise<void>;
@@ -59,6 +85,22 @@ describe('POST /v1/extract-yops (v2)', () => {
   beforeEach(async () => {
     resetProviderRegistry();
     extractAndApply.mockReset();
+    storedTurnOverrides.current.clear();
+    findTurnsByHashes.mockImplementation(
+      async (
+        _db: unknown,
+        input: { turnHashes: readonly string[] }
+      ): Promise<Array<{ turnHash: string; role: string; content: string }>> =>
+        input.turnHashes.map((hash) => {
+          const override = storedTurnOverrides.current.get(hash);
+          const requested = requestTurns.current.find((turn) => turn.turn_hash === hash);
+          return {
+            turnHash: hash,
+            role: override?.role ?? requested?.role ?? 'user',
+            content: override?.content ?? requested?.content ?? '',
+          };
+        })
+    );
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.GOOGLE_AI_STUDIO_KEY;
@@ -110,6 +152,31 @@ describe('POST /v1/extract-yops (v2)', () => {
       model: 'gpt-5.4',
       turns: [{ turn_hash: 'sha256:aabbcc', role: 'assistant', content: 'hello world' }],
     });
+  });
+
+  it('rejects extraction turns whose content is not backed by the stored turn', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+    storedTurnOverrides.current.set('sha256:mismatch', {
+      role: 'user',
+      content: 'The stored source says budget is not recorded.',
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:mismatch', role: 'user', content: 'Budget is 5000.' }],
+        provider: 'openai',
+        model: 'gpt-5.4',
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(extractAndApply).not.toHaveBeenCalled();
   });
 
   it('treats omitted/null selected_pin_ids as default context and [] as no feedback guidance', async () => {

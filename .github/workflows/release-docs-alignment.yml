@@ -22,10 +22,12 @@ on:
       - packages/*/README.md
       - packages/*/package.json
       - tools/verify-versions.mjs
+      - tools/sync-product-display-versions.mjs
       - tools/check-release-docs-alignment.mjs
       - tools/lib/releaseSurface.mjs
       - tools/lib/releaseDocsAlignment.mjs
       - tools/__tests__/releaseDocsAlignment.test.mjs
+      - tools/__tests__/syncProductDisplayVersions.test.mjs
   workflow_dispatch: {}
 
 concurrency:

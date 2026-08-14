@@ -20,8 +20,11 @@ const runnerArgs = separatorIndex >= 0 ? normalizedArgs.slice(0, separatorIndex)
 const playwrightArgs = separatorIndex >= 0 ? normalizedArgs.slice(separatorIndex + 1) : [];
 const skipBuild = runnerArgs.includes('--skip-build');
 const keepData = runnerArgs.includes('--keep-data') || process.env.T3X_E2E_KEEP_DATA === '1';
+const authEnabled = runnerArgs.includes('--auth-enabled');
 const allowExternal = process.env.T3X_E2E_ALLOW_EXTERNAL === '1';
-const unknownArgs = runnerArgs.filter((arg) => !['--skip-build', '--keep-data'].includes(arg));
+const unknownArgs = runnerArgs.filter(
+  (arg) => !['--skip-build', '--keep-data', '--auth-enabled'].includes(arg)
+);
 
 if (unknownArgs.length > 0) {
   throw new Error(`Unknown full E2E runner argument(s): ${unknownArgs.join(', ')}`);
@@ -34,7 +37,8 @@ const apiUrl = `http://127.0.0.1:${apiPort}`;
 const webUrl = `http://127.0.0.1:${webPort}`;
 const artifactDir = path.resolve(
   repoRoot,
-  process.env.T3X_E2E_ARTIFACT_DIR ?? 'test-results/full-e2e'
+  process.env.T3X_E2E_ARTIFACT_DIR ??
+    (authEnabled ? 'test-results/full-e2e-auth' : 'test-results/full-e2e')
 );
 const configuredDataDir = process.env.T3X_E2E_DATA_DIR;
 const dataDir =
@@ -49,15 +53,16 @@ const runtimeEnv = {
   ...process.env,
   API_PORT: apiPort,
   API_URL: apiUrl,
-  AUTH_DISABLED: 'true',
+  AUTH_DISABLED: authEnabled ? 'false' : 'true',
   HOST: '127.0.0.1',
   NEXT_PUBLIC_API_URL: apiUrl,
-  NEXT_PUBLIC_AUTH_DISABLED: 'true',
+  NEXT_PUBLIC_AUTH_DISABLED: authEnabled ? 'false' : 'true',
   PORT: apiPort,
   T3X_DATA_DIR: dataDir,
   T3X_E2E_ARTIFACT_DIR: artifactDir,
   T3X_E2E_EXTERNAL_SERVERS: '1',
   T3X_E2E_FULL: '1',
+  T3X_E2E_AUTH_ENABLED: authEnabled ? '1' : '0',
   T3X_PG_PORT: pgPort,
   WEBUI_PORT: webPort,
   WEBUI_URL: webUrl,
@@ -136,6 +141,7 @@ try {
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     status,
+    auth_enabled: authEnabled,
     test_exit_code: testExitCode,
     api_url: apiUrl,
     webui_url: webUrl,

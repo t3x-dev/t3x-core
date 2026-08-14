@@ -20,6 +20,11 @@ export const AgentConfigSchema = z.object({
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
+export const ProjectScopedAgentConfigSchema = AgentConfigSchema.extend({
+  project_id: z.string().min(1),
+});
+export type ProjectScopedAgentConfig = z.infer<typeof ProjectScopedAgentConfigSchema>;
+
 /**
  * Agent run request
  */
@@ -36,3 +41,8 @@ export const AgentInputSchema = z.object({
 });
 
 export type AgentInput = z.infer<typeof AgentInputSchema>;
+
+export const ProjectScopedAgentInputSchema = AgentInputSchema.extend({
+  project_id: z.string().min(1),
+});
+export type ProjectScopedAgentInput = z.infer<typeof ProjectScopedAgentInputSchema>;

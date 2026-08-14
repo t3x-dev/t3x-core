@@ -272,11 +272,13 @@ export {
 // Projects
 export {
   type CreateProjectInput,
+  claimUnownedProjects,
   deleteProject,
   findProjectById,
   findProjectByIdIncludingDeleted,
   findProjects,
   findProjectWithStats,
+  findUnownedProjects,
   insertProject,
   type ListProjectsOptions,
   type ProjectStats,
@@ -415,7 +417,10 @@ export {
   deleteTemplate,
   findTemplateById,
   type ListTemplatesOptions,
+  listTemplateAudit,
   listTemplates,
+  type TemplateAuditActor,
+  type TemplateProvenance,
 } from './templates';
 // Token Usage (LLM token metering)
 export {

@@ -83,6 +83,13 @@ When package publishing does run, npm remains the primary install source, and
 the packed npm package tarballs are also uploaded to the product GitHub Release
 `t3x-vx.y.z` as archived assets for audit and direct download.
 
+Internal and preview workspace source versions are repository bookkeeping
+values. `pnpm version-packages` runs Changesets first, then synchronizes only
+the internal source `package.json` versions that Changesets already changed to
+the current T3X product release version. Public npm packages keep their own
+package versions: `@t3x-dev/local`, `@t3x-dev/yops`,
+`@t3x-dev/transition`, and `@t3x-dev/yschema`.
+
 Hotfix PRs may target `main` from `hotfix/*`, but they still need product
 release metadata and release notes. Changesets version package PRs are exempt
 from the product release branch naming rule.

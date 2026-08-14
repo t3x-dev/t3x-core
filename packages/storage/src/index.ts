@@ -47,7 +47,7 @@ import type { SupabaseDB } from './adapters/supabase';
 export type AnyDB = PostgresDB | SupabaseDB;
 // Backup / verify utilities
 export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup/backup';
-export { type RestoreResult, restoreFromCfpack } from './backup/restore';
+export { type RestoreOptions, type RestoreResult, restoreFromCfpack } from './backup/restore';
 export {
   type VerifyChainResult,
   type VerifyResult,

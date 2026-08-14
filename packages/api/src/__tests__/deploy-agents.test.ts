@@ -5,6 +5,7 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteDeployAgent,
+  findDeployAgentById,
   findDeployAgents,
   insertDeployAgent,
   insertProject,
@@ -27,8 +28,26 @@ import { deployAgentRoutes } from '../routes/deploy-agents.openapi';
 describe('Deploy Agents Routes', () => {
   let cleanup: () => Promise<void>;
   let projectId: string;
+  let ownerProjectId: string;
+  let otherProjectId: string;
   const app = new Hono();
   app.route('/', deployAgentRoutes);
+
+  function authenticatedApp(userId: string) {
+    const authenticated = new Hono();
+    authenticated.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
+      (c as any).set('apiKey', {
+        id: `ak_${userId}`,
+        user_id: userId,
+        project_id: null,
+        principal_kind: 'human',
+      });
+      return next();
+    });
+    authenticated.route('/', deployAgentRoutes);
+    return authenticated;
+  }
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -37,6 +56,12 @@ describe('Deploy Agents Routes', () => {
     // Create a project for deploy agents
     const proj = await insertProject(mockDB, testData.project({ name: 'Agent Project' }));
     projectId = proj.projectId;
+    ownerProjectId = (
+      await insertProject(mockDB, { name: 'Owner Agent Project', ownerId: 'user_owner' })
+    ).projectId;
+    otherProjectId = (
+      await insertProject(mockDB, { name: 'Other Agent Project', ownerId: 'user_other' })
+    ).projectId;
   });
 
   afterAll(async () => {
@@ -66,6 +91,24 @@ describe('Deploy Agents Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect((data.data as Record<string, unknown>).name).toBe('Test Agent');
+    });
+
+    it('never returns a stored deploy-agent token in the create response', async () => {
+      const res = await app.request('/v1/deploy-agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'agent-secret',
+          name: 'Secret Agent',
+          endpoint: 'https://agent.example/run',
+          project_id: projectId,
+          auth: { type: 'bearer', token: 'server-secret-token-value' },
+        }),
+      });
+      const data = (await res.json()) as ApiResponse;
+
+      expect(res.status).toBe(201);
+      expect((data.data as { auth: { token: string } }).auth.token).toBe('serv****alue');
     });
 
     it('returns 400 when id missing', async () => {
@@ -227,6 +270,68 @@ describe('Deploy Agents Routes', () => {
         method: 'DELETE',
       });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('authenticated project isolation', () => {
+    it('requires a project filter and rejects another project before read or mutation', async () => {
+      const owner = authenticatedApp('user_owner');
+      const otherAgent = await insertDeployAgent(mockDB, {
+        id: 'agent-other-project',
+        name: 'Other Project Agent',
+        endpoint: 'https://agent.example/run',
+        projectId: otherProjectId,
+      });
+
+      expect((await owner.request('/v1/deploy-agents')).status).toBe(403);
+      expect((await owner.request(`/v1/deploy-agents?project_id=${ownerProjectId}`)).status).toBe(
+        200
+      );
+      expect((await owner.request(`/v1/deploy-agents/${otherAgent.deployAgentId}`)).status).toBe(
+        403
+      );
+      expect(
+        (
+          await owner.request(`/v1/deploy-agents/${otherAgent.deployAgentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Escaped Update' }),
+          })
+        ).status
+      ).toBe(403);
+      expect(
+        (
+          await owner.request(`/v1/deploy-agents/${otherAgent.deployAgentId}`, {
+            method: 'DELETE',
+          })
+        ).status
+      ).toBe(403);
+
+      const unchanged = await findDeployAgentById(mockDB, otherAgent.deployAgentId);
+      expect(unchanged?.name).toBe('Other Project Agent');
+    });
+
+    it('rejects authenticated creation and access without a concrete project', async () => {
+      const owner = authenticatedApp('user_owner');
+      const create = await owner.request('/v1/deploy-agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'agent-global-denied',
+          name: 'Global Agent',
+          endpoint: 'https://agent.example/run',
+        }),
+      });
+      expect(create.status).toBe(403);
+
+      const globalAgent = await insertDeployAgent(mockDB, {
+        id: 'agent-global-existing',
+        name: 'Existing Global Agent',
+        endpoint: 'https://agent.example/run',
+      });
+      expect((await owner.request(`/v1/deploy-agents/${globalAgent.deployAgentId}`)).status).toBe(
+        403
+      );
     });
   });
 });

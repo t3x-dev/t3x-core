@@ -21,17 +21,13 @@ import {
   findLeavesByCommit,
   findLeavesByProject,
   insertLeafOutputEdit,
-  listTransitionCommitProjectIds,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
-import {
-  getRepositorySemanticCommit,
-  RepositoryStateDomainUnsupportedError,
-} from '../lib/repository-state-transition';
+import { assertProjectAccess, assertRepositoryCommitAccess } from '../lib/project-access';
+import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -155,6 +151,7 @@ const listLeavesByCommitRoute = createRoute({
       hash: z.string().min(1),
     }),
     query: z.object({
+      project_id: z.string().optional(),
       type: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
@@ -395,30 +392,20 @@ leavesCrudRoutes.openapi(getLeafRoute, async (c) => {
 // GET /v1/commits/:hash/leaves - List leaves by commit
 leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { type, limit, offset, cursor } = c.req.valid('query');
+  const { project_id, type, limit, offset, cursor } = c.req.valid('query');
   const decodedHash = decodeURIComponent(hash);
 
   try {
     const db = await getDB();
-    let commitProjectId: string | null = null;
-    try {
-      const commit = await getRepositorySemanticCommit(db, decodedHash);
-      commitProjectId = commit?.projectId ?? null;
-    } catch (error) {
-      if (!(error instanceof RepositoryStateDomainUnsupportedError)) throw error;
-      const projectIds = await listTransitionCommitProjectIds(db, decodedHash);
-      commitProjectId = projectIds.length === 1 ? projectIds[0] : null;
-    }
-    if (commitProjectId) {
-      const accessResult = await assertProjectAccess(c, db, commitProjectId);
-      if (accessResult instanceof Response) return accessResult;
-    }
+    const commitProjectId = await assertRepositoryCommitAccess(c, db, decodedHash, project_id);
+    if (commitProjectId instanceof Response) return commitProjectId;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await findLeavesByCommit(db, decodedHash, {
         // biome-ignore lint/suspicious/noExplicitAny: generic error handler
         type: type as any,
+        projectId: commitProjectId,
         cursor: cursor as string,
         limit,
       });
@@ -436,8 +423,13 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const leaves = await findLeavesByCommit(db, decodedHash, { type: type as any, limit, offset });
+    const leaves = await findLeavesByCommit(db, decodedHash, {
+      // biome-ignore lint/suspicious/noExplicitAny: route accepts forward-compatible leaf types
+      type: type as any,
+      projectId: commitProjectId,
+      limit,
+      offset,
+    });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
