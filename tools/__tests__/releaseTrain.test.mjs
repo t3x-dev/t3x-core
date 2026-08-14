@@ -9,6 +9,7 @@ import {
 import {
   buildPackagePlan,
   buildPullRequestBody,
+  isReleasePlanNoOp,
   normalizeCommandOutput,
   normalizeVersionInput as normalizePrepareVersionInput,
   resolveVersion,
@@ -237,6 +238,18 @@ test('release train normalizes fullwidth manual version and package selection in
 test('release train command output helper tolerates inherited stdio', () => {
   assert.equal(normalizeCommandOutput(' release/1.2.0\n'), 'release/1.2.0');
   assert.equal(normalizeCommandOutput(null), '');
+});
+
+test('release train first-publish selection is release-worthy without file changes', () => {
+  assert.equal(isReleasePlanNoOp(), true);
+  assert.equal(
+    isReleasePlanNoOp({
+      changesets: [],
+      effectiveChangedFiles: [],
+      firstPublishPackageNames: ['@t3x-dev/transition'],
+    }),
+    false
+  );
 });
 
 test('release train rejects package target versions that cannot be produced by one bump', () => {

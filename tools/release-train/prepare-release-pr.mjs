@@ -603,6 +603,18 @@ function renderWarnings(warnings) {
     : '- Release train generated draft; review CI and readiness report before merge.';
 }
 
+export function isReleasePlanNoOp({
+  changesets = [],
+  effectiveChangedFiles = [],
+  firstPublishPackageNames = [],
+} = {}) {
+  return (
+    changesets.length === 0 &&
+    effectiveChangedFiles.length === 0 &&
+    firstPublishPackageNames.length === 0
+  );
+}
+
 export function buildPullRequestBody({
   baseRef,
   changesets,
@@ -703,7 +715,11 @@ function buildPlan(options) {
     mode: options.mode,
     releaseSurface,
   });
-  const noOp = changesets.length === 0 && effectiveChangedFiles.length === 0;
+  const noOp = isReleasePlanNoOp({
+    changesets,
+    effectiveChangedFiles,
+    firstPublishPackageNames,
+  });
   const version = resolveVersion({
     releaseSurface,
     requestedVersion: options.version,
