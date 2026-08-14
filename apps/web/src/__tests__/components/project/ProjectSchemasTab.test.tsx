@@ -5,14 +5,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
+import type { PublishedSchemaVersionManifest } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const refreshWorkspaces = vi.fn();
 const saveDraft = vi.fn();
 const extractCandidate = vi.fn();
+const refreshPublishedVersions = vi.fn();
 let workspaces: WorkspaceCandidate[] = [];
+let publishedVersions: PublishedSchemaVersionManifest[] = [];
 const PROMPT_SCHEMA_HASH =
   'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
+const BLUEPRINT_SCHEMA_HASH = `sha256:${'b'.repeat(64)}`;
 
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
@@ -24,6 +28,14 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 }));
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({ extractCandidate, saveDraft }),
+}));
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: refreshPublishedVersions,
+    versions: publishedVersions,
+  }),
 }));
 
 const workspace: WorkspaceCandidate = {
@@ -52,7 +64,9 @@ const workspace: WorkspaceCandidate = {
 
 beforeEach(() => {
   workspaces = [];
+  publishedVersions = [];
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
+  refreshPublishedVersions.mockReset().mockResolvedValue([]);
   saveDraft.mockReset();
   extractCandidate.mockReset();
   useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
@@ -130,6 +144,61 @@ describe('ProjectSchemasTab', () => {
     );
     expect(staleWorkspace.schemaReview.verdict).toBe('needs_review');
     expect(staleWorkspace.yopsDraft.operations).toEqual([]);
+    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+  });
+
+  it('applies a published project Blueprint and regenerates the Workspace candidate', async () => {
+    workspaces = [workspace];
+    publishedVersions = [
+      {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        canonicalName: 'projects/proj_test/product-schema',
+        version: '1.0.0',
+        family: 'open',
+        title: 'Product Schema',
+        description: 'Published project contract.',
+        status: 'published',
+        source: 'team',
+        schema: {
+          yschema: '0.1',
+          name: 'projects/proj_test/product-schema',
+          version: '1.0.0',
+          strict: false,
+          nodes: { product: { required: true, repeated: false } },
+        },
+        registry: { schemaHash: BLUEPRINT_SCHEMA_HASH },
+      },
+    ];
+    saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
+      candidate_id: candidate.id,
+      workspace: { ...candidate, revision: 2 },
+    }));
+    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
+      candidate_id: candidate.id,
+      workspace: {
+        ...candidate,
+        revision: 3,
+        schemaCandidate: { summary: 'Regenerated from Blueprint', fields: [] },
+      },
+    }));
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
+    fireEvent.click(screen.getByRole('button', { name: /Product Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /1.0.0 Published/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
+
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+    expect((saveDraft.mock.calls[0][0] as WorkspaceCandidate).schemaBindings).toEqual([
+      {
+        canonicalName: 'projects/proj_test/product-schema',
+        schemaHash: BLUEPRINT_SCHEMA_HASH,
+        schemaName: 'Product Schema',
+        version: '1.0.0',
+        mode: 'pinned',
+      },
+    ]);
     await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
   });

@@ -28,11 +28,15 @@ const baseCandidate = {
 
 const registry = getSchemaRegistryPreview('proj_1');
 const release = registry.families.find((family) => family.id === 'prompt')?.releases[0];
-const draftRelease = registry.families
-  .find((family) => family.id === 'prd')
-  ?.releases.find((candidate) => candidate.status === 'draft');
 
-if (!release || !draftRelease) throw new Error('Schema release fixtures are incomplete');
+if (!release) throw new Error('Schema release fixtures are incomplete');
+
+const draftRelease = {
+  ...release,
+  id: 'draft_release',
+  status: 'draft' as const,
+  runtimeAvailable: false,
+};
 
 const candidates: WorkspaceCandidate[] = [
   {

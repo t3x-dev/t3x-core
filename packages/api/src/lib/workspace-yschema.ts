@@ -96,7 +96,11 @@ export async function resolveWorkspaceYSchema(
       project_id: projectId,
     });
     const manifest = asRecord(published?.manifest);
-    if (manifest?.apiVersion === 't3x.dev/yschema-core/v1' && manifest.schema) {
+    if (
+      (manifest?.apiVersion === 't3x.dev/yschema-core/v1' ||
+        manifest?.apiVersion === 't3x.dev/yschema-blueprint/v1') &&
+      manifest.schema
+    ) {
       const schema = normalizeYSchemaObject(manifest.schema);
       if (!expectedSchemaHash || (await sha256CompositionValue(schema)) === expectedSchemaHash) {
         return { canonicalName, schema, version };

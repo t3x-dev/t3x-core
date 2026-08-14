@@ -161,4 +161,83 @@ describe('Workspace YSchema resolution', () => {
       version: schema.version,
     });
   });
+
+  it('resolves a published Blueprint Schema by its exact identity and Schema hash', async () => {
+    const schema = {
+      yschema: '0.1' as const,
+      name: 'projects/proj_blueprint/product-schema',
+      version: '1.0.0',
+      strict: false,
+      nodes: { product: { required: true, repeated: false } },
+    };
+    const normalizedSchema = normalizeYSchemaObject(schema);
+    const schemaHash = await sha256CompositionValue(normalizedSchema);
+    storageMock.findYSchemaArtifactVersion.mockResolvedValueOnce({
+      status: 'published',
+      manifest: {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        schema,
+        registry: { schemaHash },
+      },
+    });
+
+    const resolved = await resolveWorkspaceYSchema(
+      {
+        schemaBindings: [
+          {
+            canonicalName: schema.name,
+            schemaName: 'Product Schema',
+            version: schema.version,
+            schemaHash,
+          },
+        ],
+      },
+      { select: vi.fn() } as never,
+      'proj_blueprint'
+    );
+
+    expect(resolved).toEqual({
+      canonicalName: schema.name,
+      schema: normalizedSchema,
+      version: schema.version,
+    });
+  });
+
+  it('rejects a Blueprint Schema when its bound hash does not match the published payload', async () => {
+    const schema = {
+      yschema: '0.1' as const,
+      name: 'projects/proj_blueprint/product-schema',
+      version: '1.0.0',
+      strict: false,
+      nodes: { product: { required: true, repeated: false } },
+    };
+    storageMock.findYSchemaArtifactVersion.mockResolvedValueOnce({
+      status: 'published',
+      manifest: {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        schema,
+      },
+    });
+
+    const resolved = await resolveWorkspaceYSchema(
+      {
+        schemaBindings: [
+          {
+            canonicalName: schema.name,
+            schemaName: 'Product Schema',
+            version: schema.version,
+            schemaHash: `sha256:${'0'.repeat(64)}`,
+          },
+        ],
+      },
+      { select: vi.fn() } as never,
+      'proj_blueprint'
+    );
+
+    expect(resolved).toEqual({
+      canonicalName: schema.name,
+      schema: null,
+      version: schema.version,
+    });
+  });
 });
