@@ -15,8 +15,8 @@ export function SchemaYamlView({ release }: SchemaYamlViewProps) {
         </Badge>
       </header>
       {release.canonicalYaml.trim() ? (
-        <div className="overflow-auto bg-white">
-          <pre className="m-0 min-h-[430px] p-4 font-mono text-xs leading-[1.7] text-[#172033] selection:bg-[var(--accent-commit-soft)] [tab-size:2]">
+        <div className="overflow-auto bg-[var(--surface-elevated)]">
+          <pre className="m-0 min-h-[430px] p-4 font-mono text-xs leading-[1.7] text-[var(--text-primary)] selection:bg-[var(--accent-commit-soft)] [tab-size:2]">
             <code>{release.canonicalYaml}</code>
           </pre>
         </div>

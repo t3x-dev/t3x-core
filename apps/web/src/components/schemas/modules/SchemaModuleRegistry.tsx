@@ -426,7 +426,7 @@ export function SchemaModuleRegistry({
                   {visible.map((tag) => (
                     <button
                       aria-pressed={selectedTags.has(tag)}
-                      className={`rounded-[9px] border px-2.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors ${selectedTags.has(tag) ? 'border-[var(--accent-commit)] bg-[color-mix(in_srgb,var(--accent-commit)_10%,var(--surface-card))] font-semibold text-[var(--text-primary)]' : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'}`}
+                      className={`rounded-[9px] border px-2.5 py-1.5 text-[11px] shadow-[var(--fx-shadow-sm)] transition-colors ${selectedTags.has(tag) ? 'border-[var(--accent-commit)] bg-[color-mix(in_srgb,var(--accent-commit)_10%,var(--surface-card))] font-semibold text-[var(--text-primary)]' : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'}`}
                       key={tag}
                       onClick={() => toggleTag(tag)}
                       title={tag}
