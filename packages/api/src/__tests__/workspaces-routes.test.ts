@@ -15,6 +15,9 @@ const storageMock = vi.hoisted(() => {
     reset: () => {
       workspaceDraft = null;
     },
+    seedWorkspaceDraft: (state: Record<string, unknown>) => {
+      workspaceDraft = state;
+    },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
     findProjectById: vi.fn((_db, projectId: string) =>
       Promise.resolve({ projectId, ownerId: null })
@@ -30,6 +33,10 @@ const storageMock = vi.hoisted(() => {
               project_id: projectId,
               workspace_id: workspaceId,
               workspace_state: workspaceDraft,
+              target_branch:
+                typeof workspaceDraft.targetBranch === 'string'
+                  ? workspaceDraft.targetBranch
+                  : 'main',
               title: 'PRD audience handoff',
               status: 'editing',
               revision: 1,
@@ -127,6 +134,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
@@ -286,7 +294,12 @@ describe('Workspace routes', () => {
     expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
   });
 
-  it('allows agent principals to inspect Workspaces but not impersonate human review', async () => {
+  it('preserves agent principals on scoped Transition review', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const agentApp = appWithApiKey({
       id: 'ak_workspace_agent',
       key_prefix: 't3xk_test',
@@ -312,19 +325,22 @@ describe('Workspace routes', () => {
         body: JSON.stringify({ content: { trees: [], relations: [] } }),
       }
     );
-    expect(reviewed.status).toBe(403);
-    await expect(reviewed.json()).resolves.toEqual(
+    expect(reviewed.status).toBe(200);
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'FORBIDDEN',
-          message: 'Workspace review and commit require a human principal',
-        }),
+        actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_agent' },
+        policyBinding: null,
       })
     );
-    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
   });
 
   it('returns and binds the durable Transition identity across review and decide', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const content = { trees: [], relations: [] };
     const reviewed = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
