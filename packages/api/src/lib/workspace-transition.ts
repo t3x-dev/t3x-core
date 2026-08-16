@@ -32,6 +32,7 @@ import {
   resolveTransitionProposalGraph,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
+  type TransitionPolicyBinding,
   type TransitionRefHead,
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
@@ -135,7 +136,8 @@ export interface ReviewWorkspaceTransitionInput {
   content: SemanticContent;
   why?: string;
   expectedRevision?: number;
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
 }
 
 export interface ReviewWorkspaceTransitionResult {
@@ -240,7 +242,7 @@ export class WorkspaceTransitionDecisionDeniedError extends Error {
 
 interface PreparedWorkspaceTransition
   extends Omit<ReviewWorkspaceTransitionResult, 'transitionId'> {
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
   base: State;
   content: SemanticContent;
   effect: ReturnType<typeof createYOpsEffect>['effect'];
@@ -550,13 +552,14 @@ async function prepareWorkspaceTransition(
   const statementDigests = observations
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort();
+  const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
   const precondition: WorkspaceTransitionPrecondition = {
     workspaceRevision: context.workspaceRevision,
     refHead: context.head.head,
     effectDigest: describeTransitionObject(effect).digest,
     proposalDigest: describeTransitionObject(proposal).digest,
     statementDigests,
-    policyDigest: WORKSPACE_POLICY.resource.digest,
+    policyDigest: policyBinding.resource.digest,
   };
   const transition = projectTransitionView({
     mode: 'transition',
@@ -567,8 +570,8 @@ async function prepareWorkspaceTransition(
     objectIntegrity: 'verified',
     capabilityContext: {
       actorContext: { actor: input.actor },
-      policy: WORKSPACE_POLICY.policy,
-      policyResource: WORKSPACE_POLICY.resource,
+      policy: policyBinding.policy,
+      policyResource: policyBinding.resource,
     },
   });
   return {
@@ -683,6 +686,7 @@ export async function decideWorkspaceTransition(
   input: DecideWorkspaceTransitionInput
 ): Promise<DecideWorkspaceTransitionResult> {
   try {
+    const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
     let transitionId = input.transitionId;
     if (transitionId === undefined) {
       const prepared = await prepareWorkspaceTransition(db, {
@@ -743,14 +747,14 @@ export async function decideWorkspaceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: WORKSPACE_POLICY.resource.digest,
+        policyDigest: policyBinding.resource.digest,
         authority: {
           async resolve() {
             return {
               actorContext: { actor: input.actor },
               observationScope: OBSERVATION_SCOPE,
-              policy: WORKSPACE_POLICY.policy,
-              policyResource: WORKSPACE_POLICY.resource,
+              policy: policyBinding.policy,
+              policyResource: policyBinding.resource,
               statements: graph.observations.map((observation) => ({
                 statement: observation.statement,
                 issuerContext: observation.issuerContext,

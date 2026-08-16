@@ -38,6 +38,7 @@ import {
   resolveTransitionProposalGraph,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
+  type TransitionPolicyBinding,
   type TransitionRefHead,
 } from '@t3x-dev/storage';
 import {
@@ -233,7 +234,8 @@ export interface ReviewWorkspaceSourceTransitionInput {
   change: WorkspaceSourceChange;
   why?: string;
   expectedRevision?: number;
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
 }
 
 export interface BuildWorkspaceSourceProposalInput {
@@ -289,7 +291,8 @@ export interface ReviewWorkspaceSourceRevertInput {
   commitId: string;
   why?: string;
   expectedRevision?: number;
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
 }
 
 export interface BuildWorkspaceSourceRevertProposalInput {
@@ -1065,7 +1068,11 @@ export async function buildWorkspaceSourceProposal(
 }
 
 async function completeWorkspaceSourceTransition(
-  input: { projectId: string; workspaceId: string },
+  input: {
+    projectId: string;
+    workspaceId: string;
+    policyBinding?: TransitionPolicyBinding | null;
+  },
   capabilities: WorkspaceSourceTransitionCapabilities,
   built: BuiltWorkspaceSourceProposalInternal,
   requestKind: PreparedWorkspaceSourceTransition['requestKind']
@@ -1129,6 +1136,7 @@ async function completeWorkspaceSourceTransition(
   const statementDigests = observations
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort(comparePortable);
+  const policyBinding = input.policyBinding ?? WORKSPACE_SOURCE_POLICY;
   const precondition: WorkspaceSourceTransitionPrecondition = {
     workspaceRevision: built.workspaceRevision,
     refHead: head.head,
@@ -1137,7 +1145,7 @@ async function completeWorkspaceSourceTransition(
     effectDigest: describeTransitionObject(effect).digest,
     proposalDigest: describeTransitionObject(proposal).digest,
     statementDigests,
-    policyDigest: WORKSPACE_SOURCE_POLICY.resource.digest,
+    policyDigest: policyBinding.resource.digest,
   };
   const transition = projectTransitionView({
     mode: 'transition',
@@ -1148,8 +1156,8 @@ async function completeWorkspaceSourceTransition(
     objectIntegrity: 'verified',
     capabilityContext: {
       actorContext: { actor },
-      policy: WORKSPACE_SOURCE_POLICY.policy,
-      policyResource: WORKSPACE_SOURCE_POLICY.resource,
+      policy: policyBinding.policy,
+      policyResource: policyBinding.resource,
     },
   });
   return {
@@ -1387,7 +1395,8 @@ type WorkspaceSourceDecisionInput = {
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
   precondition: WorkspaceSourceTransitionPrecondition;
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
 };
 
 function compatibilityRequestId(action: 'decide' | 'commit', facts: ProtocolValue): string {
@@ -1524,6 +1533,7 @@ async function decidePreparedWorkspaceSourceTransition(
   capabilities: WorkspaceSourceTransitionCapabilities
 ): Promise<DecideWorkspaceSourceTransitionResult> {
   try {
+    const policyBinding = input.policyBinding ?? WORKSPACE_SOURCE_POLICY;
     let transitionId = input.transitionId;
     if (prepared !== undefined) {
       const materializedId = await materializePreparedWorkspaceSourceTransition(db, prepared);
@@ -1562,14 +1572,14 @@ async function decidePreparedWorkspaceSourceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: WORKSPACE_SOURCE_POLICY.resource.digest,
+        policyDigest: policyBinding.resource.digest,
         authority: {
           async resolve() {
             return {
               actorContext: { actor: input.actor },
               observationScope: OBSERVATION_SCOPE,
-              policy: WORKSPACE_SOURCE_POLICY.policy,
-              policyResource: WORKSPACE_SOURCE_POLICY.resource,
+              policy: policyBinding.policy,
+              policyResource: policyBinding.resource,
               statements: graph.observations.map((observation) => ({
                 statement: observation.statement as StatementObservation['statement'],
                 issuerContext: observation.issuerContext,
