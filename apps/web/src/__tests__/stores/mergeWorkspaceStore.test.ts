@@ -111,6 +111,37 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
   });
 
   describe('getUnresolvedCount', () => {
+    it('restores durable decisions and keep selections on reload', () => {
+      const prepared = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setDraftLoaded({
+        draftId: 'merge_1',
+        projectId: 'proj_1',
+        sourceHash: 'sha256:source',
+        targetHash: 'sha256:target',
+        prepared,
+        decisions: {
+          conflictResolutions: {
+            'topic/budget': 'source',
+            'topic/meeting': 'target',
+          },
+          keepFromSource: [],
+          keepFromTarget: ['tgt/only'],
+          keepRelationsFromSource: true,
+          keepRelationsFromTarget: true,
+        },
+        decisionRevision: 3,
+        status: 'pending',
+      });
+
+      const state = useMergeWorkspaceStore.getState();
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
+      expect(state.treeResolutions.get('topic/meeting')).toEqual({ type: 'target' });
+      expect([...state.keepSourceNodes]).toEqual([]);
+      expect([...state.keepTargetNodes]).toEqual(['tgt/only']);
+      expect(state.decisionRevision).toBe(3);
+      expect(state.getUnresolvedCount()).toBe(0);
+    });
+
     it('should return count of unresolved conflicts', () => {
       setupStore();
 
@@ -245,6 +276,22 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
   });
 
   describe('reset', () => {
+    it('does not clear edits made while an autosave is in flight', () => {
+      const store = useMergeWorkspaceStore.getState();
+      store.setMessage('first');
+      const savedLocalRevision = useMergeWorkspaceStore.getState().localRevision;
+      store.setSaveStarted();
+      store.setMessage('newer');
+
+      store.setSaveSucceeded(1, savedLocalRevision);
+
+      expect(useMergeWorkspaceStore.getState()).toMatchObject({
+        message: 'newer',
+        decisionRevision: 1,
+        isDirty: true,
+      });
+    });
+
     it('should clear extended resolutions', () => {
       setupStore();
 

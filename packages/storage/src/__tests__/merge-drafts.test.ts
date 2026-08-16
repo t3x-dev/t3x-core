@@ -52,6 +52,8 @@ describe('Merge Drafts Storage', () => {
       expect(draft.sourceBranch).toBeNull();
       expect(draft.targetBranch).toBeNull();
       expect(draft.message).toBeNull();
+      expect(draft.decisionJson).toBeNull();
+      expect(draft.decisionRevision).toBe(0);
       expect(draft.createdAt).toBeInstanceOf(Date);
       expect(draft.updatedAt).toBeInstanceOf(Date);
     });
@@ -213,6 +215,40 @@ describe('Merge Drafts Storage', () => {
       const newPrepared = { new: true, decisions: ['keep_source'] };
       const updated = await updateMergeDraft(db, draft.draftId, { prepared: newPrepared });
       expect(JSON.parse(updated!.preparedJson)).toEqual(newPrepared);
+    });
+
+    it('persists decisions separately and protects revisions', async () => {
+      const draft = await createMergeDraft(db, {
+        projectId: testProjectId,
+        sourceHash: 'sha256:decision1',
+        targetHash: 'sha256:decision2',
+        prepared: { conflicts: [{ path: 'service' }] },
+      });
+      const decision = {
+        conflictResolutions: { service: 'source' },
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      };
+
+      const saved = await updateMergeDraft(db, draft.draftId, {
+        decision,
+        expectedDecisionRevision: 0,
+      });
+      expect(JSON.parse(saved!.decisionJson!)).toEqual(decision);
+      expect(saved!.decisionRevision).toBe(1);
+      expect(JSON.parse(saved!.preparedJson)).toEqual({ conflicts: [{ path: 'service' }] });
+
+      const stale = await updateMergeDraft(db, draft.draftId, {
+        decision: { ...decision, conflictResolutions: { service: 'target' } },
+        expectedDecisionRevision: 0,
+      });
+      expect(stale).toBeNull();
+
+      const reloaded = await getMergeDraft(db, draft.draftId);
+      expect(JSON.parse(reloaded!.decisionJson!)).toEqual(decision);
+      expect(reloaded!.decisionRevision).toBe(1);
     });
 
     it('updates status', async () => {

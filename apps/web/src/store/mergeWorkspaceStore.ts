@@ -11,7 +11,7 @@
  *  - passive setters the hook calls after each I/O resolves
  */
 
-import type { MergeResult } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { getTerminology, type TermKey } from '@/hooks/shared/useTerminology';
 import { isDeveloperMode } from '@/store/shared';
@@ -67,6 +67,8 @@ interface MergeWorkspaceState {
   targetBranch: string | null;
   message: string;
   status: MergeDraft['status'] | null;
+  decisionRevision: number;
+  localRevision: number;
 
   // UI state
   loading: boolean;
@@ -116,11 +118,13 @@ interface MergeWorkspaceState {
     sourceBranch?: string | null;
     targetBranch?: string | null;
     prepared?: MergeResult | null;
+    decisions?: MergeDecision | null;
+    decisionRevision: number;
     status: MergeDraft['status'];
     message?: string | null;
   }) => void;
   setSaveStarted: () => void;
-  setSaveSucceeded: () => void;
+  setSaveSucceeded: (decisionRevision: number, savedLocalRevision: number) => void;
   setSaveFailed: () => void;
   setSaveStatusIdle: () => void;
   clearError: () => void;
@@ -163,6 +167,8 @@ const initialState = {
   targetBranch: null,
   message: '',
   status: null,
+  decisionRevision: 0,
+  localRevision: 0,
   loading: false,
   saveStatus: 'idle' as SaveStatus,
   error: null,
@@ -186,7 +192,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   // ── Pure mutations ──
 
-  setMessage: (message: string) => set({ message, isDirty: true }),
+  setMessage: (message: string) =>
+    set((state) => ({ message, isDirty: true, localRevision: state.localRevision + 1 })),
 
   togglePreview: () => set((state) => ({ previewExpanded: !state.previewExpanded })),
 
@@ -202,13 +209,23 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       newResolutions.set(conflict.path, { type: resolution } as TreeResolution);
       const newExtended = { ...extendedResolutions };
       delete newExtended[key];
-      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
+      set((state) => ({
+        treeResolutions: newResolutions,
+        extendedResolutions: newExtended,
+        isDirty: true,
+        localRevision: state.localRevision + 1,
+      }));
     } else {
       const newResolutions = new Map(treeResolutions);
       newResolutions.delete(conflict.path);
       const newExtended = { ...extendedResolutions };
       newExtended[key] = { type: 'both' };
-      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
+      set((state) => ({
+        treeResolutions: newResolutions,
+        extendedResolutions: newExtended,
+        isDirty: true,
+        localRevision: state.localRevision + 1,
+      }));
     }
   },
 
@@ -220,8 +237,12 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const resolution = treeResolutions.get(conflict.path);
     const extRes = extendedResolutions[String(index)];
 
-    if (resolution) {
-      return resolution.type === 'both' ? 'both' : (resolution.type as 'source' | 'target');
+    if (
+      resolution?.type === 'source' ||
+      resolution?.type === 'target' ||
+      resolution?.type === 'both'
+    ) {
+      return resolution.type;
     }
     if (extRes) {
       return extRes.type;
@@ -252,21 +273,34 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (conflictIndex !== undefined && conflictIndex >= 0) {
       delete nextExtended[String(conflictIndex)];
     }
-    set({ treeResolutions: next, extendedResolutions: nextExtended, isDirty: true });
+    set((state) => ({
+      treeResolutions: next,
+      extendedResolutions: nextExtended,
+      isDirty: true,
+      localRevision: state.localRevision + 1,
+    }));
   },
 
   toggleKeepSourceNode: (path) => {
     const next = new Set(get().keepSourceNodes);
     if (next.has(path)) next.delete(path);
     else next.add(path);
-    set({ keepSourceNodes: next, isDirty: true });
+    set((state) => ({
+      keepSourceNodes: next,
+      isDirty: true,
+      localRevision: state.localRevision + 1,
+    }));
   },
 
   toggleKeepTargetNode: (path) => {
     const next = new Set(get().keepTargetNodes);
     if (next.has(path)) next.delete(path);
     else next.add(path);
-    set({ keepTargetNodes: next, isDirty: true });
+    set((state) => ({
+      keepTargetNodes: next,
+      isDirty: true,
+      localRevision: state.localRevision + 1,
+    }));
   },
 
   allTreeConflictsResolved: () => {
@@ -284,6 +318,14 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   setDraftLoaded: (draft) => {
     const prepared = draft.prepared ?? null;
+    const treeResolutions = new Map<string, TreeResolution>();
+    for (const [path, resolution] of Object.entries(draft.decisions?.conflictResolutions ?? {})) {
+      if (resolution === 'source' || resolution === 'target' || resolution === 'both') {
+        treeResolutions.set(path, { type: resolution });
+      } else if (typeof resolution === 'object' && resolution !== null && 'edit' in resolution) {
+        treeResolutions.set(path, { type: 'edit', edit: resolution.edit });
+      }
+    }
     set({
       draftId: draft.draftId,
       projectId: draft.projectId,
@@ -292,11 +334,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       sourceBranch: draft.sourceBranch,
       targetBranch: draft.targetBranch,
       treeMergeResult: prepared,
-      treeResolutions: new Map(),
-      keepSourceNodes: new Set(prepared?.onlyInSource ?? []),
-      keepTargetNodes: new Set(prepared?.onlyInTarget ?? []),
+      treeResolutions,
+      keepSourceNodes: new Set(draft.decisions?.keepFromSource ?? prepared?.onlyInSource ?? []),
+      keepTargetNodes: new Set(draft.decisions?.keepFromTarget ?? prepared?.onlyInTarget ?? []),
       extendedResolutions: {},
       status: draft.status,
+      decisionRevision: draft.decisionRevision,
+      localRevision: 0,
       message: draft.message || '',
       loading: false,
       isDirty: false,
@@ -304,8 +348,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   setSaveStarted: () => set({ saveStatus: 'saving' }),
-  setSaveSucceeded: () => {
-    set({ saveStatus: 'saved', isDirty: false, lastSavedAt: new Date() });
+  setSaveSucceeded: (decisionRevision, savedLocalRevision) => {
+    set((state) => ({
+      saveStatus: 'saved',
+      decisionRevision,
+      isDirty: state.localRevision !== savedLocalRevision,
+      lastSavedAt: new Date(),
+    }));
   },
   setSaveFailed: () => set({ saveStatus: 'error' }),
   /** Reset saveStatus to 'idle' — driven by useSaveStatusAutoIdle. */
@@ -511,6 +560,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         case 'source':
         case 'target':
         case 'both':
+        case 'edit':
         case 'per-slot':
           paths.push(conflict.path);
           break;

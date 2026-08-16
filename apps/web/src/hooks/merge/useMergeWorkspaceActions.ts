@@ -75,16 +75,21 @@ export function useMergeWorkspaceActions() {
     []
   );
 
-  const save = useCallback(async (): Promise<void> => {
-    const { draftId, treeMergeResult, message, isDirty, status } =
+  const save = useCallback(async (decisions?: MergeDecision): Promise<void> => {
+    const { draftId, treeMergeResult, message, decisionRevision, localRevision, isDirty, status } =
       useMergeWorkspaceStore.getState();
     if (!draftId || !isDirty || status === 'committed') return;
 
     useMergeWorkspaceStore.getState().setSaveStarted();
 
     try {
-      await saveMergeDraft(draftId, { prepared: treeMergeResult ?? undefined, message });
-      useMergeWorkspaceStore.getState().setSaveSucceeded();
+      const updated = await saveMergeDraft(draftId, {
+        prepared: treeMergeResult ?? undefined,
+        decisions,
+        ...(decisions === undefined ? {} : { expected_decision_revision: decisionRevision }),
+        message,
+      });
+      useMergeWorkspaceStore.getState().setSaveSucceeded(updated.decisionRevision, localRevision);
     } catch (err) {
       const errorMsg = formatUserFacingError(err, 'Failed to save.');
       console.warn('[useMergeWorkspaceActions] Auto-save failed:', errorMsg);
