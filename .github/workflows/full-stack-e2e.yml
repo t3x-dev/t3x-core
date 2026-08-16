@@ -1,8 +1,11 @@
 name: Full-stack E2E
 
-# Intentionally manual. Run after large integration merges and before releases;
-# ordinary pull requests remain covered by PR Validation.
+# Every dev merge is qualified at its immutable post-merge SHA. Manual dispatch
+# remains available for release candidates and exact-SHA reruns.
 on:
+  push:
+    branches:
+      - dev
   workflow_dispatch:
     inputs:
       ref:
@@ -15,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: full-stack-e2e-${{ inputs.ref }}
+  group: full-stack-e2e-${{ inputs.ref || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -42,8 +45,21 @@ jobs:
       - name: Checkout requested ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
+
+      - name: Resolve exact qualification SHA
+        id: exact
+        shell: bash
+        env:
+          EXPECTED_PUSH_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
+        run: |
+          qualified_sha="$(git rev-parse HEAD)"
+          if [ -n "${EXPECTED_PUSH_SHA}" ] && [ "${qualified_sha}" != "${EXPECTED_PUSH_SHA}" ]; then
+            echo "::error::Checkout resolved ${qualified_sha}, expected pushed SHA ${EXPECTED_PUSH_SHA}."
+            exit 1
+          fi
+          echo "sha=${qualified_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -58,9 +74,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: full-e2e-turbo-${{ runner.os }}-${{ inputs.ref }}-${{ github.sha }}
+          key: full-e2e-turbo-${{ runner.os }}-${{ steps.exact.outputs.sha }}
           restore-keys: |
-            full-e2e-turbo-${{ runner.os }}-${{ inputs.ref }}-
+            full-e2e-turbo-${{ runner.os }}-${{ github.ref_name }}-
             full-e2e-turbo-${{ runner.os }}-dev-
             full-e2e-turbo-${{ runner.os }}-
 
@@ -139,7 +155,38 @@ jobs:
 
           fs.appendFileSync(
             process.env.GITHUB_STEP_SUMMARY,
-            `## Full-stack E2E\n\n${sections.join('\n')}`
+            `## Full-stack E2E\n\n- Qualified SHA: \`${process.env.QUALIFIED_SHA}\`\n- Event: \`${process.env.QUALIFICATION_EVENT}\`\n\n${sections.join('\n')}`
+          );
+          NODE
+        env:
+          QUALIFIED_SHA: ${{ steps.exact.outputs.sha }}
+          QUALIFICATION_EVENT: ${{ github.event_name }}
+
+      - name: Write qualification attestation
+        if: always()
+        shell: bash
+        env:
+          QUALIFIED_SHA: ${{ steps.exact.outputs.sha }}
+          QUALIFICATION_EVENT: ${{ github.event_name }}
+          QUALIFICATION_STATUS: ${{ job.status }}
+          REQUESTED_REF: ${{ inputs.ref || github.sha }}
+        run: |
+          mkdir -p test-results/qualification
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          fs.writeFileSync(
+            'test-results/qualification/attestation.json',
+            `${JSON.stringify({
+              schema: 't3x.dev/qualification-attestation/v1',
+              repository: process.env.GITHUB_REPOSITORY,
+              run_id: process.env.GITHUB_RUN_ID,
+              run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+              event: process.env.QUALIFICATION_EVENT,
+              requested_ref: process.env.REQUESTED_REF,
+              qualified_sha: process.env.QUALIFIED_SHA,
+              status: process.env.QUALIFICATION_STATUS,
+            }, null, 2)}\n`
           );
           NODE
 
@@ -147,8 +194,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-stack-e2e-${{ github.run_id }}
+          name: full-stack-e2e-${{ steps.exact.outputs.sha || github.run_id }}
           path: |
+            test-results/qualification/
             test-results/full-e2e/
             test-results/full-e2e-auth/
           if-no-files-found: warn

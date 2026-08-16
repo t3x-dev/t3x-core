@@ -5,11 +5,15 @@ on:
     branches:
       - dev
       - main
+  merge_group:
+  push:
+    branches:
+      - dev
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

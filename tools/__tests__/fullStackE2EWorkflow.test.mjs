@@ -4,10 +4,11 @@ import test from 'node:test';
 
 const root = new URL('../..', import.meta.url);
 
-test('full-stack E2E is manual, broad, and artifact-producing', () => {
+test('full-stack E2E qualifies exact dev pushes, supports reruns, and produces attestations', () => {
   const workflow = readText('.github/workflows/full-stack-e2e.yml');
 
   assert.match(workflow, /^name: Full-stack E2E$/m);
+  assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
   assert.match(workflow, /^\s+workflow_dispatch:$/m);
   assert.doesNotMatch(workflow, /^\s+pull_request:/m);
   assert.match(workflow, /image: postgres:16/);
@@ -26,6 +27,10 @@ test('full-stack E2E is manual, broad, and artifact-producing', () => {
   assert.ok(workflow.indexOf('pnpm e2e:full') < workflow.indexOf('pnpm e2e:auth'));
   assert.match(workflow, /if: always\(\)/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /Resolve exact qualification SHA/);
+  assert.match(workflow, /expected pushed SHA/);
+  assert.match(workflow, /t3x\.dev\/qualification-attestation\/v1/);
+  assert.match(workflow, /test-results\/qualification\/attestation\.json/);
   assert.match(workflow, /test-results\/full-e2e\//);
   assert.match(workflow, /test-results\/full-e2e-auth\//);
 });
