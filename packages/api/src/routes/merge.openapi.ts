@@ -29,7 +29,7 @@ import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { readMergeDraftDecision } from '../lib/merge-draft-decisions';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, resolveProjectResourceAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import {
   commitRepositoryYOpsMerge,
@@ -385,6 +385,11 @@ const DraftIdParamSchema = z.object({
   id: z.string().min(1),
 });
 
+const ProjectAccessDeniedResponse = {
+  description: 'Project access denied',
+  content: { 'application/json': { schema: ErrorResponseSchema } },
+} as const;
+
 function serializeMergeDraft(draft: Awaited<ReturnType<typeof getMergeDraft>> & object) {
   if (!draft) return draft;
   return {
@@ -511,6 +516,7 @@ const getDraftRoute = createRoute({
       description: 'Draft found',
       content: { 'application/json': { schema: z.any() } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -522,16 +528,13 @@ mergeRoutes.openapi(getDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
 
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   return c.json(
     {
@@ -568,6 +571,7 @@ const updateDraftRoute = createRoute({
       description: 'Invalid status',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -585,16 +589,13 @@ mergeRoutes.openapi(updateDraftRoute, async (c) => {
   const { prepared, decisions, expected_decision_revision, message } = c.req.valid('json');
   const db = await getDB();
 
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   if (draft.status !== 'pending') {
     return c.json(
@@ -668,6 +669,7 @@ const commitDraftRoute = createRoute({
       description: 'Merge committed',
       content: { 'application/json': { schema: z.any() } },
     },
+    403: ProjectAccessDeniedResponse,
     400: {
       description: 'Invalid status or unresolved pairs',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -689,16 +691,13 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   const { message, branch, decisions: decisionsInput } = c.req.valid('json');
   const db = await getDB();
 
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   if (draft.status !== 'pending') {
     return c.json(
@@ -713,8 +712,6 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     );
   }
 
-  const accessResult = await assertProjectAccess(c, db, draft.projectId);
-  if (accessResult instanceof Response) return accessResult;
   const targetBranch = draft.targetBranch;
   if (targetBranch === null) {
     return errorResponse(c, 'INVALID_REQUEST', 'Merge draft has no explicit target ref');
@@ -864,6 +861,7 @@ const deleteDraftRoute = createRoute({
       description: 'Draft deleted',
       content: { 'application/json': { schema: z.any() } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -876,16 +874,13 @@ mergeRoutes.openapi(deleteDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
 
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   const deleted = await deleteMergeDraft(db, id);
   if (!deleted) {
@@ -935,6 +930,7 @@ Returns server-side validation checks for a merge draft:
         },
       },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: {
@@ -950,16 +946,13 @@ mergeRoutes.openapi(getDraftChecksRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
 
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   const checks = await computeMergeChecks(db, draft);
   return c.json({ success: true as const, data: checks }, 200);
@@ -995,6 +988,7 @@ const suggestRoute = createRoute({
         },
       },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft or pair not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -1011,16 +1005,13 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
   const idx = Number.parseInt(pairIndex, 10);
 
   const db = await getDB();
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   const prepared: MergeResult = JSON.parse(draft.preparedJson);
   if (idx < 0 || idx >= prepared.conflicts.length) {
@@ -1117,6 +1108,7 @@ const suggestFrameRoute = createRoute({
         },
       },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Merge draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -1133,16 +1125,13 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   const _body = c.req.valid('json');
 
   const db = await getDB();
-  const draft = await getMergeDraft(db, id);
-  if (!draft) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
-      },
-      404
-    );
-  }
+  const draft = await resolveProjectResourceAccess(c, db, {
+    load: () => getMergeDraft(db, id),
+    projectId: (resource) => resource.projectId,
+    notFoundCode: 'NOT_FOUND',
+    notFoundMessage: `Merge draft not found: ${id}`,
+  });
+  if (draft instanceof Response) return draft;
 
   const llm = await getLLMProvider();
   if (!llm) {
