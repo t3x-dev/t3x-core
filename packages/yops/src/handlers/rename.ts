@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, hasOwnKey, parsePath, resolvePath, setOwnKey } from '../paths';
+import { deepClone, hasOwnKey, parsePath, resolvePathSegments, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -7,7 +7,8 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
   const path = fields.path as string;
   const to = fields.to as string;
 
-  const value = resolvePath(doc, path);
+  const segments = parsePath(path);
+  const value = resolvePathSegments(doc, segments);
   if (value === undefined) {
     return {
       doc,
@@ -15,7 +16,6 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
     };
   }
 
-  const segments = parsePath(path);
   const lastSeg = segments[segments.length - 1];
 
   if (lastSeg.type !== 'key') {
@@ -30,20 +30,13 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
   }
 
   const oldKey = lastSeg.value;
-  const parentPath = segments
-    .slice(0, -1)
-    .map((s) => {
-      if (s.type === 'key') return s.value;
-      if (s.type === 'index') return `[${s.value}]`;
-      return `[${s.key}=${s.value}]`;
-    })
-    .join('/');
+  const parentSegments = segments.slice(0, -1);
 
-  // resolvePath returned a value above, so the parent must exist and
-  // be traversable as a mapping with `oldKey` in scope. (resolvePath
+  // Structured resolution returned a value above, so the parent must exist
+  // and be traversable as a mapping with `oldKey` in scope. (Resolution
   // returns undefined for a key segment against an array or scalar, so
   // those cases are already filtered into PATH_NOT_FOUND.)
-  const parentMap = (parentPath === '' ? doc : resolvePath(doc, parentPath)) as {
+  const parentMap = resolvePathSegments(doc, parentSegments) as {
     [key: string]: YValue;
   };
 
@@ -59,7 +52,7 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
   }
 
   const cloned = deepClone(doc);
-  const clonedParent = (parentPath === '' ? cloned : resolvePath(cloned, parentPath)) as {
+  const clonedParent = resolvePathSegments(cloned, parentSegments) as {
     [key: string]: YValue;
   };
 

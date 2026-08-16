@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, hasOwnKey, parsePath, resolvePath, setOwnKey } from '../paths';
+import { deepClone, hasOwnKey, parsePath, resolvePathSegments, setOwnKey } from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
@@ -34,7 +34,8 @@ export const defineHandler: OpHandler = (doc, fields, index) => {
   const finalKey = keys[keys.length - 1];
 
   const parentPath = parentKeys.join('/');
-  const parent = parentKeys.length === 0 ? doc : resolvePath(doc, parentPath);
+  const parentSegments = segments.slice(0, -1);
+  const parent = resolvePathSegments(doc, parentSegments);
 
   if (parent === undefined) {
     return {
@@ -66,7 +67,7 @@ export const defineHandler: OpHandler = (doc, fields, index) => {
   }
 
   const cloned = deepClone(doc);
-  const clonedParent = parentKeys.length === 0 ? cloned : resolvePath(cloned, parentPath);
+  const clonedParent = resolvePathSegments(cloned, parentSegments);
   setOwnKey(clonedParent as Record<string, YValue>, finalKey, {});
   return { doc: cloned };
 };
