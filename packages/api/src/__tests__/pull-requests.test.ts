@@ -803,7 +803,7 @@ describe('Pull request routes', () => {
     expect(await listCommitHistory(mockDB, fixture.projectId)).toHaveLength(3);
   });
 
-  it('records preparation failures as blocked instead of leaving a PR checking', async () => {
+  it('records persisted-decision failures as blocked instead of leaving a PR checking', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
     const number = opened.data.data.number;
@@ -812,7 +812,7 @@ describe('Pull request routes', () => {
       { method: 'POST' }
     );
     const prepared = (await firstRerun.json()) as ApiResponse;
-    await mockSql.unsafe('UPDATE merge_drafts SET prepared_json = $1 WHERE draft_id = $2', [
+    await mockSql.unsafe('UPDATE merge_drafts SET decision_json = $1 WHERE draft_id = $2', [
       '{invalid-json',
       prepared.data.merge_draft_id,
     ]);
