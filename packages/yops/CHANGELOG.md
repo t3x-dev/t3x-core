@@ -1,5 +1,17 @@
 # @t3x-dev/yops
 
+## 1.1.1
+
+### Patch Changes
+
+- [#1357](https://github.com/t3x-dev/t3x-core/pull/1357) [`0532824`](https://github.com/t3x-dev/t3x-core/commit/05328244fa6c978b2d1dbd40a82e35542e6d16b4) Thanks [@jjy0230](https://github.com/jjy0230)! - Reject malformed runtime paths and out-of-bounds sequence writes so engine behavior matches path validation and never reports sparse or unrepresentable index writes as applied.
+
+  Breaking declaration: `@t3x-dev/yops` expands the exported
+  `ParsePathResult.code` union with `INVALID_INDEX_SYNTAX`,
+  `INVALID_MATCH_SYNTAX`, and `INDEX_OUT_OF_RANGE`. Exhaustive consumers must
+  handle these additional results for malformed paths; valid path behavior and
+  the permissive `parsePath` API remain compatible.
+
 ## 1.1.0
 
 ### Minor Changes
