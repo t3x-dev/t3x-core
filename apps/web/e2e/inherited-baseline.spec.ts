@@ -6,6 +6,7 @@ import {
   createTestTurn,
 } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
+import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 test.describe('Inherited baseline workspace state', () => {
   let projectId: string;
@@ -59,6 +60,7 @@ test.describe('Inherited baseline workspace state', () => {
       timeout: 10_000,
     });
 
+    await expandWorkspaceIfCollapsed(page);
     const afterPanel = page.getByTestId('after-panel');
     await expect(afterPanel).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Inherited baseline').first()).toBeVisible({ timeout: 10_000 });

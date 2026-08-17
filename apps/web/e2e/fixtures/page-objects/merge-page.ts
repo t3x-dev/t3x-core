@@ -28,14 +28,10 @@ export class MergePage {
   }
 
   async waitForLoad(timeout = 15000): Promise<void> {
-    // Wait for the action bar commit button — present in both node and frame mode.
-    // Button text variants:
-    //   "Confirm"       — default mode (mergeConfirm default)
-    //   "Execute Merge" — developer mode (mergeConfirm developer)
-    const workspace = this.page
-      .locator('button:has-text("Confirm")')
-      .or(this.page.locator('button:has-text("Execute Merge")'));
-    await expect(workspace.first()).toBeVisible({ timeout });
+    // The action bar briefly renders before commit hydration starts. Wait for
+    // the explicit post-preparation boundary so tests cannot observe that
+    // transient state as a ready merge workspace.
+    await expect(this.page.getByTestId('merge-workspace-ready')).toBeVisible({ timeout });
   }
 
   async getUnresolvedCount(): Promise<number> {

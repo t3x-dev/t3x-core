@@ -287,25 +287,6 @@ export async function commitRepositoryState(
 }
 
 /**
- * Update commit canvas position.
- */
-export async function updateCommitPosition(
-  commitHash: string,
-  positionX: number,
-  positionY: number
-): Promise<ApiCommit> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(commitHash)}/position`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position_x: positionX, position_y: positionY }),
-    }
-  );
-  return handleResponse<ApiCommit>(res);
-}
-
-/**
  * Update commit message (display name).
  */
 export async function updateCommitMessage(commitHash: string, message: string): Promise<ApiCommit> {

@@ -72,12 +72,7 @@ test.describe('Run Detail Page', () => {
 
     // Status badge should show one of the known run statuses
     // Includes "queued" for newly created runs that haven't been processed
-    const statusBadge = page
-      .getByText('Passed', { exact: true })
-      .or(page.getByText('Failed', { exact: true }))
-      .or(page.getByText('Running', { exact: true }))
-      .or(page.getByText('Completed', { exact: true }))
-      .or(page.locator('text=queued'));
+    const statusBadge = page.getByText(/^(passed|failed|running|completed|queued)$/i);
     await expect(statusBadge.first()).toBeVisible({ timeout: 15000 });
   });
 

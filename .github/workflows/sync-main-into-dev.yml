@@ -92,7 +92,7 @@ jobs:
           ## Verification
 
           - PR Validation is expected to run on this generated PR.
-          - Full-stack E2E remains a manual post-merge and pre-release qualification.
+          - Full-stack E2E qualifies the exact merged `dev` SHA automatically; manual exact-ref reruns remain available.
           EOF
 
           pr_number="$(

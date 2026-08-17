@@ -16,6 +16,7 @@ import {
   type GenerationMessage,
   generationApi,
 } from '@/infrastructure/generation';
+import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
 import type { Turn } from '@/infrastructure/types';
 import { useChatSessionStore } from '@/store/chatSessionStore';
@@ -35,6 +36,11 @@ interface SendMessageOptions {
   fixtureAssistantResponse?: string;
 }
 
+export interface SourceDraftReplyContext {
+  workspaceId: string;
+  workspaceRevision?: number;
+}
+
 export interface UseSourceThreadGenerationOptions {
   projectId: string;
   conversationId: string | undefined;
@@ -42,6 +48,7 @@ export interface UseSourceThreadGenerationOptions {
   provider?: string;
   model?: string;
   parentCommitHash?: string;
+  sourceDraftReply?: SourceDraftReplyContext;
   onConversationCreated?: (conversationId: string) => void;
   onTurnsSaved?: () => void;
 }
@@ -131,6 +138,7 @@ function mirrorSavedTurn(
     turn_hash: turn.turn_hash,
     ...(turn.project_id ? { project_id: turn.project_id } : {}),
     ...(turn.conversation_id ? { conversation_id: turn.conversation_id } : {}),
+    ...(turn.rings ? { rings: turn.rings } : {}),
     role,
     content,
   });
@@ -141,7 +149,32 @@ function savedTurnMessage(turn: Turn, role: 'user' | 'assistant', content: strin
     id: turn.turn_hash,
     ...(turn.project_id ? { projectId: turn.project_id } : {}),
     ...(turn.conversation_id ? { conversationId: turn.conversation_id } : {}),
+    ...(turn.rings ? { rings: turn.rings } : {}),
     role,
+    content,
+  };
+}
+
+function sourceDraftReplyRings(reply: SourceChatDraftReplyResponse): Record<string, unknown> {
+  return {
+    source_chat_draft: {
+      schema: 't3x/source-chat-draft-v1',
+      version: 1,
+      display: reply.display,
+      source_items: reply.source_items,
+      provider: reply.provider,
+      model: reply.model,
+      ...(reply.usage ? { usage: reply.usage } : {}),
+      ...(reply.warnings.length > 0 ? { warnings: reply.warnings } : {}),
+    },
+  };
+}
+
+function buildMemorySystemMessage(memoryContext: string): GenerationMessage | null {
+  const content = memoryContext.trim();
+  if (!content) return null;
+  return {
+    role: 'system',
     content,
   };
 }
@@ -161,6 +194,7 @@ export function useSourceThreadGeneration({
   provider,
   model,
   parentCommitHash,
+  sourceDraftReply,
   onConversationCreated,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
@@ -297,14 +331,25 @@ export function useSourceThreadGeneration({
       let stableConversationId: string | null = null;
       const saveAssistantResponse = async (
         content: string,
-        localMessageId: string | null
+        localMessageId: string | null,
+        rings?: Record<string, unknown>
       ): Promise<void> => {
         const conversationForSave = stableConversationId;
         if (!projectId || !conversationForSave || content.trim().length === 0) return;
         try {
-          const assistantTurn = await saveTurnWithRetry(() =>
-            sourceThreadApi.appendTurn(projectId, conversationForSave, 'assistant', content)
-          );
+          const assistantTurn = await saveTurnWithRetry(() => {
+            if (rings) {
+              return sourceThreadApi.appendTurn(
+                projectId,
+                conversationForSave,
+                'assistant',
+                content,
+                undefined,
+                { rings }
+              );
+            }
+            return sourceThreadApi.appendTurn(projectId, conversationForSave, 'assistant', content);
+          });
           mirrorSavedTurn(conversationForSave, assistantTurn, 'assistant', content);
           if (localMessageId) {
             replaceLocalMessageWithSavedTurn(localMessageId, assistantTurn, 'assistant', content);
@@ -317,6 +362,7 @@ export function useSourceThreadGeneration({
       try {
         let convId = conversationIdRef.current;
         let initialTitleForGeneratedTitle = currentTitle ?? messageTitle;
+        let savedUserTurnHash: string | null = null;
         if (!convId && isTemporaryMode) {
           const newTitle = title?.trim() ? title : messageTitle;
           const chat = useTemporaryChatsStore.getState().createChat(newTitle);
@@ -349,6 +395,7 @@ export function useSourceThreadGeneration({
           const userTurn = await saveTurnWithRetry(() =>
             sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
           );
+          savedUserTurnHash = userTurn.turn_hash;
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
           replaceLocalMessageWithSavedTurn(newUserMessage.id, userTurn, 'user', userMessage);
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
@@ -366,8 +413,9 @@ export function useSourceThreadGeneration({
           }
         }
 
+        const systemMessage = buildMemorySystemMessage(memoryContext);
         const messages: GenerationMessage[] = [
-          ...(memoryContext ? [{ role: 'system' as const, content: memoryContext }] : []),
+          ...(systemMessage ? [systemMessage] : []),
           ...previousMessages,
           { role: 'user' as const, content: apiContent },
         ];
@@ -397,6 +445,45 @@ export function useSourceThreadGeneration({
             });
           }
           if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
+          return;
+        }
+
+        if (!isTemporaryMode && sourceDraftReply && savedUserTurnHash && !images?.length) {
+          const reply = await sourceThreadApi.draftReply(projectId, sourceDraftReply.workspaceId, {
+            conversation_id: currentConversationId,
+            user_turn_hash: savedUserTurnHash,
+            provider,
+            model,
+            ...(sourceDraftReply.workspaceRevision
+              ? { if_revision: sourceDraftReply.workspaceRevision }
+              : {}),
+          });
+          fullResponse = reply.content;
+          if (reply.warnings.length > 0) {
+            warnings.setWarning(reply.warnings.slice(0, 3).join(' '));
+          }
+          if (fullResponse.trim().length > 0) {
+            localAssistantMessageId = `msg-${Date.now()}-assistant`;
+            history.setMessages((prev) => [
+              ...prev,
+              {
+                id: localAssistantMessageId!,
+                role: 'assistant' as const,
+                content: fullResponse,
+              },
+            ]);
+            stream.setStreamingContent('');
+            addedFinalMessage = true;
+            await saveAssistantResponse(
+              fullResponse,
+              localAssistantMessageId,
+              sourceDraftReplyRings(reply)
+            );
+            return;
+          }
+          warnings.setError('Model returned no content. Try again or check the provider key.');
+          stream.setStreamingContent('');
+          addedFinalMessage = true;
           return;
         }
 
@@ -537,6 +624,7 @@ export function useSourceThreadGeneration({
       provider,
       model,
       parentCommitHash,
+      sourceDraftReply,
       onConversationCreated,
       onTurnsSaved,
       webSearchEnabled,

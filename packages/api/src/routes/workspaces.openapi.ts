@@ -33,6 +33,7 @@ import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { sourceChatDraftContextText } from '../lib/source-chat-draft-context';
 import {
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
@@ -76,6 +77,7 @@ const SourceBundleItemSchema = z.object({
         role: z.string(),
         author: z.string(),
         content: z.string(),
+        rings: z.unknown().optional().nullable(),
       })
     )
     .optional(),
@@ -1394,16 +1396,65 @@ function mergeSourceTexts(
   const materialById = new Map(materials.map((material) => [material.id, material]));
   const fromSources = sources.flatMap((source): WorkspaceSourceText[] => {
     const material = source.materialId ? materialById.get(source.materialId) : undefined;
-    const chatText = source.previewTurns
-      ?.map((turn) => `${turn.author}: ${turn.content}`)
-      .join('\n');
+    const hasDraftTurns = source.previewTurns?.some((turn) =>
+      previewTurnHasSourceChatDraft(turn.rings)
+    );
+    const draftText = sourceChatDraftContextText(
+      source.previewTurns?.map((turn) => ({
+        turnHash: turn.id,
+        ringsJson: previewTurnRingsJson(turn.rings),
+      })) ?? [],
+      { kinds: ['captured'], includeInstruction: false }
+    );
+    const chatText = hasDraftTurns
+      ? undefined
+      : source.previewTurns?.map((turn) => `${turn.author}: ${turn.content}`).join('\n');
     const text =
-      material?.content_text ?? chatText ?? source.previewText ?? source.description ?? '';
+      material?.content_text ??
+      joinSourceTextParts([chatText, draftText]) ??
+      source.previewText ??
+      source.description ??
+      '';
     if (!text.trim()) return [];
     return [{ id: source.id, title: source.title, text }];
   });
 
   return fromSources;
+}
+
+function previewTurnHasSourceChatDraft(rings: unknown): boolean {
+  const ringsJson = previewTurnRingsJson(rings);
+  if (!ringsJson) return false;
+  try {
+    const parsed = JSON.parse(ringsJson) as unknown;
+    return (
+      isRecord(parsed) &&
+      isRecord(parsed.source_chat_draft) &&
+      parsed.source_chat_draft.schema === 't3x/source-chat-draft-v1' &&
+      parsed.source_chat_draft.version === 1 &&
+      Array.isArray(parsed.source_chat_draft.source_items)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function previewTurnRingsJson(rings: unknown): string | null {
+  if (rings === null || rings === undefined) return null;
+  if (typeof rings === 'string') return rings;
+  try {
+    return JSON.stringify(rings);
+  } catch {
+    return null;
+  }
+}
+
+function joinSourceTextParts(parts: Array<string | undefined>): string | undefined {
+  const text = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join('\n\n');
+  return text || undefined;
 }
 
 function buildExtractedWorkspace(
@@ -1766,6 +1817,7 @@ function extractAudience(text: string): string {
 function extractProblem(text: string): string {
   const explicit = matchLabeledValue(text, ['problem', 'pain point', 'challenge']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   const sentence = findSentence(text, /problem|pain|challenge|need/i);
   return sentence ? trimSentence(sentence) : '';
 }
@@ -1780,11 +1832,13 @@ function extractOutcome(text: string): string {
 function extractRequirementTitle(text: string): string {
   const explicit = matchLabeledValue(text, ['requirement', 'requirements', 'feature', 'title']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   return extractOutcome(text) || firstMeaningfulSentence(text);
 }
 
 function extractRequirementPriority(text: string): string {
   const explicit = matchLabeledValue(text, ['priority']);
+  if (isSourceChatDraftContext(text) && !explicit) return '';
   if (/^must|high$/i.test(explicit)) return 'must';
   if (/^could|low$/i.test(explicit)) return 'could';
   if (/^should|medium$/i.test(explicit)) return 'should';
@@ -1796,6 +1850,7 @@ function extractRequirementPriority(text: string): string {
 function extractRequirementAcceptance(text: string): string {
   const explicit = matchLabeledValue(text, ['acceptance', 'acceptance criteria', 'criteria']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   const sentence = findSentence(text, /support|ensure|verify|detect/i);
   return sentence ? trimSentence(sentence) : '';
 }
@@ -1912,6 +1967,10 @@ function matchLabeledValue(text: string, labels: string[]): string {
     if (match?.[1]) return match[1];
   }
   return '';
+}
+
+function isSourceChatDraftContext(text: string): boolean {
+  return text.trimStart().startsWith('## Source Chat Draft Items');
 }
 
 function findSentence(text: string, pattern: RegExp): string {
