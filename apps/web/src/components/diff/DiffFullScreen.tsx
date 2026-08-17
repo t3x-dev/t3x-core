@@ -101,13 +101,11 @@ export function DiffFullScreen({
         <DiffHeader
           baseCommit={{
             hash: baseCommitHash,
-            message: baseMeta?.message,
-            branch: baseMeta?.branch,
+            message: baseMeta?.rationale,
           }}
           targetCommit={{
             hash: targetCommitHash,
-            message: targetMeta?.message,
-            branch: targetMeta?.branch,
+            message: targetMeta?.rationale,
           }}
           onClose={handleClose}
         />

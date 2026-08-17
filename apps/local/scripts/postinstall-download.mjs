@@ -480,11 +480,17 @@ async function verifyInstalledVersionLock(packageDir, manifest) {
 
   for (const packageName of FIXED_VERSION_PACKAGES) {
     const manifestVersion = manifest.dependencies?.[packageName];
-    if (manifestVersion !== expectedVersion) {
+    if (typeof manifestVersion !== 'string' || manifestVersion.trim().length === 0) {
       problems.push(
-        `runtime-manifest.json dependency ${packageName} must be ${expectedVersion}, found ${manifestVersion ?? 'missing'}`
+        `runtime-manifest.json dependency ${packageName} must declare a version, found ${manifestVersion ?? 'missing'}`
       );
     }
+  }
+
+  if (manifest.dependencies?.['@t3x-dev/local'] !== expectedVersion) {
+    problems.push(
+      `runtime-manifest.json dependency @t3x-dev/local must be ${expectedVersion}, found ${manifest.dependencies?.['@t3x-dev/local'] ?? 'missing'}`
+    );
   }
 
   const platformEntries = Object.entries(manifest.platforms ?? {});

@@ -36,7 +36,7 @@ import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletio
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import { useProjectStore } from '@/store/projectStore';
-import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
+import type { ApiCommit, DiffResponse } from '@/types/api';
 import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { TreeDiffIndex } from './DiffIndex';
@@ -105,7 +105,7 @@ function CommitInfoBlock({
   accentColor,
 }: {
   label: string;
-  meta: CommitMeta;
+  meta: ApiCommit;
   accentColor: string;
 }) {
   return (
@@ -290,8 +290,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
-        const diffBaseHash = diffResp.base.hash ?? diffResp.base.digest;
-        const diffTargetHash = diffResp.target.hash ?? diffResp.target.digest;
+        const diffBaseHash = diffResp.base.digest;
+        const diffTargetHash = diffResp.target.digest;
         if (
           diffBaseHash !== baseHash ||
           diffTargetHash !== targetHash ||
@@ -349,8 +349,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         projectId,
         baseHash,
         targetHash,
-        diffResponse.base.branch || 'source',
-        diffResponse.target.branch || 'main'
+        baseCommit?.branch || 'source',
+        targetCommit?.branch || 'main'
       );
       router.push(withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo));
     } catch (err) {
@@ -358,7 +358,17 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     } finally {
       setMergeLoading(false);
     }
-  }, [diffResponse, projectId, baseHash, targetHash, router, createMergeDraft, currentReturnTo]);
+  }, [
+    diffResponse,
+    projectId,
+    baseHash,
+    targetHash,
+    baseCommit?.branch,
+    targetCommit?.branch,
+    router,
+    createMergeDraft,
+    currentReturnTo,
+  ]);
 
   // Loading state
   if (loading) {
@@ -542,20 +552,24 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         >
           <div className="space-y-5">
             {/* Base commit info */}
-            <CommitInfoBlock
-              label="Base"
-              meta={diffResponse.base}
-              accentColor="var(--diff-removed-accent)"
-            />
+            {baseCommit && (
+              <CommitInfoBlock
+                label="Base"
+                meta={baseCommit}
+                accentColor="var(--diff-removed-accent)"
+              />
+            )}
 
             <div className="border-t border-[var(--stroke-divider)]" />
 
             {/* Target commit info */}
-            <CommitInfoBlock
-              label="Target"
-              meta={diffResponse.target}
-              accentColor="var(--diff-added-accent)"
-            />
+            {targetCommit && (
+              <CommitInfoBlock
+                label="Target"
+                meta={targetCommit}
+                accentColor="var(--diff-added-accent)"
+              />
+            )}
 
             {/* Tree overview */}
             {baseCommit?.content && targetCommit?.content && (
