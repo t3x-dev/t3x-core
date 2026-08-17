@@ -6,7 +6,7 @@
  * WebUI-specific types that wrap and extend those.
  */
 
-import type { MergeResult, SlotConflict } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult, SlotConflict, TreeNode } from '@t3x-dev/core';
 
 // Re-export core merge types for consumers
 export type { MergeResult, SlotConflict };
@@ -78,6 +78,7 @@ export type TreeResolution =
   | { type: 'source' }
   | { type: 'target' }
   | { type: 'both' }
+  | { type: 'edit'; edit: TreeNode }
   | { type: 'per-slot'; slotChoices: Record<string, 'source' | 'target'> };
 
 export function isTreeResolutionComplete(
@@ -126,6 +127,8 @@ export interface MergeDraft {
   sourceBranch?: string | null;
   targetBranch?: string | null;
   prepared: MergeResult;
+  decisions?: MergeDecision | null;
+  decisionRevision: number;
   status: MergeDraftStatus;
   message?: string | null;
   createdAt: string;

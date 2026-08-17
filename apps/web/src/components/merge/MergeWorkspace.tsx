@@ -113,6 +113,32 @@ export function MergeWorkspace({
     target?: SemanticContent;
   }>({});
 
+  const saveCurrentDecision = useCallback(async () => {
+    if (!treeMergeResult) {
+      await saveDraft();
+      return;
+    }
+    await saveDraft(
+      buildMergeDecision(
+        treeMergeResult,
+        treeResolutions,
+        keepSourceNodes,
+        keepTargetNodes,
+        semanticData.source,
+        semanticData.target
+      )
+    );
+  }, [
+    keepSourceNodes,
+    keepTargetNodes,
+    message,
+    saveDraft,
+    semanticData.source,
+    semanticData.target,
+    treeMergeResult,
+    treeResolutions,
+  ]);
+
   // Fetch commits and prepare tree merge
   useEffect(() => {
     const sh = sourceHash;
@@ -205,11 +231,11 @@ export function MergeWorkspace({
     if (!isDirty) return;
 
     const timer = setTimeout(() => {
-      saveDraft();
+      saveCurrentDecision();
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [isDirty, saveDraft]);
+  }, [isDirty, saveCurrentDecision]);
 
   const handleCancel = useCallback(async () => {
     if (pullRequestNumber !== undefined) {
@@ -222,7 +248,7 @@ export function MergeWorkspace({
 
   // Keyboard shortcuts
   useMergeKeyboard({
-    saveDraft,
+    saveDraft: saveCurrentDecision,
     canCommit: () => allTreeConflictsResolved() && message.trim().length > 0,
     handleCancel,
     showReviewDialog,
@@ -426,7 +452,7 @@ export function MergeWorkspace({
           saveStatus={saveStatus}
           message={message}
           onMessageChange={setMessage}
-          onSave={saveDraft}
+          onSave={saveCurrentDecision}
           onCommit={handleNodeOpenReview}
           onCancel={handleCancel}
           canCommit={treeCanCommit}

@@ -284,7 +284,9 @@ export const mergeDrafts = pgTable(
     targetHash: text('target_hash').notNull(),
     sourceBranch: text('source_branch'),
     targetBranch: text('target_branch'),
-    preparedJson: text('prepared_json').notNull(), // Merge2WayResult with user decisions
+    preparedJson: text('prepared_json').notNull(), // Deterministic merge preparation only
+    decisionJson: text('decision_json'), // Canonical MergeDecision; null until the user decides
+    decisionRevision: integer('decision_revision').notNull().default(0),
     status: text('status').notNull().default('pending'), // 'pending' | 'committed' | 'cancelled'
     message: text('message'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),

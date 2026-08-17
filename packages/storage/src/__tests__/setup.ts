@@ -427,6 +427,8 @@ CREATE TABLE IF NOT EXISTS merge_drafts (
   source_branch TEXT,
   target_branch TEXT,
   prepared_json TEXT NOT NULL,
+  decision_json TEXT,
+  decision_revision INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
   message TEXT,
   created_at TIMESTAMPTZ NOT NULL,

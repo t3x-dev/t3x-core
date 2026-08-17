@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 64;
+const SCHEMA_VERSION = 65;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -279,6 +279,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       source_branch TEXT,
       target_branch TEXT,
       prepared_json TEXT NOT NULL,
+      decision_json TEXT,
+      decision_revision INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'pending',
       message TEXT,
       created_at TIMESTAMPTZ NOT NULL,
@@ -2001,6 +2003,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         FROM jsonb_array_elements(workspace_state_json->'schemaBindings') AS entries(binding)
         WHERE binding->>'mode' = 'project_default'
       );
+  `);
+
+  // ── Schema v65: durable merge decisions with optimistic concurrency ──
+  await sql.unsafe(`
+    ALTER TABLE merge_drafts ADD COLUMN IF NOT EXISTS decision_json TEXT;
+    ALTER TABLE merge_drafts
+      ADD COLUMN IF NOT EXISTS decision_revision INTEGER NOT NULL DEFAULT 0;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
