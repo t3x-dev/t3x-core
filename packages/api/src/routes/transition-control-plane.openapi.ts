@@ -37,6 +37,7 @@ import {
   attachTransitionStatement,
   inspectTransition,
   proposeTransition,
+  TransitionApplicationRequestConflictError,
   type TransitionControlPlaneOptions,
   TransitionPredicateNotAllowedError,
   verifyTransition,
@@ -471,6 +472,7 @@ function controlPlaneError(c: Context, error: unknown) {
   }
   if (
     error instanceof TransitionRequestConflictError ||
+    error instanceof TransitionApplicationRequestConflictError ||
     error instanceof TransitionStatementConflictError ||
     error instanceof TransitionCommandConflictError ||
     error instanceof TransitionHeadConflictError ||

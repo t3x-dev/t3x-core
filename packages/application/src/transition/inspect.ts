@@ -33,6 +33,7 @@ export interface TransitionInspectionGraph {
     refHead: string | null;
     requestKind: TransitionRequestKind;
     requestId: string;
+    requestCanonicalJson: string;
     effectDigest: string;
     proposalDigest: string;
     createdAt: string;
