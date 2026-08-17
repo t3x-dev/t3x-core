@@ -22,7 +22,7 @@ import {
   listTransitionCommitProjectIds,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
-import { createError } from './errors';
+import { createError, type ErrorCode } from './errors';
 
 export interface ProjectAccessPrincipal {
   userId: string | null | undefined;
@@ -158,6 +158,31 @@ export async function assertResourceProjectAccess(
   if (!apiKey) return null;
 
   return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
+}
+
+/**
+ * Resolve one resource ID to its stored project before evaluating authority.
+ * Resource-ID routes use this helper so request payloads and path aliases can
+ * never choose the project boundary that authorizes the loaded row.
+ */
+export async function resolveProjectResourceAccess<T>(
+  c: Context,
+  db: AnyDB,
+  input: {
+    load: () => Promise<T | null | undefined>;
+    projectId: (resource: T) => string | null | undefined;
+    notFoundCode: ErrorCode;
+    notFoundMessage: string;
+  }
+): Promise<T | Response> {
+  const resource = await input.load();
+  if (resource === null || resource === undefined) {
+    return c.json(createError(input.notFoundCode, input.notFoundMessage), 404);
+  }
+
+  const access = await assertResourceProjectAccess(c, db, input.projectId(resource));
+  if (access instanceof Response) return access;
+  return resource;
 }
 
 /**

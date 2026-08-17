@@ -39,7 +39,7 @@ import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { getUserId, resolveProjectResourceAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
@@ -100,6 +100,11 @@ async function observeDraftCommitHead(
 // Route Definitions
 // ============================================================
 
+const ProjectAccessDeniedResponse = {
+  description: 'Project access denied',
+  content: { 'application/json': { schema: ErrorResponseSchema } },
+} as const;
+
 // POST /v1/drafts/:id/preview
 const previewDraftRoute = createRoute({
   method: 'post',
@@ -123,6 +128,7 @@ const previewDraftRoute = createRoute({
       description: 'Invalid state',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -165,6 +171,7 @@ const commitDraftRoute = createRoute({
       description: 'Invalid state',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -193,6 +200,7 @@ const forkDraftRoute = createRoute({
       description: 'Draft not committed',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -224,6 +232,7 @@ const suggestDraftRoute = createRoute({
       description: 'Suggestions returned',
       content: { 'application/json': { schema: SuggestDraftResponse } },
     },
+    403: ProjectAccessDeniedResponse,
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -247,11 +256,14 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Get draft
-    const draft = await findDraftById(db, id);
-    if (!draft) {
-      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
-    }
+    // 1. Resolve the draft's stored project, then authorize that boundary.
+    const draft = await resolveProjectResourceAccess(c, db, {
+      load: () => findDraftById(db, id),
+      projectId: (resource) => resource.project_id,
+      notFoundCode: 'NOT_FOUND',
+      notFoundMessage: `Draft not found: ${id}`,
+    });
+    if (draft instanceof Response) return draft;
     // 2. Validate state
     if (draft.status !== 'editing') {
       return errorResponse(
@@ -420,13 +432,14 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Get draft
-    const draft = await findDraftById(db, id);
-    if (!draft) {
-      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
-    }
-    const access = await assertProjectAccess(c, db, draft.project_id);
-    if (access instanceof Response) return access;
+    // 1. Resolve the draft's stored project, then authorize that boundary.
+    const draft = await resolveProjectResourceAccess(c, db, {
+      load: () => findDraftById(db, id),
+      projectId: (resource) => resource.project_id,
+      notFoundCode: 'NOT_FOUND',
+      notFoundMessage: `Draft not found: ${id}`,
+    });
+    if (draft instanceof Response) return draft;
     const userId = getUserId(c);
 
     // 2. Validate state
@@ -754,6 +767,13 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const draft = await resolveProjectResourceAccess(c, db, {
+      load: () => findDraftById(db, id),
+      projectId: (resource) => resource.project_id,
+      notFoundCode: 'NOT_FOUND',
+      notFoundMessage: `Draft not found: ${id}`,
+    });
+    if (draft instanceof Response) return draft;
     const forked = await forkDraft(db, id);
 
     return c.json({ success: true as const, data: toApiDraft(forked) }, 201);
@@ -779,11 +799,14 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Get draft
-    const draft = await findDraftById(db, id);
-    if (!draft) {
-      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
-    }
+    // 1. Resolve the draft's stored project, then authorize that boundary.
+    const draft = await resolveProjectResourceAccess(c, db, {
+      load: () => findDraftById(db, id),
+      projectId: (resource) => resource.project_id,
+      notFoundCode: 'NOT_FOUND',
+      notFoundMessage: `Draft not found: ${id}`,
+    });
+    if (draft instanceof Response) return draft;
 
     // No goal means no retrieval intent, so an empty result is a valid response.
     if (!draft.goal) {
