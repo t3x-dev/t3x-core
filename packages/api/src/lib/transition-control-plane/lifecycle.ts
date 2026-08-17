@@ -62,6 +62,7 @@ export interface TransitionReviewPrecondition {
   proposalDigest: string;
   statementDigests: string[];
   policyDigest: string;
+  reviewDigest?: string;
 }
 
 export interface TransitionDecisionAuthoritySelection {
@@ -172,6 +173,12 @@ function normalizedPrecondition(precondition: TransitionReviewPrecondition): Pro
   };
 }
 
+export function digestTransitionReviewPrecondition(
+  precondition: TransitionReviewPrecondition
+): string {
+  return commandDigest(normalizedPrecondition(precondition));
+}
+
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) return false;
   const orderedLeft = [...left].sort(comparePortable);
@@ -280,6 +287,7 @@ async function resolveDecisionRetry(input: {
   actor: ActorRef;
   requestId: string;
   requestDigest: string;
+  precondition: TransitionReviewPrecondition;
 }): Promise<DecideTransitionResult | null> {
   const receipt = await findTransitionCommandReceipt(input.db, input);
   if (receipt === null) return null;
@@ -310,6 +318,7 @@ async function resolveDecisionRetry(input: {
     }),
     decision: audit.decision,
     decisionDigest: receipt.resultDigest,
+    reviewDigest: digestTransitionReviewPrecondition(input.precondition),
     reused: true,
   };
 }
@@ -318,6 +327,7 @@ export interface DecideTransitionResult {
   view: TransitionControlPlaneView;
   decision: DecisionStatement;
   decisionDigest: string;
+  reviewDigest: string;
   reused: boolean;
 }
 
@@ -357,6 +367,7 @@ export async function decideTransition(input: {
     precondition: normalizedPrecondition(input.precondition),
   };
   const requestDigest = commandDigest(normalized);
+  const reviewDigest = digestTransitionReviewPrecondition(input.precondition);
   const prior = await resolveDecisionRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
 
@@ -431,6 +442,7 @@ export async function decideTransition(input: {
     }),
     decision: issued.decision,
     decisionDigest,
+    reviewDigest,
     reused: false,
   };
 }
