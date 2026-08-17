@@ -1,5 +1,5 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, deleteAtPath, parsePath, resolvePath } from '../paths';
+import { deepClone, deleteAtPathSegments, parsePath, resolvePathSegments } from '../paths';
 import type { OpHandler } from '../registry';
 
 export const unsetHandler: OpHandler = (doc, fields, index) => {
@@ -18,8 +18,8 @@ export const unsetHandler: OpHandler = (doc, fields, index) => {
     };
   }
 
-  const parentPath = segments
-    .slice(0, -1)
+  const parentSegments = segments.slice(0, -1);
+  const parentPath = parentSegments
     .map((segment) => {
       if (segment.type === 'key') return segment.value;
       if (segment.type === 'index') return `[${segment.value}]`;
@@ -27,7 +27,7 @@ export const unsetHandler: OpHandler = (doc, fields, index) => {
     })
     .join('/');
 
-  const parent = parentPath === '' ? doc : resolvePath(doc, parentPath);
+  const parent = resolvePathSegments(doc, parentSegments);
   if (
     parent !== undefined &&
     (parent === null || typeof parent !== 'object' || Array.isArray(parent))
@@ -42,7 +42,7 @@ export const unsetHandler: OpHandler = (doc, fields, index) => {
     };
   }
 
-  const result = deleteAtPath(doc, path);
+  const result = deleteAtPathSegments(doc, segments);
   if (result === false) {
     // Idempotent — missing key is not an error
     return { doc: deepClone(doc) };

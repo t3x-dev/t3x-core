@@ -1,12 +1,19 @@
 import { YOPS_ERRORS, yopsError } from '../errors';
-import { deepClone, deleteAtPath, parsePath, resolvePath, setAtPath } from '../paths';
+import {
+  deepClone,
+  deleteAtPathSegments,
+  parsePath,
+  resolvePathSegments,
+  setAtPathSegments,
+} from '../paths';
 import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
 export const foldHandler: OpHandler = (doc, fields, index) => {
   const path = fields.path as string;
 
-  const target = resolvePath(doc, path);
+  const segments = parsePath(path);
+  const target = resolvePathSegments(doc, segments);
 
   if (target === undefined) {
     return {
@@ -39,18 +46,10 @@ export const foldHandler: OpHandler = (doc, fields, index) => {
   const childKey = childKeys[0];
   const childValue = deepClone(targetMap[childKey]);
 
-  const segments = parsePath(path);
-  const parentPath = segments
-    .slice(0, -1)
-    .map((s) => {
-      if (s.type === 'key') return s.value;
-      if (s.type === 'index') return `[${s.value}]`;
-      return `[${s.key}=${s.value}]`;
-    })
-    .join('/');
+  const parentSegments = segments.slice(0, -1);
 
   let cloned = deepClone(doc);
-  const deleted = deleteAtPath(cloned, path);
+  const deleted = deleteAtPathSegments(cloned, segments);
   if (deleted === false) {
     return {
       doc,
@@ -59,8 +58,11 @@ export const foldHandler: OpHandler = (doc, fields, index) => {
   }
   cloned = deleted;
 
-  const childTargetPath = parentPath === '' ? childKey : `${parentPath}/${childKey}`;
-  cloned = setAtPath(cloned, childTargetPath, childValue);
+  cloned = setAtPathSegments(
+    cloned,
+    [...parentSegments, { type: 'key', value: childKey }],
+    childValue
+  );
 
   return { doc: cloned };
 };
