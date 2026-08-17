@@ -1,12 +1,25 @@
 import {
+  assertTransitionDecisionMembership,
+  assertTransitionReviewPrecondition,
+  buildTransitionCommitCommand,
+  buildTransitionDecisionCommand,
+  decisionRationale,
+  digestTransitionReviewPrecondition as digestTransitionReviewPreconditionWith,
+  isGeneratedProposalPreparation,
+  sameTransitionPolicyResource,
+  TransitionAutomatedOverrideDeniedError,
+  TransitionDecisionDeniedError,
+  TransitionDecisionMembershipError,
+  type TransitionReviewPrecondition,
+  TransitionReviewStaleError,
+} from '@t3x-dev/application';
+import {
   authorizeDecisionForRepository,
   type CommitV2,
   createCommitV2,
   describeCommitV2,
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
-  type PolicyFailure,
-  PROPOSAL_GENERATION_PREPARATION_SCHEMA,
   type ProposalStatement,
   type RepositoryDecisionAuthority,
   type RequestedDecisionOutcome,
@@ -54,16 +67,7 @@ const REPOSITORY_SCOPE = Object.freeze({
   sources: ['repository:transition-statement-memberships'],
 });
 
-export interface TransitionReviewPrecondition {
-  workspaceRevision: number;
-  refName: string;
-  refHead: string | null;
-  effectDigest: string;
-  proposalDigest: string;
-  statementDigests: string[];
-  policyDigest: string;
-  reviewDigest?: string;
-}
+export type { TransitionReviewPrecondition };
 
 export interface TransitionDecisionAuthoritySelection {
   policyDigest: string;
@@ -101,89 +105,21 @@ export interface CommitPreparedRepositoryTransitionResult {
   transition: Exclude<Awaited<ReturnType<typeof getTransitionViewForCommit>>, null>;
 }
 
-export class TransitionReviewStaleError extends Error {
-  readonly code = 'TRANSITION_REVIEW_STALE';
-
-  constructor() {
-    super('Transition review facts changed; inspect and verify the Transition again');
-    this.name = 'TransitionReviewStaleError';
-  }
-}
-
-export class TransitionDecisionDeniedError extends Error {
-  readonly code = 'TRANSITION_DECISION_DENIED';
-
-  constructor(readonly failures: readonly PolicyFailure[]) {
-    super('The requested Decision is not permitted by the server-selected policy');
-    this.name = 'TransitionDecisionDeniedError';
-  }
-}
-
-export class TransitionAutomatedOverrideDeniedError extends Error {
-  readonly code = 'TRANSITION_AUTOMATED_OVERRIDE_DENIED';
-
-  constructor() {
-    super('Automated override is disabled in the first Transition rollout');
-    this.name = 'TransitionAutomatedOverrideDeniedError';
-  }
-}
-
-export class TransitionDecisionMembershipError extends Error {
-  readonly code = 'INTEGRITY_CHAIN_INVALID';
-
-  constructor(message: string) {
-    super(message);
-    this.name = 'TransitionDecisionMembershipError';
-  }
-}
-
-function comparePortable(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function sameDescriptor(
-  left: { kind: string; schema: string; digest: string },
-  right: { kind: string; schema: string; digest: string }
-): boolean {
-  return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
-}
-
-function sameResourceDescriptor(
-  left: { uri: string; mediaType: string; digest: string },
-  right: { uri: string; mediaType: string; digest: string }
-): boolean {
-  return (
-    left.uri === right.uri && left.mediaType === right.mediaType && left.digest === right.digest
-  );
-}
+export {
+  TransitionAutomatedOverrideDeniedError,
+  TransitionDecisionDeniedError,
+  TransitionDecisionMembershipError,
+  TransitionReviewStaleError,
+};
 
 function commandDigest(value: ProtocolValue): string {
   return digestTransitionRequestCanonicalJson(canonicalizeProtocolValue(value));
 }
 
-function normalizedPrecondition(precondition: TransitionReviewPrecondition): ProtocolValue {
-  return {
-    workspace_revision: precondition.workspaceRevision,
-    ref_name: precondition.refName,
-    ref_head: precondition.refHead,
-    effect_digest: precondition.effectDigest,
-    proposal_digest: precondition.proposalDigest,
-    statement_digests: [...precondition.statementDigests].sort(comparePortable),
-    policy_digest: precondition.policyDigest,
-  };
-}
-
 export function digestTransitionReviewPrecondition(
   precondition: TransitionReviewPrecondition
 ): string {
-  return commandDigest(normalizedPrecondition(precondition));
-}
-
-function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false;
-  const orderedLeft = [...left].sort(comparePortable);
-  const orderedRight = [...right].sort(comparePortable);
-  return orderedLeft.every((value, index) => value === orderedRight[index]);
+  return digestTransitionReviewPreconditionWith(precondition, commandDigest);
 }
 
 async function resolveReviewFacts(
@@ -226,60 +162,6 @@ async function resolveReviewFacts(
   };
 }
 
-function assertReviewPrecondition(
-  input: TransitionReviewPrecondition,
-  facts: Awaited<ReturnType<typeof resolveReviewFacts>>
-): void {
-  const statementDigests = facts.graph.observations.map(
-    (observation) => observation.membership.statementDigest
-  );
-  if (
-    input.workspaceRevision !== facts.workspace.revision ||
-    input.workspaceRevision !== facts.graph.membership.workspaceRevision ||
-    input.refName !== facts.graph.membership.refName ||
-    input.refHead !== facts.graph.membership.refHead ||
-    input.refHead !== facts.head.head ||
-    input.effectDigest !== facts.graph.membership.effectDigest ||
-    input.proposalDigest !== facts.graph.membership.proposalDigest ||
-    input.policyDigest !== facts.policyDigest ||
-    !sameStringSet(input.statementDigests, statementDigests)
-  ) {
-    throw new TransitionReviewStaleError();
-  }
-}
-
-function decisionRationale(input: {
-  outcome: RequestedDecisionOutcome;
-  actor: ActorRef;
-  rationale?: string;
-}): StringClaim {
-  if (input.outcome !== 'overridden') {
-    if (input.rationale !== undefined) {
-      throw new TypeError('Only an overridden Decision accepts an authored rationale');
-    }
-    return { mode: 'unspecified' };
-  }
-  if (input.rationale === undefined || input.rationale.trim().length === 0) {
-    throw new TypeError('Override requires a non-empty authored rationale');
-  }
-  return {
-    mode: 'authored',
-    value: input.rationale.trim(),
-    evidence: [],
-  };
-}
-
-function assertDecisionMembership(
-  decision: DecisionStatement,
-  graph: Awaited<ReturnType<typeof resolveTransitionProposalGraph>>
-): void {
-  if (!sameDescriptor(decision.subjects[0]!, describeTransitionObject(graph.proposal))) {
-    throw new TransitionDecisionMembershipError(
-      'Stored Decision does not bind this Transition Proposal membership'
-    );
-  }
-}
-
 async function resolveDecisionRetry(input: {
   db: AnyDB;
   projectId: string;
@@ -307,7 +189,10 @@ async function resolveDecisionRetry(input: {
   if (audit === null) {
     throw new TransitionDecisionMembershipError('Decision receipt has no verified audit record');
   }
-  assertDecisionMembership(audit.decision, graph);
+  assertTransitionDecisionMembership({
+    decision: audit.decision,
+    proposalDescriptor: describeTransitionObject(graph.proposal),
+  });
   return {
     view: await inspectTransition({
       db: input.db,
@@ -360,14 +245,12 @@ export async function decideTransition(input: {
           : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
     });
   }
-  const normalized: ProtocolValue = {
-    operation: 'decide',
+  const { requestDigest, reviewDigest } = buildTransitionDecisionCommand({
     outcome: input.outcome,
-    ...(input.rationale === undefined ? {} : { rationale: input.rationale.trim() }),
-    precondition: normalizedPrecondition(input.precondition),
-  };
-  const requestDigest = commandDigest(normalized);
-  const reviewDigest = digestTransitionReviewPrecondition(input.precondition);
+    rationale: input.rationale,
+    precondition: input.precondition,
+    digestCanonicalRequest: commandDigest,
+  });
   const prior = await resolveDecisionRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
 
@@ -377,7 +260,15 @@ export async function decideTransition(input: {
     input.transitionId,
     input.authoritySelection
   );
-  assertReviewPrecondition(input.precondition, facts);
+  assertTransitionReviewPrecondition({
+    precondition: input.precondition,
+    facts: {
+      graph: facts.graph,
+      workspaceRevision: facts.workspace.revision,
+      refHead: facts.head.head,
+      policyDigest: facts.policyDigest,
+    },
+  });
   const authority: RepositoryDecisionAuthority = input.authoritySelection?.authority ?? {
     async resolve() {
       return {
@@ -588,13 +479,11 @@ export async function commitTransition(input: {
   expectedHead: string | null;
   workspaceProjection?: TransitionWorkspaceCommitProjection;
 }): Promise<CommitTransitionResult> {
-  const requestDigest = commandDigest({
-    operation: 'commit',
-    decision_digest: input.decisionDigest,
-    expected_head: input.expectedHead,
-    ...(input.workspaceProjection === undefined
-      ? {}
-      : { workspace_projection: input.workspaceProjection.requestFacts }),
+  const { requestDigest } = buildTransitionCommitCommand({
+    decisionDigest: input.decisionDigest,
+    expectedHead: input.expectedHead,
+    workspaceProjectionFacts: input.workspaceProjection?.requestFacts,
+    digestCanonicalRequest: commandDigest,
   });
   const prior = await resolveCommitRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
@@ -619,7 +508,10 @@ export async function commitTransition(input: {
   if (audit === null) {
     throw new TransitionDecisionMembershipError('Decision is not in this repository audit ledger');
   }
-  assertDecisionMembership(audit.decision, graph);
+  assertTransitionDecisionMembership({
+    decision: audit.decision,
+    proposalDescriptor: describeTransitionObject(graph.proposal),
+  });
   if (audit.outcome === 'rejected') {
     throw new DecisionNotAuthorizedError(input.decisionDigest);
   }
@@ -627,11 +519,7 @@ export async function commitTransition(input: {
     graph.preparation === null
       ? null
       : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
-  const isGeneratedProposal =
-    preparationFacts !== null &&
-    typeof preparationFacts === 'object' &&
-    !Array.isArray(preparationFacts) &&
-    preparationFacts.schema === PROPOSAL_GENERATION_PREPARATION_SCHEMA;
+  const isGeneratedProposal = isGeneratedProposalPreparation(preparationFacts);
   if (refPolicyBinding === null && isGeneratedProposal) throw new TransitionReviewStaleError();
   const applicablePolicy =
     refPolicyBinding === null
@@ -647,7 +535,10 @@ export async function commitTransition(input: {
   if (
     applicablePolicy?.mode === 'generation_overlay' &&
     (audit.decision.predicate.policy.mode !== 'evaluated' ||
-      !sameResourceDescriptor(audit.decision.predicate.policy.resource, applicablePolicy.resource))
+      !sameTransitionPolicyResource(
+        audit.decision.predicate.policy.resource,
+        applicablePolicy.resource
+      ))
   ) {
     throw new TransitionReviewStaleError();
   }
