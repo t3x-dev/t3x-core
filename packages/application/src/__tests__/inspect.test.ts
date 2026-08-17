@@ -72,6 +72,7 @@ function graph(): TransitionInspectionGraph {
       refHead: null,
       requestKind: 'structured_yops',
       requestId: 'request_1',
+      requestCanonicalJson: '{"kind":"structured_yops"}',
       effectDigest: describeProtocolObject(subject.effect).digest,
       proposalDigest: describeProtocolObject(subject.proposal).digest,
       createdAt: '2026-08-17T00:00:00.000Z',
