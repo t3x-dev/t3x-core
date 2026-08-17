@@ -94,7 +94,11 @@ function enumSchema(values: readonly string[]): z.ZodEnum<Record<string, string>
   );
 }
 
-function buildSourceChatDraftReplySchema(targetPaths: readonly string[]) {
+function buildSourceChatDraftReplySchema(targets: readonly ExtractionTarget[]) {
+  const targetIds = targets.map((target) => target.target_id);
+  const targetPaths = targets.map(targetPath);
+  const targetIdSchema =
+    targetIds.length > 0 ? z.union([enumSchema(targetIds), z.null()]) : z.null();
   const targetPathSchema =
     targetPaths.length > 0 ? z.union([enumSchema(targetPaths), z.null()]) : z.null();
 
@@ -109,7 +113,8 @@ function buildSourceChatDraftReplySchema(targetPaths: readonly string[]) {
               kind: SourceChatDraftItemKindSchema,
               title: z.string().trim().min(1).max(120),
               content: z.string().trim().min(1).max(800),
-              target_path: targetPathSchema,
+              target_id: targetIdSchema.optional(),
+              target_path: targetPathSchema.optional(),
               source_quote: z.string().trim().min(1).max(800).nullable(),
             })
             .strict()
@@ -140,6 +145,7 @@ function slotGuidance(path: string): string | undefined {
 function compactTargetForPrompt(target: ExtractionTarget): Record<string, unknown> {
   const path = targetPath(target);
   return {
+    target_id: target.target_id,
     path,
     type: target.value_type ?? null,
     enum: target.enum ?? null,
@@ -253,6 +259,7 @@ function normalizeSourceItems(input: {
   targets: readonly ExtractionTarget[];
   warnings: string[];
 }): SourceChatDraftItem[] {
+  const idToTarget = new Map(input.targets.map((target) => [target.target_id, target]));
   const pathToTarget = new Map(input.targets.map((target) => [targetPath(target), target]));
   const nonGoalPath = firstNonGoalPath(input.targets);
   const items: SourceChatDraftItem[] = [];
@@ -262,7 +269,8 @@ function normalizeSourceItems(input: {
     kind: SourceChatDraftItemKind;
     title: string;
     content: string;
-    target_path?: string;
+    target_id?: string | null;
+    target_path?: string | null;
     source_quote?: string;
   }) => {
     const title = raw.title.trim();
@@ -282,13 +290,28 @@ function normalizeSourceItems(input: {
       kind = 'needs_confirmation';
     }
 
-    const target = raw.target_path ? pathToTarget.get(raw.target_path) : undefined;
+    const requestedTargetId = raw.target_id?.trim() || null;
+    const requestedTargetPath = raw.target_path?.trim() || null;
+    const target =
+      (requestedTargetId ? idToTarget.get(requestedTargetId) : undefined) ??
+      (requestedTargetPath ? pathToTarget.get(requestedTargetPath) : undefined);
+    const canonicalTargetPath = target ? targetPath(target) : undefined;
+    if (
+      target &&
+      requestedTargetPath &&
+      requestedTargetPath !== canonicalTargetPath &&
+      requestedTargetId
+    ) {
+      input.warnings.push(
+        `Generated item "${title}" returned target_id ${requestedTargetId} with mismatched target_path ${requestedTargetPath}; using the catalog target path.`
+      );
+    }
     const item: SourceChatDraftItem = {
       id: `S${String(items.length + 1).padStart(3, '0')}`,
       kind,
       title,
       content,
-      ...(target ? { target_id: target.target_id, target_path: raw.target_path } : {}),
+      ...(target ? { target_id: target.target_id, target_path: canonicalTargetPath } : {}),
       ...(quote ? { source_quote: quote, source_turn_hash: input.sourceTurnHash } : {}),
     };
     if (
@@ -312,6 +335,7 @@ function normalizeSourceItems(input: {
       kind: raw.kind,
       title: raw.title,
       content: raw.content,
+      ...(raw.target_id ? { target_id: raw.target_id } : {}),
       ...(raw.target_path ? { target_path: raw.target_path } : {}),
       ...(raw.source_quote ? { source_quote: raw.source_quote } : {}),
     });
@@ -394,7 +418,8 @@ function buildReplyPrompt(input: {
       'Generate source-ready draft items from the saved user turn.',
       'This output will be used by later deterministic extraction, proposal, and YOps steps.',
       'Do not apply State changes, do not write YOps, and do not claim that proposals or commits changed.',
-      'Use target_path only when it exactly matches one provided target catalog path.',
+      'Use target_id only when it exactly matches one provided target catalog id.',
+      'When target_path is included, it must match the same catalog entry as target_id.',
       'Every captured or excluded item must include an exact source_quote copied verbatim from the user turn.',
       'Use needs_confirmation for ambiguity, missing quotes, or information that is not explicitly stated.',
       'Do not invent placeholders.',
@@ -405,12 +430,12 @@ function buildReplyPrompt(input: {
         role: 'user',
         content:
           `Target catalog digest: ${input.catalogDigest ?? 'unavailable'}\n` +
-          `Target catalog paths:\n${targetBlock}\n\n` +
+          `Target catalog entries:\n${targetBlock}\n\n` +
           `Saved user turn:\n${input.sourceText}\n\n` +
           `Hard exclusions:\n${JSON.stringify(input.hardExclusions, null, 2)}\n\n` +
           `Warnings:\n${JSON.stringify(input.warnings, null, 2)}\n\n` +
           'Return this exact JSON shape:\n' +
-          '{ "schema": "t3x/source-chat-draft-reply", "version": 1, "source_items": [{ "kind": "captured|excluded|needs_confirmation", "title": "short label", "content": "source-ready material", "target_path": null, "source_quote": null }], "warnings": [] }\n\n' +
+          '{ "schema": "t3x/source-chat-draft-reply", "version": 1, "source_items": [{ "kind": "captured|excluded|needs_confirmation", "title": "short label", "content": "source-ready material", "target_id": null, "target_path": null, "source_quote": null }], "warnings": [] }\n\n' +
           'Rules:\n' +
           '- captured items are positive materials later generation can use.\n' +
           '- excluded items are explicit boundaries or non-goals.\n' +
@@ -497,7 +522,7 @@ export async function createSourceChatDraftReply(
   const targets = catalogResult.ok ? catalogResult.catalog.targets : [];
   const catalogDigest = catalogResult.ok ? catalogResult.catalog.digest : null;
   const hardExclusions = extractHardExclusions(userTurn.content);
-  const replySchema = buildSourceChatDraftReplySchema(targets.map(targetPath));
+  const replySchema = buildSourceChatDraftReplySchema(targets);
 
   let replyResult: Awaited<ReturnType<StructuredProvider['generateStructured']>>;
   try {
@@ -517,9 +542,10 @@ export async function createSourceChatDraftReply(
     throw new SourceChatDraftReplyError('generation_failed', message);
   }
 
-  warnings.push(...(replyResult.data.warnings ?? []));
+  const replyDraft = replySchema.parse(replyResult.data);
+  warnings.push(...(replyDraft.warnings ?? []));
   const sourceItems = normalizeSourceItems({
-    draft: replyResult.data,
+    draft: replyDraft,
     hardExclusions,
     sourceText: userTurn.content,
     sourceTurnHash: userTurn.turnHash,
