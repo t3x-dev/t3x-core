@@ -35,6 +35,7 @@ type WirePrecondition = {
   proposal_digest: string;
   statement_digests: string[];
   policy_digest: string;
+  review_digest?: string;
 };
 
 function key(
@@ -267,6 +268,17 @@ describe('Transition Decision and Commit routes', () => {
       requestId: 'verify:decision-commit',
       apiKey: writer,
     });
+    expect(precondition.review_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const staleReview = await decide({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'decision:stale-review-digest',
+      outcome: 'accepted',
+      precondition: { ...precondition, review_digest: `sha256:${'0'.repeat(64)}` },
+      apiKey: reviewer,
+    });
+    expect(staleReview.status).toBe(409);
 
     await expect(
       recordTransitionCommandReceipt(mockDB, {
@@ -294,10 +306,12 @@ describe('Transition Decision and Commit routes', () => {
       data: {
         reused: boolean;
         decision_digest: string;
+        review_digest: string;
         decision: { actor: unknown };
       };
     };
     expect(acceptedPayload.data.reused).toBe(false);
+    expect(acceptedPayload.data.review_digest).toBe(precondition.review_digest);
     expect(acceptedPayload.data.decision.actor).toEqual({ kind: 'human', id: 'user:reviewer' });
 
     const acceptedRetry = await decide({
@@ -310,11 +324,12 @@ describe('Transition Decision and Commit routes', () => {
     });
     expect(acceptedRetry.status).toBe(200);
     const acceptedRetryPayload = (await acceptedRetry.json()) as {
-      data: { reused: boolean; decision_digest: string };
+      data: { reused: boolean; decision_digest: string; review_digest: string };
     };
     expect(acceptedRetryPayload.data).toMatchObject({
       reused: true,
       decision_digest: acceptedPayload.data.decision_digest,
+      review_digest: acceptedPayload.data.review_digest,
     });
 
     const conflictingDecision = await decide({

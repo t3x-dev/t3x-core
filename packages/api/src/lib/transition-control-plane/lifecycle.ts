@@ -246,6 +246,12 @@ function assertReviewPrecondition(
   ) {
     throw new TransitionReviewStaleError();
   }
+  if (
+    input.reviewDigest !== undefined &&
+    input.reviewDigest !== digestTransitionReviewPrecondition(input)
+  ) {
+    throw new TransitionReviewStaleError();
+  }
 }
 
 function decisionRationale(input: {
