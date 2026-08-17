@@ -3,6 +3,7 @@ import {
   type T3xClient,
   type TransitionProtocolValue,
   type TransitionReplaceScalarOperation,
+  type TransitionReviewPrecondition,
   type TransitionSourceArtifactSelector,
   type TransitionSourceMaterialSelector,
 } from '@t3x-dev/api-client';
@@ -68,6 +69,23 @@ function optionalRevision(args: Record<string, unknown>): number | undefined {
   const value = args.if_revision;
   if (value === undefined) return undefined;
   return Number.isInteger(value) && Number(value) > 0 ? Number(value) : undefined;
+}
+
+function reviewPreconditionArg(
+  args: Record<string, unknown>,
+  name: string
+): TransitionReviewPrecondition | undefined {
+  const value = args[name];
+  if (value === undefined || value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as TransitionReviewPrecondition;
+}
+
+function expectedHeadArg(args: Record<string, unknown>): string | null | undefined {
+  const value = args.expected_head;
+  if (value === null) return null;
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 const commonProposalProperties = {
@@ -355,9 +373,147 @@ export const attachStatementHandler: ToolHandler = async (args) =>
     });
   });
 
+export const decideTransitionDef: ToolDef = {
+  name: 'decide_transition',
+  description: [
+    'Record an accepted, rejected, or overridden Decision for a verified Transition.',
+    'The review precondition must be copied from the latest inspect_transition response.',
+    'The API derives actor, policy, and observed Statements; callers cannot supply authority facts.',
+  ].join('\n'),
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project_id: { type: 'string', description: 'Project that owns the Transition.' },
+      transition_id: { type: 'string', description: 'Opaque trn_ Transition identifier.' },
+      request_id: {
+        type: 'string',
+        description: 'Decision idempotency key. Reuse only for an exact retry.',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['accepted', 'overridden', 'rejected'],
+        description: 'Requested Decision outcome.',
+      },
+      rationale: {
+        type: 'string',
+        description: 'Required only for overridden Decisions; forbidden otherwise.',
+      },
+      precondition: {
+        type: 'object',
+        description: 'Immutable review precondition from inspect_transition.view.precondition.',
+      },
+    },
+    required: ['project_id', 'transition_id', 'request_id', 'outcome', 'precondition'],
+  },
+  annotations: { idempotentHint: true },
+};
+
+export const decideTransitionHandler: ToolHandler = async (args) =>
+  withTransitionApi(async (client) => {
+    const projectId = stringArg(args, 'project_id');
+    const transitionId = stringArg(args, 'transition_id');
+    const requestId = stringArg(args, 'request_id');
+    const outcome = stringArg(args, 'outcome');
+    const precondition = reviewPreconditionArg(args, 'precondition');
+    if (!projectId || !transitionId || !requestId || !outcome || !precondition) {
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'project_id, transition_id, request_id, outcome, and precondition are required.',
+        400
+      );
+    }
+    if (!['accepted', 'overridden', 'rejected'].includes(outcome)) {
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'outcome must be accepted, overridden, or rejected.',
+        400
+      );
+    }
+    const rationale = optionalStringArg(args, 'rationale');
+    if (outcome === 'overridden' && rationale === undefined) {
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'An overridden Decision requires a non-empty rationale.',
+        400
+      );
+    }
+    if (outcome !== 'overridden' && args.rationale !== undefined) {
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'Only an overridden Decision accepts a rationale.',
+        400
+      );
+    }
+    return client.decideTransition(projectId, transitionId, {
+      request_id: requestId,
+      outcome: outcome as 'accepted' | 'overridden' | 'rejected',
+      ...(rationale === undefined ? {} : { rationale }),
+      precondition,
+    });
+  });
+
+export const commitTransitionDef: ToolDef = {
+  name: 'commit_transition',
+  description: [
+    'Create a CommitV2 for an accepted or authorized overridden Decision and advance the ref by exact expected-head CAS.',
+    'The decision_digest and expected_head must come from decide_transition / inspect_transition outputs.',
+    'The API derives actor and workspace projection facts; callers cannot supply authority facts.',
+  ].join('\n'),
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project_id: { type: 'string', description: 'Project that owns the Transition.' },
+      transition_id: { type: 'string', description: 'Opaque trn_ Transition identifier.' },
+      request_id: {
+        type: 'string',
+        description: 'Commit idempotency key. Reuse only for an exact retry.',
+      },
+      decision_digest: {
+        type: 'string',
+        description: 'Digest returned by decide_transition.',
+      },
+      expected_head: {
+        type: ['string', 'null'],
+        description: 'Exact ref head from the review precondition; null for an empty ref.',
+      },
+    },
+    required: ['project_id', 'transition_id', 'request_id', 'decision_digest', 'expected_head'],
+  },
+  annotations: { idempotentHint: true },
+};
+
+export const commitTransitionHandler: ToolHandler = async (args) =>
+  withTransitionApi(async (client) => {
+    const projectId = stringArg(args, 'project_id');
+    const transitionId = stringArg(args, 'transition_id');
+    const requestId = stringArg(args, 'request_id');
+    const decisionDigest = stringArg(args, 'decision_digest');
+    const expectedHead = expectedHeadArg(args);
+    if (
+      !projectId ||
+      !transitionId ||
+      !requestId ||
+      !decisionDigest ||
+      expectedHead === undefined
+    ) {
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'project_id, transition_id, request_id, decision_digest, and expected_head are required.',
+        400
+      );
+    }
+    return client.commitTransition(projectId, transitionId, {
+      request_id: requestId,
+      decision_digest: decisionDigest,
+      expected_head: expectedHead,
+    });
+  });
+
 export const TRANSITION_TOOLS = [
   { def: proposeTransitionDef, handler: proposeTransitionHandler },
   { def: inspectTransitionDef, handler: inspectTransitionHandler },
   { def: verifyTransitionDef, handler: verifyTransitionHandler },
   { def: attachStatementDef, handler: attachStatementHandler },
+  { def: decideTransitionDef, handler: decideTransitionHandler },
+  { def: commitTransitionDef, handler: commitTransitionHandler },
 ] as const;

@@ -42,10 +42,13 @@ Transition (opt-in, API backend only):
 - `inspect_transition`
 - `verify_transition`
 - `attach_statement`
+- `decide_transition`
+- `commit_transition`
 
 The Transition toolset exposes task-oriented transition views. It does not
-accept caller-written actors or other trust-chain metadata. Decision and Commit
-operations are intentionally not part of this milestone.
+accept caller-written actors, policy facts, workspace projection facts, or other
+trust-chain metadata. Decision and Commit operations are routed through the API
+backend so authority, review preconditions, and ref CAS remain server-owned.
 
 ### Resources
 
@@ -171,6 +174,8 @@ Transition (requires `T3X_MCP_BACKEND=api`)
 2. inspect_transition({ project_id, transition_id })    -> current task-oriented view
 3. verify_transition({ project_id, transition_id, ... }) -> replay/validation observations
 4. attach_statement({ project_id, transition_id, ... }) -> updated view
+5. decide_transition({ project_id, transition_id, ... }) -> decision_digest + updated view
+6. commit_transition({ project_id, transition_id, ... }) -> commit_digest + TransitionViewV1
 ```
 
 ## Build

@@ -203,6 +203,8 @@ describe('apps/mcp stdio subprocess smoke', () => {
         'inspect_transition',
         'verify_transition',
         'attach_statement',
+        'decide_transition',
+        'commit_transition',
       ]);
 
       const result = await client.callTool({
