@@ -101,4 +101,31 @@ describe('MergeWorkspace commit ceremony', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('does not report the merge workspace ready until commit content is hydrated', async () => {
+    let resolveCommit: (commit: { parents: string[]; content: typeof commitContent }) => void =
+      () => {};
+    loadCommitMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommit = resolve;
+      })
+    );
+    useMergeWorkspaceStore.getState().setTreeMergeResult({
+      autoKept: ['plan'],
+      conflicts: [],
+      onlyInSource: [],
+      onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
+    });
+
+    render(<MergeWorkspace projectId="proj_1" onClose={vi.fn()} />);
+
+    expect(screen.queryByTestId('merge-workspace-ready')).not.toBeInTheDocument();
+
+    resolveCommit({ parents: [], content: commitContent });
+
+    expect(await screen.findByTestId('merge-workspace-ready')).toBeInTheDocument();
+  });
 });

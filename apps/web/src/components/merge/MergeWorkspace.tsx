@@ -100,6 +100,7 @@ export function MergeWorkspace({
 
   // Tree merge loading state
   const [treeLoading, setTreeLoading] = useState(false);
+  const [treeDataReady, setTreeDataReady] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
@@ -142,6 +143,7 @@ export function MergeWorkspace({
   useEffect(() => {
     const sh = sourceHash;
     const th = targetHash;
+    setTreeDataReady(false);
     if (!sh || !th) return;
     let cancelled = false;
 
@@ -164,6 +166,7 @@ export function MergeWorkspace({
         // PR readiness already persisted the authoritative two-way preparation.
         // Keep that draft result and only load commit content for rendering.
         if (useMergeWorkspaceStore.getState().treeMergeResult) {
+          setTreeDataReady(true);
           setTreeLoading(false);
           return;
         }
@@ -184,6 +187,7 @@ export function MergeWorkspace({
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
                 setTreeMergeResult(result);
+                setTreeDataReady(true);
                 setTreeLoading(false);
                 // tree merge prepared
               })
@@ -193,6 +197,7 @@ export function MergeWorkspace({
                 const emptyBase: SemanticContent = { trees: [], relations: [] };
                 const result = prepareMerge(emptyBase, sourceContent, targetContent);
                 setTreeMergeResult(result);
+                setTreeDataReady(true);
                 setTreeLoading(false);
                 // tree merge prepared
               });
@@ -201,6 +206,7 @@ export function MergeWorkspace({
             const emptyBase: SemanticContent = { trees: [], relations: [] };
             const result = prepareMerge(emptyBase, sourceContent, targetContent);
             setTreeMergeResult(result);
+            setTreeDataReady(true);
             setTreeLoading(false);
           }
         } else {
@@ -411,6 +417,7 @@ export function MergeWorkspace({
 
     return (
       <motion.div
+        data-testid={treeDataReady ? 'merge-workspace-ready' : undefined}
         variants={containerVariants}
         initial="initial"
         animate="animate"

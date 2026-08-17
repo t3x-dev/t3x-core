@@ -21,6 +21,7 @@ export interface ChatMessage {
   conversationId?: string;
   role: 'user' | 'assistant';
   content: string;
+  rings?: Record<string, unknown> | null;
 }
 
 export interface UseChatHistoryReturn {
@@ -122,6 +123,7 @@ export function useChatHistory(
             conversationId: turn.conversation_id,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
+            rings: turn.rings,
           }))
           .reverse();
         setMessages(loaded);
@@ -178,6 +180,7 @@ export function useChatHistory(
           conversationId: turn.conversation_id,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
+          rings: turn.rings,
         }))
         .reverse();
       setMessages((prev) => [...olderMessages, ...prev]);

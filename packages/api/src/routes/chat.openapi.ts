@@ -410,6 +410,30 @@ function toOpenAIResponsesInputContent(
   });
 }
 
+function toTextOnlyContent(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content;
+  return content
+    .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
+    .join('\n\n');
+}
+
+function toGoogleContentParts(
+  content: ChatMessage['content']
+): Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
+  if (typeof content === 'string') return [{ text: content }];
+  return content.map((block) => {
+    if (block.type === 'text') {
+      return { text: block.text ?? '' };
+    }
+    return {
+      inlineData: {
+        mimeType: block.source?.media_type ?? 'image/png',
+        data: block.source?.data ?? '',
+      },
+    };
+  });
+}
+
 async function callOpenAINonStreaming(
   messages: ChatMessage[],
   model: string,
@@ -942,10 +966,12 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   .filter((m) => m.role !== 'system')
                   .map((m) => ({
                     role: m.role === 'assistant' ? 'model' : m.role,
-                    parts: [{ text: m.content }],
+                    parts: toGoogleContentParts(m.content),
                   })),
                 ...(systemMessage && {
-                  systemInstruction: { parts: [{ text: systemMessage.content }] },
+                  systemInstruction: {
+                    parts: [{ text: toTextOnlyContent(systemMessage.content) }],
+                  },
                 }),
                 generationConfig: {
                   temperature,
@@ -984,7 +1010,6 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         const decoder = new TextDecoder();
         let buffer = '';
         resolvedModel = model;
-        let receivedMessageStop = false;
         const citations: Array<{ url: string; title: string }> = [];
         let currentBlockType = '';
         let emittedOpenAIWebSearch = false;
@@ -1033,7 +1058,6 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
 
             if (!dataStr) continue;
             if (providerId === 'openai' && dataStr === '[DONE]') {
-              receivedMessageStop = true;
               emitDone();
               continue;
             }
@@ -1110,7 +1134,6 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                 }
 
                 if (openAIEventType === 'response.completed') {
-                  receivedMessageStop = true;
                   emitDone();
                   continue;
                 }
@@ -1147,7 +1170,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   );
                 }
                 if (typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0) {
-                  receivedMessageStop = true;
+                  emitDone();
                 }
               }
               continue;
@@ -1199,7 +1222,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   typeof candidate.finishReason === 'string' &&
                   candidate.finishReason.length > 0
                 ) {
-                  receivedMessageStop = true;
+                  emitDone();
                 }
               }
               continue;
@@ -1241,14 +1264,15 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                 usage.output_tokens = u.output_tokens;
               }
             } else if (eventType === 'message_stop') {
-              receivedMessageStop = true;
               emitDone();
             }
           }
         }
 
-        // If the upstream stream ends without an explicit stop event, emit done anyway.
-        if (!receivedMessageStop) {
+        // If the upstream stream ends without an explicit terminal event, emit
+        // done anyway. Some providers report finishReason inside the final
+        // content chunk instead of sending a separate stop event.
+        if (!emittedDoneEvent) {
           emitDone();
         }
         reader.releaseLock();

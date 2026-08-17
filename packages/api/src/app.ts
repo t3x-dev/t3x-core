@@ -80,6 +80,7 @@ import {
   searchRoutes,
   shareRoutes,
   skillArtifactRoutes,
+  sourceChatDraftReplyRoutes,
   sourceEvidenceRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
@@ -216,6 +217,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', transitionPolicyBindingRoutes);
   api.route('/', createTransitionControlPlaneRoutes(transitionControlPlane));
   api.route('/', shareRoutes);
+  api.route('/', sourceChatDraftReplyRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', sourceEvidenceRoutes);
   api.route('/', comparisonsRoutes);
