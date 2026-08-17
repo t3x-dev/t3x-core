@@ -17,6 +17,7 @@ import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../sc
 export const draftsYopsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+type DraftYOp = Parameters<typeof applyYOps>[1][number];
 
 // ============================================================
 // Schemas
@@ -159,7 +160,7 @@ draftsYopsRoutes.openapi(applyYOpsRoute, async (c) => {
 
     const trees = (draft.nodes ?? []) as TreeNode[];
     const content = { trees, relations: [] };
-    const result = applyYOps(content, yops);
+    const result = applyYOps(content, yops as unknown as DraftYOp[]);
 
     if (!result.ok) {
       return errorResponse(

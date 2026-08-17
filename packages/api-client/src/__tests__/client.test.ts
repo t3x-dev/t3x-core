@@ -40,6 +40,79 @@ const TRANSITION_ID = `trn_${'a'.repeat(32)}`;
 const SECOND_TRANSITION_ID = `trn_${'b'.repeat(32)}`;
 const digest = (seed: string) => `sha256:${seed.repeat(64)}`;
 
+function descriptor(kind: 'state' | 'effect' | 'statement' | 'commit', seed: string) {
+  const schemas = {
+    state: 't3x/state/v1',
+    effect: 't3x/effect/v1',
+    statement: 't3x/statement/v1',
+    commit: 't3x/commit/v2',
+  } as const;
+  return { kind, schema: schemas[kind], digest: digest(seed) };
+}
+
+function actionCapability(disposition = 'allowed') {
+  return { disposition, reasons: [] };
+}
+
+function unobservedCheck() {
+  return {
+    observation: 'no_statement_observed',
+    outcomes: [],
+    runs: [],
+    unsupportedProfiles: [],
+  };
+}
+
+function transitionGraphView() {
+  return {
+    schema: 't3x.dev/transition-view/v1',
+    version: 1,
+    mode: 'transition',
+    change: {
+      effect: descriptor('effect', 'c'),
+      base: descriptor('state', 'd'),
+      result: descriptor('state', 'e'),
+      driver: {
+        protocol: 't3x.dev/yops',
+        protocolVersion: '1',
+        specDigest: digest('f'),
+      },
+      operations: [],
+    },
+    claims: {
+      proposal: descriptor('statement', 'a'),
+      actor: { kind: 'human', id: 'human:test' },
+      intent: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+      rationale: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+    },
+    checks: {
+      objectIntegrity: 'verified',
+      observationScope: { completeness: 'complete', sources: ['project-store'] },
+      replay: unobservedCheck(),
+      validation: unobservedCheck(),
+      runner: unobservedCheck(),
+      humanConfirmation: {
+        observation: 'no_statement_observed',
+        runs: [],
+      },
+    },
+    decision: { observation: 'not_supplied' },
+    history: { observation: 'not_committed' },
+    capabilities: {
+      accept: actionCapability(),
+      override: actionCapability('denied'),
+      reject: actionCapability(),
+      commit: actionCapability('not_applicable'),
+      revert: actionCapability('not_applicable'),
+    },
+    audit: {
+      effect: descriptor('effect', 'c'),
+      proposal: descriptor('statement', 'a'),
+      statements: [],
+    },
+  };
+}
+
 function transitionView(overrides: Record<string, unknown> = {}) {
   return {
     transition_id: TRANSITION_ID,
@@ -57,7 +130,7 @@ function transitionView(overrides: Record<string, unknown> = {}) {
       statement_digests: [digest('3')],
       policy_digest: digest('4'),
     },
-    transition: { schema: 't3x.dev/test-transition-view/v1' },
+    transition: transitionGraphView(),
     statements: [
       {
         digest: digest('3'),
@@ -934,6 +1007,21 @@ describe('T3xClient', () => {
       });
     });
 
+    it('rejects a Transition control-plane response without a TransitionViewV1 projection', async () => {
+      const fn = mockFetch(
+        successResponse({
+          transition_id: TRANSITION_ID,
+          view: transitionView({ transition: null }),
+        })
+      );
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_abc')).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+        status: 200,
+      });
+    });
+
     it('verifies one Transition with an explicit idempotency key', async () => {
       const data = {
         transition_id: TRANSITION_ID,
@@ -1014,7 +1102,7 @@ describe('T3xClient', () => {
         reused: false,
         commit_digest: digest('6'),
         commit: { schema: 't3x/commit/v2' },
-        transition: { schema: 't3x.dev/test-transition-view/v1' },
+        transition: transitionGraphView(),
       };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);

@@ -181,18 +181,21 @@ describe('importFile', () => {
     // Verify turns are created with correct parent chaining
     expect(mockClient.createTurn).toHaveBeenCalledTimes(3);
     expect(mockClient.createTurn).toHaveBeenNthCalledWith(1, {
+      project_id: 'proj_test',
       conversation_id: 'conv_abc123',
       role: 'user',
       content: 'First paragraph.',
       parent_turn_hash: undefined,
     });
     expect(mockClient.createTurn).toHaveBeenNthCalledWith(2, {
+      project_id: 'proj_test',
       conversation_id: 'conv_abc123',
       role: 'user',
       content: 'Second paragraph.',
       parent_turn_hash: 'sha256:turn1',
     });
     expect(mockClient.createTurn).toHaveBeenNthCalledWith(3, {
+      project_id: 'proj_test',
       conversation_id: 'conv_abc123',
       role: 'user',
       content: 'Third paragraph.',

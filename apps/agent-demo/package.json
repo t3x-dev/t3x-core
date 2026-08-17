@@ -8,6 +8,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "clean": "rm -rf dist"

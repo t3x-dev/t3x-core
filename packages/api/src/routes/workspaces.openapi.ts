@@ -652,6 +652,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   }
 });
 
+// @ts-expect-error - OpenAPI handler return type
 workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const db = await getDB();
@@ -668,6 +669,7 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   });
 });
 
+// @ts-expect-error - OpenAPI handler return type
 workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const db = await getDB();
@@ -754,6 +756,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     if (access instanceof Response) return access;
     const authority = await resolveWorkspaceTransitionAuthority({
       db,
+      // @ts-expect-error - OpenAPI context apiKey typing
       apiKey: c.get('apiKey') as ApiKey | undefined,
       projectId,
       workspaceId,

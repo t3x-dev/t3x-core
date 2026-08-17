@@ -8,7 +8,6 @@
 
 /// <reference lib="dom" />
 import { Readability } from '@mozilla/readability';
-// @ts-expect-error - jsdom has no type declarations
 import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 // @ts-expect-error - turndown-plugin-gfm has no type declarations

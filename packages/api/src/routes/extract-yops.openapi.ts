@@ -44,8 +44,10 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   extractAndApplyWithRetry,
   extractToOutcome,
+  type LLMProvider,
   PRESETS,
   type PresetName,
+  type PromptTurnInput,
 } from '@t3x-dev/core';
 import { findConversationById, findTurnsByHashes } from '@t3x-dev/storage';
 import { buildConversationContextManifest } from '../lib/context-manifest';
@@ -91,9 +93,24 @@ type ExtractYopsTurnInput = z.infer<typeof TurnInput>;
 
 type AuthoritativeExtractionTurn = {
   turn_hash: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: PromptTurnInput['role'];
   content: string;
 };
+
+function isPromptTurnRole(role: string): role is PromptTurnInput['role'] {
+  return role === 'user' || role === 'assistant' || role === 'system' || role === 'tool';
+}
+
+function isExtractionProvider(
+  provider: unknown
+): provider is Pick<LLMProvider, 'generate' | 'generateFromPrompt' | 'generateStructured'> {
+  return (
+    provider !== null &&
+    typeof provider === 'object' &&
+    'generate' in provider &&
+    typeof provider.generate === 'function'
+  );
+}
 
 async function resolveAuthoritativeTurns(
   db: Awaited<ReturnType<typeof getDB>>,
@@ -146,6 +163,12 @@ async function resolveAuthoritativeTurns(
       return {
         ok: false,
         message: `Turn role mismatch for ${requested.turn_hash}; extraction must use stored conversation role`,
+      };
+    }
+    if (!isPromptTurnRole(stored.role)) {
+      return {
+        ok: false,
+        message: `Unsupported stored turn role for ${requested.turn_hash}: ${stored.role}`,
       };
     }
     promptTurns.push({
@@ -352,6 +375,13 @@ extractYopsRoutes.openapi(route, async (c) => {
         const errorCode =
           resolution.code === 'unavailable' ? 'PROVIDER_KEY_MISSING' : 'INVALID_REQUEST';
         return errorResponse(c, errorCode, resolution.message);
+      }
+      if (!isExtractionProvider(resolution.provider)) {
+        return errorResponse(
+          c,
+          'PROVIDER_UNAVAILABLE',
+          `Provider ${resolution.providerId} does not support extraction generation`
+        );
       }
 
       const manifest = await buildConversationContextManifest(db, conversation_id, {

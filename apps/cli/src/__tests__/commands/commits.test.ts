@@ -25,6 +25,31 @@ const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as neve
 import { Command } from 'commander';
 import { registerListCommits, registerShowCommit } from '../../commands/commits.js';
 
+function storedCommit(digest: string, parents: Array<{ digest: string }> = []) {
+  return {
+    digest,
+    recorded_at: '2024-01-01T00:00:00Z',
+    object: {
+      schema: 't3x/commit/v2',
+      parents: parents.map((parent) => ({
+        kind: 'commit',
+        schema: 't3x/commit/v2',
+        digest: parent.digest,
+      })),
+      decision: {
+        kind: 'statement',
+        schema: 't3x/statement/v1',
+        digest: 'sha256:decision111111',
+      },
+      result: {
+        kind: 'state',
+        schema: 't3x/state/v1',
+        digest: 'sha256:result222222',
+      },
+    },
+  };
+}
+
 function createProgram() {
   const program = new Command();
   program.exitOverride();
@@ -59,7 +84,7 @@ describe('Commit commands (kubectl-style)', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'list', 'commits', '-p', 'proj_1']);
 
-      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', undefined, {
+      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', {
         limit: 50,
         offset: 0,
       });
@@ -90,7 +115,7 @@ describe('Commit commands (kubectl-style)', () => {
         'feature',
       ]);
 
-      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', 'feature', {
+      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', {
         limit: 50,
         offset: 0,
       });
@@ -113,7 +138,7 @@ describe('Commit commands (kubectl-style)', () => {
         '20',
       ]);
 
-      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', undefined, {
+      expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', {
         limit: 10,
         offset: 20,
       });
@@ -131,40 +156,38 @@ describe('Commit commands (kubectl-style)', () => {
 
   describe('show commit', () => {
     it('shows commit details', async () => {
-      mockClient.getCommit.mockResolvedValue({
-        commit_hash: 'sha256:abcdef123456',
-        branch: 'main',
-        message: 'Test commit',
-        created_at: '2024-01-01T00:00:00Z',
-        parent_hashes: ['sha256:parent111111'],
-        turn_window: {
-          start_turn_hash: 'sha256:start111111',
-          end_turn_hash: 'sha256:end222222',
-        },
-      });
+      mockClient.getCommit.mockResolvedValue(
+        storedCommit('sha256:abcdef123456', [{ digest: 'sha256:parent111111' }])
+      );
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:abcdef123456']);
+      await program.parseAsync([
+        'node',
+        'test',
+        'show',
+        'commit',
+        'sha256:abcdef123456',
+        '-p',
+        'proj_1',
+      ]);
 
-      expect(mockClient.getCommit).toHaveBeenCalledWith('sha256:abcdef123456');
+      expect(mockClient.getCommit).toHaveBeenCalledWith('proj_1', 'sha256:abcdef123456');
       expect(mockSpinner.stop).toHaveBeenCalled();
     });
 
     it('shows root commit (no parents)', async () => {
-      mockClient.getCommit.mockResolvedValue({
-        commit_hash: 'sha256:root000000',
-        branch: 'main',
-        message: 'Root',
-        created_at: '2024-01-01T00:00:00Z',
-        parent_hashes: [],
-        turn_window: {
-          start_turn_hash: 'sha256:start111111',
-          end_turn_hash: 'sha256:end222222',
-        },
-      });
+      mockClient.getCommit.mockResolvedValue(storedCommit('sha256:root000000'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:root000000']);
+      await program.parseAsync([
+        'node',
+        'test',
+        'show',
+        'commit',
+        'sha256:root000000',
+        '-p',
+        'proj_1',
+      ]);
 
       expect(console.log).toHaveBeenCalledWith('  (root commit)');
     });
@@ -173,7 +196,7 @@ describe('Commit commands (kubectl-style)', () => {
       mockClient.getCommit.mockRejectedValue(new Error('Not found'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:bad']);
+      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:bad', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });

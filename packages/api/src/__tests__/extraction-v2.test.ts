@@ -40,7 +40,7 @@ describe('runApiExtractionV2', () => {
     providerMock.resolveProviderAndModel.mockResolvedValue({
       ok: true,
       providerId: 'provider_1',
-      provider: {},
+      provider: { generate: vi.fn() },
       model: 'model_1',
     });
     coreMock.extractAndApply.mockResolvedValue({

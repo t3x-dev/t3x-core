@@ -182,6 +182,7 @@ yschemaValidationRoutes.openapi(createValidationRunRoute, async (c) => {
   }
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaValidationRoutes.openapi(getLatestValidationRunRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { commit_hash, schema_name } = c.req.valid('query');
@@ -203,6 +204,7 @@ yschemaValidationRoutes.openapi(getLatestValidationRunRoute, async (c) => {
   }
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaValidationRoutes.openapi(getValidationRunRoute, async (c) => {
   const { runId } = c.req.valid('param');
 

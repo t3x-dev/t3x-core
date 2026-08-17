@@ -91,6 +91,7 @@ const listMaterialsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 materialsRoutes.openapi(listMaterialsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const db = await getDB();
@@ -133,6 +134,7 @@ const getMaterialRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 materialsRoutes.openapi(getMaterialRoute, async (c) => {
   const { projectId, materialId } = c.req.valid('param');
   const db = await getDB();
@@ -187,6 +189,7 @@ const archiveMaterialRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 materialsRoutes.openapi(archiveMaterialRoute, async (c) => {
   const { projectId, materialId } = c.req.valid('param');
   const db = await getDB();

@@ -119,7 +119,6 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   const { project_id, source_hash, target_hash } = c.req.valid('json');
 
@@ -231,7 +230,6 @@ Executes a frame merge after the user has made all resolution decisions.
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const { project_id, source_hash, target_hash, prepared, decisions, message, branch } =
     c.req.valid('json');
@@ -524,6 +522,7 @@ const getDraftRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(getDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
@@ -685,7 +684,6 @@ const commitDraftRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(commitDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
   const { message, branch, decisions: decisionsInput } = c.req.valid('json');
@@ -757,7 +755,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   }
 
   try {
-    const actorKind = author.type === 'system' ? ('service' as const) : author.type;
+    const actorKind = author.type;
     let merged!: Awaited<ReturnType<typeof commitRepositoryYOpsMerge>>;
     await (db as any).transaction(async (tx: typeof db) => {
       // The exact execution decision is part of the durable draft record, even
@@ -942,6 +940,7 @@ Returns server-side validation checks for a merge draft:
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(getDraftChecksRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
@@ -1000,6 +999,7 @@ const suggestRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(suggestRoute, async (c) => {
   const { id, pairIndex } = c.req.valid('param');
   const idx = Number.parseInt(pairIndex, 10);
@@ -1120,6 +1120,7 @@ const suggestFrameRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   const { id } = c.req.valid('param');
   const _body = c.req.valid('json');

@@ -141,7 +141,7 @@ export const queryHandler: ToolHandler = async (args) => {
         case 'project':
           return ok(await client.getProject(id));
         case 'draft':
-          return ok((await client.getDraft(id)) as Record<string, unknown>);
+          return ok((await client.getDraft(id)) as unknown as Record<string, unknown>);
         case 'commit':
           if (!projectId) {
             return fail('"project_id" is required for target="commit".');

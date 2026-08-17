@@ -176,7 +176,7 @@ export async function resolveWorkspaceExtractionTransitionSource(
   const expectedCandidateId = extractionCandidateId({
     sourceSelectorDigest: proposal.sourceSelectorDigest,
     baseCommitHash: proposal.baseCommitHash,
-    operations: proposal.operations,
+    operations: proposal.operations as unknown as ProtocolValue[],
   });
   if (expectedCandidateId !== input.candidateId) {
     throw new TypeError('Workspace extraction candidate identity failed integrity checking');
@@ -209,7 +209,7 @@ export async function resolveWorkspaceExtractionTransitionSource(
   }
   const operations = proposal.operations.map((operation) => {
     const { source: _source, ...effectOperation } = operation;
-    return effectOperation as ProtocolValue;
+    return effectOperation as unknown as ProtocolValue;
   });
   return {
     candidateId: input.candidateId,
@@ -328,7 +328,7 @@ export async function createWorkspaceExtractionProposal(
   const candidateId = extractionCandidateId({
     sourceSelectorDigest,
     baseCommitHash: context.refHead,
-    operations: extraction.ops,
+    operations: extraction.ops as unknown as ProtocolValue[],
   });
   const createdAt = new Date().toISOString();
   const proposal: WorkspaceExtractionProposal = {

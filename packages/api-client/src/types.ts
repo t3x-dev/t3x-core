@@ -331,6 +331,7 @@ export interface DiffChange {
 export interface TwoWayDiffInput {
   base_commit_hash: string;
   target_commit_hash: string;
+  project_id?: string;
 }
 
 // Merge draft types

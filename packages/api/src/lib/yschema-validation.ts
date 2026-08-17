@@ -30,6 +30,7 @@ import {
 import { resolveBuiltInYSchema } from './yschema-registry';
 
 export const YSCHEMA_VALIDATOR_VERSION = 'yschema-p0@0.1';
+type YSchemaTreeValue = Parameters<typeof validateTree>[0]['tree'];
 
 interface RunValidationInput {
   projectId: string;
@@ -88,7 +89,7 @@ export async function runYSchemaValidationForCommit(
   const provenanceByPath = await buildCommitProvenance(db, commit, candidate);
   const structuralValidation = validateTree({
     schema,
-    tree: candidate,
+    tree: candidate as YSchemaTreeValue,
     relations,
     provenanceByPath,
   });
@@ -120,7 +121,7 @@ export async function runYSchemaValidationForCommit(
     project_id: input.projectId,
     commit_hash: commit.digest,
     schema_name: schema.name,
-    schema_version: schema.version,
+    schema_version: String(schema.version),
     schema_hash: stableHash(schema),
     validator_version: YSCHEMA_VALIDATOR_VERSION,
     status,

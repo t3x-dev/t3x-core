@@ -246,12 +246,14 @@ function toCompilePreviewResponse(
 ): PromptCompilePreviewResponse {
   const runtime = isRecord(candidate.runtime) ? candidate.runtime : {};
   const contexts = isRecord(candidate.contexts) ? candidate.contexts : {};
-  const maxTokens = Object.values(contexts).reduce(
+  const maxTokens = Object.values(contexts).reduce<number>(
     (total, context) =>
       total +
       (isRecord(context) && typeof context.max_tokens === 'number' ? context.max_tokens : 0),
     0
   );
+  const maxOutputTokens =
+    typeof runtime.max_output_tokens === 'number' ? runtime.max_output_tokens : 0;
   return {
     compiled: result.compiled,
     schemaName: result.schemaName,
@@ -269,8 +271,7 @@ function toCompilePreviewResponse(
       responseFormat: stringValue(runtime.response_format),
       streaming: runtime.streaming === true,
       toolPolicy: stringValue(runtime.tool_policy),
-      maxOutputTokens:
-        typeof runtime.max_output_tokens === 'number' ? runtime.max_output_tokens : 0,
+      maxOutputTokens,
     },
     messages: result.messages,
     variables: result.variables,

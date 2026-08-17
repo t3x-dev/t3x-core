@@ -458,6 +458,7 @@ const getTemplateAuditRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 templatesRoutes.openapi(getTemplateAuditRoute, async (c) => {
   const administrationError = requireTemplateOperator(c);
   if (administrationError) return administrationError;

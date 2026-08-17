@@ -144,12 +144,23 @@ export async function runApiCompressionV2(
     };
   }
 
-  const providerResolution = await resolveProviderAndModel(input.provider, input.model);
+  const providerResolution = await resolveProviderAndModel({
+    requestedProvider: input.provider,
+    requestedModel: input.model,
+  });
   if (!providerResolution.ok) {
     return {
       ok: false,
       kind: 'provider_unavailable',
       message: providerResolution.message,
+      projectId: conversation.projectId,
+    };
+  }
+  if (!('generate' in providerResolution.provider)) {
+    return {
+      ok: false,
+      kind: 'provider_unavailable',
+      message: `Provider ${providerResolution.providerId} does not support text generation`,
       projectId: conversation.projectId,
     };
   }

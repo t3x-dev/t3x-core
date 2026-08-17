@@ -9,7 +9,7 @@
  *   persist   — update leaf output, create leaf history entry
  */
 
-import type { GenerationMode, Operation, PipelineEvent } from '@t3x-dev/core';
+import type { GenerationMode, MultiRoundResult, Operation, PipelineEvent } from '@t3x-dev/core';
 import { collectLessonsFromAssertions, generateLeafOutput, modeGenerate } from '@t3x-dev/core';
 import {
   createLeafHistory,
@@ -119,19 +119,7 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
           }>;
         }
       | undefined;
-    let multiRoundResult:
-      | {
-          output: string;
-          rounds: Array<{
-            name: string;
-            round_number: number;
-            constraints_passed: boolean;
-            failed_constraints: string[];
-          }>;
-          total_rounds: number;
-          mode: GenerationMode;
-        }
-      | undefined;
+    let multiRoundResult: MultiRoundResult | undefined;
 
     const providerResolution = await resolveProviderAndModel({
       db,

@@ -205,6 +205,7 @@ const importCfpackRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 importRoutes.openapi(importCfpackRoute, async (c) => {
   const cfpack = c.req.valid('json');
   const denied = assertProjectCreationAccess(c);

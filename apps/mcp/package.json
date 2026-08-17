@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",

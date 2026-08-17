@@ -5,6 +5,7 @@
  * advances the ref with CAS, and marks the draft as committed.
  */
 
+import type { SlotValue, TreeNode } from '@t3x-dev/core';
 import {
   type AnyDB,
   commitDraft,
@@ -134,10 +135,10 @@ export const commitHandler: ToolHandler = async (args) => {
   }
 
   // Step 4: Convert draft nodes to repository trees.
-  const commitTrees = draftNodes.map((node, i) => ({
+  const commitTrees: TreeNode[] = draftNodes.map((node, i) => ({
     key: node.key || node.id || `s_${i}`,
-    slots: node.slots || (node.text ? { text: node.text } : {}),
-    children: (node.children ?? []) as never[],
+    slots: (node.slots || (node.text ? { text: node.text } : {})) as Record<string, SlotValue>,
+    children: (node.children ?? []) as TreeNode[],
   }));
 
   try {

@@ -291,6 +291,7 @@ workspaceValidationRoutes.openapi(createWorkspaceValidationRunRoute, async (c) =
   }
 });
 
+// @ts-expect-error - OpenAPI handler return type
 workspaceValidationRoutes.openapi(getLatestWorkspaceValidationRunRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { workflow_name } = c.req.valid('query');
@@ -312,6 +313,7 @@ workspaceValidationRoutes.openapi(getLatestWorkspaceValidationRunRoute, async (c
   }
 });
 
+// @ts-expect-error - OpenAPI handler return type
 workspaceValidationRoutes.openapi(getWorkspaceValidationRunRoute, async (c) => {
   const { runId } = c.req.valid('param');
 

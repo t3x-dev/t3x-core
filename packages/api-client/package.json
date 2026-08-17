@@ -14,6 +14,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "test": "vitest run --passWithNoTests",
     "lint": "biome lint src",

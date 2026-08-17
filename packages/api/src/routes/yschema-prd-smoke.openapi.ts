@@ -184,7 +184,8 @@ function buildSmokeData(input?: {
   relations?: YSchemaRelation[];
   provenanceByPath?: ProvenanceIndex;
 }) {
-  const candidate = input?.candidate ?? t3xPrdP0Fixtures.candidateWithRelations.tree;
+  const candidate =
+    input?.candidate ?? (t3xPrdP0Fixtures.candidateWithRelations.tree as unknown as CandidateTree);
   const relations = input?.relations ?? [...t3xPrdP0Fixtures.candidateWithRelations.relations];
   const assumedProvenance = input?.provenanceByPath === undefined;
   const provenanceByPath =
@@ -456,7 +457,9 @@ yschemaPrdSmokeRoutes.post('/v1/dev/yschema/prd-smoke/validate', async (c) => {
       buildSmokeData({
         candidate: candidate as CandidateTree,
         relations: normalizeRelations(body.relations),
-        provenanceByPath: body.provenanceByPath ?? body.provenance_by_path,
+        provenanceByPath: (body.provenanceByPath ?? body.provenance_by_path) as
+          | ProvenanceIndex
+          | undefined,
       })
     );
   } catch (error) {
