@@ -32,8 +32,13 @@ import {
 import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
 import { sourceChatDraftContextText } from '../lib/source-chat-draft-context';
+import {
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+} from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import {
   decideWorkspaceTransition,
@@ -45,6 +50,7 @@ import {
   WorkspaceTransitionReviewStaleError,
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
+import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import {
   buildEsphomeDeviceWorkspace,
   isEsphomeDeviceWorkspace,
@@ -565,17 +571,23 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-  if (humanRequired) return humanRequired;
 
   try {
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: { kind: 'review' },
+    });
     const reviewed = await reviewWorkspaceTransition(db, {
       projectId,
       workspaceId,
       content,
       why,
       expectedRevision,
-      actor: workspaceHumanActor(c),
+      actor: authority.principal.actor,
+      policyBinding: authority.policyBinding,
     });
     return c.json({
       success: true as const,
@@ -603,10 +615,15 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-  if (humanRequired) return humanRequired;
 
   try {
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: { kind: 'decide', outcome },
+    });
     const decided = await decideWorkspaceTransition(db, {
       projectId,
       workspaceId,
@@ -616,7 +633,8 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
       outcome,
       decisionReason,
       precondition: transitionPreconditionFromWire(precondition),
-      actor: workspaceHumanActor(c),
+      actor: authority.principal.actor,
+      policyBinding: authority.policyBinding,
     });
     return c.json({
       success: true as const,
@@ -734,8 +752,16 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     const db = await getDB();
     const access = await assertProjectAccess(c, db, projectId);
     if (access instanceof Response) return access;
-    const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-    if (humanRequired) return humanRequired;
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: {
+        kind: 'decide',
+        outcome: validationOverride ? 'overridden' : 'accepted',
+      },
+    });
     const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
@@ -773,7 +799,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       const why =
         message ??
         `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`;
-      const actor = workspaceHumanActor(c);
+      const actor = authority.principal.actor;
       const reviewed = await reviewWorkspaceTransition(txOrDb, {
         projectId,
         workspaceId,
@@ -781,6 +807,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         why,
         expectedRevision: ifRevision,
         actor,
+        policyBinding: authority.policyBinding,
       });
       const yopsLogIds = await materializeWorkspaceYOpsLog(
         txOrDb,
@@ -798,6 +825,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         decisionReason: validationOverride?.reason,
         precondition: reviewed.precondition,
         actor,
+        policyBinding: authority.policyBinding,
         yopsLogIds,
         workspaceCommitOverride: validationOverride,
       });
@@ -1140,22 +1168,6 @@ function notFoundError(message: string) {
   };
 }
 
-function workspaceHumanActor(c: Parameters<typeof getUserId>[0]) {
-  const userId = getUserId(c);
-  return {
-    kind: 'human' as const,
-    id: userId ? `user:${userId}` : 'human:local-user',
-  };
-}
-
-function rejectNonHumanWorkspaceReviewer(c: Parameters<typeof getUserId>[0]): Response | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
-    return errorResponse(c, 'FORBIDDEN', 'Workspace review and commit require a human principal');
-  }
-  return null;
-}
-
 function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondition) {
   return {
     workspace_revision: precondition.workspaceRevision,
@@ -1181,6 +1193,13 @@ function transitionPreconditionFromWire(
 }
 
 function workspaceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (
+    error instanceof TransitionScopeDeniedError ||
+    error instanceof TransitionProjectScopeDeniedError ||
+    error instanceof TransitionPolicyBindingRequiredError
+  ) {
+    return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
+  }
   if (error instanceof WorkspaceTransitionNotFoundError) {
     return errorResponse(c, 'WORKSPACE_NOT_FOUND', error.message);
   }
