@@ -480,6 +480,66 @@ declare function parsePath(path: string): PathSegment[];
  */
 declare function resolvePath(doc: YValue, path: string): YValue | undefined;
 
+declare const YOPS_V1_SPEC_DIGEST_DOMAIN: "t3x-yops-driver-spec-v1";
+declare const YOPS_V1_SPEC_DIGEST: "sha256:2856688a25ab990f37019d10c0119a9967a0fb5f469c177d5f3e59ff1e508f37";
+declare const YOPS_OPS_V1_PROFILE_ID: "yops.ops.v1";
+declare const YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID: "yops.primitives.v2-candidate";
+declare const YOPS_V1_FROZEN_OPERATION_NAMES: readonly ["define", "drop", "rename", "set", "unset", "populate", "append", "move", "clone", "nest", "split", "fold", "merge", "sort", "unique", "pick", "omit", "assert"];
+declare const YOPS_PRIMITIVE_OPERATION_NAMES: readonly ["assert", "set", "unset"];
+type YOpsV1OperationName = (typeof YOPS_V1_FROZEN_OPERATION_NAMES)[number];
+type YOpsPrimitiveOperationName = (typeof YOPS_PRIMITIVE_OPERATION_NAMES)[number];
+type YOpsRecipeProfileId = typeof YOPS_OPS_V1_PROFILE_ID | typeof YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID;
+interface YOpsRecipeProfile {
+    readonly id: YOpsRecipeProfileId;
+    readonly status: 'frozen' | 'experimental';
+    readonly operationNames: readonly YOpsV1OperationName[];
+    readonly specDigestDomain: typeof YOPS_V1_SPEC_DIGEST_DOMAIN;
+    readonly specDigest: typeof YOPS_V1_SPEC_DIGEST;
+    readonly notes: readonly string[];
+}
+declare const YOPS_RECIPE_PROFILES: readonly [Readonly<{
+    id: "yops.ops.v1";
+    status: "frozen";
+    operationNames: readonly ["define", "drop", "rename", "set", "unset", "populate", "append", "move", "clone", "nest", "split", "fold", "merge", "sort", "unique", "pick", "omit", "assert"];
+    specDigestDomain: "t3x-yops-driver-spec-v1";
+    specDigest: "sha256:2856688a25ab990f37019d10c0119a9967a0fb5f469c177d5f3e59ff1e508f37";
+    notes: readonly string[];
+}>, Readonly<{
+    id: "yops.primitives.v2-candidate";
+    status: "experimental";
+    operationNames: readonly ["assert", "set", "unset"];
+    specDigestDomain: "t3x-yops-driver-spec-v1";
+    specDigest: "sha256:2856688a25ab990f37019d10c0119a9967a0fb5f469c177d5f3e59ff1e508f37";
+    notes: readonly string[];
+}>];
+declare const YOPS_RECIPE_REPLACE_PATH_ID: "yops.recipe.replace-path.v1";
+interface YOpsPresentPathValue {
+    readonly state: 'present';
+    readonly value: YValue;
+}
+interface YOpsAbsentPathValue {
+    readonly state: 'absent';
+}
+type YOpsPathValue = YOpsPresentPathValue | YOpsAbsentPathValue;
+interface CompileYOpsPathReplacementInput {
+    readonly path: string;
+    readonly base: YOpsPathValue;
+    readonly target: YOpsPathValue;
+}
+type YOpsRecipeId = typeof YOPS_RECIPE_REPLACE_PATH_ID;
+type YOpsRecipeInput = CompileYOpsPathReplacementInput;
+interface YOpsRecipeCompiler {
+    readonly id: YOpsRecipeId;
+    readonly profile: typeof YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID;
+    readonly description: string;
+    readonly outputOperationNames: readonly YOpsPrimitiveOperationName[];
+    compile(input: YOpsRecipeInput): readonly YOp[];
+}
+declare function compileYOpsPathReplacement(input: CompileYOpsPathReplacementInput): readonly YOp[];
+declare function listYOpsRecipeCompilers(): readonly YOpsRecipeCompiler[];
+declare function getYOpsRecipeCompiler(id: string): YOpsRecipeCompiler | undefined;
+declare function compileYOpsRecipe(id: YOpsRecipeId, input: YOpsRecipeInput): readonly YOp[];
+
 /**
  * @yops-dev/core — Zod Schema Validation
  *
@@ -1009,5 +1069,5 @@ declare const spec: YOpsSpec;
 /** The initialized op registry. */
 declare const registry: OpRegistry;
 
-export { type AppendOp, type AssertOp, type CloneOp, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, type YOp, type YOpCategory, YOpSchema, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsResult, type YOpsSpec, type YOpsWarning, type YValue, applyYOps, canonicalJson, canonicalKey, classifyYOp, compareCodepoints, compareYValues, createEngine, formatYOps, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
+export { type AppendOp, type AssertOp, type CloneOp, type CompileYOpsPathReplacementInput, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, YOPS_OPS_V1_PROFILE_ID, YOPS_PRIMITIVE_OPERATION_NAMES, YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID, YOPS_RECIPE_PROFILES, YOPS_RECIPE_REPLACE_PATH_ID, YOPS_V1_FROZEN_OPERATION_NAMES, YOPS_V1_SPEC_DIGEST, YOPS_V1_SPEC_DIGEST_DOMAIN, type YOp, type YOpCategory, YOpSchema, type YOpsAbsentPathValue, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsPathValue, type YOpsPresentPathValue, type YOpsPrimitiveOperationName, type YOpsRecipeCompiler, type YOpsRecipeId, type YOpsRecipeInput, type YOpsRecipeProfile, type YOpsRecipeProfileId, type YOpsResult, type YOpsSpec, type YOpsV1OperationName, type YOpsWarning, type YValue, applyYOps, canonicalJson, canonicalKey, classifyYOp, compareCodepoints, compareYValues, compileYOpsPathReplacement, compileYOpsRecipe, createEngine, formatYOps, getYOpsRecipeCompiler, listYOpsRecipeCompilers, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
 ```

@@ -12,6 +12,33 @@ export { formatYOps, parseYOpsYaml } from './format';
 export { registerAllHandlers } from './handlers';
 export type { ParsePathResult, PathSegment } from './paths';
 export { parsePath, resolvePath, tryParsePath } from './paths';
+export type {
+  CompileYOpsPathReplacementInput,
+  YOpsAbsentPathValue,
+  YOpsPathValue,
+  YOpsPresentPathValue,
+  YOpsPrimitiveOperationName,
+  YOpsRecipeCompiler,
+  YOpsRecipeId,
+  YOpsRecipeInput,
+  YOpsRecipeProfile,
+  YOpsRecipeProfileId,
+  YOpsV1OperationName,
+} from './recipes';
+export {
+  compileYOpsPathReplacement,
+  compileYOpsRecipe,
+  getYOpsRecipeCompiler,
+  listYOpsRecipeCompilers,
+  YOPS_OPS_V1_PROFILE_ID,
+  YOPS_PRIMITIVE_OPERATION_NAMES,
+  YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+  YOPS_RECIPE_PROFILES,
+  YOPS_RECIPE_REPLACE_PATH_ID,
+  YOPS_V1_FROZEN_OPERATION_NAMES,
+  YOPS_V1_SPEC_DIGEST,
+  YOPS_V1_SPEC_DIGEST_DOMAIN,
+} from './recipes';
 export type { OpHandler, OpResult } from './registry';
 export { OpRegistry } from './registry';
 export type { ValidationResult } from './schema';

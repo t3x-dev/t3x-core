@@ -63,6 +63,22 @@ Engine          →  dispatches ops to handlers, executes the pipeline
 
 The spec is the source of truth. The registry enforces it. The engine executes it.
 
+## Recipe compiler foundation
+
+YOps 1.x keeps the frozen 18-operation runtime union. Higher-level recipes and
+macros compile outside the runtime union and must emit ordinary `YOp[]` before
+replay. The package exposes profile metadata so callers can distinguish:
+
+- `yops.ops.v1`: frozen 18-op conformance profile pinned to the v1 spec digest.
+- `yops.primitives.v2-candidate`: experimental compiler target using
+  `assert`, `set`, and `unset` only.
+
+The first built-in compiler is `yops.recipe.replace-path.v1`, a base-aware path
+replacement recipe. It expands to `assert + set` or `assert + unset`, so stale
+base data fails before mutation. Recipe invocation provenance should be recorded
+by proposals or request facts; Effect identity continues to contain only the
+compiled operations.
+
 ## Install
 
 This command uses the public npm package.
@@ -187,6 +203,9 @@ parseYOpsYaml(yaml: string): ParseResult
 
 // Classify op category
 classifyYOp(op: YOp): 'ddl' | 'dml' | 'dtl' | 'dcl'
+
+// Compile a base-aware path replacement recipe to primitive YOps
+compileYOpsPathReplacement(input): readonly YOp[]
 ```
 
 ## The Spec
