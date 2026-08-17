@@ -175,6 +175,29 @@ describe('GeminiProvider.generateStructured', () => {
     expect(body.systemInstruction).toEqual({ parts: [{ text: 'Extract structured data.' }] });
   });
 
+  it('extracts fenced JSON from structured responses', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify(makeGeminiResponse('```json\n{"name":"Alice","age":30}\n```'))
+          ),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gemini-3.6-flash' }
+    );
+
+    expect(result.data).toEqual({ name: 'Alice', age: 30 });
+  });
+
   it('lowers boolean literals without an invalid boolean enum', async () => {
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({

@@ -74,6 +74,8 @@ export interface Turn {
   content: string;
   parent_turn_hash?: string;
   language?: string;
+  rings?: Record<string, unknown> | null;
+  content_blocks?: unknown[] | null;
   created_at: string;
 }
 

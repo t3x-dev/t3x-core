@@ -803,6 +803,85 @@ describe('Chat Routes', () => {
       delete process.env.OPENAI_API_KEY;
     });
 
+    it('maps Google streaming chat text and image content to Gemini parts', async () => {
+      process.env.GOOGLE_AI_STUDIO_KEY = 'test-google-key';
+      const streamBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"modelVersion":"gemini-3.6-flash","candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":1}}\r\n\r\n'
+            )
+          );
+          controller.close();
+        },
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+          expect(String(input)).toBe(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse'
+          );
+          expect(init?.headers).toMatchObject({
+            'Content-Type': 'application/json',
+            'x-goog-api-key': 'test-google-key',
+          });
+          const payload = JSON.parse(String(init?.body)) as {
+            contents: Array<{ role: string; parts: unknown[] }>;
+            systemInstruction: { parts: Array<{ text: string }> };
+            generationConfig: { thinkingConfig: { thinkingBudget: number } };
+          };
+          expect(payload.systemInstruction).toEqual({
+            parts: [{ text: 'Use source context.' }],
+          });
+          expect(payload.contents).toEqual([
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: 'base64-image',
+                  },
+                },
+                { text: 'Describe this screenshot.' },
+              ],
+            },
+          ]);
+          expect(payload.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 256 });
+          return new Response(streamBody, { status: 200 });
+        });
+
+      const res = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          model: 'gemini-3.6-flash',
+          messages: [
+            { role: 'system', content: 'Use source context.' },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/png', data: 'base64-image' },
+                },
+                { type: 'text', text: 'Describe this screenshot.' },
+              ],
+            },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('"type":"token","content":"ok"');
+      expect(text).toContain('"type":"done","model":"gemini-3.6-flash"');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      fetchMock.mockRestore();
+      delete process.env.GOOGLE_AI_STUDIO_KEY;
+    });
+
     it('fails clearly instead of falling back when stream model targets an unsupported provider', async () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'anthropic',

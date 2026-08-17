@@ -9,6 +9,7 @@
     "packages/api/src/routes/extract-incremental.openapi.ts",
     "packages/api/src/routes/extract-yops.openapi.ts",
     "packages/api/src/routes/extract.openapi.ts",
+    "packages/api/src/routes/source-chat-draft-replies.openapi.ts",
     "packages/api/src/routes/source-evidence.openapi.ts",
     "packages/api/src/routes/source-text-revisions.openapi.ts",
     "packages/api/src/routes/topics.openapi.ts",
@@ -158,6 +159,26 @@
           "kind": "compatibility_adapter",
           "file": "apps/web/src/infrastructure/pins.ts",
           "token": "getConversationContext("
+        }
+      ]
+    },
+    {
+      "id": "source-chat-draft-reply",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "removal_gate": "Not scheduled for removal. Workspace Source Chat needs a server-owned draft-reply lane that preserves source-thread evidence before proposal generation.",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/draft-reply",
+          "source": "packages/api/src/routes/source-chat-draft-replies.openapi.ts"
+        }
+      ],
+      "consumers": [
+        {
+          "kind": "application",
+          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
+          "token": "sourceThreadApi.draftReply("
         }
       ]
     },
