@@ -17,15 +17,14 @@
  *   `lib/` is non-React orchestration glue. The biome top-level rule
  *   forbids `@/commands/**` from non-exempt paths, and `lib/` is
  *   intentionally not exempted (it should not become a back-door for
- *   business logic). For multi-aggregate fire-and-forget writes (commit
- *   position + conversation position) this is the cleanest option.
+ *   business logic). For the staging-conversation position write this is
+ *   the cleanest option.
  *   (Re-tune, which used to live here as a cross-aggregate lib helper,
  *   has since moved to hooks/useRetuneSession because it's consumed
  *   from React code; the same refactor isn't worthwhile for the drag
  *   debouncer which deliberately survives React remounts.)
  */
 
-import { updateCommitPosition } from '@/infrastructure/commits';
 import { updateConversation } from '@/infrastructure/conversations';
 import type { NodeKind } from '@/types/nodes';
 
@@ -56,28 +55,17 @@ export function saveNodePosition(
 
     if (pending.kind !== 'unit') return;
 
-    // Workbench draft nodes (id = draft_*) are ephemeral canvas entities
-    // with no backing persistence column. Skip the save rather than
-    // PATCHing /commits/{draft_*}/position, which returns 404
-    // (COMMIT_NOT_FOUND) because the handler looks up the CommitV2 storage
-    // by hash. See docs/audits/2026-04-15/DEEP-WALK-DIAGNOSIS.md Bug 5.
-    if (nodeId.startsWith('draft_')) return;
+    // Only mutable staging conversations own persisted canvas positions.
+    // Draft nodes are ephemeral, while immutable Commit snapshots deliberately
+    // have no position mutation route.
+    if (!nodeId.startsWith('conv_')) return;
 
-    // Staging units use conversationId as nodeId (conv_xxx); committed
-    // units use the commit hash (sha256:xxx). Pick the matching API.
-    const isStagingUnit = nodeId.startsWith('conv_');
-    if (isStagingUnit) {
-      updateConversation(nodeId, {
-        position_x: pending.position.x,
-        position_y: pending.position.y,
-      }).catch(() => {
-        // Silent fire-and-forget; next drag will retry.
-      });
-    } else {
-      updateCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
-        // Silent fire-and-forget.
-      });
-    }
+    updateConversation(nodeId, {
+      position_x: pending.position.x,
+      position_y: pending.position.y,
+    }).catch(() => {
+      // Silent fire-and-forget; next drag will retry.
+    });
   }, DEBOUNCE_MS);
 
   positionSaveTimers.set(nodeId, timer);

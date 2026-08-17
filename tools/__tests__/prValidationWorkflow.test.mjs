@@ -19,6 +19,21 @@ test('PR validation enforces production type and dependency gates', () => {
   assert.ok(workflow.indexOf('run: pnpm check:route-policy') < workflow.indexOf('run: pnpm build'));
 });
 
+test('PR validation qualifies merge groups and immutable dev pushes', () => {
+  const workflow = readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8');
+
+  assert.match(workflow, /^ {2}merge_group:$/m);
+  assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
+  assert.match(
+    workflow,
+    /^ {2}group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}$/m
+  );
+  assert.match(
+    workflow,
+    /^ {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m
+  );
+});
+
 test('production dependency audit blocks high-severity advisories', () => {
   const packageJson = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
 

@@ -57,6 +57,7 @@ export interface SourceConversationTurn {
   conversationId?: string;
   projectId?: string;
   pinnable?: boolean;
+  rings?: Record<string, unknown> | null;
 }
 
 export type SchemaBindingMode = 'pinned' | 'draft_override';

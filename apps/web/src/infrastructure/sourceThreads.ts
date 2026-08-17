@@ -8,6 +8,7 @@
 import { createConversation, updateConversation } from './conversations';
 import { ApiError } from './core';
 import { getConversationMemory } from './pins';
+import { createSourceChatDraftReply } from './sourceChatDraftReplies';
 import { createTurn, listTurns } from './turns';
 
 export const sourceThreadApi = Object.freeze({
@@ -16,6 +17,7 @@ export const sourceThreadApi = Object.freeze({
   listTurns,
   appendTurn: createTurn,
   memory: getConversationMemory,
+  draftReply: createSourceChatDraftReply,
 });
 
 export function isSourceThreadRequestAborted(error: unknown): boolean {

@@ -8,6 +8,7 @@ const getConversationMemoryMock = vi.fn();
 const chatMock = vi.fn();
 const chatStreamMock = vi.fn();
 const createTurnMock = vi.fn();
+const draftReplyMock = vi.fn();
 const updateConversationMock = vi.fn();
 const setInputMock = vi.fn();
 const setMessagesMock = vi.fn();
@@ -16,6 +17,15 @@ const setIsChatStreamingMock = vi.fn();
 const setErrorMock = vi.fn();
 const setWarningMock = vi.fn();
 const showWarningMock = vi.fn();
+const sourceDraftReplyContent = [
+  'Source draft',
+  [
+    'I organized your message into source-ready material for the proposal step.',
+    'Captured items can be reused downstream; boundaries and open questions stay separate for review.',
+    'Summary: 1 captured item, 0 boundaries, 0 confirmation items.',
+  ].join('\n'),
+  'Captured\n- Review notes: Use review notes only.',
+].join('\n\n');
 
 vi.mock('@/hooks/conversations/syncSavedTurnIntoWorkspace', () => ({
   syncSavedTurnIntoWorkspace: vi.fn(),
@@ -85,6 +95,7 @@ vi.mock('@/infrastructure/sourceThreads', () => ({
     create: (...args: unknown[]) => createConversationMock(...args),
     memory: (...args: unknown[]) => getConversationMemoryMock(...args),
     appendTurn: (...args: unknown[]) => createTurnMock(...args),
+    draftReply: (...args: unknown[]) => draftReplyMock(...args),
     update: (...args: unknown[]) => updateConversationMock(...args),
   },
 }));
@@ -132,6 +143,27 @@ describe('useConversationChat', () => {
     getConversationMemoryMock.mockResolvedValue({ text: '' });
     chatMock.mockResolvedValue({ content: 'Chestnut meal plan' });
     chatStreamMock.mockReturnValue(emptyChatStream());
+    draftReplyMock.mockResolvedValue({
+      content: sourceDraftReplyContent,
+      display: {
+        captured: ['Review notes: Use review notes only.'],
+        excluded: [],
+        needs_confirmation: [],
+      },
+      model: 'gemini-3.6-flash',
+      provider: 'google-ai',
+      source_items: [
+        {
+          id: 'S001',
+          kind: 'captured',
+          title: 'Review notes',
+          content: 'Use review notes only.',
+          source_quote: 'Use review notes only.',
+          source_turn_hash: 'sha256:user_turn',
+        },
+      ],
+      warnings: [],
+    });
     createTurnMock.mockResolvedValue({ turn_hash: 'sha256:turn' });
     updateConversationMock.mockResolvedValue({
       conversation_id: 'conv_existing',
@@ -395,6 +427,148 @@ describe('useConversationChat', () => {
       expect(events).toContain('stream:start');
     });
     expect(events.indexOf('turn:user')).toBeLessThan(events.indexOf('stream:start'));
+  });
+
+  it('generates Source Chat replies through the workspace draft-reply lane', async () => {
+    const persistedDraftRings = {
+      source_chat_draft: {
+        schema: 't3x/source-chat-draft-v1',
+        version: 1,
+        source_items: [
+          {
+            id: 'S001',
+            kind: 'captured',
+            title: 'Review notes',
+            content: 'Use review notes only.',
+            source_quote: 'Use review notes only.',
+            source_turn_hash: 'sha256:user_turn',
+          },
+        ],
+      },
+    };
+    createTurnMock
+      .mockResolvedValueOnce({
+        turn_hash: 'sha256:user_turn',
+        project_id: 'proj_1',
+        conversation_id: 'conv_existing',
+      })
+      .mockResolvedValueOnce({
+        turn_hash: 'sha256:assistant_turn',
+        project_id: 'proj_1',
+        conversation_id: 'conv_existing',
+        rings: persistedDraftRings,
+      });
+    draftReplyMock.mockResolvedValueOnce({
+      content: sourceDraftReplyContent,
+      display: {
+        captured: ['Review notes: Use review notes only.'],
+        excluded: [],
+        needs_confirmation: [],
+      },
+      model: 'gemini-3.6-flash',
+      provider: 'google-ai',
+      source_items: [
+        {
+          id: 'S001',
+          kind: 'captured',
+          title: 'Review notes',
+          content: 'Use review notes only.',
+          source_quote: 'Use review notes only.',
+          source_turn_hash: 'sha256:user_turn',
+        },
+      ],
+      warnings: ['no writable leaf targets'],
+    });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'google',
+        model: 'gemini-3.6-flash',
+        sourceDraftReply: { workspaceId: 'workspace_ready', workspaceRevision: 7 },
+      })
+    );
+
+    result.current.sendMessage('I want this app to support review notes.');
+
+    await waitFor(() => {
+      expect(draftReplyMock).toHaveBeenCalledWith('proj_1', 'workspace_ready', {
+        conversation_id: 'conv_existing',
+        user_turn_hash: 'sha256:user_turn',
+        provider: 'google',
+        model: 'gemini-3.6-flash',
+        if_revision: 7,
+      });
+    });
+    expect(chatStreamMock).not.toHaveBeenCalled();
+    expect(setWarningMock).toHaveBeenCalledWith('no writable leaf targets');
+    expect(createTurnMock).toHaveBeenCalledWith(
+      'proj_1',
+      'conv_existing',
+      'assistant',
+      sourceDraftReplyContent,
+      undefined,
+      {
+        rings: {
+          source_chat_draft: expect.objectContaining({
+            schema: 't3x/source-chat-draft-v1',
+            source_items: [expect.objectContaining({ id: 'S001', kind: 'captured' })],
+          }),
+        },
+      }
+    );
+    expect(replayLocalMessageUpdates()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sha256:assistant_turn',
+          rings: persistedDraftRings,
+        }),
+      ])
+    );
+  });
+
+  it('keeps regular chat generation on the streaming generation lane', async () => {
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'google',
+        model: 'gemini-3.6-flash',
+      })
+    );
+
+    result.current.sendMessage('Answer normally.');
+
+    await waitFor(() => {
+      expect(chatStreamMock).toHaveBeenCalled();
+    });
+    expect(draftReplyMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps regular chat generation free of source draft-reply guidance', async () => {
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'google',
+        model: 'gemini-3.6-flash',
+      })
+    );
+
+    result.current.sendMessage('Answer normally.');
+
+    await waitFor(() => {
+      expect(chatStreamMock).toHaveBeenCalled();
+    });
+
+    const [request] = chatStreamMock.mock.calls[0] as [
+      { messages: Array<{ role: string; content: string | unknown[] }> },
+    ];
+    expect(JSON.stringify(request.messages)).not.toContain('t3x/source-chat-draft-reply');
   });
 
   it('does not duplicate the saved user turn when assistant turn persistence fails', async () => {

@@ -2,12 +2,10 @@ import type { TreeDiff } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export interface CommitMeta {
-  hash: string;
-  digest?: string;
-  message: string | null;
-  author: { type: string; name?: string };
-  committed_at: string;
-  branch: string;
+  digest: string;
+  rationale: string | null;
+  actor: unknown;
+  recorded_at: string;
 }
 
 export interface DiffResponse {
