@@ -550,6 +550,92 @@ describe('validateTree P0 result semantics', () => {
     ]);
   });
 
+  it('uses only own schema and tree properties during validation', () => {
+    const slots = Object.create({
+      inherited_slot: { type: 'string' },
+    }) as Record<string, never>;
+    const schema: YSchema = {
+      yschema: '0.1',
+      name: 'own-property-validation',
+      strict: true,
+      nodes: {
+        summary: {
+          required: true,
+          requiredSlots: ['inherited_slot'],
+          slots,
+        },
+      },
+      rules: [],
+    };
+    const tree = Object.create({
+      summary: {
+        inherited_slot: 'Prototype data must not satisfy schema requirements.',
+      },
+    }) as Record<string, never>;
+
+    const result = validateTree({ schema, tree });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'INVALID_SCHEMA',
+        path: 'summary/inherited_slot',
+        message: 'requiredSlots entry "inherited_slot" is not declared in slots.',
+      })
+    );
+    expect(result.gaps).toContainEqual(
+      expect.objectContaining({
+        code: 'REQUIRED_NODE_MISSING',
+        path: 'summary',
+      })
+    );
+  });
+
+  it('executes required relation rules against candidate relations', () => {
+    const schema: YSchema = {
+      ...projectPlanSchema,
+      rules: [
+        {
+          id: 'task-dependency-required',
+          kind: 'required_relation',
+          relationType: 'blocks',
+          from: 'tasks/*',
+          to: 'tasks/*',
+        },
+      ],
+    };
+
+    const missing = validateTree({
+      schema,
+      tree: completeProjectPlanTree,
+      provenanceByPath: projectPlanEvidence,
+      relations: [],
+    });
+    const satisfied = validateTree({
+      schema,
+      tree: completeProjectPlanTree,
+      provenanceByPath: projectPlanEvidence,
+      relations: projectPlanRelations,
+    });
+
+    expect(missing.valid).toBe(false);
+    expect(missing.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'REQUIRED_RELATION_MISSING',
+        path: '$relations',
+        details: {
+          ruleId: 'task-dependency-required',
+          relationType: 'blocks',
+          from: 'tasks/*',
+          to: 'tasks/*',
+        },
+      })
+    );
+    expect(satisfied.errors).not.toContainEqual(
+      expect.objectContaining({ code: 'REQUIRED_RELATION_MISSING' })
+    );
+  });
+
   it('accepts only explicit user or approved provenance for required evidence', () => {
     const accepted = validateTree({
       schema: normalizedYSchema,
