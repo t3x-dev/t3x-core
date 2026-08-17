@@ -1,11 +1,14 @@
-import type { ProjectionCapabilityContext, ProposalStatement } from '@t3x-dev/core';
+import {
+  inspectTransition as inspectTransitionQuery,
+  type TransitionInspectionPorts,
+  type TransitionInspectionView,
+} from '@t3x-dev/application';
+import type { ProposalStatement } from '@t3x-dev/core';
 import {
   buildReplayVerificationStatement,
   describeTransitionObject,
   InMemoryTransitionObjectResolver,
-  projectTransitionView,
   stateImportMutationDrivers,
-  type TransitionViewV1,
   yamlSourceMutationDrivers,
   yopsMutationDrivers,
 } from '@t3x-dev/core';
@@ -66,11 +69,6 @@ const REPLAY_ACTOR = Object.freeze({
 });
 const REPLAY_TOOL = Object.freeze({ name: '@t3x-dev/transition/replay', version: '1' });
 const UNSPECIFIED_ENVIRONMENT = Object.freeze({ mode: 'unspecified' as const });
-const REPOSITORY_SCOPE = Object.freeze({
-  completeness: 'complete' as const,
-  sources: ['repository:transition-statement-memberships'],
-});
-
 const mutationDrivers: MutationDriverRegistry = new Map([
   ...stateImportMutationDrivers,
   ...yamlSourceMutationDrivers,
@@ -201,32 +199,8 @@ export interface TransitionControlPlaneOptions {
   };
 }
 
-export interface TransitionControlPlaneView {
-  transitionId: string;
-  projectId: string;
-  workspaceId: string;
-  requestKind: TransitionRequestKind;
-  requestId: string;
-  createdAt: string;
-  precondition: {
-    workspaceRevision: number;
-    refName: string;
-    refHead: string | null;
-    effectDigest: string;
-    proposalDigest: string;
-    statementDigests: string[];
-    policyDigest: string | null;
-  };
-  transition: TransitionViewV1;
-  statements: Array<{
-    digest: string;
-    source: string;
-    issuer: ActorRef;
-    requestId: string;
-    createdAt: string;
-  }>;
-  generation?: ProposalGenerationReviewProjection;
-}
+export type TransitionControlPlaneView =
+  TransitionInspectionView<ProposalGenerationReviewProjection>;
 
 export interface TransitionOperationalResult {
   source: string;
@@ -478,84 +452,29 @@ export async function inspectTransition(input: {
   actor?: ActorRef;
   decision?: DecisionStatement;
 }): Promise<TransitionControlPlaneView> {
-  const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
-  const policyBinding = await getTransitionPolicyBinding(
-    input.db,
-    input.projectId,
-    graph.membership.refName
-  );
-  const preparationFacts =
-    graph.preparation === null
-      ? null
-      : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
-  const applicablePolicy =
-    policyBinding === null
-      ? null
-      : resolveApplicableTransitionPolicy({
-          refPolicyBinding: policyBinding,
-          requestKind: graph.membership.requestKind,
-          preparationFacts,
-        });
-  const capabilityContext: ProjectionCapabilityContext | undefined =
-    input.actor === undefined || applicablePolicy === null
-      ? undefined
-      : {
-          actorContext: { actor: input.actor },
-          policy: applicablePolicy.policy,
-          policyResource: applicablePolicy.resource,
-        };
-  const transition = projectTransitionView({
-    mode: 'transition',
-    effect: graph.effect,
-    proposal: graph.proposal,
-    observations: graph.observations.map((observation) => ({
-      statement: observation.statement as Statement,
-      issuerContext: observation.issuerContext,
-    })),
-    observationScope: REPOSITORY_SCOPE,
-    objectIntegrity: 'verified',
-    ...(input.decision === undefined ? {} : { decision: input.decision }),
-    ...(capabilityContext === undefined ? {} : { capabilityContext }),
-  });
-  const generation = projectProposalGenerationReview({
-    preparationFacts,
-    operations: graph.effect.operations,
-    base: graph.base.value,
-    result: graph.result.value,
-    observations: graph.observations.map((observation) => ({
-      statement: observation.statement as Statement,
-      source: observation.membership.source,
-      issuer: observation.issuerContext.actor,
-    })),
-  });
-  return {
-    transitionId: graph.membership.transitionId,
-    projectId: graph.membership.projectId,
-    workspaceId: graph.membership.workspaceId,
-    requestKind: graph.membership.requestKind,
-    requestId: graph.membership.requestId,
-    createdAt: graph.membership.createdAt,
-    precondition: {
-      workspaceRevision: graph.membership.workspaceRevision,
-      refName: graph.membership.refName,
-      refHead: graph.membership.refHead,
-      effectDigest: graph.membership.effectDigest,
-      proposalDigest: graph.membership.proposalDigest,
-      statementDigests: graph.observations.map(
-        (observation) => observation.membership.statementDigest
-      ),
-      policyDigest: applicablePolicy?.resource.digest ?? null,
-    },
-    transition,
-    statements: graph.observations.map((observation) => ({
-      digest: observation.membership.statementDigest,
-      source: observation.membership.source,
-      issuer: observation.membership.issuer,
-      requestId: observation.membership.requestId,
-      createdAt: observation.membership.createdAt,
-    })),
-    ...(generation === null ? {} : { generation }),
+  const ports: TransitionInspectionPorts<ProposalGenerationReviewProjection> = {
+    resolveTransitionProposalGraph: ({ projectId, transitionId }) =>
+      resolveTransitionProposalGraph(input.db, projectId, transitionId),
+    getTransitionPolicyBinding: ({ projectId, refName }) =>
+      getTransitionPolicyBinding(input.db, projectId, refName),
+    resolveApplicableTransitionPolicy: ({ refPolicyBinding, requestKind, preparationFacts }) =>
+      resolveApplicableTransitionPolicy({
+        refPolicyBinding,
+        requestKind,
+        preparationFacts,
+      }),
+    projectProposalGenerationReview,
   };
+
+  return inspectTransitionQuery(
+    {
+      projectId: input.projectId,
+      transitionId: input.transitionId,
+      actor: input.actor,
+      decision: input.decision,
+    },
+    ports
+  );
 }
 
 function subjectDescriptors(
