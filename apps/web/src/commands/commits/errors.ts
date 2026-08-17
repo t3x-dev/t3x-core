@@ -12,9 +12,6 @@
  * Optimistic-update style: all-or-nothing. Hooks set isCommitting=true
  * before the call, on success write the new state via setters, on
  * failure restore (setIsCommitting(false) + setCommitError(message)).
- * Position writes (persistCommitPosition) are best-effort: failures are
- * intentionally swallowed by callers since the canvas already reflects
- * the user's drag intent locally.
  */
 
 import { CommandError } from '../CommandError';

@@ -22,7 +22,7 @@ import {
   listTransitionCommitProjectIds,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
-import { createError } from './errors';
+import { createError, type ErrorCode } from './errors';
 
 export interface ProjectAccessPrincipal {
   userId: string | null | undefined;
@@ -34,17 +34,16 @@ export type ProjectAccessDecision =
   | { allowed: true; project: NonNullable<Awaited<ReturnType<typeof findProjectById>>> }
   | { allowed: false; status: 403 | 404; code: 'FORBIDDEN' | 'NOT_FOUND'; message: string };
 
-/**
- * Resolve one project access decision without depending on HTTP middleware.
- * HTTP routes and raw-token entry points such as WebSocket upgrades must share
- * this exact ownership and project-scoped-principal policy.
- */
-export async function evaluateProjectAccess(
+type ProjectAccessProject = NonNullable<Awaited<ReturnType<typeof findProjectById>>>;
+type ProjectAccessLookup = (db: AnyDB, projectId: string) => Promise<ProjectAccessProject | null>;
+
+async function evaluateProjectAccessWithLookup(
   db: AnyDB,
   projectId: string,
-  principal?: ProjectAccessPrincipal
+  principal: ProjectAccessPrincipal | undefined,
+  lookup: ProjectAccessLookup
 ): Promise<ProjectAccessDecision> {
-  const project = await findProjectById(db, projectId);
+  const project = await lookup(db, projectId);
 
   if (!project) {
     return {
@@ -95,22 +94,45 @@ export async function evaluateProjectAccess(
 }
 
 /**
+ * Resolve one project access decision without depending on HTTP middleware.
+ * HTTP routes and raw-token entry points such as WebSocket upgrades must share
+ * this exact ownership and project-scoped-principal policy.
+ */
+export async function evaluateProjectAccess(
+  db: AnyDB,
+  projectId: string,
+  principal?: ProjectAccessPrincipal
+): Promise<ProjectAccessDecision> {
+  return evaluateProjectAccessWithLookup(db, projectId, principal, findProjectById);
+}
+
+/** Resolve the same authority decision for restore and permanent-delete paths. */
+export async function evaluateProjectAccessIncludingDeleted(
+  db: AnyDB,
+  projectId: string,
+  principal?: ProjectAccessPrincipal
+): Promise<ProjectAccessDecision> {
+  return evaluateProjectAccessWithLookup(db, projectId, principal, findProjectByIdIncludingDeleted);
+}
+
+function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (!apiKey) return undefined;
+  return {
+    userId: apiKey.user_id,
+    projectId: apiKey.project_id,
+    principalKind: apiKey.principal_kind,
+  };
+}
+
+/**
  * Assert that the current user has access to the given project.
  *
  * Returns the project on success; throws an HTTP error response on failure.
  * Downstream handlers can use the returned project to avoid a redundant DB lookup.
  */
 export async function assertProjectAccess(c: Context, db: AnyDB, projectId: string) {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  const decision = await evaluateProjectAccess(
-    db,
-    projectId,
-    apiKey && {
-      userId: apiKey.user_id,
-      projectId: apiKey.project_id,
-      principalKind: apiKey.principal_kind,
-    }
-  );
+  const decision = await evaluateProjectAccess(db, projectId, getProjectAccessPrincipal(c));
   if (!decision.allowed) {
     return c.json(createError(decision.code, decision.message), decision.status);
   }
@@ -136,6 +158,31 @@ export async function assertResourceProjectAccess(
   if (!apiKey) return null;
 
   return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
+}
+
+/**
+ * Resolve one resource ID to its stored project before evaluating authority.
+ * Resource-ID routes use this helper so request payloads and path aliases can
+ * never choose the project boundary that authorizes the loaded row.
+ */
+export async function resolveProjectResourceAccess<T>(
+  c: Context,
+  db: AnyDB,
+  input: {
+    load: () => Promise<T | null | undefined>;
+    projectId: (resource: T) => string | null | undefined;
+    notFoundCode: ErrorCode;
+    notFoundMessage: string;
+  }
+): Promise<T | Response> {
+  const resource = await input.load();
+  if (resource === null || resource === undefined) {
+    return c.json(createError(input.notFoundCode, input.notFoundMessage), 404);
+  }
+
+  const access = await assertResourceProjectAccess(c, db, input.projectId(resource));
+  if (access instanceof Response) return access;
+  return resource;
 }
 
 /**
@@ -203,31 +250,15 @@ export async function assertProjectAccessIncludingDeleted(
   db: AnyDB,
   projectId: string
 ) {
-  const project = await findProjectByIdIncludingDeleted(db, projectId);
-
-  if (!project) {
-    return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
+  const decision = await evaluateProjectAccessIncludingDeleted(
+    db,
+    projectId,
+    getProjectAccessPrincipal(c)
+  );
+  if (!decision.allowed) {
+    return c.json(createError(decision.code, decision.message), decision.status);
   }
-
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) return project;
-
-  if (apiKey.project_id) {
-    if (apiKey.project_id !== projectId) {
-      return c.json(createError('FORBIDDEN', 'Access denied'), 403);
-    }
-    return project;
-  }
-
-  if (apiKey.principal_kind !== undefined && apiKey.principal_kind !== 'human') {
-    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
-  }
-  const userId = apiKey.user_id;
-  if (!userId || !project.ownerId || project.ownerId !== userId) {
-    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
-  }
-
-  return project;
+  return decision.project;
 }
 
 /**

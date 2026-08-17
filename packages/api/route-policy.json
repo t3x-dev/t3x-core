@@ -1675,6 +1675,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "source-chat-draft-replies.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/draft-reply",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
       "source": "workspace-source-transition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-transition/decide",

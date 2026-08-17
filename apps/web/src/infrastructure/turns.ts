@@ -57,7 +57,8 @@ export async function createTurn(
   conversationId: string,
   role: 'user' | 'assistant' | 'system' | 'tool',
   content: string,
-  language?: 'zh' | 'en' | 'auto'
+  language?: 'zh' | 'en' | 'auto',
+  options?: { rings?: Record<string, unknown>; content_blocks?: unknown[] }
 ): Promise<Turn> {
   const res = await fetchWithTimeout(`${API_V1}/turns`, {
     method: 'POST',
@@ -68,6 +69,8 @@ export async function createTurn(
       role,
       content,
       language,
+      ...(options?.rings ? { rings: options.rings } : {}),
+      ...(options?.content_blocks ? { content_blocks: options.content_blocks } : {}),
     }),
   });
   return handleResponse<Turn>(res);

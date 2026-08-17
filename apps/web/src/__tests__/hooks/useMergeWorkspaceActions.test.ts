@@ -50,6 +50,7 @@ function draftResp(overrides: Record<string, unknown> = {}) {
     sourceBranch: 'branch-1',
     targetBranch: 'main',
     prepared: EMPTY_PREPARED,
+    decisionRevision: 0,
     status: 'pending' as const,
     message: '',
     ...overrides,
@@ -123,7 +124,7 @@ describe('useMergeWorkspaceActions.save', () => {
       message: 'msg',
       status: 'pending',
     });
-    vi.mocked(saveMergeDraft).mockResolvedValueOnce(undefined as never);
+    vi.mocked(saveMergeDraft).mockResolvedValueOnce(draftResp({ decisionRevision: 1 }) as never);
 
     const { result } = renderHook(() => useMergeWorkspaceActions());
     await result.current.save();
@@ -132,6 +133,36 @@ describe('useMergeWorkspaceActions.save', () => {
     const state = useMergeWorkspaceStore.getState();
     expect(state.saveStatus).toBe('saved');
     expect(state.isDirty).toBe(false);
+    expect(state.decisionRevision).toBe(1);
+  });
+
+  it('saves decisions against the loaded revision', async () => {
+    const decisions = {
+      conflictResolutions: { service: 'source' as const },
+      keepFromSource: ['source-only'],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    };
+    useMergeWorkspaceStore.setState({
+      draftId: 'merge_1',
+      decisionRevision: 4,
+      isDirty: true,
+      message: 'msg',
+      status: 'pending',
+    });
+    vi.mocked(saveMergeDraft).mockResolvedValueOnce(
+      draftResp({ decisions, decisionRevision: 5 }) as never
+    );
+
+    const { result } = renderHook(() => useMergeWorkspaceActions());
+    await result.current.save(decisions);
+
+    expect(saveMergeDraft).toHaveBeenCalledWith(
+      'merge_1',
+      expect.objectContaining({ decisions, expected_decision_revision: 4 })
+    );
+    expect(useMergeWorkspaceStore.getState().decisionRevision).toBe(5);
   });
 });
 

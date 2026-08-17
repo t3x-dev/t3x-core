@@ -143,6 +143,10 @@ export function buildMergeDecision(
   for (const conflict of mergeResult.conflicts) {
     const resolution = resolutions.get(conflict.path);
     if (!resolution) continue;
+    if (resolution.type === 'edit') {
+      conflictResolutions[conflict.path] = { edit: resolution.edit };
+      continue;
+    }
     if (resolution.type !== 'per-slot') {
       conflictResolutions[conflict.path] = resolution.type;
       continue;

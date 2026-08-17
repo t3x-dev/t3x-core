@@ -15,6 +15,9 @@ const storageMock = vi.hoisted(() => {
     reset: () => {
       workspaceDraft = null;
     },
+    seedWorkspaceDraft: (state: Record<string, unknown>) => {
+      workspaceDraft = state;
+    },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
     findProjectById: vi.fn((_db, projectId: string) =>
       Promise.resolve({ projectId, ownerId: null })
@@ -30,6 +33,10 @@ const storageMock = vi.hoisted(() => {
               project_id: projectId,
               workspace_id: workspaceId,
               workspace_state: workspaceDraft,
+              target_branch:
+                typeof workspaceDraft.targetBranch === 'string'
+                  ? workspaceDraft.targetBranch
+                  : 'main',
               title: 'PRD audience handoff',
               status: 'editing',
               revision: 1,
@@ -127,6 +134,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
@@ -176,6 +184,13 @@ const mockPrecondition = {
 
 // biome-ignore lint/suspicious/noExplicitAny: route responses are intentionally schema-flexible here.
 type ApiResponse = any;
+
+function flattenApiFields(fields: ApiResponse[]): ApiResponse[] {
+  return fields.flatMap((field) => [
+    field,
+    ...(Array.isArray(field.children) ? flattenApiFields(field.children) : []),
+  ]);
+}
 
 describe('Workspace routes', () => {
   const app = new Hono();
@@ -286,7 +301,12 @@ describe('Workspace routes', () => {
     expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
   });
 
-  it('allows agent principals to inspect Workspaces but not impersonate human review', async () => {
+  it('preserves agent principals on scoped Transition review', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const agentApp = appWithApiKey({
       id: 'ak_workspace_agent',
       key_prefix: 't3xk_test',
@@ -312,19 +332,22 @@ describe('Workspace routes', () => {
         body: JSON.stringify({ content: { trees: [], relations: [] } }),
       }
     );
-    expect(reviewed.status).toBe(403);
-    await expect(reviewed.json()).resolves.toEqual(
+    expect(reviewed.status).toBe(200);
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'FORBIDDEN',
-          message: 'Workspace review and commit require a human principal',
-        }),
+        actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_agent' },
+        policyBinding: null,
       })
     );
-    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
   });
 
   it('returns and binds the durable Transition identity across review and decide', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const content = { trees: [], relations: [] };
     const reviewed = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
@@ -858,6 +881,181 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.schemaReview).toEqual(
       expect.objectContaining({ verdict: 'ready', gaps: [] })
     );
+  });
+
+  it('carries Source Chat draft items through candidate extraction and YOps draft generation', async () => {
+    const chatSource = {
+      id: 'source_chat:conv_prd',
+      type: 'chat',
+      title: 'Source chat',
+      conversationId: 'conv_prd',
+      previewTurns: [
+        {
+          id: 'turn_user',
+          role: 'user',
+          author: 'You',
+          content: 'We need a checkout recovery PRD, but keep it source-backed.',
+        },
+        {
+          id: 'turn_assistant',
+          role: 'assistant',
+          author: 'Assistant',
+          content: 'Source draft\n\nCaptured\n- Checkout recovery outcome',
+          rings: {
+            source_chat_draft: {
+              schema: 't3x/source-chat-draft-v1',
+              version: 1,
+              source_items: [
+                {
+                  id: 'S001',
+                  kind: 'captured',
+                  title: 'Checkout recovery outcome',
+                  content: 'Recover failed checkout payments without unsupported claims.',
+                  target_path: 'prd/summary/outcome',
+                  source_quote: 'checkout recovery PRD',
+                  source_turn_hash: 'turn_user',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [chatSource],
+          },
+          sources: [chatSource],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    const summary = extractBody.data.workspace.schemaCandidate.fields.find(
+      (field: ApiResponse) => field.path === 'summary'
+    );
+    const outcome = summary.children.find((field: ApiResponse) => field.path === 'summary.outcome');
+    expect(outcome.value).toBe('Recover failed checkout payments without unsupported claims');
+    expect(outcome.evidence).toBe(
+      'Source chat: Recover failed checkout payments without unsupported claims'
+    );
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'prd/summary/outcome',
+          afterValue: 'Recover failed checkout payments without unsupported claims',
+          sourceRefs: ['source_chat:conv_prd'],
+        }),
+      ])
+    );
+  });
+
+  it('does not turn Source Chat confirmation prompts into candidate or YOps fields', async () => {
+    const chatSource = {
+      id: 'source_chat:conv_prd',
+      type: 'chat',
+      title: 'Source chat',
+      conversationId: 'conv_prd',
+      previewTurns: [
+        {
+          id: 'turn_user',
+          role: 'user',
+          author: 'You',
+          content:
+            'Maybe add analytics later. I am not sure whether this is dashboarding or alerts.',
+        },
+        {
+          id: 'turn_assistant',
+          role: 'assistant',
+          author: 'Assistant',
+          content:
+            'Source draft\n\nNeeds confirmation\n- Analytics scope: Clarify whether the target is dashboarding, alerts, or both.',
+          rings: {
+            source_chat_draft: {
+              schema: 't3x/source-chat-draft-v1',
+              version: 1,
+              source_items: [
+                {
+                  id: 'S001',
+                  kind: 'needs_confirmation',
+                  title: 'Analytics scope',
+                  content: 'Clarify whether the target is dashboarding, alerts, or both.',
+                  source_quote: 'dashboarding or alerts',
+                  source_turn_hash: 'turn_user',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [chatSource],
+          },
+          sources: [chatSource],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    expect(
+      flattenApiFields(extractBody.data.workspace.schemaCandidate.fields).filter(
+        (field) => field.status === 'covered' && field.value
+      )
+    ).toEqual([]);
+    expect(extractBody.data.workspace.schemaReview.gaps).toEqual(['No source material.']);
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations).toEqual([]);
   });
 
   it('persists extract state and builds YOps from stored workspace state', async () => {
