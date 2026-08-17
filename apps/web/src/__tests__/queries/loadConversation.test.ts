@@ -44,7 +44,7 @@ describe('fetchConversationSnapshot', () => {
 
     const snapshot = await fetchConversationSnapshot('proj_1', 'conv_child');
 
-    expect(fetchCommitForInheritanceMock).toHaveBeenCalledWith('sha256:parent_commit');
+    expect(fetchCommitForInheritanceMock).toHaveBeenCalledWith('sha256:parent_commit', 'proj_1');
     expect(snapshot.tree).toEqual(PARENT_TREE);
     expect(snapshot.parentCommitHash).toBe('sha256:parent_commit');
     expect(snapshot.parentCommitBranch).toBe('5');
@@ -74,7 +74,7 @@ describe('fetchConversationSnapshot', () => {
 
     const snapshot = await fetchConversationSnapshot('proj_1', 'conv_committed');
 
-    expect(fetchCommitForInheritanceMock).toHaveBeenCalledWith('sha256:committed_hash');
+    expect(fetchCommitForInheritanceMock).toHaveBeenCalledWith('sha256:committed_hash', 'proj_1');
     expect(snapshot.committedBranch).toBe('feature/final');
   });
 });
