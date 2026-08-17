@@ -970,6 +970,7 @@ export interface TransitionControlPlaneView {
     proposal_digest: string;
     statement_digests: string[];
     policy_digest: string | null;
+    review_digest?: string;
   };
   transition: TransitionViewV1;
   statements: TransitionStatementMembershipView[];
@@ -1148,6 +1149,7 @@ export interface TransitionReviewPrecondition {
   proposal_digest: string;
   statement_digests: string[];
   policy_digest: string;
+  review_digest?: string;
 }
 
 export interface DecideTransitionInput {
@@ -1161,6 +1163,7 @@ export interface DecideTransitionResult {
   transition_id: string;
   reused: boolean;
   decision_digest: string;
+  review_digest: string;
   decision: TransitionProtocolValue;
   view: TransitionControlPlaneView;
 }

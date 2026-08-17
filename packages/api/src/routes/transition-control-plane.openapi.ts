@@ -49,6 +49,7 @@ import {
 import {
   commitTransition,
   decideTransition,
+  digestTransitionReviewPrecondition,
   TransitionAutomatedOverrideDeniedError,
   TransitionDecisionDeniedError,
   TransitionDecisionMembershipError,
@@ -216,6 +217,7 @@ const TransitionReviewPreconditionSchema = z
     proposal_digest: DigestSchema,
     statement_digests: z.array(DigestSchema).max(1000),
     policy_digest: DigestSchema,
+    review_digest: DigestSchema.optional(),
   })
   .strict();
 const DecideRequestSchema = z
@@ -255,25 +257,97 @@ const TransitionParamsSchema = z.object({
   transitionId: TransitionIdSchema,
 });
 
+const ActorRefSchema = z
+  .object({
+    kind: z.enum(['human', 'agent', 'service']),
+    id: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+const TransitionViewPreconditionSchema = z
+  .object({
+    workspace_revision: z.number().int().min(1),
+    ref_name: z.string().trim().min(1).max(500),
+    ref_head: DigestSchema.nullable(),
+    effect_digest: DigestSchema,
+    proposal_digest: DigestSchema,
+    statement_digests: z.array(DigestSchema).max(1000),
+    policy_digest: DigestSchema.nullable(),
+    review_digest: DigestSchema.optional(),
+  })
+  .strict();
+
+const TransitionStatementViewSchema = z
+  .object({
+    digest: DigestSchema,
+    source: z.string().trim().min(1).max(500),
+    issuer: ActorRefSchema,
+    request_id: RequestIdSchema,
+    created_at: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+const TransitionControlPlaneViewSchema = z
+  .object({
+    transition_id: TransitionIdSchema,
+    project_id: z.string().trim().min(1),
+    workspace_id: WorkspaceIdSchema,
+    request_kind: z.enum([
+      'structured_yops',
+      'exact_source_import',
+      'exact_source_edit',
+      'exact_source_revert',
+    ]),
+    request_id: RequestIdSchema,
+    created_at: z.string().trim().min(1).max(100),
+    precondition: TransitionViewPreconditionSchema,
+    transition: ProtocolValueSchema,
+    statements: z.array(TransitionStatementViewSchema).max(1000),
+    generation: ProtocolValueSchema.optional(),
+  })
+  .strict();
+
+const TransitionVerificationStatementSchema = z
+  .object({
+    transitionId: TransitionIdSchema,
+    statementDigest: DigestSchema,
+    source: z.string().trim().min(1).max(500),
+    issuer: ActorRefSchema,
+    requestId: RequestIdSchema,
+    requestDigest: DigestSchema,
+    createdAt: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+const TransitionOperationalResultSchema = z
+  .object({
+    source: z.string().trim().min(1).max(500),
+    outcome: z.enum(['no_statement', 'failed']),
+    code: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+
 const TransitionEnvelopeSchema = z.object({
   transition_id: TransitionIdSchema,
   reused: z.boolean().optional(),
-  view: z.any(),
+  view: TransitionControlPlaneViewSchema,
 });
 const VerifyEnvelopeSchema = TransitionEnvelopeSchema.extend({
-  statements: z.array(z.any()),
-  operational_results: z.array(z.any()),
+  statements: z.array(TransitionVerificationStatementSchema).max(1000),
+  operational_results: z.array(TransitionOperationalResultSchema).max(1000),
 });
 const DecisionEnvelopeSchema = TransitionEnvelopeSchema.extend({
   decision_digest: DigestSchema,
-  decision: z.any(),
+  review_digest: DigestSchema,
+  decision: ProtocolValueSchema,
 });
 const CommitEnvelopeSchema = z.object({
   transition_id: TransitionIdSchema,
   reused: z.boolean(),
   commit_digest: DigestSchema,
-  commit: z.any(),
-  transition: z.any(),
+  commit: ProtocolValueSchema,
+  transition: ProtocolValueSchema,
   workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -297,6 +371,7 @@ function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
       proposal_digest: view.precondition.proposalDigest,
       statement_digests: view.precondition.statementDigests,
       policy_digest: view.precondition.policyDigest,
+      review_digest: digestTransitionReviewPrecondition(view.precondition),
     },
     transition: view.transition,
     statements: view.statements.map((statement) => ({
@@ -360,6 +435,9 @@ function wireReviewPrecondition(precondition: z.infer<typeof TransitionReviewPre
     proposalDigest: precondition.proposal_digest,
     statementDigests: precondition.statement_digests,
     policyDigest: precondition.policy_digest,
+    ...(precondition.review_digest === undefined
+      ? {}
+      : { reviewDigest: precondition.review_digest }),
   };
 }
 
@@ -931,6 +1009,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         projectId,
         scope,
       });
+      const precondition = wireReviewPrecondition(body.precondition);
       const result = await decideTransition({
         db,
         projectId,
@@ -939,7 +1018,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         outcome: body.outcome,
         rationale: body.rationale,
-        precondition: wireReviewPrecondition(body.precondition),
+        precondition,
       });
       return c.json(
         {
@@ -948,6 +1027,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
             transition_id: result.view.transitionId,
             reused: result.reused,
             decision_digest: result.decisionDigest,
+            review_digest: result.reviewDigest,
             decision: result.decision,
             view: wireView(result.view),
           },

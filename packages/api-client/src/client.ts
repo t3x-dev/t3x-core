@@ -4,6 +4,8 @@
  * Type-safe HTTP client for the T3X API.
  */
 
+import { ZodError, type ZodType } from 'zod';
+import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
   ApiErrorResponse,
   ApiResponse,
@@ -176,7 +178,8 @@ export class T3xClient {
     path: string,
     body?: unknown,
     query?: Record<string, string | number | undefined>,
-    options?: T3xRequestOptions
+    options?: T3xRequestOptions,
+    responseSchema?: ZodType<unknown>
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
 
@@ -202,7 +205,21 @@ export class T3xClient {
       throw new T3xApiError(error.code, error.message, response.status, error.details);
     }
 
-    return (data as ApiSuccessResponse<T>).data;
+    const payload = (data as ApiSuccessResponse<T>).data;
+    if (responseSchema === undefined) return payload;
+    try {
+      return responseSchema.parse(payload) as T;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new T3xApiError(
+          'INVALID_RESPONSE',
+          'API response did not match the client runtime schema',
+          response.status,
+          { issues: error.issues }
+        );
+      }
+      throw error;
+    }
   }
 
   // ============================================
@@ -909,7 +926,10 @@ export class T3xClient {
     return this.request<ProposeTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.propose
     );
   }
 
@@ -923,7 +943,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}`,
       undefined,
       undefined,
-      options
+      options,
+      transitionResponseSchemas.inspect
     );
   }
 
@@ -935,7 +956,10 @@ export class T3xClient {
     return this.request<VerifyTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/verify`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.verify
     );
   }
 
@@ -947,7 +971,10 @@ export class T3xClient {
     return this.request<AttachTransitionStatementResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/statements`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.attachStatement
     );
   }
 
@@ -959,7 +986,10 @@ export class T3xClient {
     return this.request<DecideTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/decisions`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.decide
     );
   }
 
@@ -971,7 +1001,10 @@ export class T3xClient {
     return this.request<CommitTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/commits`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.commit
     );
   }
 

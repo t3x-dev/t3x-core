@@ -36,6 +36,41 @@ function createTestClient(fetchFn: typeof fetch) {
   });
 }
 
+const TRANSITION_ID = `trn_${'a'.repeat(32)}`;
+const SECOND_TRANSITION_ID = `trn_${'b'.repeat(32)}`;
+const digest = (seed: string) => `sha256:${seed.repeat(64)}`;
+
+function transitionView(overrides: Record<string, unknown> = {}) {
+  return {
+    transition_id: TRANSITION_ID,
+    project_id: 'proj_1',
+    workspace_id: 'ws_1',
+    request_kind: 'structured_yops',
+    request_id: 'request:transition:1',
+    created_at: '2026-08-17T00:00:00.000Z',
+    precondition: {
+      workspace_revision: 4,
+      ref_name: 'main',
+      ref_head: null,
+      effect_digest: digest('1'),
+      proposal_digest: digest('2'),
+      statement_digests: [digest('3')],
+      policy_digest: digest('4'),
+    },
+    transition: { schema: 't3x.dev/test-transition-view/v1' },
+    statements: [
+      {
+        digest: digest('3'),
+        source: 'test',
+        issuer: { kind: 'service', id: 'service:test' },
+        request_id: 'request:verify:1',
+        created_at: '2026-08-17T00:00:00.000Z',
+      },
+    ],
+    ...overrides,
+  };
+}
+
 describe('T3xClient', () => {
   // =========================================================================
   // Constructor
@@ -836,7 +871,7 @@ describe('T3xClient', () => {
   // =========================================================================
   describe('Transition control plane', () => {
     it('proposes a Transition through the project-scoped endpoint', async () => {
-      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const data = { transition_id: TRANSITION_ID, reused: false, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -855,7 +890,11 @@ describe('T3xClient', () => {
     });
 
     it('proposes from a server-owned Workspace extraction candidate', async () => {
-      const data = { transition_id: 'trn_extract', reused: false, view: {} };
+      const data = {
+        transition_id: SECOND_TRANSITION_ID,
+        reused: false,
+        view: transitionView({ transition_id: SECOND_TRANSITION_ID }),
+      };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -874,7 +913,7 @@ describe('T3xClient', () => {
     });
 
     it('inspects one project-scoped Transition', async () => {
-      const data = { transition_id: 'trn_abc', view: {} };
+      const data = { transition_id: TRANSITION_ID, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
 
@@ -885,11 +924,21 @@ describe('T3xClient', () => {
       );
     });
 
+    it('rejects malformed Transition runtime responses', async () => {
+      const fn = mockFetch(successResponse({ transition_id: TRANSITION_ID, view: {} }));
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_abc')).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+        status: 200,
+      });
+    });
+
     it('verifies one Transition with an explicit idempotency key', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        view: {},
+        view: transitionView(),
         statements: [],
         operational_results: [],
       };
@@ -909,7 +958,7 @@ describe('T3xClient', () => {
     });
 
     it('attaches only an external predicate payload and subject roles', async () => {
-      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const data = { transition_id: TRANSITION_ID, reused: false, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -928,11 +977,12 @@ describe('T3xClient', () => {
 
     it('creates a Decision from an immutable review precondition', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        decision_digest: 'sha256:decision',
-        decision: {},
-        view: {},
+        decision_digest: digest('5'),
+        review_digest: digest('6'),
+        decision: { schema: 't3x/statement/v1' },
+        view: transitionView(),
       };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
@@ -943,10 +993,11 @@ describe('T3xClient', () => {
           workspace_revision: 4,
           ref_name: 'main',
           ref_head: null,
-          effect_digest: 'sha256:effect',
-          proposal_digest: 'sha256:proposal',
-          statement_digests: ['sha256:statement'],
-          policy_digest: 'sha256:policy',
+          effect_digest: digest('1'),
+          proposal_digest: digest('2'),
+          statement_digests: [digest('3')],
+          policy_digest: digest('4'),
+          review_digest: digest('6'),
         },
       };
 
@@ -959,17 +1010,17 @@ describe('T3xClient', () => {
 
     it('creates a Commit only from a recorded Decision and expected head', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        commit_digest: 'sha256:commit',
-        commit: {},
-        transition: {},
+        commit_digest: digest('6'),
+        commit: { schema: 't3x/commit/v2' },
+        transition: { schema: 't3x.dev/test-transition-view/v1' },
       };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
         request_id: 'request:commit:1',
-        decision_digest: 'sha256:decision',
+        decision_digest: digest('5'),
         expected_head: null,
       };
 
@@ -981,7 +1032,9 @@ describe('T3xClient', () => {
     });
 
     it('encodes project and Transition ids in control-plane paths', async () => {
-      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const fn = mockFetch(
+        successResponse({ transition_id: TRANSITION_ID, view: transitionView() })
+      );
       const client = createTestClient(fn);
 
       await client.inspectTransition('project/with space', 'transition/with space');
@@ -995,7 +1048,9 @@ describe('T3xClient', () => {
     });
 
     it('passes AbortSignal through Transition inspection', async () => {
-      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const fn = mockFetch(
+        successResponse({ transition_id: TRANSITION_ID, view: transitionView() })
+      );
       const client = createTestClient(fn);
       const controller = new AbortController();
 
