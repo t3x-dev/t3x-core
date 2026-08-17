@@ -58,8 +58,18 @@ export interface RelationTypeSchema {
 export interface ReservedRuleSchema {
   id: string;
   description?: string;
-  [key: string]: unknown;
 }
+
+export interface RequiredRelationRuleSchema {
+  id: string;
+  kind: 'required_relation';
+  relationType: YSchemaKey;
+  from: RelationEndpointPattern;
+  to: RelationEndpointPattern;
+  description?: string;
+}
+
+export type YSchemaRuleSchema = ReservedRuleSchema | RequiredRelationRuleSchema;
 
 export interface YSchema {
   yschema: '0.1';
@@ -69,7 +79,7 @@ export interface YSchema {
   strict?: boolean;
   nodes: Record<YSchemaKey, NodeSchema>;
   relationTypes?: Record<YSchemaKey, RelationTypeSchema>;
-  rules?: ReservedRuleSchema[];
+  rules?: YSchemaRuleSchema[];
 }
 
 export interface YSchemaRelation {
@@ -156,6 +166,7 @@ export type ValidationErrorCode =
   | 'SELF_RELATION'
   | 'DUPLICATE_RELATION'
   | 'RELATION_CYCLE'
+  | 'REQUIRED_RELATION_MISSING'
   | 'UNEXPECTED_NODE'
   | 'UNEXPECTED_SLOT'
   | 'INVALID_SCHEMA';

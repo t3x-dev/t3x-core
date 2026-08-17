@@ -4,11 +4,13 @@ import type {
   ContentKind,
   NodeSchema,
   RelationTypeSchema,
+  RequiredRelationRuleSchema,
   ReservedRuleSchema,
   SlotSchema,
   SlotType,
   YOpsHint,
   YSchema,
+  YSchemaRuleSchema,
 } from './types';
 
 const KEY_RE = /^[a-z][a-z0-9_]*$/;
@@ -27,6 +29,77 @@ const DEPRECATED_FIELD_REPLACEMENTS: Record<string, string> = {
   guidance: 'content_guidance',
   zone: 'content_kind',
 };
+const ROOT_FIELDS = new Set([
+  'yschema',
+  'name',
+  'version',
+  'description',
+  'strict',
+  'nodes',
+  'relationTypes',
+  'relation_types',
+  'rules',
+]);
+const NODE_FIELDS = new Set([
+  'required',
+  'contentKind',
+  'content_kind',
+  'repeated',
+  'description',
+  'contentGuidance',
+  'content_guidance',
+  'requiredSlots',
+  'required_slots',
+  'slots',
+  'children',
+]);
+const SLOT_FIELDS = new Set([
+  'type',
+  'enum',
+  'const',
+  'default',
+  'description',
+  'contentGuidance',
+  'content_guidance',
+  'examples',
+  'minimum',
+  'maximum',
+  'minLength',
+  'min_length',
+  'maxLength',
+  'max_length',
+  'pattern',
+  'format',
+  'maxWords',
+  'max_words',
+  'gapQuestion',
+  'gap_question',
+  'contentKind',
+  'content_kind',
+  'provenanceRequired',
+  'provenance_required',
+  'yopsHint',
+  'yops_hint',
+]);
+const YOPS_HINT_FIELDS = new Set(['preferredOp', 'preferred_op', 'path', 'slot']);
+const RELATION_TYPE_FIELDS = new Set([
+  'from',
+  'to',
+  'description',
+  'contentGuidance',
+  'content_guidance',
+  'acyclic',
+]);
+const RESERVED_RULE_FIELDS = new Set(['id', 'description']);
+const REQUIRED_RELATION_RULE_FIELDS = new Set([
+  'id',
+  'kind',
+  'relationType',
+  'relation_type',
+  'from',
+  'to',
+  'description',
+]);
 
 function invalidSchema(message: string): never {
   throw new Error(`INVALID_SCHEMA: ${message}`);
@@ -43,19 +116,41 @@ function asRecord(value: unknown, context: string): Record<string, unknown> {
   return value;
 }
 
+function hasOwnField(record: Record<string, unknown>, field: string): boolean {
+  return Object.hasOwn(record, field);
+}
+
+function getOwnField(record: Record<string, unknown>, field: string): unknown {
+  return hasOwnField(record, field) ? record[field] : undefined;
+}
+
 function getField(record: Record<string, unknown>, camel: string, snake?: string): unknown {
-  if (snake && record[camel] !== undefined && record[snake] !== undefined) {
+  const camelValue = getOwnField(record, camel);
+  const snakeValue = snake ? getOwnField(record, snake) : undefined;
+  if (snake && camelValue !== undefined && snakeValue !== undefined) {
     invalidSchema(`${camel} and ${snake} cannot both be set`);
   }
-  if (record[camel] !== undefined) return record[camel];
-  if (snake && record[snake] !== undefined) return record[snake];
+  if (camelValue !== undefined) return camelValue;
+  if (snake && snakeValue !== undefined) return snakeValue;
   return undefined;
 }
 
 function rejectDeprecatedFields(record: Record<string, unknown>, context: string): void {
   for (const [deprecated, replacement] of Object.entries(DEPRECATED_FIELD_REPLACEMENTS)) {
-    if (record[deprecated] !== undefined) {
+    if (getOwnField(record, deprecated) !== undefined) {
       invalidSchema(`${context}.${deprecated} is deprecated; use ${replacement}`);
+    }
+  }
+}
+
+function rejectUnknownFields(
+  record: Record<string, unknown>,
+  context: string,
+  allowedFields: ReadonlySet<string>
+): void {
+  for (const field of Object.keys(record)) {
+    if (!allowedFields.has(field)) {
+      invalidSchema(`${context}.${field} is an unknown field`);
     }
   }
 }
@@ -164,9 +259,10 @@ function asKeyArray(value: unknown, context: string): string[] | undefined {
 function normalizeYOpsHint(value: unknown, context: string): YOpsHint | undefined {
   if (value === undefined) return undefined;
   const raw = asRecord(value, context);
+  rejectUnknownFields(raw, context, YOPS_HINT_FIELDS);
   const preferredOp = getField(raw, 'preferredOp', 'preferred_op');
-  const path = raw.path;
-  const slot = raw.slot;
+  const path = getOwnField(raw, 'path');
+  const slot = getOwnField(raw, 'slot');
   const hint: YOpsHint = {};
 
   if (preferredOp !== undefined) {
@@ -207,7 +303,8 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
 
   const raw = asRecord(def, context);
   rejectDeprecatedFields(raw, context);
-  const typeValue = raw.type;
+  rejectUnknownFields(raw, context, SLOT_FIELDS);
+  const typeValue = getOwnField(raw, 'type');
   const slot: SlotSchema = {};
 
   if (typeValue !== undefined) {
@@ -221,12 +318,12 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
     slot.type = normalizedType as SlotType;
   }
 
-  const enumValue = raw.enum;
-  const constValue = raw.const;
-  const defaultValue = raw.default;
-  const examples = raw.examples;
-  const minimum = raw.minimum;
-  const maximum = raw.maximum;
+  const enumValue = getOwnField(raw, 'enum');
+  const constValue = getOwnField(raw, 'const');
+  const defaultValue = getOwnField(raw, 'default');
+  const examples = getOwnField(raw, 'examples');
+  const minimum = getOwnField(raw, 'minimum');
+  const maximum = getOwnField(raw, 'maximum');
   const minLength = getField(raw, 'minLength', 'min_length');
   const maxLength = getField(raw, 'maxLength', 'max_length');
   const maxWords = getField(raw, 'maxWords', 'max_words');
@@ -269,7 +366,7 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
   const exampleArray = asYValueArray(examples, `${context}.examples`);
   if (exampleArray !== undefined) slot.examples = exampleArray;
 
-  const description = asOptionalString(raw.description, `${context}.description`);
+  const description = asOptionalString(getOwnField(raw, 'description'), `${context}.description`);
   if (description !== undefined) slot.description = description;
 
   const normalizedContentGuidance = asOptionalString(contentGuidance, `${context}.contentGuidance`);
@@ -313,7 +410,7 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
     invalidSchema(`${context}.minLength cannot be greater than ${context}.maxLength`);
   }
 
-  const pattern = asOptionalString(raw.pattern, `${context}.pattern`);
+  const pattern = asOptionalString(getOwnField(raw, 'pattern'), `${context}.pattern`);
   if (pattern !== undefined) {
     try {
       new RegExp(pattern);
@@ -323,7 +420,7 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
     slot.pattern = pattern;
   }
 
-  const format = asOptionalString(raw.format, `${context}.format`);
+  const format = asOptionalString(getOwnField(raw, 'format'), `${context}.format`);
   if (format !== undefined) slot.format = format;
 
   const normalizedMaxWords = asOptionalNumber(maxWords, `${context}.maxWords`);
@@ -360,15 +457,16 @@ function normalizeSlots(value: unknown, context: string): Record<string, SlotSch
 function normalizeNode(def: unknown, context: string): NodeSchema {
   const raw = asRecord(def, context);
   rejectDeprecatedFields(raw, context);
+  rejectUnknownFields(raw, context, NODE_FIELDS);
   const node: NodeSchema = {};
 
-  const required = asOptionalBoolean(raw.required, `${context}.required`);
+  const required = asOptionalBoolean(getOwnField(raw, 'required'), `${context}.required`);
   if (required !== undefined) node.required = required;
 
-  const repeated = asOptionalBoolean(raw.repeated, `${context}.repeated`);
+  const repeated = asOptionalBoolean(getOwnField(raw, 'repeated'), `${context}.repeated`);
   if (repeated !== undefined) node.repeated = repeated;
 
-  const description = asOptionalString(raw.description, `${context}.description`);
+  const description = asOptionalString(getOwnField(raw, 'description'), `${context}.description`);
   if (description !== undefined) node.description = description;
 
   const contentGuidance = asOptionalString(
@@ -383,7 +481,7 @@ function normalizeNode(def: unknown, context: string): NodeSchema {
   );
   if (contentKind !== undefined) node.contentKind = contentKind;
 
-  const slots = normalizeSlots(raw.slots, `${context}.slots`);
+  const slots = normalizeSlots(getOwnField(raw, 'slots'), `${context}.slots`);
   if (slots !== undefined) node.slots = slots;
 
   const requiredSlots = asKeyArray(
@@ -392,7 +490,7 @@ function normalizeNode(def: unknown, context: string): NodeSchema {
   );
   if (requiredSlots !== undefined) node.requiredSlots = requiredSlots;
 
-  const childrenValue = raw.children;
+  const childrenValue = getOwnField(raw, 'children');
   if (childrenValue !== undefined) {
     if (childrenValue === 'any') {
       node.children = 'any';
@@ -413,7 +511,7 @@ function normalizeNode(def: unknown, context: string): NodeSchema {
 
   if (node.requiredSlots) {
     for (const slotKey of node.requiredSlots) {
-      if (!node.slots || !(slotKey in node.slots)) {
+      if (!node.slots || !hasOwnField(node.slots, slotKey)) {
         invalidSchema(`${context}.requiredSlots references undeclared slot "${slotKey}"`);
       }
     }
@@ -470,8 +568,9 @@ function normalizeRelationTypes(
     assertKey(typeKey, 'relationTypes');
     const raw = asRecord(typeDef, `relationTypes.${typeKey}`);
     rejectDeprecatedFields(raw, `relationTypes.${typeKey}`);
-    const fromValue = raw.from;
-    const toValue = raw.to;
+    rejectUnknownFields(raw, `relationTypes.${typeKey}`, RELATION_TYPE_FIELDS);
+    const fromValue = getOwnField(raw, 'from');
+    const toValue = getOwnField(raw, 'to');
     if (typeof fromValue !== 'string')
       invalidSchema(`relationTypes.${typeKey}.from must be a string`);
     if (typeof toValue !== 'string') invalidSchema(`relationTypes.${typeKey}.to must be a string`);
@@ -499,7 +598,10 @@ function normalizeRelationTypes(
       to: toValue,
     };
 
-    const description = asOptionalString(raw.description, `relationTypes.${typeKey}.description`);
+    const description = asOptionalString(
+      getOwnField(raw, 'description'),
+      `relationTypes.${typeKey}.description`
+    );
     if (description !== undefined) relationType.description = description;
 
     const contentGuidance = asOptionalString(
@@ -508,7 +610,10 @@ function normalizeRelationTypes(
     );
     if (contentGuidance !== undefined) relationType.contentGuidance = contentGuidance;
 
-    const acyclic = asOptionalBoolean(raw.acyclic, `relationTypes.${typeKey}.acyclic`);
+    const acyclic = asOptionalBoolean(
+      getOwnField(raw, 'acyclic'),
+      `relationTypes.${typeKey}.acyclic`
+    );
     if (acyclic !== undefined) relationType.acyclic = acyclic;
 
     relationTypes[typeKey] = relationType;
@@ -517,52 +622,129 @@ function normalizeRelationTypes(
   return relationTypes;
 }
 
-function normalizeRules(value: unknown): ReservedRuleSchema[] {
+function normalizeReservedRule(raw: Record<string, unknown>, context: string): ReservedRuleSchema {
+  rejectUnknownFields(raw, context, RESERVED_RULE_FIELDS);
+  const id = getOwnField(raw, 'id');
+  if (typeof id !== 'string' || id.length === 0) {
+    invalidSchema(`${context}.id must be a non-empty string`);
+  }
+  const description = asOptionalString(getOwnField(raw, 'description'), `${context}.description`);
+  return {
+    id,
+    ...(description !== undefined ? { description } : {}),
+  };
+}
+
+function normalizeRequiredRelationRule(
+  raw: Record<string, unknown>,
+  context: string,
+  nodes: Record<string, NodeSchema>,
+  relationTypes: Record<string, RelationTypeSchema>
+): RequiredRelationRuleSchema {
+  rejectUnknownFields(raw, context, REQUIRED_RELATION_RULE_FIELDS);
+  const id = getOwnField(raw, 'id');
+  if (typeof id !== 'string' || id.length === 0) {
+    invalidSchema(`${context}.id must be a non-empty string`);
+  }
+  const relationType = getField(raw, 'relationType', 'relation_type');
+  if (typeof relationType !== 'string') {
+    invalidSchema(`${context}.relationType must be a string`);
+  }
+  assertKey(relationType, `${context}.relationType`);
+  if (!hasOwnField(relationTypes, relationType)) {
+    invalidSchema(`${context}.relationType "${relationType}" is not declared in relationTypes`);
+  }
+  const from = getOwnField(raw, 'from');
+  const to = getOwnField(raw, 'to');
+  if (typeof from !== 'string') invalidSchema(`${context}.from must be a string`);
+  if (typeof to !== 'string') invalidSchema(`${context}.to must be a string`);
+
+  for (const [side, endpoint] of [
+    ['from', from],
+    ['to', to],
+  ] as const) {
+    const parsed = parseEndpointPattern(endpoint, `${context}.${side}`);
+    const node = resolveNodePath(nodes, parsed.path);
+    if (!node) {
+      invalidSchema(`${context}.${side} endpoint "${endpoint}" does not resolve to a node`);
+    }
+    if (parsed.repeated && !node.repeated) {
+      invalidSchema(`${context}.${side} endpoint "${endpoint}" requires a repeated node`);
+    }
+  }
+
+  const description = asOptionalString(getOwnField(raw, 'description'), `${context}.description`);
+  return {
+    id,
+    kind: 'required_relation',
+    relationType,
+    from,
+    to,
+    ...(description !== undefined ? { description } : {}),
+  };
+}
+
+function normalizeRules(
+  value: unknown,
+  nodes: Record<string, NodeSchema>,
+  relationTypes: Record<string, RelationTypeSchema>
+): YSchemaRuleSchema[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) invalidSchema('rules must be an array');
   return value.map((item, index) => {
     const raw = asRecord(item, `rules[${index}]`);
-    if (typeof raw.id !== 'string' || raw.id.length === 0) {
-      invalidSchema(`rules[${index}].id must be a non-empty string`);
+    const kind = getOwnField(raw, 'kind');
+    if (kind === undefined) {
+      return normalizeReservedRule(raw, `rules[${index}]`);
     }
-    return { ...raw, id: raw.id } as ReservedRuleSchema;
+    if (kind !== 'required_relation') {
+      invalidSchema(`rules[${index}].kind must be required_relation`);
+    }
+    return normalizeRequiredRelationRule(raw, `rules[${index}]`, nodes, relationTypes);
   });
 }
 
 export function normalizeYSchemaObject(rawInput: unknown): YSchema {
   const raw = asRecord(rawInput, 'schema');
-  if (raw.yschema !== '0.1') {
+  rejectUnknownFields(raw, 'schema', ROOT_FIELDS);
+  const yschema = getOwnField(raw, 'yschema');
+  const name = getOwnField(raw, 'name');
+  const rawNodes = getOwnField(raw, 'nodes');
+  if (yschema !== '0.1') {
     invalidSchema('yschema must be "0.1"');
   }
-  if (typeof raw.name !== 'string' || raw.name.length === 0) {
+  if (typeof name !== 'string' || name.length === 0) {
     invalidSchema('name must be a non-empty string');
   }
-  if (raw.nodes === undefined) {
+  if (rawNodes === undefined) {
     invalidSchema('nodes is required');
   }
 
-  const nodes = normalizeNodes(raw.nodes);
+  const nodes = normalizeNodes(rawNodes);
   const relationTypes = normalizeRelationTypes(
     getField(raw, 'relationTypes', 'relation_types'),
     nodes
   );
+  const rules = normalizeRules(getOwnField(raw, 'rules'), nodes, relationTypes ?? {});
+  const strict = getOwnField(raw, 'strict');
 
   const schema: YSchema = {
     yschema: '0.1',
-    name: raw.name,
-    strict: raw.strict === undefined ? false : asOptionalBoolean(raw.strict, 'strict'),
+    name,
+    strict: strict === undefined ? false : asOptionalBoolean(strict, 'strict'),
     nodes,
-    rules: normalizeRules(raw.rules),
+    rules,
   };
 
-  if (raw.version !== undefined) {
-    if (typeof raw.version !== 'string' && typeof raw.version !== 'number') {
+  const version = getOwnField(raw, 'version');
+  if (version !== undefined) {
+    if (typeof version !== 'string' && typeof version !== 'number') {
       invalidSchema('version must be a string or number');
     }
-    schema.version = raw.version;
+    schema.version = version;
   }
 
-  const description = asOptionalString(raw.description, 'description');
+  const description = asOptionalString(getOwnField(raw, 'description'), 'description');
   if (description !== undefined) schema.description = description;
 
   if (relationTypes !== undefined) schema.relationTypes = relationTypes;

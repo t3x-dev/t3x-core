@@ -251,6 +251,141 @@ describe('normalizeYSchemaObject', () => {
     ).toThrow(/INVALID_SCHEMA.*minimum.*maximum/);
   });
 
+  it('rejects unknown schema fields instead of silently dropping them', () => {
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'unknown-root-field',
+        stability: 'experimental',
+        nodes: {
+          summary: {},
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*schema\.stability.*unknown field/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'unknown-node-field',
+        nodes: {
+          summary: {
+            slots: {
+              problem: {
+                type: 'string',
+                searchable: true,
+              },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*nodes\.summary\.slots\.problem\.searchable.*unknown field/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'unknown-relation-field',
+        nodes: {
+          summary: {},
+        },
+        relation_types: {
+          references: {
+            from: 'summary',
+            to: 'summary',
+            weight: 1,
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*relationTypes\.references\.weight.*unknown field/);
+  });
+
+  it('uses only own schema fields when normalizing authoring input', () => {
+    const inheritedSchema = Object.create({
+      yschema: '0.1',
+      name: 'inherited/schema',
+      nodes: {
+        summary: {},
+      },
+    });
+
+    expect(() => normalizeYSchemaObject(inheritedSchema)).toThrow(/INVALID_SCHEMA.*yschema/);
+
+    const nodeWithInheritedRequired = Object.create({ required: true });
+    nodeWithInheritedRequired.slots = {
+      problem: { type: 'string' },
+    };
+
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'own-fields-only',
+      nodes: {
+        summary: nodeWithInheritedRequired,
+      },
+    });
+
+    expect(schema.nodes.summary?.required).toBeUndefined();
+  });
+
+  it('normalizes only closed reserved and executable rule declarations', () => {
+    expect(
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'closed-rules',
+        nodes: {
+          requirements: {
+            repeated: true,
+          },
+        },
+        relation_types: {
+          depends_on: {
+            from: 'requirements/*',
+            to: 'requirements/*',
+          },
+        },
+        rules: [
+          {
+            id: 'doc-only',
+            description: 'Reserved documentation rule.',
+          },
+          {
+            id: 'require-dependency',
+            kind: 'required_relation',
+            relation_type: 'depends_on',
+            from: 'requirements/*',
+            to: 'requirements/*',
+          },
+        ],
+      }).rules
+    ).toEqual([
+      {
+        id: 'doc-only',
+        description: 'Reserved documentation rule.',
+      },
+      {
+        id: 'require-dependency',
+        kind: 'required_relation',
+        relationType: 'depends_on',
+        from: 'requirements/*',
+        to: 'requirements/*',
+      },
+    ]);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'open-rule',
+        nodes: {
+          summary: {},
+        },
+        rules: [
+          {
+            id: 'open-rule',
+            prompt: 'Do anything.',
+          },
+        ],
+      })
+    ).toThrow(/INVALID_SCHEMA.*rules\[0\]\.prompt.*unknown field/);
+  });
+
   it('rejects deprecated P0 metadata aliases wherever metadata is accepted', () => {
     expect(() =>
       normalizeYSchemaObject({

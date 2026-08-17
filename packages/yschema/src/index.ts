@@ -72,6 +72,7 @@ export type {
   RelationTypeSchema,
   RenderComposedYSchemaMarkdownInput,
   RenderYSchemaMarkdownInput,
+  RequiredRelationRuleSchema,
   ReservedRuleSchema,
   SlotSchema,
   SlotType,
@@ -89,6 +90,7 @@ export type {
   YSchemaKey,
   YSchemaPath,
   YSchemaRelation,
+  YSchemaRuleSchema,
   YSchemaValidationDelta,
 } from './p0';
 export {
