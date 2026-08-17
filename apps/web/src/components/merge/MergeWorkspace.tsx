@@ -385,6 +385,7 @@ export function MergeWorkspace({
 
     return (
       <motion.div
+        data-testid="merge-workspace-ready"
         variants={containerVariants}
         initial="initial"
         animate="animate"

@@ -47,6 +47,10 @@ test('authenticated browser qualification uses a fail-closed isolated profile', 
   assert.match(runner, /AUTH_DISABLED: authEnabled \? 'false' : 'true'/);
   assert.match(runner, /NEXT_PUBLIC_AUTH_DISABLED: authEnabled \? 'false' : 'true'/);
   assert.match(runner, /T3X_E2E_AUTH_ENABLED: authEnabled \? '1' : '0'/);
+  assert.match(runner, /RUNNER_URL: runnerUrl/);
+  assert.match(runner, /RUNNER_SERVICE_TOKEN:/);
+  assert.match(runner, /\['apps\/runner\/dist\/server\.js'\]/);
+  assert.match(runner, /waitForUrl\(`\$\{runnerUrl\}\/health`/);
   assert.match(runner, /authEnabled \? 'test-results\/full-e2e-auth'/);
   assert.match(runner, /auth_enabled: authEnabled/);
 });

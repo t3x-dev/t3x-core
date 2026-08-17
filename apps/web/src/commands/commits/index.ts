@@ -3,8 +3,7 @@
  *
  * Source policy: source identifiers and the actor are resolved by the server;
  *   the browser submits only task input plus an exact expected ref head.
- * Optimistic-update style: all-or-nothing for commit; best-effort
- *   for position writes.
+ * Optimistic-update style: all-or-nothing for commit.
  * Error surface: CommitPersistenceError (extends CommandError).
  */
 
@@ -13,5 +12,4 @@ export {
   commitRepositoryState,
 } from './commitRepositoryState';
 export { CommitPersistenceError } from './errors';
-export { persistCommitPosition } from './persistCommitPosition';
 export { renameCommit } from './renameCommit';
