@@ -27,6 +27,7 @@ export function syncSavedTurnIntoWorkspace(
     conversation_id?: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
+    rings?: Record<string, unknown> | null;
   }
 ): void {
   const ws = useWorkspaceStore.getState();
