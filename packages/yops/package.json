@@ -15,6 +15,7 @@
     "build": "tsx scripts/generate-spec-data.ts && tsup && tsx scripts/generate-json-schema.ts",
     "api-extract": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --write",
     "api-extract:verify": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --verify",
+    "pretest": "tsx scripts/generate-spec-data.ts && tsx scripts/generate-json-schema.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "pretypecheck": "tsx scripts/generate-spec-data.ts",
@@ -23,6 +24,9 @@
     "prepublishOnly": "npm run build",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
     "postpack": "node ../../tools/restore-package-json.mjs"
+  },
+  "dependencies": {
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
@@ -33,8 +37,7 @@
     "typescript": "^5.9.3",
     "vite": "8.0.16",
     "vitest": "^4.1.8",
-    "yaml": "2.8.3",
-    "zod": "^4.2.1"
+    "yaml": "2.8.3"
   },
   "engines": {
     "node": ">=18.0.0"
