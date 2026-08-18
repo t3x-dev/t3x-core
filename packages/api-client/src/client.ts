@@ -68,6 +68,8 @@ import type {
   ListProjectsResponse,
   ListRepositoryWorkspacesResponse,
   ListTurnsResponse,
+  ListWorkspaceTransitionReviewSnapshotsParams,
+  ListWorkspaceTransitionReviewSnapshotsResponse,
   ListYSchemaArtifactsParams,
   MergeDraft,
   MergeDraftCommitInput,
@@ -102,6 +104,7 @@ import type {
   WorkspaceExtractionProposalEnvelope,
   WorkspaceTransitionDecisionEnvelope,
   WorkspaceTransitionReviewEnvelope,
+  WorkspaceTransitionReviewSnapshotEnvelope,
   WorkspaceYSchemaCompositionResult,
   YSchemaArtifactManifest,
   YSchemaArtifactRegistryPage,
@@ -178,6 +181,12 @@ export class T3xClient {
         this.reviewWorkspaceTransition(projectId, workspaceId, input),
       decideTransition: (projectId, workspaceId, input) =>
         this.decideWorkspaceTransition(projectId, workspaceId, input),
+      listReviewSnapshots: (projectId, workspaceId, params) =>
+        this.listWorkspaceTransitionReviewSnapshots(projectId, workspaceId, params),
+      getLatestReviewSnapshot: (projectId, workspaceId, params) =>
+        this.getLatestWorkspaceTransitionReviewSnapshot(projectId, workspaceId, params),
+      getReviewSnapshot: (projectId, workspaceId, snapshotId, options) =>
+        this.getWorkspaceTransitionReviewSnapshot(projectId, workspaceId, snapshotId, options),
     });
   }
 
@@ -927,6 +936,52 @@ export class T3xClient {
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/decide`,
       input
+    );
+  }
+
+  async listWorkspaceTransitionReviewSnapshots(
+    projectId: string,
+    workspaceId: string,
+    params?: ListWorkspaceTransitionReviewSnapshotsParams
+  ): Promise<ListWorkspaceTransitionReviewSnapshotsResponse> {
+    return this.request<ListWorkspaceTransitionReviewSnapshotsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots`,
+      undefined,
+      params
+        ? {
+            transition_id: params.transition_id,
+            limit: params.limit,
+          }
+        : undefined
+    );
+  }
+
+  async getLatestWorkspaceTransitionReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    params?: Pick<ListWorkspaceTransitionReviewSnapshotsParams, 'transition_id'>
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope> {
+    return this.request<WorkspaceTransitionReviewSnapshotEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots/latest`,
+      undefined,
+      params ? { transition_id: params.transition_id } : undefined
+    );
+  }
+
+  async getWorkspaceTransitionReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    snapshotId: string,
+    options?: T3xRequestOptions
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope> {
+    return this.request<WorkspaceTransitionReviewSnapshotEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots/${encodeURIComponent(snapshotId)}`,
+      undefined,
+      undefined,
+      options
     );
   }
 

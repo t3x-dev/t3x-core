@@ -48,6 +48,8 @@ const storageMock = vi.hoisted(() => {
           : null
       )
     ),
+    getLatestTransitionReviewSnapshot: vi.fn(),
+    getTransitionReviewSnapshot: vi.fn(),
     listWorkspaceDrafts: vi.fn((_db, projectId: string) =>
       Promise.resolve(
         workspaceDraft
@@ -69,6 +71,7 @@ const storageMock = vi.hoisted(() => {
           : []
       )
     ),
+    listTransitionReviewSnapshots: vi.fn(),
     upsertWorkspaceDraft: vi.fn(
       (
         _db,
@@ -134,8 +137,11 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
     getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
+    getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
+    listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
@@ -259,6 +265,23 @@ function mockReviewArtifacts(status: 'reviewing' | 'committed' = 'reviewing') {
   };
 }
 
+function mockStoredReviewSnapshot(status: 'reviewing' | 'committed' = 'reviewing') {
+  const artifacts = mockReviewArtifacts(status);
+  return {
+    snapshotId: artifacts.reviewSnapshot.snapshotId,
+    snapshotDigest: artifacts.reviewSnapshot.snapshotDigest,
+    projectId: artifacts.reviewSnapshot.projectId,
+    workspaceId: artifacts.reviewSnapshot.workspaceId,
+    transitionId: artifacts.reviewSnapshot.transitionId,
+    reviewDigest: artifacts.reviewSnapshot.review.digest,
+    supersedesSnapshotId: null,
+    supersedesSnapshotDigest: null,
+    snapshot: artifacts.reviewSnapshot,
+    changeProjection: artifacts.changeProjection,
+    createdAt: artifacts.reviewSnapshot.createdAt,
+  };
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: route responses are intentionally schema-flexible here.
 type ApiResponse = any;
 
@@ -308,7 +331,10 @@ describe('Workspace routes', () => {
     storageMock.findProjectById.mockClear();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
+    storageMock.getLatestTransitionReviewSnapshot.mockReset();
+    storageMock.getTransitionReviewSnapshot.mockReset();
     storageMock.insertYOpsLogEntry.mockClear();
+    storageMock.listTransitionReviewSnapshots.mockReset();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
     transitionMock.reviewWorkspaceTransition.mockReset();
@@ -495,6 +521,89 @@ describe('Workspace routes', () => {
       expect.anything(),
       expect.objectContaining({ transitionId: mockTransitionId })
     );
+  });
+
+  it('reads immutable Workspace ReviewSnapshots without re-deriving Transition facts', async () => {
+    const stored = mockStoredReviewSnapshot('committed');
+    storageMock.listTransitionReviewSnapshots.mockResolvedValueOnce([stored]);
+    storageMock.getLatestTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+
+    const listed = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots?transition_id=${mockTransitionId}&limit=5`
+    );
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: {
+          snapshots: [
+            expect.objectContaining({
+              snapshot_id: stored.snapshotId,
+              snapshot_digest: stored.snapshotDigest,
+              change_projection: expect.objectContaining({ status: 'committed' }),
+            }),
+          ],
+        },
+      })
+    );
+    expect(storageMock.listTransitionReviewSnapshots).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        projectId: 'proj_sources',
+        workspaceId: 'workspace_prd_handoff',
+        transitionId: mockTransitionId,
+        limit: 5,
+      })
+    );
+
+    const latest = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/latest?transition_id=${mockTransitionId}`
+    );
+    expect(latest.status).toBe(200);
+    await expect(latest.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshot_id: stored.snapshotId,
+          review_digest: stored.reviewDigest,
+        }),
+      })
+    );
+    expect(storageMock.getLatestTransitionReviewSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        projectId: 'proj_sources',
+        workspaceId: 'workspace_prd_handoff',
+        transitionId: mockTransitionId,
+      })
+    );
+
+    const fetched = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`
+    );
+    expect(fetched.status).toBe(200);
+    await expect(fetched.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshot: expect.objectContaining({ snapshotId: stored.snapshotId }),
+        }),
+      })
+    );
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
+    expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a ReviewSnapshot through a different Workspace route', async () => {
+    const stored = mockStoredReviewSnapshot('reviewing');
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce({
+      ...stored,
+      workspaceId: 'workspace_elsewhere',
+    });
+
+    const fetched = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`
+    );
+
+    expect(fetched.status).toBe(404);
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {

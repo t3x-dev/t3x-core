@@ -225,6 +225,13 @@ function ReviewSnapshotSummary({
     reviewSnapshot?.review.precondition.policyDigest ??
     changeProjection?.review.policyDigest ??
     null;
+  const changeHref = reviewSnapshot
+    ? reviewSnapshotHref(
+        reviewSnapshot.projectId,
+        reviewSnapshot.workspaceId,
+        reviewSnapshot.snapshotId
+      )
+    : null;
 
   return (
     <section
@@ -241,13 +248,23 @@ function ReviewSnapshotSummary({
             read-only.
           </p>
         </div>
-        {changeProjection ? (
-          <Badge variant={projectionBadgeVariant(changeProjection.status)}>
-            {projectionStatusLabel(changeProjection.status)}
-          </Badge>
-        ) : (
-          <Badge variant="outline">Immutable</Badge>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {changeHref ? (
+            <a
+              className="text-xs font-semibold text-[var(--accent-commit)] hover:underline"
+              href={changeHref}
+            >
+              Open Changes
+            </a>
+          ) : null}
+          {changeProjection ? (
+            <Badge variant={projectionBadgeVariant(changeProjection.status)}>
+              {projectionStatusLabel(changeProjection.status)}
+            </Badge>
+          ) : (
+            <Badge variant="outline">Immutable</Badge>
+          )}
+        </div>
       </div>
       <dl className="mt-3 grid gap-2 text-xs text-[var(--text-secondary)] sm:grid-cols-2 xl:grid-cols-3">
         {snapshotId ? <SnapshotMeta label="Snapshot" value={shortToken(snapshotId)} /> : null}
@@ -397,6 +414,10 @@ function shortToken(value: string): string {
   const normalized = value.startsWith('sha256:') ? value.slice('sha256:'.length) : value;
   if (normalized.length <= 18) return normalized;
   return `${normalized.slice(0, 12)}…${normalized.slice(-6)}`;
+}
+
+function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
+  return `/project/${encodeURIComponent(projectId)}/changes/${encodeURIComponent(workspaceId)}/${encodeURIComponent(snapshotId)}`;
 }
 
 function operationLabel(operation: unknown, index: number): string {

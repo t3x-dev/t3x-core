@@ -2,6 +2,7 @@ import {
   decideProjectWorkspaceSourceRevert,
   decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
+  getWorkspaceTransitionReviewSnapshot,
   listProjectWorkspaces,
   reviewProjectWorkspaceSourceRevert,
   reviewProjectWorkspaceSourceTransition,
@@ -17,6 +18,7 @@ import {
   type WorkspaceTransitionOutcome,
   type WorkspaceTransitionPrecondition,
   type WorkspaceTransitionReviewResponse,
+  type WorkspaceTransitionReviewSnapshotResponse,
 } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate, WorkspaceSourceArtifact } from '@/types/workspaces';
 
@@ -55,6 +57,15 @@ export function decideWorkspaceTransition(
   }
 ): Promise<WorkspaceTransitionDecisionResponse> {
   return decideProjectWorkspaceTransition(projectId, workspaceId, input);
+}
+
+export function fetchWorkspaceTransitionReviewSnapshot(
+  projectId: string,
+  workspaceId: string,
+  snapshotId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceTransitionReviewSnapshotResponse> {
+  return getWorkspaceTransitionReviewSnapshot(projectId, workspaceId, snapshotId, signal);
 }
 
 export function reviewWorkspaceSourceTransition(

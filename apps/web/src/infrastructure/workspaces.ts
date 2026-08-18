@@ -1,4 +1,9 @@
-import { type ChangeProjectionV1, type ReviewSnapshotV1, T3xApiError } from '@t3x-dev/api-client';
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  T3xApiError,
+  type WorkspaceTransitionReviewSnapshotEnvelope,
+} from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import type {
   WorkspaceCandidate,
@@ -65,6 +70,8 @@ export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransition
   commit?: unknown;
   workspace?: WorkspaceCandidate;
 }
+
+export type WorkspaceTransitionReviewSnapshotResponse = WorkspaceTransitionReviewSnapshotEnvelope;
 
 export interface WorkspaceSourceReplaceScalarOperation {
   op: 'replace_scalar';
@@ -149,6 +156,27 @@ export async function getWorkspaceControlPlaneTransition(
 ): Promise<WorkspaceControlPlaneTransitionResponse> {
   try {
     return await getSharedApiClient().inspectTransition(projectId, transitionId, { signal });
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      throw new ApiError(error.code, error.message, error.details);
+    }
+    throw error;
+  }
+}
+
+export async function getWorkspaceTransitionReviewSnapshot(
+  projectId: string,
+  workspaceId: string,
+  snapshotId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceTransitionReviewSnapshotResponse> {
+  try {
+    return await getSharedApiClient().workspaces.getReviewSnapshot(
+      projectId,
+      workspaceId,
+      snapshotId,
+      { signal }
+    );
   } catch (error) {
     if (error instanceof T3xApiError) {
       throw new ApiError(error.code, error.message, error.details);

@@ -735,6 +735,100 @@ describe('T3xClient', () => {
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
       );
     });
+
+    it('reads immutable Workspace ReviewSnapshots through the capability facade', async () => {
+      const snapshot = {
+        snapshot_id: 'rvs_88888888888888888888888888888888',
+        snapshot_digest: digest('8'),
+        project_id: 'proj/1',
+        workspace_id: 'workspace/1',
+        transition_id: TRANSITION_ID,
+        review_digest: digest('9'),
+        supersedes_snapshot_id: null,
+        supersedes_snapshot_digest: null,
+        snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+          },
+        },
+        created_at: '2026-08-17T00:00:00.000Z',
+      };
+      const fn = mockFetch(successResponse(snapshot));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.getReviewSnapshot(
+          'proj/1',
+          'workspace/1',
+          'rvs_88888888888888888888888888888888'
+        )
+      ).toEqual(snapshot);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots/rvs_88888888888888888888888888888888'
+        ),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('lists and filters immutable Workspace ReviewSnapshots', async () => {
+      const data = { snapshots: [] };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.listReviewSnapshots('proj/1', 'workspace/1', {
+          transition_id: TRANSITION_ID,
+          limit: 20,
+        })
+      ).toEqual(data);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain(
+        '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots'
+      );
+      expect(url).toContain(`transition_id=${TRANSITION_ID}`);
+      expect(url).toContain('limit=20');
+    });
+
+    it('gets the latest immutable Workspace ReviewSnapshot', async () => {
+      const snapshot = {
+        snapshot_id: 'rvs_88888888888888888888888888888888',
+        snapshot_digest: digest('8'),
+        project_id: 'proj/1',
+        workspace_id: 'workspace/1',
+        transition_id: TRANSITION_ID,
+        review_digest: digest('9'),
+        supersedes_snapshot_id: null,
+        supersedes_snapshot_digest: null,
+        snapshot: {},
+        change_projection: {},
+        created_at: '2026-08-17T00:00:00.000Z',
+      };
+      const fn = mockFetch(successResponse(snapshot));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.getLatestReviewSnapshot('proj/1', 'workspace/1', {
+          transition_id: TRANSITION_ID,
+        })
+      ).toEqual(snapshot);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain(
+        '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots/latest'
+      );
+      expect(url).toContain(`transition_id=${TRANSITION_ID}`);
+    });
   });
 
   // =========================================================================
