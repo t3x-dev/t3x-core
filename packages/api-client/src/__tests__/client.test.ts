@@ -548,6 +548,193 @@ describe('T3xClient', () => {
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
       );
     });
+
+    it('reviews a Workspace Transition through the explicit review boundary', async () => {
+      const precondition = {
+        workspace_revision: 4,
+        ref_head: null,
+        effect_digest: digest('1'),
+        proposal_digest: digest('2'),
+        statement_digests: [digest('3')],
+        policy_digest: digest('4'),
+      };
+      const data = {
+        transition_id: TRANSITION_ID,
+        transition: transitionView().transition,
+        precondition,
+        review_snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+          createdAt: '2026-08-17T00:00:00.000Z',
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          request: {
+            kind: 'structured_yops',
+            id: 'request:workspace-review',
+            createdAt: '2026-08-17T00:00:00.000Z',
+          },
+          review: {
+            digest: digest('9'),
+            precondition: {
+              workspaceRevision: 4,
+              refName: 'main',
+              refHead: null,
+              effectDigest: digest('1'),
+              proposalDigest: digest('2'),
+              statementDigests: [digest('3')],
+              policyDigest: digest('4'),
+            },
+          },
+          objects: {
+            base: { kind: 'state', schema: 't3x/state/v1', digest: digest('5') },
+            result: { kind: 'state', schema: 't3x/state/v1', digest: digest('6') },
+            effect: { kind: 'effect', schema: 't3x/effect/v1', digest: digest('1') },
+            proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: digest('2') },
+            statements: [],
+          },
+          transition: transitionView().transition,
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+            snapshotCreatedAt: '2026-08-17T00:00:00.000Z',
+          },
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          title: 'Workspace review',
+          status: 'reviewing',
+          review: {
+            digest: digest('9'),
+            refName: 'main',
+            refHead: null,
+            workspaceRevision: 4,
+            policyDigest: digest('4'),
+          },
+          objects: {},
+          checks: {},
+          actions: {},
+        },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        content: { trees: [], relations: [] },
+        why: 'Review workspace',
+        if_revision: 4,
+      };
+
+      expect(await client.workspaces.reviewTransition('proj/1', 'workspace/1', input)).toEqual(
+        data
+      );
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('decides a Workspace Transition through the explicit decide boundary', async () => {
+      const precondition = {
+        workspace_revision: 4,
+        ref_head: null,
+        effect_digest: digest('1'),
+        proposal_digest: digest('2'),
+        statement_digests: [digest('3')],
+        policy_digest: digest('4'),
+      };
+      const data = {
+        transition_id: TRANSITION_ID,
+        transition: transitionView().transition,
+        precondition,
+        decision_digest: digest('d'),
+        review_snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+          createdAt: '2026-08-17T00:00:01.000Z',
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          request: {
+            kind: 'structured_yops',
+            id: 'request:workspace-review',
+            createdAt: '2026-08-17T00:00:00.000Z',
+          },
+          review: {
+            digest: digest('9'),
+            precondition: {
+              workspaceRevision: 4,
+              refName: 'main',
+              refHead: null,
+              effectDigest: digest('1'),
+              proposalDigest: digest('2'),
+              statementDigests: [digest('3')],
+              policyDigest: digest('4'),
+            },
+          },
+          objects: {
+            base: { kind: 'state', schema: 't3x/state/v1', digest: digest('5') },
+            result: { kind: 'state', schema: 't3x/state/v1', digest: digest('6') },
+            effect: { kind: 'effect', schema: 't3x/effect/v1', digest: digest('1') },
+            proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: digest('2') },
+            statements: [],
+          },
+          transition: transitionView().transition,
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+            snapshotCreatedAt: '2026-08-17T00:00:01.000Z',
+          },
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          title: 'Workspace review',
+          status: 'committed',
+          review: {
+            digest: digest('9'),
+            refName: 'main',
+            refHead: null,
+            workspaceRevision: 4,
+            policyDigest: digest('4'),
+          },
+          objects: {},
+          checks: {},
+          actions: {},
+        },
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 5 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        transition_id: TRANSITION_ID,
+        content: { trees: [], relations: [] },
+        outcome: 'accepted' as const,
+        precondition,
+      };
+
+      expect(await client.workspaces.decideTransition('proj/1', 'workspace/1', input)).toEqual(
+        data
+      );
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/decide'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
   });
 
   // =========================================================================
