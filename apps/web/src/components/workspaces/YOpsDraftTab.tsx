@@ -1121,7 +1121,13 @@ function CommitReviewView({
           ? 'Ready'
           : 'Return';
   const displayedReview = pendingView
-    ? { error: null, loading: false, view: pendingView }
+    ? {
+        changeProjection: transitionState.changeProjection,
+        error: null,
+        loading: false,
+        reviewSnapshot: transitionState.reviewSnapshot,
+        view: pendingView,
+      }
     : transitionReview;
 
   return (

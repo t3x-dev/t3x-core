@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -131,6 +132,77 @@ function transitionView(): Extract<TransitionViewV1, { mode: 'transition' }> {
   };
 }
 
+function reviewArtifacts(
+  view: Extract<TransitionViewV1, { mode: 'transition' }>,
+  status: ChangeProjectionV1['status']
+) {
+  const objects: ReviewSnapshotV1['objects'] = {
+    base: view.change.base,
+    result: view.change.result,
+    effect: view.audit.effect,
+    proposal: view.audit.proposal,
+    statements: view.audit.statements.map((statement) => statement.statement),
+    ...(view.audit.decision ? { decision: view.audit.decision } : {}),
+    ...(view.audit.commit ? { commit: view.audit.commit } : {}),
+  };
+  const reviewSnapshot: ReviewSnapshotV1 = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: 'rvs_review_snapshot_panel',
+    snapshotDigest: digest('9'),
+    createdAt: '2026-07-30T00:00:00.000Z',
+    projectId: 'proj_1',
+    workspaceId: 'workspace_prd_handoff',
+    transitionId: 'trn_review_panel',
+    request: {
+      kind: 'structured_yops',
+      id: 'request:workspace_prd_handoff',
+      createdAt: '2026-07-30T00:00:00.000Z',
+    },
+    review: {
+      digest: digest('8'),
+      precondition: {
+        workspaceRevision: 7,
+        refName: 'feature/prd-audience',
+        refHead: null,
+        effectDigest: view.audit.effect.digest,
+        proposalDigest: view.audit.proposal.digest,
+        statementDigests: objects.statements.map((statement) => statement.digest),
+        policyDigest: digest('1'),
+      },
+    },
+    objects,
+    transition: view,
+  };
+  const changeProjection: ChangeProjectionV1 = {
+    schema: 't3x.application/change-projection/v1',
+    version: 1,
+    authoritative: false,
+    source: {
+      kind: 'review_snapshot',
+      snapshotId: reviewSnapshot.snapshotId,
+      snapshotDigest: reviewSnapshot.snapshotDigest,
+      snapshotCreatedAt: reviewSnapshot.createdAt,
+    },
+    projectId: reviewSnapshot.projectId,
+    workspaceId: reviewSnapshot.workspaceId,
+    transitionId: reviewSnapshot.transitionId,
+    title: 'Reduce device log volume',
+    status,
+    review: {
+      digest: reviewSnapshot.review.digest,
+      refName: reviewSnapshot.review.precondition.refName,
+      refHead: reviewSnapshot.review.precondition.refHead,
+      workspaceRevision: reviewSnapshot.review.precondition.workspaceRevision,
+      policyDigest: reviewSnapshot.review.precondition.policyDigest,
+    },
+    objects,
+    checks: view.checks,
+    actions: view.capabilities,
+  };
+  return { changeProjection, reviewSnapshot };
+}
+
 describe('TransitionReviewPanel', () => {
   it('renders a verified Transition in task language from the shared view', () => {
     render(<TransitionReviewPanel error={null} loading={false} view={transitionView()} />);
@@ -206,5 +278,30 @@ describe('TransitionReviewPanel', () => {
     );
     expect(screen.getByText('Awaiting decision')).toBeInTheDocument();
     expect(screen.queryByText(/saved with verified history/i)).not.toBeInTheDocument();
+  });
+
+  it('renders ReviewSnapshot and derived Changes projection metadata when present', () => {
+    const view = transitionView();
+    const { changeProjection, reviewSnapshot } = reviewArtifacts(view, 'committed');
+
+    render(
+      <TransitionReviewPanel
+        changeProjection={changeProjection}
+        error={null}
+        loading={false}
+        reviewSnapshot={reviewSnapshot}
+        view={view}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Review snapshot' })).toHaveTextContent(
+      'Immutable ReviewSnapshot'
+    );
+    expect(screen.getByRole('region', { name: 'Review snapshot' })).toHaveTextContent(
+      'Changes projection: Reduce device log volume'
+    );
+    expect(screen.getByText('Committed')).toBeInTheDocument();
+    expect(screen.getByText('feature/prd-audience')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
   });
 });

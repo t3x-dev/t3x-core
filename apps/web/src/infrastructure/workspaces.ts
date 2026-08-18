@@ -1,4 +1,4 @@
-import { T3xApiError } from '@t3x-dev/api-client';
+import { type ChangeProjectionV1, type ReviewSnapshotV1, T3xApiError } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import type {
   WorkspaceCandidate,
@@ -56,6 +56,8 @@ export interface WorkspaceTransitionReviewResponse {
   transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
 }
 
 export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransitionReviewResponse {
