@@ -324,7 +324,7 @@ export function prepareRepositoryYOpsStateWrite(
     }),
     parents,
     objects: [input.base, result, ...parents],
-    ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+    ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: [...input.yopsLogIds] }),
   };
 }
 

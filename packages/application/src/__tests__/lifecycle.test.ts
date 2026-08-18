@@ -5,6 +5,10 @@ import {
   assertTransitionReviewPrecondition,
   buildTransitionCommitCommand,
   buildTransitionDecisionCommand,
+  decisionRationale,
+  isGeneratedProposalPreparation,
+  normalizedTransitionReviewPrecondition,
+  sameTransitionPolicyResource,
   TransitionDecisionMembershipError,
   type TransitionReviewPrecondition,
   TransitionReviewStaleError,
@@ -29,6 +33,42 @@ function precondition(): TransitionReviewPrecondition {
 }
 
 describe('transition lifecycle rules', () => {
+  it('keeps Decision rationale rules closed by outcome', () => {
+    const actor = { kind: 'human' as const, id: 'human:reviewer' };
+
+    expect(
+      decisionRationale({
+        outcome: 'overridden',
+        actor,
+        rationale: '  Reviewed and accepted with documented risk.  ',
+      })
+    ).toEqual({
+      mode: 'authored',
+      value: 'Reviewed and accepted with documented risk.',
+      evidence: [],
+    });
+    expect(
+      decisionRationale({
+        outcome: 'accepted',
+        actor,
+      })
+    ).toEqual({ mode: 'unspecified' });
+    expect(() =>
+      decisionRationale({
+        outcome: 'accepted',
+        actor,
+        rationale: 'accepted decisions do not carry override rationale',
+      })
+    ).toThrow('Only an overridden Decision accepts an authored rationale');
+    expect(() =>
+      decisionRationale({
+        outcome: 'overridden',
+        actor,
+        rationale: '   ',
+      })
+    ).toThrow('Override requires a non-empty authored rationale');
+  });
+
   it('normalizes Decision command facts and review digest from sorted preconditions', () => {
     const command = buildTransitionDecisionCommand({
       outcome: 'accepted',
@@ -50,20 +90,49 @@ describe('transition lifecycle rules', () => {
     expect(command.reviewDigest).toMatch(/^digest:/);
   });
 
-  it('rejects stale review facts before a Decision can be issued', () => {
-    const subject = graph();
+  it('normalizes review preconditions without mutating caller facts', () => {
+    const statementDigests = [`sha256:${'b'.repeat(64)}`, `sha256:${'a'.repeat(64)}`];
+    const facts = { ...precondition(), statementDigests };
 
+    expect(normalizedTransitionReviewPrecondition(facts)).toMatchObject({
+      statement_digests: [`sha256:${'a'.repeat(64)}`, `sha256:${'b'.repeat(64)}`],
+    });
+    expect(statementDigests).toEqual([`sha256:${'b'.repeat(64)}`, `sha256:${'a'.repeat(64)}`]);
+  });
+
+  it('rejects any stale review fact before a Decision can be issued', () => {
+    const subject = graph();
+    const base = precondition();
+    const facts = {
+      graph: subject,
+      workspaceRevision: subject.membership.workspaceRevision,
+      refHead: subject.membership.refHead,
+      policyDigest: `sha256:${'e'.repeat(64)}`,
+    };
+    const staleCases: TransitionReviewPrecondition[] = [
+      { ...base, workspaceRevision: 999 },
+      { ...base, refName: 'feature' },
+      { ...base, refHead: `sha256:${'1'.repeat(64)}` },
+      { ...base, effectDigest: `sha256:${'2'.repeat(64)}` },
+      { ...base, proposalDigest: `sha256:${'3'.repeat(64)}` },
+      { ...base, policyDigest: `sha256:${'4'.repeat(64)}` },
+      { ...base, statementDigests: [`sha256:${'5'.repeat(64)}`] },
+    ];
+
+    for (const stale of staleCases) {
+      expect(() =>
+        assertTransitionReviewPrecondition({
+          precondition: stale,
+          facts,
+        })
+      ).toThrow(TransitionReviewStaleError);
+    }
     expect(() =>
       assertTransitionReviewPrecondition({
-        precondition: { ...precondition(), workspaceRevision: 999 },
-        facts: {
-          graph: subject,
-          workspaceRevision: subject.membership.workspaceRevision,
-          refHead: subject.membership.refHead,
-          policyDigest: `sha256:${'e'.repeat(64)}`,
-        },
+        precondition: base,
+        facts,
       })
-    ).toThrow(TransitionReviewStaleError);
+    ).not.toThrow();
   });
 
   it('binds Decisions to the exact Transition Proposal descriptor', () => {
@@ -110,5 +179,28 @@ describe('transition lifecycle rules', () => {
       workspace_projection: { kind: 'source_commit' },
     });
     expect(command.requestDigest).toMatch(/^digest:/);
+  });
+
+  it('compares exact policy resources and recognizes generated Proposal preparation', () => {
+    const resource = {
+      uri: 't3x://project/policies/main',
+      mediaType: 'application/vnd.t3x.acceptance-policy+json',
+      digest: `sha256:${'f'.repeat(64)}`,
+    } as const;
+
+    expect(sameTransitionPolicyResource(resource, { ...resource })).toBe(true);
+    expect(
+      sameTransitionPolicyResource(resource, {
+        ...resource,
+        digest: `sha256:${'0'.repeat(64)}`,
+      })
+    ).toBe(false);
+    expect(
+      isGeneratedProposalPreparation({
+        schema: 't3x.dev/proposal-generation-preparation/v1',
+        posture: 'source_supported',
+      })
+    ).toBe(true);
+    expect(isGeneratedProposalPreparation({ schema: 'test/preparation' })).toBe(false);
   });
 });

@@ -101,6 +101,46 @@ describe('repository writer preparation', () => {
     });
   });
 
+  it('captures caller-owned evidence and YOps log ids as preparation snapshots', () => {
+    const base = createYOpsState({ service: { enabled: false } });
+    const target = createYOpsState({ service: { enabled: true } });
+    const evidence = [
+      {
+        resource: {
+          uri: 't3x://projects/project_1/conversations/c1/turns/t1',
+          mediaType: 'text/plain;charset=utf-8',
+          digest: `sha256:${'e'.repeat(64)}` as const,
+        },
+        locator: { scheme: 't3x.text-quote/v1', value: { quote: 'original evidence' } },
+      },
+    ];
+    const yopsLogIds = ['yop_1'];
+
+    const prepared = prepareRepositoryYOpsStateWrite({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: null,
+      base,
+      target,
+      actor: ACTOR,
+      rationale: 'Exact target State was reviewed.',
+      evidence,
+      yopsLogIds,
+      recordedAt: RECORDED_AT,
+    });
+    evidence[0]!.locator.value.quote = 'mutated after preparation';
+    yopsLogIds.push('yop_2');
+
+    expect(prepared.proposal.predicate.rationale).toMatchObject({
+      evidence: [
+        {
+          locator: { value: { quote: 'original evidence' } },
+        },
+      ],
+    });
+    expect(prepared.yopsLogIds).toEqual(['yop_1']);
+  });
+
   it('builds a deterministic two-parent semantic merge bundle', async () => {
     const mergeBaseState = createRepositorySemanticState(
       content([{ key: 'shared', slots: { value: 'base' }, children: [] }])
