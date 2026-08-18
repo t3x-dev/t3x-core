@@ -573,6 +573,41 @@ function parseTextResult(result: { content: Array<{ type?: string; text?: string
   return JSON.parse(result.content[0].text ?? '{}');
 }
 
+function seedCommit(input: {
+  hash: string;
+  projectId: string;
+  parents?: string[];
+  budget: number;
+  destination: string;
+  message: string;
+  branch?: string;
+  committedAt?: string;
+}) {
+  state.commits.set(input.hash, {
+    hash: input.hash,
+    schema: 't3x/commit/v2',
+    parents: input.parents ?? [],
+    author: { type: 'human', name: 'mcp' },
+    committed_at: input.committedAt ?? '2026-04-22T00:00:00.000Z',
+    content: {
+      trees: [
+        {
+          key: 'trip',
+          slots: { budget: input.budget, destination: input.destination },
+          children: [],
+        },
+      ],
+      relations: [],
+    },
+    project_id: input.projectId,
+    message: input.message,
+    branch: input.branch ?? 'main',
+    provenance: { method: 'human_curation' },
+    yops_log_ids: [],
+    sources: null,
+  });
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -607,7 +642,7 @@ describe('MCP protocol tool flows', () => {
     await client.close();
   });
 
-  it('runs a create_project -> extract -> commit -> diff flow over the MCP protocol', async () => {
+  it('stops storage-backed commit writes before they bypass the API/application kernel', async () => {
     const { client } = await connectClientAndServer();
 
     const project = parseTextResult(
@@ -627,46 +662,54 @@ describe('MCP protocol tool flows', () => {
       })
     );
 
-    const firstCommit = parseTextResult(
-      await client.callTool({
-        name: 't3x_commit',
-        arguments: {
-          project_id: project.project_id,
-          draft_id: firstExtract.draft_id,
-          message: 'First snapshot',
-        },
-      })
-    );
-    expect(firstCommit.parents).toEqual([]);
+    const commit = await client.callTool({
+      name: 't3x_commit',
+      arguments: {
+        project_id: project.project_id,
+        draft_id: firstExtract.draft_id,
+        message: 'First snapshot',
+      },
+    });
 
-    const secondExtract = parseTextResult(
+    expect(commit.isError).toBe(true);
+    expect(commit.content[0].text).toContain('t3x_commit requires T3X_MCP_BACKEND=api');
+    expect(commit.content[0].text).toContain('shared API/application command');
+
+    await client.close();
+  });
+
+  it('runs diff over seeded commits without relying on storage-backed commit writes', async () => {
+    const { client } = await connectClientAndServer();
+
+    const project = parseTextResult(
       await client.callTool({
-        name: 't3x_extract',
-        arguments: {
-          project_id: project.project_id,
-          conversation_id: firstExtract.conversation_id,
-          text: 'Add Kyoto and budget 8000',
-        },
+        name: 't3x_admin',
+        arguments: { action: 'create_project', name: 'Protocol Diff Flow' },
       })
     );
 
-    const secondCommit = parseTextResult(
-      await client.callTool({
-        name: 't3x_commit',
-        arguments: {
-          project_id: project.project_id,
-          draft_id: secondExtract.draft_id,
-          message: 'Second snapshot',
-        },
-      })
-    );
-    expect(secondCommit.parents).toEqual([firstCommit.commit_hash]);
+    seedCommit({
+      hash: 'sha256:protocol-base',
+      projectId: project.project_id,
+      budget: 5000,
+      destination: 'Tokyo',
+      message: 'Base snapshot',
+    });
+    seedCommit({
+      hash: 'sha256:protocol-target',
+      projectId: project.project_id,
+      parents: ['sha256:protocol-base'],
+      budget: 8000,
+      destination: 'Kyoto',
+      message: 'Target snapshot',
+      committedAt: '2026-04-22T00:01:00.000Z',
+    });
 
     const legacyDiff = await client.callTool({
       name: 't3x_diff',
       arguments: {
-        source: firstCommit.commit_hash,
-        target: secondCommit.commit_hash,
+        source: 'sha256:protocol-base',
+        target: 'sha256:protocol-target',
       },
     });
     expect(legacyDiff.isError).toBe(true);
@@ -676,12 +719,14 @@ describe('MCP protocol tool flows', () => {
       await client.callTool({
         name: 't3x_diff',
         arguments: {
-          base: firstCommit.commit_hash,
-          target: secondCommit.commit_hash,
+          base: 'sha256:protocol-base',
+          target: 'sha256:protocol-target',
           project_id: project.project_id,
         },
       })
     );
+    expect(diff.base).toBe('sha256:protocol-base');
+    expect(diff.target).toBe('sha256:protocol-target');
     expect(diff.summary.modified).toBe(1);
 
     await client.close();
@@ -711,26 +756,24 @@ describe('MCP protocol tool flows', () => {
       })
     );
 
-    const extract = parseTextResult(
-      await client.callTool({
-        name: 't3x_extract',
-        arguments: {
-          project_id: project.project_id,
-          text: 'Plan a Tokyo trip with budget 5000',
-        },
-      })
-    );
-
-    const commit = parseTextResult(
-      await client.callTool({
-        name: 't3x_commit',
-        arguments: {
-          project_id: project.project_id,
-          draft_id: extract.draft_id,
-          message: 'Snapshot for leaf generation',
-        },
-      })
-    );
+    const commitHash = 'sha256:seeded-protocol-commit';
+    state.commits.set(commitHash, {
+      hash: commitHash,
+      schema: 't3x/commit/v2',
+      parents: [],
+      author: { type: 'human', name: 'mcp' },
+      committed_at: '2026-04-22T00:00:00.000Z',
+      content: {
+        trees: [{ key: 'trip', slots: { budget: 5000, destination: 'Tokyo' }, children: [] }],
+        relations: [],
+      },
+      project_id: project.project_id,
+      message: 'Seeded snapshot for leaf generation',
+      branch: 'main',
+      provenance: { method: 'human_curation' },
+      yops_log_ids: [],
+      sources: null,
+    });
 
     const leaf = parseTextResult(
       await client.callTool({
@@ -738,7 +781,7 @@ describe('MCP protocol tool flows', () => {
         arguments: {
           action: 'create_leaf',
           project_id: project.project_id,
-          commit_hash: commit.commit_hash,
+          commit_hash: commitHash,
           leaf_type: 'tweet',
           title: 'Trip summary',
           constraints: [
@@ -760,7 +803,7 @@ describe('MCP protocol tool flows', () => {
     );
 
     expect(leaf.type).toBe('tweet');
-    expect(leaf.commit_hash).toBe(commit.commit_hash);
+    expect(leaf.commit_hash).toBe(commitHash);
     expect(generated.leaf_id).toBe(leaf.leaf_id);
     expect(generated.output).toBe(`Generated output for ${leaf.leaf_id}`);
     expect(generated.score).toEqual({
