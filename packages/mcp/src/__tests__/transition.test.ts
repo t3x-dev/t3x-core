@@ -53,6 +53,23 @@ const REVIEW_PRECONDITION = {
   review_digest: `sha256:${'e'.repeat(64)}`,
 };
 
+const SOURCE_ARTIFACT = {
+  format: 't3x.dev/workspace-source-artifact/v1',
+  root_path: 'requirements/device.yaml',
+  resources: [
+    {
+      path: 'requirements/device.yaml',
+      material_id: 'material:source:device',
+      content_hash: `sha256:${'1'.repeat(64)}`,
+    },
+  ],
+};
+
+const SOURCE_ROOT = {
+  material_id: 'material:source:root',
+  content_hash: `sha256:${'2'.repeat(64)}`,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   isApiBackendMock.mockReturnValue(true);
@@ -178,6 +195,119 @@ describe('Transition MCP tools', () => {
     expect(apiClient.proposeTransition).not.toHaveBeenCalled();
   });
 
+  it('maps exact-source imports through the closed Proposal request', async () => {
+    apiClient.proposeTransition.mockResolvedValue({
+      transition_id: 'trn_1',
+      reused: false,
+      view: { transition: { mode: 'transition' } },
+    });
+
+    const result = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:import',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_import',
+      artifact: SOURCE_ARTIFACT,
+      root: SOURCE_ROOT,
+      why: 'Import reviewed source material.',
+      if_revision: 7,
+      actor: { kind: 'service', id: 'service:spoofed' },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(apiClient.proposeTransition).toHaveBeenCalledWith('proj_1', {
+      request_id: 'proposal:import',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_import',
+      artifact: SOURCE_ARTIFACT,
+      root: SOURCE_ROOT,
+      why: 'Import reviewed source material.',
+      if_revision: 7,
+    });
+  });
+
+  it('maps exact-source edits without accepting server-derived root material facts', async () => {
+    const operations = [
+      {
+        op: 'replace_scalar',
+        path: ['frontmatter', 'title'],
+        expect: 'Draft title',
+        value: 'Reviewed title',
+      },
+    ];
+    apiClient.proposeTransition.mockResolvedValue({
+      transition_id: 'trn_1',
+      reused: false,
+      view: { transition: { mode: 'transition' } },
+    });
+
+    const result = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:edit',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_edit',
+      artifact: SOURCE_ARTIFACT,
+      operations,
+      root: { material_id: 'caller:root-spoof' },
+      observation_scope: { completeness: 'complete', sources: [] },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(apiClient.proposeTransition).toHaveBeenCalledWith('proj_1', {
+      request_id: 'proposal:edit',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_edit',
+      artifact: SOURCE_ARTIFACT,
+      operations,
+    });
+  });
+
+  it('maps exact-source reverts from a CommitV2 id only', async () => {
+    apiClient.proposeTransition.mockResolvedValue({
+      transition_id: 'trn_1',
+      reused: false,
+      view: { transition: { mode: 'transition' } },
+    });
+
+    const result = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:revert',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_revert',
+      commit_id: `sha256:${'3'.repeat(64)}`,
+      artifact: SOURCE_ARTIFACT,
+      operations: [{ replace_scalar: { path: ['spoofed'], value: 'ignored' } }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(apiClient.proposeTransition).toHaveBeenCalledWith('proj_1', {
+      request_id: 'proposal:revert',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_revert',
+      commit_id: `sha256:${'3'.repeat(64)}`,
+    });
+  });
+
+  it('rejects incomplete exact-source proposal requests before touching the API client', async () => {
+    const missingImportSelector = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:import:missing',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_import',
+      artifact: SOURCE_ARTIFACT,
+    });
+    const missingRevertCommit = await proposeTransitionHandler({
+      project_id: 'proj_1',
+      request_id: 'proposal:revert:missing',
+      workspace_id: 'ws_1',
+      kind: 'exact_source_revert',
+    });
+
+    expect(missingImportSelector.isError).toBe(true);
+    expect(missingRevertCommit.isError).toBe(true);
+    expect(apiClient.proposeTransition).not.toHaveBeenCalled();
+  });
+
   it('maps inspect and verify without collapsing the task-oriented view', async () => {
     apiClient.inspectTransition.mockResolvedValue({
       transition_id: 'trn_1',
@@ -237,6 +367,37 @@ describe('Transition MCP tools', () => {
       predicate: { outcome: 'reviewed' },
       subjects: ['proposal'],
     });
+  });
+
+  it('rejects Statement attachment without valid graph roles before touching the API client', async () => {
+    const missingSubjects = await attachStatementHandler({
+      project_id: 'proj_1',
+      transition_id: 'trn_1',
+      request_id: 'statement:missing-subjects',
+      predicate_type: 'example.dev/review/v1',
+      predicate: { outcome: 'reviewed' },
+      subjects: [],
+    });
+    const invalidSubject = await attachStatementHandler({
+      project_id: 'proj_1',
+      transition_id: 'trn_1',
+      request_id: 'statement:invalid-subject',
+      predicate_type: 'example.dev/review/v1',
+      predicate: { outcome: 'reviewed' },
+      subjects: ['actor'],
+    });
+    const missingPredicate = await attachStatementHandler({
+      project_id: 'proj_1',
+      transition_id: 'trn_1',
+      request_id: 'statement:missing-predicate',
+      predicate_type: 'example.dev/review/v1',
+      subjects: ['effect'],
+    });
+
+    expect(missingSubjects.isError).toBe(true);
+    expect(invalidSubject.isError).toBe(true);
+    expect(missingPredicate.isError).toBe(true);
+    expect(apiClient.attachTransitionStatement).not.toHaveBeenCalled();
   });
 
   it('records Decisions from review preconditions without forwarding caller authority fields', async () => {

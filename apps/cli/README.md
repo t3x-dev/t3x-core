@@ -6,7 +6,7 @@ Command-line interface for T3X structured-state workflows.
 
 The CLI is a preview/internal surface. It is not part of the current public
 alpha package surface; the public alpha packages are `@t3x-dev/local`,
-`@t3x-dev/yops`, and `@t3x-dev/yschema`.
+`@t3x-dev/yops`, `@t3x-dev/transition`, and `@t3x-dev/yschema`.
 
 ## First-Stage Scope
 
@@ -30,6 +30,105 @@ t3x extract -p proj_abc \
 
 This mode returns a durable Workspace candidate that WebUI can inspect. Raw
 `--text` extraction continues to return a workbench `draft_id` for compatibility.
+
+## Transition Control Plane
+
+`t3x transition` is the canonical CLI surface for the Transition lifecycle. It
+does not construct protocol authority facts locally. The CLI supplies task
+inputs and idempotency keys; the API resolves the Workspace, Source material,
+actor, policy, review digest, Statement issuer, Decision envelope, and ref CAS.
+
+The full lifecycle is:
+
+```text
+propose -> inspect -> verify -> attach-statement* -> decide -> commit
+```
+
+`attach-statement` is optional and intended for allowlisted external evidence.
+It accepts only predicate content and graph roles; the Statement envelope and
+issuer are server-owned.
+
+The command group mirrors the API client one-to-one:
+
+| CLI command | API client method | Mutates history? |
+| --- | --- | --- |
+| `t3x transition propose` | `proposeTransition` | No |
+| `t3x transition inspect` | `inspectTransition` | No |
+| `t3x transition verify` | `verifyTransition` | No, records verification Statements |
+| `t3x transition attach-statement` | `attachTransitionStatement` | No, records external evidence |
+| `t3x transition decide` | `decideTransition` | No, records a Decision |
+| `t3x transition commit` | `commitTransition` | Yes, only after accepted/authorized Decision and exact-head CAS |
+
+The important negative contract is as important as the happy path: the CLI has
+no flags for actor, policy, issuer, workspace projection, observed Statement
+set, or ref head observation beyond `--expected-head`/`--empty-head` at commit
+time. Those facts are server-derived or server-checked.
+
+Structured YOps proposals can come from inline operations or from a
+server-owned extraction candidate:
+
+```bash
+t3x transition propose workspace_abc \
+  -p proj_abc \
+  --request-id proposal:rename-device:1 \
+  --operations-json '[{"set":{"path":"device/name","value":"greenhouse"}}]' \
+  --if-revision 7
+
+t3x transition propose workspace_abc \
+  -p proj_abc \
+  --request-id proposal:from-source:1 \
+  --extraction-candidate-id candidate_abc
+```
+
+Exact-source proposals use the same command with an explicit closed kind:
+
+```bash
+t3x transition propose workspace_abc \
+  -p proj_abc \
+  --request-id proposal:import-source:1 \
+  --kind exact_source_import \
+  --artifact-json '{"format":"t3x.dev/workspace-source-artifact/v1","root_path":"docs/device.yaml"}' \
+  --root-json '{"material_id":"material:source:root"}'
+
+t3x transition propose workspace_abc \
+  -p proj_abc \
+  --request-id proposal:edit-source:1 \
+  --kind exact_source_edit \
+  --artifact-json '{"format":"t3x.dev/workspace-source-artifact/v1","root_path":"docs/device.yaml"}' \
+  --operations-json '[{"op":"replace_scalar","path":["frontmatter","title"],"expect":"Old","value":"Reviewed"}]'
+
+t3x transition propose workspace_abc \
+  -p proj_abc \
+  --request-id proposal:revert-source:1 \
+  --kind exact_source_revert \
+  --commit-id sha256:previous_commit
+```
+
+After proposal:
+
+```bash
+t3x transition inspect trn_abc -p proj_abc --json
+t3x transition verify trn_abc -p proj_abc --request-id verify:trn_abc:1 --json
+
+t3x transition attach-statement trn_abc \
+  -p proj_abc \
+  --request-id statement:ci:1 \
+  --predicate-type example.dev/ci-review/v1 \
+  --predicate-json '{"outcome":"passed"}' \
+  --subjects effect,result
+
+t3x transition decide trn_abc \
+  -p proj_abc \
+  --request-id decision:trn_abc:1 \
+  --outcome accepted \
+  --precondition-json '{"workspace_revision":7,"ref_name":"main","ref_head":null,"effect_digest":"sha256:...","proposal_digest":"sha256:...","statement_digests":[],"policy_digest":null}'
+
+t3x transition commit trn_abc \
+  -p proj_abc \
+  --request-id commit:trn_abc:1 \
+  --decision-digest sha256:decision \
+  --empty-head
+```
 
 ## Core Rule
 
