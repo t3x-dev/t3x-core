@@ -207,6 +207,58 @@ export const transitionVerificationReceipts = pgTable(
 );
 
 /**
+ * Append-only application review snapshots.
+ *
+ * These are durable product review artifacts derived from the immutable
+ * Transition graph. They deliberately keep the full snapshot/projection JSON
+ * out of protocol identity while pinning the exact snapshot digest and review
+ * digest used by client surfaces.
+ */
+export const transitionReviewSnapshots = pgTable(
+  'transition_review_snapshots',
+  {
+    snapshotId: text('snapshot_id').primaryKey(),
+    snapshotDigest: text('snapshot_digest').notNull(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull(),
+    transitionId: text('transition_id')
+      .notNull()
+      .references(() => transitionProposalMemberships.transitionId, { onDelete: 'cascade' }),
+    reviewDigest: text('review_digest').notNull(),
+    supersedesSnapshotId: text('supersedes_snapshot_id'),
+    supersedesSnapshotDigest: text('supersedes_snapshot_digest'),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    changeProjection: jsonb('change_projection').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_transition_review_snapshots_digest').on(table.snapshotDigest),
+    index('idx_transition_review_snapshots_project_workspace_created').on(
+      table.projectId,
+      table.workspaceId,
+      table.createdAt,
+      table.snapshotId
+    ),
+    index('idx_transition_review_snapshots_transition_created').on(
+      table.projectId,
+      table.transitionId,
+      table.createdAt,
+      table.snapshotId
+    ),
+    check(
+      'transition_review_snapshots_snapshot_schema_check',
+      sql`${table.snapshot}->>'schema' = 't3x.application/review-snapshot/v1'`
+    ),
+    check(
+      'transition_review_snapshots_projection_schema_check',
+      sql`${table.changeProjection}->>'schema' = 't3x.application/change-projection/v1'`
+    ),
+  ]
+);
+
+/**
  * Append-only idempotency receipt for trusted Transition commands.
  *
  * A receipt binds an authenticated application request to the immutable object
@@ -404,6 +456,7 @@ export type TransitionStatementMembershipRecord =
   typeof transitionStatementMemberships.$inferSelect;
 export type TransitionVerificationReceiptRecord =
   typeof transitionVerificationReceipts.$inferSelect;
+export type TransitionReviewSnapshotRecord = typeof transitionReviewSnapshots.$inferSelect;
 export type TransitionCommandReceiptRecord = typeof transitionCommandReceipts.$inferSelect;
 export type TransitionCommitRecord = typeof transitionCommits.$inferSelect;
 export type TransitionYOpsLogConsumptionRecord = typeof transitionYOpsLogConsumptions.$inferSelect;

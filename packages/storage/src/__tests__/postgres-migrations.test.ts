@@ -29,17 +29,23 @@ describe('PostgreSQL schema migrations', () => {
       'SELECT version FROM _schema_version WHERE singleton = TRUE'
     );
     const [tables] = await setup.sql.unsafe<
-      Array<{ preparations: string | null; verification_receipts: string | null }>
+      Array<{
+        preparations: string | null;
+        verification_receipts: string | null;
+        review_snapshots: string | null;
+      }>
     >(`
       SELECT
         to_regclass('public.transition_proposal_preparations')::text AS preparations,
-        to_regclass('public.transition_verification_receipts')::text AS verification_receipts
+        to_regclass('public.transition_verification_receipts')::text AS verification_receipts,
+        to_regclass('public.transition_review_snapshots')::text AS review_snapshots
     `);
 
-    expect(version?.version).toBe(65);
+    expect(version?.version).toBe(66);
     expect(tables).toEqual({
       preparations: 'transition_proposal_preparations',
       verification_receipts: 'transition_verification_receipts',
+      review_snapshots: 'transition_review_snapshots',
     });
   });
 
@@ -80,7 +86,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.yschema_composition_snapshots')::text AS "compositionSnapshots"
     `);
 
-    expect(version?.version).toBe(65);
+    expect(version?.version).toBe(66);
     expect(tables).toEqual({
       artifacts: 'yschema_artifacts',
       artifactVersions: 'yschema_artifact_versions',
@@ -126,7 +132,7 @@ describe('PostgreSQL schema migrations', () => {
       WHERE template_id = 'tmpl_v62_legacy'
     `);
 
-    expect(version?.version).toBe(65);
+    expect(version?.version).toBe(66);
     expect(template).toEqual({
       owner_id: null,
       provenance: {
@@ -166,10 +172,37 @@ describe('PostgreSQL schema migrations', () => {
       ORDER BY column_name
     `);
 
-    expect(version?.version).toBe(65);
+    expect(version?.version).toBe(66);
     expect(columns.map((column) => column.column_name)).toEqual([
       'decision_json',
       'decision_revision',
     ]);
+  });
+
+  it('upgrades a v65 database with immutable Transition review snapshots', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      DROP TABLE transition_review_snapshots;
+      UPDATE _schema_version SET version = 65 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresStorage({
+      connectionString: setup.connectionString,
+      maxConnections: 1,
+      onnotice: () => {},
+    });
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [tables] = await setup.sql.unsafe<Array<{ review_snapshots: string | null }>>(`
+      SELECT to_regclass('public.transition_review_snapshots')::text AS review_snapshots
+    `);
+
+    expect(version?.version).toBe(66);
+    expect(tables).toEqual({ review_snapshots: 'transition_review_snapshots' });
   });
 });

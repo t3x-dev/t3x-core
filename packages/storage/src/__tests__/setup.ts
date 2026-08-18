@@ -250,6 +250,31 @@ CREATE TABLE IF NOT EXISTS transition_verification_receipts (
   PRIMARY KEY (project_id, transition_id, request_id)
 );
 
+CREATE TABLE IF NOT EXISTS transition_review_snapshots (
+  snapshot_id TEXT PRIMARY KEY,
+  snapshot_digest TEXT NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  transition_id TEXT NOT NULL
+    REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+  review_digest TEXT NOT NULL,
+  supersedes_snapshot_id TEXT,
+  supersedes_snapshot_digest TEXT,
+  snapshot JSONB NOT NULL,
+  change_projection JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  CONSTRAINT transition_review_snapshots_snapshot_schema_check
+    CHECK (snapshot->>'schema' = 't3x.application/review-snapshot/v1'),
+  CONSTRAINT transition_review_snapshots_projection_schema_check
+    CHECK (change_projection->>'schema' = 't3x.application/change-projection/v1')
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_review_snapshots_digest
+  ON transition_review_snapshots(snapshot_digest);
+CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_project_workspace_created
+  ON transition_review_snapshots(project_id, workspace_id, created_at, snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_transition_created
+  ON transition_review_snapshots(project_id, transition_id, created_at, snapshot_id);
+
 CREATE TABLE IF NOT EXISTS transition_command_receipts (
   transition_id TEXT NOT NULL
     REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,

@@ -495,6 +495,7 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export * from './transition-review-snapshots';
 export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)
 export {

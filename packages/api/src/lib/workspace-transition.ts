@@ -38,6 +38,7 @@ import {
   findWorkspaceDraft,
   getTransitionRefHead,
   resolveTransitionProposalGraph,
+  saveTransitionReviewSnapshot,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
   type TransitionPolicyBinding,
@@ -616,11 +617,13 @@ export async function reviewWorkspaceTransition(
   const prepared = await prepareWorkspaceTransition(db, input);
   const materialized = await materializePreparedWorkspaceTransition(db, prepared);
   const inspection = materializedPreparedInspection({ materialized, prepared });
+  const artifacts = reviewArtifacts({ inspection, createdAt: materialized.membership.createdAt });
+  await persistReviewArtifacts(db, artifacts);
   return {
     transitionId: materialized.membership.transitionId,
     transition: prepared.transition,
     precondition: prepared.precondition,
-    ...reviewArtifacts({ inspection, createdAt: materialized.membership.createdAt }),
+    ...artifacts,
   };
 }
 
@@ -723,6 +726,19 @@ function reviewArtifacts(input: {
     reviewSnapshot,
     changeProjection: projectChangeFromReviewSnapshot(reviewSnapshot),
   };
+}
+
+async function persistReviewArtifacts(
+  db: AnyDB,
+  artifacts: Pick<ReviewWorkspaceTransitionResult, 'changeProjection' | 'reviewSnapshot'>
+): Promise<void> {
+  await saveTransitionReviewSnapshot(db, {
+    projectId: artifacts.reviewSnapshot.projectId,
+    workspaceId: artifacts.reviewSnapshot.workspaceId,
+    transitionId: artifacts.reviewSnapshot.transitionId,
+    snapshot: artifacts.reviewSnapshot as unknown as Record<string, unknown>,
+    changeProjection: artifacts.changeProjection as unknown as Record<string, unknown>,
+  });
 }
 
 function snapshotCreatedAt(inspection: TransitionInspectionView): string {
@@ -883,6 +899,7 @@ export async function decideWorkspaceTransition(
         inspection: decidedInspection,
         createdAt: snapshotCreatedAt(decidedInspection),
       });
+      await persistReviewArtifacts(db, artifacts);
       return {
         transitionId,
         transition: decidedInspection.transition,
@@ -945,6 +962,11 @@ export async function decideWorkspaceTransition(
       throw new WorkspaceTransitionReviewStaleError();
     }
     const committedInspection = inspectionWithTransition(decidedInspection, committed.view);
+    const artifacts = reviewArtifacts({
+      inspection: committedInspection,
+      createdAt: snapshotCreatedAt(committedInspection),
+    });
+    await persistReviewArtifacts(db, artifacts);
     return {
       transitionId,
       transition: committed.view,
@@ -952,10 +974,7 @@ export async function decideWorkspaceTransition(
       decisionDigest: decided.decisionDigest,
       commit: committed.commit,
       workspace: committed.workspace,
-      ...reviewArtifacts({
-        inspection: committedInspection,
-        createdAt: snapshotCreatedAt(committedInspection),
-      }),
+      ...artifacts,
     };
   } catch (error) {
     if (error instanceof TransitionDecisionDeniedError) {
