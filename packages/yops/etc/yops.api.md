@@ -513,6 +513,14 @@ declare const YOPS_RECIPE_PROFILES: readonly [Readonly<{
     notes: readonly string[];
 }>];
 declare const YOPS_RECIPE_REPLACE_PATH_ID: "yops.recipe.replace-path.v1";
+declare const YOPS_RECIPE_CLONE_PATH_ID: "yops.recipe.clone-path.v1";
+declare const YOPS_RECIPE_MOVE_PATH_ID: "yops.recipe.move-path.v1";
+declare const YOPS_RECIPE_RENAME_MAPPING_KEY_ID: "yops.recipe.rename-mapping-key.v1";
+declare const YOPS_RECIPE_APPEND_SEQUENCE_ITEM_ID: "yops.recipe.append-sequence-item.v1";
+declare const YOPS_RECIPE_PICK_MAPPING_KEYS_ID: "yops.recipe.pick-mapping-keys.v1";
+declare const YOPS_RECIPE_OMIT_MAPPING_KEYS_ID: "yops.recipe.omit-mapping-keys.v1";
+declare const YOPS_RECIPE_INVOCATION_SCHEMA: "t3x.dev/yops-recipe-invocation/v1";
+declare const YOPS_RECIPE_EXPANSION_SCHEMA: "t3x.dev/yops-recipe-expansion/v1";
 interface YOpsPresentPathValue {
     readonly state: 'present';
     readonly value: YValue;
@@ -526,8 +534,34 @@ interface CompileYOpsPathReplacementInput {
     readonly base: YOpsPathValue;
     readonly target: YOpsPathValue;
 }
-type YOpsRecipeId = typeof YOPS_RECIPE_REPLACE_PATH_ID;
-type YOpsRecipeInput = CompileYOpsPathReplacementInput;
+interface CompileYOpsPathCloneInput {
+    readonly from: string;
+    readonly to: string;
+    readonly source: YOpsPresentPathValue;
+    readonly destination: YOpsAbsentPathValue;
+}
+interface CompileYOpsPathMoveInput extends CompileYOpsPathCloneInput {
+}
+interface CompileYOpsMappingKeyRenameInput {
+    readonly path: string;
+    readonly base: YOpsPresentPathValue;
+    readonly from: string;
+    readonly to: string;
+}
+interface CompileYOpsSequenceAppendInput {
+    readonly path: string;
+    readonly base: YOpsPresentPathValue;
+    readonly value: YValue;
+}
+interface CompileYOpsMappingKeyOmitInput {
+    readonly path: string;
+    readonly base: YOpsPresentPathValue;
+    readonly keys: readonly string[];
+}
+interface CompileYOpsMappingKeyPickInput extends CompileYOpsMappingKeyOmitInput {
+}
+type YOpsRecipeId = typeof YOPS_RECIPE_REPLACE_PATH_ID | typeof YOPS_RECIPE_CLONE_PATH_ID | typeof YOPS_RECIPE_MOVE_PATH_ID | typeof YOPS_RECIPE_RENAME_MAPPING_KEY_ID | typeof YOPS_RECIPE_APPEND_SEQUENCE_ITEM_ID | typeof YOPS_RECIPE_PICK_MAPPING_KEYS_ID | typeof YOPS_RECIPE_OMIT_MAPPING_KEYS_ID;
+type YOpsRecipeInput = CompileYOpsPathReplacementInput | CompileYOpsPathCloneInput | CompileYOpsPathMoveInput | CompileYOpsMappingKeyRenameInput | CompileYOpsSequenceAppendInput | CompileYOpsMappingKeyOmitInput | CompileYOpsMappingKeyPickInput;
 interface YOpsRecipeCompiler {
     readonly id: YOpsRecipeId;
     readonly profile: typeof YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID;
@@ -535,10 +569,49 @@ interface YOpsRecipeCompiler {
     readonly outputOperationNames: readonly YOpsPrimitiveOperationName[];
     compile(input: YOpsRecipeInput): readonly YOp[];
 }
+interface YOpsRecipeInvocation {
+    readonly schema: typeof YOPS_RECIPE_INVOCATION_SCHEMA;
+    readonly recipeId: YOpsRecipeId;
+    readonly profile: typeof YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID;
+    readonly input: YOpsRecipeInput;
+    readonly why?: string;
+}
+interface YOpsRecipeExpansion {
+    readonly schema: typeof YOPS_RECIPE_EXPANSION_SCHEMA;
+    readonly recipeId: YOpsRecipeId;
+    readonly profile: typeof YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID;
+    readonly outputOperationNames: readonly YOpsPrimitiveOperationName[];
+    readonly operationCount: number;
+    readonly operations: readonly YOp[];
+}
+interface CompileYOpsRecipeInvocationResult {
+    readonly invocation: YOpsRecipeInvocation;
+    readonly invocationCanonicalJson: string;
+    readonly expansion: YOpsRecipeExpansion;
+    readonly expansionCanonicalJson: string;
+    readonly operations: readonly YOp[];
+}
+interface CompileYOpsRecipeInvocationsResult {
+    readonly expansions: readonly CompileYOpsRecipeInvocationResult[];
+    readonly operations: readonly YOp[];
+}
 declare function compileYOpsPathReplacement(input: CompileYOpsPathReplacementInput): readonly YOp[];
+declare function compileYOpsPathClone(input: CompileYOpsPathCloneInput): readonly YOp[];
+declare function compileYOpsPathMove(input: CompileYOpsPathMoveInput): readonly YOp[];
+declare function compileYOpsMappingKeyRename(input: CompileYOpsMappingKeyRenameInput): readonly YOp[];
+declare function compileYOpsMappingKeyPick(input: CompileYOpsMappingKeyPickInput): readonly YOp[];
+declare function compileYOpsSequenceAppend(input: CompileYOpsSequenceAppendInput): readonly YOp[];
+declare function compileYOpsMappingKeyOmit(input: CompileYOpsMappingKeyOmitInput): readonly YOp[];
 declare function listYOpsRecipeCompilers(): readonly YOpsRecipeCompiler[];
 declare function getYOpsRecipeCompiler(id: string): YOpsRecipeCompiler | undefined;
 declare function compileYOpsRecipe(id: YOpsRecipeId, input: YOpsRecipeInput): readonly YOp[];
+declare function createYOpsRecipeInvocation(recipeId: YOpsRecipeId, input: YOpsRecipeInput, options?: {
+    readonly why?: string;
+}): YOpsRecipeInvocation;
+declare function canonicalYOpsRecipeInvocation(invocation: YOpsRecipeInvocation): string;
+declare function canonicalYOpsRecipeExpansion(expansion: YOpsRecipeExpansion): string;
+declare function compileYOpsRecipeInvocation(invocation: YOpsRecipeInvocation): CompileYOpsRecipeInvocationResult;
+declare function compileYOpsRecipeInvocations(invocations: readonly YOpsRecipeInvocation[]): CompileYOpsRecipeInvocationsResult;
 
 /**
  * @yops-dev/core — Zod Schema Validation
@@ -1069,5 +1142,5 @@ declare const spec: YOpsSpec;
 /** The initialized op registry. */
 declare const registry: OpRegistry;
 
-export { type AppendOp, type AssertOp, type CloneOp, type CompileYOpsPathReplacementInput, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, YOPS_OPS_V1_PROFILE_ID, YOPS_PRIMITIVE_OPERATION_NAMES, YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID, YOPS_RECIPE_PROFILES, YOPS_RECIPE_REPLACE_PATH_ID, YOPS_V1_FROZEN_OPERATION_NAMES, YOPS_V1_SPEC_DIGEST, YOPS_V1_SPEC_DIGEST_DOMAIN, type YOp, type YOpCategory, YOpSchema, type YOpsAbsentPathValue, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsPathValue, type YOpsPresentPathValue, type YOpsPrimitiveOperationName, type YOpsRecipeCompiler, type YOpsRecipeId, type YOpsRecipeInput, type YOpsRecipeProfile, type YOpsRecipeProfileId, type YOpsResult, type YOpsSpec, type YOpsV1OperationName, type YOpsWarning, type YValue, applyYOps, canonicalJson, canonicalKey, classifyYOp, compareCodepoints, compareYValues, compileYOpsPathReplacement, compileYOpsRecipe, createEngine, formatYOps, getYOpsRecipeCompiler, listYOpsRecipeCompilers, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
+export { type AppendOp, type AssertOp, type CloneOp, type CompileYOpsMappingKeyOmitInput, type CompileYOpsMappingKeyPickInput, type CompileYOpsMappingKeyRenameInput, type CompileYOpsPathCloneInput, type CompileYOpsPathMoveInput, type CompileYOpsPathReplacementInput, type CompileYOpsRecipeInvocationResult, type CompileYOpsRecipeInvocationsResult, type CompileYOpsSequenceAppendInput, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, YOPS_OPS_V1_PROFILE_ID, YOPS_PRIMITIVE_OPERATION_NAMES, YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID, YOPS_RECIPE_APPEND_SEQUENCE_ITEM_ID, YOPS_RECIPE_CLONE_PATH_ID, YOPS_RECIPE_EXPANSION_SCHEMA, YOPS_RECIPE_INVOCATION_SCHEMA, YOPS_RECIPE_MOVE_PATH_ID, YOPS_RECIPE_OMIT_MAPPING_KEYS_ID, YOPS_RECIPE_PICK_MAPPING_KEYS_ID, YOPS_RECIPE_PROFILES, YOPS_RECIPE_RENAME_MAPPING_KEY_ID, YOPS_RECIPE_REPLACE_PATH_ID, YOPS_V1_FROZEN_OPERATION_NAMES, YOPS_V1_SPEC_DIGEST, YOPS_V1_SPEC_DIGEST_DOMAIN, type YOp, type YOpCategory, YOpSchema, type YOpsAbsentPathValue, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsPathValue, type YOpsPresentPathValue, type YOpsPrimitiveOperationName, type YOpsRecipeCompiler, type YOpsRecipeExpansion, type YOpsRecipeId, type YOpsRecipeInput, type YOpsRecipeInvocation, type YOpsRecipeProfile, type YOpsRecipeProfileId, type YOpsResult, type YOpsSpec, type YOpsV1OperationName, type YOpsWarning, type YValue, applyYOps, canonicalJson, canonicalKey, canonicalYOpsRecipeExpansion, canonicalYOpsRecipeInvocation, classifyYOp, compareCodepoints, compareYValues, compileYOpsMappingKeyOmit, compileYOpsMappingKeyPick, compileYOpsMappingKeyRename, compileYOpsPathClone, compileYOpsPathMove, compileYOpsPathReplacement, compileYOpsRecipe, compileYOpsRecipeInvocation, compileYOpsRecipeInvocations, compileYOpsSequenceAppend, createEngine, createYOpsRecipeInvocation, formatYOps, getYOpsRecipeCompiler, listYOpsRecipeCompilers, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
 ```

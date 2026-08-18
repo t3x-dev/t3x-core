@@ -73,11 +73,35 @@ replay. The package exposes profile metadata so callers can distinguish:
 - `yops.primitives.v2-candidate`: experimental compiler target using
   `assert`, `set`, and `unset` only.
 
-The first built-in compiler is `yops.recipe.replace-path.v1`, a base-aware path
-replacement recipe. It expands to `assert + set` or `assert + unset`, so stale
-base data fails before mutation. Recipe invocation provenance should be recorded
-by proposals or request facts; Effect identity continues to contain only the
-compiled operations.
+Built-in compiler candidates:
+
+- `yops.recipe.replace-path.v1`
+  - base-aware path replacement
+  - expands to `assert + set` or `assert + unset`
+- `yops.recipe.clone-path.v1`
+  - base-aware subtree clone
+  - expands to `assert + assert + set`
+- `yops.recipe.move-path.v1`
+  - base-aware subtree move
+  - expands to `assert + assert + set + unset`
+- `yops.recipe.rename-mapping-key.v1`
+  - base-aware mapping key rename
+  - expands to `assert + set`
+- `yops.recipe.append-sequence-item.v1`
+  - base-aware sequence append
+  - expands to `assert + set`
+- `yops.recipe.pick-mapping-keys.v1`
+  - base-aware mapping key selection
+  - expands to `assert + set`
+- `yops.recipe.omit-mapping-keys.v1`
+  - base-aware mapping key omission
+  - expands to `assert + set`
+
+Every compiler starts with an `assert` over the exact base value it was derived
+from, so stale base data fails before mutation. Recipe invocation provenance can
+be recorded with `t3x.dev/yops-recipe-invocation/v1` and expansion evidence with
+`t3x.dev/yops-recipe-expansion/v1`; Effect identity continues to contain only
+the compiled operations.
 
 ## Install
 
@@ -204,8 +228,19 @@ parseYOpsYaml(yaml: string): ParseResult
 // Classify op category
 classifyYOp(op: YOp): 'ddl' | 'dml' | 'dtl' | 'dcl'
 
-// Compile a base-aware path replacement recipe to primitive YOps
+// Compile base-aware recipes to primitive YOps
 compileYOpsPathReplacement(input): readonly YOp[]
+compileYOpsPathClone(input): readonly YOp[]
+compileYOpsPathMove(input): readonly YOp[]
+compileYOpsMappingKeyRename(input): readonly YOp[]
+compileYOpsSequenceAppend(input): readonly YOp[]
+compileYOpsMappingKeyPick(input): readonly YOp[]
+compileYOpsMappingKeyOmit(input): readonly YOp[]
+
+// Record recipe provenance outside Effect identity, then flatten to YOp[]
+createYOpsRecipeInvocation(recipeId, input, { why }): YOpsRecipeInvocation
+compileYOpsRecipeInvocation(invocation): CompileYOpsRecipeInvocationResult
+compileYOpsRecipeInvocations(invocations): CompileYOpsRecipeInvocationsResult
 ```
 
 ## The Spec
