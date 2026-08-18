@@ -103,6 +103,27 @@ be recorded with `t3x.dev/yops-recipe-invocation/v1` and expansion evidence with
 `t3x.dev/yops-recipe-expansion/v1`; Effect identity continues to contain only
 the compiled operations.
 
+Third-party and application callers should treat the current downshift as this
+bounded contract, not as a replacement for the frozen v1 operation union:
+
+| v1 semantics | Phase 3 recipe status | Replay contract |
+|--------------|-----------------------|-----------------|
+| `assert`, `set`, `unset` | primitive compiler target | may appear directly in compiled Effect operations |
+| path replace/create/remove | `yops.recipe.replace-path.v1` | expands to `assert + set` or `assert + unset` |
+| `clone` | `yops.recipe.clone-path.v1` | expands to source assertion, destination absence assertion, then `set` |
+| `move` | `yops.recipe.move-path.v1` | expands to clone recipe primitives, then `unset` source |
+| `rename` | `yops.recipe.rename-mapping-key.v1` | asserts the parent mapping, then writes the renamed mapping with `set` |
+| `append` | `yops.recipe.append-sequence-item.v1` | asserts the base sequence, then writes the appended sequence with `set` |
+| `pick` | `yops.recipe.pick-mapping-keys.v1` | asserts the base mapping, then writes the selected mapping with `set` |
+| `omit` | `yops.recipe.omit-mapping-keys.v1` | asserts the base mapping, then writes the omitted mapping with `set` |
+| `define`, `drop`, `populate`, `nest`, `split`, `fold`, `merge`, `sort`, `unique` | not downshifted in this tranche | remain valid frozen v1 operations until a recipe has explicit equivalence coverage |
+
+The recipe tests compare the downshifted native semantics above against their
+v1 operation results on the same base document and assert that the recipe
+expansions emit only the primitive profile. That is the intended Phase 3
+acceptance boundary; a full migration plan, dual-read rollout, or package
+release remains outside this batch.
+
 ## Install
 
 This command uses the public npm package.

@@ -135,7 +135,101 @@ describe('YOps recipe compiler profiles', () => {
     );
     expect(getYOpsRecipeCompiler('missing')).toBeUndefined();
   });
+
+  it('keeps downshifted native semantics replay-equivalent while emitting only primitives', () => {
+    const cases: Array<{
+      name: string;
+      base: YValue;
+      nativeOps: readonly YOp[];
+      invocation: ReturnType<typeof createYOpsRecipeInvocation>;
+    }> = [
+      {
+        name: 'clone',
+        base: { defaults: { service: { port: 8080 } }, services: {} },
+        nativeOps: [{ clone: { from: 'defaults/service', to: 'services/api' } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_CLONE_PATH_ID, {
+          from: 'defaults/service',
+          to: 'services/api',
+          source: { state: 'present', value: { port: 8080 } },
+          destination: { state: 'absent' },
+        }),
+      },
+      {
+        name: 'move',
+        base: { draft: { summary: 'Ready', owner: 'agent' }, review: {} },
+        nativeOps: [{ move: { from: 'draft/summary', to: 'review/summary' } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_MOVE_PATH_ID, {
+          from: 'draft/summary',
+          to: 'review/summary',
+          source: { state: 'present', value: 'Ready' },
+          destination: { state: 'absent' },
+        }),
+      },
+      {
+        name: 'rename',
+        base: { metadata: { title: 'Draft', slug: 'draft' } },
+        nativeOps: [{ rename: { path: 'metadata/slug', to: 'canonical_slug' } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_RENAME_MAPPING_KEY_ID, {
+          path: 'metadata',
+          base: { state: 'present', value: { title: 'Draft', slug: 'draft' } },
+          from: 'slug',
+          to: 'canonical_slug',
+        }),
+      },
+      {
+        name: 'append',
+        base: { tasks: ['draft'] },
+        nativeOps: [{ append: { path: 'tasks', value: 'review' } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_APPEND_SEQUENCE_ITEM_ID, {
+          path: 'tasks',
+          base: { state: 'present', value: ['draft'] },
+          value: 'review',
+        }),
+      },
+      {
+        name: 'pick',
+        base: { metadata: { title: 'Draft', owner: 'review', draft_only: true } },
+        nativeOps: [{ pick: { path: 'metadata', keys: ['title', 'owner'] } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_PICK_MAPPING_KEYS_ID, {
+          path: 'metadata',
+          base: { state: 'present', value: { title: 'Draft', owner: 'review', draft_only: true } },
+          keys: ['title', 'owner'],
+        }),
+      },
+      {
+        name: 'omit',
+        base: { metadata: { title: 'Draft', owner: 'review', draft_only: true } },
+        nativeOps: [{ omit: { path: 'metadata', keys: ['draft_only'] } }],
+        invocation: createYOpsRecipeInvocation(YOPS_RECIPE_OMIT_MAPPING_KEYS_ID, {
+          path: 'metadata',
+          base: { state: 'present', value: { title: 'Draft', owner: 'review', draft_only: true } },
+          keys: ['draft_only'],
+        }),
+      },
+    ];
+
+    for (const testCase of cases) {
+      const recipe = compileYOpsRecipeInvocation(testCase.invocation);
+      const recipeOperationNames = recipe.operations.map(recipeOperationName);
+      const nativeResult = applyYOps(testCase.base, testCase.nativeOps as YOp[]);
+      const recipeResult = applyYOps(testCase.base, recipe.operations as YOp[]);
+
+      expect(
+        recipeOperationNames.every((name) => YOPS_PRIMITIVE_OPERATION_NAMES.includes(name))
+      ).toBe(true);
+      expect(recipe.expansion.profile).toBe(YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID);
+      expect(recipeResult, testCase.name).toMatchObject({ ok: true });
+      expect(recipeResult).toMatchObject({ doc: nativeResult.doc });
+    }
+  });
 });
+
+function recipeOperationName(op: YOp): (typeof YOPS_PRIMITIVE_OPERATION_NAMES)[number] {
+  if ('assert' in op) return 'assert';
+  if ('set' in op) return 'set';
+  if ('unset' in op) return 'unset';
+  throw new Error(`Recipe emitted a non-primitive operation: ${JSON.stringify(op)}`);
+}
 
 describe('compileYOpsPathReplacement', () => {
   it('compiles present-to-present replacement into assert + set primitives', () => {
