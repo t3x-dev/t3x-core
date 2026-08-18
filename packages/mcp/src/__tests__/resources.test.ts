@@ -20,6 +20,7 @@ const {
   mockApiClient: {
     getProject: vi.fn(),
     getCommit: vi.fn(),
+    inspectTransition: vi.fn(),
     getDraft: vi.fn(),
     getLeaf: vi.fn(),
     getMergeDraft: vi.fn(),
@@ -158,6 +159,10 @@ describe('MCP resources', () => {
       expect.objectContaining({
         name: 'commit',
         uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
+      }),
+      expect.objectContaining({
+        name: 'transition',
+        uriTemplate: 't3x://projects/{project_id}/transitions/{transition_id}',
       }),
       expect.objectContaining({
         name: 'workbench_draft',
@@ -403,11 +408,56 @@ describe('MCP resources', () => {
     await client.close();
   });
 
+  it('reads a project-scoped Transition resource through the authenticated API boundary', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.inspectTransition.mockResolvedValueOnce({
+      transition_id: 'trn_00000000000000000000000000000001',
+      view: {
+        transition_id: 'trn_00000000000000000000000000000001',
+        project_id: 'proj_1',
+        workspace_id: 'workspace_1',
+        precondition: { ref_name: 'main' },
+      },
+    });
+    const { getDB } = await import('../db.js');
+    const callsBeforeRead = (getDB as ReturnType<typeof vi.fn>).mock.calls.length;
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({
+      uri: 't3x://projects/proj_1/transitions/trn_00000000000000000000000000000001',
+    });
+
+    expect(mockApiClient.inspectTransition).toHaveBeenCalledWith(
+      'proj_1',
+      'trn_00000000000000000000000000000001'
+    );
+    expect((getDB as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(callsBeforeRead);
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'transition',
+      transition_id: 'trn_00000000000000000000000000000001',
+      view: { project_id: 'proj_1', workspace_id: 'workspace_1' },
+    });
+
+    await client.close();
+  });
+
   it('fails closed for Workspace resources in direct-storage mode', async () => {
     const { client } = await connectClientAndServer();
 
     await expect(
       client.readResource({ uri: 't3x://projects/proj_1/workspaces/workspace_1' })
+    ).rejects.toThrow('T3X_MCP_BACKEND=api');
+
+    await client.close();
+  });
+
+  it('fails closed for Transition resources in direct-storage mode', async () => {
+    const { client } = await connectClientAndServer();
+
+    await expect(
+      client.readResource({
+        uri: 't3x://projects/proj_1/transitions/trn_00000000000000000000000000000001',
+      })
     ).rejects.toThrow('T3X_MCP_BACKEND=api');
 
     await client.close();
