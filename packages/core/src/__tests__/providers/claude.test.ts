@@ -589,6 +589,60 @@ describe('ClaudeProvider.generateStructured', () => {
     expect(secondBody.output_config).toBeUndefined();
   });
 
+  it('falls back to validated text JSON when Anthropic rejects an unconstrained schema node', async () => {
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                type: 'error',
+                error: {
+                  type: 'invalid_request_error',
+                  message:
+                    'output_config.format.schema: Empty schema ({}) that accepts any JSON value is not supported. Please specify a concrete type.',
+                },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                content: [
+                  {
+                    type: 'text',
+                    text: '{"operation":{"set":{"path":"prd/title","value":"Launch"}}}',
+                  },
+                ],
+                usage: { input_tokens: 14, output_tokens: 10 },
+              })
+            ),
+        })
+      );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const schema = z.object({ operation: z.custom<Record<string, unknown>>() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Generate one operation' }] },
+      schema,
+      { model: 'claude-sonnet-4-6' }
+    );
+
+    expect(result.data.operation).toEqual({ set: { path: 'prd/title', value: 'Launch' } });
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(mockFetchFn.mock.calls[1][1].body);
+    expect(secondBody.output_config).toBeUndefined();
+    expect(secondBody.system).toContain('The response must match this JSON Schema exactly');
+    expect(secondBody.system).toContain('"operation"');
+  });
+
   it('throws when fallback plain-text call also produces no extractable JSON', async () => {
     mockFetchFn
       .mockImplementationOnce(() =>
