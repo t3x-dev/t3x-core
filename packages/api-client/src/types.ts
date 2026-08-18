@@ -650,7 +650,7 @@ export interface ReviewWorkspaceTransitionInput {
 
 export interface DecideWorkspaceTransitionInput {
   transition_id?: string;
-  content: WorkspaceTransitionContent;
+  content?: WorkspaceTransitionContent;
   why?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decision_reason?: string;

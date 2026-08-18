@@ -260,7 +260,7 @@ export async function decideProjectWorkspaceTransition(
   workspaceId: string,
   input: {
     transitionId: string;
-    content: WorkspaceTransitionContent;
+    content?: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
     decisionReason?: string;
@@ -274,7 +274,7 @@ export async function decideProjectWorkspaceTransition(
     {
       body: JSON.stringify({
         transition_id: input.transitionId,
-        content: input.content,
+        ...(input.content ? { content: input.content } : {}),
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,
         ...(input.decisionReason ? { decision_reason: input.decisionReason } : {}),

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
+import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 
 export function WorkspaceChangeReviewPage({
@@ -16,7 +17,11 @@ export function WorkspaceChangeReviewPage({
   snapshotId: string;
   workspaceId: string;
 }) {
-  const { load, state } = useWorkspaceReviewSnapshot(projectId, workspaceId, snapshotId);
+  const { decide, load, overrideReason, setOverrideReason, state } = useWorkspaceReviewSnapshot(
+    projectId,
+    workspaceId,
+    snapshotId
+  );
   const workspaceHref = workspaceReviewHref(projectId, workspaceId);
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
@@ -41,8 +46,8 @@ export function WorkspaceChangeReviewPage({
               {projection ? <Badge variant="outline">{projection.status}</Badge> : null}
             </div>
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-              Read-only Changes view backed by a stored ReviewSnapshot and derived ChangeProjection.
-              Workspace remains the editable draft surface.
+              Changes is the review and decision surface backed by an immutable ReviewSnapshot.
+              Workspace remains the editable draft and preparation surface.
             </p>
           </div>
           <Button
@@ -101,6 +106,16 @@ export function WorkspaceChangeReviewPage({
           reviewSnapshot={snapshot}
           view={snapshot?.transition ?? null}
         />
+
+        {snapshot?.transition ? (
+          <TransitionDecisionControls
+            busy={state.deciding}
+            onDecide={(outcome, reason) => void decide(outcome, reason)}
+            onOverrideReasonChange={setOverrideReason}
+            overrideReason={overrideReason}
+            view={snapshot.transition}
+          />
+        ) : null}
       </div>
     </main>
   );

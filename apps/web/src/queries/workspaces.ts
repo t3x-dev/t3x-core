@@ -49,7 +49,7 @@ export function decideWorkspaceTransition(
   workspaceId: string,
   input: {
     transitionId: string;
-    content: WorkspaceTransitionContent;
+    content?: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
     decisionReason?: string;

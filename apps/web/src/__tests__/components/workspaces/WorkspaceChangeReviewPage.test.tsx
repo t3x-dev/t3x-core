@@ -24,6 +24,18 @@ vi.mock('@/components/workspaces/TransitionReviewPanel', () => ({
   ),
 }));
 
+vi.mock('@/components/workspaces/TransitionDecisionControls', () => ({
+  TransitionDecisionControls: ({
+    onDecide,
+  }: {
+    onDecide: (outcome: 'accepted' | 'overridden' | 'rejected') => void;
+  }) => (
+    <button onClick={() => onDecide('accepted')} type="button">
+      Approve and save
+    </button>
+  ),
+}));
+
 function snapshotResponse() {
   return {
     snapshot_id: 'rvs_88888888888888888888888888888888',
@@ -70,11 +82,15 @@ describe('WorkspaceChangeReviewPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads a stored ReviewSnapshot into the read-only Changes view', async () => {
+  it('loads a stored ReviewSnapshot into the Changes decision view', async () => {
+    const decide = vi.fn();
     const load = vi.fn();
     vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+      decide,
       load,
-      state: { data: snapshotResponse() as never, error: null, loading: false },
+      overrideReason: '',
+      setOverrideReason: vi.fn(),
+      state: { data: snapshotResponse() as never, deciding: false, error: null, loading: false },
     });
 
     render(
@@ -93,6 +109,8 @@ describe('WorkspaceChangeReviewPage', () => {
     expect(screen.getByRole('region', { name: 'Snapshot panel' })).toHaveTextContent(
       'rvs_88888888888888888888888888888888'
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
+    expect(decide).toHaveBeenCalledWith('accepted', undefined);
     expect(useWorkspaceReviewSnapshot).toHaveBeenCalledWith(
       'proj_1',
       'workspace_prd_handoff',
@@ -103,8 +121,11 @@ describe('WorkspaceChangeReviewPage', () => {
   it('refreshes the same immutable snapshot explicitly', async () => {
     const load = vi.fn();
     vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+      decide: vi.fn(),
       load,
-      state: { data: snapshotResponse() as never, error: null, loading: false },
+      overrideReason: '',
+      setOverrideReason: vi.fn(),
+      state: { data: snapshotResponse() as never, deciding: false, error: null, loading: false },
     });
 
     render(

@@ -165,13 +165,22 @@ const DecideWorkspaceTransitionRequestSchema = z
       .string()
       .regex(/^trn_[0-9a-f]{32}$/)
       .optional(),
-    content: TransitionContentSchema,
+    content: TransitionContentSchema.optional(),
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
     decision_reason: z.string().trim().min(1).max(2000).optional(),
     precondition: WorkspaceTransitionPreconditionSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.transition_id === undefined && value.content === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'content is required when transition_id is not supplied',
+      });
+    }
+  });
 
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
