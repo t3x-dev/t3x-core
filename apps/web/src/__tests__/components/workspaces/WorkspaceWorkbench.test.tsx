@@ -554,7 +554,7 @@ function activateTab(name: string | RegExp) {
 }
 
 describe('WorkspaceWorkbench', () => {
-  it('retries Commit without creating a second accepted Decision', async () => {
+  it('hands governed proposals to Validation and Changes without direct Commit', async () => {
     const view = governedProposalView();
     proposalGenerationMocks.generate.mockResolvedValue({
       transition_id: view.transition_id,
@@ -568,22 +568,6 @@ describe('WorkspaceWorkbench', () => {
       statements: [],
       operational_results: [],
     });
-    proposalGenerationMocks.decide.mockResolvedValue({
-      transition_id: view.transition_id,
-      reused: false,
-      view,
-      decision_digest: transitionDigest('f'),
-      decision: {},
-    });
-    proposalGenerationMocks.commit
-      .mockRejectedValueOnce(new Error('Temporary commit failure.'))
-      .mockResolvedValueOnce({
-        transition_id: view.transition_id,
-        reused: false,
-        commit_digest: transitionDigest('9'),
-        commit: {},
-        transition: {},
-      });
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/Proposal/);
@@ -592,17 +576,16 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Governed proposal review' })).toBeInTheDocument()
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Accept and commit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Changes review' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Commit accepted proposal' })).toBeEnabled()
+      expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('Temporary commit failure.');
-    fireEvent.click(screen.getByRole('button', { name: 'Commit accepted proposal' }));
-
-    await waitFor(() => expect(screen.getAllByText('Committed').length).toBeGreaterThan(0));
-    expect(proposalGenerationMocks.decide).toHaveBeenCalledTimes(1);
-    expect(proposalGenerationMocks.commit).toHaveBeenCalledTimes(2);
+    expect(proposalGenerationMocks.decide).not.toHaveBeenCalled();
+    expect(proposalGenerationMocks.commit).not.toHaveBeenCalled();
   });
 
   it('renders current workspace detail without an internal workspace selector', () => {

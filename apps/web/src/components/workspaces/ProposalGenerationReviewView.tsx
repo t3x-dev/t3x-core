@@ -11,7 +11,8 @@ import type {
 import { cn } from '@/utils/cn';
 import { ProposalPostureSelector, proposalPostureOption } from './ProposalPostureSelector';
 
-export type ProposalGenerationAction = 'accept' | 'reject' | 'revision';
+export type ProposalGenerationAction = 'prepare_changes' | 'revision';
+export type ProposalGenerationReviewState = 'undecided' | 'ready_for_changes';
 
 export function ProposalGenerationReviewView({
   actionBusy,
@@ -25,7 +26,7 @@ export function ProposalGenerationReviewView({
   view,
 }: {
   actionBusy?: boolean;
-  actionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
+  actionState?: ProposalGenerationReviewState;
   error?: string | null;
   onAction?: (action: ProposalGenerationAction) => Promise<void> | void;
   onPostureChange: (posture: WorkspaceProposalPosture) => void;
@@ -304,7 +305,7 @@ function ProposalVerification({
   view,
 }: {
   actionBusy?: boolean;
-  actionState: 'undecided' | 'accepted' | 'rejected' | 'committed';
+  actionState: ProposalGenerationReviewState;
   onAction?: (action: ProposalGenerationAction) => Promise<void> | void;
   onVerify: () => Promise<void> | void;
   postureMatchesSelection: boolean;
@@ -316,18 +317,12 @@ function ProposalVerification({
   const replayPassed = checkPassed(replay);
   const validationPassed = checkPassed(validation);
   const validationNotRequired = validation.observation === 'no_statement_observed';
-  const canAccept =
+  const canPrepareChangesReview =
     verification.status === 'passed' &&
     replayPassed &&
     (validationPassed || validationNotRequired) &&
     postureMatchesSelection &&
     actionState === 'undecided';
-  const canRetryCommit =
-    verification.status === 'passed' &&
-    replayPassed &&
-    (validationPassed || validationNotRequired) &&
-    postureMatchesSelection &&
-    actionState === 'accepted';
 
   return (
     <aside className="min-w-0 border-t border-[var(--stroke-divider)] bg-[var(--surface-panel)] xl:border-t-0 xl:border-l">
@@ -374,7 +369,7 @@ function ProposalVerification({
             tone={validationNotRequired ? 'neutral' : 'warning'}
           />
           <CheckRow label="Posture policy" passed={verification.status === 'passed'} />
-          <CheckRow label="Human approval" passed={false} pendingLabel="Required" />
+          <CheckRow label="Changes decision" passed={false} pendingLabel="In Changes" />
         </ul>
         <Button
           className="mt-3 w-full"
@@ -391,24 +386,14 @@ function ProposalVerification({
 
       <section className="p-4">
         <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">4 · Human decision</h4>
-          <Badge variant={decisionBadgeVariant(actionState)}>{decisionLabel(actionState)}</Badge>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">4 · Changes handoff</h4>
+          <Badge variant={reviewBadgeVariant(actionState)}>{reviewLabel(actionState)}</Badge>
         </div>
         <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-          Accept only the exact reviewed result. Rejection remains auditable and does not advance
-          history.
+          Select the reviewed proposal, then continue through Validation and Changes. Final accept,
+          reject, override, and commit actions stay backed by an immutable ReviewSnapshot.
         </p>
         <div className="mt-3 grid gap-2">
-          <Button
-            disabled={actionBusy || actionState !== 'undecided'}
-            onClick={() => onAction?.('reject')}
-            size="sm"
-            type="button"
-            className="border-[var(--status-error)]/40 text-[var(--status-error)] hover:border-[var(--status-error)]/60 hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)]"
-            variant="canvas-outline"
-          >
-            Reject
-          </Button>
           <Button
             disabled={actionBusy || actionState !== 'undecided'}
             onClick={() => onAction?.('revision')}
@@ -419,14 +404,14 @@ function ProposalVerification({
             Request revision
           </Button>
           <Button
-            disabled={actionBusy || (!canAccept && !canRetryCommit)}
-            onClick={() => onAction?.('accept')}
+            disabled={actionBusy || !canPrepareChangesReview}
+            onClick={() => onAction?.('prepare_changes')}
             size="sm"
             type="button"
             variant="commit"
           >
             {actionBusy ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
-            {actionState === 'accepted' ? 'Commit accepted proposal' : 'Accept and commit'}
+            {actionState === 'ready_for_changes' ? 'Ready for Changes' : 'Prepare Changes review'}
           </Button>
         </div>
       </section>
@@ -559,34 +544,23 @@ function verificationSummaryClass(status: 'pending' | 'passed' | 'failed'): stri
   return 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)]';
 }
 
-function decisionLabel(state: 'undecided' | 'accepted' | 'rejected' | 'committed'): string {
-  if (state === 'committed') return 'Committed';
-  if (state === 'accepted') return 'Accepted';
-  if (state === 'rejected') return 'Rejected';
-  return 'Undecided';
+function reviewLabel(state: ProposalGenerationReviewState): string {
+  if (state === 'ready_for_changes') return 'Ready for Changes';
+  return 'Needs handoff';
 }
 
-function decisionBadgeVariant(
-  state: 'undecided' | 'accepted' | 'rejected' | 'committed'
-): 'outline' | 'success' | 'destructive' | 'warning' {
-  if (state === 'committed') return 'success';
-  if (state === 'accepted') return 'warning';
-  if (state === 'rejected') return 'destructive';
+function reviewBadgeVariant(state: ProposalGenerationReviewState): 'outline' | 'success' {
+  if (state === 'ready_for_changes') return 'success';
   return 'outline';
 }
 
-function decisionHeaderLabel(state: 'undecided' | 'accepted' | 'rejected' | 'committed'): string {
-  if (state === 'committed') return 'Committed';
-  if (state === 'accepted') return 'Accepted · commit pending';
-  if (state === 'rejected') return 'Rejected';
-  return 'Human decision required';
+function decisionHeaderLabel(state: ProposalGenerationReviewState): string {
+  if (state === 'ready_for_changes') return 'Ready for Changes';
+  return 'Changes handoff required';
 }
 
-function decisionHeaderBadgeVariant(
-  state: 'undecided' | 'accepted' | 'rejected' | 'committed'
-): 'success' | 'warning' | 'destructive' {
-  if (state === 'committed') return 'success';
-  if (state === 'rejected') return 'destructive';
+function decisionHeaderBadgeVariant(state: ProposalGenerationReviewState): 'success' | 'warning' {
+  if (state === 'ready_for_changes') return 'success';
   return 'warning';
 }
 

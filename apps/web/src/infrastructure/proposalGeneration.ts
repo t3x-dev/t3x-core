@@ -14,20 +14,6 @@ interface ProposalVerificationEnvelope extends ProposalGenerationEnvelope {
   operational_results: unknown[];
 }
 
-interface ProposalDecisionEnvelope extends ProposalGenerationEnvelope {
-  decision_digest: string;
-  decision: unknown;
-}
-
-interface ProposalCommitEnvelope {
-  transition_id: string;
-  reused: boolean;
-  commit_digest: string;
-  commit: unknown;
-  transition: unknown;
-  workspace?: Record<string, unknown>;
-}
-
 export async function generateWorkspaceProposal(input: {
   projectId: string;
   workspaceId: string;
@@ -64,42 +50,10 @@ export async function verifyWorkspaceProposal(
   });
 }
 
-export async function decideWorkspaceProposal(
-  projectId: string,
-  view: WorkspaceProposalGenerationView,
-  outcome: 'accepted' | 'rejected'
-): Promise<ProposalDecisionEnvelope> {
-  if (!view.precondition.policy_digest) {
-    throw new Error('The proposal has no decision policy. Run verification again.');
-  }
-  return postTransitionAction<ProposalDecisionEnvelope>(
-    projectId,
-    view.transition_id,
-    'decisions',
-    {
-      request_id: `proposal-decision:${crypto.randomUUID()}`,
-      outcome,
-      precondition: view.precondition,
-    }
-  );
-}
-
-export async function commitWorkspaceProposal(
-  projectId: string,
-  view: WorkspaceProposalGenerationView,
-  decisionDigest: string
-): Promise<ProposalCommitEnvelope> {
-  return postTransitionAction<ProposalCommitEnvelope>(projectId, view.transition_id, 'commits', {
-    request_id: `proposal-commit:${crypto.randomUUID()}`,
-    decision_digest: decisionDigest,
-    expected_head: view.precondition.ref_head,
-  });
-}
-
 async function postTransitionAction<T>(
   projectId: string,
   transitionId: string,
-  action: 'verify' | 'decisions' | 'commits',
+  action: 'verify',
   body: Record<string, unknown>
 ): Promise<T> {
   const res = await fetchWithTimeout(

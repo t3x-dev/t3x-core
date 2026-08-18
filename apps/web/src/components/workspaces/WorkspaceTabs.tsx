@@ -6,7 +6,10 @@ import type {
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import type { ProposalGenerationAction } from './ProposalGenerationReviewView';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { SourcesTab } from './SourcesTab';
 import { SourceTransitionTab } from './SourceTransitionTab';
 import { type WorkspaceYOpsFlowView, YOpsDraftTab } from './YOpsDraftTab';
@@ -124,10 +127,10 @@ export function WorkspaceTabs({
   onViewCommitInState,
   onWorkflowTabChange,
   sendingToYOps,
-  proposalDecisionState,
   proposalGeneration,
   proposalGenerationBusy,
   proposalPosture,
+  proposalReviewState,
   sourceConversationId,
   sourceParentCommitHash,
   yopsDraftSent,
@@ -159,10 +162,10 @@ export function WorkspaceTabs({
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
@@ -191,10 +194,10 @@ export function WorkspaceTabs({
         onViewCommitInState,
         onWorkflowTabChange,
         sendingToYOps,
-        proposalDecisionState,
         proposalGeneration,
         proposalGenerationBusy,
         proposalPosture,
+        proposalReviewState,
         sourceConversationId,
         sourceParentCommitHash,
         yopsDraftSent,
@@ -229,10 +232,10 @@ interface RenderWorkspaceTabOptions {
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
@@ -287,10 +290,10 @@ function renderWorkspaceTab(
           onYOpsScriptSave={options.onYOpsScriptSave}
           onViewCommitInState={options.onViewCommitInState}
           sendingToYOps={options.sendingToYOps}
-          proposalDecisionState={options.proposalDecisionState}
           proposalGeneration={options.proposalGeneration}
           proposalGenerationBusy={options.proposalGenerationBusy}
           proposalPosture={options.proposalPosture}
+          proposalReviewState={options.proposalReviewState}
           onViewChange={options.onWorkflowTabChange}
           view={activeTab === 'chat' ? 'ops' : activeTab}
           yopsDraftSent={options.yopsDraftSent}

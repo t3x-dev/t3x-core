@@ -44,7 +44,10 @@ import type {
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
-import type { ProposalGenerationAction } from './ProposalGenerationReviewView';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
@@ -68,10 +71,10 @@ export function YOpsDraftTab({
   onViewCommitInState,
   onViewChange,
   sendingToYOps,
-  proposalDecisionState,
   proposalGeneration,
   proposalGenerationBusy,
   proposalPosture,
+  proposalReviewState,
   view = 'ops',
   yopsDraftSent,
 }: {
@@ -96,10 +99,10 @@ export function YOpsDraftTab({
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
 }) {
@@ -472,10 +475,10 @@ export function YOpsDraftTab({
             onSaveYOpsScript={handleSaveYOpsScript}
             onVerifyProposal={onVerifyProposal}
             proposalMode={proposalMode}
-            proposalDecisionState={proposalDecisionState}
             proposalGeneration={proposalGeneration}
             proposalGenerationBusy={proposalGenerationBusy}
             proposalPosture={proposalPosture}
+            proposalReviewState={proposalReviewState}
             sendingToYOps={Boolean(sendingToYOps)}
             statusText={statusText}
             yopsDraftSent={Boolean(yopsDraftSent)}

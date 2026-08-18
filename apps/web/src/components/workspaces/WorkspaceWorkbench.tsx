@@ -15,7 +15,10 @@ import type {
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { PromptCompilePreviewDrawer } from './PromptCompilePreviewDrawer';
-import type { ProposalGenerationAction } from './ProposalGenerationReviewView';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -32,8 +35,7 @@ interface WorkspaceFlowState {
   proposalPosture?: WorkspaceProposalPosture;
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
-  proposalDecisionDigest?: string;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
+  proposalReviewState?: ProposalGenerationReviewState;
   validationGapCount?: number;
   error?: string;
 }
@@ -230,9 +232,8 @@ export function WorkspaceWorkbench({
 
     updateSelectedFlow({
       error: undefined,
-      proposalDecisionDigest: undefined,
-      proposalDecisionState: 'undecided',
       proposalGenerationBusy: true,
+      proposalReviewState: 'undecided',
     });
     try {
       const generated = await proposalGeneration.generate({
@@ -289,68 +290,18 @@ export function WorkspaceWorkbench({
     if (action === 'revision') {
       updateSelectedFlow({
         error: undefined,
-        proposalDecisionDigest: undefined,
-        proposalDecisionState: 'undecided',
+        proposalReviewState: 'undecided',
       });
       setActiveWorkflowTab('chat');
       return;
     }
 
-    updateSelectedFlow({ error: undefined, proposalGenerationBusy: true });
-    try {
-      if (action === 'accept' && selectedFlow.proposalDecisionState === 'accepted') {
-        if (!selectedFlow.proposalDecisionDigest) {
-          throw new Error('The accepted proposal has no Decision digest and cannot be committed.');
-        }
-        await proposalGeneration.commit(
-          selectedWorkspace.projectId,
-          selectedFlow.proposalGeneration,
-          selectedFlow.proposalDecisionDigest
-        );
-        updateSelectedFlow({
-          proposalDecisionState: 'committed',
-          proposalGenerationBusy: false,
-        });
-        await onWorkspacesRefresh?.();
-        return;
-      }
-
-      const decided = await proposalGeneration.decide(
-        selectedWorkspace.projectId,
-        selectedFlow.proposalGeneration,
-        action === 'accept' ? 'accepted' : 'rejected'
-      );
-      if (action === 'reject') {
-        updateSelectedFlow({
-          proposalDecisionDigest: undefined,
-          proposalDecisionState: 'rejected',
-          proposalGeneration: decided.view,
-          proposalGenerationBusy: false,
-        });
-        return;
-      }
-
-      updateSelectedFlow({
-        proposalDecisionDigest: decided.decision_digest,
-        proposalDecisionState: 'accepted',
-        proposalGeneration: decided.view,
-      });
-      await proposalGeneration.commit(
-        selectedWorkspace.projectId,
-        decided.view,
-        decided.decision_digest
-      );
-      updateSelectedFlow({
-        proposalDecisionState: 'committed',
-        proposalGenerationBusy: false,
-      });
-      await onWorkspacesRefresh?.();
-    } catch (err) {
-      updateSelectedFlow({
-        error: err instanceof Error ? err.message : 'The proposal decision could not be recorded.',
-        proposalGenerationBusy: false,
-      });
-    }
+    updateSelectedFlow({
+      error: undefined,
+      proposalGenerationBusy: false,
+      proposalReviewState: 'ready_for_changes',
+    });
+    setActiveWorkflowTab('validation');
   };
 
   const handleCommitted = (
@@ -654,7 +605,7 @@ function WorkspaceDetail({
           onViewCommitInState={onViewCommitInState}
           onWorkflowTabChange={onWorkflowTabChange}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
-          proposalDecisionState={flowState?.proposalDecisionState}
+          proposalReviewState={flowState?.proposalReviewState}
           proposalGeneration={flowState?.proposalGeneration}
           proposalGenerationBusy={Boolean(flowState?.proposalGenerationBusy)}
           proposalPosture={flowState?.proposalPosture ?? 'guided'}
