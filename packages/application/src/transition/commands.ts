@@ -584,6 +584,14 @@ export async function verifyTransitionCommand<
   reused: boolean;
 }> {
   const request = input.ports.canonicalTransitionRequest({ operation: 'verify' });
+  const receipt = await input.ports.findTransitionVerificationReceipt({
+    projectId: input.projectId,
+    transitionId: input.transitionId,
+    requestId: input.requestId,
+  });
+  if (receipt !== null && receipt.requestDigest !== request.digest) {
+    throw new TransitionApplicationRequestConflictError(input.requestId);
+  }
   const prior = await input.ports.findTransitionStatementsByRequest({
     projectId: input.projectId,
     transitionId: input.transitionId,
@@ -591,14 +599,6 @@ export async function verifyTransitionCommand<
     requestDigest: request.digest,
   });
   if (prior.length > 0) {
-    const receipt = await input.ports.findTransitionVerificationReceipt({
-      projectId: input.projectId,
-      transitionId: input.transitionId,
-      requestId: input.requestId,
-    });
-    if (receipt !== null && receipt.requestDigest !== request.digest) {
-      throw new TransitionApplicationRequestConflictError(input.requestId);
-    }
     return {
       view: await input.ports.inspectTransition(input),
       statements: prior,
