@@ -51,6 +51,7 @@ import { registerSchemaCommands } from './commands/schema.js';
 import { registerShareCommands } from './commands/share.js';
 import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
+import { registerTransitionCommands } from './commands/transition.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
 
@@ -156,6 +157,7 @@ registerImportCommands(program);
 registerSchemaCommands(program);
 registerValidateCommands(program);
 registerYopsCommands(program);
+registerTransitionCommands(program);
 registerDiffCommand(program);
 registerMergeCommands(program);
 registerComposeCommands(program);
