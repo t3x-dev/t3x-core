@@ -8,7 +8,8 @@ This package is the runnable stdio wrapper around `@t3x-dev/mcp-lib`.
 
 The MCP server is a preview/internal surface. It is not part of the current
 public alpha package surface; the public alpha packages are
-`@t3x-dev/local`, `@t3x-dev/yops`, and `@t3x-dev/yschema`.
+`@t3x-dev/local`, `@t3x-dev/yops`, `@t3x-dev/transition`, and
+`@t3x-dev/yschema`.
 
 ## Current Surface
 
@@ -42,17 +43,52 @@ Transition (opt-in, API backend only):
 - `inspect_transition`
 - `verify_transition`
 - `attach_statement`
+- `decide_transition`
+- `commit_transition`
 
 The Transition toolset exposes task-oriented transition views. It does not
-accept caller-written actors or other trust-chain metadata. Decision and Commit
-operations are intentionally not part of this milestone.
+accept caller-written actors, policy facts, workspace projection facts, or other
+trust-chain metadata. Decision and Commit operations are routed through the API
+backend so authority, review preconditions, and ref CAS remain server-owned.
+
+#### Transition surface map
+
+The MCP Transition toolset intentionally mirrors the CLI/API lifecycle without
+turning protocol nouns into separate product models:
+
+| Lifecycle step | MCP tool | API client method | Boundary rule |
+| --- | --- | --- | --- |
+| Prepare Proposal | `propose_transition` | `proposeTransition` | caller sends only a closed task request |
+| Inspect review state | `inspect_transition` | `inspectTransition` | read-only, project-scoped Transition view |
+| Verify | `verify_transition` | `verifyTransition` | Replay and external checks stay server-owned |
+| Add external evidence | `attach_statement` | `attachTransitionStatement` | caller sends predicate content and subject roles only |
+| Decide | `decide_transition` | `decideTransition` | caller copies the latest immutable review precondition |
+| Commit | `commit_transition` | `commitTransition` | caller supplies `decision_digest` and exact `expected_head` |
+
+`propose_transition` accepts the same closed request kinds as the API:
+
+- `structured_yops`
+  - either a non-empty `operations` array, or a server-owned
+    `extraction_candidate_id`
+- `exact_source_import`
+  - an exact-source `artifact` selector and `root` material selector
+- `exact_source_edit`
+  - an exact-source `artifact` selector and `replace_scalar` operations
+- `exact_source_revert`
+  - a CommitV2 `commit_id` from the server's Transition graph
+
+Anything that would assert trust-chain facts locally is intentionally absent
+from the MCP schema: actor, policy, issuer, workspace projection, observed
+Statement set, and ref head are all resolved or checked at the API boundary.
 
 ### Resources
 
 The server currently exposes these resource templates:
 
 - `t3x://projects/{project_id}`
-- `t3x://commits/{commit_hash}`
+- `t3x://projects/{project_id}/commits/{commit_digest}`
+- `t3x://projects/{project_id}/transitions/{transition_id}`
+- `t3x://projects/{project_id}/workspaces/{workspace_id}`
 - `t3x://workbench-drafts/{draft_id}`
 - `t3x://source-threads/{source_thread_id}`
 - `t3x://leaves/{leaf_id}`
@@ -118,7 +154,7 @@ The server supports two backends:
   - reuses `T3X_API_KEY` or the shared `~/.t3x/config.json` key when present
 
 The opt-in `transition` toolset requires the `api` backend. In `storage` mode,
-all four Transition tools fail closed with `API_BACKEND_REQUIRED`; there is no
+all six Transition tools fail closed with `API_BACKEND_REQUIRED`; there is no
 direct-storage fallback for authenticated authority or issuer context.
 
 API-backed resources and Source evidence reads also pass through the API
@@ -171,6 +207,8 @@ Transition (requires `T3X_MCP_BACKEND=api`)
 2. inspect_transition({ project_id, transition_id })    -> current task-oriented view
 3. verify_transition({ project_id, transition_id, ... }) -> replay/validation observations
 4. attach_statement({ project_id, transition_id, ... }) -> updated view
+5. decide_transition({ project_id, transition_id, ... }) -> decision_digest + updated view
+6. commit_transition({ project_id, transition_id, ... }) -> commit_digest + TransitionViewV1
 ```
 
 ## Build

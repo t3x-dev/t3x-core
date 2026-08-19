@@ -8,8 +8,9 @@
  * Advanced toolset (3 additional tools):
  *   t3x_diff, t3x_merge, t3x_admin
  *
- * Transition toolset (4 opt-in, API-only tools):
- *   propose_transition, inspect_transition, verify_transition, attach_statement
+ * Transition toolset (6 opt-in, API-only tools):
+ *   propose_transition, inspect_transition, verify_transition, attach_statement,
+ *   decide_transition, commit_transition
  */
 
 import { createRequire } from 'node:module';
@@ -101,6 +102,8 @@ Transition lifecycle (only if the opt-in transition toolset and API backend are 
 9. inspect_transition — inspect task state, assurance, and immutable preconditions
 10. verify_transition — run mandatory Replay plus configured external checks
 11. attach_statement — attach an allowlisted claim through authenticated API authority
+12. decide_transition — record an accepted, rejected, or overridden Decision from the latest review precondition
+13. commit_transition — create CommitV2 and advance the ref by exact expected-head CAS
 
 t3x_generate creates validated outputs from committed state.`;
 

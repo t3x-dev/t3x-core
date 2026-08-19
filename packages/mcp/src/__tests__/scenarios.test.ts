@@ -711,6 +711,41 @@ function expectOkJson(result: { content: Array<{ text: string }>; isError?: bool
   return JSON.parse(getText(result));
 }
 
+function seedScenarioCommit(input: {
+  hash: string;
+  projectId: string;
+  parents?: string[];
+  budget: number;
+  destination: string;
+  message: string;
+  branch?: string;
+  committedAt?: string;
+}) {
+  mockState.commits.set(input.hash, {
+    hash: input.hash,
+    schema: 't3x/commit/v2',
+    parents: input.parents ?? [],
+    author: { type: 'human', name: 'mcp' },
+    committed_at: input.committedAt ?? '2026-04-22T00:00:00.000Z',
+    content: {
+      trees: [
+        {
+          key: 'trip',
+          slots: { budget: input.budget, destination: input.destination },
+          children: [],
+        },
+      ],
+      relations: [],
+    },
+    project_id: input.projectId,
+    message: input.message,
+    branch: input.branch ?? 'main',
+    provenance: { method: 'human_curation' },
+    yops_log_ids: [],
+    sources: null,
+  });
+}
+
 describe('mcp audit scenarios', () => {
   beforeEach(async () => {
     resetMockState();
@@ -718,7 +753,7 @@ describe('mcp audit scenarios', () => {
     resetProviderRegistry();
   });
 
-  it('runs extract -> query -> edit -> commit -> extract -> commit -> diff with current semantics', async () => {
+  it('runs extract -> query -> edit, then stops storage-backed commit writes at the MCP boundary', async () => {
     const callTool = getCallTool();
 
     const project = expectOkJson(
@@ -747,50 +782,55 @@ describe('mcp audit scenarios', () => {
     );
     expect(edited.applied).toBe(true);
 
-    const firstCommit = expectOkJson(
-      await callTool('t3x_commit', {
-        project_id: project.project_id,
-        draft_id: firstExtract.draft_id,
-        message: 'Initial snapshot',
-      })
-    );
-    expect(firstCommit.parents).toEqual([]);
+    const commit = await callTool('t3x_commit', {
+      project_id: project.project_id,
+      draft_id: firstExtract.draft_id,
+      message: 'Initial snapshot',
+    });
+    expect(commit.isError).toBe(true);
+    expect(getText(commit)).toContain('t3x_commit requires T3X_MCP_BACKEND=api');
+    expect(getText(commit)).toContain('shared API/application command');
+  });
 
-    const secondExtract = expectOkJson(
-      await callTool('t3x_extract', {
-        project_id: project.project_id,
-        conversation_id: firstExtract.conversation_id,
-        text: 'Add a Kyoto stop and budget 8000',
-      })
-    );
-    expect(secondExtract.conversation_id).toBe(firstExtract.conversation_id);
-    expect(secondExtract.is_new_conversation).toBe(false);
+  it('runs diff through tools/call over seeded commits', async () => {
+    const callTool = getCallTool();
 
-    const secondCommit = expectOkJson(
-      await callTool('t3x_commit', {
-        project_id: project.project_id,
-        draft_id: secondExtract.draft_id,
-        message: 'Follow-up snapshot',
-      })
+    const project = expectOkJson(
+      await callTool('t3x_admin', { action: 'create_project', name: 'Scenario Diff' })
     );
-    expect(secondCommit.parents).toEqual([firstCommit.commit_hash]);
+    seedScenarioCommit({
+      hash: 'sha256:scenario-diff-base',
+      projectId: project.project_id,
+      budget: 5000,
+      destination: 'Tokyo',
+      message: 'Base snapshot',
+    });
+    seedScenarioCommit({
+      hash: 'sha256:scenario-diff-target',
+      projectId: project.project_id,
+      parents: ['sha256:scenario-diff-base'],
+      budget: 8000,
+      destination: 'Kyoto',
+      message: 'Target snapshot',
+      committedAt: '2026-04-22T00:01:00.000Z',
+    });
 
     const legacyDiff = await callTool('t3x_diff', {
-      source: firstCommit.commit_hash,
-      target: secondCommit.commit_hash,
+      source: 'sha256:scenario-diff-base',
+      target: 'sha256:scenario-diff-target',
     });
     expect(legacyDiff.isError).toBe(true);
     expect(getText(legacyDiff)).toContain('"base" is required');
 
     const diff = expectOkJson(
       await callTool('t3x_diff', {
-        base: firstCommit.commit_hash,
-        target: secondCommit.commit_hash,
+        base: 'sha256:scenario-diff-base',
+        target: 'sha256:scenario-diff-target',
         project_id: project.project_id,
       })
     );
-    expect(diff.base).toBe(firstCommit.commit_hash);
-    expect(diff.target).toBe(secondCommit.commit_hash);
+    expect(diff.base).toBe('sha256:scenario-diff-base');
+    expect(diff.target).toBe('sha256:scenario-diff-target');
     expect(diff.summary.modified).toBe(1);
   });
 
@@ -801,40 +841,49 @@ describe('mcp audit scenarios', () => {
       await callTool('t3x_admin', { action: 'create_project', name: 'Scenario A4' })
     );
 
-    const firstExtract = expectOkJson(
-      await callTool('t3x_extract', {
-        project_id: project.project_id,
-        text: 'Plan a Tokyo trip with budget 5000',
-      })
-    );
-    const firstCommit = expectOkJson(
-      await callTool('t3x_commit', {
-        project_id: project.project_id,
-        draft_id: firstExtract.draft_id,
-        message: 'Base snapshot',
-      })
-    );
-
-    const secondExtract = expectOkJson(
-      await callTool('t3x_extract', {
-        project_id: project.project_id,
-        text: 'Plan a Kyoto trip with budget 8000',
-      })
-    );
-    const secondCommit = expectOkJson(
-      await callTool('t3x_commit', {
-        project_id: project.project_id,
-        draft_id: secondExtract.draft_id,
-        message: 'Variant snapshot',
-      })
-    );
+    const firstCommitHash = 'sha256:scenario-base';
+    const secondCommitHash = 'sha256:scenario-variant';
+    mockState.commits.set(firstCommitHash, {
+      hash: firstCommitHash,
+      schema: 't3x/commit/v2',
+      parents: [],
+      author: { type: 'human', name: 'mcp' },
+      committed_at: '2026-04-22T00:00:00.000Z',
+      content: {
+        trees: [{ key: 'trip', slots: { budget: 5000, destination: 'Tokyo' }, children: [] }],
+        relations: [],
+      },
+      project_id: project.project_id,
+      message: 'Base snapshot',
+      branch: 'main',
+      provenance: { method: 'human_curation' },
+      yops_log_ids: [],
+      sources: null,
+    });
+    mockState.commits.set(secondCommitHash, {
+      hash: secondCommitHash,
+      schema: 't3x/commit/v2',
+      parents: [firstCommitHash],
+      author: { type: 'human', name: 'mcp' },
+      committed_at: '2026-04-22T00:01:00.000Z',
+      content: {
+        trees: [{ key: 'trip', slots: { budget: 8000, destination: 'Kyoto' }, children: [] }],
+        relations: [],
+      },
+      project_id: project.project_id,
+      message: 'Variant snapshot',
+      branch: 'main',
+      provenance: { method: 'human_curation' },
+      yops_log_ids: [],
+      sources: null,
+    });
 
     const prepared = expectOkJson(
       await callTool('t3x_merge', {
         action: 'prepare',
         project_id: project.project_id,
-        source_hash: firstCommit.commit_hash,
-        target_hash: secondCommit.commit_hash,
+        source_hash: firstCommitHash,
+        target_hash: secondCommitHash,
         source_branch: 'main',
         target_branch: 'main',
       })
@@ -865,15 +914,13 @@ describe('mcp audit scenarios', () => {
     );
     expect(resolved.progress).toBe('1/1 conflicts resolved');
 
-    const executed = expectOkJson(
-      await callTool('t3x_merge', {
-        action: 'execute',
-        draft_id: prepared.draft_id,
-        message: 'Merge scenario',
-      })
-    );
-    expect(executed.parents).toEqual([secondCommit.commit_hash, firstCommit.commit_hash]);
-    expect(executed.branch).toBe('main');
+    const executed = await callTool('t3x_merge', {
+      action: 'execute',
+      draft_id: prepared.draft_id,
+      message: 'Merge scenario',
+    });
+    expect(executed.isError).toBe(true);
+    expect(getText(executed)).toContain('t3x_merge execute requires T3X_MCP_BACKEND=api');
   });
 
   it('distinguishes empty text from non-extractable text through tools/call', async () => {

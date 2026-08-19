@@ -113,6 +113,23 @@ function transitionGraphView() {
   };
 }
 
+const SOURCE_ARTIFACT = {
+  format: 't3x.dev/workspace-source-artifact/v1' as const,
+  root_path: 'docs/device.yaml',
+  resources: [
+    {
+      path: 'docs/device.yaml',
+      material_id: 'material:source:device',
+      content_hash: digest('5'),
+    },
+  ],
+};
+
+const SOURCE_ROOT = {
+  material_id: 'material:source:root',
+  content_hash: digest('6'),
+};
+
 function transitionView(overrides: Record<string, unknown> = {}) {
   return {
     transition_id: TRANSITION_ID,
@@ -976,6 +993,82 @@ describe('T3xClient', () => {
         workspace_id: 'ws_1',
         extraction_candidate_id: 'candidate:abc',
         if_revision: 4,
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('proposes an exact-source import through the same project-scoped endpoint', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_import' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_import' as const,
+        request_id: 'request:proposal:import',
+        workspace_id: 'ws_1',
+        artifact: SOURCE_ARTIFACT,
+        root: SOURCE_ROOT,
+        why: 'Import source verbatim.',
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('proposes an exact-source edit as replace-scalar operations', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_edit' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_edit' as const,
+        request_id: 'request:proposal:edit',
+        workspace_id: 'ws_1',
+        artifact: SOURCE_ARTIFACT,
+        operations: [
+          {
+            op: 'replace_scalar' as const,
+            path: ['frontmatter', 'title'],
+            expect: 'Draft title',
+            value: 'Reviewed title',
+          },
+        ],
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('proposes an exact-source revert from a CommitV2 id', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_revert' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_revert' as const,
+        request_id: 'request:proposal:revert',
+        workspace_id: 'ws_1',
+        commit_id: digest('7'),
       };
 
       expect(await client.proposeTransition('proj_1', input)).toEqual(data);

@@ -149,6 +149,32 @@ describe('apps/mcp stdio subprocess smoke', () => {
   );
 
   it(
+    'advertises Transition resource templates through the real stdio subprocess',
+    async () => {
+      const { client } = await connectConfiguredClient();
+      openClients.push(client);
+
+      const result = await client.listResourceTemplates();
+
+      expect(result.resourceTemplates).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'transition',
+            uriTemplate: 't3x://projects/{project_id}/transitions/{transition_id}',
+            mimeType: 'application/json',
+          }),
+          expect.objectContaining({
+            name: 'workspace',
+            uriTemplate: 't3x://projects/{project_id}/workspaces/{workspace_id}',
+            mimeType: 'application/json',
+          }),
+        ])
+      );
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
     'routes generate boundary errors through the real stdio subprocess',
     async () => {
       const { client } = await connectConfiguredClient();
@@ -189,6 +215,24 @@ describe('apps/mcp stdio subprocess smoke', () => {
   );
 
   it(
+    'refuses Transition resources over stdio when configured for direct storage',
+    async () => {
+      const { client } = await connectConfiguredClient({
+        T3X_TOOLSETS: 'transition',
+        T3X_MCP_BACKEND: 'storage',
+      });
+      openClients.push(client);
+
+      await expect(
+        client.readResource({
+          uri: 't3x://projects/proj_1/transitions/trn_00000000000000000000000000000001',
+        })
+      ).rejects.toThrow('T3X_MCP_BACKEND=api');
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
     'advertises transition tools while refusing direct-storage authority paths',
     async () => {
       const { client } = await connectConfiguredClient({
@@ -203,6 +247,8 @@ describe('apps/mcp stdio subprocess smoke', () => {
         'inspect_transition',
         'verify_transition',
         'attach_statement',
+        'decide_transition',
+        'commit_transition',
       ]);
 
       const result = await client.callTool({

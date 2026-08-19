@@ -98,6 +98,30 @@ describe('apps/mcp entrypoint', () => {
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
+  it('fails fast for empty toolset configuration', async () => {
+    process.env.T3X_TOOLSETS = ' , ';
+
+    await expect(import('../index.ts')).rejects.toThrow('process.exit:1');
+
+    expect(mockCreateMcpServer).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(mockConsoleError).toHaveBeenCalledWith(
+      'T3X_TOOLSETS must include at least one of: core, advanced, transition.'
+    );
+  });
+
+  it('fails fast for unsupported toolsets before server startup', async () => {
+    process.env.T3X_TOOLSETS = 'core,legacy-transition';
+
+    await expect(import('../index.ts')).rejects.toThrow('process.exit:1');
+
+    expect(mockCreateMcpServer).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(mockConsoleError).toHaveBeenCalledWith(
+      'Unsupported T3X_TOOLSETS value(s): legacy-transition. Use only: core, advanced, transition.'
+    );
+  });
+
   it('fails fast for unsupported http transport', async () => {
     process.env.T3X_TRANSPORT = 'http';
 

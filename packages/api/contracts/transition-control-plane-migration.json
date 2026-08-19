@@ -311,7 +311,7 @@
         },
         {
           "file": "packages/mcp/src/tools/advanced/merge.ts",
-          "token": "commitRepositoryYOpsMerge({"
+          "token": "client.commitMergeDraft("
         }
       ],
       "migration_proofs": [
@@ -322,10 +322,14 @@
         {
           "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
           "token": "recomputes and commits a deterministic two-parent merge with source evidence"
+        },
+        {
+          "file": "packages/mcp/src/tools/advanced/merge.ts",
+          "token": "t3x_merge execute requires T3X_MCP_BACKEND=api."
         }
       ],
-      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary.",
-      "remaining_gap": "Merge remains a task adapter and does not yet expose durable canonical review or command receipts. Retiring governance ownership requires canonical merge lifecycle parity and first-party caller migration.",
+      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary. MCP storage mode may prepare and resolve drafts locally, but execute is fail-closed and the API-backed path calls the shared merge commit command.",
+      "remaining_gap": "Merge remains a task adapter and does not yet expose durable canonical review or command receipts. Retiring governance ownership requires canonical merge lifecycle parity and any remaining first-party caller migration.",
       "replacement": "Keep Merge as a task-level adapter while its deterministic multi-parent Effect, Statements, Decision, and Commit use the canonical lifecycle.",
       "removal_gate": "The task endpoint may remain, but it must stop owning governance orchestration once canonical merge lifecycle parity is covered."
     },

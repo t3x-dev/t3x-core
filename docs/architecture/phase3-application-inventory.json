@@ -152,8 +152,8 @@
       "path": "packages/mcp/src/tools/advanced/merge.ts",
       "patterns": [
         "createMergeDraft",
-        "prepareRepositoryYOpsMerge",
-        "commitRepositoryYOpsMerge"
+        "commitMergeDraft",
+        "prepareRepositoryYOpsMerge"
       ]
     },
     {
@@ -179,7 +179,6 @@
         "packages/mcp/src/resources/index.ts",
         "packages/mcp/src/tools/advanced/admin.ts",
         "packages/mcp/src/tools/advanced/merge.ts",
-        "packages/mcp/src/tools/core/commit.ts",
         "packages/mcp/src/tools/core/edit.ts",
         "packages/mcp/src/tools/core/extract.ts",
         "packages/mcp/src/tools/core/generate.ts",
@@ -187,20 +186,7 @@
       ]
     }
   ],
-  "mcpHardcodedActors": [
-    {
-      "path": "packages/mcp/src/tools/advanced/merge.ts",
-      "actors": [
-        "agent:mcp-merge"
-      ]
-    },
-    {
-      "path": "packages/mcp/src/tools/core/commit.ts",
-      "actors": [
-        "human:mcp-local"
-      ]
-    }
-  ],
+  "mcpHardcodedActors": [],
   "yops": {
     "operationCount": 18,
     "operations": [

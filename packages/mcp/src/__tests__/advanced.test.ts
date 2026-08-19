@@ -7,6 +7,11 @@ const mockDB = {
 };
 const mockApiClient = {
   createProject: vi.fn(),
+  createMergeDraft: vi.fn(),
+  getMergeDraft: vi.fn(),
+  updateMergeDraft: vi.fn(),
+  commitMergeDraft: vi.fn(),
+  deleteMergeDraft: vi.fn(),
 };
 
 vi.mock('../db.js', () => ({
@@ -96,6 +101,35 @@ const MOCK_MERGE_DRAFT_CANCELLED = {
   ...MOCK_MERGE_DRAFT,
   draftId: 'md_cancelled',
   status: 'cancelled',
+};
+
+const MOCK_API_MERGE_DRAFT = {
+  draftId: 'md_api1',
+  projectId: 'proj_test1',
+  sourceHash: 'sha256:aaa',
+  targetHash: 'sha256:bbb',
+  sourceBranch: 'feature',
+  targetBranch: 'release',
+  prepared: JSON.parse(MOCK_MERGE_DRAFT.preparedJson),
+  decisions: undefined,
+  decisionRevision: 0,
+  status: 'pending',
+  message: null,
+  createdAt: '2026-04-13T00:00:00.000Z',
+  updatedAt: '2026-04-13T00:00:00.000Z',
+};
+
+const MOCK_API_MERGE_DRAFT_RESOLVED = {
+  ...MOCK_API_MERGE_DRAFT,
+  draftId: 'md_api_resolved',
+  decisions: {
+    conflictResolutions: { trip: 'source' },
+    keepFromSource: [],
+    keepFromTarget: [],
+    keepRelationsFromSource: true,
+    keepRelationsFromTarget: true,
+  },
+  decisionRevision: 1,
 };
 
 const MOCK_PROJECT = {
@@ -483,60 +517,62 @@ describe('t3x_merge handler', () => {
 
   // -- execute --
 
-  it('execute: returns error when not all conflicts resolved', async () => {
+  it('execute: fails closed on the storage backend instead of minting a local merge actor', async () => {
     const result = await mergeHandler({
       action: 'execute',
       draft_id: 'md_test1',
       message: 'Merge',
     });
+
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('0/1 conflicts resolved');
+    expect(result.content[0].text).toContain('t3x_merge execute requires T3X_MCP_BACKEND=api');
+    expect(result.content[0].text).toContain('shared API/application command');
+    expect(transitionMock.commitRepositoryYOpsMerge).not.toHaveBeenCalled();
   });
 
-  it('execute: creates merge commit when all resolved', async () => {
+  it('execute: commits through the API backend when all conflicts are resolved', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.getMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT_RESOLVED);
+    mockApiClient.commitMergeDraft.mockResolvedValueOnce({
+      hash: 'sha256:merged',
+      parents: ['sha256:bbb', 'sha256:aaa'],
+      author: { type: 'human', name: 'mcp' },
+      committed_at: '2026-04-13T00:00:00.000Z',
+      message: 'Merge feature',
+      branch: 'release',
+      merge_summary: {
+        kept_identical: 0,
+        resolved_conflicts: 1,
+        kept_from_source: 0,
+        kept_from_target: 0,
+        discarded: 0,
+        total_nodes: 1,
+      },
+    });
+
     const result = await mergeHandler({
       action: 'execute',
-      draft_id: 'md_resolved',
+      draft_id: 'md_api_resolved',
       message: 'Merge feature',
     });
+
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.commit_hash).toBe('sha256:merged');
     expect(data.parents).toEqual(['sha256:bbb', 'sha256:aaa']);
     expect(data.branch).toBe('release');
-    expect(transitionMock.commitRepositoryYOpsMerge).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        projectId: 'proj_test1',
-        refName: 'release',
-        sourceDigest: 'sha256:aaa',
-        targetDigest: 'sha256:bbb',
-      })
-    );
-  });
-
-  it('execute: rejects a draft whose target is no longer the branch head', async () => {
-    transitionMock.commitRepositoryYOpsMerge.mockRejectedValueOnce(
-      new Error('Target commit is no longer the current head')
-    );
-
-    const result = await mergeHandler({
-      action: 'execute',
-      draft_id: 'md_resolved',
-      message: 'Stale merge',
+    expect(mockApiClient.commitMergeDraft).toHaveBeenCalledWith('md_api_resolved', {
+      message: 'Merge feature',
+      branch: 'release',
     });
-
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('no longer the current head');
+    expect(transitionMock.commitRepositoryYOpsMerge).not.toHaveBeenCalled();
   });
 
-  it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {
-    const { getMergeDraft, updateMergeDraft } = await import('@t3x-dev/storage');
-
-    vi.mocked(getMergeDraft)
-      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
-      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
-      .mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
-    vi.mocked(updateMergeDraft).mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
+  it('prepare and resolve: use API merge draft commands when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.createMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT);
+    mockApiClient.getMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT);
+    mockApiClient.updateMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT_RESOLVED);
 
     const prepared = await mergeHandler({
       action: 'prepare',
@@ -547,15 +583,84 @@ describe('t3x_merge handler', () => {
       target_branch: 'release',
     });
     expect(prepared.isError).toBeUndefined();
-    expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_test1');
+    expect(JSON.parse(prepared.content[0].text)).toMatchObject({
+      draft_id: 'md_api1',
+      summary: { conflicts: 1 },
+    });
+    expect(mockApiClient.createMergeDraft).toHaveBeenCalledWith({
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
+    });
 
-    const shown = await mergeHandler({ action: 'show_conflict', draft_id: 'md_test1', index: 0 });
+    const resolved = await mergeHandler({
+      action: 'resolve',
+      draft_id: 'md_api1',
+      index: 0,
+      resolution: 'source',
+      reasoning: 'Original budget is correct',
+    });
+    expect(resolved.isError).toBeUndefined();
+    expect(JSON.parse(resolved.content[0].text)).toMatchObject({
+      resolved_path: 'trip',
+      progress: '1/1 conflicts resolved',
+    });
+    expect(mockApiClient.updateMergeDraft).toHaveBeenCalledWith(
+      'md_api1',
+      expect.objectContaining({
+        expected_decision_revision: 0,
+        decisions: expect.objectContaining({
+          conflictResolutions: { trip: 'source' },
+        }),
+      })
+    );
+  });
+
+  it('supports the documented prepare -> show_conflict -> resolve -> execute flow through API backend', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.createMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT);
+    mockApiClient.getMergeDraft
+      .mockResolvedValueOnce(MOCK_API_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_API_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_API_MERGE_DRAFT_RESOLVED);
+    mockApiClient.updateMergeDraft.mockResolvedValueOnce(MOCK_API_MERGE_DRAFT_RESOLVED);
+    mockApiClient.commitMergeDraft.mockResolvedValueOnce({
+      hash: 'sha256:merged',
+      parents: ['sha256:bbb', 'sha256:aaa'],
+      author: { type: 'human', name: 'mcp' },
+      committed_at: '2026-04-13T00:00:00.000Z',
+      message: 'Merge feature',
+      branch: 'release',
+      merge_summary: {
+        kept_identical: 0,
+        resolved_conflicts: 1,
+        kept_from_source: 0,
+        kept_from_target: 0,
+        discarded: 0,
+        total_nodes: 1,
+      },
+    });
+
+    const prepared = await mergeHandler({
+      action: 'prepare',
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      source_branch: 'feature',
+      target_branch: 'release',
+    });
+    expect(prepared.isError).toBeUndefined();
+    expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_api1');
+
+    const shown = await mergeHandler({ action: 'show_conflict', draft_id: 'md_api1', index: 0 });
     expect(shown.isError).toBeUndefined();
     expect(JSON.parse(shown.content[0].text).conflict.path).toBe('trip');
 
     const resolved = await mergeHandler({
       action: 'resolve',
-      draft_id: 'md_test1',
+      draft_id: 'md_api1',
       index: 0,
       resolution: 'source',
       reasoning: 'Original budget is correct',
@@ -565,7 +670,7 @@ describe('t3x_merge handler', () => {
 
     const executed = await mergeHandler({
       action: 'execute',
-      draft_id: 'md_test1',
+      draft_id: 'md_api_resolved',
       message: 'Merge feature',
     });
     expect(executed.isError).toBeUndefined();
