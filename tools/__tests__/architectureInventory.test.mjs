@@ -79,7 +79,10 @@ test('the repository phase 3 architecture inventory can be collected', () => {
 
   assert.equal(inventory.version, 1);
   assert.equal(inventory.scope, 'phase-3-application-convergence');
-  assert.equal(inventory.applicationPackage.exists, false);
+  if (inventory.applicationPackage.exists) {
+    assert.equal(inventory.applicationPackage.name, '@t3x-dev/application');
+    assert.equal(inventory.applicationPackage.private, true);
+  }
   assert.ok(inventory.transitionControlPlane.length > 0);
   assert.ok(inventory.apiRouteAuthorization.routeFiles > 0);
   assert.equal(inventory.yops.operationCount, 18);
