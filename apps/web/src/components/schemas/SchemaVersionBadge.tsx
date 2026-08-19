@@ -16,7 +16,7 @@ interface SchemaVersionBadgeProps {
 export function SchemaVersionBadge({ release }: SchemaVersionBadgeProps) {
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
-      <span className="truncate [font-weight:650] text-[var(--text-primary)]">
+      <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
         {formatSchemaReleaseName(release)}
       </span>
       <Badge variant={getSchemaStatusTone(release.status)}>{STATUS_LABELS[release.status]}</Badge>

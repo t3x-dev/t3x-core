@@ -55,10 +55,10 @@ function ProjectMetric({
   }[tone];
 
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)]">
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
       <span
         aria-hidden="true"
-        className="size-2 rounded-full"
+        className="size-1.5 rounded-full"
         style={{ backgroundColor: toneVar }}
       />
       <span className="truncate">
@@ -70,7 +70,7 @@ function ProjectMetric({
 
 function ProjectMetrics({ project }: { project: ProjectSummary }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-2">
+    <div className="flex flex-wrap gap-x-3.5 gap-y-1.5">
       <ProjectMetric label="Sources" value={metricValue(project.nodes)} tone="source" />
       <ProjectMetric label="YSchema" value="pending" tone="schema" />
       <ProjectMetric label="YOps" value="pending" tone="yops" />
@@ -106,18 +106,18 @@ function ProjectCard({
           onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
-          <h3 className="truncate text-lg font-semibold leading-tight text-[var(--accent-commit)]">
+          <h3 className="truncate text-base font-semibold leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
             {project.name}
           </h3>
-          <p className="mt-3 line-clamp-2 text-sm font-medium leading-snug text-[var(--text-secondary)]">
+          <p className="mt-1.5 line-clamp-2 text-xs font-normal leading-relaxed text-[var(--text-secondary)]">
             {project.description || 'Structured state repository.'}
           </p>
-          <p className="mt-3 truncate text-sm font-semibold text-[var(--text-tertiary)]">
+          <p className="mt-2 truncate text-xs font-mono text-[var(--text-tertiary)]">
             {getProjectRepoPath(project)}
           </p>
         </Link>
         {!compact && (
-          <span className="mt-1 shrink-0 text-xs font-semibold text-[var(--text-tertiary)]">
+          <span className="mt-1 shrink-0 text-xs font-normal text-[var(--text-tertiary)]">
             Updated {project.updatedAt}
           </span>
         )}

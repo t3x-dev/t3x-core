@@ -713,7 +713,7 @@ function StateRepositoryToolbar({
   schemaName: string;
 }) {
   return (
-    <div className="flex min-h-[38px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-2.5 py-1">
+    <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StateBranchControls
           branch={branch}
@@ -722,19 +722,27 @@ function StateRepositoryToolbar({
           onBranchChange={onBranchChange}
           onCreateBranch={onCreateBranch}
         />
-        <span className="text-xs font-medium text-[var(--text-secondary)]">
+        <span className="text-xs font-normal text-[var(--text-tertiary)]">
           {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
         </span>
-        <span className="font-mono text-xs text-[var(--text-secondary)]">{schemaName}</span>
+        <span className="text-xs font-normal text-[var(--text-tertiary)] opacity-40">/</span>
+        <span className="font-mono text-xs font-normal text-[var(--text-secondary)]">
+          {schemaName}
+        </span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button asChild className="text-xs" size="sm" variant="canvas-outline">
+        <Button
+          asChild
+          className="h-7 text-xs font-medium px-2.5"
+          size="sm"
+          variant="canvas-outline"
+        >
           <Link aria-label="History" href={historyHref}>
-            <History className="size-3.5" />
-            History
-            <Badge className="min-w-5 px-1.5 py-0 text-xs" variant="outline">
+            <History className="size-3.5 opacity-70" />
+            <span>History</span>
+            <span className="ml-0.5 rounded-full border border-[var(--stroke-default)] bg-[var(--surface-app)] px-1.5 py-0 text-[10px] font-mono text-[var(--text-secondary)]">
               {commitCount}
-            </Badge>
+            </span>
           </Link>
         </Button>
       </div>
@@ -756,20 +764,32 @@ function StateUpdateBanner({
   return (
     <output
       aria-live="polite"
-      className="flex min-h-[42px] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--accent-commit)]/15 bg-[var(--accent-commit)]/10 px-3 py-1.5 text-xs leading-5 text-[var(--accent-commit)]"
+      className="flex min-h-[38px] shrink-0 flex-wrap items-center gap-2 border-b border-[var(--accent-commit)]/15 bg-[var(--accent-commit)]/5 px-3 py-1.5 text-xs leading-5 text-[var(--accent-commit)]"
     >
       <GitCommit aria-hidden="true" className="size-3.5" />
       <span>
-        <strong className="text-[var(--text-primary)]">Newer commit available on {branch}</strong>
+        <strong className="font-semibold text-[var(--text-primary)]">
+          Newer commit available on {branch}
+        </strong>
         {' · '}
-        <span className="font-mono">{shortHash(hash)}</span>
+        <span className="font-mono text-xs">{shortHash(hash)}</span>
         {' · just now'}
       </span>
       <div className="ml-auto flex items-center gap-1.5">
-        <Button className="text-xs" onClick={onDismiss} size="sm" variant="canvas-ghost">
+        <Button
+          className="h-7 text-xs font-medium px-2"
+          onClick={onDismiss}
+          size="sm"
+          variant="canvas-ghost"
+        >
           Dismiss
         </Button>
-        <Button className="text-xs" onClick={onViewLatest} size="sm" variant="commit">
+        <Button
+          className="h-7 text-xs font-medium px-2.5"
+          onClick={onViewLatest}
+          size="sm"
+          variant="commit"
+        >
           View latest
         </Button>
       </div>
@@ -793,32 +813,35 @@ function StateCommitRow({
   yopsCount: number;
 }) {
   return (
-    <div className="flex min-h-[34px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-h-[40px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3.5 py-1.5">
+      <div className="flex min-w-0 items-center gap-2.5">
         <span
-          className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-xs font-bold text-[var(--accent-branch)]"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-[11px] font-medium text-[var(--accent-branch)]"
           title={`Author ${author}`}
         >
           W
         </span>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="truncate text-base font-semibold text-[var(--text-primary)]">{title}</h2>
-          <p className="whitespace-nowrap text-xs leading-5 text-[var(--text-secondary)]">
+          <h2 className="truncate text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
+          <p className="whitespace-nowrap text-xs text-[var(--text-tertiary)] font-normal">
             Committed state · {yopsCount} deterministic {yopsCount === 1 ? 'YOp' : 'YOps'}
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
+      <div className="flex shrink-0 items-center gap-2.5 text-xs text-[var(--text-tertiary)] font-normal">
         {commitCanvasHref && hash ? (
           <Link
-            className="font-mono hover:text-[var(--accent-commit)] hover:underline"
+            className="font-mono text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
             href={commitCanvasHref}
           >
             {shortHash(hash)}
           </Link>
         ) : (
-          <span className="font-mono">{hash ? shortHash(hash) : 'empty'}</span>
+          <span className="font-mono text-[var(--text-secondary)]">
+            {hash ? shortHash(hash) : 'empty'}
+          </span>
         )}
+        <span className="opacity-40">·</span>
         <span>{relativeTime}</span>
       </div>
     </div>
@@ -851,25 +874,25 @@ function StateObjectLine({
   workspaceHref: string;
 }) {
   return (
-    <div className="flex min-h-[38px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <div className="min-w-0 truncate text-sm text-[var(--text-secondary)]">
+    <div className="flex min-h-[40px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3.5 py-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="min-w-0 truncate text-xs text-[var(--text-secondary)] font-normal">
           state{' '}
-          <span className="font-bold text-[var(--text-primary)]">
+          <span className="font-medium text-[var(--text-primary)]">
             {schemaArtifactFileName(schemaName)}
           </span>{' '}
-          / <span className="font-bold text-[var(--text-primary)]">{rootKey}</span>
+          / <span className="font-medium text-[var(--text-primary)]">{rootKey}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-[var(--text-secondary)]">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs text-[var(--text-tertiary)] font-normal">
           <span>
             HEAD{' '}
-            <span className="font-mono">
+            <span className="font-mono text-[var(--text-secondary)]">
               {headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
             </span>
           </span>
           {diffCount > 0 && diffHref ? (
             <Link
-              className="font-semibold text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
+              className="font-medium text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
               href={diffHref}
             >
               {diffCount} changed paths
@@ -877,7 +900,7 @@ function StateObjectLine({
           ) : null}
           <span>
             Parent{' '}
-            <span className="font-mono">
+            <span className="font-mono text-[var(--text-secondary)]">
               {headCommit?.parents?.[0] ? shortHash(headCommit.parents[0]) : 'none'}
             </span>
           </span>
@@ -885,14 +908,14 @@ function StateObjectLine({
       </div>
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <Badge
-          className="min-h-[23px] px-2 text-xs font-semibold"
+          className="min-h-[22px] px-2 text-[11px] font-medium"
           variant={validationReady ? 'success' : 'warning'}
         >
           {readinessLabel}
         </Badge>
         {validationError ? (
           <span
-            className="max-w-44 truncate text-xs font-semibold text-[var(--status-warning)]"
+            className="max-w-44 truncate text-xs font-medium text-[var(--status-warning)]"
             title={validationError}
           >
             {validationError}
@@ -900,7 +923,7 @@ function StateObjectLine({
         ) : null}
         {!validationReady && onRunValidation ? (
           <Button
-            className="text-xs"
+            className="h-7 text-xs font-medium px-2.5"
             disabled={validationRunning}
             onClick={onRunValidation}
             size="sm"
@@ -911,7 +934,12 @@ function StateObjectLine({
             {validationRunning ? 'Running…' : 'Run validation'}
           </Button>
         ) : null}
-        <Button asChild className="text-xs" size="sm" variant="canvas-outline">
+        <Button
+          asChild
+          className="h-7 text-xs font-medium px-2.5"
+          size="sm"
+          variant="canvas-outline"
+        >
           <Link href={workspaceHref}>Open workspace</Link>
         </Button>
       </div>
@@ -955,7 +983,7 @@ function StateModeTabs({
           <button
             aria-selected={selected}
             className={cn(
-              'border-b-2 px-3 py-1.5 text-left transition-colors',
+              'border-b-2 px-3.5 py-2 text-left transition-colors',
               selected
                 ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -965,10 +993,10 @@ function StateModeTabs({
             role="tab"
             type="button"
           >
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">
-              <Icon aria-hidden="true" className="size-3.5" />
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium">
+              <Icon aria-hidden="true" className="size-3.5 opacity-80" />
               {mode.label}
-              <span className="hidden text-xs font-normal text-[var(--text-secondary)] lg:inline">
+              <span className="hidden text-[11px] font-normal text-[var(--text-tertiary)] lg:inline">
                 · {mode.subtitle}
               </span>
             </span>
@@ -993,10 +1021,10 @@ function StateViewTabs({
   return (
     <div
       aria-label="State views"
-      className="flex min-h-[38px] shrink-0 items-stretch justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] px-1"
+      className="flex min-h-[38px] shrink-0 items-stretch justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-1"
       role="tablist"
     >
-      <div className="flex shrink-0 items-stretch gap-0">
+      <div className="flex shrink-0 items-stretch gap-0.5">
         {SNAPSHOT_VIEWS.map((view) => {
           const Icon = view.icon;
           const selected = activeView === view.id;
@@ -1004,7 +1032,7 @@ function StateViewTabs({
             <button
               aria-selected={selected}
               className={cn(
-                'min-w-28 border-b-2 px-3 py-1 text-left transition-colors',
+                'min-w-24 border-b-2 px-3 py-1.5 text-left transition-colors',
                 selected
                   ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -1014,11 +1042,14 @@ function StateViewTabs({
               role="tab"
               type="button"
             >
-              <span className="flex items-center gap-1.5 text-sm font-semibold">
-                <Icon aria-hidden="true" className="size-3.5" />
+              <span className="flex items-center gap-1.5 text-xs font-medium">
+                <Icon
+                  aria-hidden="true"
+                  className={cn('size-3.5', selected ? 'opacity-90' : 'opacity-60')}
+                />
                 {view.label}
               </span>
-              <span className="mt-0.5 block text-xs leading-4 text-[var(--text-secondary)]">
+              <span className="mt-0.5 block text-[10px] leading-tight text-[var(--text-tertiary)] font-normal">
                 {view.subtitle}
               </span>
             </button>
@@ -1027,7 +1058,7 @@ function StateViewTabs({
       </div>
       <Button
         aria-expanded={detailsOpen}
-        className="my-auto mr-2 text-xs min-[1121px]:hidden"
+        className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
         onClick={onDetailsToggle}
         size="sm"
         type="button"
@@ -1389,7 +1420,7 @@ function StateContextRail({
         <RailRow label="Last checked" value={lastCheckedLabel} />
       </dl>
       {warning ? (
-        <p className="mt-3 text-xs font-semibold text-[var(--status-warning)]">{warning}</p>
+        <p className="mt-3 text-xs font-medium text-[var(--status-warning)]">{warning}</p>
       ) : null}
     </RailCard>
   );
@@ -1397,8 +1428,8 @@ function StateContextRail({
 
 function RailCard({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 shadow-sm">
-      <h2 className="mb-3 text-base font-semibold text-[var(--text-primary)]">{title}</h2>
+    <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3.5 shadow-sm">
+      <h2 className="mb-2.5 text-base font-semibold text-[var(--text-primary)]">{title}</h2>
       <div className="leading-5 text-[var(--text-secondary)]">{children}</div>
     </section>
   );
@@ -1417,11 +1448,11 @@ function RailRow({
 }) {
   return (
     <>
-      <dt className="font-semibold text-[var(--text-secondary)]">{label}</dt>
+      <dt className="font-normal text-[var(--text-tertiary)] text-xs">{label}</dt>
       <dd
         className={cn(
-          'min-w-0 truncate font-semibold text-[var(--text-primary)]',
-          mono && 'font-mono text-xs'
+          'min-w-0 truncate font-medium text-[var(--text-primary)] text-xs',
+          mono && 'font-mono text-[11px]'
         )}
         title={title ?? value}
       >
