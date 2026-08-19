@@ -388,8 +388,6 @@ export function ProjectStateTab({
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
-  const yopsCount = countStateYOps(effectiveOperations);
-  const branchCount = branchOptions.length;
   const committedDiffChanges = useMemo(
     () =>
       headCommit && snapshot.parentCommit
@@ -536,16 +534,32 @@ export function ProjectStateTab({
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
           {activeView !== 'canvas' ? (
             <>
-              <StateRepositoryToolbar
+              <StateUnifiedToolbar
                 branch={branchFocus || 'main'}
-                branchCount={branchCount}
                 branchOptions={branchOptions}
+                commitCanvasHref={commitCanvasHref}
                 commitCount={commitCount}
+                commitTitle={commitTitle}
+                diffCount={committedDiffChanges.length}
+                diffHref={diffHref}
+                headCommit={headCommit}
                 headCommitHash={mainHeadCommitHash}
                 historyHref={historyHref}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
+                onRunValidation={
+                  headCommit && onRunValidation
+                    ? () => onRunValidation(headCommit.hash, schemaName)
+                    : undefined
+                }
+                readinessLabel={readinessLabel}
+                relativeTime={formatRelativeTime(headCommit?.committed_at)}
+                rootKey={rootKey}
                 schemaName={schemaName}
+                validationError={validationError}
+                validationReady={validationReady}
+                validationRunning={validationRunning}
+                workspaceHref={workspaceHref}
               />
               {availableHeadHash ? (
                 <StateUpdateBanner
@@ -555,31 +569,6 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              <StateCommitRow
-                author={headCommit?.author?.name ?? headCommit?.author?.type ?? 'W'}
-                commitCanvasHref={commitCanvasHref}
-                hash={headCommit?.hash ?? null}
-                relativeTime={formatRelativeTime(headCommit?.committed_at)}
-                title={commitTitle}
-                yopsCount={yopsCount}
-              />
-              <StateObjectLine
-                diffHref={diffHref}
-                diffCount={committedDiffChanges.length}
-                headCommit={headCommit}
-                onRunValidation={
-                  headCommit && onRunValidation
-                    ? () => onRunValidation(headCommit.hash, schemaName)
-                    : undefined
-                }
-                readinessLabel={readinessLabel}
-                rootKey={rootKey}
-                schemaName={schemaName}
-                validationError={validationError}
-                validationReady={validationReady}
-                validationRunning={validationRunning}
-                workspaceHref={workspaceHref}
-              />
               <StateViewTabs
                 activeView={activeView}
                 detailsOpen={stateDetailsOpen}
@@ -691,30 +680,54 @@ export function ProjectStateTab({
   );
 }
 
-function StateRepositoryToolbar({
+function StateUnifiedToolbar({
   branch,
-  branchCount,
   branchOptions,
+  commitCanvasHref,
   commitCount,
+  commitTitle,
+  diffCount,
+  diffHref,
+  headCommit,
   headCommitHash,
   historyHref,
   onBranchChange,
   onCreateBranch,
+  onRunValidation,
+  readinessLabel,
+  relativeTime,
+  rootKey,
   schemaName,
+  validationError,
+  validationReady,
+  validationRunning,
+  workspaceHref,
 }: {
   branch: string;
-  branchCount: number;
   branchOptions: string[];
+  commitCanvasHref: string | null;
   commitCount: number;
+  commitTitle: string;
+  diffCount: number;
+  diffHref: string | null;
+  headCommit: ApiCommit | null;
   headCommitHash: string | null;
   historyHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
+  onRunValidation?: () => Promise<void> | void;
+  readinessLabel: string;
+  relativeTime: string;
+  rootKey: string;
   schemaName: string;
+  validationError?: string | null;
+  validationReady: boolean;
+  validationRunning: boolean;
+  workspaceHref: string;
 }) {
   return (
-    <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 py-1.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1.5 shadow-xs">
+      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
         <StateBranchControls
           branch={branch}
           branchOptions={branchOptions}
@@ -722,15 +735,91 @@ function StateRepositoryToolbar({
           onBranchChange={onBranchChange}
           onCreateBranch={onCreateBranch}
         />
-        <span className="text-xs font-normal text-[var(--text-tertiary)]">
-          {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
+
+        <span className="text-xs text-[var(--text-tertiary)] opacity-40">/</span>
+
+        <span className="truncate text-xs font-normal text-[var(--text-secondary)]">
+          state{' '}
+          <span className="font-medium text-[var(--text-primary)]">
+            {schemaArtifactFileName(schemaName)}
+          </span>{' '}
+          / <span className="font-medium text-[var(--text-primary)]">{rootKey}</span>
         </span>
-        <span className="text-xs font-normal text-[var(--text-tertiary)] opacity-40">/</span>
-        <span className="font-mono text-xs font-normal text-[var(--text-secondary)]">
-          {schemaName}
-        </span>
+
+        {headCommit ? (
+          <>
+            <span className="text-xs text-[var(--text-tertiary)] opacity-40">·</span>
+            <div className="flex min-w-0 items-center gap-2 text-xs">
+              <h2
+                className="max-w-[240px] truncate font-semibold text-[var(--text-primary)]"
+                title={commitTitle}
+              >
+                {commitTitle}
+              </h2>
+              {commitCanvasHref && headCommit.hash ? (
+                <Link
+                  className="font-mono text-xs font-medium text-[var(--accent-commit)] hover:underline"
+                  href={commitCanvasHref}
+                  title={headCommit.hash}
+                >
+                  {shortHash(headCommit.hash)}
+                </Link>
+              ) : (
+                <span className="font-mono text-xs text-[var(--text-tertiary)]">
+                  {headCommit.hash ? shortHash(headCommit.hash) : 'empty'}
+                </span>
+              )}
+              <span className="text-[var(--text-tertiary)] font-normal whitespace-nowrap">
+                {relativeTime}
+              </span>
+            </div>
+          </>
+        ) : null}
+
+        {diffCount > 0 && diffHref ? (
+          <>
+            <span className="text-xs text-[var(--text-tertiary)] opacity-40">·</span>
+            <Link
+              className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline whitespace-nowrap"
+              href={diffHref}
+            >
+              {diffCount} changed paths
+            </Link>
+          </>
+        ) : null}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge
+          className="min-h-[22px] px-2 text-[11px] font-medium"
+          variant={validationReady ? 'success' : 'warning'}
+        >
+          {readinessLabel}
+        </Badge>
+
+        {validationError ? (
+          <span
+            className="max-w-44 truncate text-xs font-medium text-[var(--status-warning)]"
+            title={validationError}
+          >
+            {validationError}
+          </span>
+        ) : null}
+
+        {!validationReady && onRunValidation && headCommit ? (
+          <Button
+            className="h-7 text-xs font-medium px-2.5"
+            disabled={validationRunning}
+            onClick={onRunValidation}
+            size="sm"
+            type="button"
+            variant="commit"
+          >
+            <RotateCw className={cn('size-3.5', validationRunning && 'animate-spin')} />
+            {validationRunning ? 'Running…' : 'Run validation'}
+          </Button>
+        ) : null}
+
         <Button
           asChild
           className="h-7 text-xs font-medium px-2.5"
@@ -744,6 +833,15 @@ function StateRepositoryToolbar({
               {commitCount}
             </span>
           </Link>
+        </Button>
+
+        <Button
+          asChild
+          className="h-7 text-xs font-medium px-2.5"
+          size="sm"
+          variant="canvas-outline"
+        >
+          <Link href={workspaceHref}>Open workspace</Link>
         </Button>
       </div>
     </div>
@@ -794,156 +892,6 @@ function StateUpdateBanner({
         </Button>
       </div>
     </output>
-  );
-}
-
-function StateCommitRow({
-  author,
-  commitCanvasHref,
-  hash,
-  relativeTime,
-  title,
-  yopsCount,
-}: {
-  author: string;
-  commitCanvasHref: string | null;
-  hash: string | null;
-  relativeTime: string;
-  title: string;
-  yopsCount: number;
-}) {
-  return (
-    <div className="flex min-h-[40px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3.5 py-1.5">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-branch)]/10 text-[11px] font-medium text-[var(--accent-branch)]"
-          title={`Author ${author}`}
-        >
-          W
-        </span>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="truncate text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
-          <p className="whitespace-nowrap text-xs text-[var(--text-tertiary)] font-normal">
-            Committed state · {yopsCount} deterministic {yopsCount === 1 ? 'YOp' : 'YOps'}
-          </p>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2.5 text-xs text-[var(--text-tertiary)] font-normal">
-        {commitCanvasHref && hash ? (
-          <Link
-            className="font-mono text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
-            href={commitCanvasHref}
-          >
-            {shortHash(hash)}
-          </Link>
-        ) : (
-          <span className="font-mono text-[var(--text-secondary)]">
-            {hash ? shortHash(hash) : 'empty'}
-          </span>
-        )}
-        <span className="opacity-40">·</span>
-        <span>{relativeTime}</span>
-      </div>
-    </div>
-  );
-}
-
-function StateObjectLine({
-  diffHref,
-  diffCount,
-  headCommit,
-  onRunValidation,
-  readinessLabel,
-  rootKey,
-  schemaName,
-  validationError,
-  validationReady,
-  validationRunning,
-  workspaceHref,
-}: {
-  diffHref: string | null;
-  diffCount: number;
-  headCommit: ApiCommit | null;
-  onRunValidation?: () => Promise<void> | void;
-  readinessLabel: string;
-  rootKey: string;
-  schemaName: string;
-  validationError?: string | null;
-  validationReady: boolean;
-  validationRunning: boolean;
-  workspaceHref: string;
-}) {
-  return (
-    <div className="flex min-h-[40px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3.5 py-1.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <div className="min-w-0 truncate text-xs text-[var(--text-secondary)] font-normal">
-          state{' '}
-          <span className="font-medium text-[var(--text-primary)]">
-            {schemaArtifactFileName(schemaName)}
-          </span>{' '}
-          / <span className="font-medium text-[var(--text-primary)]">{rootKey}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-[var(--text-tertiary)] font-normal">
-          <span>
-            HEAD{' '}
-            <span className="font-mono text-[var(--text-secondary)]">
-              {headCommit?.hash ? shortHash(headCommit.hash) : 'empty'}
-            </span>
-          </span>
-          {diffCount > 0 && diffHref ? (
-            <Link
-              className="font-medium text-[var(--text-secondary)] hover:text-[var(--accent-commit)] hover:underline"
-              href={diffHref}
-            >
-              {diffCount} changed paths
-            </Link>
-          ) : null}
-          <span>
-            Parent{' '}
-            <span className="font-mono text-[var(--text-secondary)]">
-              {headCommit?.parents?.[0] ? shortHash(headCommit.parents[0]) : 'none'}
-            </span>
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <Badge
-          className="min-h-[22px] px-2 text-[11px] font-medium"
-          variant={validationReady ? 'success' : 'warning'}
-        >
-          {readinessLabel}
-        </Badge>
-        {validationError ? (
-          <span
-            className="max-w-44 truncate text-xs font-medium text-[var(--status-warning)]"
-            title={validationError}
-          >
-            {validationError}
-          </span>
-        ) : null}
-        {!validationReady && onRunValidation ? (
-          <Button
-            className="h-7 text-xs font-medium px-2.5"
-            disabled={validationRunning}
-            onClick={onRunValidation}
-            size="sm"
-            type="button"
-            variant="commit"
-          >
-            <RotateCw className={cn('size-3.5', validationRunning && 'animate-spin')} />
-            {validationRunning ? 'Running…' : 'Run validation'}
-          </Button>
-        ) : null}
-        <Button
-          asChild
-          className="h-7 text-xs font-medium px-2.5"
-          size="sm"
-          variant="canvas-outline"
-        >
-          <Link href={workspaceHref}>Open workspace</Link>
-        </Button>
-      </div>
-    </div>
   );
 }
 
