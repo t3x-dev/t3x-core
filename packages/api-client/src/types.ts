@@ -5,6 +5,7 @@
 import type {
   ActionCapabilityView,
   ClaimView,
+  MergeDecision as CoreMergeDecision,
   TransitionGraphViewV1 as CoreTransitionGraphViewV1,
 } from '@t3x-dev/core';
 
@@ -370,21 +371,19 @@ export interface MergeDraft {
   targetBranch?: string;
   status: 'pending' | 'committed' | 'cancelled';
   prepared: MergeDraftPrepared;
+  decisions?: MergeDecision;
+  decisionRevision?: number;
   message: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export type MergeDecision = CoreMergeDecision;
+
 export interface MergeDraftCommitInput {
   message: string;
   branch?: string;
-  decisions?: {
-    conflictResolutions?: Record<string, string>;
-    keepFromSource?: string[];
-    keepFromTarget?: string[];
-    keepRelationsFromSource?: boolean;
-    keepRelationsFromTarget?: boolean;
-  };
+  decisions?: MergeDecision;
 }
 
 export interface MergeSummary {
@@ -417,6 +416,8 @@ export interface MergeResolution {
 export interface UpdateMergeDraftInput {
   prepared?: unknown;
   message?: string;
+  decisions?: MergeDecision;
+  expected_decision_revision?: number;
   resolutions?: MergeResolution[];
 }
 
