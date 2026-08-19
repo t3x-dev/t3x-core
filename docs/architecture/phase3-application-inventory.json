@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "scope": "phase-3-application-convergence",
+  "applicationPackage": {
+    "exists": false
+  },
+  "transitionControlPlane": [
+    {
+      "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
+      "lines": 193
+    },
+    {
+      "path": "packages/api/src/lib/transition-control-plane/index.ts",
+      "lines": 966
+    },
+    {
+      "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
+      "lines": 774
+    },
+    {
+      "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
+      "lines": 110
+    }
+  ],
+  "apiRouteAuthorization": {
+    "routeFiles": 75,
+    "filesUsingGetDB": 67,
+    "filesUsingAssertProjectAccess": 53,
+    "filesUsingRequireTransitionAuthority": 2,
+    "getDBWithoutProjectAccess": [
+      "packages/api/src/routes/auth-local.openapi.ts",
+      "packages/api/src/routes/auth-me.openapi.ts",
+      "packages/api/src/routes/comparisons.openapi.ts",
+      "packages/api/src/routes/deploy-agents.openapi.ts",
+      "packages/api/src/routes/diff.openapi.ts",
+      "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "packages/api/src/routes/health.openapi.ts",
+      "packages/api/src/routes/notifications.openapi.ts",
+      "packages/api/src/routes/providers.openapi.ts",
+      "packages/api/src/routes/relations.openapi.ts",
+      "packages/api/src/routes/status.openapi.ts",
+      "packages/api/src/routes/templates.openapi.ts",
+      "packages/api/src/routes/webhooks.openapi.ts",
+      "packages/api/src/routes/ws.ts"
+    ]
+  },
+  "compatibilityWriterReferences": [
+    {
+      "path": "apps/cli/src/commands/commit.ts",
+      "patterns": [
+        "commitFromDraft"
+      ]
+    },
+    {
+      "path": "apps/cli/src/commands/merge.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/commands/merge/commitMergeDraft.ts",
+      "patterns": [
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/commands/merge/createMergeDraft.ts",
+      "patterns": [
+        "createMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/commands/merge/errors.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/commands/merge/index.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/components/diff/DiffPage.tsx",
+      "patterns": [
+        "createMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/components/merge/MergeWorkspace.tsx",
+      "patterns": [
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/hooks/canvas/useCanvasCommitActions.ts",
+      "patterns": [
+        "createMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/hooks/merge/useMergeWorkspaceActions.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "apps/web/src/infrastructure/mergeApi.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "packages/api/src/lib/repository-state-transition.ts",
+      "patterns": [
+        "prepareRepositoryYOpsMerge",
+        "commitRepositoryYOpsMerge"
+      ]
+    },
+    {
+      "path": "packages/api/src/ops/merge.ts",
+      "patterns": [
+        "prepareRepositoryYOpsMerge",
+        "commitRepositoryYOpsMerge"
+      ]
+    },
+    {
+      "path": "packages/api/src/routes/merge.openapi.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft",
+        "prepareRepositoryYOpsMerge",
+        "commitRepositoryYOpsMerge"
+      ]
+    },
+    {
+      "path": "packages/api/src/routes/pull-requests.openapi.ts",
+      "patterns": [
+        "createMergeDraft",
+        "commitMergeDraft"
+      ]
+    },
+    {
+      "path": "packages/mcp/src/tools/advanced/merge.ts",
+      "patterns": [
+        "createMergeDraft",
+        "prepareRepositoryYOpsMerge",
+        "commitRepositoryYOpsMerge"
+      ]
+    },
+    {
+      "path": "packages/mcp/src/tools/core/commit.ts",
+      "patterns": [
+        "commitFromDraft"
+      ]
+    }
+  ],
+  "surfaceStorageImports": [
+    {
+      "surface": "web",
+      "files": [
+        "apps/web/src/infrastructure/db.ts"
+      ]
+    },
+    {
+      "surface": "mcp",
+      "files": [
+        "packages/mcp/src/db.ts",
+        "packages/mcp/src/provider-runtime.ts",
+        "packages/mcp/src/repository-semantic-commit.ts",
+        "packages/mcp/src/resources/index.ts",
+        "packages/mcp/src/tools/advanced/admin.ts",
+        "packages/mcp/src/tools/advanced/merge.ts",
+        "packages/mcp/src/tools/core/commit.ts",
+        "packages/mcp/src/tools/core/edit.ts",
+        "packages/mcp/src/tools/core/extract.ts",
+        "packages/mcp/src/tools/core/generate.ts",
+        "packages/mcp/src/tools/core/query.ts"
+      ]
+    }
+  ],
+  "mcpHardcodedActors": [
+    {
+      "path": "packages/mcp/src/tools/advanced/merge.ts",
+      "actors": [
+        "agent:mcp-merge"
+      ]
+    },
+    {
+      "path": "packages/mcp/src/tools/core/commit.ts",
+      "actors": [
+        "human:mcp-local"
+      ]
+    }
+  ],
+  "yops": {
+    "operationCount": 18,
+    "operations": [
+      "append",
+      "assert",
+      "clone",
+      "define",
+      "drop",
+      "fold",
+      "merge",
+      "move",
+      "nest",
+      "omit",
+      "pick",
+      "populate",
+      "rename",
+      "set",
+      "sort",
+      "split",
+      "unique",
+      "unset"
+    ]
+  },
+  "reviewSnapshotReferences": []
+}

@@ -92,6 +92,9 @@ jobs:
       - name: Check Transition boundaries
         run: pnpm check:transition-boundaries
 
+      - name: Check architecture inventory
+        run: pnpm check:architecture-inventory
+
       - name: Check API route policy inventory
         run: pnpm check:route-policy
 
