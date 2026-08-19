@@ -1082,21 +1082,21 @@ function PrdOutline({
     <aside
       aria-label="Document outline"
       className={cn(
-        'z-30 min-h-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
+        'z-30 min-h-0 min-w-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
         open
-          ? 'absolute inset-y-0 left-0 block w-[270px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
+          ? 'absolute inset-y-0 left-0 block w-[300px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
           : 'hidden xl:block'
       )}
     >
-      <StateScrollArea className="h-full" label="Document outline items">
-        <div className="px-3 py-4">
-          <header className="border-b border-[var(--stroke-divider)] px-1 pb-3">
+      <StateScrollArea className="h-full w-full min-w-0" label="Document outline items">
+        <div className="w-full min-w-0 px-3 py-4">
+          <header className="w-full min-w-0 border-b border-[var(--stroke-divider)] px-1 pb-3">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <strong className="block text-[11px] font-bold text-[var(--text-primary)]">
+              <div className="min-w-0 flex-1">
+                <strong className="block truncate text-[11px] font-bold text-[var(--text-primary)]">
                   {isPrdDocument ? 'PRD structure' : 'Document structure'}
                 </strong>
-                <span className="mt-0.5 block text-[9px] text-[var(--text-tertiary)]">
+                <span className="mt-0.5 block truncate text-[9px] text-[var(--text-tertiary)]">
                   {schemaNavigation ? (
                     <>
                       <span>
@@ -1128,16 +1128,16 @@ function PrdOutline({
             {schemaNavigation ? (
               <div
                 aria-label="PRD navigation view"
-                className="mt-3 grid grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
+                className="mt-3 grid w-full grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
                 role="tablist"
               >
                 {(['modules', 'outline'] as const).map((nextView) => (
                   <button
                     aria-selected={activeView === nextView}
                     className={cn(
-                      'h-7 rounded-[5px] text-[9px] font-bold capitalize text-[var(--text-tertiary)] transition-colors',
+                      'h-7 min-w-0 truncate rounded-[5px] px-2 text-xs font-medium capitalize text-[var(--text-tertiary)] transition-colors',
                       activeView === nextView &&
-                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-xs font-semibold'
                     )}
                     key={nextView}
                     onClick={() => setView(nextView)}
@@ -1153,13 +1153,13 @@ function PrdOutline({
           </header>
 
           {activeView === 'modules' && schemaNavigation ? (
-            <nav aria-label="PRD Module navigation" className="mt-4">
+            <nav aria-label="PRD Module navigation" className="mt-4 w-full min-w-0">
               {schemaNavigation.core ? (
                 <>
-                  <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                  <h2 className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                     Core tagged Module
                   </h2>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 w-full min-w-0">
                     <SchemaNavigationRow
                       index={0}
                       item={schemaNavigation.core}
@@ -1169,10 +1169,10 @@ function PrdOutline({
                   </div>
                 </>
               ) : null}
-              <h2 className="mt-4 px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              <h2 className="mt-4 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                 Modules used
               </h2>
-              <div className="mt-1.5 grid gap-1">
+              <div className="mt-1.5 grid w-full min-w-0 gap-1">
                 {schemaNavigation.modules.map((module, index) => (
                   <SchemaNavigationRow
                     index={index + (schemaNavigation.core ? 1 : 0)}
@@ -1187,40 +1187,42 @@ function PrdOutline({
           ) : (
             <nav
               aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
-              className="mt-4"
+              className="mt-4 w-full min-w-0 space-y-4"
             >
               {groups.map((group) => {
                 const groupNodes = nodes.filter((node) => node.group === group);
                 if (groupNodes.length === 0) return null;
+                const isRequirements = group === 'requirements';
+
                 return (
-                  <section className="mb-4" key={group}>
-                    <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                  <section className="w-full min-w-0" key={group}>
+                    <h2 className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                       {labels[group]}
                     </h2>
-                    <div className="mt-1.5 grid gap-0.5">
-                      {groupNodes.map((node) => {
+                    <div className="grid w-full min-w-0 gap-0.5">
+                      {groupNodes.map((node, index) => {
                         const selected = selectedNodeId === node.id;
                         return (
                           <button
                             aria-current={selected ? 'true' : undefined}
                             aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'flex min-h-8 w-full items-start gap-2 rounded-md border-l-2 border-l-transparent px-2 py-1.5 text-left text-[10px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-                              selected &&
-                                'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)]'
+                              'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
+                              selected
+                                ? 'border border-[var(--stroke-default)] bg-[var(--surface-card)] font-medium text-[var(--text-primary)] shadow-xs'
+                                : 'border border-transparent text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
                             )}
                             key={node.id}
                             onClick={() => onSelect(node.id)}
+                            title={node.label}
                             type="button"
                           >
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-semibold text-current">{node.label}</span>
-                              {node.meta ? (
-                                <span className="mt-0.5 block truncate font-mono text-[8px] font-normal text-[var(--text-tertiary)]">
-                                  {node.meta}
-                                </span>
-                              ) : null}
-                            </span>
+                            {isRequirements ? (
+                              <span className="shrink-0 font-mono text-[10px] text-[var(--text-tertiary)] opacity-75">
+                                {String(index + 1).padStart(2, '0')}
+                              </span>
+                            ) : null}
+                            <span className="min-w-0 flex-1 truncate">{node.label}</span>
                           </button>
                         );
                       })}
@@ -1270,25 +1272,26 @@ function SchemaNavigationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[50px] items-center rounded-md border-l-2 border-l-transparent transition-colors hover:bg-[var(--hover-bg)]',
-        selected && 'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)]'
+        'group flex min-h-[44px] w-full min-w-0 items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
+        selected && 'bg-[var(--status-info-muted)]'
       )}
     >
       <button
         aria-current={selected ? 'true' : undefined}
         aria-label={`Go to ${item.title} instance`}
-        className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
         onClick={() => onSelect(item.nodeId)}
+        title={item.title}
         type="button"
       >
         <span className={cn('flex size-6 flex-none items-center justify-center rounded-md', tone)}>
           <Icon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[10px] font-semibold text-[var(--text-primary)]">
+          <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
             {item.title}
           </span>
-          <span className="mt-0.5 block truncate font-mono text-[8px] text-[var(--text-tertiary)]">
+          <span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--text-tertiary)]">
             {item.canonicalName} · v{item.version}
           </span>
         </span>

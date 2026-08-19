@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Archive,
-  ArrowLeft,
-  Copy,
-  FilePlus2,
-  MoreHorizontal,
-  Search,
-  Settings2,
-} from 'lucide-react';
+import { ArrowLeft, FilePlus2, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,13 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -546,12 +531,9 @@ function SchemaLibrary({
 }
 
 function SchemaIdentityHeader({
-  identityPending,
-  onEdit,
-  onToggleArchive,
   selectedFamily,
 }: {
-  identityPending: boolean;
+  identityPending?: boolean;
   onEdit?: () => void;
   onToggleArchive?: () => Promise<void>;
   selectedFamily: SchemaFamilyPreview;
@@ -595,38 +577,6 @@ function SchemaIdentityHeader({
             ))}
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label="Schema management menu"
-              className="size-9 p-0"
-              type="button"
-              variant="canvas-outline"
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            {onEdit ? (
-              <DropdownMenuItem disabled={identityPending} onClick={onEdit}>
-                <Settings2 /> Edit name, description &amp; tags
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem
-              onClick={() => void navigator.clipboard.writeText(selectedFamily.canonicalName)}
-            >
-              <Copy /> Copy canonical name
-            </DropdownMenuItem>
-            {onToggleArchive ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={identityPending} onClick={() => void onToggleArchive()}>
-                  <Archive /> {archived ? 'Restore Schema identity' : 'Archive Schema identity'}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
       <dl className="grid gap-px border-t border-[var(--stroke-divider)] bg-[var(--stroke-divider)] min-[481px]:grid-cols-2 min-[721px]:grid-cols-4">
         <SchemaFact label="Versions" value={String(selectedFamily.releases.length)} mono />

@@ -575,11 +575,13 @@ describe('ProjectStateTab', () => {
     expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(within(structureView).getByRole('table')).toHaveClass(
-      'min-w-[1010px]',
-      'text-base',
+      'w-full',
+      'min-w-[760px]',
+      'table-fixed',
+      'text-xs',
       'leading-5'
     );
-    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[250px]');
+    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[30%]');
     expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
       'sticky',
       'top-0'
@@ -588,7 +590,7 @@ describe('ProjectStateTab', () => {
       'sticky',
       'left-0'
     );
-    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-10');
+    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-9');
     expect(screen.getByRole('heading', { name: 'State details' })).toHaveClass('text-base');
 
     expect(

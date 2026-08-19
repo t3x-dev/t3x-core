@@ -35,14 +35,14 @@ export function ProjectShell({ activeTab, children, project }: ProjectShellProps
         <div className="flex h-full min-w-0 items-center gap-2">
           <Link
             aria-label={`Back to ${DEFAULT_OWNER_SLUG}`}
-            className="inline-flex h-6 shrink-0 items-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+            className="inline-flex h-6 shrink-0 items-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
             href="/"
           >
             {DEFAULT_OWNER_SLUG}
           </Link>
           <span
             aria-hidden="true"
-            className="text-sm font-semibold leading-none text-[var(--text-tertiary)]"
+            className="text-xs font-normal leading-none text-[var(--text-tertiary)] opacity-50"
           >
             /
           </span>
@@ -52,7 +52,7 @@ export function ProjectShell({ activeTab, children, project }: ProjectShellProps
           <p className="sr-only">{project.description || 'Structured state repository'}</p>
           <span
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 text-xs font-semibold',
+              'ml-1 inline-flex shrink-0 items-center gap-1.5 text-xs font-medium',
               status === 'active'
                 ? 'text-[var(--status-success)]'
                 : status === 'paused'
@@ -63,7 +63,7 @@ export function ProjectShell({ activeTab, children, project }: ProjectShellProps
             <span
               aria-hidden="true"
               className={cn(
-                'h-1.5 w-1.5 rounded-full',
+                'size-1.5 rounded-full',
                 status === 'active'
                   ? 'bg-[var(--status-success)]'
                   : status === 'paused'
