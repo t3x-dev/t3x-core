@@ -40,6 +40,22 @@ const FORBIDDEN_LEAF_MODULES = [
   'tls',
   'undici',
 ];
+const FORBIDDEN_APPLICATION_MODULES = [
+  '@hono/node-server',
+  '@modelcontextprotocol/sdk',
+  '@t3x-dev/api',
+  '@t3x-dev/storage',
+  'commander',
+  'drizzle-orm',
+  'hono',
+  'next',
+  'openai',
+  'pg',
+  'postgres',
+  'react',
+  'undici',
+];
+const ALLOWED_APPLICATION_T3X_PACKAGES = new Set(['@t3x-dev/core', '@t3x-dev/transition']);
 
 const FORBIDDEN_RANDOM_APIS = new Set([
   'randomBytes',
@@ -345,6 +361,60 @@ function checkPackageIsolation({ rootPath, packagePath, forbiddenPackage, errors
   return files.length;
 }
 
+function checkApplicationBoundary(rootPath, errors) {
+  const packagePath = join(rootPath, 'packages/application');
+  const manifestPath = join(packagePath, 'package.json');
+  if (!existsSync(manifestPath)) return 0;
+
+  const manifest = readJson(manifestPath);
+  if (manifest.name !== '@t3x-dev/application') {
+    errors.push('packages/application must be named @t3x-dev/application');
+  }
+  if (manifest.private !== true) {
+    errors.push('@t3x-dev/application must stay private');
+  }
+  for (const dependency of runtimeDependencyNames(manifest)) {
+    if (dependency.startsWith('@t3x-dev/') && !ALLOWED_APPLICATION_T3X_PACKAGES.has(dependency)) {
+      errors.push(`@t3x-dev/application must not depend on ${dependency}`);
+    }
+    if (FORBIDDEN_APPLICATION_MODULES.some((name) => matchesModule(dependency, name))) {
+      errors.push(
+        `@t3x-dev/application must not depend on framework or storage package ${dependency}`
+      );
+    }
+  }
+
+  const files = sourceFiles(join(packagePath, 'src'));
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    const relativeFile = displayPath(rootPath, file);
+
+    for (const label of forbiddenLeafUses(source, file)) {
+      errors.push(`${relativeFile} uses forbidden ${label}`);
+    }
+
+    for (const specifier of moduleSpecifiers(source, file)) {
+      if (
+        specifier.startsWith('@t3x-dev/') &&
+        !ALLOWED_APPLICATION_T3X_PACKAGES.has(specifier.split('/').slice(0, 2).join('/'))
+      ) {
+        errors.push(`${relativeFile} imports forbidden T3X package ${specifier}`);
+      }
+      if (FORBIDDEN_APPLICATION_MODULES.some((name) => matchesModule(specifier, name))) {
+        errors.push(`${relativeFile} imports forbidden framework or storage module ${specifier}`);
+      }
+      if (specifier.startsWith('.') || isAbsolute(specifier)) {
+        const target = resolve(dirname(file), specifier);
+        if (!isWithin(packagePath, target)) {
+          errors.push(`${relativeFile} imports outside the application package: ${specifier}`);
+        }
+      }
+    }
+  }
+
+  return files.length;
+}
+
 export function validateTransitionBoundaries({ rootDir = new URL('../..', import.meta.url) } = {}) {
   const rootPath = toRootPath(rootDir);
   const errors = [];
@@ -364,6 +434,7 @@ export function validateTransitionBoundaries({ rootDir = new URL('../..', import
     forbiddenPackage: '@t3x-dev/storage',
     errors,
   });
+  filesChecked += checkApplicationBoundary(rootPath, errors);
 
   return { errors: errors.sort(), filesChecked };
 }

@@ -2,7 +2,9 @@
   "version": 1,
   "scope": "phase-3-application-convergence",
   "applicationPackage": {
-    "exists": false
+    "exists": true,
+    "name": "@t3x-dev/application",
+    "private": true
   },
   "transitionControlPlane": [
     {
@@ -11,7 +13,7 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
-      "lines": 966
+      "lines": 327
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",

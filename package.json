@@ -14,6 +14,7 @@
     "build:local": "turbo run build --filter=@t3x-dev/local",
     "build:local-runtime": "turbo run build --filter=t3x-api-server --filter=@t3x-dev/cli --filter=@t3x-dev/mcp --filter=t3x-webui --filter=@t3x-dev/local && pnpm --filter @t3x-dev/local prepare:runtime && pnpm --filter @t3x-dev/local generate:runtime-manifest",
     "build:runner": "turbo run build --filter=@t3x-dev/runner",
+    "build:application": "turbo run build --filter=@t3x-dev/application",
     "build:api": "turbo run build --filter=@t3x-dev/api",
     "build:api-server": "turbo run build --filter=t3x-api-server",
     "build:yops": "turbo run build --filter=@t3x-dev/yops",
