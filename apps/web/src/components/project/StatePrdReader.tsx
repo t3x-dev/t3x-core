@@ -4,7 +4,9 @@ import {
   Blocks,
   Braces,
   Check,
+  CheckCircle2,
   ChevronDown,
+  CircleDot,
   Copy,
   Cpu,
   Database,
@@ -12,10 +14,14 @@ import {
   FileCode2,
   FileText,
   GitCompare,
+  HelpCircle,
+  Layers,
   ListTree,
+  Milestone,
   Monitor,
   PanelRight,
   Server,
+  Users,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -1135,9 +1141,9 @@ function PrdOutline({
                   <button
                     aria-selected={activeView === nextView}
                     className={cn(
-                      'h-7 rounded-[5px] text-[9px] font-bold capitalize text-[var(--text-tertiary)] transition-colors',
+                      'h-7 rounded-[5px] text-xs font-medium capitalize text-[var(--text-tertiary)] transition-colors',
                       activeView === nextView &&
-                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-xs font-semibold'
                     )}
                     key={nextView}
                     onClick={() => setView(nextView)}
@@ -1156,7 +1162,7 @@ function PrdOutline({
             <nav aria-label="PRD Module navigation" className="mt-4">
               {schemaNavigation.core ? (
                 <>
-                  <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                  <h2 className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                     Core tagged Module
                   </h2>
                   <div className="mt-1.5">
@@ -1169,7 +1175,7 @@ function PrdOutline({
                   </div>
                 </>
               ) : null}
-              <h2 className="mt-4 px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+              <h2 className="mt-4 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                 Modules used
               </h2>
               <div className="mt-1.5 grid gap-1">
@@ -1194,29 +1200,43 @@ function PrdOutline({
                 if (groupNodes.length === 0) return null;
                 return (
                   <section className="mb-4" key={group}>
-                    <h2 className="px-1 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                    <h2 className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                       {labels[group]}
                     </h2>
                     <div className="mt-1.5 grid gap-0.5">
                       {groupNodes.map((node) => {
                         const selected = selectedNodeId === node.id;
+                        const Icon = getOutlineNodeIcon(node);
                         return (
                           <button
                             aria-current={selected ? 'true' : undefined}
                             aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'flex min-h-8 w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[10px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-                              selected &&
-                                'bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)]'
+                              'group flex min-h-[36px] w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-[var(--hover-bg)]',
+                              selected
+                                ? 'bg-[var(--status-info-muted)] font-medium text-[var(--text-primary)]'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                             )}
                             key={node.id}
                             onClick={() => onSelect(node.id)}
                             type="button"
                           >
+                            <Icon
+                              aria-hidden="true"
+                              className={cn(
+                                'size-3.5 shrink-0 transition-colors',
+                                selected
+                                  ? 'text-[var(--accent-commit)]'
+                                  : 'text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]'
+                              )}
+                              strokeWidth={1.8}
+                            />
                             <span className="min-w-0 flex-1">
-                              <span className="block font-semibold text-current">{node.label}</span>
-                              {node.meta ? (
-                                <span className="mt-0.5 block truncate font-mono text-[8px] font-normal text-[var(--text-tertiary)]">
+                              <span className="block truncate font-medium text-current">
+                                {node.label}
+                              </span>
+                              {node.meta && node.meta !== node.label ? (
+                                <span className="mt-0.5 block truncate font-mono text-[9px] font-normal text-[var(--text-tertiary)]">
                                   {node.meta}
                                 </span>
                               ) : null}
@@ -1234,6 +1254,18 @@ function PrdOutline({
       </StateScrollArea>
     </aside>
   );
+}
+
+function getOutlineNodeIcon(node: PrdOutlineNode) {
+  if (node.group === 'document') return FileText;
+  const id = node.id.toLowerCase();
+  if (id.includes('problem')) return HelpCircle;
+  if (id.includes('audience')) return Users;
+  if (id.includes('outcome')) return CheckCircle2;
+  if (node.group === 'requirements') return CircleDot;
+  if (id.includes('milestone')) return Milestone;
+  if (id.includes('api') || id.includes('contract')) return Braces;
+  return Layers;
 }
 
 const SCHEMA_NAV_ICONS = {
@@ -1270,14 +1302,14 @@ function SchemaNavigationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[50px] items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
+        'group flex min-h-[44px] items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
         selected && 'bg-[var(--status-info-muted)]'
       )}
     >
       <button
         aria-current={selected ? 'true' : undefined}
         aria-label={`Go to ${item.title} instance`}
-        className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
         onClick={() => onSelect(item.nodeId)}
         type="button"
       >
@@ -1285,10 +1317,10 @@ function SchemaNavigationRow({
           <Icon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[10px] font-semibold text-[var(--text-primary)]">
+          <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
             {item.title}
           </span>
-          <span className="mt-0.5 block truncate font-mono text-[8px] text-[var(--text-tertiary)]">
+          <span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--text-tertiary)]">
             {item.canonicalName} · v{item.version}
           </span>
         </span>
