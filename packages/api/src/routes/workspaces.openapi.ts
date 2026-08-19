@@ -284,6 +284,10 @@ const listWorkspacesRoute = createRoute({
       description: 'Project access denied',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -615,6 +619,10 @@ const listWorkspaceTransitionReviewSnapshotsRoute = createRoute({
       description: 'Project access denied',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -801,10 +809,13 @@ workspaceRoutes.openapi(listWorkspaceTransitionReviewSnapshotsRoute, async (c) =
     limit,
   });
 
-  return c.json({
-    success: true as const,
-    data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
-  });
+  return c.json(
+    {
+      success: true as const,
+      data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
+    },
+    200
+  );
 });
 
 workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (c) => {
@@ -824,10 +835,13 @@ workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (
     return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
   }
 
-  return c.json({
-    success: true as const,
-    data: transitionReviewSnapshotToWire(snapshot),
-  });
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
 });
 
 workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => {
@@ -841,10 +855,13 @@ workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => 
     return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
   }
 
-  return c.json({
-    success: true as const,
-    data: transitionReviewSnapshotToWire(snapshot),
-  });
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
 });
 
 // @ts-expect-error - OpenAPI handler return type
