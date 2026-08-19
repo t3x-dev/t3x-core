@@ -1205,9 +1205,9 @@ function PrdOutline({
                             aria-current={selected ? 'true' : undefined}
                             aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'flex min-h-8 w-full items-start gap-2 rounded-md border-l-2 border-l-transparent px-2 py-1.5 text-left text-[10px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                              'flex min-h-8 w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[10px] leading-4 text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
                               selected &&
-                                'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)]'
+                                'bg-[var(--status-info-muted)] font-semibold text-[var(--status-info)]'
                             )}
                             key={node.id}
                             onClick={() => onSelect(node.id)}
@@ -1270,8 +1270,8 @@ function SchemaNavigationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[50px] items-center rounded-md border-l-2 border-l-transparent transition-colors hover:bg-[var(--hover-bg)]',
-        selected && 'border-l-[var(--accent-commit)] bg-[var(--status-info-muted)]'
+        'group flex min-h-[50px] items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
+        selected && 'bg-[var(--status-info-muted)]'
       )}
     >
       <button
