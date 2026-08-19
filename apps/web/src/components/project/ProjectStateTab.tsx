@@ -1122,34 +1122,34 @@ function StateStructureView({
       aria-label="Structured state tree"
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
-        <label className="relative h-[33px] w-full max-w-[270px]">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
+        <label className="relative h-[30px] w-full max-w-[260px]">
           <Search
             aria-hidden="true"
             className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
           />
           <input
-            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             onChange={(event) => onPathQueryChange(event.target.value)}
             placeholder="Search paths, titles, types..."
             value={pathQuery}
           />
         </label>
-        <span className="text-xs text-[var(--text-secondary)]">
+        <span className="text-xs font-normal text-[var(--text-tertiary)]">
           {visibleRows.length} visible {visibleRows.length === 1 ? 'row' : 'rows'}
         </span>
       </div>
       <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
-        <table className="w-full min-w-[1010px] table-fixed border-collapse text-left text-base leading-5">
+        <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-xs leading-5">
           <colgroup>
-            <col className="w-[250px]" />
-            <col />
-            <col className="w-[88px]" />
-            <col className="w-[92px]" />
-            <col className="w-[130px]" />
-            <col className="w-[62px]" />
+            <col className="w-[30%] min-w-[220px]" />
+            <col className="w-[38%]" />
+            <col className="w-[70px]" />
+            <col className="w-[90px]" />
+            <col className="w-[90px]" />
+            <col className="w-[60px]" />
           </colgroup>
-          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-xs font-semibold uppercase tracking-[0.04em] text-[var(--text-secondary)] shadow-[0_1px_0_var(--stroke-divider)]">
+          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] shadow-[0_1px_0_var(--stroke-divider)]">
             <tr>
               <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
                 Path / Key
@@ -1158,7 +1158,9 @@ function StateStructureView({
               <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Type</th>
               <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Status</th>
               <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Source / Op</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Issues</th>
+              <th className="border-b border-[var(--stroke-divider)] px-3 py-2 text-center">
+                Issues
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1198,20 +1200,20 @@ function StatePointTableRow({
   return (
     <tr
       className={cn(
-        'group h-10 border-b border-[var(--stroke-divider)] text-[var(--text-primary)]',
-        row.expandable && 'cursor-pointer transition-colors hover:bg-[var(--surface-hover)]',
-        row.status === 'missing' && 'bg-[var(--status-warning-muted)]/25'
+        'group h-9 border-b border-[var(--stroke-divider)] text-[var(--text-primary)] transition-colors',
+        row.expandable && 'cursor-pointer hover:bg-[var(--surface-hover)]',
+        row.status === 'missing' && 'bg-[var(--status-warning-muted)]/15'
       )}
       onClick={row.expandable ? onToggle : undefined}
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 font-semibold transition-colors',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1.5 font-medium transition-colors text-xs',
           row.expandable && 'group-hover:bg-[var(--surface-hover)]',
-          row.status === 'missing' && 'bg-[var(--status-warning-muted)]'
+          row.status === 'missing' && 'bg-[var(--status-warning-muted)]/35'
         )}
       >
-        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: row.depth * 22 }}>
+        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: row.depth * 18 }}>
           {row.expandable ? (
             <button
               aria-expanded={expanded}
@@ -1224,41 +1226,53 @@ function StatePointTableRow({
               type="button"
             >
               {expanded ? (
-                <ChevronDown aria-hidden="true" className="size-3" />
+                <ChevronDown aria-hidden="true" className="size-3.5" />
               ) : (
-                <ChevronRight aria-hidden="true" className="size-3" />
+                <ChevronRight aria-hidden="true" className="size-3.5" />
               )}
             </button>
           ) : (
-            <span className="w-3 shrink-0" />
+            <span className="w-3.5 shrink-0" />
           )}
-          <span className="min-w-0 flex-1 truncate" title={row.path}>
+          <span
+            className="min-w-0 flex-1 truncate font-medium text-[var(--text-primary)]"
+            title={row.path}
+          >
             {row.key}
           </span>
+          {row.issueCount > 0 ? (
+            <span
+              className="inline-flex size-1.5 shrink-0 rounded-full bg-[var(--status-danger)]"
+              title={`${row.issueCount} issue${row.issueCount === 1 ? '' : 's'}`}
+            />
+          ) : null}
           {row.childCount ? (
-            <Badge className="shrink-0 px-1.5 py-0 text-xs" variant="outline">
+            <Badge className="shrink-0 px-1.5 py-0 text-[10px] font-normal" variant="outline">
               {row.childCount}
             </Badge>
           ) : null}
         </span>
       </td>
-      <td className="truncate px-3 py-2 text-base text-[var(--text-secondary)]" title={row.value}>
+      <td
+        className="truncate px-3 py-1.5 text-xs font-normal text-[var(--text-secondary)]"
+        title={row.value}
+      >
         {row.value}
       </td>
-      <td className="px-3 py-2 text-base text-[var(--text-secondary)]">{row.type}</td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-1.5 text-xs font-normal text-[var(--text-tertiary)]">{row.type}</td>
+      <td className="px-3 py-1.5">
         <StatusPill row={row} />
       </td>
-      <td className="px-3 py-2 font-mono text-[13px] text-[var(--text-secondary)]">
+      <td className="px-3 py-1.5 font-mono text-xs font-normal text-[var(--text-tertiary)]">
         {row.sourceOp}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-3 py-1.5 text-center">
         {row.issueCount > 0 ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--status-danger)] text-xs font-bold text-[var(--on-status)]">
+          <span className="inline-flex size-4.5 min-w-4.5 px-1 items-center justify-center rounded-full bg-[var(--status-danger)] text-[10px] font-bold text-[var(--on-status)]">
             {row.issueCount}
           </span>
         ) : (
-          <span className="text-[var(--text-tertiary)]">-</span>
+          <span className="text-[var(--text-tertiary)] opacity-40">-</span>
         )}
       </td>
     </tr>
@@ -1266,6 +1280,14 @@ function StatePointTableRow({
 }
 
 function StatusPill({ row }: { row: StatePointRow }) {
+  if (row.status === 'unchanged') {
+    return (
+      <span className="text-xs font-normal text-[var(--text-tertiary)] opacity-60">
+        {row.statusLabel}
+      </span>
+    );
+  }
+
   const tone =
     row.status === 'missing'
       ? 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
@@ -1275,7 +1297,9 @@ function StatusPill({ row }: { row: StatePointRow }) {
           ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]'
           : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]';
   return (
-    <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', tone)}>
+    <span
+      className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', tone)}
+    >
       {row.statusLabel}
     </span>
   );
