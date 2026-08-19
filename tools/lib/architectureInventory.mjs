@@ -3,7 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
-const SKIPPED_DIRECTORIES = new Set(['.turbo', 'coverage', 'dist', 'node_modules']);
+const SKIPPED_DIRECTORIES = new Set(['.next', '.turbo', 'coverage', 'dist', 'node_modules']);
 
 const COMPATIBILITY_WRITER_PATTERNS = [
   'commitFromDraft',

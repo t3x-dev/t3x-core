@@ -70,6 +70,10 @@ function createFixture() {
     join(root, 'apps/web/src/infrastructure/mergeApi.ts'),
     'export async function commitMergeDraft() {}\n'
   );
+  write(
+    join(root, 'apps/web/.next/server/generated.js'),
+    'const ignored = "ReviewSnapshot generated bundle";\n'
+  );
 
   return root;
 }
@@ -129,4 +133,5 @@ test('phase 3 architecture inventory tracks expected convergence gaps', () => {
     },
   ]);
   assert.deepEqual(inventory.yops.operations, ['assert', 'set']);
+  assert.deepEqual(inventory.reviewSnapshotReferences, []);
 });
