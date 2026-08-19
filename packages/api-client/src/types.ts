@@ -628,6 +628,118 @@ export interface WorkspaceExtractionProposalEnvelope {
   workspace: RepositoryWorkspace;
 }
 
+export interface WorkspaceTransitionContent {
+  trees: unknown[];
+  relations?: unknown[];
+}
+
+export interface WorkspaceTransitionPrecondition {
+  workspace_revision: number;
+  ref_head: string | null;
+  effect_digest: string;
+  proposal_digest: string;
+  statement_digests: string[];
+  policy_digest: string;
+}
+
+export interface ReviewWorkspaceTransitionInput {
+  content: WorkspaceTransitionContent;
+  why?: string;
+  if_revision?: number;
+}
+
+export interface DecideWorkspaceTransitionInput {
+  transition_id?: string;
+  content: WorkspaceTransitionContent;
+  why?: string;
+  outcome: 'accepted' | 'overridden' | 'rejected';
+  decision_reason?: string;
+  precondition: WorkspaceTransitionPrecondition;
+}
+
+export interface ReviewSnapshotV1 {
+  schema: 't3x.application/review-snapshot/v1';
+  version: 1;
+  snapshotId: string;
+  snapshotDigest: string;
+  createdAt: string;
+  supersedes?: {
+    snapshotId: string;
+    snapshotDigest: string;
+  };
+  projectId: string;
+  workspaceId: string;
+  transitionId: string;
+  request: {
+    kind: TransitionControlPlaneView['request_kind'];
+    id: string;
+    createdAt: string;
+  };
+  review: {
+    digest: string;
+    precondition: {
+      workspaceRevision: number;
+      refName: string;
+      refHead: string | null;
+      effectDigest: string;
+      proposalDigest: string;
+      statementDigests: string[];
+      policyDigest: string;
+    };
+  };
+  objects: {
+    base: TransitionObjectDescriptor;
+    result: TransitionObjectDescriptor;
+    effect: TransitionObjectDescriptor;
+    proposal: TransitionObjectDescriptor;
+    statements: TransitionObjectDescriptor[];
+    decision?: TransitionObjectDescriptor;
+    commit?: TransitionObjectDescriptor;
+  };
+  transition: TransitionViewV1;
+}
+
+export interface ChangeProjectionV1 {
+  schema: 't3x.application/change-projection/v1';
+  version: 1;
+  authoritative: false;
+  source: {
+    kind: 'review_snapshot';
+    snapshotId: string;
+    snapshotDigest: string;
+    snapshotCreatedAt: string;
+  };
+  projectId: string;
+  workspaceId: string;
+  transitionId: string;
+  title: string;
+  status: 'reviewing' | 'accepted' | 'overridden' | 'rejected' | 'committed';
+  review: {
+    digest: string;
+    refName: string;
+    refHead: string | null;
+    workspaceRevision: number;
+    policyDigest: string;
+  };
+  objects: ReviewSnapshotV1['objects'];
+  checks: TransitionViewV1['checks'];
+  actions: TransitionViewV1['capabilities'];
+}
+
+export interface WorkspaceTransitionReviewEnvelope {
+  transition_id: string;
+  transition: TransitionViewV1;
+  precondition: WorkspaceTransitionPrecondition;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
+}
+
+export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransitionReviewEnvelope {
+  decision_digest: string;
+  commit?: TransitionProtocolValue;
+  workspace?: Record<string, unknown>;
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
@@ -637,6 +749,16 @@ export interface RepositoryWorkspaceCapability {
     workspaceId: string,
     input: CreateWorkspaceExtractionProposalInput
   ): Promise<WorkspaceExtractionProposalEnvelope>;
+  reviewTransition(
+    projectId: string,
+    workspaceId: string,
+    input: ReviewWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionReviewEnvelope>;
+  decideTransition(
+    projectId: string,
+    workspaceId: string,
+    input: DecideWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionDecisionEnvelope>;
 }
 
 /** @deprecated Use GenerationMessage. */

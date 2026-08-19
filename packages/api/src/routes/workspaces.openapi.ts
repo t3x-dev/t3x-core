@@ -191,6 +191,8 @@ const WorkspaceTransitionReviewResponseSchema = z.object({
   transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
   transition: z.any(),
   precondition: WorkspaceTransitionPreconditionSchema,
+  review_snapshot: z.any(),
+  change_projection: z.any(),
 });
 
 const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewResponseSchema.extend({
@@ -595,6 +597,8 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
         transition_id: reviewed.transitionId,
         transition: reviewed.transition,
         precondition: transitionPreconditionToWire(reviewed.precondition),
+        review_snapshot: reviewed.reviewSnapshot,
+        change_projection: reviewed.changeProjection,
       },
     });
   } catch (error) {
@@ -643,6 +647,8 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
         transition: decided.transition,
         precondition: transitionPreconditionToWire(decided.precondition),
         decision_digest: decided.decisionDigest,
+        review_snapshot: decided.reviewSnapshot,
+        change_projection: decided.changeProjection,
         ...(decided.commit === undefined ? {} : { commit: decided.commit }),
         ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
       },

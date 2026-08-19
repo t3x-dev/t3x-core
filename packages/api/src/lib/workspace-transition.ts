@@ -1,4 +1,11 @@
 import {
+  buildReviewSnapshot,
+  type ChangeProjectionV1,
+  projectChangeFromReviewSnapshot,
+  type ReviewSnapshotV1,
+  type TransitionInspectionView,
+} from '@t3x-dev/application';
+import {
   buildReplayVerificationStatement,
   type CommitV2,
   compileProposalDraft,
@@ -31,10 +38,13 @@ import {
   findWorkspaceDraft,
   getTransitionRefHead,
   resolveTransitionProposalGraph,
+  saveTransitionReviewSnapshot,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
   type TransitionPolicyBinding,
+  type TransitionProposalMembership,
   type TransitionRefHead,
+  type TransitionStatementMembership,
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
@@ -145,6 +155,8 @@ export interface ReviewWorkspaceTransitionResult {
   transitionId: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
+  reviewSnapshot: ReviewSnapshotV1;
+  changeProjection: ChangeProjectionV1;
 }
 
 export interface BuildWorkspaceYOpsProposalInput {
@@ -242,7 +254,7 @@ export class WorkspaceTransitionDecisionDeniedError extends Error {
 }
 
 interface PreparedWorkspaceTransition
-  extends Omit<ReviewWorkspaceTransitionResult, 'transitionId'> {
+  extends Pick<ReviewWorkspaceTransitionResult, 'precondition' | 'transition'> {
   actor: ActorRef;
   base: State;
   content: SemanticContent;
@@ -255,6 +267,11 @@ interface PreparedWorkspaceTransition
   targetBranch: string;
   workspace: Record<string, unknown>;
   workspaceId: string;
+}
+
+interface MaterializedPreparedWorkspaceTransition {
+  membership: TransitionProposalMembership;
+  statements: TransitionStatementMembership[];
 }
 
 export interface ResolvedWorkspaceTransitionContext {
@@ -598,14 +615,22 @@ export async function reviewWorkspaceTransition(
   input: ReviewWorkspaceTransitionInput
 ): Promise<ReviewWorkspaceTransitionResult> {
   const prepared = await prepareWorkspaceTransition(db, input);
-  const transitionId = await materializePreparedWorkspaceTransition(db, prepared);
-  return { transitionId, transition: prepared.transition, precondition: prepared.precondition };
+  const materialized = await materializePreparedWorkspaceTransition(db, prepared);
+  const inspection = materializedPreparedInspection({ materialized, prepared });
+  const artifacts = reviewArtifacts({ inspection, createdAt: materialized.membership.createdAt });
+  await persistReviewArtifacts(db, artifacts);
+  return {
+    transitionId: materialized.membership.transitionId,
+    transition: prepared.transition,
+    precondition: prepared.precondition,
+    ...artifacts,
+  };
 }
 
 async function materializePreparedWorkspaceTransition(
   db: AnyDB,
   prepared: PreparedWorkspaceTransition
-): Promise<string> {
+): Promise<MaterializedPreparedWorkspaceTransition> {
   const proposalDigest = describeTransitionObject(prepared.proposal).digest;
   const requestId = [
     'compat:workspace-transition-review',
@@ -650,8 +675,9 @@ async function materializePreparedWorkspaceTransition(
     { observation: prepared.observations[0]!, source: 'server:workspace-replay' },
     { observation: prepared.observations[1]!, source: 'server:workspace-yschema' },
   ] as const;
+  const statements: TransitionStatementMembership[] = [];
   for (const { observation, source } of durableObservations) {
-    await materializeTransitionStatement({
+    const persisted = await materializeTransitionStatement({
       db,
       projectId: created.membership.projectId,
       transitionId: created.membership.transitionId,
@@ -661,8 +687,9 @@ async function materializePreparedWorkspaceTransition(
       requestId: statementRequestId,
       requestFacts,
     });
+    statements.push(persisted.membership);
   }
-  return created.membership.transitionId;
+  return { membership: created.membership, statements };
 }
 
 function compatibilityRequestId(action: 'decide' | 'commit', facts: ProtocolValue): string {
@@ -682,6 +709,106 @@ function canonicalPrecondition(precondition: WorkspaceTransitionPrecondition, re
   };
 }
 
+function digestCanonicalSnapshotPayload(value: ProtocolValue): string {
+  return canonicalTransitionRequest(value).digest;
+}
+
+function reviewArtifacts(input: {
+  inspection: TransitionInspectionView;
+  createdAt: string;
+}): Pick<ReviewWorkspaceTransitionResult, 'changeProjection' | 'reviewSnapshot'> {
+  const reviewSnapshot = buildReviewSnapshot({
+    inspection: input.inspection,
+    createdAt: input.createdAt,
+    digestCanonicalRequest: digestCanonicalSnapshotPayload,
+  });
+  return {
+    reviewSnapshot,
+    changeProjection: projectChangeFromReviewSnapshot(reviewSnapshot),
+  };
+}
+
+async function persistReviewArtifacts(
+  db: AnyDB,
+  artifacts: Pick<ReviewWorkspaceTransitionResult, 'changeProjection' | 'reviewSnapshot'>
+): Promise<void> {
+  await saveTransitionReviewSnapshot(db, {
+    projectId: artifacts.reviewSnapshot.projectId,
+    workspaceId: artifacts.reviewSnapshot.workspaceId,
+    transitionId: artifacts.reviewSnapshot.transitionId,
+    snapshot: artifacts.reviewSnapshot as unknown as Record<string, unknown>,
+    changeProjection: artifacts.changeProjection as unknown as Record<string, unknown>,
+  });
+}
+
+function snapshotCreatedAt(inspection: TransitionInspectionView): string {
+  if (inspection.transition.history.observation === 'committed') {
+    return inspection.transition.history.commit.recordedAt;
+  }
+  if (inspection.transition.decision.observation === 'supplied') {
+    return inspection.transition.decision.decidedAt;
+  }
+  return inspection.createdAt;
+}
+
+function materializedPreparedInspection(input: {
+  materialized: MaterializedPreparedWorkspaceTransition;
+  prepared: PreparedWorkspaceTransition;
+  transition?: TransitionViewV1;
+}): TransitionInspectionView {
+  const membership = input.materialized.membership;
+  return {
+    transitionId: membership.transitionId,
+    projectId: membership.projectId,
+    workspaceId: membership.workspaceId,
+    requestKind: membership.requestKind,
+    requestId: membership.requestId,
+    createdAt: membership.createdAt,
+    precondition: {
+      workspaceRevision: input.prepared.precondition.workspaceRevision,
+      refName: membership.refName,
+      refHead: input.prepared.precondition.refHead,
+      effectDigest: input.prepared.precondition.effectDigest,
+      proposalDigest: input.prepared.precondition.proposalDigest,
+      statementDigests: [...input.prepared.precondition.statementDigests],
+      policyDigest: input.prepared.precondition.policyDigest,
+    },
+    transition: input.transition ?? input.prepared.transition,
+    statements: input.materialized.statements.map((statement) => ({
+      digest: statement.statementDigest,
+      source: statement.source,
+      issuer: statement.issuer,
+      requestId: statement.requestId,
+      createdAt: statement.createdAt,
+    })),
+  };
+}
+
+function inspectionWithTransition(
+  inspection: TransitionInspectionView,
+  transition: TransitionViewV1
+): TransitionInspectionView {
+  return { ...inspection, transition };
+}
+
+function inspectionWithWorkspacePrecondition(
+  inspection: TransitionInspectionView,
+  precondition: ReturnType<typeof canonicalPrecondition>
+): TransitionInspectionView {
+  return {
+    ...inspection,
+    precondition: {
+      workspaceRevision: precondition.workspaceRevision,
+      refName: precondition.refName,
+      refHead: precondition.refHead,
+      effectDigest: precondition.effectDigest,
+      proposalDigest: precondition.proposalDigest,
+      statementDigests: [...precondition.statementDigests],
+      policyDigest: precondition.policyDigest,
+    },
+  };
+}
+
 export async function decideWorkspaceTransition(
   db: AnyDB,
   input: DecideWorkspaceTransitionInput
@@ -697,7 +824,8 @@ export async function decideWorkspaceTransition(
       if (!samePrecondition(input.precondition, prepared.precondition)) {
         throw new WorkspaceTransitionReviewStaleError();
       }
-      transitionId = await materializePreparedWorkspaceTransition(db, prepared);
+      const materialized = await materializePreparedWorkspaceTransition(db, prepared);
+      transitionId = materialized.membership.transitionId;
     }
 
     const graph = await resolveTransitionProposalGraph(db, input.projectId, transitionId);
@@ -765,12 +893,19 @@ export async function decideWorkspaceTransition(
         },
       },
     });
+    const decidedInspection = inspectionWithWorkspacePrecondition(decided.view, precondition);
     if (input.outcome === 'rejected') {
+      const artifacts = reviewArtifacts({
+        inspection: decidedInspection,
+        createdAt: snapshotCreatedAt(decidedInspection),
+      });
+      await persistReviewArtifacts(db, artifacts);
       return {
         transitionId,
-        transition: decided.view.transition,
+        transition: decidedInspection.transition,
         precondition: input.precondition,
         decisionDigest: decided.decisionDigest,
+        ...artifacts,
       };
     }
 
@@ -826,6 +961,12 @@ export async function decideWorkspaceTransition(
     if (committed.workspace === undefined) {
       throw new WorkspaceTransitionReviewStaleError();
     }
+    const committedInspection = inspectionWithTransition(decidedInspection, committed.view);
+    const artifacts = reviewArtifacts({
+      inspection: committedInspection,
+      createdAt: snapshotCreatedAt(committedInspection),
+    });
+    await persistReviewArtifacts(db, artifacts);
     return {
       transitionId,
       transition: committed.view,
@@ -833,6 +974,7 @@ export async function decideWorkspaceTransition(
       decisionDigest: decided.decisionDigest,
       commit: committed.commit,
       workspace: committed.workspace,
+      ...artifacts,
     };
   } catch (error) {
     if (error instanceof TransitionDecisionDeniedError) {

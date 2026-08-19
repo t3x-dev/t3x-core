@@ -1,3 +1,4 @@
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { useCallback, useRef, useState } from 'react';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
@@ -23,9 +24,11 @@ export type WorkspaceTransitionPhase =
   | 'committed';
 
 export interface WorkspaceTransitionState {
+  changeProjection: ChangeProjectionV1 | null;
   error: string | null;
   errorCode: string | null;
   phase: WorkspaceTransitionPhase;
+  reviewSnapshot: ReviewSnapshotV1 | null;
   view: TransitionViewV1 | null;
 }
 
@@ -42,9 +45,11 @@ export interface WorkspaceTransitionCommitResult {
 }
 
 const INITIAL_STATE: WorkspaceTransitionState = {
+  changeProjection: null,
   error: null,
   errorCode: null,
   phase: 'idle',
+  reviewSnapshot: null,
   view: null,
 };
 
@@ -65,7 +70,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
       const generation = generationRef.current + 1;
       generationRef.current = generation;
       sessionRef.current = null;
-      setState({ error: null, errorCode: null, phase: 'reviewing', view: null });
+      setState({ ...INITIAL_STATE, phase: 'reviewing' });
 
       try {
         const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
@@ -89,9 +94,11 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
           why,
         };
         setState({
+          changeProjection: reviewed.change_projection,
           error: null,
           errorCode: null,
           phase: 'reviewed',
+          reviewSnapshot: reviewed.review_snapshot,
           view: reviewed.transition,
         });
         return true;
@@ -113,10 +120,10 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
       const session = sessionRef.current;
       if (!session) {
         setState({
+          ...INITIAL_STATE,
           error: 'Review this change again before making a decision.',
           errorCode: 'REVIEW_REQUIRED',
           phase: 'idle',
-          view: null,
         });
         return null;
       }
@@ -147,9 +154,11 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
           throw new Error('Committed Workspace response did not include the latest revision.');
         }
         setState({
+          changeProjection: decided.change_projection,
           error: null,
           errorCode: null,
           phase: commitId ? 'committed' : 'rejected',
+          reviewSnapshot: decided.review_snapshot,
           view: decided.transition,
         });
         if (commitId) {
@@ -164,7 +173,17 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
         const stale = error instanceof ApiError && error.code === 'STALE_REVIEW';
         if (stale) sessionRef.current = null;
         setState((current) =>
-          failedState(error, stale ? null : current.view, stale ? 'idle' : 'reviewed')
+          failedState(
+            error,
+            stale ? null : current.view,
+            stale ? 'idle' : 'reviewed',
+            stale
+              ? { changeProjection: null, reviewSnapshot: null }
+              : {
+                  changeProjection: current.changeProjection,
+                  reviewSnapshot: current.reviewSnapshot,
+                }
+          )
         );
         return null;
       }
@@ -188,10 +207,15 @@ function committedTransitionId(view: TransitionViewV1): string | null {
 function failedState(
   error: unknown,
   view: TransitionViewV1 | null,
-  phase: WorkspaceTransitionPhase
+  phase: WorkspaceTransitionPhase,
+  artifacts: Pick<WorkspaceTransitionState, 'changeProjection' | 'reviewSnapshot'> = {
+    changeProjection: null,
+    reviewSnapshot: null,
+  }
 ): WorkspaceTransitionState {
   if (error instanceof ApiError) {
     return {
+      ...artifacts,
       error:
         error.code === 'LEGACY_HEAD_READ_ONLY'
           ? 'Verified changes are not enabled for this legacy branch yet. Existing history remains readable, but this branch needs an explicit migration before it can save a Transition.'
@@ -202,6 +226,7 @@ function failedState(
     };
   }
   return {
+    ...artifacts,
     error: error instanceof Error ? error.message : 'Workspace Transition failed.',
     errorCode: null,
     phase,

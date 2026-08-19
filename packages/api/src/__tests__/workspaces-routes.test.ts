@@ -181,6 +181,83 @@ const mockPrecondition = {
   statementDigests: [`sha256:${'c'.repeat(64)}`],
   policyDigest: `sha256:${'f'.repeat(64)}`,
 };
+const mockReviewDigest = `sha256:${'9'.repeat(64)}`;
+const mockSnapshotDigest = `sha256:${'8'.repeat(64)}`;
+const mockDescriptor = {
+  kind: 'state',
+  schema: 't3x/state/v1',
+  digest: `sha256:${'7'.repeat(64)}`,
+};
+
+function mockReviewArtifacts(status: 'reviewing' | 'committed' = 'reviewing') {
+  const reviewSnapshot = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: 'rvs_88888888888888888888888888888888',
+    snapshotDigest: mockSnapshotDigest,
+    createdAt: '2026-08-17T00:00:00.000Z',
+    projectId: 'proj_sources',
+    workspaceId: 'workspace_prd_handoff',
+    transitionId: mockTransitionId,
+    request: {
+      kind: 'structured_yops',
+      id: 'request:workspace-review',
+      createdAt: '2026-08-17T00:00:00.000Z',
+    },
+    review: {
+      digest: mockReviewDigest,
+      precondition: {
+        workspaceRevision: mockPrecondition.workspaceRevision,
+        refName: 'main',
+        refHead: mockPrecondition.refHead,
+        effectDigest: mockPrecondition.effectDigest,
+        proposalDigest: mockPrecondition.proposalDigest,
+        statementDigests: mockPrecondition.statementDigests,
+        policyDigest: mockPrecondition.policyDigest,
+      },
+    },
+    objects: {
+      base: mockDescriptor,
+      result: mockDescriptor,
+      effect: { ...mockDescriptor, kind: 'effect', schema: 't3x/effect/v1' },
+      proposal: { ...mockDescriptor, kind: 'statement', schema: 't3x/statement/v1' },
+      statements: [],
+      ...(status === 'committed'
+        ? { commit: { ...mockDescriptor, kind: 'commit', schema: 't3x/commit/v2' } }
+        : {}),
+    },
+    transition: {},
+  };
+  return {
+    reviewSnapshot,
+    changeProjection: {
+      schema: 't3x.application/change-projection/v1',
+      version: 1,
+      authoritative: false,
+      source: {
+        kind: 'review_snapshot',
+        snapshotId: reviewSnapshot.snapshotId,
+        snapshotDigest: reviewSnapshot.snapshotDigest,
+        snapshotCreatedAt: reviewSnapshot.createdAt,
+      },
+      projectId: reviewSnapshot.projectId,
+      workspaceId: reviewSnapshot.workspaceId,
+      transitionId: reviewSnapshot.transitionId,
+      title: 'PRD audience handoff',
+      status,
+      review: {
+        digest: mockReviewDigest,
+        refName: 'main',
+        refHead: mockPrecondition.refHead,
+        workspaceRevision: mockPrecondition.workspaceRevision,
+        policyDigest: mockPrecondition.policyDigest,
+      },
+      objects: reviewSnapshot.objects,
+      checks: {},
+      actions: {},
+    },
+  };
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: route responses are intentionally schema-flexible here.
 type ApiResponse = any;
@@ -239,6 +316,7 @@ describe('Workspace routes', () => {
       transitionId: mockTransitionId,
       transition: {},
       precondition: mockPrecondition,
+      ...mockReviewArtifacts(),
     });
     transitionMock.decideWorkspaceTransition.mockReset();
     transitionMock.decideWorkspaceTransition.mockImplementation(
@@ -264,6 +342,7 @@ describe('Workspace routes', () => {
             mockCommitDigest,
             input.workspaceCommitOverride
           ),
+          ...mockReviewArtifacts('committed'),
         })
     );
   });
@@ -360,7 +439,18 @@ describe('Workspace routes', () => {
     expect(reviewed.status).toBe(200);
     await expect(reviewed.json()).resolves.toEqual(
       expect.objectContaining({
-        data: expect.objectContaining({ transition_id: mockTransitionId }),
+        data: expect.objectContaining({
+          transition_id: mockTransitionId,
+          review_snapshot: expect.objectContaining({
+            schema: 't3x.application/review-snapshot/v1',
+            snapshotDigest: mockSnapshotDigest,
+          }),
+          change_projection: expect.objectContaining({
+            schema: 't3x.application/change-projection/v1',
+            authoritative: false,
+            status: 'reviewing',
+          }),
+        }),
       })
     );
     transitionMock.decideWorkspaceTransition.mockResolvedValueOnce({
@@ -368,6 +458,7 @@ describe('Workspace routes', () => {
       transition: {},
       precondition: mockPrecondition,
       decisionDigest: mockCommitV2.decision.digest,
+      ...mockReviewArtifacts('committed'),
     });
 
     const decided = await app.request(
@@ -393,7 +484,11 @@ describe('Workspace routes', () => {
     expect(decided.status).toBe(200);
     await expect(decided.json()).resolves.toEqual(
       expect.objectContaining({
-        data: expect.objectContaining({ transition_id: mockTransitionId }),
+        data: expect.objectContaining({
+          transition_id: mockTransitionId,
+          review_snapshot: expect.objectContaining({ snapshotDigest: mockSnapshotDigest }),
+          change_projection: expect.objectContaining({ status: 'committed' }),
+        }),
       })
     );
     expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(

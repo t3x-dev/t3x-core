@@ -39,6 +39,7 @@ import type {
   CreateWorkspaceExtractionProposalInput,
   DecideTransitionInput,
   DecideTransitionResult,
+  DecideWorkspaceTransitionInput,
   DiffResult,
   Draft,
   ExportCfpackInput,
@@ -84,6 +85,7 @@ import type {
   RenameConversationResult,
   RepositoryWorkspaceCapability,
   RepositoryWorkspaceEnvelope,
+  ReviewWorkspaceTransitionInput,
   ShareToken,
   SourceThreadCapability,
   SourceThreadMemory,
@@ -98,6 +100,8 @@ import type {
   VerifyTransitionResult,
   Webhook,
   WorkspaceExtractionProposalEnvelope,
+  WorkspaceTransitionDecisionEnvelope,
+  WorkspaceTransitionReviewEnvelope,
   WorkspaceYSchemaCompositionResult,
   YSchemaArtifactManifest,
   YSchemaArtifactRegistryPage,
@@ -170,6 +174,10 @@ export class T3xClient {
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
       createExtractionProposal: (projectId, workspaceId, input) =>
         this.createWorkspaceExtractionProposal(projectId, workspaceId, input),
+      reviewTransition: (projectId, workspaceId, input) =>
+        this.reviewWorkspaceTransition(projectId, workspaceId, input),
+      decideTransition: (projectId, workspaceId, input) =>
+        this.decideWorkspaceTransition(projectId, workspaceId, input),
     });
   }
 
@@ -894,6 +902,30 @@ export class T3xClient {
     return this.request<WorkspaceExtractionProposalEnvelope>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/extraction-proposals`,
+      input
+    );
+  }
+
+  async reviewWorkspaceTransition(
+    projectId: string,
+    workspaceId: string,
+    input: ReviewWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionReviewEnvelope> {
+    return this.request<WorkspaceTransitionReviewEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review`,
+      input
+    );
+  }
+
+  async decideWorkspaceTransition(
+    projectId: string,
+    workspaceId: string,
+    input: DecideWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionDecisionEnvelope> {
+    return this.request<WorkspaceTransitionDecisionEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/decide`,
       input
     );
   }

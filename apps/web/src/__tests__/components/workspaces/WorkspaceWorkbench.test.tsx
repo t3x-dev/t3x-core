@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
@@ -223,6 +224,83 @@ function workspaceTransitionView({
           }
         : {}),
     },
+  };
+}
+
+function workspaceReviewArtifacts(
+  view: Extract<TransitionViewV1, { mode: 'transition' }>,
+  status: ChangeProjectionV1['status'],
+  input: { refName?: string; workspaceId?: string } = {}
+) {
+  const refName = input.refName ?? 'main';
+  const workspaceId = input.workspaceId ?? 'workspace_ready';
+  const objects: ReviewSnapshotV1['objects'] = {
+    base: view.change.base,
+    result: view.change.result,
+    effect: view.audit.effect,
+    proposal: view.audit.proposal,
+    statements: view.audit.statements.map((statement) => statement.statement),
+    ...(view.audit.decision ? { decision: view.audit.decision } : {}),
+    ...(view.audit.commit ? { commit: view.audit.commit } : {}),
+  };
+  const reviewSnapshot: ReviewSnapshotV1 = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: `rvs_${status}`,
+    snapshotDigest: transitionDigest(status[0] ?? 's'),
+    createdAt: '2026-07-30T00:00:00.000Z',
+    projectId: 'proj_1',
+    workspaceId,
+    transitionId: 'trn_workspace_review',
+    request: {
+      kind: 'structured_yops',
+      id: `request:${workspaceId}`,
+      createdAt: '2026-07-30T00:00:00.000Z',
+    },
+    review: {
+      digest: transitionDigest('r'),
+      precondition: {
+        workspaceRevision: transitionPrecondition.workspace_revision,
+        refName,
+        refHead: transitionPrecondition.ref_head,
+        effectDigest: transitionPrecondition.effect_digest,
+        proposalDigest: transitionPrecondition.proposal_digest,
+        statementDigests: transitionPrecondition.statement_digests,
+        policyDigest: transitionPrecondition.policy_digest,
+      },
+    },
+    objects,
+    transition: view,
+  };
+  const changeProjection: ChangeProjectionV1 = {
+    schema: 't3x.application/change-projection/v1',
+    version: 1,
+    authoritative: false,
+    source: {
+      kind: 'review_snapshot',
+      snapshotId: reviewSnapshot.snapshotId,
+      snapshotDigest: reviewSnapshot.snapshotDigest,
+      snapshotCreatedAt: reviewSnapshot.createdAt,
+    },
+    projectId: reviewSnapshot.projectId,
+    workspaceId: reviewSnapshot.workspaceId,
+    transitionId: reviewSnapshot.transitionId,
+    title: 'Workspace review projection',
+    status,
+    review: {
+      digest: reviewSnapshot.review.digest,
+      refName: reviewSnapshot.review.precondition.refName,
+      refHead: reviewSnapshot.review.precondition.refHead,
+      workspaceRevision: reviewSnapshot.review.precondition.workspaceRevision,
+      policyDigest: reviewSnapshot.review.precondition.policyDigest,
+    },
+    objects,
+    checks: view.checks,
+    actions: view.capabilities,
+  };
+  return {
+    change_projection: changeProjection,
+    review_snapshot: reviewSnapshot,
   };
 }
 
@@ -1370,23 +1448,31 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === reviewUrl) {
+        const transition = workspaceTransitionView({ overrideAllowed: true });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({ overrideAllowed: true }),
+            ...workspaceReviewArtifacts(transition, 'reviewing', {
+              workspaceId: workspaceCandidates[1].id,
+            }),
+            transition,
             precondition: transitionPrecondition,
           },
         });
       }
       if (url === decideUrl) {
+        const transition = workspaceTransitionView({
+          commitId: transitionDigest('9'),
+          outcome: 'overridden',
+          overrideAllowed: true,
+        });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({
-              commitId: transitionDigest('9'),
-              outcome: 'overridden',
-              overrideAllowed: true,
+            ...workspaceReviewArtifacts(transition, 'committed', {
+              workspaceId: workspaceCandidates[1].id,
             }),
+            transition,
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},
@@ -2616,22 +2702,30 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === workspaceReviewUrl) {
+        const transition = workspaceTransitionView();
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView(),
+            ...workspaceReviewArtifacts(transition, 'reviewing', {
+              workspaceId: yopsWorkspace.id,
+            }),
+            transition,
             precondition: transitionPrecondition,
           },
         });
       }
       if (url === workspaceDecideUrl) {
+        const transition = workspaceTransitionView({
+          commitId: transitionDigest('8'),
+          outcome: 'accepted',
+        });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({
-              commitId: transitionDigest('8'),
-              outcome: 'accepted',
+            ...workspaceReviewArtifacts(transition, 'committed', {
+              workspaceId: yopsWorkspace.id,
             }),
+            transition,
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},

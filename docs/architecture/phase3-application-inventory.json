@@ -210,5 +210,14 @@
       "unset"
     ]
   },
-  "reviewSnapshotReferences": []
+  "reviewSnapshotReferences": [
+    "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
+    "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
+    "packages/api/src/lib/workspace-transition.ts",
+    "packages/api/src/routes/workspaces.openapi.ts",
+    "packages/application/src/change/reviewSnapshots.ts",
+    "packages/storage/src/adapters/postgres.ts",
+    "packages/storage/src/queries/transition-review-snapshots.ts"
+  ]
 }
