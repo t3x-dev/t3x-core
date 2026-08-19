@@ -1082,21 +1082,21 @@ function PrdOutline({
     <aside
       aria-label="Document outline"
       className={cn(
-        'z-30 min-h-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
+        'z-30 min-h-0 min-w-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
         open
           ? 'absolute inset-y-0 left-0 block w-[300px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
           : 'hidden xl:block'
       )}
     >
-      <StateScrollArea className="h-full" label="Document outline items">
-        <div className="px-3 py-4">
-          <header className="border-b border-[var(--stroke-divider)] px-1 pb-3">
+      <StateScrollArea className="h-full w-full min-w-0" label="Document outline items">
+        <div className="w-full min-w-0 px-3 py-4">
+          <header className="w-full min-w-0 border-b border-[var(--stroke-divider)] px-1 pb-3">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <strong className="block text-[11px] font-bold text-[var(--text-primary)]">
+              <div className="min-w-0 flex-1">
+                <strong className="block truncate text-[11px] font-bold text-[var(--text-primary)]">
                   {isPrdDocument ? 'PRD structure' : 'Document structure'}
                 </strong>
-                <span className="mt-0.5 block text-[9px] text-[var(--text-tertiary)]">
+                <span className="mt-0.5 block truncate text-[9px] text-[var(--text-tertiary)]">
                   {schemaNavigation ? (
                     <>
                       <span>
@@ -1128,14 +1128,14 @@ function PrdOutline({
             {schemaNavigation ? (
               <div
                 aria-label="PRD navigation view"
-                className="mt-3 grid grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
+                className="mt-3 grid w-full grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
                 role="tablist"
               >
                 {(['modules', 'outline'] as const).map((nextView) => (
                   <button
                     aria-selected={activeView === nextView}
                     className={cn(
-                      'h-7 rounded-[5px] text-xs font-medium capitalize text-[var(--text-tertiary)] transition-colors',
+                      'h-7 min-w-0 truncate rounded-[5px] px-2 text-xs font-medium capitalize text-[var(--text-tertiary)] transition-colors',
                       activeView === nextView &&
                         'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-xs font-semibold'
                     )}
@@ -1153,13 +1153,13 @@ function PrdOutline({
           </header>
 
           {activeView === 'modules' && schemaNavigation ? (
-            <nav aria-label="PRD Module navigation" className="mt-4">
+            <nav aria-label="PRD Module navigation" className="mt-4 w-full min-w-0">
               {schemaNavigation.core ? (
                 <>
                   <h2 className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                     Core tagged Module
                   </h2>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 w-full min-w-0">
                     <SchemaNavigationRow
                       index={0}
                       item={schemaNavigation.core}
@@ -1172,7 +1172,7 @@ function PrdOutline({
               <h2 className="mt-4 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                 Modules used
               </h2>
-              <div className="mt-1.5 grid gap-1">
+              <div className="mt-1.5 grid w-full min-w-0 gap-1">
                 {schemaNavigation.modules.map((module, index) => (
                   <SchemaNavigationRow
                     index={index + (schemaNavigation.core ? 1 : 0)}
@@ -1187,7 +1187,7 @@ function PrdOutline({
           ) : (
             <nav
               aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
-              className="mt-4 space-y-4"
+              className="mt-4 w-full min-w-0 space-y-4"
             >
               {groups.map((group) => {
                 const groupNodes = nodes.filter((node) => node.group === group);
@@ -1195,11 +1195,11 @@ function PrdOutline({
                 const isRequirements = group === 'requirements';
 
                 return (
-                  <section key={group}>
+                  <section className="w-full min-w-0" key={group}>
                     <h2 className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                       {labels[group]}
                     </h2>
-                    <div className="grid gap-0.5">
+                    <div className="grid w-full min-w-0 gap-0.5">
                       {groupNodes.map((node, index) => {
                         const selected = selectedNodeId === node.id;
                         return (
@@ -1207,13 +1207,14 @@ function PrdOutline({
                             aria-current={selected ? 'true' : undefined}
                             aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'group flex min-h-8 w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
+                              'group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
                               selected
                                 ? 'border border-[var(--stroke-default)] bg-[var(--surface-card)] font-medium text-[var(--text-primary)] shadow-xs'
                                 : 'border border-transparent text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
                             )}
                             key={node.id}
                             onClick={() => onSelect(node.id)}
+                            title={node.label}
                             type="button"
                           >
                             {isRequirements ? (
@@ -1271,7 +1272,7 @@ function SchemaNavigationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[44px] items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
+        'group flex min-h-[44px] w-full min-w-0 items-center rounded-md transition-colors hover:bg-[var(--hover-bg)]',
         selected && 'bg-[var(--status-info-muted)]'
       )}
     >
@@ -1280,6 +1281,7 @@ function SchemaNavigationRow({
         aria-label={`Go to ${item.title} instance`}
         className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
         onClick={() => onSelect(item.nodeId)}
+        title={item.title}
         type="button"
       >
         <span className={cn('flex size-6 flex-none items-center justify-center rounded-md', tone)}>

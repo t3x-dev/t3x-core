@@ -36,6 +36,7 @@ export const StateScrollArea = forwardRef<
         aria-label={label}
         className={cn(
           'size-full overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)]/60',
+          !horizontal && '[&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full',
           viewportClassName
         )}
         data-slot="state-scroll-area-viewport"
