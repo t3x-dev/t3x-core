@@ -5,9 +5,11 @@ import {
   createMaterial,
   digestTransitionRequestCanonicalJson,
   ensureMainBranch,
+  findTransitionCommandReceipt,
   findWorkspaceDraft,
   getTransitionRefHead,
   insertProject,
+  listTransitionCommits,
   recordTransitionCommandReceipt,
   TransitionCommandIntegrityError,
   upsertWorkspaceDraft,
@@ -23,6 +25,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
+import { commitTransition } from '../lib/transition-control-plane/lifecycle';
 import { createWorkspaceSourceRunnerProvider } from '../lib/workspace-source-transition';
 import type { LocalOciCommandExecutor } from '../lib/workspace-validation/local-oci-provider';
 import { createTransitionControlPlaneRoutes } from '../routes/transition-control-plane.openapi';
@@ -385,6 +388,79 @@ describe('Transition Decision and Commit routes', () => {
       apiKey: committer,
     });
     expect(conflictingCommit.status).toBe(409);
+  });
+
+  it('rolls back CommitV2 ref advance workspace state and receipt when projection fails', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Commit Rollback' }));
+    const workspace = await createWorkspace(project.projectId, 'ws_commit_rollback');
+    await bindPolicy(project.projectId, 'commit-rollback/v1');
+    const writer = key(project.projectId, 'rollback-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(project.projectId, 'rollback-reviewer', 'human', [
+      'transition:decide:accept',
+    ]);
+    const committerActor = { kind: 'service' as const, id: 'service:rollback-committer' };
+    const proposed = await propose({
+      projectId: project.projectId,
+      workspaceId: 'ws_commit_rollback',
+      requestId: 'proposal:commit-rollback',
+      apiKey: writer,
+    });
+    const precondition = await verify({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'verify:commit-rollback',
+      apiKey: writer,
+    });
+    const accepted = await decide({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'decision:commit-rollback',
+      outcome: 'accepted',
+      precondition,
+      apiKey: reviewer,
+    });
+    expect(accepted.status).toBe(200);
+    const acceptedPayload = (await accepted.json()) as { data: { decision_digest: string } };
+
+    await expect(
+      commitTransition({
+        db: mockDB,
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        actor: committerActor,
+        requestId: 'commit:projection-fails',
+        decisionDigest: acceptedPayload.data.decision_digest,
+        expectedHead: null,
+        workspaceProjection: {
+          requestFacts: { kind: 'test:failing-workspace-projection' },
+          apply() {
+            throw new Error('projection failed after commit graph');
+          },
+        },
+      })
+    ).rejects.toThrow('projection failed after commit graph');
+
+    await expect(listTransitionCommits(mockDB, project.projectId)).resolves.toEqual([]);
+    await expect(
+      getTransitionRefHead(mockDB, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ format: 'empty', head: null });
+    await expect(
+      findTransitionCommandReceipt(mockDB, {
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        actor: committerActor,
+        requestId: 'commit:projection-fails',
+      })
+    ).resolves.toBeNull();
+    await expect(
+      findWorkspaceDraft(mockDB, project.projectId, 'ws_commit_rollback')
+    ).resolves.toMatchObject({
+      revision: workspace.revision,
+      workspace_state: expect.not.objectContaining({ lastCommitHash: expect.any(String) }),
+    });
   });
 
   it('commits canonical exact-source import, edit, and revert with trusted projections', async () => {
