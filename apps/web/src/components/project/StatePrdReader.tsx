@@ -4,9 +4,7 @@ import {
   Blocks,
   Braces,
   Check,
-  CheckCircle2,
   ChevronDown,
-  CircleDot,
   Copy,
   Cpu,
   Database,
@@ -14,14 +12,10 @@ import {
   FileCode2,
   FileText,
   GitCompare,
-  HelpCircle,
-  Layers,
   ListTree,
-  Milestone,
   Monitor,
   PanelRight,
   Server,
-  Users,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -1090,7 +1084,7 @@ function PrdOutline({
       className={cn(
         'z-30 min-h-0 overflow-hidden border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
         open
-          ? 'absolute inset-y-0 left-0 block w-[270px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
+          ? 'absolute inset-y-0 left-0 block w-[300px] shadow-[var(--fx-shadow-lg)] xl:static xl:w-auto xl:shadow-none'
           : 'hidden xl:block'
       )}
     >
@@ -1193,54 +1187,41 @@ function PrdOutline({
           ) : (
             <nav
               aria-label={isPrdDocument ? 'PRD semantic nodes' : 'Structured state semantic nodes'}
-              className="mt-4"
+              className="mt-4 space-y-4"
             >
               {groups.map((group) => {
                 const groupNodes = nodes.filter((node) => node.group === group);
                 if (groupNodes.length === 0) return null;
+                const isRequirements = group === 'requirements';
+
                 return (
-                  <section className="mb-4" key={group}>
-                    <h2 className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                  <section key={group}>
+                    <h2 className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                       {labels[group]}
                     </h2>
-                    <div className="mt-1.5 grid gap-0.5">
-                      {groupNodes.map((node) => {
+                    <div className="grid gap-0.5">
+                      {groupNodes.map((node, index) => {
                         const selected = selectedNodeId === node.id;
-                        const Icon = getOutlineNodeIcon(node);
                         return (
                           <button
                             aria-current={selected ? 'true' : undefined}
                             aria-label={node.meta ? `${node.label} · ${node.meta}` : node.label}
                             className={cn(
-                              'group flex min-h-[36px] w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-[var(--hover-bg)]',
+                              'group flex min-h-8 w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
                               selected
-                                ? 'bg-[var(--status-info-muted)] font-medium text-[var(--text-primary)]'
-                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                                ? 'border border-[var(--stroke-default)] bg-[var(--surface-card)] font-medium text-[var(--text-primary)] shadow-xs'
+                                : 'border border-transparent text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
                             )}
                             key={node.id}
                             onClick={() => onSelect(node.id)}
                             type="button"
                           >
-                            <Icon
-                              aria-hidden="true"
-                              className={cn(
-                                'size-3.5 shrink-0 transition-colors',
-                                selected
-                                  ? 'text-[var(--accent-commit)]'
-                                  : 'text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]'
-                              )}
-                              strokeWidth={1.8}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-medium text-current">
-                                {node.label}
+                            {isRequirements ? (
+                              <span className="shrink-0 font-mono text-[10px] text-[var(--text-tertiary)] opacity-75">
+                                {String(index + 1).padStart(2, '0')}
                               </span>
-                              {node.meta && node.meta !== node.label ? (
-                                <span className="mt-0.5 block truncate font-mono text-[9px] font-normal text-[var(--text-tertiary)]">
-                                  {node.meta}
-                                </span>
-                              ) : null}
-                            </span>
+                            ) : null}
+                            <span className="min-w-0 flex-1 truncate">{node.label}</span>
                           </button>
                         );
                       })}
@@ -1254,18 +1235,6 @@ function PrdOutline({
       </StateScrollArea>
     </aside>
   );
-}
-
-function getOutlineNodeIcon(node: PrdOutlineNode) {
-  if (node.group === 'document') return FileText;
-  const id = node.id.toLowerCase();
-  if (id.includes('problem')) return HelpCircle;
-  if (id.includes('audience')) return Users;
-  if (id.includes('outcome')) return CheckCircle2;
-  if (node.group === 'requirements') return CircleDot;
-  if (id.includes('milestone')) return Milestone;
-  if (id.includes('api') || id.includes('contract')) return Braces;
-  return Layers;
 }
 
 const SCHEMA_NAV_ICONS = {
