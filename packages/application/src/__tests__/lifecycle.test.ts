@@ -88,6 +88,13 @@ describe('transition lifecycle rules', () => {
     });
     expect(command.requestDigest).toMatch(/^digest:/);
     expect(command.reviewDigest).toMatch(/^digest:/);
+    expect(() =>
+      buildTransitionDecisionCommand({
+        outcome: 'accepted',
+        precondition: { ...precondition(), reviewDigest: 'digest:stale' },
+        digestCanonicalRequest: digest,
+      })
+    ).toThrow(TransitionReviewStaleError);
   });
 
   it('normalizes review preconditions without mutating caller facts', () => {

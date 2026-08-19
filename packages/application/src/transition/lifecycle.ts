@@ -124,6 +124,16 @@ export function buildTransitionDecisionCommand(input: {
   precondition: TransitionReviewPrecondition;
   digestCanonicalRequest: (value: ProtocolValue) => string;
 }): { requestFacts: ProtocolValue; requestDigest: string; reviewDigest: string } {
+  const reviewDigest = digestTransitionReviewPrecondition(
+    input.precondition,
+    input.digestCanonicalRequest
+  );
+  if (
+    input.precondition.reviewDigest !== undefined &&
+    input.precondition.reviewDigest !== reviewDigest
+  ) {
+    throw new TransitionReviewStaleError();
+  }
   const requestFacts: ProtocolValue = {
     operation: 'decide',
     outcome: input.outcome,
@@ -133,10 +143,7 @@ export function buildTransitionDecisionCommand(input: {
   return {
     requestFacts,
     requestDigest: input.digestCanonicalRequest(requestFacts),
-    reviewDigest: digestTransitionReviewPrecondition(
-      input.precondition,
-      input.digestCanonicalRequest
-    ),
+    reviewDigest,
   };
 }
 
