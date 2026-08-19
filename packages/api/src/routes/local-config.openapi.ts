@@ -97,6 +97,7 @@ const putRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 localConfigRoutes.openapi(putRoute, async (c) => {
   const body = c.req.valid('json');
   return c.json({

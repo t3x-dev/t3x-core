@@ -20,7 +20,7 @@
  * usable both by the API and by MCP.
  */
 
-import { collectLessonsFromAssertions, generateLeafOutput } from '@t3x-dev/core';
+import { collectLessonsFromAssertions, generateLeafOutput, type Lesson } from '@t3x-dev/core';
 import {
   findLeafById,
   findLeavesByCommit,
@@ -127,7 +127,7 @@ export const generateHandler: ToolHandler = async (args) => {
   }
 
   // ── Step 3: Collect lessons from historical leaves (optional improvement) ──
-  let lessons: string[] | undefined;
+  let lessons: Lesson[] | undefined;
   try {
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash, {
       projectId: leaf.project_id,

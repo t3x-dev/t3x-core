@@ -77,6 +77,7 @@ const feedbackStatsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 extractionFeedbackRoutes.openapi(feedbackStatsRoute, async (c) => {
   try {
     const { projectId } = c.req.valid('param');

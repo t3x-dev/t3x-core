@@ -20,6 +20,7 @@ import {
   getModelsByProvider,
   normalizeLocalProviderId as normalizeSharedLocalProviderId,
   type ProviderName,
+  type ProviderRole,
   publicProviderIdForRuntime,
   runtimeProviderIdForPublic,
 } from '@t3x-dev/core';
@@ -154,9 +155,13 @@ function filterVisibleProviderIds(role: string, providerIds: string[]): string[]
   return providerIds.filter((providerId) => VISIBLE_GENERATION_PROVIDER_IDS.has(providerId));
 }
 
+function isCoreProviderRole(role: string): role is ProviderRole {
+  return role === 'generation' || role === 'embedding';
+}
+
 function serializeRoleAssignments(
-  roles: Array<{ role: string; providerIds: string[] }>
-): Array<{ role: string; provider_ids: string[] }> {
+  roles: Array<{ role: ProviderRole; providerIds: string[] }>
+): Array<{ role: ProviderRole; provider_ids: string[] }> {
   return roles.map((role) => ({
     role: role.role,
     provider_ids: filterVisibleProviderIds(role.role, role.providerIds),
@@ -295,6 +300,7 @@ providersRoutes.openapi(updateRolesRoute, async (c) => {
 
   try {
     for (const { role, provider_ids } of body.roles) {
+      if (!isCoreProviderRole(role)) continue;
       registry.assignRole(role, filterVisibleProviderIds(role, provider_ids));
     }
     await saveRegistryConfig();
@@ -655,10 +661,14 @@ providersRoutes.openapi(updateConfigRoute, async (c) => {
 
   try {
     registry.importConfig({
-      roles: body.roles.map((r) => ({
-        role: r.role,
-        providerIds: filterVisibleProviderIds(r.role, r.provider_ids),
-      })),
+      roles: body.roles
+        .filter((assignment): assignment is { role: ProviderRole; provider_ids: string[] } =>
+          isCoreProviderRole(assignment.role)
+        )
+        .map((r) => ({
+          role: r.role,
+          providerIds: filterVisibleProviderIds(r.role, r.provider_ids),
+        })),
     });
     await saveRegistryConfig();
 

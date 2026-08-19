@@ -165,6 +165,7 @@ const recordUsageRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 usageRoutes.openapi(recordUsageRoute, async (c) => {
   const userId = getUserId(c);
   if (!userId) {

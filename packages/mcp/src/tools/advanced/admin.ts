@@ -182,14 +182,13 @@ async function handleCreateBranch(args: Record<string, unknown>) {
 
   if (isApiBackend()) {
     const client = getApiClient();
-    return ok(
-      await client.createBranch({
-        project_id: projectId,
-        name,
-        parent_branch: parentBranch,
-        description,
-      } as Record<string, unknown>)
-    );
+    const input: Parameters<typeof client.createBranch>[0] = {
+      project_id: projectId,
+      name,
+    };
+    if (parentBranch !== undefined) input.parent_branch = parentBranch;
+    if (description !== undefined) input.description = description;
+    return ok(await client.createBranch(input));
   }
 
   const db = await getDB();

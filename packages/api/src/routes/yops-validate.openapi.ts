@@ -167,6 +167,7 @@ export const yopsValidateRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yopsValidateRoutes.openapi(validateRoute, async (c) => {
   const { trees, relations, yops } = c.req.valid('json');
   const content = { trees: trees as any, relations: relations as any };

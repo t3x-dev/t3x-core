@@ -118,6 +118,9 @@ export const ErrorCodes = {
   RESTORE_FAILED: 'RESTORE_FAILED',
   COMPARE_FAILED: 'COMPARE_FAILED',
   MERGE_FAILED: 'MERGE_FAILED',
+  DIFF_FAILED: 'DIFF_FAILED',
+  SKILL_COMPILE_FAILED: 'SKILL_COMPILE_FAILED',
+  READ_FAILED: 'READ_FAILED',
   LEARN_FAILED: 'LEARN_FAILED',
   EXTRACTION_FAILED: 'EXTRACTION_FAILED',
 
@@ -160,6 +163,7 @@ export const ErrorCodes = {
   // were superseded by a concurrent re-extract between the caller's
   // snapshot and the commit insert. Retryable: re-fetch the active
   // draft id set and try again.
+  YOPS_LOG_ALREADY_COMMITTED: 'YOPS_LOG_ALREADY_COMMITTED',
   YOPS_LOG_SUPERSEDED: 'YOPS_LOG_SUPERSEDED',
 } as const;
 
@@ -217,6 +221,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   STALE_REVIEW: 409,
   DECISION_NOT_PERMITTED: 409,
   ALIAS_TAKEN: 409,
+  YOPS_LOG_ALREADY_COMMITTED: 409,
   YOPS_LOG_SUPERSEDED: 409,
   REF_HEAD_INTEGRITY_INVALID: 409,
 
@@ -270,6 +275,9 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   RESTORE_FAILED: 500,
   COMPARE_FAILED: 500,
   MERGE_FAILED: 500,
+  DIFF_FAILED: 500,
+  SKILL_COMPILE_FAILED: 500,
+  READ_FAILED: 500,
   LEARN_FAILED: 500,
   EXTRACTION_FAILED: 500,
   PROVIDER_KEY_MISSING: 400,

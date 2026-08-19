@@ -78,9 +78,10 @@ async function resolveRef(client: T3xClient, ref: string, projectId?: string): P
     );
   }
 
-  const result = await client.listCommits(projectId, ref, { limit: 1, offset: 0 });
-  if (result.commits.length === 0) {
+  const result = await client.listBranches(projectId, { limit: 100, offset: 0 });
+  const branch = result.branches.find((candidate) => candidate.name === ref);
+  if (branch?.head_commit_hash === undefined || branch.head_commit_hash === null) {
     throw new Error(`Branch not found or has no commits: ${ref}`);
   }
-  return result.commits[0].commit_hash;
+  return branch.head_commit_hash;
 }

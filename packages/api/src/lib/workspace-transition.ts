@@ -22,6 +22,7 @@ import {
   type State,
   type StatementObservation,
   type TransitionViewV1,
+  type TrustedDecisionFacts,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -758,7 +759,7 @@ export async function decideWorkspaceTransition(
               statements: graph.observations.map((observation) => ({
                 statement: observation.statement,
                 issuerContext: observation.issuerContext,
-              })),
+              })) as TrustedDecisionFacts['statements'],
             };
           },
         },

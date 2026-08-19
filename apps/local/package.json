@@ -26,6 +26,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/bin/t3x-local.ts src/bin/t3x.ts src/bin/t3x-mcp.ts --format esm --dts --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/bin/t3x-local.ts",
     "prepare:runtime": "node ./scripts/prepare-runtime.mjs",
     "generate:runtime-manifest": "node ./scripts/generate-runtime-manifest.mjs",

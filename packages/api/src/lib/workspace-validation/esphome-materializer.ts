@@ -76,7 +76,7 @@ export function materializeEsphomeDeviceInput(
     noRefs: true,
     sortKeys: false,
   });
-  const file = {
+  const file: EsphomeMaterializedFile = {
     from: ESPHOME_DEVICE_INPUT_REF,
     to: ESPHOME_DEVICE_CONFIG_PATH,
     format: 'yaml' as const,

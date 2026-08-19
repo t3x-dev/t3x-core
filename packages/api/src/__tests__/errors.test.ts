@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 82 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(82);
+  it('has 86 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(86);
   });
 
   it('key equals value for every code', () => {
@@ -42,6 +42,7 @@ describe('ErrorCodes', () => {
         "DECISION_NOT_PERMITTED": "DECISION_NOT_PERMITTED",
         "DELETE_FAILED": "DELETE_FAILED",
         "DEPRECATED": "DEPRECATED",
+        "DIFF_FAILED": "DIFF_FAILED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
         "EXTRACTION_FAILED": "EXTRACTION_FAILED",
@@ -77,6 +78,7 @@ describe('ErrorCodes', () => {
         "PROVIDER_KEY_MISSING": "PROVIDER_KEY_MISSING",
         "PROVIDER_UNAVAILABLE": "PROVIDER_UNAVAILABLE",
         "RATE_LIMITED": "RATE_LIMITED",
+        "READ_FAILED": "READ_FAILED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "REF_HEAD_INTEGRITY_INVALID": "REF_HEAD_INTEGRITY_INVALID",
         "RESTORE_FAILED": "RESTORE_FAILED",
@@ -89,6 +91,7 @@ describe('ErrorCodes', () => {
         "SERVICE_UNAVAILABLE": "SERVICE_UNAVAILABLE",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "SKILL_COMPILE_FAILED": "SKILL_COMPILE_FAILED",
         "STALE_REVIEW": "STALE_REVIEW",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
@@ -103,6 +106,7 @@ describe('ErrorCodes', () => {
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
         "WORKSPACE_BASE_BRANCH_MISMATCH": "WORKSPACE_BASE_BRANCH_MISMATCH",
         "WORKSPACE_NOT_FOUND": "WORKSPACE_NOT_FOUND",
+        "YOPS_LOG_ALREADY_COMMITTED": "YOPS_LOG_ALREADY_COMMITTED",
         "YOPS_LOG_SUPERSEDED": "YOPS_LOG_SUPERSEDED",
       }
     `);

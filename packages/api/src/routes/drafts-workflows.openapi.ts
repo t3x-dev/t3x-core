@@ -62,6 +62,14 @@ export const draftsWorkflowRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
+function committedAtFromTransition(
+  transition: Awaited<ReturnType<typeof commitRepositoryYOpsState>>['transition']
+): string {
+  return transition.history.observation === 'committed'
+    ? transition.history.commit.recordedAt
+    : new Date().toISOString();
+}
+
 // ============================================================
 // In-memory state constants
 // ============================================================
@@ -501,7 +509,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         hash: written.created.commitDigest,
         schema: 't3x/commit/v2' as const,
         parents: written.created.commit.parents.map((parent) => parent.digest),
-        committed_at: written.created.transition.recordedAt,
+        committed_at: committedAtFromTransition(written.created.transition),
         content,
         project_id: draft.project_id,
         message: intent,
@@ -707,7 +715,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       hash: written.created.commitDigest,
       schema: 't3x/commit/v2' as const,
       parents: written.created.commit.parents.map((parent) => parent.digest),
-      committed_at: written.created.transition.recordedAt,
+      committed_at: committedAtFromTransition(written.created.transition),
       content,
       project_id: draft.project_id,
       message: intent,

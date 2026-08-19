@@ -564,6 +564,7 @@ yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
   );
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const query = c.req.valid('query');
@@ -588,6 +589,7 @@ yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
   );
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(listProjectVersionsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { family } = c.req.valid('query');
@@ -676,6 +678,7 @@ yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
   return c.json({ success: true as const, data: result }, 200);
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(previewProjectCompositionRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const composition = c.req.valid('json');

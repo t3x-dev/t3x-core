@@ -140,7 +140,7 @@ export const editHandler: ToolHandler = async (args) => {
 
   if (isApiBackend()) {
     const client = getApiClient();
-    const draft = (await client.getDraft(draftId)) as Record<string, unknown>;
+    const draft = (await client.getDraft(draftId)) as unknown as Record<string, unknown>;
     const status = draft.status as string | undefined;
 
     if (status !== 'editing') {

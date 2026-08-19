@@ -351,7 +351,7 @@ async function callProviderNonStreaming(
       .map((message) => ({
         role: message.role === 'assistant' ? 'assistant' : 'user',
         content: message.content,
-      })),
+      })) as unknown as LLMPrompt['messages'],
   };
 
   const result: LLMResult = await provider.generateFromPrompt(prompt, {

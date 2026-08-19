@@ -204,6 +204,7 @@ workspaceExtractionProposalRoutes.openapi(linkRoute, async (c) => {
   if (access instanceof Response) return access;
   try {
     requireTransitionAuthority({
+      // @ts-expect-error - OpenAPI context apiKey typing
       apiKey: c.get('apiKey') as ApiKey | undefined,
       projectId,
       scope: 'transition:inspect',
@@ -250,6 +251,7 @@ workspaceExtractionProposalRoutes.openapi(route, async (c) => {
 
   try {
     const principal = requireTransitionAuthority({
+      // @ts-expect-error - OpenAPI context apiKey typing
       apiKey: c.get('apiKey') as ApiKey | undefined,
       projectId,
       scope: 'transition:propose',

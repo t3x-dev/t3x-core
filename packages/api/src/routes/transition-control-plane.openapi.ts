@@ -355,6 +355,31 @@ function apiKey(c: Context): ApiKey | undefined {
   return c.get('apiKey') as ApiKey | undefined;
 }
 
+type TransitionPreconditionView = Awaited<ReturnType<typeof inspectTransition>>['precondition'];
+
+function wireViewPrecondition(precondition: TransitionPreconditionView) {
+  const policyDigest = precondition.policyDigest;
+  const wired = {
+    workspace_revision: precondition.workspaceRevision,
+    ref_name: precondition.refName,
+    ref_head: precondition.refHead,
+    effect_digest: precondition.effectDigest,
+    proposal_digest: precondition.proposalDigest,
+    statement_digests: precondition.statementDigests,
+    policy_digest: policyDigest,
+  };
+
+  if (policyDigest === null) return wired;
+
+  return {
+    ...wired,
+    review_digest: digestTransitionReviewPrecondition({
+      ...precondition,
+      policyDigest,
+    }),
+  };
+}
+
 function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
   return {
     transition_id: view.transitionId,
@@ -363,16 +388,7 @@ function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
     request_kind: view.requestKind,
     request_id: view.requestId,
     created_at: view.createdAt,
-    precondition: {
-      workspace_revision: view.precondition.workspaceRevision,
-      ref_name: view.precondition.refName,
-      ref_head: view.precondition.refHead,
-      effect_digest: view.precondition.effectDigest,
-      proposal_digest: view.precondition.proposalDigest,
-      statement_digests: view.precondition.statementDigests,
-      policy_digest: view.precondition.policyDigest,
-      review_digest: digestTransitionReviewPrecondition(view.precondition),
-    },
+    precondition: wireViewPrecondition(view.precondition),
     transition: view.transition,
     statements: view.statements.map((statement) => ({
       digest: statement.digest,

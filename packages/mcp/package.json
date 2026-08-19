@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsup --watch",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",

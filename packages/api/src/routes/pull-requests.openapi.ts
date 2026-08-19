@@ -490,6 +490,7 @@ const listPullRequestsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { query, status } = c.req.valid('query');
@@ -559,6 +560,7 @@ const comparePullRequestsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(comparePullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { base } = c.req.valid('query');
@@ -631,6 +633,7 @@ const createPullRequestRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -790,6 +793,7 @@ const getPullRequestRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(getPullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const { access, db } = await requireProject(c, projectId);
@@ -822,6 +826,7 @@ const listChecksRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(listChecksRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const { access, db } = await requireProject(c, projectId);
@@ -1402,7 +1407,6 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
               body.message ?? `Merge pull request #${pullRequest.number}: ${pullRequest.title}`,
             branch: pullRequest.targetBranch,
             author,
-            manage_transaction: false,
           },
           context
         )

@@ -213,7 +213,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
           // Future: handle client messages (triage decisions, cursor, etc.)
           try {
             const msg = JSON.parse(
-              typeof evt.data === 'string' ? evt.data : (evt.data as Buffer).toString()
+              typeof evt.data === 'string' ? evt.data : (evt.data as unknown as Buffer).toString()
             );
 
             if (msg.type === 'ping') {
