@@ -650,7 +650,7 @@ export interface ReviewWorkspaceTransitionInput {
 
 export interface DecideWorkspaceTransitionInput {
   transition_id?: string;
-  content: WorkspaceTransitionContent;
+  content?: WorkspaceTransitionContent;
   why?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decision_reason?: string;
@@ -740,6 +740,29 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
   workspace?: Record<string, unknown>;
 }
 
+export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  snapshot_id: string;
+  snapshot_digest: string;
+  project_id: string;
+  workspace_id: string;
+  transition_id: string;
+  review_digest: string;
+  supersedes_snapshot_id: string | null;
+  supersedes_snapshot_digest: string | null;
+  snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
+  created_at: string;
+}
+
+export interface ListWorkspaceTransitionReviewSnapshotsParams {
+  transition_id?: string;
+  limit?: number;
+}
+
+export interface ListWorkspaceTransitionReviewSnapshotsResponse {
+  snapshots: WorkspaceTransitionReviewSnapshotEnvelope[];
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
@@ -759,6 +782,22 @@ export interface RepositoryWorkspaceCapability {
     workspaceId: string,
     input: DecideWorkspaceTransitionInput
   ): Promise<WorkspaceTransitionDecisionEnvelope>;
+  listReviewSnapshots(
+    projectId: string,
+    workspaceId: string,
+    params?: ListWorkspaceTransitionReviewSnapshotsParams
+  ): Promise<ListWorkspaceTransitionReviewSnapshotsResponse>;
+  getLatestReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    params?: Pick<ListWorkspaceTransitionReviewSnapshotsParams, 'transition_id'>
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope>;
+  getReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    snapshotId: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope>;
 }
 
 /** @deprecated Use GenerationMessage. */

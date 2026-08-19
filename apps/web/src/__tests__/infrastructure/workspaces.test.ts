@@ -189,12 +189,8 @@ describe('infrastructure/workspaces', () => {
     );
   });
 
-  it('decides with the immutable precondition and no client authority fields', async () => {
+  it('decides snapshot-bound changes with the immutable precondition and no Workspace content', async () => {
     const response = new Response('{}');
-    const content = {
-      relations: [],
-      trees: [{ key: 'prd', slots: { title: 'Reviewed PRD' }, children: [] }],
-    };
     const precondition = {
       workspace_revision: 7,
       ref_head: null,
@@ -208,7 +204,6 @@ describe('infrastructure/workspaces', () => {
 
     await decideProjectWorkspaceTransition('proj_1', 'workspace_prd_handoff', {
       transitionId: `trn_${'1'.repeat(32)}`,
-      content,
       why: 'Keep the audience current.',
       outcome: 'overridden',
       decisionReason: 'The known gap is acceptable for this draft.',
@@ -218,7 +213,6 @@ describe('infrastructure/workspaces', () => {
     const body = JSON.parse(String(fetchWithTimeoutMock.mock.calls[0]?.[1]?.body));
     expect(body).toEqual({
       transition_id: `trn_${'1'.repeat(32)}`,
-      content,
       why: 'Keep the audience current.',
       outcome: 'overridden',
       decision_reason: 'The known gap is acceptable for this draft.',

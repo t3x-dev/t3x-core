@@ -100,7 +100,7 @@ describe('ProposalGenerationReviewView', () => {
     expect(screen.getByRole('combobox', { name: 'Proposal mode' })).toHaveValue('guided');
     expect(screen.getByText('2 · Proposal outcomes')).toBeInTheDocument();
     expect(screen.getByText('3 · Verify')).toBeInTheDocument();
-    expect(screen.getByText('4 · Human decision')).toBeInTheDocument();
+    expect(screen.getByText('4 · Changes handoff')).toBeInTheDocument();
     expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Proposal mode' }), {
@@ -121,14 +121,14 @@ describe('ProposalGenerationReviewView', () => {
     );
 
     expect(screen.getByText('Regenerate to apply')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept and commit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Prepare Changes review' })).toBeDisabled();
   });
 
-  it('allows an accepted Decision to retry its pending Commit', () => {
+  it('marks selected proposals as ready for the Changes handoff without a Commit retry', () => {
     const onAction = vi.fn();
     render(
       <ProposalGenerationReviewView
-        actionState="accepted"
+        actionState="ready_for_changes"
         onAction={onAction}
         onPostureChange={vi.fn()}
         onRegenerate={vi.fn()}
@@ -138,18 +138,17 @@ describe('ProposalGenerationReviewView', () => {
       />
     );
 
-    expect(screen.getByText('Accepted · commit pending')).toBeInTheDocument();
-    const commitButton = screen.getByRole('button', { name: 'Commit accepted proposal' });
-    expect(commitButton).toBeEnabled();
-    fireEvent.click(commitButton);
-    expect(onAction).toHaveBeenCalledWith('accept');
+    expect(screen.getAllByText('Ready for Changes').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Ready for Changes' })).toBeDisabled();
+    expect(screen.queryByText('Commit accepted proposal')).not.toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
   });
 
-  it('shows a terminal rejected Decision without asking for another decision', () => {
+  it('lets reviewers request revision before Changes owns the final decision', () => {
+    const onAction = vi.fn();
     render(
       <ProposalGenerationReviewView
-        actionState="rejected"
-        onAction={vi.fn()}
+        onAction={onAction}
         onPostureChange={vi.fn()}
         onRegenerate={vi.fn()}
         onVerify={vi.fn()}
@@ -158,11 +157,12 @@ describe('ProposalGenerationReviewView', () => {
       />
     );
 
-    expect(screen.getAllByText('Rejected')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Request revision' }));
+    expect(onAction).toHaveBeenCalledWith('revision');
     expect(screen.queryByText('Human decision required')).not.toBeInTheDocument();
   });
 
-  it('keeps accept and commit disabled when posture verification fails', () => {
+  it('keeps Changes handoff disabled when posture verification fails', () => {
     render(
       <ProposalGenerationReviewView
         onAction={vi.fn()}
@@ -174,11 +174,11 @@ describe('ProposalGenerationReviewView', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Accept and commit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Prepare Changes review' })).toBeDisabled();
     expect(screen.getByText('The inference has no reviewable basis.')).toBeInTheDocument();
   });
 
-  it('keeps accept and commit disabled when schema validation fails', () => {
+  it('keeps Changes handoff disabled when schema validation fails', () => {
     const view = generationView();
     view.transition.checks.validation = {
       observation: 'observed',
@@ -197,7 +197,7 @@ describe('ProposalGenerationReviewView', () => {
     );
 
     expect(screen.getByText('Schema validation')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept and commit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Prepare Changes review' })).toBeDisabled();
   });
 
   it('treats an absent optional validation statement as not required', () => {
@@ -219,6 +219,6 @@ describe('ProposalGenerationReviewView', () => {
     );
 
     expect(screen.getByText('Not required')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept and commit' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Prepare Changes review' })).toBeEnabled();
   });
 });

@@ -22,8 +22,12 @@ import {
   findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
+  getLatestTransitionReviewSnapshot,
+  getTransitionReviewSnapshot,
   insertYOpsLogEntry,
+  listTransitionReviewSnapshots,
   listWorkspaceDrafts,
+  type StoredTransitionReviewSnapshot,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
@@ -161,13 +165,22 @@ const DecideWorkspaceTransitionRequestSchema = z
       .string()
       .regex(/^trn_[0-9a-f]{32}$/)
       .optional(),
-    content: TransitionContentSchema,
+    content: TransitionContentSchema.optional(),
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
     decision_reason: z.string().trim().min(1).max(2000).optional(),
     precondition: WorkspaceTransitionPreconditionSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.transition_id === undefined && value.content === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'content is required when transition_id is not supplied',
+      });
+    }
+  });
 
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
@@ -201,6 +214,26 @@ const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewRespo
   workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
+const ReviewSnapshotIdSchema = z.string().regex(/^rvs_[0-9a-f]{32}$/);
+
+const WorkspaceTransitionReviewSnapshotResponseSchema = z.object({
+  snapshot_id: ReviewSnapshotIdSchema,
+  snapshot_digest: TransitionDigestSchema,
+  project_id: z.string(),
+  workspace_id: z.string(),
+  transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
+  review_digest: TransitionDigestSchema,
+  supersedes_snapshot_id: ReviewSnapshotIdSchema.nullable(),
+  supersedes_snapshot_digest: TransitionDigestSchema.nullable(),
+  snapshot: z.any(),
+  change_projection: z.any(),
+  created_at: z.string(),
+});
+
+const WorkspaceTransitionReviewSnapshotListResponseSchema = z.object({
+  snapshots: z.array(WorkspaceTransitionReviewSnapshotResponseSchema),
+});
+
 const ListWorkspacesResponseSchema = z.object({
   workspaces: z.array(z.record(z.string(), z.unknown())),
 });
@@ -216,6 +249,18 @@ const projectWorkspacesParams = z.object({
 const workspaceParams = z.object({
   projectId: z.string(),
   workspaceId: z.string(),
+});
+
+const workspaceReviewSnapshotParams = workspaceParams.extend({
+  snapshotId: ReviewSnapshotIdSchema,
+});
+
+const workspaceReviewSnapshotQuery = z.object({
+  transition_id: z
+    .string()
+    .regex(/^trn_[0-9a-f]{32}$/)
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
 });
 
 const listWorkspacesRoute = createRoute({
@@ -237,6 +282,10 @@ const listWorkspacesRoute = createRoute({
     },
     403: {
       description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -548,6 +597,94 @@ const decideWorkspaceTransitionRoute = createRoute({
   },
 });
 
+const listWorkspaceTransitionReviewSnapshotsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots',
+  tags: ['Workspaces'],
+  summary: 'List immutable ReviewSnapshots for a Workspace Transition flow',
+  request: {
+    params: workspaceParams,
+    query: workspaceReviewSnapshotQuery,
+  },
+  responses: {
+    200: {
+      description: 'Immutable ReviewSnapshots and derived Changes projections',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotListResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const getLatestWorkspaceTransitionReviewSnapshotRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots/latest',
+  tags: ['Workspaces'],
+  summary: 'Read the latest immutable ReviewSnapshot for a Workspace Transition flow',
+  request: {
+    params: workspaceParams,
+    query: z.object({
+      transition_id: workspaceReviewSnapshotQuery.shape.transition_id,
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Latest immutable ReviewSnapshot and derived Changes projection',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'ReviewSnapshot not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const getWorkspaceTransitionReviewSnapshotRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots/{snapshotId}',
+  tags: ['Workspaces'],
+  summary: 'Read one immutable ReviewSnapshot for a Workspace Transition flow',
+  request: {
+    params: workspaceReviewSnapshotParams,
+  },
+  responses: {
+    200: {
+      description: 'Immutable ReviewSnapshot and derived Changes projection',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'ReviewSnapshot not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -656,6 +793,75 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   } catch (error) {
     return workspaceTransitionErrorResponse(c, error);
   }
+});
+
+workspaceRoutes.openapi(listWorkspaceTransitionReviewSnapshotsRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { limit, transition_id: transitionId } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshots = await listTransitionReviewSnapshots(db, {
+    projectId,
+    workspaceId,
+    ...(transitionId ? { transitionId } : {}),
+    limit,
+  });
+
+  return c.json(
+    {
+      success: true as const,
+      data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
+    },
+    200
+  );
+});
+
+workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { transition_id: transitionId } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshot = await getLatestTransitionReviewSnapshot(db, {
+    projectId,
+    workspaceId,
+    ...(transitionId ? { transitionId } : {}),
+  });
+
+  if (!snapshot) {
+    return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
+  }
+
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
+});
+
+workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => {
+  const { projectId, snapshotId, workspaceId } = c.req.valid('param');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshot = await getTransitionReviewSnapshot(db, { projectId, snapshotId });
+  if (!snapshot || snapshot.workspaceId !== workspaceId) {
+    return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
+  }
+
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
 });
 
 // @ts-expect-error - OpenAPI handler return type
@@ -1185,6 +1391,22 @@ function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondit
     proposal_digest: precondition.proposalDigest,
     statement_digests: [...precondition.statementDigests],
     policy_digest: precondition.policyDigest,
+  };
+}
+
+function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) {
+  return {
+    snapshot_id: record.snapshotId,
+    snapshot_digest: record.snapshotDigest,
+    project_id: record.projectId,
+    workspace_id: record.workspaceId,
+    transition_id: record.transitionId,
+    review_digest: record.reviewDigest,
+    supersedes_snapshot_id: record.supersedesSnapshotId,
+    supersedes_snapshot_digest: record.supersedesSnapshotDigest,
+    snapshot: record.snapshot,
+    change_projection: record.changeProjection,
+    created_at: record.createdAt,
   };
 }
 

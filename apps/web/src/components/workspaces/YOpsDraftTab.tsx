@@ -44,9 +44,11 @@ import type {
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
-import type { ProposalGenerationAction } from './ProposalGenerationReviewView';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
-import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
 
@@ -59,7 +61,6 @@ export function YOpsDraftTab({
   continuationBusy,
   flowError,
   onApplied,
-  onCommitted,
   onContinueFromCommit,
   onGenerateProposal,
   onProposalAction,
@@ -70,10 +71,10 @@ export function YOpsDraftTab({
   onViewCommitInState,
   onViewChange,
   sendingToYOps,
-  proposalDecisionState,
   proposalGeneration,
   proposalGenerationBusy,
   proposalPosture,
+  proposalReviewState,
   view = 'ops',
   yopsDraftSent,
 }: {
@@ -98,10 +99,10 @@ export function YOpsDraftTab({
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
 }) {
@@ -125,7 +126,6 @@ export function YOpsDraftTab({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
   const [changeNote, setChangeNote] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
   const transitionReview = useCommitTransitionView(
     candidate.projectId,
     targetBranch,
@@ -247,7 +247,6 @@ export function YOpsDraftTab({
     setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
     setErrorMessage(null);
     setChangeNote('');
-    setOverrideReason('');
     workspaceTransition.reset();
   }, [candidate.id, draft.id, draftFingerprint, workspaceTransition.reset]);
 
@@ -407,31 +406,19 @@ export function YOpsDraftTab({
   async function handleReview() {
     if (!materializedTrees || !materializedRelations || !canReview) return;
     setErrorMessage(null);
-    setOverrideReason('');
     await workspaceTransition.review(
       { trees: materializedTrees, relations: materializedRelations },
       changeNote
     );
   }
 
-  async function handleDecision(outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) {
-    const result = await workspaceTransition.decide(outcome, reason);
-    if (result) {
-      setCommittedHash(result.commitId);
-      setStatus('committed');
-      onCommitted?.(result.commitId, targetBranch, result.workspace);
-    }
-  }
-
   function handleTargetBranchChange(branch: string) {
     setTargetBranch(branch);
-    setOverrideReason('');
     workspaceTransition.reset();
   }
 
   function handleChangeNote(next: string) {
     setChangeNote(next);
-    setOverrideReason('');
     workspaceTransition.reset();
   }
 
@@ -488,10 +475,10 @@ export function YOpsDraftTab({
             onSaveYOpsScript={handleSaveYOpsScript}
             onVerifyProposal={onVerifyProposal}
             proposalMode={proposalMode}
-            proposalDecisionState={proposalDecisionState}
             proposalGeneration={proposalGeneration}
             proposalGenerationBusy={proposalGenerationBusy}
             proposalPosture={proposalPosture}
+            proposalReviewState={proposalReviewState}
             sendingToYOps={Boolean(sendingToYOps)}
             statusText={statusText}
             yopsDraftSent={Boolean(yopsDraftSent)}
@@ -559,13 +546,10 @@ export function YOpsDraftTab({
           continuationBusy={Boolean(continuationBusy)}
           isBusy={isBusy}
           onChangeNote={handleChangeNote}
-          onDecision={(outcome, reason) => void handleDecision(outcome, reason)}
-          onOverrideReasonChange={setOverrideReason}
           onReview={() => void handleReview()}
           onContinueFromCommit={onContinueFromCommit}
           onTargetBranchChange={handleTargetBranchChange}
           onViewCommitInState={onViewCommitInState}
-          overrideReason={overrideReason}
           reviewBlockers={reviewBlockers}
           targetBranch={targetBranch}
           transitionReview={transitionReview}
@@ -1070,12 +1054,9 @@ function CommitReviewView({
   isBusy,
   onChangeNote,
   onContinueFromCommit,
-  onDecision,
-  onOverrideReasonChange,
   onReview,
   onTargetBranchChange,
   onViewCommitInState,
-  overrideReason,
   reviewBlockers,
   targetBranch,
   transitionReview,
@@ -1098,12 +1079,9 @@ function CommitReviewView({
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void> | void;
-  onDecision: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
-  onOverrideReasonChange: (reason: string) => void;
   onReview: () => void;
   onTargetBranchChange: (branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
-  overrideReason: string;
   reviewBlockers: string[];
   targetBranch: string;
   transitionReview: ReturnType<typeof useCommitTransitionView>;
@@ -1195,13 +1173,7 @@ function CommitReviewView({
           targetBranch={targetBranch}
         />
       ) : pendingView ? (
-        <TransitionDecisionControls
-          busy={isBusy}
-          onDecide={onDecision}
-          onOverrideReasonChange={onOverrideReasonChange}
-          overrideReason={overrideReason}
-          view={pendingView}
-        />
+        <ChangesDecisionHandoff reviewSnapshot={transitionState.reviewSnapshot} />
       ) : (
         <aside
           aria-label="Review controls"
@@ -1288,6 +1260,48 @@ function CommitReviewView({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ChangesDecisionHandoff({
+  reviewSnapshot,
+}: {
+  reviewSnapshot: WorkspaceTransitionState['reviewSnapshot'];
+}) {
+  const href = reviewSnapshot
+    ? reviewSnapshotHref(
+        reviewSnapshot.projectId,
+        reviewSnapshot.workspaceId,
+        reviewSnapshot.snapshotId
+      )
+    : null;
+
+  return (
+    <aside
+      aria-label="Changes decision handoff"
+      className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+    >
+      <div>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Decide in Changes</h3>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+          This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and
+          commit actions now live in Changes so Web has one review lifecycle.
+        </p>
+      </div>
+      {href ? (
+        <a
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)] transition-colors hover:brightness-105"
+          href={href}
+        >
+          Open Changes
+          <ArrowRight aria-hidden="true" className="size-4" />
+        </a>
+      ) : (
+        <p className="rounded-md bg-[var(--surface-panel)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+          Refresh the review if the ReviewSnapshot link is not available yet.
+        </p>
+      )}
+    </aside>
   );
 }
 
@@ -1933,6 +1947,10 @@ function operationPreviewPath(operation: WorkspaceYOpsDraftOperation, rootKey: s
 function yopPreviewPath(yop: WorkspaceYOp) {
   const payload = Object.values(yop)[0] as { path?: string };
   return payload.path ?? '';
+}
+
+function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
+  return `/project/${encodeURIComponent(projectId)}/changes/${encodeURIComponent(workspaceId)}/${encodeURIComponent(snapshotId)}`;
 }
 
 function treeLineClassName(status: YamlTreeLine['status']) {

@@ -182,7 +182,14 @@ export interface BuiltWorkspaceYOpsProposal {
   workspaceUpdatedAt: string;
 }
 
-export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitionInput {
+export interface DecideWorkspaceTransitionInput {
+  projectId: string;
+  workspaceId: string;
+  content?: SemanticContent;
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
   transitionId?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
@@ -817,8 +824,12 @@ export async function decideWorkspaceTransition(
     const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
     let transitionId = input.transitionId;
     if (transitionId === undefined) {
+      if (input.content === undefined) {
+        throw new TypeError('Workspace Transition Decision requires content without transition_id');
+      }
       const prepared = await prepareWorkspaceTransition(db, {
         ...input,
+        content: input.content,
         expectedRevision: input.precondition.workspaceRevision,
       });
       if (!samePrecondition(input.precondition, prepared.precondition)) {

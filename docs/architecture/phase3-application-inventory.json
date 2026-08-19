@@ -211,8 +211,11 @@
     ]
   },
   "reviewSnapshotReferences": [
+    "apps/web/src/components/workspaces/ProposalGenerationReviewView.tsx",
     "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
+    "apps/web/src/components/workspaces/WorkspaceChangeReviewPage.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
     "packages/api/src/lib/workspace-transition.ts",
     "packages/api/src/routes/workspaces.openapi.ts",

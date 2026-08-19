@@ -16,6 +16,7 @@ import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import {
   type ProposalGenerationAction,
+  type ProposalGenerationReviewState,
   ProposalGenerationReviewView,
 } from './ProposalGenerationReviewView';
 import { ProposalPostureSelector, proposalPostureOption } from './ProposalPostureSelector';
@@ -35,7 +36,7 @@ interface ProposalReviewViewProps {
   proposalPosture?: WorkspaceProposalPosture;
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
-  proposalDecisionState?: 'undecided' | 'accepted' | 'rejected' | 'committed';
+  proposalReviewState?: ProposalGenerationReviewState;
   sendingToYOps: boolean;
   statusText: string;
   yopsDraftSent: boolean;
@@ -58,7 +59,7 @@ export function ProposalReviewView({
   proposalPosture = 'guided',
   proposalGeneration,
   proposalGenerationBusy = false,
-  proposalDecisionState = 'undecided',
+  proposalReviewState = 'undecided',
   sendingToYOps,
   statusText,
   yopsDraftSent,
@@ -85,7 +86,7 @@ export function ProposalReviewView({
     return (
       <ProposalGenerationReviewView
         actionBusy={proposalGenerationBusy}
-        actionState={proposalDecisionState}
+        actionState={proposalReviewState}
         error={flowError}
         onAction={onProposalAction}
         onPostureChange={onProposalPostureChange}

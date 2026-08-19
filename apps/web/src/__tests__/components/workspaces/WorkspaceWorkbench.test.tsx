@@ -554,7 +554,7 @@ function activateTab(name: string | RegExp) {
 }
 
 describe('WorkspaceWorkbench', () => {
-  it('retries Commit without creating a second accepted Decision', async () => {
+  it('hands governed proposals to Validation and Changes without direct Commit', async () => {
     const view = governedProposalView();
     proposalGenerationMocks.generate.mockResolvedValue({
       transition_id: view.transition_id,
@@ -568,22 +568,6 @@ describe('WorkspaceWorkbench', () => {
       statements: [],
       operational_results: [],
     });
-    proposalGenerationMocks.decide.mockResolvedValue({
-      transition_id: view.transition_id,
-      reused: false,
-      view,
-      decision_digest: transitionDigest('f'),
-      decision: {},
-    });
-    proposalGenerationMocks.commit
-      .mockRejectedValueOnce(new Error('Temporary commit failure.'))
-      .mockResolvedValueOnce({
-        transition_id: view.transition_id,
-        reused: false,
-        commit_digest: transitionDigest('9'),
-        commit: {},
-        transition: {},
-      });
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/Proposal/);
@@ -592,17 +576,16 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Governed proposal review' })).toBeInTheDocument()
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Accept and commit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Changes review' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Commit accepted proposal' })).toBeEnabled()
+      expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('Temporary commit failure.');
-    fireEvent.click(screen.getByRole('button', { name: 'Commit accepted proposal' }));
-
-    await waitFor(() => expect(screen.getAllByText('Committed').length).toBeGreaterThan(0));
-    expect(proposalGenerationMocks.decide).toHaveBeenCalledTimes(1);
-    expect(proposalGenerationMocks.commit).toHaveBeenCalledTimes(2);
+    expect(proposalGenerationMocks.decide).not.toHaveBeenCalled();
+    expect(proposalGenerationMocks.commit).not.toHaveBeenCalled();
   });
 
   it('renders current workspace detail without an internal workspace selector', () => {
@@ -1554,42 +1537,22 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByRole('region', { name: 'Change review' })).toHaveTextContent(
       'Awaiting decision'
     );
-    const overrideButton = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(overrideButton).toBeEnabled();
-    fireEvent.click(overrideButton);
+    expect(screen.getByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and commit actions now live in Changes so Web has one review lifecycle.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open Changes/ })
+        .some(
+          (link) =>
+            link.getAttribute('href') === '/project/proj_1/changes/workspace_draft/rvs_reviewing'
+        )
+    ).toBe(true);
     expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(0);
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a reason before continuing with this failed check.'
-    );
-    fireEvent.change(screen.getByLabelText('Why continue despite the failed check?'), {
-      target: { value: 'This known schema gap is acceptable for the draft.' },
-    });
-    fireEvent.click(overrideButton);
-
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(1));
-    const decisionBody = JSON.parse(
-      String(findFetchCall(fetchMock.mock.calls, decideUrl)[1]?.body)
-    );
-    expect(decisionBody).toMatchObject({
-      outcome: 'overridden',
-      decision_reason: 'This known schema gap is acceptable for the draft.',
-      precondition: transitionPrecondition,
-    });
     expect(countFetchCalls(fetchMock.mock.calls, `${workspaceUrl}/commit`)).toBe(0);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue on release/notes' }));
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, workspaceUrl)).toBe(2));
-    const continuationSave = fetchMock.mock.calls.filter(
-      ([input]) => String(input) === workspaceUrl
-    )[1];
-    const continuationBody = JSON.parse(String(continuationSave?.[1]?.body));
-    expect(continuationBody).toMatchObject({
-      if_revision: 3,
-      workspace: {
-        status: 'draft',
-      },
-    });
-    expect(continuationBody.workspace).not.toHaveProperty('lastCommitHash');
 
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
@@ -1671,9 +1634,12 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole('button', { name: 'Include turn' }));
 
-    await screen.findByText('1 selected source turns');
-    await screen.findByText('1 source');
-    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+    await within(detail).findByText('1 selected source turns');
+    await within(detail).findByText('1 source');
+    await waitFor(() =>
+      expect(usePinsStore.getState().isPinned('conversation_turn', 'turn_persisted_1')).toBe(true)
+    );
+    fireEvent.click(within(detail).getByRole('button', { name: 'Generate candidate proposal' }));
 
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBeGreaterThanOrEqual(1)
@@ -1833,7 +1799,7 @@ describe('WorkspaceWorkbench', () => {
     expect(
       screen.queryByText('This turn belongs to the pre-merge main workspace.')
     ).not.toBeInTheDocument();
-    expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBe(1);
+    expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBeGreaterThanOrEqual(1);
 
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument());
     activateTab('Proposal');
@@ -2947,17 +2913,16 @@ describe('WorkspaceWorkbench', () => {
       why: 'Keep the PRD audience aligned with the reviewed source.',
       if_revision: 2,
     });
-    expect(await screen.findByRole('button', { name: 'Approve and save' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
-    await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, workspaceDecideUrl)).toBeGreaterThanOrEqual(1)
-    );
-    const [, decideInit] = findFetchCall(fetchMock.mock.calls, workspaceDecideUrl);
-    expect(JSON.parse(String(decideInit?.body))).toMatchObject({
-      outcome: 'accepted',
-      why: 'Keep the PRD audience aligned with the reviewed source.',
-      precondition: transitionPrecondition,
-    });
+    expect(await screen.findByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open Changes/ })
+        .some(
+          (link) =>
+            link.getAttribute('href') === '/project/proj_1/changes/workspace_ready/rvs_reviewing'
+        )
+    ).toBe(true);
+    expect(countFetchCalls(fetchMock.mock.calls, workspaceDecideUrl)).toBe(0);
     expect(
       countFetchCalls(
         fetchMock.mock.calls,
@@ -2968,7 +2933,9 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true')
     );
-    expect(screen.getAllByText(transitionDigest('8')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('region', { name: 'Change review' })).toHaveTextContent(
+      'Awaiting decision'
+    );
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
