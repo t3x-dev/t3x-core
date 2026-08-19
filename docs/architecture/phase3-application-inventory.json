@@ -17,7 +17,7 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 774
+      "lines": 659
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
