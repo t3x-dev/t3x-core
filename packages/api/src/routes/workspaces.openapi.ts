@@ -44,6 +44,7 @@ import {
   TransitionScopeDeniedError,
 } from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
+import { decideWorkspaceChange } from '../lib/workspace-change-decision';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -765,7 +766,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
       workspaceId,
       operation: { kind: 'decide', outcome },
     });
-    const decided = await decideWorkspaceTransition(db, {
+    const decided = await decideWorkspaceChange(db, {
       projectId,
       workspaceId,
       transitionId,

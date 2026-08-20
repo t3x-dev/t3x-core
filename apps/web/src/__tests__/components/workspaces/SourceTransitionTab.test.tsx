@@ -20,8 +20,8 @@ vi.mock('@/hooks/workspaces/useWorkspaceSourceTransition', () => ({
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}` as const;
 const review = vi.fn();
 const reviewRevert = vi.fn();
-const decide = vi.fn();
 const reset = vi.fn();
+const snapshotId = `rvs_${'3'.repeat(32)}`;
 
 const candidate = {
   id: 'workspace_esphome',
@@ -120,14 +120,64 @@ function mockSourceTransition(
   task: 'change' | 'revert' | null = view ? 'change' : null
 ) {
   vi.mocked(useWorkspaceSourceTransition).mockReturnValue({
-    decide,
     reset,
     review,
     reviewRevert,
     state: {
+      changeProjection: view
+        ? {
+            schema: 't3x.application/change-projection/v1',
+            version: 1,
+            authoritative: false,
+            status: 'reviewing',
+            source: {
+              kind: 'review_snapshot',
+              snapshotId,
+              snapshotDigest: digest('s'),
+              snapshotCreatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          }
+        : null,
       error: null,
       errorCode: null,
       phase: view ? 'reviewed' : 'idle',
+      reviewSnapshot: view
+        ? {
+            schema: 't3x.application/review-snapshot/v1',
+            version: 1,
+            snapshotId,
+            snapshotDigest: digest('s'),
+            createdAt: '2026-01-01T00:00:00.000Z',
+            projectId: 'proj_1',
+            workspaceId: 'workspace_esphome',
+            transitionId: `trn_${'2'.repeat(32)}`,
+            request: {
+              kind: 'exact_source_edit',
+              id: 'request_1',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            review: {
+              digest: digest('r'),
+              precondition: {
+                workspaceRevision: 7,
+                refName: 'main',
+                refHead: digest('0'),
+                effectDigest: digest('a'),
+                proposalDigest: digest('e'),
+                statementDigests: [],
+                policyDigest: digest('p'),
+              },
+            },
+            objects: {
+              base: { kind: 'state', schema: 't3x/state/v1', digest: digest('b') },
+              result: { kind: 'state', schema: 't3x/state/v1', digest: digest('c') },
+              effect: { kind: 'effect', schema: 't3x/effect/v1', digest: digest('a') },
+              proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: digest('e') },
+              statements: [],
+            },
+            transition: view,
+          }
+        : null,
       runner: view ? { mode: 'statement', statementDigest: digest('1'), outcome: 'failed' } : null,
       task,
       view,
@@ -140,7 +190,6 @@ describe('SourceTransitionTab', () => {
     vi.clearAllMocks();
     review.mockResolvedValue(true);
     reviewRevert.mockResolvedValue(true);
-    decide.mockResolvedValue(null);
     vi.mocked(useCommitTransitionView).mockReturnValue({
       error: null,
       loading: false,
@@ -203,25 +252,22 @@ describe('SourceTransitionTab', () => {
     expect(onViewChange).toHaveBeenCalledWith('preview');
   });
 
-  it('requires an authored reason before invoking the projected override action', () => {
+  it('hands source decisions to Changes instead of rendering Workspace decision controls', () => {
     mockSourceTransition(transitionView());
     render(<SourceTransitionTab active candidate={candidate} view="commit" />);
 
-    const continueButton = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(continueButton).toBeEnabled();
-    fireEvent.click(continueButton);
-    expect(decide).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a reason before continuing with this failed check.'
-    );
-    fireEvent.change(screen.getByLabelText(/Why continue despite the failed check/), {
-      target: { value: 'The known environment risk is acceptable for this device.' },
-    });
-    fireEvent.click(continueButton);
-    expect(decide).toHaveBeenCalledWith(
-      'overridden',
-      'The known environment risk is acceptable for this device.'
-    );
+    expect(screen.getByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Open Changes' })
+        .some(
+          (link) =>
+            link.getAttribute('href') === `/project/proj_1/changes/workspace_esphome/${snapshotId}`
+        )
+    ).toBe(true);
+    expect(
+      screen.queryByRole('button', { name: 'Continue anyway and save' })
+    ).not.toBeInTheDocument();
   });
 
   it('offers revert only for the selected committed source edit and sends only its commit id', async () => {

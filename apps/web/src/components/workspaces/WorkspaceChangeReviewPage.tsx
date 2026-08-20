@@ -17,12 +17,15 @@ export function WorkspaceChangeReviewPage({
   snapshotId: string;
   workspaceId: string;
 }) {
+  const normalizedProjectId = safeDecodeURIComponent(projectId);
+  const normalizedSnapshotId = safeDecodeURIComponent(snapshotId);
+  const normalizedWorkspaceId = safeDecodeURIComponent(workspaceId);
   const { decide, load, overrideReason, setOverrideReason, state } = useWorkspaceReviewSnapshot(
-    projectId,
-    workspaceId,
-    snapshotId
+    normalizedProjectId,
+    normalizedWorkspaceId,
+    normalizedSnapshotId
   );
-  const workspaceHref = workspaceReviewHref(projectId, workspaceId);
+  const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId);
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
 
@@ -122,6 +125,21 @@ export function WorkspaceChangeReviewPage({
 }
 
 function workspaceReviewHref(projectId: string, workspaceId: string): string {
-  const params = new URLSearchParams({ tab: 'workspaces', workspace: workspaceId });
-  return `/project/${encodeURIComponent(projectId)}/workspaces?${params.toString()}`;
+  const params = new URLSearchParams({
+    tab: 'workspaces',
+    workspace: safeDecodeURIComponent(workspaceId),
+  });
+  return `/project/${encodePathSegment(projectId)}/workspaces?${params.toString()}`;
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(safeDecodeURIComponent(value));
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
