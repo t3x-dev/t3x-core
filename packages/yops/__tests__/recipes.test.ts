@@ -10,6 +10,7 @@ import {
   compileYOpsMappingKeyOmit,
   compileYOpsMappingKeyPick,
   compileYOpsMappingKeyRename,
+  compileYOpsOperationsToPrimitiveProfile,
   compileYOpsPathClone,
   compileYOpsPathMove,
   compileYOpsPathReplacement,
@@ -26,13 +27,20 @@ import {
   YOPS_RECIPE_APPEND_SEQUENCE_ITEM_ID,
   YOPS_RECIPE_CLONE_PATH_ID,
   YOPS_RECIPE_EXPANSION_SCHEMA,
+  YOPS_RECIPE_FOLD_MAPPING_CHILD_ID,
   YOPS_RECIPE_INVOCATION_SCHEMA,
+  YOPS_RECIPE_MERGE_MAPPING_KEYS_ID,
   YOPS_RECIPE_MOVE_PATH_ID,
+  YOPS_RECIPE_NEST_MAPPING_KEYS_ID,
   YOPS_RECIPE_OMIT_MAPPING_KEYS_ID,
   YOPS_RECIPE_PICK_MAPPING_KEYS_ID,
+  YOPS_RECIPE_POPULATE_MAPPING_ID,
   YOPS_RECIPE_PROFILES,
   YOPS_RECIPE_RENAME_MAPPING_KEY_ID,
   YOPS_RECIPE_REPLACE_PATH_ID,
+  YOPS_RECIPE_SORT_SEQUENCE_ID,
+  YOPS_RECIPE_SPLIT_MAPPING_GROUPS_ID,
+  YOPS_RECIPE_UNIQUE_SEQUENCE_ID,
   YOPS_V1_FROZEN_OPERATION_NAMES,
   YOPS_V1_SPEC_DIGEST,
   YOPS_V1_SPEC_DIGEST_DOMAIN,
@@ -115,6 +123,41 @@ describe('YOps recipe compiler profiles', () => {
         profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
         outputOperationNames: ['assert', 'set'],
       }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_POPULATE_MAPPING_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_NEST_MAPPING_KEYS_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_SPLIT_MAPPING_GROUPS_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_FOLD_MAPPING_CHILD_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_MERGE_MAPPING_KEYS_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_SORT_SEQUENCE_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
+      expect.objectContaining({
+        id: YOPS_RECIPE_UNIQUE_SEQUENCE_ID,
+        profile: YOPS_PRIMITIVE_V2_CANDIDATE_PROFILE_ID,
+        outputOperationNames: ['assert', 'set'],
+      }),
     ]);
     expect(getYOpsRecipeCompiler(YOPS_RECIPE_REPLACE_PATH_ID)?.compile).toBe(
       compileYOpsPathReplacement
@@ -132,6 +175,27 @@ describe('YOps recipe compiler profiles', () => {
     );
     expect(getYOpsRecipeCompiler(YOPS_RECIPE_OMIT_MAPPING_KEYS_ID)?.id).toBe(
       YOPS_RECIPE_OMIT_MAPPING_KEYS_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_POPULATE_MAPPING_ID)?.id).toBe(
+      YOPS_RECIPE_POPULATE_MAPPING_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_NEST_MAPPING_KEYS_ID)?.id).toBe(
+      YOPS_RECIPE_NEST_MAPPING_KEYS_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_SPLIT_MAPPING_GROUPS_ID)?.id).toBe(
+      YOPS_RECIPE_SPLIT_MAPPING_GROUPS_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_FOLD_MAPPING_CHILD_ID)?.id).toBe(
+      YOPS_RECIPE_FOLD_MAPPING_CHILD_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_MERGE_MAPPING_KEYS_ID)?.id).toBe(
+      YOPS_RECIPE_MERGE_MAPPING_KEYS_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_SORT_SEQUENCE_ID)?.id).toBe(
+      YOPS_RECIPE_SORT_SEQUENCE_ID
+    );
+    expect(getYOpsRecipeCompiler(YOPS_RECIPE_UNIQUE_SEQUENCE_ID)?.id).toBe(
+      YOPS_RECIPE_UNIQUE_SEQUENCE_ID
     );
     expect(getYOpsRecipeCompiler('missing')).toBeUndefined();
   });
@@ -221,6 +285,101 @@ describe('YOps recipe compiler profiles', () => {
       expect(recipeResult, testCase.name).toMatchObject({ ok: true });
       expect(recipeResult).toMatchObject({ doc: nativeResult.doc });
     }
+  });
+
+  it('downshifts advanced native operations into replay-equivalent primitive recipes', () => {
+    const cases: Array<{
+      name: string;
+      recipeId: string;
+      base: YValue;
+      nativeOp: YOp;
+    }> = [
+      {
+        name: 'populate',
+        recipeId: YOPS_RECIPE_POPULATE_MAPPING_ID,
+        base: { service: { name: 'api' } },
+        nativeOp: { populate: { path: 'service', values: { port: 8080, tls: true } } },
+      },
+      {
+        name: 'nest',
+        recipeId: YOPS_RECIPE_NEST_MAPPING_KEYS_ID,
+        base: { service: { host: '0.0.0.0', port: 8080, owner: 'ops' } },
+        nativeOp: { nest: { path: 'service', keys: ['host', 'port'], under: 'endpoint' } },
+      },
+      {
+        name: 'split',
+        recipeId: YOPS_RECIPE_SPLIT_MAPPING_GROUPS_ID,
+        base: { service: { host: '0.0.0.0', port: 8080, owner: 'ops' } },
+        nativeOp: { split: { path: 'service', into: { endpoint: ['host', 'port'] } } },
+      },
+      {
+        name: 'fold',
+        recipeId: YOPS_RECIPE_FOLD_MAPPING_CHILD_ID,
+        base: { service: { endpoint: { host: '0.0.0.0' }, owner: 'ops' } },
+        nativeOp: { fold: { path: 'service/endpoint' } },
+      },
+      {
+        name: 'merge',
+        recipeId: YOPS_RECIPE_MERGE_MAPPING_KEYS_ID,
+        base: { service: { http: { port: 80 }, tls: { enabled: true }, owner: 'ops' } },
+        nativeOp: { merge: { path: 'service', keys: ['http', 'tls'], into: 'listener' } },
+      },
+      {
+        name: 'sort',
+        recipeId: YOPS_RECIPE_SORT_SEQUENCE_ID,
+        base: {
+          items: [
+            { name: 'b', rank: 2 },
+            { name: 'a', rank: 1 },
+          ],
+        },
+        nativeOp: { sort: { path: 'items', by: 'rank' } },
+      },
+      {
+        name: 'unique',
+        recipeId: YOPS_RECIPE_UNIQUE_SEQUENCE_ID,
+        base: {
+          items: [
+            { name: 'api', rank: 1 },
+            { name: 'api', rank: 2 },
+            { name: 'web', rank: 3 },
+          ],
+        },
+        nativeOp: { unique: { path: 'items', by: 'name' } },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const downshifted = compileYOpsOperationsToPrimitiveProfile({
+        base: testCase.base,
+        operations: [testCase.nativeOp],
+      });
+      const nativeResult = applyYOps(testCase.base, [testCase.nativeOp]);
+      const primitiveResult = applyYOps(testCase.base, downshifted.operations as YOp[]);
+
+      expect(downshifted.retainedOperationNames, testCase.name).toEqual([]);
+      expect(downshifted.expansions.map((result) => result.expansion.recipeId)).toEqual([
+        testCase.recipeId,
+      ]);
+      expect(
+        downshifted.operations
+          .map(recipeOperationName)
+          .every((name) => YOPS_PRIMITIVE_OPERATION_NAMES.includes(name))
+      ).toBe(true);
+      expect(nativeResult, testCase.name).toMatchObject({ ok: true });
+      expect(primitiveResult, testCase.name).toMatchObject({ ok: true, doc: nativeResult.doc });
+    }
+  });
+
+  it('keeps structural v1 core operations native instead of forcing them into recipes', () => {
+    const downshifted = compileYOpsOperationsToPrimitiveProfile({
+      base: {},
+      operations: [{ define: { path: 'service' } }],
+    });
+
+    expect(downshifted.expansions).toEqual([]);
+    expect(downshifted.retainedOperationNames).toEqual(['define']);
+    expect(downshifted.operations).toEqual([{ define: { path: 'service' } }]);
   });
 });
 

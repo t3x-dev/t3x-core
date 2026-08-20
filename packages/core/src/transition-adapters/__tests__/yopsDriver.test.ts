@@ -69,6 +69,49 @@ describe('YOps MutationDriver adapter', () => {
     );
   });
 
+  it('downshifts advanced YOps when creating new Effects while replay keeps v1 support', () => {
+    const base = createYOpsState({ service: { ports: [2, 1, 1], meta: { owner: 'ops' } } });
+    const created = createYOpsEffect({
+      base,
+      operations: [
+        { sort: { path: 'service/ports' } },
+        { unique: { path: 'service/ports' } },
+        { populate: { path: 'service/meta', values: { tier: 'prod' } } },
+      ],
+    });
+
+    expect(created.result.value).toEqual({
+      service: { ports: [1, 2], meta: { owner: 'ops', tier: 'prod' } },
+    });
+    expect(created.effect.operations.map((op) => Object.keys(op as object)[0])).toEqual([
+      'assert',
+      'set',
+      'assert',
+      'set',
+      'assert',
+      'set',
+    ]);
+    expect(created.effect.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sort: expect.anything() }),
+        expect.objectContaining({ unique: expect.anything() }),
+        expect.objectContaining({ populate: expect.anything() }),
+      ])
+    );
+    expect(
+      replay(
+        base,
+        {
+          driver: { ...YOPS_MUTATION_DRIVER_REF },
+          operations: [{ sort: { path: 'service/ports' } }],
+          inputs: [],
+        },
+        new Map(),
+        yopsMutationDrivers
+      ).value
+    ).toEqual({ service: { ports: [1, 1, 2], meta: { owner: 'ops' } } });
+  });
+
   it('builds an exact base-sensitive replacement from two YOps States', () => {
     const base = createYOpsState({ keep: { enabled: true }, remove: 1, update: 'before' });
     const target = createYOpsState({ add: 2, keep: { enabled: true }, update: 'after' });

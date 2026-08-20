@@ -25,6 +25,7 @@ import {
 } from '@t3x-dev/transition';
 import {
   applyYOps,
+  compileYOpsOperationsToPrimitiveProfile,
   spec,
   YOPS_ERRORS,
   type YOp,
@@ -190,9 +191,18 @@ export function createYOpsEffect(input: CreateYOpsEffectInput): CreatedYOpsEffec
       `Actual Base ${baseDescriptor.digest} does not match expected ${input.expectedBase.digest}`
     );
   }
+  assertYOpsState(input.base);
 
-  const operations = JSON.parse(
+  const callerOperations = JSON.parse(
     canonicalizeProtocolValue(input.operations as ProtocolValue)
+  ) as ProtocolValue[];
+  const parsedOperations = parseOperations(callerOperations);
+  const downshifted = compileYOpsOperationsToPrimitiveProfile({
+    base: yopsStateCodec.decode(input.base.value) as YValue,
+    operations: parsedOperations,
+  });
+  const operations = JSON.parse(
+    canonicalizeProtocolValue(downshifted.operations as unknown as ProtocolValue)
   ) as ProtocolValue[];
   const definition: EffectDefinition = {
     driver: { ...YOPS_MUTATION_DRIVER_REF },
