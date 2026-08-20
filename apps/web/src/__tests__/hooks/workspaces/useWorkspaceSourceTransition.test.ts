@@ -4,10 +4,7 @@ import type { TransitionViewV1 } from '@t3x-dev/core';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspaceSourceTransition } from '@/hooks/workspaces/useWorkspaceSourceTransition';
-import { ApiError } from '@/infrastructure/core';
 import {
-  decideWorkspaceSourceRevert,
-  decideWorkspaceSourceTransition,
   reviewWorkspaceSourceRevert,
   reviewWorkspaceSourceTransition,
   saveWorkspaceDraft,
@@ -16,8 +13,6 @@ import { WORKSPACE_SOURCE_ARTIFACT_FORMAT, type WorkspaceCandidate } from '@/typ
 import { cleanupRoots, renderHook } from '../renderHook';
 
 vi.mock('@/queries/workspaces', () => ({
-  decideWorkspaceSourceRevert: vi.fn(),
-  decideWorkspaceSourceTransition: vi.fn(),
   reviewWorkspaceSourceRevert: vi.fn(),
   reviewWorkspaceSourceTransition: vi.fn(),
   saveWorkspaceDraft: vi.fn(),
@@ -25,6 +20,7 @@ vi.mock('@/queries/workspaces', () => ({
 
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}`;
 const transitionId = `trn_${'2'.repeat(32)}`;
+const snapshotId = `rvs_${'3'.repeat(32)}`;
 
 const candidate = {
   id: 'workspace_esphome',
@@ -63,20 +59,53 @@ const precondition = {
   policy_digest: digest('f'),
 };
 
-function transitionView(
-  mode: 'pending' | 'committed' | 'rejected'
-): Extract<TransitionViewV1, { mode: 'transition' }> {
+function transitionView(): Extract<TransitionViewV1, { mode: 'transition' }> {
   return {
     mode: 'transition',
-    decision:
-      mode === 'pending'
-        ? { observation: 'not_supplied' }
-        : { observation: 'supplied', outcome: mode === 'rejected' ? 'rejected' : 'accepted' },
-    history:
-      mode === 'committed'
-        ? { observation: 'committed', commit: { id: digest('9') } }
-        : { observation: 'not_committed' },
+    decision: { observation: 'not_supplied' },
+    history: { observation: 'not_committed' },
   } as Extract<TransitionViewV1, { mode: 'transition' }>;
+}
+
+function reviewArtifacts() {
+  const review_snapshot = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId,
+    snapshotDigest: digest('s'),
+    projectId: 'proj_1',
+    workspaceId: 'workspace_esphome',
+    transitionId,
+    request: { kind: 'exact_source_edit', id: 'request_1', createdAt: '2026-01-01T00:00:00.000Z' },
+    review: {
+      digest: digest('r'),
+      precondition: {
+        workspaceRevision: 7,
+        refName: 'main',
+        refHead: digest('a'),
+        effectDigest: digest('c'),
+        proposalDigest: digest('d'),
+        statementDigests: [digest('e')],
+        policyDigest: digest('f'),
+      },
+    },
+  };
+  return {
+    review_snapshot,
+    change_projection: {
+      schema: 't3x.application/change-projection/v1',
+      version: 1,
+      authoritative: false,
+      status: 'reviewing',
+      source: {
+        kind: 'review_snapshot',
+        snapshotId,
+        snapshotDigest: digest('s'),
+        snapshotCreatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      title: 'ESPHome configuration change',
+    },
+  } as const;
 }
 
 describe('useWorkspaceSourceTransition', () => {
@@ -88,32 +117,23 @@ describe('useWorkspaceSourceTransition', () => {
     });
     vi.mocked(reviewWorkspaceSourceTransition).mockResolvedValue({
       transition_id: transitionId,
-      transition: transitionView('pending'),
+      transition: transitionView(),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
+      ...reviewArtifacts(),
     });
     vi.mocked(reviewWorkspaceSourceRevert).mockResolvedValue({
       transition_id: transitionId,
-      transition: transitionView('pending'),
+      transition: transitionView(),
       precondition,
       runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
+      ...reviewArtifacts(),
     });
   });
 
   afterEach(() => cleanupRoots());
 
-  it('persists the source selector before Review and decides only the bound session', async () => {
-    const commitCreated = vi.fn();
-    window.addEventListener('t3x:commit-created', commitCreated);
-    vi.mocked(decideWorkspaceSourceTransition).mockResolvedValue({
-      transition_id: transitionId,
-      transition: transitionView('committed'),
-      precondition,
-      runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
-      decision_digest: digest('2'),
-      commit: {},
-      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
-    });
+  it('persists the source selector before Review and exposes the immutable Changes handoff', async () => {
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
     await act(async () => {
@@ -130,96 +150,17 @@ describe('useWorkspaceSourceTransition', () => {
     expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(reviewWorkspaceSourceTransition).mock.invocationCallOrder[0]!
     );
-    expect(result.current.state.runner).toMatchObject({ mode: 'statement', outcome: 'passed' });
-
-    await act(async () => {
-      await result.current.decide('accepted');
+    expect(result.current.state).toMatchObject({
+      phase: 'reviewed',
+      reviewSnapshot: { snapshotId },
+      changeProjection: { status: 'reviewing' },
+      runner: { mode: 'statement', outcome: 'passed' },
+      task: 'change',
     });
-
-    expect(decideWorkspaceSourceTransition).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
-      transitionId,
-      artifact: candidate.sourceArtifact,
-      change,
-      why: 'Reduce production log volume.',
-      outcome: 'accepted',
-      decisionReason: undefined,
-      precondition,
-    });
-    expect(commitCreated).toHaveBeenCalledOnce();
-    window.removeEventListener('t3x:commit-created', commitCreated);
   });
 
-  it('retains rejection without emitting a commit event', async () => {
-    const commitCreated = vi.fn();
-    window.addEventListener('t3x:commit-created', commitCreated);
-    vi.mocked(decideWorkspaceSourceTransition).mockResolvedValue({
-      transition_id: transitionId,
-      transition: transitionView('rejected'),
-      precondition,
-      runner: { mode: 'not_configured' },
-      decision_digest: digest('3'),
-    });
-    const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
-
-    await act(async () => {
-      await result.current.review(change);
-      await result.current.decide('rejected');
-    });
-
-    expect(result.current.state.phase).toBe('rejected');
-    expect(result.current.state.view).toEqual(transitionView('rejected'));
-    expect(commitCreated).not.toHaveBeenCalled();
-    window.removeEventListener('t3x:commit-created', commitCreated);
-  });
-
-  it('requires a reason for override and clears a stale review session', async () => {
-    const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
-    await act(async () => {
-      await result.current.review(change);
-      await result.current.decide('overridden', '   ');
-    });
-    expect(decideWorkspaceSourceTransition).not.toHaveBeenCalled();
-    expect(result.current.state.errorCode).toBe('OVERRIDE_REASON_REQUIRED');
-
-    vi.mocked(decideWorkspaceSourceTransition).mockRejectedValue(
-      new ApiError('STALE_REVIEW', 'Workspace or ref facts changed; review again.')
-    );
-    await act(async () => {
-      await result.current.decide('accepted');
-    });
-    expect(result.current.state.errorCode).toBe('STALE_REVIEW');
-    expect(result.current.state.view).toBeNull();
-
-    await act(async () => {
-      await result.current.decide('accepted');
-    });
-    expect(decideWorkspaceSourceTransition).toHaveBeenCalledOnce();
-    expect(result.current.state.errorCode).toBe('REVIEW_REQUIRED');
-  });
-
-  it('refuses Review when no root Material is selected', async () => {
-    const { result } = renderHook(() =>
-      useWorkspaceSourceTransition({ ...candidate, sourceArtifact: undefined })
-    );
-    await act(async () => {
-      await result.current.review(change);
-    });
-    expect(saveWorkspaceDraft).not.toHaveBeenCalled();
-    expect(reviewWorkspaceSourceTransition).not.toHaveBeenCalled();
-    expect(result.current.state.errorCode).toBe('SOURCE_ROOT_REQUIRED');
-  });
-
-  it('saves before revert Review and decides only the commit-bound opaque session', async () => {
+  it('saves before revert Review and exposes the same Changes handoff', async () => {
     const commitId = digest('8');
-    vi.mocked(decideWorkspaceSourceRevert).mockResolvedValue({
-      transition_id: transitionId,
-      transition: transitionView('committed'),
-      precondition,
-      runner: { mode: 'statement', statementDigest: digest('1'), outcome: 'passed' },
-      decision_digest: digest('2'),
-      commit: {},
-      workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('9') },
-    });
     const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
 
     await act(async () => {
@@ -232,46 +173,23 @@ describe('useWorkspaceSourceTransition', () => {
       why: 'Restore the previous configuration.',
       ifRevision: 7,
     });
-    expect(vi.mocked(saveWorkspaceDraft).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(reviewWorkspaceSourceRevert).mock.invocationCallOrder[0]!
-    );
-    expect(result.current.state.task).toBe('revert');
-
-    await act(async () => {
-      await result.current.decide('accepted');
+    expect(result.current.state).toMatchObject({
+      phase: 'reviewed',
+      reviewSnapshot: { snapshotId },
+      changeProjection: { status: 'reviewing' },
+      task: 'revert',
     });
-
-    expect(decideWorkspaceSourceRevert).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
-      transitionId,
-      commitId,
-      why: 'Restore the previous configuration.',
-      outcome: 'accepted',
-      decisionReason: undefined,
-      precondition,
-    });
-    expect(decideWorkspaceSourceTransition).not.toHaveBeenCalled();
   });
 
-  it('clears a stale revert Review so it cannot be retried as authority', async () => {
-    vi.mocked(decideWorkspaceSourceRevert).mockRejectedValue(
-      new ApiError('STALE_REVIEW', 'Workspace or ref facts changed; review again.')
+  it('refuses Review when no root Material is selected', async () => {
+    const { result } = renderHook(() =>
+      useWorkspaceSourceTransition({ ...candidate, sourceArtifact: undefined })
     );
-    const { result } = renderHook(() => useWorkspaceSourceTransition(candidate));
     await act(async () => {
-      await result.current.reviewRevert(digest('8'));
-      await result.current.decide('accepted');
+      await result.current.review(change);
     });
-    expect(result.current.state).toMatchObject({
-      errorCode: 'STALE_REVIEW',
-      phase: 'idle',
-      task: null,
-      view: null,
-    });
-
-    await act(async () => {
-      await result.current.decide('accepted');
-    });
-    expect(decideWorkspaceSourceRevert).toHaveBeenCalledOnce();
-    expect(result.current.state.errorCode).toBe('REVIEW_REQUIRED');
+    expect(saveWorkspaceDraft).not.toHaveBeenCalled();
+    expect(reviewWorkspaceSourceTransition).not.toHaveBeenCalled();
+    expect(result.current.state.errorCode).toBe('SOURCE_ROOT_REQUIRED');
   });
 });

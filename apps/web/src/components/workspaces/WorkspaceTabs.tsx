@@ -268,7 +268,6 @@ function renderWorkspaceTab(
           active={activeTab !== 'chat'}
           candidate={candidate}
           key={`${candidate.id}:${candidate.revision ?? 'unsaved'}:${JSON.stringify(candidate.sourceArtifact)}`}
-          onCommitted={options.onYOpsCommitted}
           onViewChange={options.onWorkflowTabChange}
           view={activeTab === 'chat' ? 'ops' : activeTab}
         />

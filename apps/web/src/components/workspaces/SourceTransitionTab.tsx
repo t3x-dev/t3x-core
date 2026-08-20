@@ -19,20 +19,18 @@ import {
   type WorkspaceSourceTask,
 } from '@/hooks/workspaces/useWorkspaceSourceTransition';
 import type { WorkspaceCandidate, WorkspaceSourceMaterialSelector } from '@/types/workspaces';
-import { TransitionDecisionControls } from './TransitionDecisionControls';
+import { ChangeDecisionHandoff } from './ChangeDecisionHandoff';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import type { WorkspaceYOpsFlowView } from './YOpsDraftTab';
 
 export function SourceTransitionTab({
   active,
   candidate,
-  onCommitted,
   onViewChange,
   view,
 }: {
   active: boolean;
   candidate: WorkspaceCandidate;
-  onCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   view: WorkspaceYOpsFlowView;
 }) {
@@ -42,7 +40,6 @@ export function SourceTransitionTab({
   const [replacementValue, setReplacementValue] = useState('INFO');
   const [why, setWhy] = useState('');
   const [revertWhy, setRevertWhy] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
   const committedReview = useCommitTransitionView(
     candidate.projectId,
     candidate.targetBranch,
@@ -64,7 +61,6 @@ export function SourceTransitionTab({
   const handleDraftChange = (update: () => void) => {
     update();
     sourceTransition.reset();
-    setOverrideReason('');
   };
 
   const handleReview = async () => {
@@ -79,20 +75,17 @@ export function SourceTransitionTab({
     if (reviewed) onViewChange?.('validation');
   };
 
-  const handleDecision = async (
-    outcome: 'accepted' | 'overridden' | 'rejected',
-    reason?: string
-  ) => {
-    const result = await sourceTransition.decide(outcome, reason);
-    if (result) onCommitted?.(result.commitId, candidate.targetBranch, result.workspace);
-  };
-
   const pendingReview = sourceTransition.state.view;
   const displayedReview = pendingReview
-    ? { error: null, loading: false, view: pendingReview }
+    ? {
+        changeProjection: sourceTransition.state.changeProjection,
+        error: null,
+        loading: false,
+        reviewSnapshot: sourceTransition.state.reviewSnapshot,
+        view: pendingReview,
+      }
     : committedReview;
-  const busy =
-    sourceTransition.state.phase === 'reviewing' || sourceTransition.state.phase === 'deciding';
+  const busy = sourceTransition.state.phase === 'reviewing';
   const isRevert = sourceTransition.state.task === 'revert';
   const displayedOperations = sourceOperations(displayedReview.view);
 
@@ -177,13 +170,7 @@ export function SourceTransitionTab({
           )}
         </div>
       ) : pendingReview ? (
-        <TransitionDecisionControls
-          busy={busy}
-          onDecide={(outcome, reason) => void handleDecision(outcome, reason)}
-          onOverrideReasonChange={setOverrideReason}
-          overrideReason={overrideReason}
-          view={pendingReview}
-        />
+        <ChangeDecisionHandoff reviewSnapshot={sourceTransition.state.reviewSnapshot} />
       ) : null}
     </div>
   );

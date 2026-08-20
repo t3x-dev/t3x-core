@@ -189,6 +189,8 @@ const WorkspaceSourceTransitionReviewResponseSchema = z.object({
   transition: z.any(),
   precondition: WorkspaceSourceTransitionPreconditionSchema,
   runner: WorkspaceSourceRunnerStatusSchema,
+  review_snapshot: z.any(),
+  change_projection: z.any(),
 });
 
 const WorkspaceSourceTransitionDecisionResponseSchema =
@@ -542,6 +544,8 @@ export function createWorkspaceSourceTransitionRoutes(
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
+          review_snapshot: reviewed.reviewSnapshot,
+          change_projection: reviewed.changeProjection,
         },
       });
     } catch (error) {
@@ -589,6 +593,8 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          review_snapshot: decided.reviewSnapshot,
+          change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),
           ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
         },
@@ -633,6 +639,8 @@ export function createWorkspaceSourceTransitionRoutes(
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
+          review_snapshot: reviewed.reviewSnapshot,
+          change_projection: reviewed.changeProjection,
         },
       });
     } catch (error) {
@@ -679,6 +687,8 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          review_snapshot: decided.reviewSnapshot,
+          change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),
           ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
         },

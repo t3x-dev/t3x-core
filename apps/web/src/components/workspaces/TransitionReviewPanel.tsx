@@ -417,7 +417,21 @@ function shortToken(value: string): string {
 }
 
 function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
-  return `/project/${encodeURIComponent(projectId)}/changes/${encodeURIComponent(workspaceId)}/${encodeURIComponent(snapshotId)}`;
+  return `/project/${encodePathSegment(projectId)}/changes/${encodePathSegment(
+    workspaceId
+  )}/${encodePathSegment(snapshotId)}`;
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(safeDecodeURIComponent(value));
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function operationLabel(operation: unknown, index: number): string {
