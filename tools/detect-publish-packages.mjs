@@ -2,8 +2,10 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parsePackageReleaseEntries } from './lib/releasePr.mjs';
 import { validateReleaseSurfaceOrThrow } from './lib/releaseSurface.mjs';
+import { readChangesets } from './release-train/ensure-changesets.mjs';
 
 function parseArgs(argv) {
   const options = {
@@ -49,6 +51,7 @@ function readChangedFiles(options) {
 
 export function detectPublishPackages({
   changedFiles,
+  changesets = [],
   isPackageVersionPublished = defaultIsPackageVersionPublished,
   readVersion = defaultReadVersion,
   releaseRecords = [],
@@ -63,13 +66,18 @@ export function detectPublishPackages({
       .filter((entry) => changedFileSet.has(`${entry.path}/package.json`))
       .map((entry) => entry.name)
   );
+  const changesetPackages = pendingChangesetPackageNames({ activeEntries, changesets });
   const firstPublishPackages = firstPublishPackageNames({
     activeEntries,
     isPackageVersionPublished,
     readVersion,
     releaseRecords,
   });
-  const selectedPackages = new Set([...changedPackages, ...firstPublishPackages]);
+  const selectedPackages = new Set([
+    ...changedPackages,
+    ...changesetPackages,
+    ...firstPublishPackages,
+  ]);
   const packages = activeEntries
     .filter((entry) => selectedPackages.has(entry.name))
     .map((entry) => entry.name);
@@ -80,6 +88,21 @@ export function detectPublishPackages({
     packageSlugs: packages.map((name) => name.replace(/^@t3x-dev\//, '')),
     publishesLocal: packages.includes('@t3x-dev/local'),
   };
+}
+
+function pendingChangesetPackageNames({ activeEntries, changesets }) {
+  const activePackageNames = new Set(activeEntries.map((entry) => entry.name));
+  const selected = new Set();
+
+  for (const changeset of changesets) {
+    for (const entry of changeset.entries ?? []) {
+      if (activePackageNames.has(entry.packageName)) {
+        selected.add(entry.packageName);
+      }
+    }
+  }
+
+  return selected;
 }
 
 function firstPublishPackageNames({
@@ -193,10 +216,13 @@ function writeOutputs(result) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const releaseSurface = validateReleaseSurfaceOrThrow({ rootDir: new URL('..', import.meta.url) });
+  const rootUrl = new URL('..', import.meta.url);
+  const rootDir = fileURLToPath(rootUrl);
+  const releaseSurface = validateReleaseSurfaceOrThrow({ rootDir: rootUrl });
   const changedFiles = readChangedFiles(options);
   const result = detectPublishPackages({
     changedFiles,
+    changesets: readChangesets({ rootDir }),
     releaseRecords: readProductReleaseRecords(),
     releaseSurface,
   });
