@@ -197,25 +197,27 @@ export function planProductDisplayVersionSync({
     });
   }
 
-  const rootReadmePath = path.join(repoRoot, readmePath);
-  if (existsSync(rootReadmePath)) {
-    const readme = readFileSync(rootReadmePath, 'utf8');
-    const nextBadge = `<img src="https://img.shields.io/badge/alpha-v${version}%20public-green" alt="public alpha v${version}" />`;
-    if (!readmeBadgePattern.test(readme)) {
-      throw new Error(`${readmePath} must contain the public alpha version badge`);
-    }
-
-    const nextReadme = readme.replace(readmeBadgePattern, nextBadge);
-    if (nextReadme !== readme) {
-      changes.push({
-        kind: 'readme-badge',
-        relativePath: readmePath,
-        write() {
-          writeFileSync(rootReadmePath, nextReadme, 'utf8');
-        },
-      });
-    }
+  const localPackageVersion = workspacePackages.find(
+    (packageRecord) => packageRecord.name === '@t3x-dev/local'
+  )?.packageJson.version;
+  if (localPackageVersion) {
+    changes.push(
+      ...planRootReadmeAlphaBadgeSync({
+        localPackageVersion,
+        repoRoot,
+      })
+    );
   }
+
+  changes.push(
+    ...planPackageReadmeReleaseStatusSync({
+      changedPackagePaths,
+      releaseSurface: resolvedReleaseSurface,
+      repoRoot,
+      workspacePackages,
+      workspaceSourceScope,
+    })
+  );
 
   for (const packageRecord of productDisplayPackages({
     releaseSurface: resolvedReleaseSurface,
@@ -247,6 +249,119 @@ export function planProductDisplayVersionSync({
   }
 
   return changes;
+}
+
+function planRootReadmeAlphaBadgeSync({ localPackageVersion, repoRoot }) {
+  const rootReadmePath = path.join(repoRoot, readmePath);
+  if (!existsSync(rootReadmePath)) {
+    return [];
+  }
+
+  const readme = readFileSync(rootReadmePath, 'utf8');
+  if (!readmeBadgePattern.test(readme)) {
+    throw new Error(`${readmePath} must contain the public alpha version badge`);
+  }
+
+  const nextBadge = `<img src="https://img.shields.io/badge/alpha-v${localPackageVersion}%20public-green" alt="public alpha v${localPackageVersion}" />`;
+  const nextReadme = readme.replace(readmeBadgePattern, nextBadge);
+  if (nextReadme === readme) {
+    return [];
+  }
+
+  return [
+    {
+      kind: 'readme-badge',
+      relativePath: readmePath,
+      write() {
+        writeFileSync(rootReadmePath, nextReadme, 'utf8');
+      },
+    },
+  ];
+}
+
+function planPackageReadmeReleaseStatusSync({
+  changedPackagePaths,
+  releaseSurface,
+  repoRoot,
+  workspacePackages,
+  workspaceSourceScope,
+}) {
+  const packageRecordsByName = new Map(
+    workspacePackages.map((packageRecord) => [packageRecord.name, packageRecord])
+  );
+  const changes = [];
+
+  for (const entry of releaseSurface.packages.filter((item) => item.npm_publish === true)) {
+    const packageRecord = packageRecordsByName.get(entry.name);
+    if (!packageRecord) {
+      continue;
+    }
+    if (
+      workspaceSourceScope === 'changed' &&
+      !changedPackagePaths.has(packageRecord.relativePath)
+    ) {
+      continue;
+    }
+    if (!entry.path) {
+      continue;
+    }
+
+    const readmePath = path.join(entry.path, 'README.md');
+    const absoluteReadmePath = path.join(repoRoot, readmePath);
+    if (!existsSync(absoluteReadmePath)) {
+      continue;
+    }
+
+    const readme = readFileSync(absoluteReadmePath, 'utf8');
+    const nextReadme = withPackageReleaseStatus({
+      entry,
+      readme,
+      version: packageRecord.packageJson.version,
+    });
+    if (nextReadme === readme) {
+      continue;
+    }
+
+    changes.push({
+      kind: 'package-readme-release-status',
+      packageName: entry.name,
+      relativePath: readmePath,
+      write() {
+        writeFileSync(absoluteReadmePath, nextReadme, 'utf8');
+      },
+    });
+  }
+
+  return changes;
+}
+
+function withPackageReleaseStatus({ entry, readme, version }) {
+  const expectedSentence = packageReleaseStatusSentence({ entry, version });
+  if (readme.includes(expectedSentence)) {
+    return readme;
+  }
+
+  const existingSentencePattern = new RegExp(
+    `\\\`${escapeRegex(entry.name)}@[^\\\`]+\\\` is part of the [^\\n.]+ T3X [^\\n.]+ release surface\\.`
+  );
+  if (existingSentencePattern.test(readme)) {
+    return readme.replace(existingSentencePattern, expectedSentence);
+  }
+
+  const releaseStatusHeadingPattern = /(## Release status\s*\n+)/i;
+  if (releaseStatusHeadingPattern.test(readme)) {
+    return readme.replace(releaseStatusHeadingPattern, `$1${expectedSentence}\n`);
+  }
+
+  return `${readme.trimEnd()}\n\n## Release status\n\n${expectedSentence}\n`;
+}
+
+function packageReleaseStatusSentence({ entry, version }) {
+  return `\`${entry.name}@${version}\` is part of the ${entry.access} T3X ${entry.stability_tier} release surface.`;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function syncProductDisplayVersions({

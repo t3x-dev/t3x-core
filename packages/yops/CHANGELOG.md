@@ -1,5 +1,25 @@
 # @t3x-dev/yops
 
+## 1.2.0
+
+### Minor Changes
+
+- [#1384](https://github.com/t3x-dev/t3x-core/pull/1384) [`72fe53d`](https://github.com/t3x-dev/t3x-core/commit/72fe53d7c069e106a57338956469c108889d14f1) Thanks [@jjy0230](https://github.com/jjy0230)! - Add versioned YOps recipe compiler profile metadata, base-aware built-in recipes for path replacement, path clone/move, mapping-key rename/pick/omit, and sequence append, plus invocation/expansion envelopes that keep recipe provenance outside Effect identity while compiling to primitive `assert` plus `set`/`unset` operations.
+
+### Patch Changes
+
+- [#1362](https://github.com/t3x-dev/t3x-core/pull/1362) [`78c9ae6`](https://github.com/t3x-dev/t3x-core/commit/78c9ae6730dc28d330cc12786d043a774fdd2b18) Thanks [@etht3x](https://github.com/etht3x)! - Preserve decoded path segments through define, rename, unset, and fold so quoted mapping keys containing `/` remain one key instead of being reinterpreted as nested paths.
+
+- [#1323](https://github.com/t3x-dev/t3x-core/pull/1323) [`513dc89`](https://github.com/t3x-dev/t3x-core/commit/513dc894763ced7b2b69ae0abb442e5e0c42038e) Thanks [@a996qaq](https://github.com/a996qaq)! - Reject malformed runtime paths and out-of-bounds sequence writes so engine behavior matches path validation and never reports sparse or unrepresentable index writes as applied.
+
+  Breaking declaration: `@t3x-dev/yops` expands the exported
+  `ParsePathResult.code` union with `INVALID_INDEX_SYNTAX`,
+  `INVALID_MATCH_SYNTAX`, and `INDEX_OUT_OF_RANGE`. Exhaustive consumers must
+  handle these additional results for malformed paths; valid path behavior and
+  the permissive `parsePath` API remain compatible.
+
+- [#1377](https://github.com/t3x-dev/t3x-core/pull/1377) [`6d201d1`](https://github.com/t3x-dev/t3x-core/commit/6d201d149fc21c174bb9eeb47ddb743390b01ef3) Thanks [@jjy0230](https://github.com/jjy0230)! - Declare zod as a runtime dependency and regenerate YOps spec/schema artifacts before tests so strict path fixes are verified from fresh generated data.
+
 ## 1.1.1
 
 ### Patch Changes

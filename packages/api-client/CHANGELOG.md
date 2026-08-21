@@ -1,5 +1,16 @@
 # @t3x-dev/api-client
 
+## 1.3.0
+
+### Minor Changes
+
+- [#1358](https://github.com/t3x-dev/t3x-core/pull/1358) [`7b56ef2`](https://github.com/t3x-dev/t3x-core/commit/7b56ef20168650e04567611757963d87e12d16da) Thanks [@lqw905](https://github.com/lqw905)! - Add the open YSchema Module Composition v2 contract, deterministic compiler, and immutable Blueprint-backed Schema Version publishing while preserving v1 Composition replay compatibility.
+
+### Patch Changes
+
+- Updated dependencies [[`3124c5a`](https://github.com/t3x-dev/t3x-core/commit/3124c5a7dc87625bec37f3ae05fab2d097812d5e)]:
+  - @t3x-dev/core@1.2.1
+
 ## 1.0.2
 
 ### Patch Changes
