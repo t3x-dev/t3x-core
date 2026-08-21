@@ -8,14 +8,41 @@
 
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rateLimitL1, rateLimitL2 } from '../middleware/rate-limit';
+import {
+  createRateLimitL1,
+  createRateLimitL2,
+  getClientIp,
+  hashRateLimitIdentity,
+  RATE_LIMIT_POLICIES,
+  type RateLimitStore,
+  resolveIpRateLimitPolicy,
+} from '../middleware/rate-limit';
+
+class MemoryRateLimitStore implements RateLimitStore {
+  private readonly counters = new Map<string, number>();
+
+  async consume(input: Parameters<RateLimitStore['consume']>[0]) {
+    const now = input.now ?? Date.now();
+    const windowStart = Math.floor(now / input.windowMs) * input.windowMs;
+    const resetAt = windowStart + input.windowMs;
+    const bucket = `${input.scope}:${input.keyHash}:${windowStart}`;
+    const count = (this.counters.get(bucket) ?? 0) + 1;
+    this.counters.set(bucket, count);
+    return {
+      allowed: count <= input.limit,
+      count,
+      remaining: Math.max(0, input.limit - count),
+      resetAt,
+    };
+  }
+}
 
 /**
  * Creates a test app with L1 (IP-based) rate limiting only.
  */
-function createL1TestApp() {
+function createL1TestApp(store: RateLimitStore = new MemoryRateLimitStore()) {
   const app = new Hono();
-  app.use('*', rateLimitL1);
+  app.use('*', createRateLimitL1(store));
   app.get('/test', (c) => c.json({ success: true }));
   return app;
 }
@@ -24,7 +51,7 @@ function createL1TestApp() {
  * Creates a test app with L2 (Key-based) rate limiting.
  * The middleware simulates an authenticated request by setting apiKey in context.
  */
-function createL2TestApp() {
+function createL2TestApp(store: RateLimitStore = new MemoryRateLimitStore()) {
   const app = new Hono();
   // Simulate auth middleware setting apiKey
   app.use('*', async (c, next) => {
@@ -35,16 +62,15 @@ function createL2TestApp() {
     }
     return next();
   });
-  app.use('*', rateLimitL2);
+  app.use('*', createRateLimitL2(store));
   app.get('/test', (c) => c.json({ success: true }));
   return app;
 }
 
 describe('Rate Limit Middleware', () => {
-  // We need to handle the setInterval cleanup in RateLimiter constructor.
-  // Use fake timers to prevent the cleanup interval from running.
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-21T00:00:00.000Z'));
     // Trust proxy headers in tests (simulates reverse proxy deployment)
     process.env.TRUST_PROXY = '1';
   });
@@ -55,6 +81,20 @@ describe('Rate Limit Middleware', () => {
   });
 
   describe('L1 — IP-based rate limiting', () => {
+    it('uses the Node socket address instead of untrusted proxy headers', async () => {
+      process.env.TRUST_PROXY = '0';
+      const app = new Hono();
+      app.get('/test', (c) => c.json({ ip: getClientIp(c) }));
+
+      const res = await app.request(
+        '/test',
+        { headers: { 'X-Forwarded-For': '198.51.100.99' } },
+        { incoming: { socket: { remoteAddress: '203.0.113.7' } } }
+      );
+
+      expect(await res.json()).toEqual({ ip: '203.0.113.7' });
+    });
+
     it('allows normal requests under the limit', async () => {
       const app = createL1TestApp();
 
@@ -117,6 +157,7 @@ describe('Rate Limit Middleware', () => {
       const data = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('RATE_LIMITED');
+      expect(res.headers.get('Retry-After')).toBe('60');
     });
 
     it('different IPs have independent limits', async () => {
@@ -198,6 +239,7 @@ describe('Rate Limit Middleware', () => {
       const data = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('RATE_LIMITED');
+      expect(res.headers.get('Retry-After')).toBe('60');
     });
 
     it('different API keys have independent limits', async () => {
@@ -221,6 +263,56 @@ describe('Rate Limit Middleware', () => {
         headers: { 'X-Test-Key-Id': 'ak_l2keyB' },
       });
       expect(resB.status).toBe(200);
+    });
+  });
+
+  describe('distributed policy behavior', () => {
+    it('does not make liveness or readiness probe routing depend on the counter store', async () => {
+      const store: RateLimitStore = {
+        consume: async () => {
+          throw new Error('database unavailable');
+        },
+      };
+      const app = new Hono();
+      app.use('*', createRateLimitL1(store));
+      app.get('/health', (c) => c.text('alive'));
+      app.get('/ready', (c) => c.text('route owns readiness'));
+
+      expect((await app.request('/health')).status).toBe(200);
+      expect((await app.request('/ready')).status).toBe(200);
+    });
+
+    it('shares counters between independently assembled API apps', async () => {
+      const store = new MemoryRateLimitStore();
+      const instanceA = createL1TestApp(store);
+      const instanceB = createL1TestApp(store);
+      const headers = { 'X-Forwarded-For': '10.9.0.1' };
+
+      for (let i = 0; i < 100; i++) {
+        expect((await instanceA.request('/test', { headers })).status).toBe(200);
+        expect((await instanceB.request('/test', { headers })).status).toBe(200);
+      }
+
+      expect((await instanceA.request('/test', { headers })).status).toBe(429);
+    });
+
+    it('uses distinct limits for OAuth callbacks, auth entry, and business APIs', () => {
+      expect(resolveIpRateLimitPolicy('/api/v1/auth/github/callback')).toEqual(
+        RATE_LIMIT_POLICIES.oauthCallbackIp
+      );
+      expect(resolveIpRateLimitPolicy('/api/v1/auth/login')).toEqual(
+        RATE_LIMIT_POLICIES.authEntryIp
+      );
+      expect(resolveIpRateLimitPolicy('/api/v1/projects')).toEqual(RATE_LIMIT_POLICIES.businessIp);
+      expect(RATE_LIMIT_POLICIES.loginUsername.limit).toBe(10);
+      expect(RATE_LIMIT_POLICIES.oauthCallbackIp.limit).toBe(30);
+      expect(RATE_LIMIT_POLICIES.businessIp.limit).toBe(200);
+    });
+
+    it('hashes identities before handing them to the store', () => {
+      const hash = hashRateLimitIdentity('login-username', 'user@example.com');
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(hash).not.toContain('user@example.com');
     });
   });
 });

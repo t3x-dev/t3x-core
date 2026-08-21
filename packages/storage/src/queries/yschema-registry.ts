@@ -15,11 +15,14 @@ export interface UpsertYSchemaArtifactVersionInput {
   artifact_version_id: string;
   canonical_name: string;
   family: string;
-  kind: 'core' | 'module';
+  kind: 'core' | 'module' | 'schema';
+  display_name?: string;
+  description?: string;
+  tags?: string[];
   owner_project_id?: string;
   visibility: YSchemaArtifactVisibility;
   version: string;
-  status: 'active' | 'deprecated' | 'draft';
+  status: 'active' | 'published' | 'deprecated' | 'draft';
   manifest_json: Record<string, unknown>;
   artifact_hash: string;
   path_count: number;
@@ -34,6 +37,12 @@ export interface YSchemaArtifactVersionView {
   canonicalName: string;
   family: string;
   kind: string;
+  displayName: string | null;
+  description: string | null;
+  tags: string[];
+  lifecycleStatus: string;
+  archivedAt: Date | null;
+  metadataRevision: number;
   ownerProjectId: string | null;
   visibility: string;
   version: string;
@@ -49,7 +58,7 @@ export interface YSchemaArtifactVersionView {
 export interface ListYSchemaArtifactsOptions {
   project_id?: string;
   family?: string;
-  kind?: 'core' | 'module';
+  kind?: 'core' | 'module' | 'schema';
   visibility?: YSchemaArtifactVisibility;
   search?: string;
   cursor?: string;
@@ -65,13 +74,23 @@ export interface FindYSchemaArtifactVersionInput {
 export interface ListProjectYSchemaVersionHistoryOptions {
   project_id: string;
   family?: string;
-  kind?: 'core' | 'module';
+  kind?: 'core' | 'module' | 'schema';
 }
 
 export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifactVersionInput {
   owner_project_id: string;
   visibility: 'private' | 'team';
-  status: 'active';
+  status: 'active' | 'published';
+}
+
+export interface UpdateYSchemaArtifactIdentityInput {
+  artifact_id: string;
+  project_id: string;
+  if_revision: number;
+  display_name?: string;
+  description?: string;
+  tags?: string[];
+  lifecycle_status?: 'active' | 'archived';
 }
 
 export async function upsertYSchemaArtifactVersion(
@@ -86,6 +105,9 @@ export async function upsertYSchemaArtifactVersion(
       canonicalName: input.canonical_name,
       family: input.family,
       kind: input.kind,
+      displayName: input.display_name ?? null,
+      description: input.description ?? null,
+      tags: input.tags ?? [],
       ownerProjectId: input.owner_project_id ?? null,
       visibility: input.visibility,
       createdAt: now,
@@ -150,6 +172,60 @@ export async function upsertYSchemaArtifactVersion(
   }
 
   return joinedArtifactView(artifact, version);
+}
+
+/** Update mutable catalog metadata without touching any immutable version payload. */
+export async function updateYSchemaArtifactIdentity(
+  db: AnyDB,
+  input: UpdateYSchemaArtifactIdentityInput
+): Promise<YSchemaArtifactVersionView | null> {
+  const [artifact] = await db
+    .select()
+    .from(yschemaArtifacts)
+    .where(
+      and(
+        eq(yschemaArtifacts.artifactId, input.artifact_id),
+        eq(yschemaArtifacts.ownerProjectId, input.project_id),
+        inArray(yschemaArtifacts.kind, ['schema', 'core']),
+        eq(yschemaArtifacts.metadataRevision, input.if_revision)
+      )
+    )
+    .limit(1);
+  if (!artifact) return null;
+
+  const lifecycleStatus = input.lifecycle_status ?? artifact.lifecycleStatus;
+  const [updated] = await db
+    .update(yschemaArtifacts)
+    .set({
+      ...(input.display_name !== undefined ? { displayName: input.display_name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
+      lifecycleStatus,
+      archivedAt:
+        lifecycleStatus === 'archived'
+          ? (artifact.archivedAt ?? new Date())
+          : input.lifecycle_status === 'active'
+            ? null
+            : artifact.archivedAt,
+      metadataRevision: artifact.metadataRevision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(yschemaArtifacts.artifactId, artifact.artifactId),
+        eq(yschemaArtifacts.metadataRevision, input.if_revision)
+      )
+    )
+    .returning();
+  if (!updated) return null;
+
+  const [version] = await db
+    .select()
+    .from(yschemaArtifactVersions)
+    .where(eq(yschemaArtifactVersions.artifactId, artifact.artifactId))
+    .orderBy(desc(yschemaArtifactVersions.createdAt))
+    .limit(1);
+  return version ? joinedArtifactView(updated, version) : null;
 }
 
 export async function listYSchemaArtifactVersions(
@@ -279,15 +355,19 @@ export async function publishYSchemaArtifactVersion(
       }
     }
 
-    await tx
-      .update(yschemaArtifactVersions)
-      .set({ status: 'deprecated' })
-      .where(
-        and(
-          eq(yschemaArtifactVersions.artifactId, input.artifact_id),
-          eq(yschemaArtifactVersions.status, 'active')
-        )
-      );
+    // Published Schema versions do not have an implicit "current" pointer. Only
+    // registry Artifacts using the explicit active status rotate their active version.
+    if (input.status === 'active') {
+      await tx
+        .update(yschemaArtifactVersions)
+        .set({ status: 'deprecated' })
+        .where(
+          and(
+            eq(yschemaArtifactVersions.artifactId, input.artifact_id),
+            eq(yschemaArtifactVersions.status, 'active')
+          )
+        );
+    }
 
     const published = await upsertYSchemaArtifactVersion(tx, input);
     await tx
@@ -449,6 +529,12 @@ function joinedArtifactView(
     canonicalName: artifact.canonicalName,
     family: artifact.family,
     kind: artifact.kind,
+    displayName: artifact.displayName,
+    description: artifact.description,
+    tags: artifact.tags,
+    lifecycleStatus: artifact.lifecycleStatus,
+    archivedAt: artifact.archivedAt,
+    metadataRevision: artifact.metadataRevision,
     ownerProjectId: artifact.ownerProjectId,
     visibility: artifact.visibility,
     version: version.version,

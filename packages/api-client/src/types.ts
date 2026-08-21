@@ -5,6 +5,7 @@
 import type {
   ActionCapabilityView,
   ClaimView,
+  MergeDecision as CoreMergeDecision,
   TransitionGraphViewV1 as CoreTransitionGraphViewV1,
 } from '@t3x-dev/core';
 
@@ -331,6 +332,7 @@ export interface DiffChange {
 export interface TwoWayDiffInput {
   base_commit_hash: string;
   target_commit_hash: string;
+  project_id?: string;
 }
 
 // Merge draft types
@@ -369,21 +371,19 @@ export interface MergeDraft {
   targetBranch?: string;
   status: 'pending' | 'committed' | 'cancelled';
   prepared: MergeDraftPrepared;
+  decisions?: MergeDecision;
+  decisionRevision?: number;
   message: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export type MergeDecision = CoreMergeDecision;
+
 export interface MergeDraftCommitInput {
   message: string;
   branch?: string;
-  decisions?: {
-    conflictResolutions?: Record<string, string>;
-    keepFromSource?: string[];
-    keepFromTarget?: string[];
-    keepRelationsFromSource?: boolean;
-    keepRelationsFromTarget?: boolean;
-  };
+  decisions?: MergeDecision;
 }
 
 export interface MergeSummary {
@@ -416,6 +416,8 @@ export interface MergeResolution {
 export interface UpdateMergeDraftInput {
   prepared?: unknown;
   message?: string;
+  decisions?: MergeDecision;
+  expected_decision_revision?: number;
   resolutions?: MergeResolution[];
 }
 
@@ -626,6 +628,141 @@ export interface WorkspaceExtractionProposalEnvelope {
   workspace: RepositoryWorkspace;
 }
 
+export interface WorkspaceTransitionContent {
+  trees: unknown[];
+  relations?: unknown[];
+}
+
+export interface WorkspaceTransitionPrecondition {
+  workspace_revision: number;
+  ref_head: string | null;
+  effect_digest: string;
+  proposal_digest: string;
+  statement_digests: string[];
+  policy_digest: string;
+}
+
+export interface ReviewWorkspaceTransitionInput {
+  content: WorkspaceTransitionContent;
+  why?: string;
+  if_revision?: number;
+}
+
+export interface DecideWorkspaceTransitionInput {
+  transition_id?: string;
+  content?: WorkspaceTransitionContent;
+  why?: string;
+  outcome: 'accepted' | 'overridden' | 'rejected';
+  decision_reason?: string;
+  precondition: WorkspaceTransitionPrecondition;
+}
+
+export interface ReviewSnapshotV1 {
+  schema: 't3x.application/review-snapshot/v1';
+  version: 1;
+  snapshotId: string;
+  snapshotDigest: string;
+  createdAt: string;
+  supersedes?: {
+    snapshotId: string;
+    snapshotDigest: string;
+  };
+  projectId: string;
+  workspaceId: string;
+  transitionId: string;
+  request: {
+    kind: TransitionControlPlaneView['request_kind'];
+    id: string;
+    createdAt: string;
+  };
+  review: {
+    digest: string;
+    precondition: {
+      workspaceRevision: number;
+      refName: string;
+      refHead: string | null;
+      effectDigest: string;
+      proposalDigest: string;
+      statementDigests: string[];
+      policyDigest: string;
+    };
+  };
+  objects: {
+    base: TransitionObjectDescriptor;
+    result: TransitionObjectDescriptor;
+    effect: TransitionObjectDescriptor;
+    proposal: TransitionObjectDescriptor;
+    statements: TransitionObjectDescriptor[];
+    decision?: TransitionObjectDescriptor;
+    commit?: TransitionObjectDescriptor;
+  };
+  transition: TransitionViewV1;
+}
+
+export interface ChangeProjectionV1 {
+  schema: 't3x.application/change-projection/v1';
+  version: 1;
+  authoritative: false;
+  source: {
+    kind: 'review_snapshot';
+    snapshotId: string;
+    snapshotDigest: string;
+    snapshotCreatedAt: string;
+  };
+  projectId: string;
+  workspaceId: string;
+  transitionId: string;
+  title: string;
+  status: 'reviewing' | 'accepted' | 'overridden' | 'rejected' | 'committed';
+  review: {
+    digest: string;
+    refName: string;
+    refHead: string | null;
+    workspaceRevision: number;
+    policyDigest: string;
+  };
+  objects: ReviewSnapshotV1['objects'];
+  checks: TransitionViewV1['checks'];
+  actions: TransitionViewV1['capabilities'];
+}
+
+export interface WorkspaceTransitionReviewEnvelope {
+  transition_id: string;
+  transition: TransitionViewV1;
+  precondition: WorkspaceTransitionPrecondition;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
+}
+
+export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransitionReviewEnvelope {
+  decision_digest: string;
+  commit?: TransitionProtocolValue;
+  workspace?: Record<string, unknown>;
+}
+
+export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  snapshot_id: string;
+  snapshot_digest: string;
+  project_id: string;
+  workspace_id: string;
+  transition_id: string;
+  review_digest: string;
+  supersedes_snapshot_id: string | null;
+  supersedes_snapshot_digest: string | null;
+  snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
+  created_at: string;
+}
+
+export interface ListWorkspaceTransitionReviewSnapshotsParams {
+  transition_id?: string;
+  limit?: number;
+}
+
+export interface ListWorkspaceTransitionReviewSnapshotsResponse {
+  snapshots: WorkspaceTransitionReviewSnapshotEnvelope[];
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
@@ -635,6 +772,32 @@ export interface RepositoryWorkspaceCapability {
     workspaceId: string,
     input: CreateWorkspaceExtractionProposalInput
   ): Promise<WorkspaceExtractionProposalEnvelope>;
+  reviewTransition(
+    projectId: string,
+    workspaceId: string,
+    input: ReviewWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionReviewEnvelope>;
+  decideTransition(
+    projectId: string,
+    workspaceId: string,
+    input: DecideWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionDecisionEnvelope>;
+  listReviewSnapshots(
+    projectId: string,
+    workspaceId: string,
+    params?: ListWorkspaceTransitionReviewSnapshotsParams
+  ): Promise<ListWorkspaceTransitionReviewSnapshotsResponse>;
+  getLatestReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    params?: Pick<ListWorkspaceTransitionReviewSnapshotsParams, 'transition_id'>
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope>;
+  getReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    snapshotId: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope>;
 }
 
 /** @deprecated Use GenerationMessage. */
@@ -970,6 +1133,7 @@ export interface TransitionControlPlaneView {
     proposal_digest: string;
     statement_digests: string[];
     policy_digest: string | null;
+    review_digest?: string;
   };
   transition: TransitionViewV1;
   statements: TransitionStatementMembershipView[];
@@ -1029,10 +1193,14 @@ export interface AttachTransitionStatementResult {
 // ============================================
 
 export interface YSchemaArtifactManifest {
-  apiVersion: 't3x.dev/yschema-core/v1' | 't3x.dev/yschema-module/v1';
+  apiVersion:
+    | 't3x.dev/yschema-core/v1'
+    | 't3x.dev/yschema-module/v1'
+    | 't3x.dev/yschema-module/v2'
+    | 't3x.dev/yschema-blueprint/v1';
   canonicalName: string;
   version: string;
-  family: 'esphome-device' | 'prd' | 'prompt' | 'skill';
+  family?: 'esphome-device' | 'prd' | 'prompt' | 'skill' | 'open';
   title: string;
   description: string;
   status: 'active' | 'deprecated' | 'draft';
@@ -1063,7 +1231,7 @@ export interface ListYSchemaArtifactsParams {
   limit?: number;
 }
 
-export interface YSchemaCompositionDraft {
+export interface YSchemaCompositionDraftV1 {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
@@ -1078,6 +1246,21 @@ export interface YSchemaCompositionDraft {
     hash?: string;
   }>;
 }
+
+export interface YSchemaCompositionDraftV2 {
+  apiVersion: 't3x.dev/yschema-composition/v2';
+  id: string;
+  revision: number;
+  status: 'draft';
+  modules: Array<{
+    canonicalName: string;
+    version: string;
+    presentationOrder: number;
+    hash?: string;
+  }>;
+}
+
+export type YSchemaCompositionDraft = YSchemaCompositionDraftV1 | YSchemaCompositionDraftV2;
 
 export interface YSchemaCompositionPreview {
   schema: Record<string, unknown>;
@@ -1118,6 +1301,7 @@ export interface PublishWorkspaceYSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  tags?: string[];
 }
 
 export interface TransitionReviewPrecondition {
@@ -1128,6 +1312,7 @@ export interface TransitionReviewPrecondition {
   proposal_digest: string;
   statement_digests: string[];
   policy_digest: string;
+  review_digest?: string;
 }
 
 export interface DecideTransitionInput {
@@ -1141,6 +1326,7 @@ export interface DecideTransitionResult {
   transition_id: string;
   reused: boolean;
   decision_digest: string;
+  review_digest: string;
   decision: TransitionProtocolValue;
   view: TransitionControlPlaneView;
 }

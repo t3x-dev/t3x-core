@@ -182,3 +182,65 @@ test('core cannot depend on or import storage', () => {
   assert.ok(errors.some((error) => error.includes('must not depend on @t3x-dev/storage')));
   assert.ok(errors.some((error) => error.includes('forbidden @t3x-dev/storage boundary')));
 });
+
+test('application package may depend on core and transition only', () => {
+  const rootDir = createFixture();
+  write(
+    join(rootDir, 'packages/application/package.json'),
+    `${JSON.stringify(
+      {
+        name: '@t3x-dev/application',
+        private: true,
+        dependencies: {
+          '@t3x-dev/core': 'workspace:*',
+          '@t3x-dev/transition': 'workspace:*',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+  write(
+    join(rootDir, 'packages/application/src/index.ts'),
+    "import type { TransitionViewV1 } from '@t3x-dev/core';\nimport type { Effect } from '@t3x-dev/transition';\nexport type View = TransitionViewV1;\nexport type AppEffect = Effect;\n"
+  );
+
+  assert.deepEqual(validateTransitionBoundaries({ rootDir }).errors, []);
+});
+
+test('application package rejects storage framework and ambient runtime access', () => {
+  const rootDir = createFixture();
+  write(
+    join(rootDir, 'packages/application/package.json'),
+    `${JSON.stringify(
+      {
+        name: '@t3x-dev/application',
+        private: true,
+        dependencies: {
+          '@t3x-dev/core': 'workspace:*',
+          '@t3x-dev/storage': 'workspace:*',
+          hono: '^4.0.0',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+  write(
+    join(rootDir, 'packages/application/src/index.ts'),
+    [
+      "import { getDB } from '@t3x-dev/storage';",
+      "import { Hono } from 'hono';",
+      'export const value = process.env.DATABASE_URL;',
+      'export { getDB, Hono };',
+      '',
+    ].join('\n')
+  );
+
+  const { errors } = validateTransitionBoundaries({ rootDir });
+  assert.ok(errors.some((error) => error.includes('must not depend on @t3x-dev/storage')));
+  assert.ok(errors.some((error) => error.includes('must not depend on framework')));
+  assert.ok(errors.some((error) => error.includes('imports forbidden T3X package')));
+  assert.ok(errors.some((error) => error.includes('imports forbidden framework')));
+  assert.ok(errors.some((error) => error.includes('forbidden current environment')));
+});

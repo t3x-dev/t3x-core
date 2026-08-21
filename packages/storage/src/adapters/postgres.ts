@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 63;
+const SCHEMA_VERSION = 67;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -279,6 +279,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       source_branch TEXT,
       target_branch TEXT,
       prepared_json TEXT NOT NULL,
+      decision_json TEXT,
+      decision_revision INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'pending',
       message TEXT,
       created_at TIMESTAMPTZ NOT NULL,
@@ -499,6 +501,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       canonical_name TEXT NOT NULL UNIQUE,
       family TEXT NOT NULL,
       kind TEXT NOT NULL,
+      display_name TEXT,
+      description TEXT,
+      tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      lifecycle_status TEXT NOT NULL DEFAULT 'active',
+      archived_at TIMESTAMPTZ,
+      metadata_revision INTEGER NOT NULL DEFAULT 1,
       owner_project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
       visibility TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -774,6 +782,19 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       value TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Persistent distributed rate-limit counters. Identities are stored as hashes.
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      scope TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      count INTEGER NOT NULL DEFAULT 1,
+      expires_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT rate_limit_buckets_pkey PRIMARY KEY (scope, key_hash, window_start)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rate_limit_buckets_expires
+      ON rate_limit_buckets(expires_at);
 
     -- API Keys table (Authentication)
     CREATE TABLE IF NOT EXISTS api_keys (
@@ -1949,6 +1970,87 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (project_id, transition_id, request_id)
     );
+  `);
+
+  // ── Schema v63: mutable Schema identity catalog metadata ──
+  await sql.unsafe(`
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'active';
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS metadata_revision INTEGER NOT NULL DEFAULT 1;
+    CREATE INDEX IF NOT EXISTS idx_yschema_artifacts_catalog
+      ON yschema_artifacts(owner_project_id, kind, lifecycle_status, updated_at DESC);
+  `);
+
+  // ── Schema v64: Workspace-only Schema bindings ──
+  await sql.unsafe(`
+    UPDATE projects
+    SET metadata_json = (metadata_json::jsonb - 'default_schema_binding')::text
+    WHERE metadata_json IS NOT NULL
+      AND jsonb_typeof(metadata_json::jsonb) = 'object'
+      AND metadata_json::jsonb ? 'default_schema_binding';
+
+    UPDATE drafts
+    SET workspace_state_json = jsonb_set(
+      workspace_state_json,
+      '{schemaBindings}',
+      (
+        SELECT jsonb_agg(
+          CASE
+            WHEN binding->>'mode' = 'project_default'
+              THEN jsonb_set(binding, '{mode}', '"pinned"'::jsonb)
+            ELSE binding
+          END
+          ORDER BY position
+        )
+        FROM jsonb_array_elements(workspace_state_json->'schemaBindings')
+          WITH ORDINALITY AS entries(binding, position)
+      ),
+      false
+    )
+    WHERE jsonb_typeof(workspace_state_json->'schemaBindings') = 'array'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(workspace_state_json->'schemaBindings') AS entries(binding)
+        WHERE binding->>'mode' = 'project_default'
+      );
+  `);
+
+  // ── Schema v65: durable merge decisions with optimistic concurrency ──
+  await sql.unsafe(`
+    ALTER TABLE merge_drafts ADD COLUMN IF NOT EXISTS decision_json TEXT;
+    ALTER TABLE merge_drafts
+      ADD COLUMN IF NOT EXISTS decision_revision INTEGER NOT NULL DEFAULT 0;
+  `);
+
+  // ── Schema v66: immutable application ReviewSnapshot storage ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS transition_review_snapshots (
+      snapshot_id TEXT PRIMARY KEY,
+      snapshot_digest TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      transition_id TEXT NOT NULL
+        REFERENCES transition_proposal_memberships(transition_id) ON DELETE CASCADE,
+      review_digest TEXT NOT NULL,
+      supersedes_snapshot_id TEXT,
+      supersedes_snapshot_digest TEXT,
+      snapshot JSONB NOT NULL,
+      change_projection JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      CONSTRAINT transition_review_snapshots_snapshot_schema_check
+        CHECK (snapshot->>'schema' = 't3x.application/review-snapshot/v1'),
+      CONSTRAINT transition_review_snapshots_projection_schema_check
+        CHECK (change_projection->>'schema' = 't3x.application/change-projection/v1')
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transition_review_snapshots_digest
+      ON transition_review_snapshots(snapshot_digest);
+    CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_project_workspace_created
+      ON transition_review_snapshots(project_id, workspace_id, created_at, snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_transition_created
+      ON transition_review_snapshots(project_id, transition_id, created_at, snapshot_id);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

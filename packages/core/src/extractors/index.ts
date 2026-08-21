@@ -101,6 +101,14 @@ export {
   ProviderExtractionDraftSchema,
 } from './v2/providerDraft';
 export {
+  type BuildExtractionTargetCatalogInput,
+  type BuildExtractionTargetCatalogResult,
+  buildExtractionTargetCatalog,
+  type ExtractionTarget,
+  type ExtractionTargetCatalog,
+  type ExtractionTargetValueType,
+} from './v2/targetCatalog';
+export {
   type CompiledMutationPlan,
   type CompileInput,
   type DraftEvidence,

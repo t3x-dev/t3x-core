@@ -17,6 +17,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -88,6 +89,31 @@ export const globalSettings = pgTable('global_settings', {
   value: text('value').notNull(), // JSON as text
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Persistent fixed-window rate-limit counters.
+ *
+ * Only opaque identity hashes are stored. The composite key makes PostgreSQL
+ * the serialization point shared by every API instance.
+ */
+export const rateLimitBuckets = pgTable(
+  'rate_limit_buckets',
+  {
+    scope: text('scope').notNull(),
+    keyHash: text('key_hash').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    count: integer('count').notNull().default(1),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'rate_limit_buckets_pkey',
+      columns: [table.scope, table.keyHash, table.windowStart],
+    }),
+    index('idx_rate_limit_buckets_expires').on(table.expiresAt),
+  ]
+);
 
 /**
  * Conversations - Container for turns within a project
@@ -284,7 +310,9 @@ export const mergeDrafts = pgTable(
     targetHash: text('target_hash').notNull(),
     sourceBranch: text('source_branch'),
     targetBranch: text('target_branch'),
-    preparedJson: text('prepared_json').notNull(), // Merge2WayResult with user decisions
+    preparedJson: text('prepared_json').notNull(), // Deterministic merge preparation only
+    decisionJson: text('decision_json'), // Canonical MergeDecision; null until the user decides
+    decisionRevision: integer('decision_revision').notNull().default(0),
     status: text('status').notNull().default('pending'), // 'pending' | 'committed' | 'cancelled'
     message: text('message'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
@@ -630,6 +658,12 @@ export const yschemaArtifacts = pgTable(
     canonicalName: text('canonical_name').notNull().unique(),
     family: text('family').notNull(),
     kind: text('kind').notNull(),
+    displayName: text('display_name'),
+    description: text('description'),
+    tags: jsonb('tags').notNull().default([]).$type<string[]>(),
+    lifecycleStatus: text('lifecycle_status').notNull().default('active'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    metadataRevision: integer('metadata_revision').notNull().default(1),
     ownerProjectId: text('owner_project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
     }),
@@ -644,6 +678,12 @@ export const yschemaArtifacts = pgTable(
       table.visibility
     ),
     index('idx_yschema_artifacts_owner').on(table.ownerProjectId),
+    index('idx_yschema_artifacts_catalog').on(
+      table.ownerProjectId,
+      table.kind,
+      table.lifecycleStatus,
+      table.updatedAt
+    ),
   ]
 );
 

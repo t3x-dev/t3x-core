@@ -138,7 +138,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     baseCommitHash: null,
     targetBranch: 'release/notes',
     sourceBundle: [],
-    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'pinned' }],
     schemaCandidate: {
       proposalMode: 'fixture',
       summary: 'Release-note candidate still needs required release metadata.',
@@ -224,7 +224,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
 const DEFAULT_PROJECT_WORKSPACE_BINDING = {
   schemaName: 'PRD Schema',
   version: 'v2',
-  mode: 'project_default' as const,
+  mode: 'pinned' as const,
 };
 
 export function getProjectWorkspaceStarterCandidate(

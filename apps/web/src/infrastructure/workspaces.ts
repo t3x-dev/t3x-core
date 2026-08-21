@@ -1,4 +1,9 @@
-import { T3xApiError } from '@t3x-dev/api-client';
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  T3xApiError,
+  type WorkspaceTransitionReviewSnapshotEnvelope,
+} from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import type {
   WorkspaceCandidate,
@@ -56,6 +61,8 @@ export interface WorkspaceTransitionReviewResponse {
   transition_id: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
 }
 
 export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransitionReviewResponse {
@@ -63,6 +70,8 @@ export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransition
   commit?: unknown;
   workspace?: WorkspaceCandidate;
 }
+
+export type WorkspaceTransitionReviewSnapshotResponse = WorkspaceTransitionReviewSnapshotEnvelope;
 
 export interface WorkspaceSourceReplaceScalarOperation {
   op: 'replace_scalar';
@@ -101,6 +110,8 @@ export interface WorkspaceSourceTransitionReviewResponse {
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
   runner: WorkspaceSourceRunnerStatus;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
 }
 
 export interface WorkspaceSourceTransitionDecisionResponse
@@ -147,6 +158,27 @@ export async function getWorkspaceControlPlaneTransition(
 ): Promise<WorkspaceControlPlaneTransitionResponse> {
   try {
     return await getSharedApiClient().inspectTransition(projectId, transitionId, { signal });
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      throw new ApiError(error.code, error.message, error.details);
+    }
+    throw error;
+  }
+}
+
+export async function getWorkspaceTransitionReviewSnapshot(
+  projectId: string,
+  workspaceId: string,
+  snapshotId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceTransitionReviewSnapshotResponse> {
+  try {
+    return await getSharedApiClient().workspaces.getReviewSnapshot(
+      projectId,
+      workspaceId,
+      snapshotId,
+      { signal }
+    );
   } catch (error) {
     if (error instanceof T3xApiError) {
       throw new ApiError(error.code, error.message, error.details);
@@ -230,7 +262,7 @@ export async function decideProjectWorkspaceTransition(
   workspaceId: string,
   input: {
     transitionId: string;
-    content: WorkspaceTransitionContent;
+    content?: WorkspaceTransitionContent;
     why?: string;
     outcome: WorkspaceTransitionOutcome;
     decisionReason?: string;
@@ -244,7 +276,7 @@ export async function decideProjectWorkspaceTransition(
     {
       body: JSON.stringify({
         transition_id: input.transitionId,
-        content: input.content,
+        ...(input.content ? { content: input.content } : {}),
         ...(input.why ? { why: input.why } : {}),
         outcome: input.outcome,
         ...(input.decisionReason ? { decision_reason: input.decisionReason } : {}),

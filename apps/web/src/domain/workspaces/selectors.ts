@@ -38,7 +38,6 @@ const SOURCE_LABELS: Record<SourceBundleType, { singular: string; plural: string
 const SCHEMA_BINDING_PRIORITY: Record<WorkspaceSchemaBinding['mode'], number> = {
   draft_override: 3,
   pinned: 2,
-  project_default: 1,
 };
 
 const EMPTY_WORKSPACE_STATUS_COUNTS: WorkspaceStatusCounts = {

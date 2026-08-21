@@ -33,7 +33,7 @@ export function registerShowDraft(parent: Command): void {
 
       try {
         const client = getClientWithAuth();
-        const draft = (await client.getDraft(draftId)) as Record<string, unknown>;
+        const draft = (await client.getDraft(draftId)) as unknown as Record<string, unknown>;
 
         spinner?.stop();
 
@@ -137,7 +137,7 @@ export function registerListDrafts(parent: Command): void {
 
         spinner?.stop();
 
-        const drafts = Array.isArray(result) ? result : (result.drafts ?? []);
+        const drafts: unknown[] = Array.isArray(result) ? result : (result.drafts ?? []);
 
         if (options.json) {
           console.log(JSON.stringify(drafts, null, 2));
@@ -151,12 +151,15 @@ export function registerListDrafts(parent: Command): void {
 
         printTable({
           columns: ['Draft ID', 'Status', 'Title', 'Created'],
-          rows: drafts.map((d: Record<string, unknown>) => [
-            String(d.id ?? d.draft_id ?? ''),
-            String(d.status ?? ''),
-            truncate(String(d.title ?? d.intent ?? ''), 30),
-            formatDate(String(d.created_at ?? '')),
-          ]),
+          rows: drafts.map((value) => {
+            const d = value as Record<string, unknown>;
+            return [
+              String(d.id ?? d.draft_id ?? ''),
+              String(d.status ?? ''),
+              truncate(String(d.title ?? d.intent ?? ''), 30),
+              formatDate(String(d.created_at ?? '')),
+            ];
+          }),
         });
       } catch (err) {
         spinner?.stop();

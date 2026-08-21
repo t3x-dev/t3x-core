@@ -137,6 +137,7 @@ export async function importFile(
   let parentTurnHash: string | undefined;
   for (const paragraph of paragraphs) {
     const turn = await client.createTurn({
+      project_id: projectId,
       conversation_id: conversation.conversation_id,
       role: 'user',
       content: paragraph,

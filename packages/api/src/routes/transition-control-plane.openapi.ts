@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, ProposalGenerationDraftSchema } from '@t3x-dev/core';
+import { type ApiKey, LLMProviderError, ProposalGenerationDraftSchema } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -37,6 +37,7 @@ import {
   attachTransitionStatement,
   inspectTransition,
   proposeTransition,
+  TransitionApplicationRequestConflictError,
   type TransitionControlPlaneOptions,
   TransitionPredicateNotAllowedError,
   verifyTransition,
@@ -49,6 +50,7 @@ import {
 import {
   commitTransition,
   decideTransition,
+  digestTransitionReviewPrecondition,
   TransitionAutomatedOverrideDeniedError,
   TransitionDecisionDeniedError,
   TransitionDecisionMembershipError,
@@ -216,6 +218,7 @@ const TransitionReviewPreconditionSchema = z
     proposal_digest: DigestSchema,
     statement_digests: z.array(DigestSchema).max(1000),
     policy_digest: DigestSchema,
+    review_digest: DigestSchema.optional(),
   })
   .strict();
 const DecideRequestSchema = z
@@ -255,30 +258,127 @@ const TransitionParamsSchema = z.object({
   transitionId: TransitionIdSchema,
 });
 
+const ActorRefSchema = z
+  .object({
+    kind: z.enum(['human', 'agent', 'service']),
+    id: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+const TransitionViewPreconditionSchema = z
+  .object({
+    workspace_revision: z.number().int().min(1),
+    ref_name: z.string().trim().min(1).max(500),
+    ref_head: DigestSchema.nullable(),
+    effect_digest: DigestSchema,
+    proposal_digest: DigestSchema,
+    statement_digests: z.array(DigestSchema).max(1000),
+    policy_digest: DigestSchema.nullable(),
+    review_digest: DigestSchema.optional(),
+  })
+  .strict();
+
+const TransitionStatementViewSchema = z
+  .object({
+    digest: DigestSchema,
+    source: z.string().trim().min(1).max(500),
+    issuer: ActorRefSchema,
+    request_id: RequestIdSchema,
+    created_at: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+const TransitionControlPlaneViewSchema = z
+  .object({
+    transition_id: TransitionIdSchema,
+    project_id: z.string().trim().min(1),
+    workspace_id: WorkspaceIdSchema,
+    request_kind: z.enum([
+      'structured_yops',
+      'exact_source_import',
+      'exact_source_edit',
+      'exact_source_revert',
+    ]),
+    request_id: RequestIdSchema,
+    created_at: z.string().trim().min(1).max(100),
+    precondition: TransitionViewPreconditionSchema,
+    transition: ProtocolValueSchema,
+    statements: z.array(TransitionStatementViewSchema).max(1000),
+    generation: ProtocolValueSchema.optional(),
+  })
+  .strict();
+
+const TransitionVerificationStatementSchema = z
+  .object({
+    transitionId: TransitionIdSchema,
+    statementDigest: DigestSchema,
+    source: z.string().trim().min(1).max(500),
+    issuer: ActorRefSchema,
+    requestId: RequestIdSchema,
+    requestDigest: DigestSchema,
+    createdAt: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+const TransitionOperationalResultSchema = z
+  .object({
+    source: z.string().trim().min(1).max(500),
+    outcome: z.enum(['no_statement', 'failed']),
+    code: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+
 const TransitionEnvelopeSchema = z.object({
   transition_id: TransitionIdSchema,
   reused: z.boolean().optional(),
-  view: z.any(),
+  view: TransitionControlPlaneViewSchema,
 });
 const VerifyEnvelopeSchema = TransitionEnvelopeSchema.extend({
-  statements: z.array(z.any()),
-  operational_results: z.array(z.any()),
+  statements: z.array(TransitionVerificationStatementSchema).max(1000),
+  operational_results: z.array(TransitionOperationalResultSchema).max(1000),
 });
 const DecisionEnvelopeSchema = TransitionEnvelopeSchema.extend({
   decision_digest: DigestSchema,
-  decision: z.any(),
+  review_digest: DigestSchema,
+  decision: ProtocolValueSchema,
 });
 const CommitEnvelopeSchema = z.object({
   transition_id: TransitionIdSchema,
   reused: z.boolean(),
   commit_digest: DigestSchema,
-  commit: z.any(),
-  transition: z.any(),
+  commit: ProtocolValueSchema,
+  transition: ProtocolValueSchema,
   workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
 function apiKey(c: Context): ApiKey | undefined {
   return c.get('apiKey') as ApiKey | undefined;
+}
+
+type TransitionPreconditionView = Awaited<ReturnType<typeof inspectTransition>>['precondition'];
+
+function wireViewPrecondition(precondition: TransitionPreconditionView) {
+  const policyDigest = precondition.policyDigest;
+  const wired = {
+    workspace_revision: precondition.workspaceRevision,
+    ref_name: precondition.refName,
+    ref_head: precondition.refHead,
+    effect_digest: precondition.effectDigest,
+    proposal_digest: precondition.proposalDigest,
+    statement_digests: precondition.statementDigests,
+    policy_digest: policyDigest,
+  };
+
+  if (policyDigest === null) return wired;
+
+  return {
+    ...wired,
+    review_digest: digestTransitionReviewPrecondition({
+      ...precondition,
+      policyDigest,
+    }),
+  };
 }
 
 function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
@@ -289,15 +389,7 @@ function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
     request_kind: view.requestKind,
     request_id: view.requestId,
     created_at: view.createdAt,
-    precondition: {
-      workspace_revision: view.precondition.workspaceRevision,
-      ref_name: view.precondition.refName,
-      ref_head: view.precondition.refHead,
-      effect_digest: view.precondition.effectDigest,
-      proposal_digest: view.precondition.proposalDigest,
-      statement_digests: view.precondition.statementDigests,
-      policy_digest: view.precondition.policyDigest,
-    },
+    precondition: wireViewPrecondition(view.precondition),
     transition: view.transition,
     statements: view.statements.map((statement) => ({
       digest: statement.digest,
@@ -360,6 +452,9 @@ function wireReviewPrecondition(precondition: z.infer<typeof TransitionReviewPre
     proposalDigest: precondition.proposal_digest,
     statementDigests: precondition.statement_digests,
     policyDigest: precondition.policy_digest,
+    ...(precondition.review_digest === undefined
+      ? {}
+      : { reviewDigest: precondition.review_digest }),
   };
 }
 
@@ -373,6 +468,12 @@ function controlPlaneError(c: Context, error: unknown) {
     return errorResponse(c, 'GENERATION_FAILED', error.message, {
       protocol_code: error.code,
       issues: error.issues,
+    });
+  }
+  if (error instanceof LLMProviderError) {
+    return errorResponse(c, 'GENERATION_FAILED', error.message, {
+      provider_code: error.code,
+      issues: error.details.issues,
     });
   }
   if (
@@ -393,6 +494,7 @@ function controlPlaneError(c: Context, error: unknown) {
   }
   if (
     error instanceof TransitionRequestConflictError ||
+    error instanceof TransitionApplicationRequestConflictError ||
     error instanceof TransitionStatementConflictError ||
     error instanceof TransitionCommandConflictError ||
     error instanceof TransitionHeadConflictError ||
@@ -931,6 +1033,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         projectId,
         scope,
       });
+      const precondition = wireReviewPrecondition(body.precondition);
       const result = await decideTransition({
         db,
         projectId,
@@ -939,7 +1042,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         outcome: body.outcome,
         rationale: body.rationale,
-        precondition: wireReviewPrecondition(body.precondition),
+        precondition,
       });
       return c.json(
         {
@@ -948,6 +1051,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
             transition_id: result.view.transitionId,
             reused: result.reused,
             decision_digest: result.decisionDigest,
+            review_digest: result.reviewDigest,
             decision: result.decision,
             view: wireView(result.view),
           },

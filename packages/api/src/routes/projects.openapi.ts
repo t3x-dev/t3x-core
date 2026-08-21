@@ -289,7 +289,6 @@ const claimUnownedProjectsRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler includes shared operator-denial response
 projectRoutes.openapi(claimUnownedProjectsRoute, async (c) => {
   const denied = requireProjectOperator(c);
   if (denied) return denied;
@@ -418,6 +417,7 @@ const createProjectRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
 
@@ -722,7 +722,6 @@ const deleteProjectRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(deleteProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
   const { permanent } = c.req.valid('query');
@@ -817,7 +816,6 @@ const restoreProjectRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(restoreProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
 

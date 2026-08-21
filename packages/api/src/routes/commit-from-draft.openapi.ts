@@ -39,6 +39,9 @@ export const commitFromDraftRoutes = new OpenAPIHono({
 });
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
+type CommitTree = Parameters<
+  typeof createRepositoryYOpsStateFromSemanticContent
+>[0]['trees'][number];
 
 class DraftCommitClaimConflictError extends Error {
   constructor(readonly draftId: string) {
@@ -162,11 +165,14 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     }
 
     // Step 5: Convert draft nodes to commit trees
-    const commitTrees = draftNodes.map((node, i) => ({
-      key: node.key || node.id || `s_${i}`,
-      slots: node.slots || (node.text ? { text: node.text } : {}),
-      children: (node.children ?? []) as any[],
-    }));
+    const commitTrees: CommitTree[] = draftNodes.map(
+      (node, i) =>
+        ({
+          key: node.key || node.id || `s_${i}`,
+          slots: node.slots || (node.text ? { text: node.text } : {}),
+          children: (node.children ?? []) as CommitTree[],
+        }) as CommitTree
+    );
 
     // Find uncommitted yops for this conversation (if draft is from a conversation)
     const conversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;

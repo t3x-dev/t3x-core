@@ -8,19 +8,35 @@ import { workspaceYOpsScriptForEditor } from '@/domain/workspaces/yopsScript';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
+  WorkspaceProposalGenerationView,
+  WorkspaceProposalPosture,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import {
+  type ProposalGenerationAction,
+  type ProposalGenerationReviewState,
+  ProposalGenerationReviewView,
+} from './ProposalGenerationReviewView';
+import { ProposalPostureSelector, proposalPostureOption } from './ProposalPostureSelector';
 import { WorkspaceYOpsEditor } from './WorkspaceYOpsEditor';
 
 interface ProposalReviewViewProps {
   candidate: WorkspaceCandidate;
   flowError?: string | null;
   onContinueToValidation?: () => void;
+  onGenerateProposal?: () => Promise<void> | void;
+  onProposalAction?: (action: ProposalGenerationAction) => Promise<void> | void;
+  onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
+  onVerifyProposal?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSaveYOpsScript?: (script: string) => Promise<void> | void;
   proposalMode: string;
+  proposalPosture?: WorkspaceProposalPosture;
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalReviewState?: ProposalGenerationReviewState;
   sendingToYOps: boolean;
   statusText: string;
   yopsDraftSent: boolean;
@@ -33,9 +49,17 @@ export function ProposalReviewView({
   candidate,
   flowError,
   onContinueToValidation,
+  onGenerateProposal,
+  onProposalAction,
+  onProposalPostureChange,
+  onVerifyProposal,
   onSendToYOps,
   onSaveYOpsScript,
   proposalMode,
+  proposalPosture = 'guided',
+  proposalGeneration,
+  proposalGenerationBusy = false,
+  proposalReviewState = 'undecided',
   sendingToYOps,
   statusText,
   yopsDraftSent,
@@ -58,6 +82,24 @@ export function ProposalReviewView({
     setSelectedOperationId(operations.at(-1)?.id ?? null);
   }, [candidate.id, candidate.yopsDraft.id, operations]);
 
+  if (proposalGeneration && onGenerateProposal && onProposalPostureChange && onVerifyProposal) {
+    return (
+      <ProposalGenerationReviewView
+        actionBusy={proposalGenerationBusy}
+        actionState={proposalReviewState}
+        error={flowError}
+        onAction={onProposalAction}
+        onPostureChange={onProposalPostureChange}
+        onRegenerate={onGenerateProposal}
+        onVerify={onVerifyProposal}
+        selectedPosture={proposalPosture}
+        view={proposalGeneration}
+      />
+    );
+  }
+
+  const posture = proposalPostureOption(proposalPosture);
+
   return (
     <section aria-label="YOps proposal" className="flex min-h-0 flex-1 flex-col">
       <header className="flex min-h-[72px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
@@ -66,7 +108,7 @@ export function ProposalReviewView({
             Proposal
           </h3>
           <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-            Review what T3X recommends and why.
+            Review what T3X proposes, what supports it, and why.
           </p>
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -112,6 +154,47 @@ export function ProposalReviewView({
         >
           {flowError}
         </div>
+      ) : null}
+
+      {onGenerateProposal && onProposalPostureChange ? (
+        <section className="border-b border-[var(--source)]/20 bg-[var(--source)]/[0.07] px-4 py-3">
+          <div className="grid gap-3 lg:grid-cols-[360px_minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                1 · Proposal mode
+              </p>
+              <ProposalPostureSelector
+                disabled={proposalGenerationBusy}
+                onChange={onProposalPostureChange}
+                value={proposalPosture}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{posture.policy}</Badge>
+                <Badge variant="secondary">One mode per generation</Badge>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
+                {posture.title}
+              </p>
+              <p className="mt-0.5 text-xs leading-5 text-[var(--text-secondary)]">
+                {posture.description}
+              </p>
+            </div>
+            <Button
+              disabled={proposalGenerationBusy}
+              onClick={onGenerateProposal}
+              size="sm"
+              type="button"
+              variant="commit"
+            >
+              {proposalGenerationBusy ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : null}
+              Generate governed proposal
+            </Button>
+          </div>
+        </section>
       ) : null}
 
       {yopsOpen ? (

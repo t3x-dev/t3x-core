@@ -6,15 +6,20 @@ import {
   listYSchemaArtifactVersions,
   publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
+  updateYSchemaArtifactIdentity,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
   builtInYSchemaModules,
   compileYSchemaComposition,
+  compileYSchemaCompositionV2,
+  diffYSchemas,
   type NodeSchema,
   normalizeYSchemaObject,
+  type PublishedYSchemaBlueprintV1,
   sha256CompositionValue,
   type YSchemaCompositionDraft,
+  type YSchemaCompositionDraftV2,
   type YSchemaCoreArtifact,
 } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
@@ -24,6 +29,7 @@ import {
   artifactViewToManifest,
   ensureBuiltInYSchemaArtifacts,
   resolveCompositionArtifacts,
+  resolveCompositionArtifactsV2,
 } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -40,7 +46,7 @@ const CompositionModuleReferenceSchema = ArtifactReferenceSchema.extend({
 
 const YSchemaFamilySchema = z.enum(['esphome-device', 'prd', 'prompt', 'skill']);
 
-export const YSchemaCompositionPreviewRequestSchema = z
+const YSchemaCompositionV1Schema = z
   .object({
     apiVersion: z.literal('t3x.dev/yschema-composition/v1'),
     id: z.string().min(1),
@@ -72,6 +78,47 @@ export const YSchemaCompositionPreviewRequestSchema = z
       orders.add(module.order);
     });
   })
+  .openapi('YSchemaCompositionV1');
+
+const CompositionModuleReferenceV2Schema = ArtifactReferenceSchema.extend({
+  presentationOrder: z.number().int().nonnegative(),
+});
+
+const YSchemaCompositionV2Schema = z
+  .object({
+    apiVersion: z.literal('t3x.dev/yschema-composition/v2'),
+    id: z.string().min(1),
+    revision: z.number().int().nonnegative(),
+    status: z.literal('draft'),
+    modules: z.array(CompositionModuleReferenceV2Schema),
+  })
+  .superRefine((composition, context) => {
+    const moduleNames = new Set<string>();
+    const orders = new Set<number>();
+    composition.modules.forEach((module, index) => {
+      const identity = `${module.canonicalName}@${module.version}`;
+      if (moduleNames.has(identity)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['modules', index, 'canonicalName'],
+          message: `Module ${identity} is selected more than once.`,
+        });
+      }
+      moduleNames.add(identity);
+      if (orders.has(module.presentationOrder)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['modules', index, 'presentationOrder'],
+          message: `Presentation order ${module.presentationOrder} is assigned more than once.`,
+        });
+      }
+      orders.add(module.presentationOrder);
+    });
+  })
+  .openapi('YSchemaCompositionV2');
+
+export const YSchemaCompositionPreviewRequestSchema = z
+  .union([YSchemaCompositionV1Schema, YSchemaCompositionV2Schema])
   .openapi('YSchemaCompositionPreviewRequest');
 
 const WorkspaceCompositionParamsSchema = z.object({
@@ -118,6 +165,7 @@ const PublishWorkspaceCompositionRequestSchema = z
     title: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).optional(),
     release_notes: z.string().trim().max(1000).optional(),
+    tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
   })
   .strict()
   .openapi('PublishWorkspaceYSchemaCompositionRequest');
@@ -129,6 +177,8 @@ const CompositionIssueSchema = z
     blocking: z.boolean(),
     module: z.string().optional(),
     path: z.string().optional(),
+    policy: z.string().optional(),
+    capability: z.string().optional(),
     details: z.record(z.string(), z.any()).optional(),
   })
   .openapi('YSchemaCompositionIssue');
@@ -155,10 +205,12 @@ const CompositionPreviewResponseSchema = z
     ),
     report: z.object({
       valid: z.boolean(),
+      mode: z.enum(['open', 'governed']).optional(),
       issues: z.array(CompositionIssueSchema),
     }),
     compiledSchemaHash: z.string(),
     compositionHash: z.string(),
+    reportHash: z.string().optional(),
   })
   .openapi('YSchemaCompositionPreviewResponse');
 
@@ -242,6 +294,80 @@ const listProjectVersionsRoute = createRoute({
     },
     403: {
       description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const SchemaIdentityParamsSchema = z.object({
+  projectId: z.string().min(1),
+  artifactId: z.string().min(1),
+});
+
+const UpdateSchemaIdentityRequestSchema = z
+  .object({
+    if_revision: z.number().int().positive(),
+    display_name: z.string().trim().min(1).max(80).optional(),
+    description: z.string().trim().max(500).optional(),
+    tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
+  })
+  .strict();
+
+const updateSchemaIdentityRoute = createRoute({
+  method: 'patch',
+  path: '/v1/projects/{projectId}/yschemas/{artifactId}',
+  tags: ['YSchema'],
+  summary: 'Update mutable Schema identity metadata',
+  request: {
+    params: SchemaIdentityParamsSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: UpdateSchemaIdentityRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated Schema identity without modifying immutable versions',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Metadata revision conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const setSchemaLifecycleRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/yschemas/{artifactId}/{action}',
+  tags: ['YSchema'],
+  summary: 'Archive or restore a Schema identity',
+  request: {
+    params: SchemaIdentityParamsSchema.extend({ action: z.enum(['archive', 'restore']) }),
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z.object({ if_revision: z.number().int().positive() }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated Schema lifecycle; immutable versions remain addressable',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Metadata revision conflict',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -429,12 +555,16 @@ yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
   return c.json(
     {
       success: true as const,
-      data: { ...page, items: page.items.map(artifactViewToManifest) },
+      data: {
+        ...page,
+        items: page.items.filter((item) => item.kind !== 'schema').map(artifactViewToManifest),
+      },
     },
     200
   );
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const query = c.req.valid('query');
@@ -450,32 +580,96 @@ yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
   return c.json(
     {
       success: true as const,
-      data: { ...page, items: page.items.map(artifactViewToManifest) },
+      data: {
+        ...page,
+        items: page.items.filter((item) => item.kind !== 'schema').map(artifactViewToManifest),
+      },
     },
     200
   );
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(listProjectVersionsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { family } = c.req.valid('query');
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const items = await listProjectYSchemaVersionHistory(db, {
-    project_id: projectId,
-    family,
-    kind: 'core',
-  });
+  const [legacyItems, schemaItems] = await Promise.all([
+    listProjectYSchemaVersionHistory(db, {
+      project_id: projectId,
+      family,
+      kind: 'core',
+    }),
+    family
+      ? Promise.resolve([])
+      : listProjectYSchemaVersionHistory(db, {
+          project_id: projectId,
+          kind: 'schema',
+        }),
+  ]);
+  const items = [...schemaItems, ...legacyItems].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime()
+  );
   return c.json(
     { success: true as const, data: { items: items.map(artifactViewToManifest) } },
     200
   );
 });
 
-yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
-  const composition = c.req.valid('json') as YSchemaCompositionDraft;
+yschemaCompositionRoutes.openapi(updateSchemaIdentityRoute, async (c) => {
+  const { projectId, artifactId } = c.req.valid('param');
+  const input = c.req.valid('json');
   const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const updated = await updateYSchemaArtifactIdentity(db, {
+    artifact_id: artifactId,
+    project_id: projectId,
+    if_revision: input.if_revision,
+    display_name: input.display_name,
+    description: input.description,
+    tags: input.tags ? projectSchemaTags(input.tags) : undefined,
+  });
+  if (!updated) {
+    return errorResponse(c, 'CONFLICT', 'Schema metadata changed or the Schema is unavailable.');
+  }
+  return c.json({ success: true as const, data: artifactViewToManifest(updated) }, 200);
+});
+
+yschemaCompositionRoutes.openapi(setSchemaLifecycleRoute, async (c) => {
+  const { projectId, artifactId, action } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const updated = await updateYSchemaArtifactIdentity(db, {
+    artifact_id: artifactId,
+    project_id: projectId,
+    if_revision: input.if_revision,
+    lifecycle_status: action === 'archive' ? 'archived' : 'active',
+  });
+  if (!updated) {
+    return errorResponse(c, 'CONFLICT', 'Schema metadata changed or the Schema is unavailable.');
+  }
+  return c.json({ success: true as const, data: artifactViewToManifest(updated) }, 200);
+});
+
+yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
+  const composition = c.req.valid('json');
+  const db = await getDB();
+  if (composition.apiVersion === 't3x.dev/yschema-composition/v2') {
+    const modules = await resolveCompositionArtifactsV2(
+      db,
+      composition as YSchemaCompositionDraftV2
+    );
+    const result = await compileYSchemaCompositionV2({
+      composition: composition as YSchemaCompositionDraftV2,
+      modules,
+    });
+    return c.json({ success: true as const, data: result }, 200);
+  }
   const artifacts = await resolveCompositionArtifacts(db, composition);
   const result = await compileYSchemaComposition({
     composition,
@@ -484,12 +678,25 @@ yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
   return c.json({ success: true as const, data: result }, 200);
 });
 
+// @ts-expect-error - OpenAPI handler return type
 yschemaCompositionRoutes.openapi(previewProjectCompositionRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const composition = c.req.valid('json') as YSchemaCompositionDraft;
+  const composition = c.req.valid('json');
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  if (composition.apiVersion === 't3x.dev/yschema-composition/v2') {
+    const modules = await resolveCompositionArtifactsV2(
+      db,
+      composition as YSchemaCompositionDraftV2,
+      projectId
+    );
+    const result = await compileYSchemaCompositionV2({
+      composition: composition as YSchemaCompositionDraftV2,
+      modules,
+    });
+    return c.json({ success: true as const, data: result }, 200);
+  }
   const artifacts = await resolveCompositionArtifacts(db, composition, projectId);
   const result = await compileYSchemaComposition({ composition, ...artifacts });
   return c.json({ success: true as const, data: result }, 200);
@@ -560,18 +767,30 @@ yschemaCompositionRoutes.openapi(saveWorkspaceCompositionRoute, async (c) => {
     );
   }
 
-  const artifacts = await resolveCompositionArtifacts(db, composition, projectId);
+  const openModules =
+    composition.apiVersion === 't3x.dev/yschema-composition/v2'
+      ? await resolveCompositionArtifactsV2(db, composition as YSchemaCompositionDraftV2, projectId)
+      : undefined;
+  const artifacts =
+    composition.apiVersion === 't3x.dev/yschema-composition/v1'
+      ? await resolveCompositionArtifacts(db, composition as YSchemaCompositionDraft, projectId)
+      : undefined;
   const normalized = normalizeComposition(
-    composition,
+    composition as YSchemaCompositionDraft | YSchemaCompositionDraftV2,
     expectedCompositionRevision + 1,
-    artifacts.modules
+    artifacts?.modules
   );
-  const preview = await compileYSchemaComposition({
-    composition: normalized,
-    ...artifacts,
-  });
+  const preview =
+    normalized.apiVersion === 't3x.dev/yschema-composition/v2'
+      ? await compileYSchemaCompositionV2({ composition: normalized, modules: openModules ?? [] })
+      : await compileYSchemaComposition({
+          composition: normalized,
+          ...(artifacts as NonNullable<typeof artifacts>),
+        });
   const invalidReference = preview.report.issues.find((issue) =>
-    ['CORE_INCOMPATIBLE', 'MODULE_NOT_FOUND', 'SLOT_NOT_FOUND'].includes(issue.code)
+    ['ARTIFACT_HASH_MISMATCH', 'CORE_INCOMPATIBLE', 'MODULE_NOT_FOUND', 'SLOT_NOT_FOUND'].includes(
+      issue.code
+    )
   );
   if (invalidReference) {
     return errorResponse(c, 'VALIDATION_FAILED', invalidReference.message, {
@@ -641,6 +860,126 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   if (!persisted.composition) {
     return errorResponse(c, 'NOT_FOUND', `Workspace ${workspaceId} has no saved Composition.`);
   }
+  if (persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2') {
+    if (persisted.composition.revision !== input.composition_revision) {
+      return errorResponse(
+        c,
+        'CONFLICT',
+        `Composition revision conflict: expected ${persisted.composition.revision}, received ${input.composition_revision}.`,
+        { expectedRevision: persisted.composition.revision }
+      );
+    }
+    const modules = await resolveCompositionArtifactsV2(db, persisted.composition, projectId);
+    const preview = await compileYSchemaCompositionV2({
+      composition: persisted.composition,
+      modules,
+    });
+    if (preview.compositionHash !== input.composition_hash) {
+      return errorResponse(
+        c,
+        'CONFLICT',
+        'Composition preview is stale. Compile the saved revision again before publishing it.',
+        { expectedCompositionHash: preview.compositionHash }
+      );
+    }
+    if (!preview.report.valid) {
+      return errorResponse(
+        c,
+        'REVIEW_REQUIRED',
+        'Composition has blocking verification issues and cannot be published.',
+        { issues: preview.report.issues }
+      );
+    }
+    const modulesByIdentity = new Map(
+      modules.map((module) => [`${module.canonicalName}@${module.version}`, module])
+    );
+    const pinnedModules = await Promise.all(
+      persisted.composition.modules.map(async (reference) => {
+        const module = modulesByIdentity.get(`${reference.canonicalName}@${reference.version}`);
+        if (!module) throw new Error(`Resolved Module is missing: ${reference.canonicalName}`);
+        return {
+          ...reference,
+          hash: reference.hash ?? (await sha256CompositionValue(module)),
+        };
+      })
+    );
+    const schema = normalizeYSchemaObject({
+      ...preview.schema,
+      name: input.canonical_name,
+      version: input.version,
+      description: input.description || preview.schema.description,
+    });
+    const schemaHash = await sha256CompositionValue(schema);
+    const schemaTags = projectSchemaTags(input.tags);
+    const comparison = await findCompositionComparison({
+      canonicalName: input.canonical_name,
+      compositionId: persisted.composition.id,
+      compositionRevision: persisted.composition.revision,
+      db,
+      projectId,
+      schema,
+    });
+    const manifest: PublishedYSchemaBlueprintV1 = {
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName: input.canonical_name,
+      version: input.version,
+      title: input.title,
+      description: input.description || `Published from ${persisted.composition.id}.`,
+      status: 'published',
+      source: 'team',
+      tags: schemaTags,
+      blueprint: {
+        compositionApiVersion: persisted.composition.apiVersion,
+        compositionId: persisted.composition.id,
+        compositionRevision: persisted.composition.revision,
+        modules: pinnedModules,
+      },
+      schema,
+      registry: {
+        origin: 'composition',
+        compilerVersion: 'yschema-v2',
+        compositionHash: preview.compositionHash,
+        compiledSchemaHash: preview.compiledSchemaHash,
+        reportHash: preview.reportHash,
+        schemaHash,
+        renderPlan: preview.renderPlan,
+        originsByPath: preview.originsByPath,
+        releaseNotes: input.release_notes ?? '',
+        ...(comparison ? { comparison } : {}),
+      },
+    };
+    const artifactHash = await sha256CompositionValue(manifest);
+    try {
+      const published = await publishYSchemaArtifactVersion(db, {
+        artifact_id: yschemaArtifactId(input.canonical_name),
+        artifact_version_id: yschemaArtifactVersionId(input.canonical_name, input.version),
+        canonical_name: input.canonical_name,
+        family: 'open',
+        kind: 'schema',
+        display_name: input.title,
+        description: input.description ?? '',
+        tags: schemaTags,
+        owner_project_id: projectId,
+        visibility: 'private',
+        version: input.version,
+        status: 'published',
+        manifest_json: manifest as unknown as Record<string, unknown>,
+        artifact_hash: artifactHash,
+        path_count: countSchemaNodePaths(schema.nodes),
+        created_by: `project:${projectId}`,
+        provides: [],
+        requires: [],
+      });
+      return c.json({ success: true as const, data: artifactViewToManifest(published) }, 200);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Schema version could not be published.';
+      if (message.includes('immutable') || message.includes('identity conflict')) {
+        return errorResponse(c, 'CONFLICT', message);
+      }
+      throw error;
+    }
+  }
   if (persisted.composition.revision !== input.composition_revision) {
     return errorResponse(
       c,
@@ -679,18 +1018,28 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || preview.schema.description,
   });
   const schemaHash = await sha256CompositionValue(schema);
+  const schemaTags = projectSchemaTags(input.tags);
+  const comparison = await findCompositionComparison({
+    canonicalName: input.canonical_name,
+    compositionId: persisted.composition.id,
+    compositionRevision: persisted.composition.revision,
+    db,
+    projectId,
+    schema,
+  });
   const provides = Array.from(
     new Set([...artifacts.core.provides, ...artifacts.modules.flatMap((module) => module.provides)])
   ).sort();
-  const manifest: YSchemaCoreArtifact & { registry: Record<string, unknown> } = {
+  const manifest: YSchemaCoreArtifact & { tags: string[]; registry: Record<string, unknown> } = {
     apiVersion: 't3x.dev/yschema-core/v1',
     canonicalName: input.canonical_name,
     version: input.version,
     family: persisted.composition.family,
     title: input.title,
     description: input.description || `Published from ${persisted.composition.id}.`,
-    status: 'active',
+    status: 'published',
     source: 'team',
+    tags: schemaTags,
     provides,
     extensionSlots: artifacts.core.extensionSlots,
     render: artifacts.core.render,
@@ -706,6 +1055,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       originsByPath: preview.originsByPath,
       modules: persisted.composition.modules,
       releaseNotes: input.release_notes ?? '',
+      ...(comparison ? { comparison } : {}),
     },
   };
   const artifactHash = await sha256CompositionValue(manifest);
@@ -717,10 +1067,13 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       canonical_name: input.canonical_name,
       family: persisted.composition.family,
       kind: 'core',
+      display_name: input.title,
+      description: input.description ?? '',
+      tags: schemaTags,
       owner_project_id: projectId,
       visibility: 'private',
       version: input.version,
-      status: 'active',
+      status: 'published',
       manifest_json: manifest as unknown as Record<string, unknown>,
       artifact_hash: artifactHash,
       path_count: countSchemaNodePaths(schema.nodes),
@@ -776,11 +1129,24 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
     );
   }
 
-  const artifacts = await resolveCompositionArtifacts(db, persisted.composition, projectId);
-  const preview = await compileYSchemaComposition({
-    composition: persisted.composition,
-    ...artifacts,
-  });
+  const openModules =
+    persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+      ? await resolveCompositionArtifactsV2(db, persisted.composition, projectId)
+      : undefined;
+  const artifacts =
+    persisted.composition.apiVersion === 't3x.dev/yschema-composition/v1'
+      ? await resolveCompositionArtifacts(db, persisted.composition, projectId)
+      : undefined;
+  const preview =
+    persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+      ? await compileYSchemaCompositionV2({
+          composition: persisted.composition,
+          modules: openModules ?? [],
+        })
+      : await compileYSchemaComposition({
+          composition: persisted.composition,
+          ...(artifacts as NonNullable<typeof artifacts>),
+        });
   if (preview.compositionHash !== expectedCompositionHash) {
     return errorResponse(
       c,
@@ -799,9 +1165,19 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
   }
 
   const binding = {
-    canonicalName: `t3x/${persisted.composition.family}`,
-    schemaName: `${artifacts.core.title} Composition`,
-    version: preview.schema.version ?? artifacts.core.version,
+    canonicalName:
+      persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+        ? persisted.composition.id
+        : `t3x/${persisted.composition.family}`,
+    schemaName:
+      persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+        ? 'Open Module Composition'
+        : `${artifacts?.core.title} Composition`,
+    version:
+      preview.schema.version ??
+      (persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+        ? `r${persisted.composition.revision}`
+        : (artifacts?.core.version ?? '1.0.0')),
     mode: 'draft_override',
     schemaHash: preview.compiledSchemaHash,
     compositionId: persisted.composition.id,
@@ -815,7 +1191,10 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
     composition_revision: persisted.composition.revision,
     composition_hash: preview.compositionHash,
     compiled_schema_hash: preview.compiledSchemaHash,
-    compiler_version: 'yschema-composition@1',
+    compiler_version:
+      persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
+        ? 'yschema-composition@2'
+        : 'yschema-composition@1',
     manifest_json: persisted.composition as unknown as Record<string, unknown>,
     schema_json: preview.schema as unknown as Record<string, unknown>,
     render_plan_json: preview.renderPlan,
@@ -883,7 +1262,9 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
 
 function parsePersistedComposition(
   value: unknown
-): { ok: true; composition: YSchemaCompositionDraft | null } | { ok: false; issues: string[] } {
+):
+  | { ok: true; composition: YSchemaCompositionDraft | YSchemaCompositionDraftV2 | null }
+  | { ok: false; issues: string[] } {
   if (value === undefined || value === null) return { ok: true, composition: null };
   const parsed = YSchemaCompositionPreviewRequestSchema.safeParse(value);
   if (!parsed.success) {
@@ -894,14 +1275,30 @@ function parsePersistedComposition(
       ),
     };
   }
-  return { ok: true, composition: parsed.data as YSchemaCompositionDraft };
+  return {
+    ok: true,
+    composition: parsed.data as YSchemaCompositionDraft | YSchemaCompositionDraftV2,
+  };
 }
 
 function normalizeComposition(
-  composition: YSchemaCompositionDraft,
+  composition: YSchemaCompositionDraft | YSchemaCompositionDraftV2,
   revision: number,
   availableModules = builtInYSchemaModules
-): YSchemaCompositionDraft {
+): YSchemaCompositionDraft | YSchemaCompositionDraftV2 {
+  if (composition.apiVersion === 't3x.dev/yschema-composition/v2') {
+    return {
+      ...composition,
+      revision,
+      modules: [...composition.modules]
+        .sort(
+          (left, right) =>
+            left.presentationOrder - right.presentationOrder ||
+            left.canonicalName.localeCompare(right.canonicalName)
+        )
+        .map((reference, index) => ({ ...reference, presentationOrder: (index + 1) * 10 })),
+    };
+  }
   const moduleByKey = new Map(
     availableModules.map((module) => [`${module.canonicalName}@${module.version}`, module])
   );
@@ -944,6 +1341,85 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function projectSchemaTags(tags: string[] | undefined): string[] {
+  return Array.from(
+    new Set([
+      ...(tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:')),
+      'source:team',
+    ])
+  ).sort();
+}
+
+async function findCompositionComparison({
+  canonicalName,
+  compositionId,
+  compositionRevision,
+  db,
+  projectId,
+  schema,
+}: {
+  canonicalName: string;
+  compositionId: string;
+  compositionRevision: number;
+  db: Parameters<typeof listProjectYSchemaVersionHistory>[0];
+  projectId: string;
+  schema: ReturnType<typeof normalizeYSchemaObject>;
+}) {
+  const history = await listProjectYSchemaVersionHistory(db, {
+    project_id: projectId,
+    kind: 'schema',
+  });
+  const candidates = history
+    .filter((item) => item.canonicalName === canonicalName)
+    .map((item) => {
+      const manifest = asRecord(item.manifest);
+      const lineage = publishedCompositionLineage(manifest);
+      const baseSchema = asRecord(manifest?.schema);
+      const registry = asRecord(manifest?.registry);
+      return { item, lineage, baseSchema, registry };
+    })
+    .filter(
+      (candidate) =>
+        candidate.lineage?.compositionId === compositionId &&
+        candidate.lineage.compositionRevision < compositionRevision &&
+        candidate.baseSchema !== null
+    )
+    .sort(
+      (left, right) =>
+        (right.lineage?.compositionRevision ?? 0) - (left.lineage?.compositionRevision ?? 0) ||
+        right.item.createdAt.getTime() - left.item.createdAt.getTime()
+    );
+  const base = candidates[0];
+  if (!base?.baseSchema) return null;
+  const baseSchema = normalizeYSchemaObject(base.baseSchema);
+  const recordedSchemaHash = base.registry?.schemaHash;
+  return {
+    baseVersion: base.item.version,
+    baseSchemaHash:
+      typeof recordedSchemaHash === 'string' ? recordedSchemaHash : base.item.artifactHash,
+    changes: diffYSchemas(baseSchema, schema),
+  };
+}
+
+function publishedCompositionLineage(manifest: Record<string, unknown> | null):
+  | {
+      compositionId: string;
+      compositionRevision: number;
+    }
+  | undefined {
+  if (!manifest) return undefined;
+  const source =
+    manifest.apiVersion === 't3x.dev/yschema-blueprint/v1'
+      ? asRecord(manifest.blueprint)
+      : asRecord(manifest.registry);
+  const compositionId = source?.compositionId;
+  const compositionRevision = source?.compositionRevision;
+  if (typeof compositionId !== 'string' || typeof compositionRevision !== 'number') {
+    return undefined;
+  }
+  return { compositionId, compositionRevision };
 }
 
 function yschemaArtifactId(canonicalName: string): string {

@@ -5,6 +5,7 @@ export type SchemaReleaseBadgeTone = 'pending' | 'commit' | 'warning';
 const SCHEMA_RELEASE_TONES: Record<SchemaReleaseStatus, SchemaReleaseBadgeTone> = {
   draft: 'pending',
   active: 'commit',
+  published: 'commit',
   deprecated: 'warning',
 };
 

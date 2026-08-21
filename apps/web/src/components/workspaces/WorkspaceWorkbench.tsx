@@ -4,14 +4,21 @@ import { Button } from '@/components/ui/button';
 import { isPromptWorkspace } from '@/domain/workspaces/promptCompile';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import { useWorkspaceProposalGeneration } from '@/hooks/workspaces/useWorkspaceProposalGeneration';
 import { usePinsStore } from '@/store/pinsStore';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
+  WorkspaceProposalGenerationView,
+  WorkspaceProposalPosture,
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { PromptCompilePreviewDrawer } from './PromptCompilePreviewDrawer';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -25,6 +32,10 @@ interface WorkspaceFlowState {
   continuationBusy?: boolean;
   extracting?: boolean;
   sendingToYOps?: boolean;
+  proposalPosture?: WorkspaceProposalPosture;
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalReviewState?: ProposalGenerationReviewState;
   validationGapCount?: number;
   error?: string;
 }
@@ -70,6 +81,7 @@ export function WorkspaceWorkbench({
     sendToYOps,
     startNextIteration,
   } = useWorkspaceFlow();
+  const proposalGeneration = useWorkspaceProposalGeneration();
 
   const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
   const selectedWorkspace = baseSelectedWorkspace
@@ -201,6 +213,95 @@ export function WorkspaceWorkbench({
         sendingToYOps: false,
       });
     }
+  };
+
+  const handleProposalPostureChange = (posture: WorkspaceProposalPosture) => {
+    updateSelectedFlow({ error: undefined, proposalPosture: posture });
+  };
+
+  const handleGenerateProposal = async () => {
+    if (!selectedWorkspace) return;
+    const posture = selectedFlow?.proposalPosture ?? 'guided';
+    const sourceMaterialIds = [
+      ...new Set(
+        selectedWorkspace.sourceBundle.flatMap((source) =>
+          source.materialId ? [source.materialId] : []
+        )
+      ),
+    ];
+
+    updateSelectedFlow({
+      error: undefined,
+      proposalGenerationBusy: true,
+      proposalReviewState: 'undecided',
+    });
+    try {
+      const generated = await proposalGeneration.generate({
+        projectId: selectedWorkspace.projectId,
+        workspaceId: selectedWorkspace.id,
+        posture,
+        instruction: `Generate a schema-aligned proposal for ${selectedWorkspace.title} from the selected workspace evidence.`,
+        sourceMaterialIds,
+        ifRevision: selectedWorkspace.revision,
+      });
+      updateSelectedFlow({ proposalGeneration: generated.view });
+      const verified = await proposalGeneration.verify(
+        selectedWorkspace.projectId,
+        generated.transition_id
+      );
+      updateSelectedFlow({
+        error: undefined,
+        proposalGeneration: verified.view,
+        proposalGenerationBusy: false,
+      });
+    } catch (err) {
+      updateSelectedFlow({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Governed proposal generation could not be completed.',
+        proposalGenerationBusy: false,
+      });
+    }
+  };
+
+  const handleVerifyProposal = async () => {
+    if (!selectedWorkspace || !selectedFlow?.proposalGeneration) return;
+    updateSelectedFlow({ error: undefined, proposalGenerationBusy: true });
+    try {
+      const verified = await proposalGeneration.verify(
+        selectedWorkspace.projectId,
+        selectedFlow.proposalGeneration.transition_id
+      );
+      updateSelectedFlow({
+        proposalGeneration: verified.view,
+        proposalGenerationBusy: false,
+      });
+    } catch (err) {
+      updateSelectedFlow({
+        error: err instanceof Error ? err.message : 'Proposal verification failed.',
+        proposalGenerationBusy: false,
+      });
+    }
+  };
+
+  const handleProposalAction = async (action: ProposalGenerationAction) => {
+    if (!selectedWorkspace || !selectedFlow?.proposalGeneration) return;
+    if (action === 'revision') {
+      updateSelectedFlow({
+        error: undefined,
+        proposalReviewState: 'undecided',
+      });
+      setActiveWorkflowTab('chat');
+      return;
+    }
+
+    updateSelectedFlow({
+      error: undefined,
+      proposalGenerationBusy: false,
+      proposalReviewState: 'ready_for_changes',
+    });
+    setActiveWorkflowTab('validation');
   };
 
   const handleCommitted = (
@@ -345,9 +446,13 @@ export function WorkspaceWorkbench({
             candidate={selectedWorkspaceWithFlow}
             flowState={selectedFlow}
             onExtractCandidate={handleExtractCandidate}
+            onGenerateProposal={handleGenerateProposal}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onContinueFromCommit={handleContinueFromCommit}
             onSendToYOps={handleSendToYOps}
+            onProposalAction={handleProposalAction}
+            onProposalPostureChange={handleProposalPostureChange}
+            onVerifyProposal={handleVerifyProposal}
             onViewCommitInState={onViewCommitInState}
             onWorkflowTabChange={setActiveWorkflowTab}
             onYOpsApplied={handleYOpsApplied}
@@ -420,8 +525,11 @@ function WorkspaceDetail({
   candidate,
   flowState,
   onExtractCandidate,
+  onGenerateProposal,
   onChatSourceEvidenceChange,
   onContinueFromCommit,
+  onProposalAction,
+  onProposalPostureChange,
   onSendToYOps,
   onSourceMaterialUploaded,
   onSourceArtifactChange,
@@ -430,18 +538,22 @@ function WorkspaceDetail({
   onYOpsCommitted,
   onYOpsScriptSave,
   onViewCommitInState,
+  onVerifyProposal,
 }: {
   activeTab: WorkspaceTabId;
   branchOptions?: string[];
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
   onExtractCandidate: () => void;
+  onGenerateProposal: () => void;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onContinueFromCommit: (
     commitHash: string,
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void>;
+  onProposalAction: (action: ProposalGenerationAction) => void;
+  onProposalPostureChange: (posture: WorkspaceProposalPosture) => void;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
@@ -450,6 +562,7 @@ function WorkspaceDetail({
   onYOpsCommitted: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  onVerifyProposal: () => void;
 }) {
   if (!candidate) return null;
 
@@ -481,13 +594,21 @@ function WorkspaceDetail({
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}
+          onGenerateProposal={onGenerateProposal}
+          onProposalAction={onProposalAction}
+          onProposalPostureChange={onProposalPostureChange}
           onSendToYOps={onSendToYOps}
+          onVerifyProposal={onVerifyProposal}
           onYOpsScriptSave={onYOpsScriptSave}
           onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
           onViewCommitInState={onViewCommitInState}
           onWorkflowTabChange={onWorkflowTabChange}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
+          proposalReviewState={flowState?.proposalReviewState}
+          proposalGeneration={flowState?.proposalGeneration}
+          proposalGenerationBusy={Boolean(flowState?.proposalGenerationBusy)}
+          proposalPosture={flowState?.proposalPosture ?? 'guided'}
           yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
         />
       </div>
@@ -539,9 +660,25 @@ function upsertWorkspaceSourceBundle(
   sourceId: string,
   source: SourceBundleItem | null
 ): SourceBundleItem[] {
-  const next = sourceBundle.filter((item) => item.id !== sourceId);
-  if (!source) return next;
-  return [...next, source];
+  const existingIndex = sourceBundle.findIndex((item) => item.id === sourceId);
+  if (!source) {
+    return existingIndex < 0
+      ? sourceBundle
+      : sourceBundle.filter((_, index) => index !== existingIndex);
+  }
+
+  if (existingIndex >= 0) {
+    return sourceBundle.map((item, index) => (index === existingIndex ? source : item));
+  }
+
+  const firstMaterialIndex = sourceBundle.findIndex((item) => Boolean(item.materialId));
+  if (firstMaterialIndex < 0) return [...sourceBundle, source];
+
+  return [
+    ...sourceBundle.slice(0, firstMaterialIndex),
+    source,
+    ...sourceBundle.slice(firstMaterialIndex),
+  ];
 }
 
 function resetWorkspaceProposalAfterSourceChange(

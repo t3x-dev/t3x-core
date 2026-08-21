@@ -42,10 +42,11 @@ export function registerMergeCommands(program: Command): void {
           project_id: options.project,
           source_hash: sourceHash,
           target_hash: targetHash,
+          target_branch: target,
         });
 
         spinner.stop();
-        success(`Merge prepared (${draft.id})`);
+        success(`Merge prepared (${draft.draftId})`);
         console.log();
 
         const prepared = draft.prepared;
@@ -57,7 +58,7 @@ export function registerMergeCommands(program: Command): void {
 
         console.log(
           formatPrepareResult({
-            mergeId: draft.id,
+            mergeId: draft.draftId,
             autoKept: prepared.autoKept?.length || 0,
             onlyInSource: prepared.onlyInSource?.length || 0,
             onlyInTarget: prepared.onlyInTarget?.length || 0,
@@ -74,7 +75,7 @@ export function registerMergeCommands(program: Command): void {
           autoSpinner.start();
 
           const message = options.message || `Merge ${source} into ${target}`;
-          const commitResult = await client.commitMergeDraft(draft.id, {
+          const commitResult = await client.commitMergeDraft(draft.draftId, {
             message,
             decisions: {
               conflictResolutions: {},
@@ -177,9 +178,10 @@ async function resolveRef(client: T3xClient, ref: string, projectId: string): Pr
     return ref;
   }
 
-  const result = await client.listCommits(projectId, ref, { limit: 1, offset: 0 });
-  if (result.commits.length === 0) {
+  const result = await client.listBranches(projectId, { limit: 100, offset: 0 });
+  const branch = result.branches.find((candidate) => candidate.name === ref);
+  if (branch?.head_commit_hash === undefined || branch.head_commit_hash === null) {
     throw new Error(`Branch not found or has no commits: ${ref}`);
   }
-  return result.commits[0].commit_hash;
+  return branch.head_commit_hash;
 }

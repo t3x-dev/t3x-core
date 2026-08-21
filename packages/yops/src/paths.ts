@@ -284,7 +284,18 @@ export function deepClone(value: YValue): YValue {
  * Returns undefined if any segment cannot be followed.
  */
 export function resolvePath(doc: YValue, path: string): YValue | undefined {
-  const segments = parsePath(path);
+  return resolvePathSegments(doc, parsePath(path));
+}
+
+/**
+ * Navigate an already parsed path without serializing decoded segments back
+ * into the wire path syntax. Handlers use this after inspecting a path so
+ * quoted keys such as `"db/prod"` remain one mapping key.
+ */
+export function resolvePathSegments(
+  doc: YValue,
+  segments: readonly PathSegment[]
+): YValue | undefined {
   if (segments.length === 0) return doc;
 
   let current: YValue = doc;
@@ -322,7 +333,15 @@ export function resolvePath(doc: YValue, path: string): YValue | undefined {
  * Empty path replaces the entire doc.
  */
 export function setAtPath(doc: YValue, path: string, value: YValue): YValue {
-  const segments = parsePath(path);
+  return setAtPathSegments(doc, parsePath(path), value);
+}
+
+/** Set a value using an already parsed path. */
+export function setAtPathSegments(
+  doc: YValue,
+  segments: readonly PathSegment[],
+  value: YValue
+): YValue {
   if (segments.length === 0) return deepClone(value);
 
   const cloned = deepClone(doc);
@@ -330,7 +349,12 @@ export function setAtPath(doc: YValue, path: string, value: YValue): YValue {
   return cloned;
 }
 
-function _setRecursive(current: YValue, segments: PathSegment[], idx: number, value: YValue): void {
+function _setRecursive(
+  current: YValue,
+  segments: readonly PathSegment[],
+  idx: number,
+  value: YValue
+): void {
   const seg = segments[idx];
   const isLast = idx === segments.length - 1;
 
@@ -389,11 +413,18 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
  * For index segments: splices the element from the array.
  */
 export function deleteAtPath(doc: YValue, path: string): YValue | false {
-  const segments = parsePath(path);
+  return deleteAtPathSegments(doc, parsePath(path));
+}
+
+/** Delete a value using an already parsed path. */
+export function deleteAtPathSegments(
+  doc: YValue,
+  segments: readonly PathSegment[]
+): YValue | false {
   if (segments.length === 0) return false;
 
   // Verify the path exists before cloning and deleting
-  if (resolvePath(doc, path) === undefined) {
+  if (resolvePathSegments(doc, segments) === undefined) {
     // Special case: for a key segment at the top level, check if it actually exists
     // resolvePath returns undefined for missing keys, but we want to be precise:
     // A delete on a missing key should return false.
@@ -406,7 +437,7 @@ export function deleteAtPath(doc: YValue, path: string): YValue | false {
   return cloned;
 }
 
-function _deleteRecursive(current: YValue, segments: PathSegment[], idx: number): boolean {
+function _deleteRecursive(current: YValue, segments: readonly PathSegment[], idx: number): boolean {
   const seg = segments[idx];
   const isLast = idx === segments.length - 1;
 

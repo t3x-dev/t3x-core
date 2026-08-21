@@ -100,7 +100,6 @@ const createRunRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 runsRoutes.openapi(createRunRoute, async (c) => {
   try {
     const input = c.req.valid('json');

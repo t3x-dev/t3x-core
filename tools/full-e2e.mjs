@@ -32,9 +32,11 @@ if (unknownArgs.length > 0) {
 
 const apiPort = process.env.T3X_E2E_API_PORT ?? '8100';
 const webPort = process.env.T3X_E2E_WEB_PORT ?? '3100';
+const runnerPort = process.env.T3X_E2E_RUNNER_PORT ?? '8200';
 const pgPort = process.env.T3X_E2E_PG_PORT ?? '5545';
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const webUrl = `http://127.0.0.1:${webPort}`;
+const runnerUrl = `http://127.0.0.1:${runnerPort}`;
 const artifactDir = path.resolve(
   repoRoot,
   process.env.T3X_E2E_ARTIFACT_DIR ??
@@ -58,7 +60,11 @@ const runtimeEnv = {
   NEXT_PUBLIC_API_URL: apiUrl,
   NEXT_PUBLIC_AUTH_DISABLED: authEnabled ? 'false' : 'true',
   PORT: apiPort,
+  RUNNER_HOST: '127.0.0.1',
+  RUNNER_SERVICE_TOKEN: process.env.RUNNER_SERVICE_TOKEN ?? 't3x-e2e-runner-token',
+  RUNNER_URL: runnerUrl,
   T3X_DATA_DIR: dataDir,
+  T3X_ENGINE_URL: apiUrl,
   T3X_E2E_ARTIFACT_DIR: artifactDir,
   T3X_E2E_EXTERNAL_SERVERS: '1',
   T3X_E2E_FULL: '1',
@@ -75,7 +81,6 @@ if (!allowExternal) {
     GOOGLE_API_KEY: '',
     N8N_API_KEY: '',
     OPENAI_API_KEY: '',
-    RUNNER_BASE_URL: '',
   });
 }
 
@@ -94,6 +99,7 @@ process.once('SIGTERM', () => interrupt('SIGTERM'));
 try {
   await assertPortAvailable(Number(apiPort), 'API', 'T3X_E2E_API_PORT');
   await assertPortAvailable(Number(webPort), 'WebUI', 'T3X_E2E_WEB_PORT');
+  await assertPortAvailable(Number(runnerPort), 'Runner', 'T3X_E2E_RUNNER_PORT');
   if (!runtimeEnv.DATABASE_URL) {
     await assertPortAvailable(Number(pgPort), 'embedded PostgreSQL', 'T3X_E2E_PG_PORT');
   }
@@ -102,6 +108,13 @@ try {
     await runCommand('pnpm', ['build:api-server'], runtimeEnv);
     await runCommand('pnpm', ['build:webui'], runtimeEnv);
   }
+
+  const runner = startLoggedProcess('runner', 'node', ['apps/runner/dist/server.js'], {
+    ...runtimeEnv,
+    PORT: runnerPort,
+  });
+  children.push(runner);
+  await waitForUrl(`${runnerUrl}/health`, runner, 90_000);
 
   const api = startLoggedProcess(
     'api',
@@ -145,10 +158,12 @@ try {
     test_exit_code: testExitCode,
     api_url: apiUrl,
     webui_url: webUrl,
+    runner_url: runnerUrl,
     data_dir: keepData ? dataDir : null,
     error: caughtError?.message ?? null,
     artifacts: {
       api_log: path.join(artifactDir, 'api.log'),
+      runner_log: path.join(artifactDir, 'runner.log'),
       webui_log: path.join(artifactDir, 'webui.log'),
       playwright_html: path.join(artifactDir, 'html'),
       playwright_json: path.join(artifactDir, 'results.json'),

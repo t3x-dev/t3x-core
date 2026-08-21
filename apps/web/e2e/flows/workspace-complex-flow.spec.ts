@@ -215,9 +215,20 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     );
     await page.getByRole('button', { name: 'Review change' }).click();
     await expect(page.getByLabel('Validation: passed')).toContainText('passed');
+    await expect(page.getByRole('heading', { name: 'Decide in Changes' })).toBeVisible();
+    await page.getByRole('link', { name: 'Open Changes' }).last().click();
+    await expect(page).toHaveURL(/\/changes\//);
+    await expect(
+      page.getByText('Changes is the review and decision surface backed by an immutable ReviewSnapshot.')
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and save' })).toBeEnabled();
     await page.getByRole('button', { name: 'Approve and save' }).click();
+    await expect(page.getByRole('region', { name: 'Saved change review' })).toContainText(
+      'Saved change'
+    );
 
+    await page.goto(workspaceUrl);
+    await page.getByRole('tab', { name: /Commit/ }).click();
     await expect(page.getByRole('tab', { name: /Commit/ })).toHaveAttribute(
       'aria-selected',
       'true'

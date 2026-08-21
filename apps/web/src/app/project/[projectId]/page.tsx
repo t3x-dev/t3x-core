@@ -21,10 +21,6 @@ import {
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
-import {
-  getProjectDefaultSchemaBinding,
-  mergeProjectWorkspaceSchemaBindings,
-} from '@/domain/workspaces/schemaBindings';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -199,17 +195,7 @@ export function ProjectDetailPageContent({
   const liveSchemaBindings = useProjectWorkspaceSchemaBindingsStore(
     (state) => state.bindingsByProjectId[projectId]
   );
-  const schemaBindings = useMemo(
-    () =>
-      mergeProjectWorkspaceSchemaBindings(
-        {
-          projectDefault: getProjectDefaultSchemaBinding(projectBase?.metadata),
-          byWorkspaceId: {},
-        },
-        liveSchemaBindings
-      ),
-    [liveSchemaBindings, projectBase?.metadata]
-  );
+  const schemaBindings = liveSchemaBindings;
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
@@ -575,13 +561,7 @@ export function ProjectDetailPageContent({
   const activeContent = (() => {
     switch (activeTab) {
       case 'schemas':
-        return (
-          <ProjectSchemasTab
-            projectId={projectId}
-            projectMetadata={projectBase?.metadata}
-            schemaBindings={schemaBindings}
-          />
-        );
+        return <ProjectSchemasTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'workspaces':
         return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':

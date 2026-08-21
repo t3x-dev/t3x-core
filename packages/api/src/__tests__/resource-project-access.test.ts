@@ -2,6 +2,7 @@ import type { AnyDB } from '@t3x-dev/storage';
 import {
   createLeaf,
   createLeafHistory,
+  createMergeDraft,
   createPin,
   createTopic,
   createWebhook,
@@ -23,9 +24,11 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { draftsCrudRoutes } from '../routes/drafts-crud.openapi';
+import { draftsWorkflowRoutes } from '../routes/drafts-workflows.openapi';
 import { gateRoutes } from '../routes/gate.openapi';
 import { leavesHistoryRoutes } from '../routes/leaves-history.openapi';
 import { leavesMLRoutes } from '../routes/leaves-ml.openapi';
+import { mergeRoutes } from '../routes/merge.openapi';
 import { notificationsRoutes } from '../routes/notifications.openapi';
 import { pinsRoutes } from '../routes/pins.openapi';
 import { runsRoutes } from '../routes/runs.openapi';
@@ -47,6 +50,7 @@ function createAuthenticatedApp(userId: string) {
     return next();
   });
   app.route('/', draftsCrudRoutes);
+  app.route('/', draftsWorkflowRoutes);
   app.route('/', gateRoutes);
   app.route('/', pinsRoutes);
   app.route('/', webhooksRoutes);
@@ -55,6 +59,7 @@ function createAuthenticatedApp(userId: string) {
   app.route('/', topicsRoutes);
   app.route('/', leavesHistoryRoutes);
   app.route('/', leavesMLRoutes);
+  app.route('/', mergeRoutes);
   return app;
 }
 
@@ -106,6 +111,72 @@ describe('project ownership on child-resource routes', () => {
       ).status
     ).toBe(403);
     expect((await app.request(`/v1/drafts/${draft.id}`, { method: 'DELETE' })).status).toBe(403);
+  });
+
+  it('blocks every cross-project draft workflow before generation, search, fork, or commit', async () => {
+    const draft = await insertDraft(mockDB, {
+      project_id: otherProjectId,
+      title: 'Private workflow draft',
+      goal: 'private retrieval intent',
+    });
+    const app = createAuthenticatedApp('user_owner');
+
+    for (const action of ['preview', 'commit', 'suggest']) {
+      const response = await app.request(`/v1/drafts/${draft.id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(response.status, action).toBe(403);
+    }
+    expect((await app.request(`/v1/drafts/${draft.id}/fork`, { method: 'POST' })).status).toBe(403);
+  });
+
+  it('blocks every cross-project merge-draft read and mutation before downstream work', async () => {
+    const draft = await createMergeDraft(mockDB, {
+      projectId: otherProjectId,
+      sourceHash: `sha256:${'1'.repeat(64)}`,
+      targetHash: `sha256:${'2'.repeat(64)}`,
+      targetBranch: 'main',
+      prepared: { conflicts: [] },
+    });
+    const app = createAuthenticatedApp('user_owner');
+    const base = `/v1/merge/drafts/${draft.draftId}`;
+
+    expect((await app.request(base)).status).toBe(403);
+    expect(
+      (
+        await app.request(base, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'unauthorized' }),
+        })
+      ).status
+    ).toBe(403);
+    expect(
+      (
+        await app.request(`${base}/commit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'unauthorized' }),
+        })
+      ).status
+    ).toBe(403);
+    expect((await app.request(base, { method: 'DELETE' })).status).toBe(403);
+    expect((await app.request(`${base}/checks`)).status).toBe(403);
+    expect((await app.request(`${base}/suggest/0`, { method: 'POST' })).status).toBe(403);
+    expect(
+      (
+        await app.request(`${base}/suggest-frame/frame`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_frame: { type: 'test', slots: {} },
+            target_frame: { type: 'test', slots: {} },
+          }),
+        })
+      ).status
+    ).toBe(403);
   });
 
   it('blocks cross-project pin create, list, read, update, and delete', async () => {

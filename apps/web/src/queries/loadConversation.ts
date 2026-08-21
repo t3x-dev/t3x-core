@@ -59,7 +59,10 @@ export interface ConversationSnapshot {
   partial?: SnapshotPartial;
 }
 
-async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
+async function loadParentCommitInfo(
+  projectId: string,
+  parentCommitHash: string | null
+): Promise<{
   content: SemanticContent;
   branch: string | null;
   parentCommit: ParentCommit | null;
@@ -67,7 +70,7 @@ async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
   if (!parentCommitHash) {
     return { content: { trees: [], relations: [] }, branch: null, parentCommit: null };
   }
-  const parentCommit = await fetchCommitForInheritance(parentCommitHash);
+  const parentCommit = await fetchCommitForInheritance(parentCommitHash, projectId);
   const content = parentCommit.content ?? { trees: [], relations: [] };
   return {
     content,
@@ -80,10 +83,13 @@ async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
   };
 }
 
-async function loadCommitBranch(commitHash: string | null): Promise<string | null> {
+async function loadCommitBranch(
+  projectId: string,
+  commitHash: string | null
+): Promise<string | null> {
   if (!commitHash) return null;
   try {
-    const commit = await fetchCommitForInheritance(commitHash);
+    const commit = await fetchCommitForInheritance(commitHash, projectId);
     return commit.branch ?? null;
   } catch {
     return null;
@@ -132,8 +138,8 @@ export async function fetchConversationSnapshot(
 
   const validationTurns: ValidationTurn[] = workspaceTurns;
   const [parentCommitInfo, committedBranch] = await Promise.all([
-    loadParentCommitInfo(parentCommitHash),
-    loadCommitBranch(committedAs),
+    loadParentCommitInfo(projectId, parentCommitHash),
+    loadCommitBranch(projectId, committedAs),
   ]);
   const parentBaseline = parentCommitInfo.content;
   const { tree, sourceIndex, partial } = replay(flatOps, validationTurns, parentBaseline);

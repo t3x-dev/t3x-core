@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
+import { createTestRateLimitStore } from './setup';
 
 const testApiKey = (suffix: string) => `t3xk_${suffix}`;
 
@@ -16,7 +17,11 @@ describe('Local Config Routes', () => {
   let configPath: string;
 
   function createLocalConfigApp() {
-    return createApp({ enableLocalConfigRoutes: true, skipBuiltinAuth: true });
+    return createApp({
+      enableLocalConfigRoutes: true,
+      skipBuiltinAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
   }
 
   beforeEach(() => {
@@ -159,7 +164,10 @@ describe('Local Config Routes', () => {
 
   it('requires authentication when builtin auth is enabled', async () => {
     delete process.env.AUTH_DISABLED;
-    const { app } = createApp({ enableLocalConfigRoutes: true });
+    const { app } = createApp({
+      enableLocalConfigRoutes: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
     const res = await app.request('/api/v1/local-config');
 
     expect(res.status).toBe(401);
@@ -361,7 +369,10 @@ describe('Local Config Routes', () => {
   });
 
   it('is not mounted by default on generic createApp consumers', async () => {
-    const { app } = createApp({ skipBuiltinAuth: true });
+    const { app } = createApp({
+      skipBuiltinAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
     const res = await app.request('/api/v1/local-config');
 
     expect(res.status).toBe(404);

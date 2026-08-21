@@ -15,6 +15,9 @@ const storageMock = vi.hoisted(() => {
     reset: () => {
       workspaceDraft = null;
     },
+    seedWorkspaceDraft: (state: Record<string, unknown>) => {
+      workspaceDraft = state;
+    },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
     findProjectById: vi.fn((_db, projectId: string) =>
       Promise.resolve({ projectId, ownerId: null })
@@ -30,6 +33,10 @@ const storageMock = vi.hoisted(() => {
               project_id: projectId,
               workspace_id: workspaceId,
               workspace_state: workspaceDraft,
+              target_branch:
+                typeof workspaceDraft.targetBranch === 'string'
+                  ? workspaceDraft.targetBranch
+                  : 'main',
               title: 'PRD audience handoff',
               status: 'editing',
               revision: 1,
@@ -41,6 +48,8 @@ const storageMock = vi.hoisted(() => {
           : null
       )
     ),
+    getLatestTransitionReviewSnapshot: vi.fn(),
+    getTransitionReviewSnapshot: vi.fn(),
     listWorkspaceDrafts: vi.fn((_db, projectId: string) =>
       Promise.resolve(
         workspaceDraft
@@ -62,6 +71,7 @@ const storageMock = vi.hoisted(() => {
           : []
       )
     ),
+    listTransitionReviewSnapshots: vi.fn(),
     upsertWorkspaceDraft: vi.fn(
       (
         _db,
@@ -127,7 +137,11 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findProjectById: storageMock.findProjectById,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
+    getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
+    getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
+    listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
@@ -173,9 +187,110 @@ const mockPrecondition = {
   statementDigests: [`sha256:${'c'.repeat(64)}`],
   policyDigest: `sha256:${'f'.repeat(64)}`,
 };
+const mockReviewDigest = `sha256:${'9'.repeat(64)}`;
+const mockSnapshotDigest = `sha256:${'8'.repeat(64)}`;
+const mockDescriptor = {
+  kind: 'state',
+  schema: 't3x/state/v1',
+  digest: `sha256:${'7'.repeat(64)}`,
+};
+
+function mockReviewArtifacts(status: 'reviewing' | 'committed' = 'reviewing') {
+  const reviewSnapshot = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: 'rvs_88888888888888888888888888888888',
+    snapshotDigest: mockSnapshotDigest,
+    createdAt: '2026-08-17T00:00:00.000Z',
+    projectId: 'proj_sources',
+    workspaceId: 'workspace_prd_handoff',
+    transitionId: mockTransitionId,
+    request: {
+      kind: 'structured_yops',
+      id: 'request:workspace-review',
+      createdAt: '2026-08-17T00:00:00.000Z',
+    },
+    review: {
+      digest: mockReviewDigest,
+      precondition: {
+        workspaceRevision: mockPrecondition.workspaceRevision,
+        refName: 'main',
+        refHead: mockPrecondition.refHead,
+        effectDigest: mockPrecondition.effectDigest,
+        proposalDigest: mockPrecondition.proposalDigest,
+        statementDigests: mockPrecondition.statementDigests,
+        policyDigest: mockPrecondition.policyDigest,
+      },
+    },
+    objects: {
+      base: mockDescriptor,
+      result: mockDescriptor,
+      effect: { ...mockDescriptor, kind: 'effect', schema: 't3x/effect/v1' },
+      proposal: { ...mockDescriptor, kind: 'statement', schema: 't3x/statement/v1' },
+      statements: [],
+      ...(status === 'committed'
+        ? { commit: { ...mockDescriptor, kind: 'commit', schema: 't3x/commit/v2' } }
+        : {}),
+    },
+    transition: {},
+  };
+  return {
+    reviewSnapshot,
+    changeProjection: {
+      schema: 't3x.application/change-projection/v1',
+      version: 1,
+      authoritative: false,
+      source: {
+        kind: 'review_snapshot',
+        snapshotId: reviewSnapshot.snapshotId,
+        snapshotDigest: reviewSnapshot.snapshotDigest,
+        snapshotCreatedAt: reviewSnapshot.createdAt,
+      },
+      projectId: reviewSnapshot.projectId,
+      workspaceId: reviewSnapshot.workspaceId,
+      transitionId: reviewSnapshot.transitionId,
+      title: 'PRD audience handoff',
+      status,
+      review: {
+        digest: mockReviewDigest,
+        refName: 'main',
+        refHead: mockPrecondition.refHead,
+        workspaceRevision: mockPrecondition.workspaceRevision,
+        policyDigest: mockPrecondition.policyDigest,
+      },
+      objects: reviewSnapshot.objects,
+      checks: {},
+      actions: {},
+    },
+  };
+}
+
+function mockStoredReviewSnapshot(status: 'reviewing' | 'committed' = 'reviewing') {
+  const artifacts = mockReviewArtifacts(status);
+  return {
+    snapshotId: artifacts.reviewSnapshot.snapshotId,
+    snapshotDigest: artifacts.reviewSnapshot.snapshotDigest,
+    projectId: artifacts.reviewSnapshot.projectId,
+    workspaceId: artifacts.reviewSnapshot.workspaceId,
+    transitionId: artifacts.reviewSnapshot.transitionId,
+    reviewDigest: artifacts.reviewSnapshot.review.digest,
+    supersedesSnapshotId: null,
+    supersedesSnapshotDigest: null,
+    snapshot: artifacts.reviewSnapshot,
+    changeProjection: artifacts.changeProjection,
+    createdAt: artifacts.reviewSnapshot.createdAt,
+  };
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: route responses are intentionally schema-flexible here.
 type ApiResponse = any;
+
+function flattenApiFields(fields: ApiResponse[]): ApiResponse[] {
+  return fields.flatMap((field) => [
+    field,
+    ...(Array.isArray(field.children) ? flattenApiFields(field.children) : []),
+  ]);
+}
 
 describe('Workspace routes', () => {
   const app = new Hono();
@@ -216,7 +331,10 @@ describe('Workspace routes', () => {
     storageMock.findProjectById.mockClear();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
+    storageMock.getLatestTransitionReviewSnapshot.mockReset();
+    storageMock.getTransitionReviewSnapshot.mockReset();
     storageMock.insertYOpsLogEntry.mockClear();
+    storageMock.listTransitionReviewSnapshots.mockReset();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
     transitionMock.reviewWorkspaceTransition.mockReset();
@@ -224,6 +342,7 @@ describe('Workspace routes', () => {
       transitionId: mockTransitionId,
       transition: {},
       precondition: mockPrecondition,
+      ...mockReviewArtifacts(),
     });
     transitionMock.decideWorkspaceTransition.mockReset();
     transitionMock.decideWorkspaceTransition.mockImplementation(
@@ -249,6 +368,7 @@ describe('Workspace routes', () => {
             mockCommitDigest,
             input.workspaceCommitOverride
           ),
+          ...mockReviewArtifacts('committed'),
         })
     );
   });
@@ -286,7 +406,12 @@ describe('Workspace routes', () => {
     expect(storageMock.findWorkspaceDraft).not.toHaveBeenCalled();
   });
 
-  it('allows agent principals to inspect Workspaces but not impersonate human review', async () => {
+  it('preserves agent principals on scoped Transition review', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const agentApp = appWithApiKey({
       id: 'ak_workspace_agent',
       key_prefix: 't3xk_test',
@@ -312,19 +437,22 @@ describe('Workspace routes', () => {
         body: JSON.stringify({ content: { trees: [], relations: [] } }),
       }
     );
-    expect(reviewed.status).toBe(403);
-    await expect(reviewed.json()).resolves.toEqual(
+    expect(reviewed.status).toBe(200);
+    expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'FORBIDDEN',
-          message: 'Workspace review and commit require a human principal',
-        }),
+        actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_agent' },
+        policyBinding: null,
       })
     );
-    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
   });
 
   it('returns and binds the durable Transition identity across review and decide', async () => {
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      targetBranch: 'main',
+    });
     const content = { trees: [], relations: [] };
     const reviewed = await app.request(
       '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review',
@@ -337,7 +465,18 @@ describe('Workspace routes', () => {
     expect(reviewed.status).toBe(200);
     await expect(reviewed.json()).resolves.toEqual(
       expect.objectContaining({
-        data: expect.objectContaining({ transition_id: mockTransitionId }),
+        data: expect.objectContaining({
+          transition_id: mockTransitionId,
+          review_snapshot: expect.objectContaining({
+            schema: 't3x.application/review-snapshot/v1',
+            snapshotDigest: mockSnapshotDigest,
+          }),
+          change_projection: expect.objectContaining({
+            schema: 't3x.application/change-projection/v1',
+            authoritative: false,
+            status: 'reviewing',
+          }),
+        }),
       })
     );
     transitionMock.decideWorkspaceTransition.mockResolvedValueOnce({
@@ -345,6 +484,7 @@ describe('Workspace routes', () => {
       transition: {},
       precondition: mockPrecondition,
       decisionDigest: mockCommitV2.decision.digest,
+      ...mockReviewArtifacts('committed'),
     });
 
     const decided = await app.request(
@@ -370,13 +510,100 @@ describe('Workspace routes', () => {
     expect(decided.status).toBe(200);
     await expect(decided.json()).resolves.toEqual(
       expect.objectContaining({
-        data: expect.objectContaining({ transition_id: mockTransitionId }),
+        data: expect.objectContaining({
+          transition_id: mockTransitionId,
+          review_snapshot: expect.objectContaining({ snapshotDigest: mockSnapshotDigest }),
+          change_projection: expect.objectContaining({ status: 'committed' }),
+        }),
       })
     );
     expect(transitionMock.decideWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ transitionId: mockTransitionId })
     );
+  });
+
+  it('reads immutable Workspace ReviewSnapshots without re-deriving Transition facts', async () => {
+    const stored = mockStoredReviewSnapshot('committed');
+    storageMock.listTransitionReviewSnapshots.mockResolvedValueOnce([stored]);
+    storageMock.getLatestTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+
+    const listed = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots?transition_id=${mockTransitionId}&limit=5`
+    );
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: {
+          snapshots: [
+            expect.objectContaining({
+              snapshot_id: stored.snapshotId,
+              snapshot_digest: stored.snapshotDigest,
+              change_projection: expect.objectContaining({ status: 'committed' }),
+            }),
+          ],
+        },
+      })
+    );
+    expect(storageMock.listTransitionReviewSnapshots).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        projectId: 'proj_sources',
+        workspaceId: 'workspace_prd_handoff',
+        transitionId: mockTransitionId,
+        limit: 5,
+      })
+    );
+
+    const latest = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/latest?transition_id=${mockTransitionId}`
+    );
+    expect(latest.status).toBe(200);
+    await expect(latest.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshot_id: stored.snapshotId,
+          review_digest: stored.reviewDigest,
+        }),
+      })
+    );
+    expect(storageMock.getLatestTransitionReviewSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        projectId: 'proj_sources',
+        workspaceId: 'workspace_prd_handoff',
+        transitionId: mockTransitionId,
+      })
+    );
+
+    const fetched = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`
+    );
+    expect(fetched.status).toBe(200);
+    await expect(fetched.json()).resolves.toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshot: expect.objectContaining({ snapshotId: stored.snapshotId }),
+        }),
+      })
+    );
+    expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
+    expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a ReviewSnapshot through a different Workspace route', async () => {
+    const stored = mockStoredReviewSnapshot('reviewing');
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce({
+      ...stored,
+      workspaceId: 'workspace_elsewhere',
+    });
+
+    const fetched = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`
+    );
+
+    expect(fetched.status).toBe(404);
   });
 
   it('extracts schema candidates from each source instead of a single merged text blob', async () => {
@@ -858,6 +1085,181 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.schemaReview).toEqual(
       expect.objectContaining({ verdict: 'ready', gaps: [] })
     );
+  });
+
+  it('carries Source Chat draft items through candidate extraction and YOps draft generation', async () => {
+    const chatSource = {
+      id: 'source_chat:conv_prd',
+      type: 'chat',
+      title: 'Source chat',
+      conversationId: 'conv_prd',
+      previewTurns: [
+        {
+          id: 'turn_user',
+          role: 'user',
+          author: 'You',
+          content: 'We need a checkout recovery PRD, but keep it source-backed.',
+        },
+        {
+          id: 'turn_assistant',
+          role: 'assistant',
+          author: 'Assistant',
+          content: 'Source draft\n\nCaptured\n- Checkout recovery outcome',
+          rings: {
+            source_chat_draft: {
+              schema: 't3x/source-chat-draft-v1',
+              version: 1,
+              source_items: [
+                {
+                  id: 'S001',
+                  kind: 'captured',
+                  title: 'Checkout recovery outcome',
+                  content: 'Recover failed checkout payments without unsupported claims.',
+                  target_path: 'prd/summary/outcome',
+                  source_quote: 'checkout recovery PRD',
+                  source_turn_hash: 'turn_user',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [chatSource],
+          },
+          sources: [chatSource],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    const summary = extractBody.data.workspace.schemaCandidate.fields.find(
+      (field: ApiResponse) => field.path === 'summary'
+    );
+    const outcome = summary.children.find((field: ApiResponse) => field.path === 'summary.outcome');
+    expect(outcome.value).toBe('Recover failed checkout payments without unsupported claims');
+    expect(outcome.evidence).toBe(
+      'Source chat: Recover failed checkout payments without unsupported claims'
+    );
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'prd/summary/outcome',
+          afterValue: 'Recover failed checkout payments without unsupported claims',
+          sourceRefs: ['source_chat:conv_prd'],
+        }),
+      ])
+    );
+  });
+
+  it('does not turn Source Chat confirmation prompts into candidate or YOps fields', async () => {
+    const chatSource = {
+      id: 'source_chat:conv_prd',
+      type: 'chat',
+      title: 'Source chat',
+      conversationId: 'conv_prd',
+      previewTurns: [
+        {
+          id: 'turn_user',
+          role: 'user',
+          author: 'You',
+          content:
+            'Maybe add analytics later. I am not sure whether this is dashboarding or alerts.',
+        },
+        {
+          id: 'turn_assistant',
+          role: 'assistant',
+          author: 'Assistant',
+          content:
+            'Source draft\n\nNeeds confirmation\n- Analytics scope: Clarify whether the target is dashboarding, alerts, or both.',
+          rings: {
+            source_chat_draft: {
+              schema: 't3x/source-chat-draft-v1',
+              version: 1,
+              source_items: [
+                {
+                  id: 'S001',
+                  kind: 'needs_confirmation',
+                  title: 'Analytics scope',
+                  content: 'Clarify whether the target is dashboarding, alerts, or both.',
+                  source_quote: 'dashboarding or alerts',
+                  source_turn_hash: 'turn_user',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [chatSource],
+          },
+          sources: [chatSource],
+        }),
+      }
+    );
+
+    expect(extractRes.status).toBe(200);
+    const extractBody: ApiResponse = await extractRes.json();
+    expect(
+      flattenApiFields(extractBody.data.workspace.schemaCandidate.fields).filter(
+        (field) => field.status === 'covered' && field.value
+      )
+    ).toEqual([]);
+    expect(extractBody.data.workspace.schemaReview.gaps).toEqual(['No source material.']);
+
+    const yopsRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: { id: 'workspace_prd_handoff' },
+          if_revision: extractBody.data.workspace.revision,
+        }),
+      }
+    );
+
+    expect(yopsRes.status).toBe(200);
+    const yopsBody: ApiResponse = await yopsRes.json();
+    expect(yopsBody.data.workspace.yopsDraft.operations).toEqual([]);
   });
 
   it('persists extract state and builds YOps from stored workspace state', async () => {

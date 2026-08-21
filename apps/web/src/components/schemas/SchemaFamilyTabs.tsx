@@ -25,13 +25,9 @@ export function SchemaFamilyTabs({
           className="flex h-auto w-full max-w-full justify-start gap-5 overflow-x-auto overscroll-x-contain rounded-none bg-transparent p-0 text-[var(--text-secondary)] shadow-none dark:rounded-none dark:border-0 dark:bg-transparent dark:p-0"
         >
           {families.map((family) => {
-            const currentRelease = family.releases.find(
-              (release) => release.id === family.currentReleaseId && release.status === 'active'
-            );
-
             return (
               <TabsTrigger
-                aria-label={`${family.name} ${currentRelease?.version ?? 'no current version'}`}
+                aria-label={`${family.name} ${family.releases.length} versions`}
                 className="h-[42px] flex-none whitespace-nowrap rounded-none border-0 border-b-2 border-b-transparent bg-transparent px-0 py-0 text-[13px] [font-weight:650] text-[var(--text-secondary)] shadow-none hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)] focus-visible:ring-offset-2 data-[state=active]:border-b-[var(--accent-commit)] data-[state=active]:bg-transparent data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none dark:px-0 dark:py-0 dark:text-[var(--text-secondary)] dark:hover:text-[var(--text-primary)]"
                 key={family.id}
                 value={family.id}
@@ -41,7 +37,7 @@ export function SchemaFamilyTabs({
                   className="font-mono text-[10px]"
                   variant={family.id === activeFamilyId ? 'commit' : 'outline'}
                 >
-                  {currentRelease?.version ?? 'no current'}
+                  {family.releases.length}v
                 </Badge>
               </TabsTrigger>
             );

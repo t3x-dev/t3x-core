@@ -22,8 +22,12 @@ import {
   findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
+  getLatestTransitionReviewSnapshot,
+  getTransitionReviewSnapshot,
   insertYOpsLogEntry,
+  listTransitionReviewSnapshots,
   listWorkspaceDrafts,
+  type StoredTransitionReviewSnapshot,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
@@ -32,8 +36,15 @@ import {
 import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
+import { sourceChatDraftContextText } from '../lib/source-chat-draft-context';
+import {
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+} from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
+import { decideWorkspaceChange } from '../lib/workspace-change-decision';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -44,6 +55,7 @@ import {
   WorkspaceTransitionReviewStaleError,
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
+import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import {
   buildEsphomeDeviceWorkspace,
   isEsphomeDeviceWorkspace,
@@ -70,6 +82,7 @@ const SourceBundleItemSchema = z.object({
         role: z.string(),
         author: z.string(),
         content: z.string(),
+        rings: z.unknown().optional().nullable(),
       })
     )
     .optional(),
@@ -153,13 +166,22 @@ const DecideWorkspaceTransitionRequestSchema = z
       .string()
       .regex(/^trn_[0-9a-f]{32}$/)
       .optional(),
-    content: TransitionContentSchema,
+    content: TransitionContentSchema.optional(),
     why: z.string().trim().min(1).max(2000).optional(),
     outcome: z.enum(['accepted', 'overridden', 'rejected']),
     decision_reason: z.string().trim().min(1).max(2000).optional(),
     precondition: WorkspaceTransitionPreconditionSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.transition_id === undefined && value.content === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'content is required when transition_id is not supplied',
+      });
+    }
+  });
 
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
@@ -183,12 +205,34 @@ const WorkspaceTransitionReviewResponseSchema = z.object({
   transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
   transition: z.any(),
   precondition: WorkspaceTransitionPreconditionSchema,
+  review_snapshot: z.any(),
+  change_projection: z.any(),
 });
 
 const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewResponseSchema.extend({
   decision_digest: TransitionDigestSchema,
   commit: z.any().optional(),
   workspace: z.record(z.string(), z.unknown()).optional(),
+});
+
+const ReviewSnapshotIdSchema = z.string().regex(/^rvs_[0-9a-f]{32}$/);
+
+const WorkspaceTransitionReviewSnapshotResponseSchema = z.object({
+  snapshot_id: ReviewSnapshotIdSchema,
+  snapshot_digest: TransitionDigestSchema,
+  project_id: z.string(),
+  workspace_id: z.string(),
+  transition_id: z.string().regex(/^trn_[0-9a-f]{32}$/),
+  review_digest: TransitionDigestSchema,
+  supersedes_snapshot_id: ReviewSnapshotIdSchema.nullable(),
+  supersedes_snapshot_digest: TransitionDigestSchema.nullable(),
+  snapshot: z.any(),
+  change_projection: z.any(),
+  created_at: z.string(),
+});
+
+const WorkspaceTransitionReviewSnapshotListResponseSchema = z.object({
+  snapshots: z.array(WorkspaceTransitionReviewSnapshotResponseSchema),
 });
 
 const ListWorkspacesResponseSchema = z.object({
@@ -206,6 +250,18 @@ const projectWorkspacesParams = z.object({
 const workspaceParams = z.object({
   projectId: z.string(),
   workspaceId: z.string(),
+});
+
+const workspaceReviewSnapshotParams = workspaceParams.extend({
+  snapshotId: ReviewSnapshotIdSchema,
+});
+
+const workspaceReviewSnapshotQuery = z.object({
+  transition_id: z
+    .string()
+    .regex(/^trn_[0-9a-f]{32}$/)
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
 });
 
 const listWorkspacesRoute = createRoute({
@@ -227,6 +283,10 @@ const listWorkspacesRoute = createRoute({
     },
     403: {
       description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -538,6 +598,94 @@ const decideWorkspaceTransitionRoute = createRoute({
   },
 });
 
+const listWorkspaceTransitionReviewSnapshotsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots',
+  tags: ['Workspaces'],
+  summary: 'List immutable ReviewSnapshots for a Workspace Transition flow',
+  request: {
+    params: workspaceParams,
+    query: workspaceReviewSnapshotQuery,
+  },
+  responses: {
+    200: {
+      description: 'Immutable ReviewSnapshots and derived Changes projections',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotListResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const getLatestWorkspaceTransitionReviewSnapshotRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots/latest',
+  tags: ['Workspaces'],
+  summary: 'Read the latest immutable ReviewSnapshot for a Workspace Transition flow',
+  request: {
+    params: workspaceParams,
+    query: z.object({
+      transition_id: workspaceReviewSnapshotQuery.shape.transition_id,
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Latest immutable ReviewSnapshot and derived Changes projection',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'ReviewSnapshot not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const getWorkspaceTransitionReviewSnapshotRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review-snapshots/{snapshotId}',
+  tags: ['Workspaces'],
+  summary: 'Read one immutable ReviewSnapshot for a Workspace Transition flow',
+  request: {
+    params: workspaceReviewSnapshotParams,
+  },
+  responses: {
+    200: {
+      description: 'Immutable ReviewSnapshot and derived Changes projection',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceTransitionReviewSnapshotResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'ReviewSnapshot not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -563,17 +711,23 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-  if (humanRequired) return humanRequired;
 
   try {
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: { kind: 'review' },
+    });
     const reviewed = await reviewWorkspaceTransition(db, {
       projectId,
       workspaceId,
       content,
       why,
       expectedRevision,
-      actor: workspaceHumanActor(c),
+      actor: authority.principal.actor,
+      policyBinding: authority.policyBinding,
     });
     return c.json({
       success: true as const,
@@ -581,6 +735,8 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
         transition_id: reviewed.transitionId,
         transition: reviewed.transition,
         precondition: transitionPreconditionToWire(reviewed.precondition),
+        review_snapshot: reviewed.reviewSnapshot,
+        change_projection: reviewed.changeProjection,
       },
     });
   } catch (error) {
@@ -601,11 +757,16 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-  if (humanRequired) return humanRequired;
 
   try {
-    const decided = await decideWorkspaceTransition(db, {
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: { kind: 'decide', outcome },
+    });
+    const decided = await decideWorkspaceChange(db, {
       projectId,
       workspaceId,
       transitionId,
@@ -614,7 +775,8 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
       outcome,
       decisionReason,
       precondition: transitionPreconditionFromWire(precondition),
-      actor: workspaceHumanActor(c),
+      actor: authority.principal.actor,
+      policyBinding: authority.policyBinding,
     });
     return c.json({
       success: true as const,
@@ -623,6 +785,8 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
         transition: decided.transition,
         precondition: transitionPreconditionToWire(decided.precondition),
         decision_digest: decided.decisionDigest,
+        review_snapshot: decided.reviewSnapshot,
+        change_projection: decided.changeProjection,
         ...(decided.commit === undefined ? {} : { commit: decided.commit }),
         ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
       },
@@ -632,6 +796,76 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   }
 });
 
+workspaceRoutes.openapi(listWorkspaceTransitionReviewSnapshotsRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { limit, transition_id: transitionId } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshots = await listTransitionReviewSnapshots(db, {
+    projectId,
+    workspaceId,
+    ...(transitionId ? { transitionId } : {}),
+    limit,
+  });
+
+  return c.json(
+    {
+      success: true as const,
+      data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
+    },
+    200
+  );
+});
+
+workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { transition_id: transitionId } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshot = await getLatestTransitionReviewSnapshot(db, {
+    projectId,
+    workspaceId,
+    ...(transitionId ? { transitionId } : {}),
+  });
+
+  if (!snapshot) {
+    return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
+  }
+
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
+});
+
+workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => {
+  const { projectId, snapshotId, workspaceId } = c.req.valid('param');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  const snapshot = await getTransitionReviewSnapshot(db, { projectId, snapshotId });
+  if (!snapshot || snapshot.workspaceId !== workspaceId) {
+    return errorResponse(c, 'NOT_FOUND', 'ReviewSnapshot not found.');
+  }
+
+  return c.json(
+    {
+      success: true as const,
+      data: transitionReviewSnapshotToWire(snapshot),
+    },
+    200
+  );
+});
+
+// @ts-expect-error - OpenAPI handler return type
 workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const db = await getDB();
@@ -648,6 +882,7 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   });
 });
 
+// @ts-expect-error - OpenAPI handler return type
 workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const db = await getDB();
@@ -732,8 +967,17 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     const db = await getDB();
     const access = await assertProjectAccess(c, db, projectId);
     if (access instanceof Response) return access;
-    const humanRequired = rejectNonHumanWorkspaceReviewer(c);
-    if (humanRequired) return humanRequired;
+    const authority = await resolveWorkspaceTransitionAuthority({
+      db,
+      // @ts-expect-error - OpenAPI context apiKey typing
+      apiKey: c.get('apiKey') as ApiKey | undefined,
+      projectId,
+      workspaceId,
+      operation: {
+        kind: 'decide',
+        outcome: validationOverride ? 'overridden' : 'accepted',
+      },
+    });
     const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
@@ -771,7 +1015,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       const why =
         message ??
         `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`;
-      const actor = workspaceHumanActor(c);
+      const actor = authority.principal.actor;
       const reviewed = await reviewWorkspaceTransition(txOrDb, {
         projectId,
         workspaceId,
@@ -779,6 +1023,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         why,
         expectedRevision: ifRevision,
         actor,
+        policyBinding: authority.policyBinding,
       });
       const yopsLogIds = await materializeWorkspaceYOpsLog(
         txOrDb,
@@ -796,6 +1041,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         decisionReason: validationOverride?.reason,
         precondition: reviewed.precondition,
         actor,
+        policyBinding: authority.policyBinding,
         yopsLogIds,
         workspaceCommitOverride: validationOverride,
       });
@@ -1138,22 +1384,6 @@ function notFoundError(message: string) {
   };
 }
 
-function workspaceHumanActor(c: Parameters<typeof getUserId>[0]) {
-  const userId = getUserId(c);
-  return {
-    kind: 'human' as const,
-    id: userId ? `user:${userId}` : 'human:local-user',
-  };
-}
-
-function rejectNonHumanWorkspaceReviewer(c: Parameters<typeof getUserId>[0]): Response | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
-    return errorResponse(c, 'FORBIDDEN', 'Workspace review and commit require a human principal');
-  }
-  return null;
-}
-
 function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondition) {
   return {
     workspace_revision: precondition.workspaceRevision,
@@ -1162,6 +1392,22 @@ function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondit
     proposal_digest: precondition.proposalDigest,
     statement_digests: [...precondition.statementDigests],
     policy_digest: precondition.policyDigest,
+  };
+}
+
+function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) {
+  return {
+    snapshot_id: record.snapshotId,
+    snapshot_digest: record.snapshotDigest,
+    project_id: record.projectId,
+    workspace_id: record.workspaceId,
+    transition_id: record.transitionId,
+    review_digest: record.reviewDigest,
+    supersedes_snapshot_id: record.supersedesSnapshotId,
+    supersedes_snapshot_digest: record.supersedesSnapshotDigest,
+    snapshot: record.snapshot,
+    change_projection: record.changeProjection,
+    created_at: record.createdAt,
   };
 }
 
@@ -1179,6 +1425,13 @@ function transitionPreconditionFromWire(
 }
 
 function workspaceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (
+    error instanceof TransitionScopeDeniedError ||
+    error instanceof TransitionProjectScopeDeniedError ||
+    error instanceof TransitionPolicyBindingRequiredError
+  ) {
+    return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
+  }
   if (error instanceof WorkspaceTransitionNotFoundError) {
     return errorResponse(c, 'WORKSPACE_NOT_FOUND', error.message);
   }
@@ -1375,16 +1628,65 @@ function mergeSourceTexts(
   const materialById = new Map(materials.map((material) => [material.id, material]));
   const fromSources = sources.flatMap((source): WorkspaceSourceText[] => {
     const material = source.materialId ? materialById.get(source.materialId) : undefined;
-    const chatText = source.previewTurns
-      ?.map((turn) => `${turn.author}: ${turn.content}`)
-      .join('\n');
+    const hasDraftTurns = source.previewTurns?.some((turn) =>
+      previewTurnHasSourceChatDraft(turn.rings)
+    );
+    const draftText = sourceChatDraftContextText(
+      source.previewTurns?.map((turn) => ({
+        turnHash: turn.id,
+        ringsJson: previewTurnRingsJson(turn.rings),
+      })) ?? [],
+      { kinds: ['captured'], includeInstruction: false }
+    );
+    const chatText = hasDraftTurns
+      ? undefined
+      : source.previewTurns?.map((turn) => `${turn.author}: ${turn.content}`).join('\n');
     const text =
-      material?.content_text ?? chatText ?? source.previewText ?? source.description ?? '';
+      material?.content_text ??
+      joinSourceTextParts([chatText, draftText]) ??
+      source.previewText ??
+      source.description ??
+      '';
     if (!text.trim()) return [];
     return [{ id: source.id, title: source.title, text }];
   });
 
   return fromSources;
+}
+
+function previewTurnHasSourceChatDraft(rings: unknown): boolean {
+  const ringsJson = previewTurnRingsJson(rings);
+  if (!ringsJson) return false;
+  try {
+    const parsed = JSON.parse(ringsJson) as unknown;
+    return (
+      isRecord(parsed) &&
+      isRecord(parsed.source_chat_draft) &&
+      parsed.source_chat_draft.schema === 't3x/source-chat-draft-v1' &&
+      parsed.source_chat_draft.version === 1 &&
+      Array.isArray(parsed.source_chat_draft.source_items)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function previewTurnRingsJson(rings: unknown): string | null {
+  if (rings === null || rings === undefined) return null;
+  if (typeof rings === 'string') return rings;
+  try {
+    return JSON.stringify(rings);
+  } catch {
+    return null;
+  }
+}
+
+function joinSourceTextParts(parts: Array<string | undefined>): string | undefined {
+  const text = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join('\n\n');
+  return text || undefined;
 }
 
 function buildExtractedWorkspace(
@@ -1747,6 +2049,7 @@ function extractAudience(text: string): string {
 function extractProblem(text: string): string {
   const explicit = matchLabeledValue(text, ['problem', 'pain point', 'challenge']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   const sentence = findSentence(text, /problem|pain|challenge|need/i);
   return sentence ? trimSentence(sentence) : '';
 }
@@ -1761,11 +2064,13 @@ function extractOutcome(text: string): string {
 function extractRequirementTitle(text: string): string {
   const explicit = matchLabeledValue(text, ['requirement', 'requirements', 'feature', 'title']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   return extractOutcome(text) || firstMeaningfulSentence(text);
 }
 
 function extractRequirementPriority(text: string): string {
   const explicit = matchLabeledValue(text, ['priority']);
+  if (isSourceChatDraftContext(text) && !explicit) return '';
   if (/^must|high$/i.test(explicit)) return 'must';
   if (/^could|low$/i.test(explicit)) return 'could';
   if (/^should|medium$/i.test(explicit)) return 'should';
@@ -1777,6 +2082,7 @@ function extractRequirementPriority(text: string): string {
 function extractRequirementAcceptance(text: string): string {
   const explicit = matchLabeledValue(text, ['acceptance', 'acceptance criteria', 'criteria']);
   if (explicit) return trimSentence(explicit);
+  if (isSourceChatDraftContext(text)) return '';
   const sentence = findSentence(text, /support|ensure|verify|detect/i);
   return sentence ? trimSentence(sentence) : '';
 }
@@ -1893,6 +2199,10 @@ function matchLabeledValue(text: string, labels: string[]): string {
     if (match?.[1]) return match[1];
   }
   return '';
+}
+
+function isSourceChatDraftContext(text: string): boolean {
+  return text.trimStart().startsWith('## Source Chat Draft Items');
 }
 
 function findSentence(text: string, pattern: RegExp): string {

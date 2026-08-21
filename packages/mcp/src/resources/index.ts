@@ -19,6 +19,7 @@ import {
 type ResourceKind =
   | 'project'
   | 'commit'
+  | 'transition'
   | 'workbench_draft'
   | 'workspace'
   | 'source_thread'
@@ -42,6 +43,12 @@ export const RESOURCE_TEMPLATES = [
     name: 'commit',
     uriTemplate: 't3x://projects/{project_id}/commits/{commit_digest}',
     description: 'Read a verified CommitV2 by project membership and digest.',
+    mimeType: 'application/json',
+  },
+  {
+    name: 'transition',
+    uriTemplate: 't3x://projects/{project_id}/transitions/{transition_id}',
+    description: 'Read a project-scoped Transition review view through authenticated API access.',
     mimeType: 'application/json',
   },
   {
@@ -107,6 +114,9 @@ function parseResourceUri(uri: string): ParsedResourceUri {
       if (segments.length === 3 && segments[1] === 'commits') {
         return { kind: 'commit', projectId: segments[0], id: segments[2] };
       }
+      if (segments.length === 3 && segments[1] === 'transitions') {
+        return { kind: 'transition', projectId: segments[0], id: segments[2] };
+      }
       if (segments.length === 3 && segments[1] === 'workspaces') {
         return { kind: 'workspace', projectId: segments[0], id: segments[2] };
       }
@@ -155,6 +165,13 @@ export async function readResource(uri: string) {
           kind: 'commit',
           ...(await client.getCommit(parsed.projectId, parsed.id)),
         });
+      case 'transition':
+        if (!parsed.projectId)
+          throw new Error(`Transition resource is missing project scope: ${uri}`);
+        return jsonTextContent(uri, {
+          kind: 'transition',
+          ...(await client.inspectTransition(parsed.projectId, parsed.id)),
+        });
       case 'workbench_draft':
         return jsonTextContent(uri, {
           kind: 'workbench_draft',
@@ -192,6 +209,11 @@ export async function readResource(uri: string) {
   if (parsed.kind === 'workspace') {
     throw new Error(
       'Workspace resources require T3X_MCP_BACKEND=api so authorization stays at the Workspace service boundary.'
+    );
+  }
+  if (parsed.kind === 'transition') {
+    throw new Error(
+      'Transition resources require T3X_MCP_BACKEND=api so authority and policy projection stay at the API boundary.'
     );
   }
 

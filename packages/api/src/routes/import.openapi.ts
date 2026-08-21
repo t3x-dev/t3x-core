@@ -28,6 +28,7 @@ import {
 } from '../lib/import';
 import { assertProjectAccess, assertProjectCreationAccess, getUserId } from '../lib/project-access';
 import { jsonError } from '../lib/response';
+import { createHeartbeatSseStream } from '../lib/sse-heartbeat';
 import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -205,6 +206,7 @@ const importCfpackRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 importRoutes.openapi(importCfpackRoute, async (c) => {
   const cfpack = c.req.valid('json');
   const denied = assertProjectCreationAccess(c);
@@ -892,7 +894,7 @@ importRoutes.post('/v1/import/url/stream', async (c) => {
     return jsonError(c, 'INVALID_REQUEST', 'URL targets a blocked internal address', 400);
   }
 
-  const stream = new ReadableStream({
+  const stream = createHeartbeatSseStream({
     async start(controller) {
       try {
         controller.enqueue(
@@ -1000,7 +1002,7 @@ importRoutes.post('/v1/import/document/stream', async (c) => {
   const fileName = file.name;
   const fileType = file.type;
 
-  const stream = new ReadableStream({
+  const stream = createHeartbeatSseStream({
     async start(controller) {
       try {
         controller.enqueue(
@@ -1087,7 +1089,7 @@ importRoutes.post('/v1/import/platform/stream', async (c) => {
   const access = await assertProjectAccess(c, db, project_id);
   if (access instanceof Response) return access;
 
-  const stream = new ReadableStream({
+  const stream = createHeartbeatSseStream({
     async start(controller) {
       try {
         controller.enqueue(

@@ -4,7 +4,7 @@
 
 import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
-import { createSpinner, error, formatDate, getApiUrl, printTable, truncate } from '../utils.js';
+import { createSpinner, error, formatDate, getApiUrl, printTable } from '../utils.js';
 
 /** Register: t3x list commits */
 export function registerListCommits(parent: Command): void {
@@ -22,7 +22,7 @@ export function registerListCommits(parent: Command): void {
 
       try {
         const client = createClient({ baseUrl: getApiUrl() });
-        const result = await client.listCommits(options.project, options.branch, {
+        const result = await client.listCommits(options.project, {
           limit: parseInt(options.limit, 10),
           offset: parseInt(options.offset, 10),
         });
@@ -34,13 +34,19 @@ export function registerListCommits(parent: Command): void {
           return;
         }
 
+        if (options.branch !== undefined) {
+          console.log(
+            'Branch filtering is not available on the Transition commit history endpoint; showing recent project commits.'
+          );
+        }
+
         printTable({
-          columns: ['Hash', 'Branch', 'Message', 'Created'],
+          columns: ['Commit', 'Decision', 'Parents', 'Recorded'],
           rows: result.commits.map((c) => [
-            c.commit_hash.slice(0, 12),
-            c.branch,
-            truncate(c.message, 40),
-            formatDate(c.created_at),
+            c.id.slice(0, 12),
+            c.assurance.decision.digest.slice(0, 12),
+            String(c.parents.length),
+            formatDate(c.recordedAt),
           ]),
         });
       } catch (err) {
@@ -56,34 +62,35 @@ export function registerShowCommit(parent: Command): void {
   parent
     .command('commit <hash>')
     .description('Show commit details')
-    .action(async (hash: string) => {
+    .requiredOption('-p, --project <id>', 'Project ID')
+    .action(async (hash: string, options) => {
       const spinner = createSpinner('Fetching commit...');
       spinner.start();
 
       try {
         const client = createClient({ baseUrl: getApiUrl() });
-        const commit = await client.getCommit(hash);
+        const commit = await client.getCommit(options.project, hash);
 
         spinner.stop();
 
         console.log();
-        console.log(`Commit: ${commit.commit_hash}`);
-        console.log(`Branch: ${commit.branch}`);
-        console.log(`Message: ${commit.message}`);
-        console.log(`Created: ${formatDate(commit.created_at)}`);
+        console.log(`Commit: ${commit.digest}`);
+        console.log(`Schema: ${commit.object.schema}`);
+        console.log(`Recorded: ${formatDate(commit.recorded_at)}`);
         console.log();
         console.log('Parents:');
-        if (commit.parent_hashes.length === 0) {
+        if (commit.object.parents.length === 0) {
           console.log('  (root commit)');
         } else {
-          for (const p of commit.parent_hashes) {
-            console.log(`  - ${p.slice(0, 12)}`);
+          for (const p of commit.object.parents) {
+            console.log(`  - ${p.digest.slice(0, 12)}`);
           }
         }
         console.log();
-        console.log('Turn Window:');
-        console.log(`  Start: ${commit.turn_window.start_turn_hash.slice(0, 12)}`);
-        console.log(`  End: ${commit.turn_window.end_turn_hash.slice(0, 12)}`);
+        console.log('Decision:');
+        console.log(`  ${commit.object.decision.digest}`);
+        console.log('Result:');
+        console.log(`  ${commit.object.result.digest}`);
       } catch (err) {
         spinner.stop();
         error(`Failed to get commit: ${err instanceof Error ? err.message : String(err)}`);

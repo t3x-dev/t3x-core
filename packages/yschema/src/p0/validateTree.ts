@@ -3,6 +3,7 @@ import type {
   FixProposal,
   NodeSchema,
   ProvenanceRef,
+  RequiredRelationRuleSchema,
   SlotSchema,
   SlotType,
   ValidationError,
@@ -40,6 +41,21 @@ function isMapping(value: YValue | undefined): value is Record<string, YValue> {
   return (
     value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value)
   );
+}
+
+function hasOwnField(record: object, field: string): boolean {
+  return Object.hasOwn(record, field);
+}
+
+function getOwnValue(record: Record<string, YValue>, field: string): YValue | undefined {
+  return hasOwnField(record, field) ? record[field] : undefined;
+}
+
+function getOwnNode(
+  record: Record<YSchemaKey, NodeSchema> | undefined,
+  field: string
+): NodeSchema | undefined {
+  return record !== undefined && hasOwnField(record, field) ? record[field] : undefined;
 }
 
 function isYValueEqual(left: YValue, right: YValue): boolean {
@@ -103,7 +119,7 @@ function resolvePath(root: YValue, path: YSchemaPath): YValue | undefined {
   let current: YValue | undefined = root;
   for (const segment of path.split('/')) {
     if (!isMapping(current)) return undefined;
-    current = current[segment];
+    current = getOwnValue(current, segment);
   }
   return current;
 }
@@ -206,12 +222,12 @@ function hasAcceptedEvidence(refs: ProvenanceRef[] | undefined): boolean {
 function resolveNodeSchema(schema: YSchema, path: YSchemaPath): NodeSchema | undefined {
   if (!PATH_RE.test(path)) return undefined;
   const segments = path.split('/');
-  let current: NodeSchema | undefined = schema.nodes[segments[0] as string];
+  let current: NodeSchema | undefined = getOwnNode(schema.nodes, segments[0] as string);
   for (const segment of segments.slice(1)) {
     if (current === undefined || current.children === undefined || current.children === 'any') {
       return undefined;
     }
-    current = current.children[segment];
+    current = getOwnNode(current.children, segment);
   }
   return current;
 }
@@ -241,7 +257,7 @@ function validateNodeSchemaShape(
         `${nodePath}/${requiredSlot}`,
         `requiredSlots entry "${requiredSlot}" is invalid.`
       );
-    } else if (!(requiredSlot in slots)) {
+    } else if (!hasOwnField(slots, requiredSlot)) {
       pushError(
         state,
         'INVALID_SCHEMA',
@@ -511,7 +527,7 @@ function validateSlots(
 
   for (const [slotKey, slot] of Object.entries(slots)) {
     const slotPath = joinPath(nodePath, slotKey);
-    const slotValue = value[slotKey];
+    const slotValue = getOwnValue(value, slotKey);
     const required = requiredSlots.has(slotKey);
 
     if (slotValue === undefined) {
@@ -598,7 +614,7 @@ function validateNodeBody(
 
   if (node.children !== undefined && node.children !== 'any') {
     for (const [childKey, childNode] of Object.entries(node.children)) {
-      validateNode(state, joinPath(nodePath, childKey), childNode, value[childKey]);
+      validateNode(state, joinPath(nodePath, childKey), childNode, getOwnValue(value, childKey));
     }
   }
 
@@ -858,6 +874,49 @@ function validateRelations(state: ValidationState, relations: YSchemaRelation[])
   }
 }
 
+function isRequiredRelationRule(rule: unknown): rule is RequiredRelationRuleSchema {
+  return (
+    rule !== null &&
+    typeof rule === 'object' &&
+    hasOwnField(rule, 'kind') &&
+    (rule as { kind?: unknown }).kind === 'required_relation'
+  );
+}
+
+function validateRequiredRelationRule(
+  state: ValidationState,
+  rule: RequiredRelationRuleSchema,
+  relations: YSchemaRelation[]
+): void {
+  const satisfied = relations.some(
+    (relation) =>
+      relation.type === rule.relationType &&
+      endpointMatches(rule.from, relation.from) &&
+      endpointMatches(rule.to, relation.to)
+  );
+  if (satisfied) return;
+
+  pushRelationError(
+    state,
+    'REQUIRED_RELATION_MISSING',
+    `Rule "${rule.id}" requires a ${rule.relationType} relation from ${rule.from} to ${rule.to}.`,
+    {
+      ruleId: rule.id,
+      relationType: rule.relationType,
+      from: rule.from,
+      to: rule.to,
+    }
+  );
+}
+
+function validateRules(state: ValidationState, relations: YSchemaRelation[]): void {
+  for (const rule of state.schema.rules ?? []) {
+    if (isRequiredRelationRule(rule)) {
+      validateRequiredRelationRule(state, rule, relations);
+    }
+  }
+}
+
 function seenDuplicateBefore(
   relation: YSchemaRelation,
   relations: YSchemaRelation[],
@@ -911,11 +970,13 @@ export function validateTree(input: ValidationInput): ValidationResult {
   } else {
     validateTopLevelUnexpectedNodes(state);
     for (const [nodeKey, node] of Object.entries(input.schema.nodes)) {
-      validateNode(state, nodeKey, node, input.tree[nodeKey]);
+      validateNode(state, nodeKey, node, getOwnValue(input.tree, nodeKey));
     }
   }
 
-  validateRelations(state, input.relations ?? []);
+  const relations = input.relations ?? [];
+  validateRelations(state, relations);
+  validateRules(state, relations);
 
   return {
     valid: state.errors.length === 0,

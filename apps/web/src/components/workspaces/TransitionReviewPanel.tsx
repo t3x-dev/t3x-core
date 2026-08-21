@@ -1,3 +1,4 @@
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type {
   ActionCapabilityView,
   ClaimView,
@@ -8,12 +9,16 @@ import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export function TransitionReviewPanel({
+  changeProjection,
   error,
   loading,
+  reviewSnapshot,
   view,
 }: {
+  changeProjection?: ChangeProjectionV1 | null;
   error: string | null;
   loading: boolean;
+  reviewSnapshot?: ReviewSnapshotV1 | null;
   view: TransitionViewV1 | null;
 }) {
   if (loading) {
@@ -52,10 +57,24 @@ export function TransitionReviewPanel({
   }
 
   if (!view) return null;
-  return <VerifiedTransitionReview view={view} />;
+  return (
+    <VerifiedTransitionReview
+      changeProjection={changeProjection ?? null}
+      reviewSnapshot={reviewSnapshot ?? null}
+      view={view}
+    />
+  );
 }
 
-function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
+function VerifiedTransitionReview({
+  changeProjection,
+  reviewSnapshot,
+  view,
+}: {
+  changeProjection: ChangeProjectionV1 | null;
+  reviewSnapshot: ReviewSnapshotV1 | null;
+  view: TransitionGraphViewV1;
+}) {
   const pending = view.decision.observation !== 'supplied';
   const rejected = view.decision.observation === 'supplied' && view.decision.outcome === 'rejected';
   return (
@@ -80,6 +99,13 @@ function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
         </div>
         <Badge variant={decisionBadgeVariant(view)}>{decisionLabel(view)}</Badge>
       </header>
+
+      {reviewSnapshot || changeProjection ? (
+        <ReviewSnapshotSummary
+          changeProjection={changeProjection}
+          reviewSnapshot={reviewSnapshot}
+        />
+      ) : null}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <ClaimCard claim={view.claims.intent} label="Purpose" />
@@ -178,6 +204,102 @@ function VerifiedTransitionReview({ view }: { view: TransitionGraphViewV1 }) {
   );
 }
 
+function ReviewSnapshotSummary({
+  changeProjection,
+  reviewSnapshot,
+}: {
+  changeProjection: ChangeProjectionV1 | null;
+  reviewSnapshot: ReviewSnapshotV1 | null;
+}) {
+  const snapshotId = reviewSnapshot?.snapshotId ?? changeProjection?.source.snapshotId ?? null;
+  const snapshotDigest =
+    reviewSnapshot?.snapshotDigest ?? changeProjection?.source.snapshotDigest ?? null;
+  const reviewDigest = reviewSnapshot?.review.digest ?? changeProjection?.review.digest ?? null;
+  const refName =
+    reviewSnapshot?.review.precondition.refName ?? changeProjection?.review.refName ?? null;
+  const workspaceRevision =
+    reviewSnapshot?.review.precondition.workspaceRevision ??
+    changeProjection?.review.workspaceRevision ??
+    null;
+  const policyDigest =
+    reviewSnapshot?.review.precondition.policyDigest ??
+    changeProjection?.review.policyDigest ??
+    null;
+  const changeHref = reviewSnapshot
+    ? reviewSnapshotHref(
+        reviewSnapshot.projectId,
+        reviewSnapshot.workspaceId,
+        reviewSnapshot.snapshotId
+      )
+    : null;
+
+  return (
+    <section
+      aria-label="Review snapshot"
+      className="mt-4 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+            Review snapshot
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+            Immutable ReviewSnapshot is the audit source; Changes projection is derived and
+            read-only.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {changeHref ? (
+            <a
+              className="text-xs font-semibold text-[var(--accent-commit)] hover:underline"
+              href={changeHref}
+            >
+              Open Changes
+            </a>
+          ) : null}
+          {changeProjection ? (
+            <Badge variant={projectionBadgeVariant(changeProjection.status)}>
+              {projectionStatusLabel(changeProjection.status)}
+            </Badge>
+          ) : (
+            <Badge variant="outline">Immutable</Badge>
+          )}
+        </div>
+      </div>
+      <dl className="mt-3 grid gap-2 text-xs text-[var(--text-secondary)] sm:grid-cols-2 xl:grid-cols-3">
+        {snapshotId ? <SnapshotMeta label="Snapshot" value={shortToken(snapshotId)} /> : null}
+        {snapshotDigest ? (
+          <SnapshotMeta label="Snapshot digest" value={shortToken(snapshotDigest)} />
+        ) : null}
+        {reviewDigest ? (
+          <SnapshotMeta label="Review digest" value={shortToken(reviewDigest)} />
+        ) : null}
+        {refName ? <SnapshotMeta label="Ref" value={refName} /> : null}
+        {workspaceRevision !== null ? (
+          <SnapshotMeta label="Workspace revision" value={String(workspaceRevision)} />
+        ) : null}
+        {policyDigest ? <SnapshotMeta label="Policy" value={shortToken(policyDigest)} /> : null}
+      </dl>
+      {changeProjection ? (
+        <p className="mt-3 truncate text-xs font-medium text-[var(--text-primary)]">
+          Changes projection: {changeProjection.title}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function SnapshotMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[var(--text-tertiary)]">{label}</dt>
+      <dd className="mt-0.5 truncate font-mono font-semibold text-[var(--text-primary)]">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function ClaimCard({ claim, label }: { claim: ClaimView; label: string }) {
   return (
     <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
@@ -263,11 +385,53 @@ function decisionBadgeVariant(
   return view.decision.outcome === 'overridden' ? 'warning' : 'success';
 }
 
+function projectionStatusLabel(status: ChangeProjectionV1['status']): string {
+  if (status === 'reviewing') return 'Reviewing';
+  if (status === 'accepted') return 'Accepted';
+  if (status === 'overridden') return 'Overridden';
+  if (status === 'rejected') return 'Rejected';
+  return 'Committed';
+}
+
+function projectionBadgeVariant(
+  status: ChangeProjectionV1['status']
+): 'commit-subtle' | 'destructive' | 'pending-subtle' | 'success' | 'warning' {
+  if (status === 'reviewing') return 'pending-subtle';
+  if (status === 'committed') return 'commit-subtle';
+  if (status === 'rejected') return 'destructive';
+  if (status === 'overridden') return 'warning';
+  return 'success';
+}
+
 function originLabel(origin: ClaimView['origin']): string {
   if (origin === 'request_source') return 'From source';
   if (origin === 'inferred') return 'Inferred';
   if (origin === 'actor_authored') return 'Added by actor';
   return 'Not provided';
+}
+
+function shortToken(value: string): string {
+  const normalized = value.startsWith('sha256:') ? value.slice('sha256:'.length) : value;
+  if (normalized.length <= 18) return normalized;
+  return `${normalized.slice(0, 12)}…${normalized.slice(-6)}`;
+}
+
+function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
+  return `/project/${encodePathSegment(projectId)}/changes/${encodePathSegment(
+    workspaceId
+  )}/${encodePathSegment(snapshotId)}`;
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(safeDecodeURIComponent(value));
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function operationLabel(operation: unknown, index: number): string {

@@ -14,9 +14,31 @@ test('PR validation enforces production type and dependency gates', () => {
     workflow,
     /^ {6}- name: Check API route policy inventory\n {8}run: pnpm check:route-policy$/m
   );
+  assert.match(
+    workflow,
+    /^ {6}- name: Check architecture inventory\n {8}run: pnpm check:architecture-inventory$/m
+  );
   assert.ok(workflow.indexOf('run: pnpm typecheck') < workflow.indexOf('run: pnpm build'));
   assert.ok(workflow.indexOf('run: pnpm audit:prod') < workflow.indexOf('run: pnpm build'));
+  assert.ok(
+    workflow.indexOf('run: pnpm check:architecture-inventory') < workflow.indexOf('run: pnpm build')
+  );
   assert.ok(workflow.indexOf('run: pnpm check:route-policy') < workflow.indexOf('run: pnpm build'));
+});
+
+test('PR validation qualifies merge groups and immutable dev pushes', () => {
+  const workflow = readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8');
+
+  assert.match(workflow, /^ {2}merge_group:$/m);
+  assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
+  assert.match(
+    workflow,
+    /^ {2}group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}$/m
+  );
+  assert.match(
+    workflow,
+    /^ {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m
+  );
 });
 
 test('production dependency audit blocks high-severity advisories', () => {

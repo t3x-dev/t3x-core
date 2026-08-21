@@ -17,50 +17,14 @@ import bcrypt from 'bcryptjs';
 import { getDB } from '../lib/db';
 import { createError, errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  getClientIp,
+  getRequestRateLimitStore,
+  RATE_LIMIT_POLICIES,
+} from '../middleware/rate-limit';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
-
-// ============================================================
-// Auth-specific rate limiting (per-endpoint, stricter than global)
-// ============================================================
-
-interface AuthRateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-class AuthRateLimiter {
-  private store = new Map<string, AuthRateLimitEntry>();
-  private readonly limit: number;
-  private readonly windowMs: number;
-
-  constructor(limit: number, windowMs = 60_000) {
-    this.limit = limit;
-    this.windowMs = windowMs;
-    // Cleanup every 5 minutes
-    setInterval(() => {
-      const now = Date.now();
-      for (const [key, entry] of this.store) {
-        if (now > entry.resetAt) this.store.delete(key);
-      }
-    }, 5 * 60_000);
-  }
-
-  check(key: string): boolean {
-    const now = Date.now();
-    const entry = this.store.get(key);
-    if (!entry || now > entry.resetAt) {
-      this.store.set(key, { count: 1, resetAt: now + this.windowMs });
-      return true;
-    }
-    entry.count++;
-    return entry.count <= this.limit;
-  }
-}
-
-/** 5 registrations per IP per minute */
-const registerLimiter = new AuthRateLimiter(5);
-/** 10 login attempts per username per minute */
-const loginLimiter = new AuthRateLimiter(10);
 
 export const authLocalRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -123,6 +87,10 @@ const registerRoute = createRoute({
       description: 'Username already taken',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    429: {
+      description: 'Too many registration attempts',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     400: {
       description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -133,9 +101,15 @@ const registerRoute = createRoute({
 authLocalRoutes.openapi(registerRoute, async (c) => {
   const { username, password, name } = c.req.valid('json');
 
-  // Per-IP rate limit for registration (5/min)
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!registerLimiter.check(`register:${ip}`)) {
+  // Per-IP rate limit for registration (5/min), persisted across API instances.
+  const policy = RATE_LIMIT_POLICIES.registerIp;
+  const result = await consumeRateLimit(
+    getRequestRateLimitStore(c),
+    policy,
+    getClientIp(c) ?? 'unknown'
+  );
+  applyRateLimitHeaders(c, policy, result);
+  if (!result.allowed) {
     return c.json(
       createError('RATE_LIMITED', 'Too many registration attempts. Try again later.'),
       429
@@ -206,6 +180,10 @@ const loginRoute = createRoute({
       description: 'Invalid credentials',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    429: {
+      description: 'Too many login attempts',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     400: {
       description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -216,8 +194,15 @@ const loginRoute = createRoute({
 authLocalRoutes.openapi(loginRoute, async (c) => {
   const { username, password } = c.req.valid('json');
 
-  // Per-username rate limit for login (10/min) — prevents brute force
-  if (!loginLimiter.check(`login:${username}`)) {
+  // Normalize before hashing so casing cannot bypass the brute-force policy.
+  const policy = RATE_LIMIT_POLICIES.loginUsername;
+  const result = await consumeRateLimit(
+    getRequestRateLimitStore(c),
+    policy,
+    username.normalize('NFKC').toLocaleLowerCase('en-US')
+  );
+  applyRateLimitHeaders(c, policy, result);
+  if (!result.allowed) {
     return c.json(createError('RATE_LIMITED', 'Too many login attempts. Try again later.'), 429);
   }
 

@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { ApiKey } from '@t3x-dev/core';
 import {
   ConflictError,
   TransitionHeadConflictError,
@@ -8,7 +9,12 @@ import {
 import { TransitionProtocolError } from '@t3x-dev/transition';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
+import {
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+} from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import {
   decideWorkspaceSourceRevert,
@@ -28,6 +34,7 @@ import {
   WorkspaceTransitionNotFoundError,
   WorkspaceTransitionReviewStaleError,
 } from '../lib/workspace-transition';
+import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const TransitionDigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
@@ -182,6 +189,8 @@ const WorkspaceSourceTransitionReviewResponseSchema = z.object({
   transition: z.any(),
   precondition: WorkspaceSourceTransitionPreconditionSchema,
   runner: WorkspaceSourceRunnerStatusSchema,
+  review_snapshot: z.any(),
+  change_projection: z.any(),
 });
 
 const WorkspaceSourceTransitionDecisionResponseSchema =
@@ -372,14 +381,6 @@ const decideRevertRoute = createRoute({
   },
 });
 
-function actorFromContext(c: Parameters<typeof getUserId>[0]) {
-  const userId = getUserId(c);
-  return {
-    kind: 'human' as const,
-    id: userId ? `user:${userId}` : 'human:local-user',
-  };
-}
-
 function artifactFromWire(
   artifact: z.infer<typeof SourceArtifactSelectorSchema>
 ): Parameters<typeof reviewWorkspaceSourceTransition>[1]['artifact'] {
@@ -448,6 +449,13 @@ function preconditionFromWire(
 }
 
 function sourceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (
+    error instanceof TransitionScopeDeniedError ||
+    error instanceof TransitionProjectScopeDeniedError ||
+    error instanceof TransitionPolicyBindingRequiredError
+  ) {
+    return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
+  }
   if (error instanceof WorkspaceTransitionNotFoundError) {
     return errorResponse(c, 'WORKSPACE_NOT_FOUND', error.message);
   }
@@ -508,6 +516,13 @@ export function createWorkspaceSourceTransitionRoutes(
     if (access instanceof Response) return access;
 
     try {
+      const authority = await resolveWorkspaceTransitionAuthority({
+        db,
+        apiKey: c.get('apiKey') as ApiKey | undefined,
+        projectId,
+        workspaceId,
+        operation: { kind: 'review' },
+      });
       const reviewed = await reviewWorkspaceSourceTransition(
         db,
         {
@@ -517,7 +532,8 @@ export function createWorkspaceSourceTransitionRoutes(
           change: changeFromWire(request.change),
           why: request.why,
           expectedRevision: request.if_revision,
-          actor: actorFromContext(c),
+          actor: authority.principal.actor,
+          policyBinding: authority.policyBinding,
         },
         capabilities
       );
@@ -528,6 +544,8 @@ export function createWorkspaceSourceTransitionRoutes(
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
+          review_snapshot: reviewed.reviewSnapshot,
+          change_projection: reviewed.changeProjection,
         },
       });
     } catch (error) {
@@ -543,6 +561,13 @@ export function createWorkspaceSourceTransitionRoutes(
     if (access instanceof Response) return access;
 
     try {
+      const authority = await resolveWorkspaceTransitionAuthority({
+        db,
+        apiKey: c.get('apiKey') as ApiKey | undefined,
+        projectId,
+        workspaceId,
+        operation: { kind: 'decide', outcome: request.outcome },
+      });
       const decided = await decideWorkspaceSourceTransition(
         db,
         {
@@ -555,7 +580,8 @@ export function createWorkspaceSourceTransitionRoutes(
           outcome: request.outcome,
           decisionReason: request.decision_reason,
           precondition: preconditionFromWire(request.precondition),
-          actor: actorFromContext(c),
+          actor: authority.principal.actor,
+          policyBinding: authority.policyBinding,
         },
         capabilities
       );
@@ -567,6 +593,8 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          review_snapshot: decided.reviewSnapshot,
+          change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),
           ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
         },
@@ -584,6 +612,13 @@ export function createWorkspaceSourceTransitionRoutes(
     if (access instanceof Response) return access;
 
     try {
+      const authority = await resolveWorkspaceTransitionAuthority({
+        db,
+        apiKey: c.get('apiKey') as ApiKey | undefined,
+        projectId,
+        workspaceId,
+        operation: { kind: 'review' },
+      });
       const reviewed = await reviewWorkspaceSourceRevert(
         db,
         {
@@ -592,7 +627,8 @@ export function createWorkspaceSourceTransitionRoutes(
           commitId: request.commit_id,
           why: request.why,
           expectedRevision: request.if_revision,
-          actor: actorFromContext(c),
+          actor: authority.principal.actor,
+          policyBinding: authority.policyBinding,
         },
         capabilities
       );
@@ -603,6 +639,8 @@ export function createWorkspaceSourceTransitionRoutes(
           transition: reviewed.transition,
           precondition: preconditionToWire(reviewed.precondition),
           runner: reviewed.runner,
+          review_snapshot: reviewed.reviewSnapshot,
+          change_projection: reviewed.changeProjection,
         },
       });
     } catch (error) {
@@ -618,6 +656,13 @@ export function createWorkspaceSourceTransitionRoutes(
     if (access instanceof Response) return access;
 
     try {
+      const authority = await resolveWorkspaceTransitionAuthority({
+        db,
+        apiKey: c.get('apiKey') as ApiKey | undefined,
+        projectId,
+        workspaceId,
+        operation: { kind: 'decide', outcome: request.outcome },
+      });
       const decided = await decideWorkspaceSourceRevert(
         db,
         {
@@ -629,7 +674,8 @@ export function createWorkspaceSourceTransitionRoutes(
           outcome: request.outcome,
           decisionReason: request.decision_reason,
           precondition: preconditionFromWire(request.precondition),
-          actor: actorFromContext(c),
+          actor: authority.principal.actor,
+          policyBinding: authority.policyBinding,
         },
         capabilities
       );
@@ -641,6 +687,8 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          review_snapshot: decided.reviewSnapshot,
+          change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),
           ...(decided.workspace === undefined ? {} : { workspace: decided.workspace }),
         },

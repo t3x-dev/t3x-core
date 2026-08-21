@@ -37,6 +37,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
+import { readMergeDraftDecision } from '../lib/merge-draft-decisions';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { buildPipelineContext } from '../ops/context';
@@ -489,6 +490,7 @@ const listPullRequestsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { query, status } = c.req.valid('query');
@@ -558,6 +560,7 @@ const comparePullRequestsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(comparePullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { base } = c.req.valid('query');
@@ -630,6 +633,7 @@ const createPullRequestRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -789,6 +793,7 @@ const getPullRequestRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(getPullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const { access, db } = await requireProject(c, projectId);
@@ -821,6 +826,7 @@ const listChecksRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(listChecksRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const { access, db } = await requireProject(c, projectId);
@@ -959,14 +965,8 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         }
 
         if (draft) {
-          const storedPrepared = JSON.parse(draft.preparedJson) as MergeResult & {
-            decisions?: MergeDecision;
-          };
           draft = await updateMergeDraft(tx, draft.draftId, {
-            prepared: {
-              ...freshlyPrepared,
-              ...(storedPrepared.decisions ? { decisions: storedPrepared.decisions } : {}),
-            },
+            prepared: freshlyPrepared,
           });
         } else {
           draft = await createMergeDraft(tx, {
@@ -981,11 +981,10 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
         }
         if (!draft) throw new Error('Could not create or update the pull request merge draft.');
 
-        const prepared = JSON.parse(draft.preparedJson) as MergeResult & {
-          decisions?: MergeDecision;
-        };
+        const prepared = JSON.parse(draft.preparedJson) as MergeResult;
+        const storedDecisions = readMergeDraftDecision(draft);
         const unresolvedConflicts = prepared.conflicts.filter(
-          (conflict) => !prepared.decisions?.conflictResolutions[conflict.path]
+          (conflict) => !storedDecisions?.conflictResolutions[conflict.path]
         );
         const serverChecks = await computeMergeChecks(tx, draft);
         const serverChecksPassed = serverChecks.every((check) => check.passed);
@@ -1376,18 +1375,25 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         );
       }
 
-      const preparedWithDecisions = JSON.parse(draft.preparedJson) as MergeResult & {
-        decisions?: MergeDecision;
-      };
+      const prepared = JSON.parse(draft.preparedJson) as MergeResult;
       const decisions: MergeDecision = (body.decisions as MergeDecision | undefined) ??
-        preparedWithDecisions.decisions ?? {
+        readMergeDraftDecision(draft) ?? {
           conflictResolutions: {},
-          keepFromSource: preparedWithDecisions.onlyInSource,
-          keepFromTarget: preparedWithDecisions.onlyInTarget,
+          keepFromSource: prepared.onlyInSource,
+          keepFromTarget: prepared.onlyInTarget,
           keepRelationsFromSource: true,
           keepRelationsFromTarget: true,
         };
       const context = { ...pipelineContext, db: tx as AnyDB };
+      const persistedDecision = await updateMergeDraft(tx, draft.draftId, {
+        decision: decisions,
+      });
+      if (!persistedDecision) {
+        throw new MergeError(
+          'PULL_REQUEST_MERGE_NOT_PREPARED',
+          'The merge draft disappeared before its decision could be persisted.'
+        );
+      }
       const result = await collectResult(
         runOperation(
           mergeExecuteOp,
@@ -1395,13 +1401,12 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
             project_id: projectId,
             source_hash: pullRequest.sourceCommitHash,
             target_hash: pullRequest.targetBaseCommitHash,
-            prepared: preparedWithDecisions,
+            prepared,
             decisions,
             message:
               body.message ?? `Merge pull request #${pullRequest.number}: ${pullRequest.title}`,
             branch: pullRequest.targetBranch,
             author,
-            manage_transaction: false,
           },
           context
         )

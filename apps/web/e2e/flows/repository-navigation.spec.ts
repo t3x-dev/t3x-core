@@ -65,7 +65,7 @@ test('State opens History and Commit with its inline parent Diff and a complete 
     await expect(inlineDiff).toContainText('3 field changes');
     await expect(inlineDiff.getByRole('treeitem', { name: /good_reply added/ })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Back to History' }).click();
+    await page.getByRole('button', { name: 'Back to commit history' }).click();
     await expect(page.getByRole('heading', { name: 'Commit History', exact: true })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Branch filter' })).toHaveValue('main');
     await page.getByRole('button', { name: 'Back', exact: true }).click();

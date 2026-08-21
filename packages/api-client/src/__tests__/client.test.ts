@@ -36,6 +36,131 @@ function createTestClient(fetchFn: typeof fetch) {
   });
 }
 
+const TRANSITION_ID = `trn_${'a'.repeat(32)}`;
+const SECOND_TRANSITION_ID = `trn_${'b'.repeat(32)}`;
+const digest = (seed: string) => `sha256:${seed.repeat(64)}`;
+
+function descriptor(kind: 'state' | 'effect' | 'statement' | 'commit', seed: string) {
+  const schemas = {
+    state: 't3x/state/v1',
+    effect: 't3x/effect/v1',
+    statement: 't3x/statement/v1',
+    commit: 't3x/commit/v2',
+  } as const;
+  return { kind, schema: schemas[kind], digest: digest(seed) };
+}
+
+function actionCapability(disposition = 'allowed') {
+  return { disposition, reasons: [] };
+}
+
+function unobservedCheck() {
+  return {
+    observation: 'no_statement_observed',
+    outcomes: [],
+    runs: [],
+    unsupportedProfiles: [],
+  };
+}
+
+function transitionGraphView() {
+  return {
+    schema: 't3x.dev/transition-view/v1',
+    version: 1,
+    mode: 'transition',
+    change: {
+      effect: descriptor('effect', 'c'),
+      base: descriptor('state', 'd'),
+      result: descriptor('state', 'e'),
+      driver: {
+        protocol: 't3x.dev/yops',
+        protocolVersion: '1',
+        specDigest: digest('f'),
+      },
+      operations: [],
+    },
+    claims: {
+      proposal: descriptor('statement', 'a'),
+      actor: { kind: 'human', id: 'human:test' },
+      intent: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+      rationale: { mode: 'unspecified', origin: 'not_provided', evidence: [] },
+    },
+    checks: {
+      objectIntegrity: 'verified',
+      observationScope: { completeness: 'complete', sources: ['project-store'] },
+      replay: unobservedCheck(),
+      validation: unobservedCheck(),
+      runner: unobservedCheck(),
+      humanConfirmation: {
+        observation: 'no_statement_observed',
+        runs: [],
+      },
+    },
+    decision: { observation: 'not_supplied' },
+    history: { observation: 'not_committed' },
+    capabilities: {
+      accept: actionCapability(),
+      override: actionCapability('denied'),
+      reject: actionCapability(),
+      commit: actionCapability('not_applicable'),
+      revert: actionCapability('not_applicable'),
+    },
+    audit: {
+      effect: descriptor('effect', 'c'),
+      proposal: descriptor('statement', 'a'),
+      statements: [],
+    },
+  };
+}
+
+const SOURCE_ARTIFACT = {
+  format: 't3x.dev/workspace-source-artifact/v1' as const,
+  root_path: 'docs/device.yaml',
+  resources: [
+    {
+      path: 'docs/device.yaml',
+      material_id: 'material:source:device',
+      content_hash: digest('5'),
+    },
+  ],
+};
+
+const SOURCE_ROOT = {
+  material_id: 'material:source:root',
+  content_hash: digest('6'),
+};
+
+function transitionView(overrides: Record<string, unknown> = {}) {
+  return {
+    transition_id: TRANSITION_ID,
+    project_id: 'proj_1',
+    workspace_id: 'ws_1',
+    request_kind: 'structured_yops',
+    request_id: 'request:transition:1',
+    created_at: '2026-08-17T00:00:00.000Z',
+    precondition: {
+      workspace_revision: 4,
+      ref_name: 'main',
+      ref_head: null,
+      effect_digest: digest('1'),
+      proposal_digest: digest('2'),
+      statement_digests: [digest('3')],
+      policy_digest: digest('4'),
+    },
+    transition: transitionGraphView(),
+    statements: [
+      {
+        digest: digest('3'),
+        source: 'test',
+        issuer: { kind: 'service', id: 'service:test' },
+        request_id: 'request:verify:1',
+        created_at: '2026-08-17T00:00:00.000Z',
+      },
+    ],
+    ...overrides,
+  };
+}
+
 describe('T3xClient', () => {
   // =========================================================================
   // Constructor
@@ -422,6 +547,287 @@ describe('T3xClient', () => {
         ),
         expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
       );
+    });
+
+    it('reviews a Workspace Transition through the explicit review boundary', async () => {
+      const precondition = {
+        workspace_revision: 4,
+        ref_head: null,
+        effect_digest: digest('1'),
+        proposal_digest: digest('2'),
+        statement_digests: [digest('3')],
+        policy_digest: digest('4'),
+      };
+      const data = {
+        transition_id: TRANSITION_ID,
+        transition: transitionView().transition,
+        precondition,
+        review_snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+          createdAt: '2026-08-17T00:00:00.000Z',
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          request: {
+            kind: 'structured_yops',
+            id: 'request:workspace-review',
+            createdAt: '2026-08-17T00:00:00.000Z',
+          },
+          review: {
+            digest: digest('9'),
+            precondition: {
+              workspaceRevision: 4,
+              refName: 'main',
+              refHead: null,
+              effectDigest: digest('1'),
+              proposalDigest: digest('2'),
+              statementDigests: [digest('3')],
+              policyDigest: digest('4'),
+            },
+          },
+          objects: {
+            base: { kind: 'state', schema: 't3x/state/v1', digest: digest('5') },
+            result: { kind: 'state', schema: 't3x/state/v1', digest: digest('6') },
+            effect: { kind: 'effect', schema: 't3x/effect/v1', digest: digest('1') },
+            proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: digest('2') },
+            statements: [],
+          },
+          transition: transitionView().transition,
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+            snapshotCreatedAt: '2026-08-17T00:00:00.000Z',
+          },
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          title: 'Workspace review',
+          status: 'reviewing',
+          review: {
+            digest: digest('9'),
+            refName: 'main',
+            refHead: null,
+            workspaceRevision: 4,
+            policyDigest: digest('4'),
+          },
+          objects: {},
+          checks: {},
+          actions: {},
+        },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        content: { trees: [], relations: [] },
+        why: 'Review workspace',
+        if_revision: 4,
+      };
+
+      expect(await client.workspaces.reviewTransition('proj/1', 'workspace/1', input)).toEqual(
+        data
+      );
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('decides a Workspace Transition through the explicit decide boundary', async () => {
+      const precondition = {
+        workspace_revision: 4,
+        ref_head: null,
+        effect_digest: digest('1'),
+        proposal_digest: digest('2'),
+        statement_digests: [digest('3')],
+        policy_digest: digest('4'),
+      };
+      const data = {
+        transition_id: TRANSITION_ID,
+        transition: transitionView().transition,
+        precondition,
+        decision_digest: digest('d'),
+        review_snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+          createdAt: '2026-08-17T00:00:01.000Z',
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          request: {
+            kind: 'structured_yops',
+            id: 'request:workspace-review',
+            createdAt: '2026-08-17T00:00:00.000Z',
+          },
+          review: {
+            digest: digest('9'),
+            precondition: {
+              workspaceRevision: 4,
+              refName: 'main',
+              refHead: null,
+              effectDigest: digest('1'),
+              proposalDigest: digest('2'),
+              statementDigests: [digest('3')],
+              policyDigest: digest('4'),
+            },
+          },
+          objects: {
+            base: { kind: 'state', schema: 't3x/state/v1', digest: digest('5') },
+            result: { kind: 'state', schema: 't3x/state/v1', digest: digest('6') },
+            effect: { kind: 'effect', schema: 't3x/effect/v1', digest: digest('1') },
+            proposal: { kind: 'statement', schema: 't3x/statement/v1', digest: digest('2') },
+            statements: [],
+          },
+          transition: transitionView().transition,
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+            snapshotCreatedAt: '2026-08-17T00:00:01.000Z',
+          },
+          projectId: 'proj/1',
+          workspaceId: 'workspace/1',
+          transitionId: TRANSITION_ID,
+          title: 'Workspace review',
+          status: 'committed',
+          review: {
+            digest: digest('9'),
+            refName: 'main',
+            refHead: null,
+            workspaceRevision: 4,
+            policyDigest: digest('4'),
+          },
+          objects: {},
+          checks: {},
+          actions: {},
+        },
+        workspace: { id: 'workspace/1', projectId: 'proj/1', revision: 5 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        transition_id: TRANSITION_ID,
+        content: { trees: [], relations: [] },
+        outcome: 'accepted' as const,
+        precondition,
+      };
+
+      expect(await client.workspaces.decideTransition('proj/1', 'workspace/1', input)).toEqual(
+        data
+      );
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/decide'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('reads immutable Workspace ReviewSnapshots through the capability facade', async () => {
+      const snapshot = {
+        snapshot_id: 'rvs_88888888888888888888888888888888',
+        snapshot_digest: digest('8'),
+        project_id: 'proj/1',
+        workspace_id: 'workspace/1',
+        transition_id: TRANSITION_ID,
+        review_digest: digest('9'),
+        supersedes_snapshot_id: null,
+        supersedes_snapshot_digest: null,
+        snapshot: {
+          schema: 't3x.application/review-snapshot/v1',
+          version: 1,
+          snapshotId: 'rvs_88888888888888888888888888888888',
+          snapshotDigest: digest('8'),
+        },
+        change_projection: {
+          schema: 't3x.application/change-projection/v1',
+          version: 1,
+          authoritative: false,
+          source: {
+            kind: 'review_snapshot',
+            snapshotId: 'rvs_88888888888888888888888888888888',
+            snapshotDigest: digest('8'),
+          },
+        },
+        created_at: '2026-08-17T00:00:00.000Z',
+      };
+      const fn = mockFetch(successResponse(snapshot));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.getReviewSnapshot(
+          'proj/1',
+          'workspace/1',
+          'rvs_88888888888888888888888888888888'
+        )
+      ).toEqual(snapshot);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots/rvs_88888888888888888888888888888888'
+        ),
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('lists and filters immutable Workspace ReviewSnapshots', async () => {
+      const data = { snapshots: [] };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.listReviewSnapshots('proj/1', 'workspace/1', {
+          transition_id: TRANSITION_ID,
+          limit: 20,
+        })
+      ).toEqual(data);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain(
+        '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots'
+      );
+      expect(url).toContain(`transition_id=${TRANSITION_ID}`);
+      expect(url).toContain('limit=20');
+    });
+
+    it('gets the latest immutable Workspace ReviewSnapshot', async () => {
+      const snapshot = {
+        snapshot_id: 'rvs_88888888888888888888888888888888',
+        snapshot_digest: digest('8'),
+        project_id: 'proj/1',
+        workspace_id: 'workspace/1',
+        transition_id: TRANSITION_ID,
+        review_digest: digest('9'),
+        supersedes_snapshot_id: null,
+        supersedes_snapshot_digest: null,
+        snapshot: {},
+        change_projection: {},
+        created_at: '2026-08-17T00:00:00.000Z',
+      };
+      const fn = mockFetch(successResponse(snapshot));
+      const client = createTestClient(fn);
+
+      expect(
+        await client.workspaces.getLatestReviewSnapshot('proj/1', 'workspace/1', {
+          transition_id: TRANSITION_ID,
+        })
+      ).toEqual(snapshot);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain(
+        '/v1/projects/proj%2F1/workspaces/workspace%2F1/transition/review-snapshots/latest'
+      );
+      expect(url).toContain(`transition_id=${TRANSITION_ID}`);
     });
   });
 
@@ -836,7 +1242,7 @@ describe('T3xClient', () => {
   // =========================================================================
   describe('Transition control plane', () => {
     it('proposes a Transition through the project-scoped endpoint', async () => {
-      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const data = { transition_id: TRANSITION_ID, reused: false, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -855,7 +1261,11 @@ describe('T3xClient', () => {
     });
 
     it('proposes from a server-owned Workspace extraction candidate', async () => {
-      const data = { transition_id: 'trn_extract', reused: false, view: {} };
+      const data = {
+        transition_id: SECOND_TRANSITION_ID,
+        reused: false,
+        view: transitionView({ transition_id: SECOND_TRANSITION_ID }),
+      };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -873,8 +1283,84 @@ describe('T3xClient', () => {
       );
     });
 
+    it('proposes an exact-source import through the same project-scoped endpoint', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_import' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_import' as const,
+        request_id: 'request:proposal:import',
+        workspace_id: 'ws_1',
+        artifact: SOURCE_ARTIFACT,
+        root: SOURCE_ROOT,
+        why: 'Import source verbatim.',
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('proposes an exact-source edit as replace-scalar operations', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_edit' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_edit' as const,
+        request_id: 'request:proposal:edit',
+        workspace_id: 'ws_1',
+        artifact: SOURCE_ARTIFACT,
+        operations: [
+          {
+            op: 'replace_scalar' as const,
+            path: ['frontmatter', 'title'],
+            expect: 'Draft title',
+            value: 'Reviewed title',
+          },
+        ],
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
+    it('proposes an exact-source revert from a CommitV2 id', async () => {
+      const data = {
+        transition_id: TRANSITION_ID,
+        reused: false,
+        view: transitionView({ request_kind: 'exact_source_revert' }),
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      const input = {
+        kind: 'exact_source_revert' as const,
+        request_id: 'request:proposal:revert',
+        workspace_id: 'ws_1',
+        commit_id: digest('7'),
+      };
+
+      expect(await client.proposeTransition('proj_1', input)).toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/transitions'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
+      );
+    });
+
     it('inspects one project-scoped Transition', async () => {
-      const data = { transition_id: 'trn_abc', view: {} };
+      const data = { transition_id: TRANSITION_ID, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
 
@@ -885,11 +1371,36 @@ describe('T3xClient', () => {
       );
     });
 
+    it('rejects malformed Transition runtime responses', async () => {
+      const fn = mockFetch(successResponse({ transition_id: TRANSITION_ID, view: {} }));
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_abc')).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+        status: 200,
+      });
+    });
+
+    it('rejects a Transition control-plane response without a TransitionViewV1 projection', async () => {
+      const fn = mockFetch(
+        successResponse({
+          transition_id: TRANSITION_ID,
+          view: transitionView({ transition: null }),
+        })
+      );
+      const client = createTestClient(fn);
+
+      await expect(client.inspectTransition('proj_1', 'trn_abc')).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+        status: 200,
+      });
+    });
+
     it('verifies one Transition with an explicit idempotency key', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        view: {},
+        view: transitionView(),
         statements: [],
         operational_results: [],
       };
@@ -909,7 +1420,7 @@ describe('T3xClient', () => {
     });
 
     it('attaches only an external predicate payload and subject roles', async () => {
-      const data = { transition_id: 'trn_abc', reused: false, view: {} };
+      const data = { transition_id: TRANSITION_ID, reused: false, view: transitionView() };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
@@ -928,11 +1439,12 @@ describe('T3xClient', () => {
 
     it('creates a Decision from an immutable review precondition', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        decision_digest: 'sha256:decision',
-        decision: {},
-        view: {},
+        decision_digest: digest('5'),
+        review_digest: digest('6'),
+        decision: { schema: 't3x/statement/v1' },
+        view: transitionView(),
       };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
@@ -943,10 +1455,11 @@ describe('T3xClient', () => {
           workspace_revision: 4,
           ref_name: 'main',
           ref_head: null,
-          effect_digest: 'sha256:effect',
-          proposal_digest: 'sha256:proposal',
-          statement_digests: ['sha256:statement'],
-          policy_digest: 'sha256:policy',
+          effect_digest: digest('1'),
+          proposal_digest: digest('2'),
+          statement_digests: [digest('3')],
+          policy_digest: digest('4'),
+          review_digest: digest('6'),
         },
       };
 
@@ -959,17 +1472,17 @@ describe('T3xClient', () => {
 
     it('creates a Commit only from a recorded Decision and expected head', async () => {
       const data = {
-        transition_id: 'trn_abc',
+        transition_id: TRANSITION_ID,
         reused: false,
-        commit_digest: 'sha256:commit',
-        commit: {},
-        transition: {},
+        commit_digest: digest('6'),
+        commit: { schema: 't3x/commit/v2' },
+        transition: transitionGraphView(),
       };
       const fn = mockFetch(successResponse(data));
       const client = createTestClient(fn);
       const input = {
         request_id: 'request:commit:1',
-        decision_digest: 'sha256:decision',
+        decision_digest: digest('5'),
         expected_head: null,
       };
 
@@ -981,7 +1494,9 @@ describe('T3xClient', () => {
     });
 
     it('encodes project and Transition ids in control-plane paths', async () => {
-      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const fn = mockFetch(
+        successResponse({ transition_id: TRANSITION_ID, view: transitionView() })
+      );
       const client = createTestClient(fn);
 
       await client.inspectTransition('project/with space', 'transition/with space');
@@ -995,7 +1510,9 @@ describe('T3xClient', () => {
     });
 
     it('passes AbortSignal through Transition inspection', async () => {
-      const fn = mockFetch(successResponse({ transition_id: 'trn_abc', view: {} }));
+      const fn = mockFetch(
+        successResponse({ transition_id: TRANSITION_ID, view: transitionView() })
+      );
       const client = createTestClient(fn);
       const controller = new AbortController();
 

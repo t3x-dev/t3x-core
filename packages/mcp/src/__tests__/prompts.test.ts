@@ -144,6 +144,8 @@ describe('MCP prompts', () => {
     expect(result.messages[0].content.text).toContain('source_evidence');
     expect(result.messages[0].content.text).toContain('propose_transition');
     expect(result.messages[0].content.text).toContain('verify_transition');
+    expect(result.messages[0].content.text).toContain('decide_transition');
+    expect(result.messages[0].content.text).toContain('commit_transition');
 
     await client.close();
   });

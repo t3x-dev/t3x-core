@@ -44,7 +44,34 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
 const GENERATION_PROMPT_VERSION = '1' as const;
 const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
-Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.`;
+Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
+Return JSON only with this exact top-level shape:
+{
+  "schema": "t3x.dev/proposal-generation-draft/v1",
+  "version": 1,
+  "posture": "source_only | guided | recommend",
+  "intent": { "mode": "unspecified" } or { "mode": "stated | inferred | authored", "value": "...", "evidencePointers": [] },
+  "rationale": { "mode": "unspecified" } or { "mode": "stated | inferred | authored", "value": "...", "evidencePointers": [] },
+  "changes": [{
+    "id": "stable-group-id",
+    "operations": [{ "set": { "path": "node/slot", "value": "..." } }],
+    "claimedOrigin": "source_backed | inferred | recommended",
+    "evidencePointers": [{ "sourceIndex": 0, "locator": { "scheme": "t3x.text-quote/v1", "value": { "quote": "exact source bytes", "occurrence": 0 } } }],
+    "basisPointers": [{ "kind": "source", "index": 0 }],
+    "assumptions": [],
+    "reason": "...",
+    "challenges": []
+  }],
+  "warnings": []
+}
+When intent.mode or rationale.mode is "stated", its evidencePointers array MUST contain at least one
+valid pointer to the exact supporting source bytes. If no such pointer exists, use "inferred",
+"authored", or "unspecified" instead.
+For the "guided" posture, use "inferred", "authored", or "unspecified" for intent and rationale,
+and return an empty challenges array for every change. Guided inference may explain assumptions and
+risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
+"recommend" posture.
+Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
 

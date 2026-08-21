@@ -11,14 +11,12 @@ import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import {
-  getProjectDefaultSchemaBinding,
   type ProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
-  workspaceSchemaBindingsEqual,
 } from '@/domain/workspaces/schemaBindings';
-import { useProjectSchemaDefault } from '@/hooks/projects/useProjectSchemaDefault';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
+import { useYSchemaIdentityManagement } from '@/hooks/schemas/useYSchemaIdentityManagement';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
@@ -27,7 +25,6 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 interface ProjectSchemasTabProps {
   projectId: string;
-  projectMetadata?: Record<string, unknown>;
   schemaBindings?: ProjectWorkspaceSchemaBindings;
 }
 
@@ -40,13 +37,10 @@ interface WorkspaceBindingResult {
   regenerationError?: string;
 }
 
-export function ProjectSchemasTab({
-  projectId,
-  projectMetadata,
-  schemaBindings,
-}: ProjectSchemasTabProps) {
+export function ProjectSchemasTab({ projectId, schemaBindings }: ProjectSchemasTabProps) {
   const searchParams = useSearchParams();
   const publishedVersions = useProjectYSchemaVersions(projectId);
+  const identityManagement = useYSchemaIdentityManagement(projectId, publishedVersions.refresh);
   const registry = useMemo(
     () =>
       mergePublishedSchemaVersions(
@@ -58,7 +52,6 @@ export function ProjectSchemasTab({
   );
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const { extractCandidate, saveDraft } = useWorkspaceFlow();
-  const setProjectDefault = useProjectSchemaDefault();
   const bindSchema = useProjectWorkspaceSchemaBindingsStore((state) => state.bindSchema);
   const [pending, setPending] = useState<SchemaBindingActionKind | null>(null);
   const [feedback, setFeedback] = useState<BindingFeedback>();
@@ -69,8 +62,6 @@ export function ProjectSchemasTab({
       resolveWorkspaceTarget(projectWorkspaces.workspaces, requestedWorkspaceId, requestedBranch),
     [projectWorkspaces.workspaces, requestedBranch, requestedWorkspaceId]
   );
-  const defaultBinding =
-    schemaBindings?.projectDefault ?? getProjectDefaultSchemaBinding(projectMetadata);
   const workspaceBinding = workspaceTarget
     ? (schemaBindings?.byWorkspaceId[workspaceTarget.id] ?? workspaceTarget.schemaBindings[0])
     : undefined;
@@ -88,7 +79,6 @@ export function ProjectSchemasTab({
       bindSchema({
         binding,
         projectId,
-        scope: 'current_workspace',
         workspaceId: workspaceTarget.id,
       });
 
@@ -98,7 +88,6 @@ export function ProjectSchemasTab({
         bindSchema({
           binding: extractedBinding,
           projectId,
-          scope: 'current_workspace',
           workspaceId: workspaceTarget.id,
         });
         return {};
@@ -111,67 +100,6 @@ export function ProjectSchemasTab({
       }
     },
     [bindSchema, extractCandidate, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
-  );
-
-  const handleSetProjectDefault = useCallback(
-    async (release: SchemaReleasePreview) => {
-      const binding = schemaReleaseToWorkspaceBinding(release, 'project_default');
-      setPending('project_default');
-      setFeedback(undefined);
-
-      try {
-        if (!workspaceSchemaBindingsEqual(defaultBinding, binding)) {
-          await setProjectDefault(projectId, projectMetadata, binding);
-        }
-      } catch (error) {
-        setFeedback({
-          message: formatUserFacingError(error, 'Failed to update the project Schema default.'),
-          tone: 'error',
-        });
-        setPending(null);
-        return;
-      }
-
-      if (!workspaceTarget || workspaceSchemaBindingsEqual(workspaceBinding, binding)) {
-        setFeedback({
-          message: `${release.name} ${release.version} will be used by new Workspaces.`,
-          tone: 'success',
-        });
-        setPending(null);
-        return;
-      }
-
-      try {
-        const result = await applyReleaseToWorkspace(release);
-        setFeedback(
-          result.regenerationError
-            ? {
-                message: `${release.name} ${release.version} is now the project default and was saved to ${workspaceTarget.title}, but candidate regeneration failed: ${result.regenerationError}`,
-                tone: 'warning',
-              }
-            : {
-                message: `${release.name} ${release.version} is now the project default and ${workspaceTarget.title} was regenerated with it.`,
-                tone: 'success',
-              }
-        );
-      } catch (error) {
-        setFeedback({
-          message: `${release.name} ${release.version} is now the project default, but updating ${workspaceTarget.title} failed: ${formatUserFacingError(error, 'Unknown error')}`,
-          tone: 'warning',
-        });
-      }
-
-      setPending(null);
-    },
-    [
-      applyReleaseToWorkspace,
-      defaultBinding,
-      projectId,
-      projectMetadata,
-      setProjectDefault,
-      workspaceBinding,
-      workspaceTarget,
-    ]
   );
 
   const handleApplyToWorkspace = useCallback(
@@ -209,6 +137,9 @@ export function ProjectSchemasTab({
     <SchemaRegistry
       key={projectId}
       {...registry}
+      onArchiveIdentity={(family) => identityManagement.setLifecycle(family, 'archive')}
+      onRestoreIdentity={(family) => identityManagement.setLifecycle(family, 'restore')}
+      onUpdateIdentity={identityManagement.updateIdentity}
       compositionWorkspace={
         workspaceTarget?.revision
           ? {
@@ -225,25 +156,12 @@ export function ProjectSchemasTab({
               onPublished: async () => {
                 await publishedVersions.refresh();
               },
-              onApplied: async (result) => {
-                if (result.binding) {
-                  bindSchema({
-                    binding: result.binding,
-                    projectId,
-                    scope: 'current_workspace',
-                    workspaceId: workspaceTarget.id,
-                  });
-                }
-                await projectWorkspaces.refresh();
-              },
             }
           : undefined
       }
       bindingActions={{
-        defaultBinding,
         feedback,
         onApplyToWorkspace: handleApplyToWorkspace,
-        onSetProjectDefault: handleSetProjectDefault,
         pending,
         workspaceTarget: workspaceTarget
           ? {

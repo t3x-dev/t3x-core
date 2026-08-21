@@ -16,6 +16,8 @@ import {
   type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
+import { extractJsonBlock } from './jsonExtract';
+import { tryParseWithRepair } from './jsonRepair';
 import { normalizeGeminiStructuredData, toGeminiStructuredSchema } from './structuredSchema';
 
 /**
@@ -391,22 +393,45 @@ export class GeminiProvider implements LLMProvider {
         );
       }
 
-      let jsonData: unknown;
-      try {
-        jsonData = JSON.parse(content);
-      } catch {
-        throw new LLMProviderError(this.id, undefined, 'Failed to parse response as JSON');
-      }
-      try {
-        const parsed = schema.parse(normalizeGeminiStructuredData(jsonData));
-        return { data: parsed, usage };
-      } catch {
+      const jsonText = extractJsonBlock(content);
+      if (!jsonText) {
         throw new LLMProviderError(
           this.id,
           undefined,
-          'Response JSON does not match expected schema'
+          'Failed to parse response as JSON',
+          'JSON_PARSE',
+          {
+            rawText: content,
+          }
         );
       }
+
+      const repaired = tryParseWithRepair(jsonText);
+      if (!repaired.ok) {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          'Failed to parse response as JSON',
+          'JSON_PARSE',
+          {
+            jsonText,
+            rawText: content,
+          }
+        );
+      }
+
+      const parsed = schema.safeParse(normalizeGeminiStructuredData(repaired.value));
+      if (parsed.success) {
+        return { data: parsed.data, usage };
+      }
+
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Response JSON does not match expected schema',
+        'SCHEMA_MISMATCH',
+        { jsonText, rawText: content, issues: parsed.error.issues }
+      );
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;

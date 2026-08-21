@@ -14,7 +14,7 @@
  * Those features live in the API layer and depend on API-specific infrastructure.
  */
 
-import { extractAndApply } from '@t3x-dev/core';
+import { extractAndApply, type PromptTurnInput } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,
@@ -153,6 +153,10 @@ function textToTurns(text: string): Array<{ role: 'user' | 'assistant'; content:
   return turns;
 }
 
+function isPromptTurnRole(role: string): role is PromptTurnInput['role'] {
+  return role === 'user' || role === 'assistant' || role === 'system' || role === 'tool';
+}
+
 // ── Handler ──
 
 export const extractHandler: ToolHandler = async (args) => {
@@ -278,7 +282,7 @@ export const extractHandler: ToolHandler = async (args) => {
   const result = await extractAndApply({
     turns: allTurns.map((t) => ({
       turn_hash: t.turnHash,
-      role: t.role,
+      role: isPromptTurnRole(t.role) ? t.role : 'user',
       content: t.content,
     })),
     mode: 'bootstrap',

@@ -43,6 +43,14 @@ import { pushNotification } from './notifications.openapi';
 
 export const autopilotRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
+function committedAtFromTransition(
+  transition: Awaited<ReturnType<typeof commitRepositoryYOpsState>>['transition']
+): string {
+  return transition.history.observation === 'committed'
+    ? transition.history.commit.recordedAt
+    : new Date().toISOString();
+}
+
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
 class AutoCommitClaimConflictError extends Error {
@@ -481,7 +489,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
           commit: {
             hash: created.commitDigest,
             branch: config.target_branch,
-            committed_at: created.transition.recordedAt,
+            committed_at: committedAtFromTransition(created.transition),
           },
           nodes_committed: qualifyingSPs.length,
           nodes_skipped: plan.skipped.length,

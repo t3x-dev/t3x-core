@@ -2,25 +2,21 @@ import { Badge } from '@/components/ui/badge';
 import type { SchemaContractChangeKind, SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaChangesViewProps {
-  currentRelease: SchemaReleasePreview | null;
+  comparisonBaseRelease: SchemaReleasePreview | null;
   release: SchemaReleasePreview;
 }
 
-export function SchemaChangesView({ currentRelease, release }: SchemaChangesViewProps) {
-  const isCurrent = release.id === currentRelease?.id;
-  const comparisonAvailable =
-    isCurrent || (currentRelease !== null && release.changesBaseReleaseId === currentRelease.id);
+export function SchemaChangesView({ comparisonBaseRelease, release }: SchemaChangesViewProps) {
+  const comparisonAvailable = comparisonBaseRelease !== null;
   const changes = comparisonAvailable ? release.changes : [];
 
   return (
     <section className="min-w-0 overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
       <header className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3 py-2.5">
         <h4 className="text-[13px] font-semibold text-[var(--text-primary)]">
-          {isCurrent
-            ? 'Changes from current'
-            : comparisonAvailable && currentRelease
-              ? `${release.version} compared with current ${currentRelease.version}`
-              : 'Comparison unavailable'}
+          {comparisonBaseRelease
+            ? `${release.version} compared with ${comparisonBaseRelease.version}`
+            : 'Comparison unavailable'}
         </h4>
         <Badge className="text-[11px]" variant="outline">
           {comparisonAvailable
@@ -31,15 +27,12 @@ export function SchemaChangesView({ currentRelease, release }: SchemaChangesView
 
       {!comparisonAvailable ? (
         <div className="grid min-h-[350px] place-items-center p-6 text-center text-[13px] text-[var(--text-secondary)]">
-          {currentRelease
-            ? `This comparison was recorded against a different baseline, not current ${currentRelease.version}.`
-            : 'Set a current published version before comparing schema contracts.'}
+          This version does not record a comparison baseline that is available in this Schema
+          history.
         </div>
       ) : changes.length === 0 ? (
         <div className="grid min-h-[350px] place-items-center p-6 text-center text-[13px] text-[var(--text-secondary)]">
-          {isCurrent
-            ? `This is the current version. Select another version to compare its contract with ${release.version}.`
-            : `No recorded changes against current ${currentRelease?.version}.`}
+          No recorded changes against {comparisonBaseRelease?.version}.
         </div>
       ) : (
         <div className="overflow-x-auto">

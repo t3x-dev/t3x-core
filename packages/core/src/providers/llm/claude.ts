@@ -90,7 +90,7 @@ export class ClaudeProvider implements LLMProvider {
     const url = `${this.baseUrl}/v1/messages`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
     try {
       const response = await fetchWithProxy(url, {
@@ -150,7 +150,7 @@ export class ClaudeProvider implements LLMProvider {
         throw error;
       }
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 120000ms');
       }
       throw new LLMProviderError(
         this.id,
@@ -167,7 +167,7 @@ export class ClaudeProvider implements LLMProvider {
     const url = `${this.baseUrl}/v1/messages`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
     try {
       const response = await fetchWithProxy(url, {
@@ -222,7 +222,7 @@ export class ClaudeProvider implements LLMProvider {
         throw error;
       }
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 120000ms');
       }
       throw new LLMProviderError(
         this.id,
@@ -248,7 +248,11 @@ export class ClaudeProvider implements LLMProvider {
       // JSON only.
       if (
         error instanceof LLMProviderError &&
-        error.message.endsWith('No structured data found in response')
+        (error.message.endsWith('No structured data found in response') ||
+          (error.statusCode === 400 &&
+            error.message.includes(
+              'Empty schema ({}) that accepts any JSON value is not supported'
+            )))
       ) {
         return this.generateStructuredViaText(prompt, schema, options);
       }
@@ -268,7 +272,7 @@ export class ClaudeProvider implements LLMProvider {
     const url = `${this.baseUrl}/v1/messages`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
     try {
       const response = await fetchWithProxy(url, {
@@ -346,7 +350,7 @@ export class ClaudeProvider implements LLMProvider {
         throw error;
       }
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 120000ms');
       }
       throw new LLMProviderError(
         this.id,
@@ -361,7 +365,18 @@ export class ClaudeProvider implements LLMProvider {
     schema: ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
-    const result = await this.generateFromPrompt(prompt, options);
+    const jsonSchema = toClaudeStructuredSchema(schema);
+    const fallbackPrompt: LLMPrompt = {
+      ...prompt,
+      system: [
+        prompt.system,
+        'Return JSON only. The response must match this JSON Schema exactly:',
+        JSON.stringify(jsonSchema),
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    };
+    const result = await this.generateFromPrompt(fallbackPrompt, options);
     const jsonText = extractJsonBlock(result.text);
     if (!jsonText) {
       // F6: carry the raw response through so pipeline logs can diagnose

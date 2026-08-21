@@ -320,6 +320,13 @@ export {
   type UpdatePullRequestInput,
   updatePullRequest,
 } from './pull-requests';
+// Persistent distributed rate-limit counters
+export {
+  type ConsumeRateLimitInput,
+  type ConsumeRateLimitResult,
+  cleanupExpiredRateLimitBuckets,
+  consumeRateLimit,
+} from './rate-limits';
 // Recipes (workflow automation)
 export {
   type CreateRecipeInput,
@@ -495,6 +502,7 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export * from './transition-review-snapshots';
 export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)
 export {
@@ -602,7 +610,9 @@ export {
   publishYSchemaArtifactVersion,
   type SaveYSchemaCompositionSnapshotInput,
   saveYSchemaCompositionSnapshot,
+  type UpdateYSchemaArtifactIdentityInput,
   type UpsertYSchemaArtifactVersionInput,
+  updateYSchemaArtifactIdentity,
   upsertYSchemaArtifactVersion,
   type YSchemaArtifactVersionView,
   type YSchemaArtifactVisibility,

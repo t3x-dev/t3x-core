@@ -6,7 +6,7 @@
  */
 
 // Standalone runtime database maintenance.
-export { cleanupOldEvents } from '@t3x-dev/storage';
+export { cleanupExpiredRateLimitBuckets, cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
 export { createApp } from './app';
 // Database
@@ -38,6 +38,21 @@ export {
 } from './lib/workspace-source-transition';
 // Logger
 export { pinoLogger } from './middleware/logger';
+export {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createDatabaseRateLimitStore,
+  createRateLimitL1,
+  createRateLimitL2,
+  databaseRateLimitStore,
+  getClientIp,
+  getRequestRateLimitStore,
+  hashRateLimitIdentity,
+  RATE_LIMIT_POLICIES,
+  type RateLimitPolicy,
+  type RateLimitStore,
+  resolveIpRateLimitPolicy,
+} from './middleware/rate-limit';
 
 // Common OpenAPI schemas
 export { ErrorResponseSchema, SuccessResponseSchema } from './schemas/common';

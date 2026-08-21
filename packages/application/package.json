@@ -1,0 +1,40 @@
+{
+  "name": "@t3x-dev/application",
+  "version": "0.0.0",
+  "description": "Internal T3X application use cases and ports",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@t3x-dev/core": "workspace:*",
+    "@t3x-dev/transition": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vite": "8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

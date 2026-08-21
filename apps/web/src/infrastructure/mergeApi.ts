@@ -19,6 +19,8 @@ export interface MergeDraftResponse {
   sourceBranch: string | null;
   targetBranch: string | null;
   prepared: MergeResult | undefined;
+  decisions?: MergeDecision;
+  decisionRevision: number;
   status: 'pending' | 'committed' | 'cancelled';
   message: string | null;
 }
@@ -74,14 +76,19 @@ export async function getMergeDraft(draftId: string): Promise<MergeDraftResponse
  */
 export async function saveMergeDraft(
   draftId: string,
-  patch: { prepared?: MergeResult; message?: string }
-): Promise<void> {
+  patch: {
+    prepared?: MergeResult;
+    decisions?: MergeDecision;
+    expected_decision_revision?: number;
+    message?: string;
+  }
+): Promise<MergeDraftResponse> {
   const res = await fetchWithTimeout(`${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
-  await handleResponse(res);
+  return handleResponse<MergeDraftResponse>(res);
 }
 
 /**

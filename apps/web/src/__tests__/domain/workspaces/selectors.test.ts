@@ -69,7 +69,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         fileName: 'release.md',
       },
     ],
-    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'pinned' }],
     schemaReview: {
       verdict: 'needs_review',
       summary: 'Needs schema confirmation before YOps apply.',
@@ -160,13 +160,13 @@ describe('workspace selectors', () => {
     expect(summarizeSourceBundle([])).toBe('No sources');
   });
 
-  it('prefers pinned and draft override schema bindings over project defaults', () => {
+  it('prefers draft overrides and otherwise keeps the first exact Workspace binding', () => {
     expect(
       getPrimarySchemaBinding([
-        { schemaName: 'PRD Schema', version: 'v2', mode: 'project_default' },
+        { schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
         { schemaName: 'PRD Schema', version: 'v3', mode: 'pinned' },
       ])
-    ).toEqual({ schemaName: 'PRD Schema', version: 'v3', mode: 'pinned' });
+    ).toEqual({ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' });
 
     expect(
       getPrimarySchemaBinding([

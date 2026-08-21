@@ -15,6 +15,7 @@
       "!**/.turbo",
       "!**/*.min.js",
       "!**/pnpm-lock.yaml",
+      "!docs/architecture/phase3-application-inventory.json",
       "!**/preview",
       "!**/e2e"
     ]

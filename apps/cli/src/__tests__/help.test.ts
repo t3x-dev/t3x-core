@@ -57,6 +57,7 @@ describe('t3x --help', () => {
         'auth',
         'config',
         'extract',
+        'transition',
         'yops',
       ];
       for (const cmd of expected) {
@@ -117,6 +118,46 @@ describe('t3x --help', () => {
 
       const generateHelp = runCliHelp(['generate', '--help']);
       expect(commandIsListed(generateHelp, 'leaf')).toBe(true);
+    },
+    HELP_TEST_TIMEOUT_MS
+  );
+
+  it(
+    'shows the complete Transition lifecycle command group',
+    () => {
+      if (!existsSync(BIN)) {
+        throw new Error(
+          `CLI binary not built at ${BIN}; run \`pnpm --filter @t3x-dev/cli build\` first.`
+        );
+      }
+
+      const transitionHelp = runCliHelp(['transition', '--help']);
+      for (const command of [
+        'propose',
+        'inspect',
+        'verify',
+        'attach-statement',
+        'decide',
+        'commit',
+      ]) {
+        expect(
+          commandIsListed(transitionHelp, command),
+          `transition help missing "${command}"\n---\n${transitionHelp}`
+        ).toBe(true);
+      }
+
+      const proposeHelp = runCliHelp(['transition', 'propose', '--help']);
+      expect(proposeHelp).toContain('--kind <kind>');
+      expect(proposeHelp).toContain('--operations-json <json>');
+      expect(proposeHelp).toContain('--extraction-candidate-id <id>');
+      expect(proposeHelp).toContain('--artifact-json <json>');
+      expect(proposeHelp).toContain('--root-json <json>');
+      expect(proposeHelp).toContain('--commit-id <id>');
+
+      const attachHelp = runCliHelp(['transition', 'attach-statement', '--help']);
+      expect(attachHelp).toContain('--predicate-type <type>');
+      expect(attachHelp).toContain('--predicate-json <json>');
+      expect(attachHelp).toContain('--subjects <roles>');
     },
     HELP_TEST_TIMEOUT_MS
   );

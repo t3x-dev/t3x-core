@@ -7,7 +7,7 @@
  */
 
 import { generateMergeDraftId } from '@t3x-dev/core';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type MergeDraft, mergeDrafts, type NewMergeDraft } from '../schema';
 
@@ -20,6 +20,7 @@ export interface CreateMergeDraftInput {
   sourceBranch?: string;
   targetBranch?: string;
   prepared: unknown; // Merge2WayResult
+  decision?: unknown; // Canonical MergeDecision
   message?: string;
 }
 
@@ -31,7 +32,9 @@ export interface ListMergeDraftsOptions {
 }
 
 export interface UpdateMergeDraftInput {
-  prepared?: unknown; // Merge2WayResult with user decisions
+  prepared?: unknown; // Deterministic MergeResult
+  decision?: unknown; // Canonical MergeDecision
+  expectedDecisionRevision?: number;
   message?: string;
   status?: MergeDraftStatus;
 }
@@ -56,6 +59,8 @@ export async function createMergeDraft(
       sourceBranch: input.sourceBranch ?? null,
       targetBranch: input.targetBranch ?? null,
       preparedJson: JSON.stringify(input.prepared),
+      decisionJson: input.decision === undefined ? null : JSON.stringify(input.decision),
+      decisionRevision: input.decision === undefined ? 0 : 1,
       status: 'pending',
       message: input.message ?? null,
       createdAt: now,
@@ -123,12 +128,19 @@ export async function updateMergeDraft(
   draftId: string,
   input: UpdateMergeDraftInput
 ): Promise<MergeDraft | null> {
+  if (input.expectedDecisionRevision !== undefined && input.decision === undefined) {
+    throw new Error('expectedDecisionRevision requires a decision update');
+  }
+
   const updates: Partial<NewMergeDraft> = {
     updatedAt: new Date(),
   };
 
   if (input.prepared !== undefined) {
     updates.preparedJson = JSON.stringify(input.prepared);
+  }
+  if (input.decision !== undefined) {
+    updates.decisionJson = JSON.stringify(input.decision);
   }
   if (input.message !== undefined) {
     updates.message = input.message;
@@ -137,10 +149,20 @@ export async function updateMergeDraft(
     updates.status = input.status;
   }
 
+  const conditions = [eq(mergeDrafts.draftId, draftId)];
+  if (input.expectedDecisionRevision !== undefined) {
+    conditions.push(eq(mergeDrafts.decisionRevision, input.expectedDecisionRevision));
+  }
+
   const [updated] = await db
     .update(mergeDrafts)
-    .set(updates)
-    .where(eq(mergeDrafts.draftId, draftId))
+    .set({
+      ...updates,
+      ...(input.decision === undefined
+        ? {}
+        : { decisionRevision: sql`${mergeDrafts.decisionRevision} + 1` }),
+    })
+    .where(and(...conditions))
     .returning();
 
   return updated ?? null;

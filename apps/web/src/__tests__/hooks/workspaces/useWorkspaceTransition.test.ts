@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,6 +61,92 @@ function transitionView(
   } as Extract<TransitionViewV1, { mode: 'transition' }>;
 }
 
+function reviewArtifacts(mode: 'pending' | 'committed' | 'rejected') {
+  const transition = transitionView(mode);
+  const objects: ReviewSnapshotV1['objects'] = {
+    base: { kind: 'state', schema: 't3x/state/v1', digest: digest('1') },
+    result: { kind: 'state', schema: 't3x/state/v1', digest: digest('2') },
+    effect: { kind: 'effect', schema: 't3x/effect/v1', digest: precondition.effect_digest },
+    proposal: {
+      kind: 'statement',
+      schema: 't3x/statement/v1',
+      digest: precondition.proposal_digest,
+    },
+    statements: precondition.statement_digests.map((statementDigest) => ({
+      kind: 'statement' as const,
+      schema: 't3x/statement/v1' as const,
+      digest: statementDigest,
+    })),
+  };
+  if (mode === 'committed') {
+    objects.commit = { kind: 'commit', schema: 't3x/commit/v2', digest: digest('e') };
+    objects.decision = { kind: 'statement', schema: 't3x/statement/v1', digest: digest('f') };
+  }
+  if (mode === 'rejected') {
+    objects.decision = { kind: 'statement', schema: 't3x/statement/v1', digest: digest('f') };
+  }
+  const reviewSnapshot: ReviewSnapshotV1 = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: `rvs_${mode}`,
+    snapshotDigest: digest(mode[0] ?? 'z'),
+    createdAt: '2026-07-30T00:00:00.000Z',
+    projectId: candidate.projectId,
+    workspaceId: candidate.id,
+    transitionId,
+    request: {
+      kind: 'structured_yops',
+      id: 'request:workspace_prd_handoff',
+      createdAt: '2026-07-30T00:00:00.000Z',
+    },
+    review: {
+      digest: digest('r'),
+      precondition: {
+        workspaceRevision: precondition.workspace_revision,
+        refName: candidate.targetBranch,
+        refHead: precondition.ref_head,
+        effectDigest: precondition.effect_digest,
+        proposalDigest: precondition.proposal_digest,
+        statementDigests: precondition.statement_digests,
+        policyDigest: precondition.policy_digest,
+      },
+    },
+    objects,
+    transition,
+  };
+  const changeProjection: ChangeProjectionV1 = {
+    schema: 't3x.application/change-projection/v1',
+    version: 1,
+    authoritative: false,
+    source: {
+      kind: 'review_snapshot',
+      snapshotId: reviewSnapshot.snapshotId,
+      snapshotDigest: reviewSnapshot.snapshotDigest,
+      snapshotCreatedAt: reviewSnapshot.createdAt,
+    },
+    projectId: candidate.projectId,
+    workspaceId: candidate.id,
+    transitionId,
+    title: 'PRD audience handoff',
+    status: mode === 'pending' ? 'reviewing' : mode === 'rejected' ? 'rejected' : 'committed',
+    review: {
+      digest: reviewSnapshot.review.digest,
+      refName: candidate.targetBranch,
+      refHead: precondition.ref_head,
+      workspaceRevision: precondition.workspace_revision,
+      policyDigest: precondition.policy_digest,
+    },
+    objects,
+    checks: transition.checks,
+    actions: transition.capabilities,
+  };
+  return {
+    change_projection: changeProjection,
+    review_snapshot: reviewSnapshot,
+    transition,
+  };
+}
+
 describe('useWorkspaceTransition', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,8 +155,8 @@ describe('useWorkspaceTransition', () => {
       workspace: { ...candidate, revision: 7 },
     });
     vi.mocked(reviewWorkspaceTransition).mockResolvedValue({
+      ...reviewArtifacts('pending'),
       transition_id: transitionId,
-      transition: transitionView('pending'),
       precondition,
     });
   });
@@ -82,8 +169,8 @@ describe('useWorkspaceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceTransition).mockResolvedValue({
+      ...reviewArtifacts('committed'),
       transition_id: transitionId,
-      transition: transitionView('committed'),
       precondition,
       decision_digest: digest('f'),
       commit: {},
@@ -107,6 +194,8 @@ describe('useWorkspaceTransition', () => {
       vi.mocked(reviewWorkspaceTransition).mock.invocationCallOrder[0]!
     );
     expect(result.current.state.phase).toBe('reviewed');
+    expect(result.current.state.reviewSnapshot?.snapshotId).toBe('rvs_pending');
+    expect(result.current.state.changeProjection?.status).toBe('reviewing');
 
     let committed: { commitId: string; workspace: WorkspaceCandidate } | null = null;
     await act(async () => {
@@ -125,6 +214,8 @@ describe('useWorkspaceTransition', () => {
       commitId: digest('e'),
       workspace: { ...candidate, revision: 8, status: 'committed', lastCommitHash: digest('e') },
     });
+    expect(result.current.state.reviewSnapshot?.snapshotId).toBe('rvs_committed');
+    expect(result.current.state.changeProjection?.status).toBe('committed');
     expect(commitCreated).toHaveBeenCalledOnce();
     expect((commitCreated.mock.calls[0]?.[0] as CustomEvent).detail.payload.hash).toBe(digest('e'));
     window.removeEventListener('t3x:commit-created', commitCreated);
@@ -146,8 +237,8 @@ describe('useWorkspaceTransition', () => {
     const commitCreated = vi.fn();
     window.addEventListener('t3x:commit-created', commitCreated);
     vi.mocked(decideWorkspaceTransition).mockResolvedValue({
+      ...reviewArtifacts('rejected'),
       transition_id: transitionId,
-      transition: transitionView('rejected'),
       precondition,
       decision_digest: digest('f'),
     });
@@ -186,6 +277,8 @@ describe('useWorkspaceTransition', () => {
 
   it('does not restore a review invalidated while the request was in flight', async () => {
     let resolveReview!: (value: {
+      change_projection: ChangeProjectionV1;
+      review_snapshot: ReviewSnapshotV1;
       transition_id: string;
       transition: TransitionViewV1;
       precondition: typeof precondition;
@@ -206,17 +299,19 @@ describe('useWorkspaceTransition', () => {
     act(() => result.current.reset());
     await act(async () => {
       resolveReview({
+        ...reviewArtifacts('pending'),
         transition_id: transitionId,
-        transition: transitionView('pending'),
         precondition,
       });
       await reviewPromise;
     });
 
     expect(result.current.state).toEqual({
+      changeProjection: null,
       error: null,
       errorCode: null,
       phase: 'idle',
+      reviewSnapshot: null,
       view: null,
     });
   });

@@ -100,6 +100,7 @@ export function MergeWorkspace({
 
   // Tree merge loading state
   const [treeLoading, setTreeLoading] = useState(false);
+  const [treeDataReady, setTreeDataReady] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
@@ -112,10 +113,37 @@ export function MergeWorkspace({
     target?: SemanticContent;
   }>({});
 
+  const saveCurrentDecision = useCallback(async () => {
+    if (!treeMergeResult) {
+      await saveDraft();
+      return;
+    }
+    await saveDraft(
+      buildMergeDecision(
+        treeMergeResult,
+        treeResolutions,
+        keepSourceNodes,
+        keepTargetNodes,
+        semanticData.source,
+        semanticData.target
+      )
+    );
+  }, [
+    keepSourceNodes,
+    keepTargetNodes,
+    message,
+    saveDraft,
+    semanticData.source,
+    semanticData.target,
+    treeMergeResult,
+    treeResolutions,
+  ]);
+
   // Fetch commits and prepare tree merge
   useEffect(() => {
     const sh = sourceHash;
     const th = targetHash;
+    setTreeDataReady(false);
     if (!sh || !th) return;
     let cancelled = false;
 
@@ -138,6 +166,7 @@ export function MergeWorkspace({
         // PR readiness already persisted the authoritative two-way preparation.
         // Keep that draft result and only load commit content for rendering.
         if (useMergeWorkspaceStore.getState().treeMergeResult) {
+          setTreeDataReady(true);
           setTreeLoading(false);
           return;
         }
@@ -158,6 +187,7 @@ export function MergeWorkspace({
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
                 setTreeMergeResult(result);
+                setTreeDataReady(true);
                 setTreeLoading(false);
                 // tree merge prepared
               })
@@ -167,6 +197,7 @@ export function MergeWorkspace({
                 const emptyBase: SemanticContent = { trees: [], relations: [] };
                 const result = prepareMerge(emptyBase, sourceContent, targetContent);
                 setTreeMergeResult(result);
+                setTreeDataReady(true);
                 setTreeLoading(false);
                 // tree merge prepared
               });
@@ -175,6 +206,7 @@ export function MergeWorkspace({
             const emptyBase: SemanticContent = { trees: [], relations: [] };
             const result = prepareMerge(emptyBase, sourceContent, targetContent);
             setTreeMergeResult(result);
+            setTreeDataReady(true);
             setTreeLoading(false);
           }
         } else {
@@ -199,11 +231,11 @@ export function MergeWorkspace({
     if (!isDirty) return;
 
     const timer = setTimeout(() => {
-      saveDraft();
+      saveCurrentDecision();
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [isDirty, saveDraft]);
+  }, [isDirty, saveCurrentDecision]);
 
   const handleCancel = useCallback(async () => {
     if (pullRequestNumber !== undefined) {
@@ -216,7 +248,7 @@ export function MergeWorkspace({
 
   // Keyboard shortcuts
   useMergeKeyboard({
-    saveDraft,
+    saveDraft: saveCurrentDecision,
     canCommit: () => allTreeConflictsResolved() && message.trim().length > 0,
     handleCancel,
     showReviewDialog,
@@ -385,6 +417,7 @@ export function MergeWorkspace({
 
     return (
       <motion.div
+        data-testid={treeDataReady ? 'merge-workspace-ready' : undefined}
         variants={containerVariants}
         initial="initial"
         animate="animate"
@@ -419,7 +452,7 @@ export function MergeWorkspace({
           saveStatus={saveStatus}
           message={message}
           onMessageChange={setMessage}
-          onSave={saveDraft}
+          onSave={saveCurrentDecision}
           onCommit={handleNodeOpenReview}
           onCancel={handleCancel}
           canCommit={treeCanCommit}

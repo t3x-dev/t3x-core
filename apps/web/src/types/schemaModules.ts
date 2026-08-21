@@ -1,6 +1,15 @@
 export type SchemaArtifactKind = 'core' | 'module';
-export type SchemaArtifactDetailView = 'overview' | 'render' | 'rules' | 'versions';
 export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
+
+export interface SchemaArtifactInstance {
+  title: string;
+  description: string;
+  useCases: Array<{
+    title: string;
+    description: string;
+  }>;
+  value: Record<string, unknown>;
+}
 
 export interface SchemaModuleRulePreview {
   id: string;
@@ -17,7 +26,7 @@ export interface SchemaArtifactPreview {
   description: string;
   domain: string;
   source: 'official' | 'team' | 'community';
-  status: 'active' | 'draft' | 'deprecated';
+  status: 'active' | 'published' | 'draft' | 'deprecated';
   provides: string[];
   requires: string[];
   placement: string;
@@ -31,6 +40,7 @@ export interface SchemaArtifactPreview {
   sortOrder: number;
   icon: 'blocks' | 'braces' | 'cpu' | 'database' | 'file' | 'monitor' | 'server';
   recommended?: boolean;
+  tags?: string[];
 }
 
 export interface SchemaCompositionIssuePreview {
@@ -54,7 +64,7 @@ export interface SchemaCompositionPreviewResult {
   }>;
 }
 
-export interface SchemaCompositionDraft {
+export interface SchemaCompositionDraftV1 {
   apiVersion: 't3x.dev/yschema-composition/v1';
   id: string;
   revision: number;
@@ -69,6 +79,21 @@ export interface SchemaCompositionDraft {
     hash?: string;
   }>;
 }
+
+export interface SchemaCompositionDraftV2 {
+  apiVersion: 't3x.dev/yschema-composition/v2';
+  id: string;
+  revision: number;
+  status: 'draft';
+  modules: Array<{
+    canonicalName: string;
+    version: string;
+    presentationOrder: number;
+    hash?: string;
+  }>;
+}
+
+export type SchemaCompositionDraft = SchemaCompositionDraftV1 | SchemaCompositionDraftV2;
 
 export interface WorkspaceSchemaCompositionResult {
   composition: SchemaCompositionDraft | null;
@@ -93,7 +118,6 @@ export interface SchemaCompositionWorkspaceContext {
   workspaceRevision: number;
   composition?: SchemaCompositionDraft;
   onSaved?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
-  onApplied?: (result: WorkspaceSchemaCompositionResult) => void | Promise<void>;
   onPublished?: (version: PublishedSchemaVersionManifest) => void | Promise<void>;
   appliedCompositionRevision?: number;
   appliedSchemaHash?: string;
@@ -107,19 +131,34 @@ export interface PublishSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  tags?: string[];
 }
 
 export interface PublishedSchemaVersionManifest extends Record<string, unknown> {
-  apiVersion: 't3x.dev/yschema-core/v1';
+  apiVersion:
+    | 't3x.dev/yschema-core/v1'
+    | 't3x.dev/yschema-module/v2'
+    | 't3x.dev/yschema-blueprint/v1';
   canonicalName: string;
   version: string;
-  family: YSchemaArtifactFamily;
+  family?: YSchemaArtifactFamily | 'open';
   title: string;
   description: string;
-  status: 'active' | 'deprecated' | 'draft';
+  status: 'active' | 'published' | 'deprecated' | 'draft';
   source: 'official' | 'team' | 'community';
   artifactHash?: string;
-  schema: Record<string, unknown>;
+  artifactId?: string;
+  artifactVersionId?: string;
+  displayName?: string;
+  catalogDescription?: string;
+  catalogTags?: string[];
+  lifecycleStatus?: 'active' | 'archived';
+  archivedAt?: string | null;
+  metadataRevision?: number;
+  ownerProjectId?: string | null;
+  updatedAt?: string;
+  tags?: string[];
+  schema?: Record<string, unknown>;
 }
 
 export interface ProjectSchemaVersionHistory {

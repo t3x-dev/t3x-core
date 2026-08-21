@@ -1,4 +1,10 @@
-import { type ExtractionFailure, type ExtractionMode, extractAndApply } from '@t3x-dev/core';
+import {
+  type ExtractionFailure,
+  type ExtractionMode,
+  extractAndApply,
+  type LLMProvider,
+  type PromptTurnInput,
+} from '@t3x-dev/core';
 import {
   type AnyDB,
   deleteYOpsLogEntry,
@@ -46,6 +52,21 @@ export type ApiExtractionV2Result =
       message: string;
       failure?: ExtractionFailure;
     };
+
+function isPromptTurnRole(role: string): role is PromptTurnInput['role'] {
+  return role === 'user' || role === 'assistant' || role === 'system' || role === 'tool';
+}
+
+function isExtractionProvider(
+  provider: unknown
+): provider is Pick<LLMProvider, 'generate' | 'generateFromPrompt' | 'generateStructured'> {
+  return (
+    provider !== null &&
+    typeof provider === 'object' &&
+    'generate' in provider &&
+    typeof provider.generate === 'function'
+  );
+}
 
 export async function runApiExtractionV2(
   input: ApiExtractionV2Input
@@ -100,6 +121,13 @@ export async function runApiExtractionV2(
       message: providerResolution.message,
     };
   }
+  if (!isExtractionProvider(providerResolution.provider)) {
+    return {
+      ok: false,
+      kind: 'provider_unavailable',
+      message: `Provider ${providerResolution.providerId} does not support extraction generation`,
+    };
+  }
 
   let replayedSnapshot = input.baselineSnapshot;
   if (replayedSnapshot === undefined) {
@@ -122,13 +150,24 @@ export async function runApiExtractionV2(
     );
   }
   const mode: ExtractionMode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
-
-  const result = await extractAndApply({
-    turns: selectedTurns.map((turn) => ({
+  const promptTurns: PromptTurnInput[] = [];
+  for (const turn of selectedTurns) {
+    if (!isPromptTurnRole(turn.role)) {
+      return {
+        ok: false,
+        kind: 'invalid_request',
+        message: `Unsupported turn role for extraction: ${turn.role}`,
+      };
+    }
+    promptTurns.push({
       turn_hash: turn.turnHash,
       role: turn.role,
       content: turn.content,
-    })),
+    });
+  }
+
+  const result = await extractAndApply({
+    turns: promptTurns,
     mode,
     providerId: providerResolution.providerId,
     provider: providerResolution.provider,

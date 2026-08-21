@@ -1,3 +1,8 @@
+import type {
+  ChangeProjectionV1,
+  ReviewSnapshotV1,
+  TransitionInspectionView,
+} from '@t3x-dev/application';
 import {
   buildReplayVerificationStatement,
   type CommitV2,
@@ -22,6 +27,7 @@ import {
   type State,
   type StatementObservation,
   type TransitionViewV1,
+  type TrustedDecisionFacts,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -32,7 +38,10 @@ import {
   resolveTransitionProposalGraph,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
+  type TransitionPolicyBinding,
+  type TransitionProposalMembership,
   type TransitionRefHead,
+  type TransitionStatementMembership,
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
@@ -47,6 +56,11 @@ import {
   materializeTransitionProposal,
   materializeTransitionStatement,
 } from './transition-control-plane/materialize';
+import {
+  buildWorkspaceReviewArtifacts,
+  persistWorkspaceReviewArtifacts,
+  reviewSnapshotCreatedAt,
+} from './workspace-review-artifacts';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -135,13 +149,16 @@ export interface ReviewWorkspaceTransitionInput {
   content: SemanticContent;
   why?: string;
   expectedRevision?: number;
-  actor: ActorRef & { kind: 'human' };
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
 }
 
 export interface ReviewWorkspaceTransitionResult {
   transitionId: string;
   transition: TransitionViewV1;
   precondition: WorkspaceTransitionPrecondition;
+  reviewSnapshot: ReviewSnapshotV1;
+  changeProjection: ChangeProjectionV1;
 }
 
 export interface BuildWorkspaceYOpsProposalInput {
@@ -167,7 +184,14 @@ export interface BuiltWorkspaceYOpsProposal {
   workspaceUpdatedAt: string;
 }
 
-export interface DecideWorkspaceTransitionInput extends ReviewWorkspaceTransitionInput {
+export interface DecideWorkspaceTransitionInput {
+  projectId: string;
+  workspaceId: string;
+  content?: SemanticContent;
+  why?: string;
+  expectedRevision?: number;
+  actor: ActorRef;
+  policyBinding?: TransitionPolicyBinding | null;
   transitionId?: string;
   outcome: 'accepted' | 'overridden' | 'rejected';
   decisionReason?: string;
@@ -239,8 +263,8 @@ export class WorkspaceTransitionDecisionDeniedError extends Error {
 }
 
 interface PreparedWorkspaceTransition
-  extends Omit<ReviewWorkspaceTransitionResult, 'transitionId'> {
-  actor: ActorRef & { kind: 'human' };
+  extends Pick<ReviewWorkspaceTransitionResult, 'precondition' | 'transition'> {
+  actor: ActorRef;
   base: State;
   content: SemanticContent;
   effect: ReturnType<typeof createYOpsEffect>['effect'];
@@ -252,6 +276,11 @@ interface PreparedWorkspaceTransition
   targetBranch: string;
   workspace: Record<string, unknown>;
   workspaceId: string;
+}
+
+interface MaterializedPreparedWorkspaceTransition {
+  membership: TransitionProposalMembership;
+  statements: TransitionStatementMembership[];
 }
 
 export interface ResolvedWorkspaceTransitionContext {
@@ -550,13 +579,14 @@ async function prepareWorkspaceTransition(
   const statementDigests = observations
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort();
+  const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
   const precondition: WorkspaceTransitionPrecondition = {
     workspaceRevision: context.workspaceRevision,
     refHead: context.head.head,
     effectDigest: describeTransitionObject(effect).digest,
     proposalDigest: describeTransitionObject(proposal).digest,
     statementDigests,
-    policyDigest: WORKSPACE_POLICY.resource.digest,
+    policyDigest: policyBinding.resource.digest,
   };
   const transition = projectTransitionView({
     mode: 'transition',
@@ -567,8 +597,8 @@ async function prepareWorkspaceTransition(
     objectIntegrity: 'verified',
     capabilityContext: {
       actorContext: { actor: input.actor },
-      policy: WORKSPACE_POLICY.policy,
-      policyResource: WORKSPACE_POLICY.resource,
+      policy: policyBinding.policy,
+      policyResource: policyBinding.resource,
     },
   });
   return {
@@ -594,14 +624,25 @@ export async function reviewWorkspaceTransition(
   input: ReviewWorkspaceTransitionInput
 ): Promise<ReviewWorkspaceTransitionResult> {
   const prepared = await prepareWorkspaceTransition(db, input);
-  const transitionId = await materializePreparedWorkspaceTransition(db, prepared);
-  return { transitionId, transition: prepared.transition, precondition: prepared.precondition };
+  const materialized = await materializePreparedWorkspaceTransition(db, prepared);
+  const inspection = materializedPreparedInspection({ materialized, prepared });
+  const artifacts = buildWorkspaceReviewArtifacts({
+    inspection,
+    createdAt: materialized.membership.createdAt,
+  });
+  await persistWorkspaceReviewArtifacts(db, artifacts);
+  return {
+    transitionId: materialized.membership.transitionId,
+    transition: prepared.transition,
+    precondition: prepared.precondition,
+    ...artifacts,
+  };
 }
 
 async function materializePreparedWorkspaceTransition(
   db: AnyDB,
   prepared: PreparedWorkspaceTransition
-): Promise<string> {
+): Promise<MaterializedPreparedWorkspaceTransition> {
   const proposalDigest = describeTransitionObject(prepared.proposal).digest;
   const requestId = [
     'compat:workspace-transition-review',
@@ -646,8 +687,9 @@ async function materializePreparedWorkspaceTransition(
     { observation: prepared.observations[0]!, source: 'server:workspace-replay' },
     { observation: prepared.observations[1]!, source: 'server:workspace-yschema' },
   ] as const;
+  const statements: TransitionStatementMembership[] = [];
   for (const { observation, source } of durableObservations) {
-    await materializeTransitionStatement({
+    const persisted = await materializeTransitionStatement({
       db,
       projectId: created.membership.projectId,
       transitionId: created.membership.transitionId,
@@ -657,8 +699,9 @@ async function materializePreparedWorkspaceTransition(
       requestId: statementRequestId,
       requestFacts,
     });
+    statements.push(persisted.membership);
   }
-  return created.membership.transitionId;
+  return { membership: created.membership, statements };
 }
 
 function compatibilityRequestId(action: 'decide' | 'commit', facts: ProtocolValue): string {
@@ -678,21 +721,85 @@ function canonicalPrecondition(precondition: WorkspaceTransitionPrecondition, re
   };
 }
 
+function materializedPreparedInspection(input: {
+  materialized: MaterializedPreparedWorkspaceTransition;
+  prepared: PreparedWorkspaceTransition;
+  transition?: TransitionViewV1;
+}): TransitionInspectionView {
+  const membership = input.materialized.membership;
+  return {
+    transitionId: membership.transitionId,
+    projectId: membership.projectId,
+    workspaceId: membership.workspaceId,
+    requestKind: membership.requestKind,
+    requestId: membership.requestId,
+    createdAt: membership.createdAt,
+    precondition: {
+      workspaceRevision: input.prepared.precondition.workspaceRevision,
+      refName: membership.refName,
+      refHead: input.prepared.precondition.refHead,
+      effectDigest: input.prepared.precondition.effectDigest,
+      proposalDigest: input.prepared.precondition.proposalDigest,
+      statementDigests: [...input.prepared.precondition.statementDigests],
+      policyDigest: input.prepared.precondition.policyDigest,
+    },
+    transition: input.transition ?? input.prepared.transition,
+    statements: input.materialized.statements.map((statement) => ({
+      digest: statement.statementDigest,
+      source: statement.source,
+      issuer: statement.issuer,
+      requestId: statement.requestId,
+      createdAt: statement.createdAt,
+    })),
+  };
+}
+
+function inspectionWithTransition(
+  inspection: TransitionInspectionView,
+  transition: TransitionViewV1
+): TransitionInspectionView {
+  return { ...inspection, transition };
+}
+
+function inspectionWithWorkspacePrecondition(
+  inspection: TransitionInspectionView,
+  precondition: ReturnType<typeof canonicalPrecondition>
+): TransitionInspectionView {
+  return {
+    ...inspection,
+    precondition: {
+      workspaceRevision: precondition.workspaceRevision,
+      refName: precondition.refName,
+      refHead: precondition.refHead,
+      effectDigest: precondition.effectDigest,
+      proposalDigest: precondition.proposalDigest,
+      statementDigests: [...precondition.statementDigests],
+      policyDigest: precondition.policyDigest,
+    },
+  };
+}
+
 export async function decideWorkspaceTransition(
   db: AnyDB,
   input: DecideWorkspaceTransitionInput
 ): Promise<DecideWorkspaceTransitionResult> {
   try {
+    const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
     let transitionId = input.transitionId;
     if (transitionId === undefined) {
+      if (input.content === undefined) {
+        throw new TypeError('Workspace Transition Decision requires content without transition_id');
+      }
       const prepared = await prepareWorkspaceTransition(db, {
         ...input,
+        content: input.content,
         expectedRevision: input.precondition.workspaceRevision,
       });
       if (!samePrecondition(input.precondition, prepared.precondition)) {
         throw new WorkspaceTransitionReviewStaleError();
       }
-      transitionId = await materializePreparedWorkspaceTransition(db, prepared);
+      const materialized = await materializePreparedWorkspaceTransition(db, prepared);
+      transitionId = materialized.membership.transitionId;
     }
 
     const graph = await resolveTransitionProposalGraph(db, input.projectId, transitionId);
@@ -743,29 +850,36 @@ export async function decideWorkspaceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: WORKSPACE_POLICY.resource.digest,
+        policyDigest: policyBinding.resource.digest,
         authority: {
           async resolve() {
             return {
               actorContext: { actor: input.actor },
               observationScope: OBSERVATION_SCOPE,
-              policy: WORKSPACE_POLICY.policy,
-              policyResource: WORKSPACE_POLICY.resource,
+              policy: policyBinding.policy,
+              policyResource: policyBinding.resource,
               statements: graph.observations.map((observation) => ({
                 statement: observation.statement,
                 issuerContext: observation.issuerContext,
-              })),
+              })) as TrustedDecisionFacts['statements'],
             };
           },
         },
       },
     });
+    const decidedInspection = inspectionWithWorkspacePrecondition(decided.view, precondition);
     if (input.outcome === 'rejected') {
+      const artifacts = buildWorkspaceReviewArtifacts({
+        inspection: decidedInspection,
+        createdAt: reviewSnapshotCreatedAt(decidedInspection),
+      });
+      await persistWorkspaceReviewArtifacts(db, artifacts);
       return {
         transitionId,
-        transition: decided.view.transition,
+        transition: decidedInspection.transition,
         precondition: input.precondition,
         decisionDigest: decided.decisionDigest,
+        ...artifacts,
       };
     }
 
@@ -821,6 +935,12 @@ export async function decideWorkspaceTransition(
     if (committed.workspace === undefined) {
       throw new WorkspaceTransitionReviewStaleError();
     }
+    const committedInspection = inspectionWithTransition(decidedInspection, committed.view);
+    const artifacts = buildWorkspaceReviewArtifacts({
+      inspection: committedInspection,
+      createdAt: reviewSnapshotCreatedAt(committedInspection),
+    });
+    await persistWorkspaceReviewArtifacts(db, artifacts);
     return {
       transitionId,
       transition: committed.view,
@@ -828,6 +948,7 @@ export async function decideWorkspaceTransition(
       decisionDigest: decided.decisionDigest,
       commit: committed.commit,
       workspace: committed.workspace,
+      ...artifacts,
     };
   } catch (error) {
     if (error instanceof TransitionDecisionDeniedError) {

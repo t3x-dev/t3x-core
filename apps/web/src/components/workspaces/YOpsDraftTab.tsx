@@ -31,6 +31,8 @@ import {
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
+  WorkspaceProposalGenerationView,
+  WorkspaceProposalPosture,
   WorkspaceSchemaFieldStatus,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
@@ -40,10 +42,14 @@ import type {
   WorkspaceYOpsValue,
 } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { ChangeDecisionHandoff } from './ChangeDecisionHandoff';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
-import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
 
@@ -56,13 +62,20 @@ export function YOpsDraftTab({
   continuationBusy,
   flowError,
   onApplied,
-  onCommitted,
   onContinueFromCommit,
+  onGenerateProposal,
+  onProposalAction,
+  onProposalPostureChange,
   onSendToYOps,
+  onVerifyProposal,
   onYOpsScriptSave,
   onViewCommitInState,
   onViewChange,
   sendingToYOps,
+  proposalGeneration,
+  proposalGenerationBusy,
+  proposalPosture,
+  proposalReviewState,
   view = 'ops',
   yopsDraftSent,
 }: {
@@ -78,11 +91,19 @@ export function YOpsDraftTab({
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void> | void;
+  onGenerateProposal?: () => Promise<void> | void;
+  onProposalAction?: (action: ProposalGenerationAction) => Promise<void> | void;
+  onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
   onSendToYOps?: () => Promise<void> | void;
+  onVerifyProposal?: () => Promise<void> | void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
 }) {
@@ -106,7 +127,6 @@ export function YOpsDraftTab({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
   const [changeNote, setChangeNote] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
   const transitionReview = useCommitTransitionView(
     candidate.projectId,
     targetBranch,
@@ -228,7 +248,6 @@ export function YOpsDraftTab({
     setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
     setErrorMessage(null);
     setChangeNote('');
-    setOverrideReason('');
     workspaceTransition.reset();
   }, [candidate.id, draft.id, draftFingerprint, workspaceTransition.reset]);
 
@@ -388,31 +407,19 @@ export function YOpsDraftTab({
   async function handleReview() {
     if (!materializedTrees || !materializedRelations || !canReview) return;
     setErrorMessage(null);
-    setOverrideReason('');
     await workspaceTransition.review(
       { trees: materializedTrees, relations: materializedRelations },
       changeNote
     );
   }
 
-  async function handleDecision(outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) {
-    const result = await workspaceTransition.decide(outcome, reason);
-    if (result) {
-      setCommittedHash(result.commitId);
-      setStatus('committed');
-      onCommitted?.(result.commitId, targetBranch, result.workspace);
-    }
-  }
-
   function handleTargetBranchChange(branch: string) {
     setTargetBranch(branch);
-    setOverrideReason('');
     workspaceTransition.reset();
   }
 
   function handleChangeNote(next: string) {
     setChangeNote(next);
-    setOverrideReason('');
     workspaceTransition.reset();
   }
 
@@ -462,9 +469,17 @@ export function YOpsDraftTab({
             candidate={candidate}
             flowError={visibleErrorMessage}
             onContinueToValidation={() => onViewChange?.('validation')}
+            onGenerateProposal={onGenerateProposal}
+            onProposalAction={onProposalAction}
+            onProposalPostureChange={onProposalPostureChange}
             onSendToYOps={onSendToYOps}
             onSaveYOpsScript={handleSaveYOpsScript}
+            onVerifyProposal={onVerifyProposal}
             proposalMode={proposalMode}
+            proposalGeneration={proposalGeneration}
+            proposalGenerationBusy={proposalGenerationBusy}
+            proposalPosture={proposalPosture}
+            proposalReviewState={proposalReviewState}
             sendingToYOps={Boolean(sendingToYOps)}
             statusText={statusText}
             yopsDraftSent={Boolean(yopsDraftSent)}
@@ -532,13 +547,10 @@ export function YOpsDraftTab({
           continuationBusy={Boolean(continuationBusy)}
           isBusy={isBusy}
           onChangeNote={handleChangeNote}
-          onDecision={(outcome, reason) => void handleDecision(outcome, reason)}
-          onOverrideReasonChange={setOverrideReason}
           onReview={() => void handleReview()}
           onContinueFromCommit={onContinueFromCommit}
           onTargetBranchChange={handleTargetBranchChange}
           onViewCommitInState={onViewCommitInState}
-          overrideReason={overrideReason}
           reviewBlockers={reviewBlockers}
           targetBranch={targetBranch}
           transitionReview={transitionReview}
@@ -1043,12 +1055,9 @@ function CommitReviewView({
   isBusy,
   onChangeNote,
   onContinueFromCommit,
-  onDecision,
-  onOverrideReasonChange,
   onReview,
   onTargetBranchChange,
   onViewCommitInState,
-  overrideReason,
   reviewBlockers,
   targetBranch,
   transitionReview,
@@ -1071,12 +1080,9 @@ function CommitReviewView({
     targetBranch: string,
     createBranchFrom?: string
   ) => Promise<void> | void;
-  onDecision: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
-  onOverrideReasonChange: (reason: string) => void;
   onReview: () => void;
   onTargetBranchChange: (branch: string) => void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
-  overrideReason: string;
   reviewBlockers: string[];
   targetBranch: string;
   transitionReview: ReturnType<typeof useCommitTransitionView>;
@@ -1094,7 +1100,13 @@ function CommitReviewView({
           ? 'Ready'
           : 'Return';
   const displayedReview = pendingView
-    ? { error: null, loading: false, view: pendingView }
+    ? {
+        changeProjection: transitionState.changeProjection,
+        error: null,
+        loading: false,
+        reviewSnapshot: transitionState.reviewSnapshot,
+        view: pendingView,
+      }
     : transitionReview;
 
   return (
@@ -1162,13 +1174,7 @@ function CommitReviewView({
           targetBranch={targetBranch}
         />
       ) : pendingView ? (
-        <TransitionDecisionControls
-          busy={isBusy}
-          onDecide={onDecision}
-          onOverrideReasonChange={onOverrideReasonChange}
-          overrideReason={overrideReason}
-          view={pendingView}
-        />
+        <ChangeDecisionHandoff reviewSnapshot={transitionState.reviewSnapshot} />
       ) : (
         <aside
           aria-label="Review controls"

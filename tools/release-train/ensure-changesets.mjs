@@ -96,6 +96,7 @@ export function parseChangesetEntries(markdown) {
 
 export function readChangesets({ rootDir = rootPath } = {}) {
   const changesetDir = join(rootDir, '.changeset');
+  const ignoredPackageNames = new Set(readChangesetConfig({ rootDir }).ignore ?? []);
   const names = existsSync(changesetDir)
     ? readdirSync(changesetDir)
         .filter((name) => name.endsWith('.md') && name !== 'README.md')
@@ -103,20 +104,24 @@ export function readChangesets({ rootDir = rootPath } = {}) {
         .sort()
     : [];
 
-  return names.map((name) => {
-    const markdown = readFileSync(join(rootDir, name), 'utf8');
-    const entries = parseChangesetEntries(markdown);
-    return {
-      name,
-      entries,
-      packages: entries.map((entry) => entry.packageName),
-      summary:
-        markdown
-          .split(/^---\s*$/m)
-          .at(-1)
-          ?.trim() ?? '',
-    };
-  });
+  return names
+    .map((name) => {
+      const markdown = readFileSync(join(rootDir, name), 'utf8');
+      const entries = parseChangesetEntries(markdown).filter(
+        (entry) => !ignoredPackageNames.has(entry.packageName)
+      );
+      return {
+        name,
+        entries,
+        packages: entries.map((entry) => entry.packageName),
+        summary:
+          markdown
+            .split(/^---\s*$/m)
+            .at(-1)
+            ?.trim() ?? '',
+      };
+    })
+    .filter((changeset) => changeset.entries.length > 0);
 }
 
 function readPackageVersion(packagePath, rootDir) {
@@ -180,6 +185,44 @@ export function releaseTrainPackageNames({ releaseSurface }) {
       releaseSurface.npmPublishPackages ??
       []),
   ];
+}
+
+export function pausedReleaseTrainIgnoreDiagnostics({ releaseSurface, changesetConfig = {} } = {}) {
+  const ignoredPackageNames = new Set(changesetConfig.ignore ?? []);
+  return (releaseSurface?.pausedReleaseTrainPackages ?? [])
+    .filter((packageName) => !ignoredPackageNames.has(packageName))
+    .map(
+      (packageName) =>
+        `${packageName} is paused in the release train and must be listed in .changeset/config.json ignore`
+    );
+}
+
+export function pausedReleaseTrainChangesetDiagnostics({ changesets = [], releaseSurface } = {}) {
+  const pausedPackageNames = new Set(releaseSurface?.pausedReleaseTrainPackages ?? []);
+  if (pausedPackageNames.size === 0) {
+    return [];
+  }
+
+  const diagnostics = [];
+  for (const changeset of changesets) {
+    for (const entry of changeset.entries ?? []) {
+      if (pausedPackageNames.has(entry.packageName)) {
+        diagnostics.push(
+          `${changeset.name} targets ${entry.packageName}, which is paused in the release train`
+        );
+      }
+    }
+  }
+  return diagnostics;
+}
+
+export function assertNoPausedReleaseTrainChangesets({ changesets = [], releaseSurface } = {}) {
+  const diagnostics = pausedReleaseTrainChangesetDiagnostics({ changesets, releaseSurface });
+  if (diagnostics.length === 0) {
+    return;
+  }
+
+  throw new Error(`changesets target paused release-train package(s):\n${diagnostics.join('\n')}`);
 }
 
 function packageSlug(packageName) {

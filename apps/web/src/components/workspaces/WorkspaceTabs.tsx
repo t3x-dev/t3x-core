@@ -1,9 +1,15 @@
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
+  WorkspaceProposalGenerationView,
+  WorkspaceProposalPosture,
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import type {
+  ProposalGenerationAction,
+  ProposalGenerationReviewState,
+} from './ProposalGenerationReviewView';
 import { SourcesTab } from './SourcesTab';
 import { SourceTransitionTab } from './SourceTransitionTab';
 import { type WorkspaceYOpsFlowView, YOpsDraftTab } from './YOpsDraftTab';
@@ -108,15 +114,23 @@ export function WorkspaceTabs({
   onChatSourceEvidenceChange,
   onContinueFromCommit,
   onExtractCandidate,
+  onGenerateProposal,
+  onProposalAction,
+  onProposalPostureChange,
   onSourceMaterialUploaded,
   onSourceArtifactChange,
   onSendToYOps,
+  onVerifyProposal,
   onYOpsApplied,
   onYOpsCommitted,
   onYOpsScriptSave,
   onViewCommitInState,
   onWorkflowTabChange,
   sendingToYOps,
+  proposalGeneration,
+  proposalGenerationBusy,
+  proposalPosture,
+  proposalReviewState,
   sourceConversationId,
   sourceParentCommitHash,
   yopsDraftSent,
@@ -135,15 +149,23 @@ export function WorkspaceTabs({
     createBranchFrom?: string
   ) => Promise<void> | void;
   onExtractCandidate?: () => Promise<void> | void;
+  onGenerateProposal?: () => Promise<void> | void;
+  onProposalAction?: (action: ProposalGenerationAction) => Promise<void> | void;
+  onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onSendToYOps?: () => Promise<void> | void;
+  onVerifyProposal?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
@@ -159,7 +181,11 @@ export function WorkspaceTabs({
         onChatSourceEvidenceChange,
         onContinueFromCommit,
         onExtractCandidate,
+        onGenerateProposal,
+        onProposalAction,
+        onProposalPostureChange,
         onSendToYOps,
+        onVerifyProposal,
         onSourceMaterialUploaded,
         onSourceArtifactChange,
         onYOpsApplied,
@@ -168,6 +194,10 @@ export function WorkspaceTabs({
         onViewCommitInState,
         onWorkflowTabChange,
         sendingToYOps,
+        proposalGeneration,
+        proposalGenerationBusy,
+        proposalPosture,
+        proposalReviewState,
         sourceConversationId,
         sourceParentCommitHash,
         yopsDraftSent,
@@ -189,7 +219,11 @@ interface RenderWorkspaceTabOptions {
     createBranchFrom?: string
   ) => Promise<void> | void;
   onExtractCandidate?: () => Promise<void> | void;
+  onGenerateProposal?: () => Promise<void> | void;
+  onProposalAction?: (action: ProposalGenerationAction) => Promise<void> | void;
+  onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
   onSendToYOps?: () => Promise<void> | void;
+  onVerifyProposal?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
@@ -198,6 +232,10 @@ interface RenderWorkspaceTabOptions {
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
+  proposalGeneration?: WorkspaceProposalGenerationView;
+  proposalGenerationBusy?: boolean;
+  proposalPosture?: WorkspaceProposalPosture;
+  proposalReviewState?: ProposalGenerationReviewState;
   sourceConversationId?: string;
   sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
@@ -230,7 +268,6 @@ function renderWorkspaceTab(
           active={activeTab !== 'chat'}
           candidate={candidate}
           key={`${candidate.id}:${candidate.revision ?? 'unsaved'}:${JSON.stringify(candidate.sourceArtifact)}`}
-          onCommitted={options.onYOpsCommitted}
           onViewChange={options.onWorkflowTabChange}
           view={activeTab === 'chat' ? 'ops' : activeTab}
         />
@@ -242,12 +279,20 @@ function renderWorkspaceTab(
           continuationBusy={options.continuationBusy}
           flowError={options.flowError}
           onContinueFromCommit={options.onContinueFromCommit}
+          onGenerateProposal={options.onGenerateProposal}
+          onProposalAction={options.onProposalAction}
+          onProposalPostureChange={options.onProposalPostureChange}
           onSendToYOps={options.onSendToYOps}
+          onVerifyProposal={options.onVerifyProposal}
           onApplied={options.onYOpsApplied}
           onCommitted={options.onYOpsCommitted}
           onYOpsScriptSave={options.onYOpsScriptSave}
           onViewCommitInState={options.onViewCommitInState}
           sendingToYOps={options.sendingToYOps}
+          proposalGeneration={options.proposalGeneration}
+          proposalGenerationBusy={options.proposalGenerationBusy}
+          proposalPosture={options.proposalPosture}
+          proposalReviewState={options.proposalReviewState}
           onViewChange={options.onWorkflowTabChange}
           view={activeTab === 'chat' ? 'ops' : activeTab}
           yopsDraftSent={options.yopsDraftSent}

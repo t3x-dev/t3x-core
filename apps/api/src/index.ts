@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import {
+  cleanupExpiredRateLimitBuckets,
   cleanupOldEvents,
   closeDB,
   createApp,
@@ -120,10 +121,17 @@ async function start() {
     cleanupInterval = setInterval(
       async () => {
         try {
-          const count = await cleanupOldEvents(await getDB(), { retentionDays: 7 });
-          pinoLogger.info({ deleted: count }, 'events cleanup ran');
+          const db = await getDB();
+          const [eventsDeleted, rateLimitBucketsDeleted] = await Promise.all([
+            cleanupOldEvents(db, { retentionDays: 7 }),
+            cleanupExpiredRateLimitBuckets(db),
+          ]);
+          pinoLogger.info(
+            { events_deleted: eventsDeleted, rate_limit_buckets_deleted: rateLimitBucketsDeleted },
+            'storage cleanup ran'
+          );
         } catch (err) {
-          pinoLogger.warn({ err }, 'events cleanup failed');
+          pinoLogger.warn({ err }, 'storage cleanup failed');
         }
       },
       60 * 60 * 1000

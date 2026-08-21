@@ -21,6 +21,7 @@ export type {
   RelateYOp,
   RelationEndpointPattern,
   RelationTypeSchema,
+  RequiredRelationRuleSchema,
   ReservedRuleSchema,
   SlotSchema,
   SlotType,
@@ -38,6 +39,7 @@ export type {
   YSchemaKey,
   YSchemaPath,
   YSchemaRelation,
+  YSchemaRuleSchema,
 } from './types';
 export { validateTree } from './validateTree';
 export type {

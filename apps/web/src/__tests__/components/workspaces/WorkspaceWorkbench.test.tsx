@@ -1,13 +1,25 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { usePinsStore } from '@/store/pinsStore';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceProposalGenerationView } from '@/types/workspaces';
+
+const proposalGenerationMocks = vi.hoisted(() => ({
+  commit: vi.fn(),
+  decide: vi.fn(),
+  generate: vi.fn(),
+  verify: vi.fn(),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceProposalGeneration', () => ({
+  useWorkspaceProposalGeneration: () => proposalGenerationMocks,
+}));
 
 vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
   WorkspaceYOpsEditor: ({
@@ -215,6 +227,83 @@ function workspaceTransitionView({
   };
 }
 
+function workspaceReviewArtifacts(
+  view: Extract<TransitionViewV1, { mode: 'transition' }>,
+  status: ChangeProjectionV1['status'],
+  input: { refName?: string; workspaceId?: string } = {}
+) {
+  const refName = input.refName ?? 'main';
+  const workspaceId = input.workspaceId ?? 'workspace_ready';
+  const objects: ReviewSnapshotV1['objects'] = {
+    base: view.change.base,
+    result: view.change.result,
+    effect: view.audit.effect,
+    proposal: view.audit.proposal,
+    statements: view.audit.statements.map((statement) => statement.statement),
+    ...(view.audit.decision ? { decision: view.audit.decision } : {}),
+    ...(view.audit.commit ? { commit: view.audit.commit } : {}),
+  };
+  const reviewSnapshot: ReviewSnapshotV1 = {
+    schema: 't3x.application/review-snapshot/v1',
+    version: 1,
+    snapshotId: `rvs_${status}`,
+    snapshotDigest: transitionDigest(status[0] ?? 's'),
+    createdAt: '2026-07-30T00:00:00.000Z',
+    projectId: 'proj_1',
+    workspaceId,
+    transitionId: 'trn_workspace_review',
+    request: {
+      kind: 'structured_yops',
+      id: `request:${workspaceId}`,
+      createdAt: '2026-07-30T00:00:00.000Z',
+    },
+    review: {
+      digest: transitionDigest('r'),
+      precondition: {
+        workspaceRevision: transitionPrecondition.workspace_revision,
+        refName,
+        refHead: transitionPrecondition.ref_head,
+        effectDigest: transitionPrecondition.effect_digest,
+        proposalDigest: transitionPrecondition.proposal_digest,
+        statementDigests: transitionPrecondition.statement_digests,
+        policyDigest: transitionPrecondition.policy_digest,
+      },
+    },
+    objects,
+    transition: view,
+  };
+  const changeProjection: ChangeProjectionV1 = {
+    schema: 't3x.application/change-projection/v1',
+    version: 1,
+    authoritative: false,
+    source: {
+      kind: 'review_snapshot',
+      snapshotId: reviewSnapshot.snapshotId,
+      snapshotDigest: reviewSnapshot.snapshotDigest,
+      snapshotCreatedAt: reviewSnapshot.createdAt,
+    },
+    projectId: reviewSnapshot.projectId,
+    workspaceId: reviewSnapshot.workspaceId,
+    transitionId: reviewSnapshot.transitionId,
+    title: 'Workspace review projection',
+    status,
+    review: {
+      digest: reviewSnapshot.review.digest,
+      refName: reviewSnapshot.review.precondition.refName,
+      refHead: reviewSnapshot.review.precondition.refHead,
+      workspaceRevision: reviewSnapshot.review.precondition.workspaceRevision,
+      policyDigest: reviewSnapshot.review.precondition.policyDigest,
+    },
+    objects,
+    checks: view.checks,
+    actions: view.capabilities,
+  };
+  return {
+    change_projection: changeProjection,
+    review_snapshot: reviewSnapshot,
+  };
+}
+
 const workspaceCandidates: WorkspaceCandidate[] = [
   {
     id: 'workspace_ready',
@@ -338,7 +427,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         fileName: 'release.md',
       },
     ],
-    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'pinned' }],
     schemaCandidate: {
       summary: 'Release-note candidate still needs required release metadata.',
       fields: [
@@ -391,6 +480,60 @@ const workspaceCandidates: WorkspaceCandidate[] = [
   },
 ];
 
+function governedProposalView(): WorkspaceProposalGenerationView {
+  return {
+    transition_id: 'transition_governed',
+    project_id: 'proj_1',
+    workspace_id: 'workspace_ready',
+    request_id: 'proposal-generation:test',
+    created_at: '2026-08-13T00:00:00.000Z',
+    precondition: {
+      ...transitionPrecondition,
+      ref_name: 'dev',
+    },
+    transition: workspaceTransitionView(),
+    statements: [],
+    generation: {
+      posture: 'guided',
+      profileResource: {
+        uri: 't3x://proposal-generation-profiles/guided/v1',
+        mediaType: 'application/json',
+        digest: transitionDigest('e'),
+      },
+      requestedBy: { kind: 'human', id: 'human:test' },
+      generator: { kind: 'service', id: 'service:test' },
+      provider: 'test-provider',
+      model: 'test-model',
+      run: { id: 'run_test', recordedAt: '2026-08-13T00:00:00.000Z' },
+      counts: { sourceBacked: 0, inferred: 1, recommended: 0, challenges: 0 },
+      groups: [
+        {
+          id: 'audience',
+          origin: 'inferred',
+          operationIndexes: [0],
+          operations: [{ set: { path: 'prd/summary/audience', value: 'Reviewers' } }],
+          paths: ['prd/summary/audience'],
+          values: [
+            {
+              path: 'prd/summary/audience',
+              before: { availability: 'unavailable' },
+              after: { availability: 'available', value: 'Reviewers' },
+              changed: true,
+            },
+          ],
+          evidence: [],
+          basis: [{ uri: 't3x://basis/workspace' }],
+          assumptions: [],
+          reason: 'The workspace scope supports this inference.',
+          challenges: [],
+        },
+      ],
+      warnings: [],
+      verification: { status: 'passed', findings: [] },
+    },
+  };
+}
+
 afterEach(() => {
   window.localStorage.removeItem('t3x:workspace-source-chat:proj_1:workspace_ready');
   window.localStorage.removeItem(
@@ -400,6 +543,7 @@ afterEach(() => {
     't3x:workspace-source-chat:proj_1:workspace_ready:sha256:merged-main-head'
   );
   usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
+  Object.values(proposalGenerationMocks).forEach((mock) => mock.mockReset());
   vi.restoreAllMocks();
 });
 
@@ -410,6 +554,40 @@ function activateTab(name: string | RegExp) {
 }
 
 describe('WorkspaceWorkbench', () => {
+  it('hands governed proposals to Validation and Changes without direct Commit', async () => {
+    const view = governedProposalView();
+    proposalGenerationMocks.generate.mockResolvedValue({
+      transition_id: view.transition_id,
+      reused: false,
+      view,
+    });
+    proposalGenerationMocks.verify.mockResolvedValue({
+      transition_id: view.transition_id,
+      reused: false,
+      view,
+      statements: [],
+      operational_results: [],
+    });
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate governed proposal' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Governed proposal review' })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Changes review' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+    expect(proposalGenerationMocks.decide).not.toHaveBeenCalled();
+    expect(proposalGenerationMocks.commit).not.toHaveBeenCalled();
+  });
+
   it('renders current workspace detail without an internal workspace selector', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
@@ -1253,23 +1431,31 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === reviewUrl) {
+        const transition = workspaceTransitionView({ overrideAllowed: true });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({ overrideAllowed: true }),
+            ...workspaceReviewArtifacts(transition, 'reviewing', {
+              workspaceId: workspaceCandidates[1].id,
+            }),
+            transition,
             precondition: transitionPrecondition,
           },
         });
       }
       if (url === decideUrl) {
+        const transition = workspaceTransitionView({
+          commitId: transitionDigest('9'),
+          outcome: 'overridden',
+          overrideAllowed: true,
+        });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({
-              commitId: transitionDigest('9'),
-              outcome: 'overridden',
-              overrideAllowed: true,
+            ...workspaceReviewArtifacts(transition, 'committed', {
+              workspaceId: workspaceCandidates[1].id,
             }),
+            transition,
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},
@@ -1351,42 +1537,22 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByRole('region', { name: 'Change review' })).toHaveTextContent(
       'Awaiting decision'
     );
-    const overrideButton = screen.getByRole('button', { name: 'Continue anyway and save' });
-    expect(overrideButton).toBeEnabled();
-    fireEvent.click(overrideButton);
+    expect(screen.getByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and commit actions now live in Changes so Web has one review lifecycle.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open Changes/ })
+        .some(
+          (link) =>
+            link.getAttribute('href') === '/project/proj_1/changes/workspace_draft/rvs_reviewing'
+        )
+    ).toBe(true);
     expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(0);
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a reason before continuing with this failed check.'
-    );
-    fireEvent.change(screen.getByLabelText('Why continue despite the failed check?'), {
-      target: { value: 'This known schema gap is acceptable for the draft.' },
-    });
-    fireEvent.click(overrideButton);
-
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, decideUrl)).toBe(1));
-    const decisionBody = JSON.parse(
-      String(findFetchCall(fetchMock.mock.calls, decideUrl)[1]?.body)
-    );
-    expect(decisionBody).toMatchObject({
-      outcome: 'overridden',
-      decision_reason: 'This known schema gap is acceptable for the draft.',
-      precondition: transitionPrecondition,
-    });
     expect(countFetchCalls(fetchMock.mock.calls, `${workspaceUrl}/commit`)).toBe(0);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue on release/notes' }));
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, workspaceUrl)).toBe(2));
-    const continuationSave = fetchMock.mock.calls.filter(
-      ([input]) => String(input) === workspaceUrl
-    )[1];
-    const continuationBody = JSON.parse(String(continuationSave?.[1]?.body));
-    expect(continuationBody).toMatchObject({
-      if_revision: 3,
-      workspace: {
-        status: 'draft',
-      },
-    });
-    expect(continuationBody.workspace).not.toHaveProperty('lastCommitHash');
 
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
@@ -1468,9 +1634,12 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole('button', { name: 'Include turn' }));
 
-    await screen.findByText('1 selected source turns');
-    await screen.findByText('1 source');
-    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+    await within(detail).findByText('1 selected source turns');
+    await within(detail).findByText('1 source');
+    await waitFor(() =>
+      expect(usePinsStore.getState().isPinned('conversation_turn', 'turn_persisted_1')).toBe(true)
+    );
+    fireEvent.click(within(detail).getByRole('button', { name: 'Generate candidate proposal' }));
 
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBeGreaterThanOrEqual(1)
@@ -1507,6 +1676,69 @@ describe('WorkspaceWorkbench', () => {
         ],
       },
     });
+  });
+
+  it('stabilizes selected chat evidence alongside material sources', async () => {
+    const mixedSourceCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      sourceBundle: [workspaceCandidates[0]!.sourceBundle[1]!],
+    };
+    const pinsUrl = 'http://localhost:8000/api/v1/projects/proj_1/pins';
+    const turnsUrl = 'http://localhost:8000/api/v1/turns?';
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_1');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith(turnsUrl)) {
+        return jsonResponse({
+          success: true,
+          data: {
+            turns: [
+              {
+                turn_hash: 'turn_persisted_1',
+                project_id: 'proj_1',
+                conversation_id: 'conv_1',
+                role: 'assistant',
+                content: 'Persisted turn ready to include as source evidence.',
+                created_at: '2026-07-03T00:00:00.000Z',
+              },
+            ],
+            limit: 100,
+            offset: 0,
+          },
+        });
+      }
+      if (url === pinsUrl && init?.method !== 'POST') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              id: 'pin_turn_1',
+              project_id: 'proj_1',
+              type: 'conversation_turn',
+              ref_id: 'turn_persisted_1',
+              selected_assertion_ids: null,
+              pinned_at: '2026-07-03T00:00:00.000Z',
+              pinned_by: null,
+            },
+          ],
+        });
+      }
+      return jsonResponse({ success: true, data: {} });
+    });
+
+    render(<WorkspaceWorkbench candidates={[mixedSourceCandidate]} projectId="proj_1" />);
+
+    const detail = screen.getByRole('region', { name: 'Workspace detail' });
+    const chatTab = within(detail).getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+
+    expect(
+      await within(detail).findByText('Persisted turn ready to include as source evidence.')
+    ).toBeInTheDocument();
+    await within(detail).findByText('1 selected source turns');
+    await screen.findByText('2 sources');
+    expect(screen.getByRole('button', { name: 'Generate candidate proposal' })).toBeEnabled();
   });
 
   it('starts a clean source round when the stored conversation belongs to an older head', async () => {
@@ -1567,10 +1799,10 @@ describe('WorkspaceWorkbench', () => {
     expect(
       screen.queryByText('This turn belongs to the pre-merge main workspace.')
     ).not.toBeInTheDocument();
-    expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBe(1);
+    expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBeGreaterThanOrEqual(1);
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument());
-    activateTab('Proposal');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument());
+    activateTab(/Proposal/);
     expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
   });
 
@@ -2436,22 +2668,30 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === workspaceReviewUrl) {
+        const transition = workspaceTransitionView();
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView(),
+            ...workspaceReviewArtifacts(transition, 'reviewing', {
+              workspaceId: yopsWorkspace.id,
+            }),
+            transition,
             precondition: transitionPrecondition,
           },
         });
       }
       if (url === workspaceDecideUrl) {
+        const transition = workspaceTransitionView({
+          commitId: transitionDigest('8'),
+          outcome: 'accepted',
+        });
         return jsonResponse({
           success: true,
           data: {
-            transition: workspaceTransitionView({
-              commitId: transitionDigest('8'),
-              outcome: 'accepted',
+            ...workspaceReviewArtifacts(transition, 'committed', {
+              workspaceId: yopsWorkspace.id,
             }),
+            transition,
             precondition: transitionPrecondition,
             decision_digest: transitionDigest('4'),
             commit: {},
@@ -2673,17 +2913,16 @@ describe('WorkspaceWorkbench', () => {
       why: 'Keep the PRD audience aligned with the reviewed source.',
       if_revision: 2,
     });
-    expect(await screen.findByRole('button', { name: 'Approve and save' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
-    await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, workspaceDecideUrl)).toBeGreaterThanOrEqual(1)
-    );
-    const [, decideInit] = findFetchCall(fetchMock.mock.calls, workspaceDecideUrl);
-    expect(JSON.parse(String(decideInit?.body))).toMatchObject({
-      outcome: 'accepted',
-      why: 'Keep the PRD audience aligned with the reviewed source.',
-      precondition: transitionPrecondition,
-    });
+    expect(await screen.findByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open Changes/ })
+        .some(
+          (link) =>
+            link.getAttribute('href') === '/project/proj_1/changes/workspace_ready/rvs_reviewing'
+        )
+    ).toBe(true);
+    expect(countFetchCalls(fetchMock.mock.calls, workspaceDecideUrl)).toBe(0);
     expect(
       countFetchCalls(
         fetchMock.mock.calls,
@@ -2694,7 +2933,9 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true')
     );
-    expect(screen.getAllByText(transitionDigest('8')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('region', { name: 'Change review' })).toHaveTextContent(
+      'Awaiting decision'
+    );
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 

@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
@@ -45,7 +46,7 @@
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.3.0-beta.17",
     "js-yaml": "^4.3.1",
-    "json-canonicalize": "^2.0.0",
+    "json-canonicalize": "2.0.0",
     "nanoid": "^5.1.16",
     "pg": "^8.21.0",
     "postgres": "^3.4.9",

@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { SchemaRegistry } from '@/components/schemas';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 
@@ -11,278 +11,220 @@ function renderRegistry(projectId = 'proj_test') {
 }
 
 describe('SchemaRegistry', () => {
-  it('shows PRD, Skill, Prompt, and ESPHome Device as selectable Schema families', () => {
+  it('opens a Schema identity without inferring a default version', () => {
     renderRegistry();
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByRole('tablist', { name: 'Schema families' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /PRD Schema v2/i })).toHaveAttribute(
-      'aria-selected',
-      'true'
+    expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skill Schema/ })).toBeInTheDocument();
+    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
+    expect(screen.queryByText('Current version')).not.toBeInTheDocument();
+    expect(screen.queryByText('Version behavior')).not.toBeInTheDocument();
+    expect(screen.queryByText('0 commits')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Published from composition:/)).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Schema versions' })).toHaveClass(
+      'rounded-none'
     );
-    expect(screen.getByRole('tab', { name: /Skill Schema v1/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Prompt Schema v1/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /ESPHome Device v1/i })).toBeInTheDocument();
-    expect(screen.getByRole('tablist', { name: 'Schema families' })).toHaveAttribute(
-      'aria-orientation',
-      'horizontal'
-    );
-    expect(screen.getByText('4 families')).toBeInTheDocument();
-    expect(screen.getByText(/2 nodes · 8 paths/)).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 
-  it('switches to the Skill family and exposes its structured nodes and typed relations', () => {
-    renderRegistry();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /Skill Schema v1/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getAllByText('Skill Schema v1')).toHaveLength(2);
-    expect(screen.getByText(/9 nodes · 24 paths/)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Relations' })).toBeInTheDocument();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Relations' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getByText('6 relation types')).toBeInTheDocument();
-    expect(screen.getByText('has_step')).toBeInTheDocument();
-    expect(screen.getByText('checks/*')).toBeInTheDocument();
-    expect(screen.getAllByText('workflows/*')).not.toHaveLength(0);
-  });
-
-  it('exposes the Prompt structure, relations, executable rules, YAML, and changes views', () => {
-    renderRegistry();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /Prompt Schema v1/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getAllByText('Prompt Schema v1')).toHaveLength(2);
-    const rootFact = screen.getByText('Root').parentElement;
-    expect(rootFact).not.toBeNull();
-    expect(rootFact).toHaveTextContent('prompt');
-    expect(screen.getByText(/11 nodes · 34 paths/)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Relations' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Rules' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Canonical YAML' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Changes' })).toBeInTheDocument();
-
-    const messagesToggle = screen.getByRole('button', { name: 'Expand messages.* structure' });
-    expect(messagesToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('messages.*.template')).not.toBeInTheDocument();
-    fireEvent.click(messagesToggle);
-    expect(messagesToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('messages.*.template')).toBeInTheDocument();
-    expect(screen.getByText('pattern')).toBeInTheDocument();
-    expect(screen.getAllByText('executable').length).toBeGreaterThan(0);
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Rules' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getByText('6 executable')).toBeInTheDocument();
-    expect(screen.getByText('prompt.placeholders_declared')).toBeInTheDocument();
-    expect(screen.getAllByText('blocking')).toHaveLength(6);
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Relations' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getByText('9 relation types')).toBeInTheDocument();
-    expect(screen.getByText('uses_output_schema')).toBeInTheDocument();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Canonical YAML' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getByText('t3x/prompt@v1')).toBeInTheDocument();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getByText('Changes from current')).toBeInTheDocument();
-  });
-
-  it('exposes ESPHome Device v1 as a bindable device-state Schema', () => {
-    renderRegistry();
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /ESPHome Device v1/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getAllByText('ESPHome Device v1')).toHaveLength(2);
-    const rootFact = screen.getByText('Root').parentElement;
-    expect(rootFact).not.toBeNull();
-    expect(rootFact).toHaveTextContent('device');
-    expect(screen.getByText(/5 nodes · 8 paths/)).toBeInTheDocument();
-    expect(screen.getByText('t3x/esphome-device')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open ESPHome Device v1 canonical YAML' }));
-
-    expect(screen.getByRole('tab', { name: 'Canonical YAML' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(screen.getByText('t3x/esphome-device@v1')).toBeInTheDocument();
-  });
-
-  it('labels executable and descriptive rules distinctly', () => {
-    renderRegistry();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /Skill Schema v1/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Rules' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getByText('2 executable')).toBeInTheDocument();
-    expect(screen.getByText('descriptive')).toBeInTheDocument();
-    expect(screen.getByText('skill.generated-trigger-description')).toBeInTheDocument();
-  });
-
-  it('binds runtime releases and keeps draft previews view-only', () => {
+  it('isolates Official and project Schemas using protected source tags', () => {
     const preview = getSchemaRegistryPreview('proj_test');
-    const onSetProjectDefault = vi.fn().mockResolvedValue(undefined);
+    const official = preview.families[0]!;
+    render(
+      <SchemaRegistry
+        defaultFamilyId={official.id}
+        families={[
+          { ...official, source: 'official', tags: ['source:official'] },
+          {
+            ...official,
+            id: 'published:projects/proj_test/prd',
+            name: 'Project PRD',
+            canonicalName: 'projects/proj_test/prd',
+            source: 'team',
+            tags: ['source:team'],
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
+    expect(screen.getByRole('button', { name: /Project PRD/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^PRD Schema/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project PRD' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Official' }));
+    expect(screen.getByRole('button', { name: /^PRD Schema/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Project PRD/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'PRD Schema' })).toBeInTheDocument();
+  });
+
+  it('keeps Schema identities clean without extra management menu', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const baseFamily = preview.families[0]!;
+    const officialFamily = {
+      ...baseFamily,
+      artifactId: 'ysa_official_prd',
+      metadataRevision: 2,
+      source: 'official' as const,
+      tags: ['source:official'],
+    };
+
+    render(<SchemaRegistry defaultFamilyId={officialFamily.id} families={[officialFamily]} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Schema management menu' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows archived Schema identities without a separate status filter', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const archivedFamily = {
+      ...preview.families[0]!,
+      lifecycleStatus: 'archived' as const,
+    };
+
+    render(<SchemaRegistry defaultFamilyId={archivedFamily.id} families={[archivedFamily]} />);
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Filter by Schema status' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+  });
+
+  it('keeps long Schema and version collections inside bounded scroll regions', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
+    const baseFamily = preview.families[0]!;
+    const baseRelease = baseFamily.releases[0]!;
+    const releases = Array.from({ length: 20 }, (_, index) => ({
+      ...baseRelease,
+      id: `release_${index}`,
+      version: `1.0.${index}`,
+    }));
+    const families = Array.from({ length: 16 }, (_, index) => ({
+      ...baseFamily,
+      id: `schema_${index}`,
+      name: `Schema ${index}`,
+      canonicalName: `t3x/schema-${index}`,
+      releases: index === 0 ? releases : baseFamily.releases,
+    }));
+
+    render(<SchemaRegistry defaultFamilyId="schema_0" families={families} />);
+
+    expect(screen.getByLabelText('Schema results')).toHaveClass(
+      'overflow-y-auto',
+      '[scrollbar-gutter:stable]'
+    );
+    expect(screen.getByRole('button', { name: /Schema 15/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Schema version results')).toHaveClass(
+      'overflow-x-auto',
+      'min-[1101px]:overflow-y-auto'
+    );
+    expect(screen.getAllByRole('radio')).toHaveLength(20);
+  });
+
+  it('shows version details only after the user selects an exact version', () => {
+    renderRegistry();
+
+    fireEvent.click(screen.getByRole('radio', { name: /v2 Published/i }));
+
+    expect(screen.getByText('PRD Schema v2')).toBeInTheDocument();
+    expect(screen.getByText(/2 nodes · 8 paths/)).toBeInTheDocument();
+    expect(screen.getByText('Applied explicitly per Workspace')).toBeInTheDocument();
+  });
+
+  it('applies only the selected exact version to a Workspace', () => {
+    const preview = getSchemaRegistryPreview('proj_test');
     const onApplyToWorkspace = vi.fn().mockResolvedValue(undefined);
     render(
       <SchemaRegistry
         {...preview}
         bindingActions={{
           onApplyToWorkspace,
-          onSetProjectDefault,
           pending: null,
-          workspaceTarget: {
-            id: 'workspace_main',
-            title: 'Main workspace',
-          },
+          workspaceTarget: { id: 'workspace_main', title: 'Main workspace' },
         }}
       />
     );
 
-    expect(screen.getByRole('region', { name: 'Schema binding actions' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Use in current & new Workspaces' }));
+    expect(screen.queryByRole('group', { name: 'Schema binding actions' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /v2 Published/i }));
+    expect(screen.getByRole('group', { name: 'Schema binding actions' })).toBeInTheDocument();
+    expect(screen.queryByText('Workspace binding')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
-    const currentPrd = preview.families[0].releases.find(
-      (release) => release.id === preview.families[0].currentReleaseId
+    expect(onApplyToWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ canonicalName: 't3x/prd', version: 'v2' })
     );
-    expect(onSetProjectDefault).toHaveBeenCalledWith(currentPrd);
-    expect(onApplyToWorkspace).toHaveBeenCalledWith(currentPrd);
-
-    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
-    expect(screen.getByText('view only')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Use in current & new Workspaces' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Apply to Main workspace' })).toBeDisabled();
+    expect(
+      screen.queryByRole('menuitem', { name: /Set as project default/i })
+    ).not.toBeInTheDocument();
   });
 
-  it('remembers each family version selection while resetting the detail view', () => {
-    renderRegistry();
-
-    fireEvent.click(screen.getByRole('radio', { name: /v1 Historical/i }));
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /Skill Schema v1/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Relations' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /PRD Schema v2/i }), {
-      button: 0,
-      ctrlKey: false,
-    });
-
-    expect(screen.getByRole('radio', { name: /v1 Historical/i })).toBeChecked();
-    expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('tab', { name: 'Relations' })).not.toBeInTheDocument();
-  });
-
-  it('switches versions, resets to Structure, and compares against current v2', () => {
-    renderRegistry();
-
-    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
-
-    expect(screen.getByText('PRD Schema v3')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText(/2 nodes · 9 paths/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Compare with v2' }));
-
-    expect(screen.getByRole('tab', { name: 'Changes' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('v3 compared with current v2')).toBeInTheDocument();
-    expect(screen.getByText('requirements.*.evidence')).toBeInTheDocument();
-  });
-
-  it('opens canonical YAML for the selected family and version', () => {
-    renderRegistry();
-
-    fireEvent.click(screen.getByRole('radio', { name: /v1 Historical/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open PRD Schema v1 canonical YAML' }));
-
-    expect(screen.getByRole('tab', { name: 'Canonical YAML' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(screen.getByText('t3x/prd@v1')).toBeInTheDocument();
-    expect(screen.getByText(/version: 1/)).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /v1 Historical/i })).toBeChecked();
-  });
-
-  it('does not infer current from release order or an active status', () => {
-    const preview = getSchemaRegistryPreview('proj_test');
-    const prdFamily = preview.families[0];
-
+  it('does not expose a Draft Schema version state', () => {
+    const onApplyToWorkspace = vi.fn().mockResolvedValue(undefined);
     render(
       <SchemaRegistry
-        defaultFamilyId="prd"
-        families={[{ ...prdFamily, currentReleaseId: 'missing_release' }]}
+        {...getSchemaRegistryPreview('proj_test')}
+        bindingActions={{
+          onApplyToWorkspace,
+          pending: null,
+          workspaceTarget: { id: 'workspace_main', title: 'Main workspace' },
+        }}
       />
     );
 
-    const currentVersionFact = screen.getByText('Current version').parentElement;
-    expect(currentVersionFact).toHaveTextContent('Not set');
-    expect(screen.getByRole('radio', { name: /v3 Draft/i })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /v2 Published/i })).not.toBeChecked();
+    expect(screen.queryByText('Draft')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /v3 Published/i }));
+
+    expect(screen.getByRole('button', { name: 'Apply to Main workspace' })).toBeEnabled();
   });
 
-  it('only enables comparison when its recorded baseline matches current', () => {
-    const preview = getSchemaRegistryPreview('proj_test');
-    const prdFamily = preview.families[0];
-    const releases = prdFamily.releases.map((release) =>
-      release.id === 'schema_prd_v3'
-        ? { ...release, changesBaseReleaseId: 'schema_prd_v1' }
-        : release
-    );
+  it('remembers explicit selections per Schema while resetting the detail view', () => {
+    renderRegistry();
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Historical/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Skill Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Relations' }));
+    fireEvent.click(screen.getByRole('button', { name: /PRD Schema/ }));
 
-    render(<SchemaRegistry defaultFamilyId="prd" families={[{ ...prdFamily, releases }]} />);
-    fireEvent.click(screen.getByRole('radio', { name: /v3 Draft/i }));
+    expect(screen.getByRole('radio', { name: /v1 Historical/i })).toBeChecked();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
+  });
 
-    expect(screen.queryByRole('button', { name: /Compare with/ })).not.toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes' }), {
+  it('compares a version with its recorded baseline rather than a current pointer', () => {
+    renderRegistry();
+
+    fireEvent.click(screen.getByRole('radio', { name: /v3 Published/i }));
+    expect(screen.queryByRole('button', { name: /Compare with/i })).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes vs v2' }), {
       button: 0,
       ctrlKey: false,
     });
-    expect(screen.getByText('Comparison unavailable')).toBeInTheDocument();
-    expect(screen.getByText(/recorded against a different baseline/)).toBeInTheDocument();
+
+    expect(screen.getByRole('tab', { name: 'Changes vs v2' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByText('v3 compared with v2')).toBeInTheDocument();
+    expect(screen.getByText('requirements.*.evidence')).toBeInTheDocument();
   });
 
-  it('keeps the page identity and action state visible when no families exist', () => {
+  it('does not offer Changes when a version has no recorded lineage', () => {
+    renderRegistry();
+
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Historical/i }));
+
+    expect(screen.queryByRole('tab', { name: /Changes/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the page identity visible when no Schema identities exist', () => {
     render(<SchemaRegistry defaultFamilyId="missing_family" families={[]} />);
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
-      screen.getByText('No schema families are available for this project.')
+      screen.getByText('No Schema matches the current library selection.')
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open canonical YAML' })).toBeDisabled();
   });
 });

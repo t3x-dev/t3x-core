@@ -4,6 +4,8 @@
  * Type-safe HTTP client for the T3X API.
  */
 
+import { ZodError, type ZodType } from 'zod';
+import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
   ApiErrorResponse,
   ApiResponse,
@@ -37,6 +39,7 @@ import type {
   CreateWorkspaceExtractionProposalInput,
   DecideTransitionInput,
   DecideTransitionResult,
+  DecideWorkspaceTransitionInput,
   DiffResult,
   Draft,
   ExportCfpackInput,
@@ -65,6 +68,8 @@ import type {
   ListProjectsResponse,
   ListRepositoryWorkspacesResponse,
   ListTurnsResponse,
+  ListWorkspaceTransitionReviewSnapshotsParams,
+  ListWorkspaceTransitionReviewSnapshotsResponse,
   ListYSchemaArtifactsParams,
   MergeDraft,
   MergeDraftCommitInput,
@@ -82,6 +87,7 @@ import type {
   RenameConversationResult,
   RepositoryWorkspaceCapability,
   RepositoryWorkspaceEnvelope,
+  ReviewWorkspaceTransitionInput,
   ShareToken,
   SourceThreadCapability,
   SourceThreadMemory,
@@ -96,6 +102,9 @@ import type {
   VerifyTransitionResult,
   Webhook,
   WorkspaceExtractionProposalEnvelope,
+  WorkspaceTransitionDecisionEnvelope,
+  WorkspaceTransitionReviewEnvelope,
+  WorkspaceTransitionReviewSnapshotEnvelope,
   WorkspaceYSchemaCompositionResult,
   YSchemaArtifactManifest,
   YSchemaArtifactRegistryPage,
@@ -168,6 +177,16 @@ export class T3xClient {
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
       createExtractionProposal: (projectId, workspaceId, input) =>
         this.createWorkspaceExtractionProposal(projectId, workspaceId, input),
+      reviewTransition: (projectId, workspaceId, input) =>
+        this.reviewWorkspaceTransition(projectId, workspaceId, input),
+      decideTransition: (projectId, workspaceId, input) =>
+        this.decideWorkspaceTransition(projectId, workspaceId, input),
+      listReviewSnapshots: (projectId, workspaceId, params) =>
+        this.listWorkspaceTransitionReviewSnapshots(projectId, workspaceId, params),
+      getLatestReviewSnapshot: (projectId, workspaceId, params) =>
+        this.getLatestWorkspaceTransitionReviewSnapshot(projectId, workspaceId, params),
+      getReviewSnapshot: (projectId, workspaceId, snapshotId, options) =>
+        this.getWorkspaceTransitionReviewSnapshot(projectId, workspaceId, snapshotId, options),
     });
   }
 
@@ -176,7 +195,8 @@ export class T3xClient {
     path: string,
     body?: unknown,
     query?: Record<string, string | number | undefined>,
-    options?: T3xRequestOptions
+    options?: T3xRequestOptions,
+    responseSchema?: ZodType<unknown>
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
 
@@ -202,7 +222,21 @@ export class T3xClient {
       throw new T3xApiError(error.code, error.message, response.status, error.details);
     }
 
-    return (data as ApiSuccessResponse<T>).data;
+    const payload = (data as ApiSuccessResponse<T>).data;
+    if (responseSchema === undefined) return payload;
+    try {
+      return responseSchema.parse(payload) as T;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new T3xApiError(
+          'INVALID_RESPONSE',
+          'API response did not match the client runtime schema',
+          response.status,
+          { issues: error.issues }
+        );
+      }
+      throw error;
+    }
   }
 
   // ============================================
@@ -881,6 +915,76 @@ export class T3xClient {
     );
   }
 
+  async reviewWorkspaceTransition(
+    projectId: string,
+    workspaceId: string,
+    input: ReviewWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionReviewEnvelope> {
+    return this.request<WorkspaceTransitionReviewEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review`,
+      input
+    );
+  }
+
+  async decideWorkspaceTransition(
+    projectId: string,
+    workspaceId: string,
+    input: DecideWorkspaceTransitionInput
+  ): Promise<WorkspaceTransitionDecisionEnvelope> {
+    return this.request<WorkspaceTransitionDecisionEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/decide`,
+      input
+    );
+  }
+
+  async listWorkspaceTransitionReviewSnapshots(
+    projectId: string,
+    workspaceId: string,
+    params?: ListWorkspaceTransitionReviewSnapshotsParams
+  ): Promise<ListWorkspaceTransitionReviewSnapshotsResponse> {
+    return this.request<ListWorkspaceTransitionReviewSnapshotsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots`,
+      undefined,
+      params
+        ? {
+            transition_id: params.transition_id,
+            limit: params.limit,
+          }
+        : undefined
+    );
+  }
+
+  async getLatestWorkspaceTransitionReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    params?: Pick<ListWorkspaceTransitionReviewSnapshotsParams, 'transition_id'>
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope> {
+    return this.request<WorkspaceTransitionReviewSnapshotEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots/latest`,
+      undefined,
+      params ? { transition_id: params.transition_id } : undefined
+    );
+  }
+
+  async getWorkspaceTransitionReviewSnapshot(
+    projectId: string,
+    workspaceId: string,
+    snapshotId: string,
+    options?: T3xRequestOptions
+  ): Promise<WorkspaceTransitionReviewSnapshotEnvelope> {
+    return this.request<WorkspaceTransitionReviewSnapshotEnvelope>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/transition/review-snapshots/${encodeURIComponent(snapshotId)}`,
+      undefined,
+      undefined,
+      options
+    );
+  }
+
   async check(input: CheckInput): Promise<CheckResult> {
     return this.request<CheckResult>('POST', '/v1/check', input);
   }
@@ -909,7 +1013,10 @@ export class T3xClient {
     return this.request<ProposeTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.propose
     );
   }
 
@@ -923,7 +1030,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}`,
       undefined,
       undefined,
-      options
+      options,
+      transitionResponseSchemas.inspect
     );
   }
 
@@ -935,7 +1043,10 @@ export class T3xClient {
     return this.request<VerifyTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/verify`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.verify
     );
   }
 
@@ -947,7 +1058,10 @@ export class T3xClient {
     return this.request<AttachTransitionStatementResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/statements`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.attachStatement
     );
   }
 
@@ -959,7 +1073,10 @@ export class T3xClient {
     return this.request<DecideTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/decisions`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.decide
     );
   }
 
@@ -971,7 +1088,10 @@ export class T3xClient {
     return this.request<CommitTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions/${encodeURIComponent(transitionId)}/commits`,
-      input
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.commit
     );
   }
 
@@ -1079,6 +1199,7 @@ export class T3xClient {
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.tags?.length ? { tags: input.tags } : {}),
       }
     );
   }

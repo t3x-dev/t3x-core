@@ -1,5 +1,11 @@
 import type { ApiKey } from '@t3x-dev/core';
-import { type AnyDB, insertProject } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  bindTransitionPolicy,
+  ensureMainBranch,
+  insertProject,
+  upsertWorkspaceDraft,
+} from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   deriveTrustedTransitionPrincipal,
@@ -9,6 +15,7 @@ import {
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
 } from '../lib/transition-authority';
+import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import { setupTestDB, testData } from './setup';
 
 function key(overrides: Partial<ApiKey> = {}): ApiKey {
@@ -103,5 +110,104 @@ describe('Transition API authority', () => {
         scope: 'transition:decide:accept',
       })
     ).rejects.toBeInstanceOf(TransitionPolicyBindingRequiredError);
+  });
+
+  it('preserves the authenticated agent and server-selected ref policy on compatibility paths', async () => {
+    await ensureMainBranch(db, projectId);
+    await upsertWorkspaceDraft(db, {
+      project_id: projectId,
+      workspace_id: 'workspace_authority',
+      title: 'Authority workspace',
+      target_branch: 'main',
+      workspace_state: { id: 'workspace_authority', targetBranch: 'main' },
+    });
+    const binding = await bindTransitionPolicy(db, {
+      projectId,
+      refName: 'main',
+      uri: 't3x://policies/workspace-authority-test',
+      policy: {
+        schema: 't3x.dev/acceptance-policy/v1',
+        version: 1,
+        authorization: {
+          decide: { actors: { mode: 'any' } },
+          override: { actors: { mode: 'any' } },
+          allowSelfApproval: true,
+        },
+        claims: {
+          intent: {
+            allowedModes: ['unspecified'],
+            minimumEvidence: 0,
+            humanConfirmation: 'not_required',
+          },
+          rationale: {
+            allowedModes: ['unspecified'],
+            minimumEvidence: 0,
+            humanConfirmation: 'not_required',
+          },
+        },
+        checks: {
+          replay: {
+            issuers: { mode: 'any' },
+            tools: { mode: 'any' },
+            environments: { mode: 'any' },
+          },
+          validation: {
+            requirement: 'optional',
+            issuers: { mode: 'any' },
+            tools: { mode: 'any' },
+            environments: { mode: 'any' },
+            profiles: { mode: 'any' },
+            schemas: { mode: 'any' },
+            contexts: { mode: 'any' },
+          },
+          humanConfirmation: { issuers: { mode: 'any' } },
+        },
+        override: {
+          allowClaimFailures: false,
+          allowFailedValidation: false,
+          allowMissingHumanConfirmation: false,
+          allowMissingValidation: false,
+        },
+      },
+      actor: { kind: 'human', id: 'user:policy-admin' },
+    });
+
+    const resolved = await resolveWorkspaceTransitionAuthority({
+      db,
+      apiKey: key({
+        project_id: projectId,
+        transition_scopes: [
+          'transition:propose',
+          'transition:decide:accept',
+          'transition:commit:create',
+          'transition:ref:advance',
+        ],
+      }),
+      projectId,
+      workspaceId: 'workspace_authority',
+      operation: { kind: 'decide', outcome: 'accepted' },
+    });
+
+    expect(resolved.principal.actor).toEqual({
+      kind: 'agent',
+      id: 'agent:api-key:ak_agent',
+    });
+    expect(resolved.policyBinding?.resource.digest).toBe(binding.resource.digest);
+
+    await expect(
+      resolveWorkspaceTransitionAuthority({
+        db,
+        apiKey: key({
+          project_id: projectId,
+          transition_scopes: ['transition:propose', 'transition:decide:accept'],
+        }),
+        projectId,
+        workspaceId: 'workspace_authority',
+        operation: { kind: 'decide', outcome: 'accepted' },
+      })
+    ).rejects.toMatchObject({
+      code: 'TRANSITION_SCOPE_DENIED',
+      scope: 'transition:commit:create',
+    });
   });
 });

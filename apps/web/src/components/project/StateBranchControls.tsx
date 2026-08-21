@@ -61,12 +61,12 @@ export function StateBranchControls({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <label className="inline-flex h-8 min-w-0 items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-xs font-bold text-[var(--text-primary)]">
-        <GitBranch aria-hidden="true" className="size-3.5 text-[var(--accent-branch)]" />
+      <label className="inline-flex h-7.5 min-w-0 items-center gap-2 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--stroke-strong)]">
+        <GitBranch aria-hidden="true" className="size-3.5 text-[var(--accent-branch)] opacity-90" />
         <span className="sr-only">Branch</span>
         <select
           aria-label="Branch focus"
-          className="min-w-0 bg-transparent font-mono text-xs font-bold outline-none"
+          className="min-w-0 cursor-pointer bg-transparent font-mono text-xs font-medium text-[var(--text-primary)] outline-none"
           onChange={(event) => onBranchChange(event.target.value)}
           value={branch}
         >
@@ -79,7 +79,7 @@ export function StateBranchControls({
       </label>
 
       <Button
-        className="text-xs"
+        className="h-7.5 text-xs font-medium px-2.5"
         onClick={() => setDialogOpen(true)}
         size="sm"
         type="button"

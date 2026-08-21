@@ -157,6 +157,7 @@ const markReadRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 notificationsRoutes.openapi(markReadRoute, async (c) => {
   const { id } = c.req.valid('param');
   const db = await getDB();
@@ -213,6 +214,7 @@ const markAllReadRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 notificationsRoutes.openapi(markAllReadRoute, async (c) => {
   const { project_id } = c.req.valid('query');
   const db = await getDB();
