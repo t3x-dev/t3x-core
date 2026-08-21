@@ -24,6 +24,7 @@ import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
+import { createHeartbeatSseStream } from '../lib/sse-heartbeat';
 import { pinoLogger } from '../middleware/logger';
 import {
   GenerationProvidersResponseDataSchema,
@@ -860,7 +861,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
   const systemMessage = messages.find((m) => m.role === 'system');
   const otherMessages = messages.filter((m) => m.role !== 'system');
 
-  const stream = new ReadableStream({
+  const stream = createHeartbeatSseStream({
     async start(controller) {
       let upstreamResponse: Response | undefined;
       let resolvedModel = model;
