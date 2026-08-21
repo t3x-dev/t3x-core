@@ -19,7 +19,7 @@ in the mutation path.
 
 ## Release status
 
-`@t3x-dev/yschema@1.1.0` is part of the public T3X alpha release surface.
+`@t3x-dev/yschema@1.2.0` is part of the public T3X alpha release surface.
 Package visibility is public on npm, and the version is aligned with the T3X
 alpha release train.
 
