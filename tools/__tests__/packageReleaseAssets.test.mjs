@@ -285,6 +285,55 @@ test('detects selected active publish packages from version package changes', ()
   assert.equal(result.publishesLocal, false);
 });
 
+test('detects selected active publish packages from pending changesets', () => {
+  const result = detectPublishPackages({
+    changedFiles: ['packages/yops/package.json'],
+    changesets: [
+      {
+        name: '.changeset/open-yschema-modules.md',
+        entries: [{ packageName: '@t3x-dev/yschema', bump: 'minor' }],
+      },
+      {
+        name: '.changeset/runtime-manifest-version-lock.md',
+        entries: [{ packageName: '@t3x-dev/local', bump: 'patch' }],
+      },
+    ],
+    releaseSurface: {
+      packages: [
+        {
+          name: '@t3x-dev/local',
+          path: 'apps/local',
+          npm_publish: true,
+          release_train: 'paused',
+        },
+        {
+          name: '@t3x-dev/yops',
+          path: 'packages/yops',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/transition',
+          path: 'packages/transition',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/yschema',
+          path: 'packages/yschema',
+          npm_publish: true,
+          release_train: 'active',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(result.packageNames, ['@t3x-dev/yops', '@t3x-dev/yschema']);
+  assert.deepEqual(result.packageSlugs, ['yops', 'yschema']);
+  assert.equal(result.hasPublishPackages, true);
+  assert.equal(result.publishesLocal, false);
+});
+
 test('detects current-version first publish packages from product release notes', () => {
   const result = detectPublishPackages({
     changedFiles: ['packages/yops/package.json', 'packages/yschema/package.json'],
