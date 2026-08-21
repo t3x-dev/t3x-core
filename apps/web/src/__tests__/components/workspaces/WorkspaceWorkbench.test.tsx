@@ -1801,8 +1801,8 @@ describe('WorkspaceWorkbench', () => {
     ).not.toBeInTheDocument();
     expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBeGreaterThanOrEqual(1);
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument());
-    activateTab('Proposal');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument());
+    activateTab(/Proposal/);
     expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
   });
 

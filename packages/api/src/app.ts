@@ -36,6 +36,7 @@ import {
   type RateLimitStore,
 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
+import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import {
   agentDraftRoutes,
   apiKeysRoutes,
@@ -145,10 +146,13 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
           ],
         };
 
-  // Global middleware (order: RequestId → CORS → Logger → L1 Rate Limit → [extensions] → L2 Rate Limit)
+  // Global middleware (order: RequestId → CORS → Logger → Response Cache Policy
+  // → L1 Rate Limit → Auth/[extensions] → L2 Rate Limit). The cache policy wraps
+  // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
+  app.use('*', responseCachePolicyMiddleware);
   app.use('*', createRateLimitL1(rateLimitStore));
 
   // Auth middleware: validates Bearer API key (built-in, used by OSS self-hosted)
