@@ -1,5 +1,16 @@
 # @t3x-dev/cli
 
+## 1.2.1
+
+### Patch Changes
+
+- [#1369](https://github.com/t3x-dev/t3x-core/pull/1369) [`3124c5a`](https://github.com/t3x-dev/t3x-core/commit/3124c5a7dc87625bec37f3ae05fab2d097812d5e) Thanks [@etht3x](https://github.com/etht3x)! - Pin `json-canonicalize` to the complete 2.0.0 artifact so independently installed runtime packages cannot resolve the incomplete 2.0.1 release.
+
+- Updated dependencies [[`78c9ae6`](https://github.com/t3x-dev/t3x-core/commit/78c9ae6730dc28d330cc12786d043a774fdd2b18), [`7b56ef2`](https://github.com/t3x-dev/t3x-core/commit/7b56ef20168650e04567611757963d87e12d16da), [`3124c5a`](https://github.com/t3x-dev/t3x-core/commit/3124c5a7dc87625bec37f3ae05fab2d097812d5e), [`513dc89`](https://github.com/t3x-dev/t3x-core/commit/513dc894763ced7b2b69ae0abb442e5e0c42038e), [`72fe53d`](https://github.com/t3x-dev/t3x-core/commit/72fe53d7c069e106a57338956469c108889d14f1), [`6d201d1`](https://github.com/t3x-dev/t3x-core/commit/6d201d149fc21c174bb9eeb47ddb743390b01ef3)]:
+  - @t3x-dev/yops@1.2.0
+  - @t3x-dev/api-client@1.3.0
+  - @t3x-dev/core@1.2.1
+
 ## 1.0.2
 
 ### Patch Changes
