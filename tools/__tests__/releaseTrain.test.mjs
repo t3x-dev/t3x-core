@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   normalizeVersionInput as normalizeChangesetVersionInput,
   normalizePackageSelectionInput,
+  pausedReleaseTrainChangesetDiagnostics,
+  pausedReleaseTrainIgnoreDiagnostics,
   planMissingChangesets,
+  readChangesets,
 } from '../release-train/ensure-changesets.mjs';
 import {
   buildPackagePlan,
@@ -16,6 +21,10 @@ import {
   parseLsRemoteHead,
   resolveVersion,
 } from '../release-train/prepare-release-pr.mjs';
+import {
+  normalizeSelectedPackages,
+  selectedPublicPackageVersionDiagnostics,
+} from '../version-packages.mjs';
 
 const root = new URL('../..', import.meta.url);
 const releaseSurface = {
@@ -297,6 +306,129 @@ test('release train rejects paused local package selection', () => {
       }),
     /@t3x-dev\/local is paused/
   );
+});
+
+test('release train reports changesets that target paused packages', () => {
+  const diagnostics = pausedReleaseTrainChangesetDiagnostics({
+    changesets: [
+      changeset('.changeset/local.md', [{ packageName: '@t3x-dev/local', bump: 'patch' }]),
+      changeset('.changeset/yops.md', [{ packageName: '@t3x-dev/yops', bump: 'minor' }]),
+    ],
+    releaseSurface,
+  });
+
+  assert.deepEqual(diagnostics, [
+    '.changeset/local.md targets @t3x-dev/local, which is paused in the release train',
+  ]);
+});
+
+test('release train requires paused packages to be ignored by Changesets', () => {
+  assert.deepEqual(
+    pausedReleaseTrainIgnoreDiagnostics({
+      changesetConfig: { ignore: ['t3x-webui'] },
+      releaseSurface,
+    }),
+    [
+      '@t3x-dev/local is paused in the release train and must be listed in .changeset/config.json ignore',
+    ]
+  );
+  assert.deepEqual(
+    pausedReleaseTrainIgnoreDiagnostics({
+      changesetConfig: { ignore: ['t3x-webui', '@t3x-dev/local'] },
+      releaseSurface,
+    }),
+    []
+  );
+});
+
+test('release train readChangesets hides ignored package entries', () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3x-changesets-ignore-'));
+  mkdirSync(join(dir, '.changeset'), { recursive: true });
+  writeFileSync(
+    join(dir, '.changeset/config.json'),
+    JSON.stringify({ ignore: ['@t3x-dev/local'] }, null, 2)
+  );
+  writeFileSync(
+    join(dir, '.changeset/local-only.md'),
+    `---
+'@t3x-dev/local': patch
+---
+
+Ignored local update.
+`
+  );
+  writeFileSync(
+    join(dir, '.changeset/mixed.md'),
+    `---
+'@t3x-dev/local': patch
+'@t3x-dev/yops': minor
+---
+
+Mixed update.
+`
+  );
+
+  assert.deepEqual(readChangesets({ rootDir: dir }), [
+    {
+      entries: [{ packageName: '@t3x-dev/yops', bump: 'minor' }],
+      name: '.changeset/mixed.md',
+      packages: ['@t3x-dev/yops'],
+      summary: 'Mixed update.',
+    },
+  ]);
+});
+
+test('version packages normalizes release allowlists and flags unselected public manifests', () => {
+  assert.deepEqual(normalizeSelectedPackages('yops,@t3x-dev/yschema'), [
+    '@t3x-dev/yops',
+    '@t3x-dev/yschema',
+  ]);
+  assert.deepEqual(normalizeSelectedPackages('none'), []);
+  assert.equal(normalizeSelectedPackages(undefined), null);
+
+  const diagnostics = selectedPublicPackageVersionDiagnostics({
+    changedFiles: [
+      'packages/yops/package.json',
+      'packages/yschema/package.json',
+      'apps/local/package.json',
+    ],
+    releaseSurface: {
+      packages: [
+        {
+          name: '@t3x-dev/local',
+          path: 'apps/local',
+          npm_publish: true,
+          release_train: 'paused',
+        },
+        {
+          name: '@t3x-dev/yops',
+          path: 'packages/yops',
+          npm_publish: true,
+          release_train: 'active',
+        },
+        {
+          name: '@t3x-dev/yschema',
+          path: 'packages/yschema',
+          npm_publish: true,
+          release_train: 'active',
+        },
+      ],
+    },
+    selectedPackages: ['@t3x-dev/yops', '@t3x-dev/yschema'],
+  });
+
+  assert.deepEqual(diagnostics, [
+    '@t3x-dev/local (apps/local/package.json) changed outside T3X_PACKAGE_RELEASES',
+  ]);
+});
+
+test('version-packages script routes through the guarded release helper', () => {
+  const packageJson = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
+  const script = readFileSync(new URL('tools/version-packages.mjs', root), 'utf8');
+
+  assert.equal(packageJson.scripts['version-packages'], 'node tools/version-packages.mjs');
+  assert.match(script, /assertNoPausedReleaseTrainChangesets/);
+  assert.match(script, /T3X_PACKAGE_RELEASES/);
 });
 
 test('release train body adds release surface review text for protected surface files', () => {

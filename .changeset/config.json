@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["t3x-webui", "agent-demo"]
+  "ignore": ["t3x-webui", "agent-demo", "@t3x-dev/local"]
 }

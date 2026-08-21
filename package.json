@@ -76,7 +76,7 @@
     "verify:versions": "node tools/verify-versions.mjs",
     "verify:versions:no-manifest": "node tools/verify-versions.mjs --no-manifest",
     "sync-product-display-versions": "node tools/sync-product-display-versions.mjs",
-    "version-packages": "changeset version && node tools/sync-product-display-versions.mjs --version auto --workspace-source-scope changed && pnpm install --lockfile-only",
+    "version-packages": "node tools/version-packages.mjs",
     "publish-packages": "pnpm verify:versions:no-manifest && pnpm build && node tools/publish-package-tarballs.mjs",
     "publish-runtime-release": "node tools/publish-runtime-release.mjs",
     "publish-release": "pnpm publish-packages",
