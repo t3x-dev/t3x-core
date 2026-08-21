@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 66;
+const SCHEMA_VERSION = 67;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -782,6 +782,19 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       value TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Persistent distributed rate-limit counters. Identities are stored as hashes.
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      scope TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      count INTEGER NOT NULL DEFAULT 1,
+      expires_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT rate_limit_buckets_pkey PRIMARY KEY (scope, key_hash, window_start)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rate_limit_buckets_expires
+      ON rate_limit_buckets(expires_at);
 
     -- API Keys table (Authentication)
     CREATE TABLE IF NOT EXISTS api_keys (

@@ -5,6 +5,7 @@
  */
 
 import { createTestDB } from '../../../storage/src/__tests__/setup';
+import type { RateLimitStore } from '../middleware/rate-limit';
 
 process.env.T3X_CREDENTIAL_ENCRYPTION_KEY ??= Buffer.alloc(32, 0x42).toString('base64');
 
@@ -19,6 +20,20 @@ export async function setupTestDB(): Promise<{
 
 export function generateId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).substring(2, 10)}`;
+}
+
+/** Keep createApp integration tests isolated from the runtime PostgreSQL singleton. */
+export function createTestRateLimitStore(): RateLimitStore {
+  return {
+    async consume(input) {
+      return {
+        allowed: true,
+        count: 1,
+        remaining: input.limit - 1,
+        resetAt: (input.now ?? Date.now()) + input.windowMs,
+      };
+    },
+  };
 }
 
 export const testData = {

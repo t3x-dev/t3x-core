@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
+import { createTestRateLimitStore } from '../setup';
 
 function collectOperationTags(spec: unknown): string[] {
   if (!spec || typeof spec !== 'object' || !('paths' in spec)) {
@@ -56,7 +57,10 @@ function collectDeclaredTags(spec: unknown): string[] {
 
 describe('OpenAPI metadata contract', () => {
   it('publishes the repository license in the API spec metadata', async () => {
-    const { app } = createApp({ skipBuiltinAuth: true });
+    const { app } = createApp({
+      skipBuiltinAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
     const res = await app.request('/api/openapi.json');
 
     expect(res.status).toBe(200);
@@ -72,6 +76,7 @@ describe('OpenAPI metadata contract', () => {
     const { app } = createApp({
       skipBuiltinAuth: true,
       enableLocalConfigRoutes: true,
+      rateLimitStore: createTestRateLimitStore(),
     });
     const res = await app.request('/api/openapi.json');
 

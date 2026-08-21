@@ -3,6 +3,7 @@ import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { yschemaPrdSmokeRoutes } from '../routes/yschema-prd-smoke.openapi';
+import { createTestRateLimitStore } from './setup';
 
 interface SmokeDiffYaml {
   schema_name: string;
@@ -57,6 +58,7 @@ describe('YSchema PRD smoke routes', () => {
     const { app: mountedApp } = createApp({
       skipBuiltinAuth: true,
       skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
     });
     const res = await mountedApp.request('/api/v1/dev/yschema/prd-smoke?format=yaml');
 
