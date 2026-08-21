@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app';
 import { promptCompileRoutes } from '../routes/prompt-compile.openapi';
+import { createTestRateLimitStore } from './setup';
 
 const responseSchema = JSON.stringify({
   type: 'object',
@@ -185,6 +186,7 @@ describe('Prompt compile preview route', () => {
     const { app: mountedApp } = createApp({
       skipBuiltinAuth: true,
       skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
     });
     const response = await mountedApp.request('/api/openapi.json');
     expect(response.status).toBe(200);

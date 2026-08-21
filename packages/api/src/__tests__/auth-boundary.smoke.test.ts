@@ -7,7 +7,7 @@ import {
   revokeApiKey,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setupTestDB } from './setup';
+import { createTestRateLimitStore, setupTestDB } from './setup';
 
 let testDb: AnyDB;
 
@@ -45,7 +45,10 @@ describe('authenticated application boundary smoke', () => {
   let ownerProjectId: string;
   let otherProjectId: string;
   let revocableKeyId: string;
-  const { app } = createApp({ skipLocalAuth: true });
+  const { app } = createApp({
+    skipLocalAuth: true,
+    rateLimitStore: createTestRateLimitStore(),
+  });
 
   beforeAll(async () => {
     const setup = await setupTestDB();

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createTestRateLimitStore } from './setup';
 
 // vi.mock() factories run BEFORE top-level `const` declarations due to
 // Vitest's hoisting. Use vi.hoisted to move spy creation above the mocks.
@@ -387,7 +388,10 @@ describe('ws route — createApp() integration (C-1 regression)', () => {
     // findApiKeyByValue — not reached in this test because token is absent.
 
     const { createApp } = await import('../app');
-    const { app } = createApp({ skipLocalAuth: true });
+    const { app } = createApp({
+      skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
 
     const res = await app.request('/ws?conversation_id=conv_x');
     expect(res.status).toBe(401);
@@ -409,7 +413,10 @@ describe('ws route — createApp() integration (C-1 regression)', () => {
     mockVerify.mockResolvedValue(null);
 
     const { createApp } = await import('../app');
-    const { app } = createApp({ skipLocalAuth: true });
+    const { app } = createApp({
+      skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
 
     const res = await app.request('/ws?conversation_id=conv_x&token=bad_token');
     expect(res.status).toBe(401);

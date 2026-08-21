@@ -320,6 +320,13 @@ export {
   type UpdatePullRequestInput,
   updatePullRequest,
 } from './pull-requests';
+// Persistent distributed rate-limit counters
+export {
+  type ConsumeRateLimitInput,
+  type ConsumeRateLimitResult,
+  cleanupExpiredRateLimitBuckets,
+  consumeRateLimit,
+} from './rate-limits';
 // Recipes (workflow automation)
 export {
   type CreateRecipeInput,
