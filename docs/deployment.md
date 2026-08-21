@@ -83,6 +83,15 @@ Common deployment variables:
 - `AUTH_DISABLED=false` to keep auth enabled explicitly.
 - `WEBUI_PORT` and `POSTGRES_PORT` to override Docker Compose host ports.
 
+Rate-limit counters use the same PostgreSQL database by default, so API
+instances that share `DATABASE_URL` also share login, OAuth callback, IP, and
+API-key limits. Set `TRUST_PROXY` to the exact number of trusted reverse-proxy
+hops before relying on per-IP limits. When it is unset or invalid, requests use
+the direct Node socket address when available and otherwise use a conservative
+per-path fallback bucket. Cloud assemblers can instead pass a compatible
+`RateLimitStore` to `createApp`; the store must provide an atomic consume
+operation shared by every instance.
+
 Before saving provider keys or deploy-agent tokens through the API, configure
 `T3X_CREDENTIAL_ENCRYPTION_KEY` as a base64-encoded 32-byte key:
 

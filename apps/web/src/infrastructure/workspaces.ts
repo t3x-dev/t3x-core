@@ -110,6 +110,8 @@ export interface WorkspaceSourceTransitionReviewResponse {
   transition: TransitionViewV1;
   precondition: WorkspaceSourceTransitionPrecondition;
   runner: WorkspaceSourceRunnerStatus;
+  review_snapshot: ReviewSnapshotV1;
+  change_projection: ChangeProjectionV1;
 }
 
 export interface WorkspaceSourceTransitionDecisionResponse

@@ -29,7 +29,12 @@ import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
-import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
+import {
+  createRateLimitL1,
+  createRateLimitL2,
+  databaseRateLimitStore,
+  type RateLimitStore,
+} from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import {
@@ -103,6 +108,8 @@ import {
 import { createWsRoute } from './routes/ws';
 
 export interface CreateAppOptions {
+  /** Shared rate-limit backend. Defaults to persistent PostgreSQL counters. */
+  rateLimitStore?: RateLimitStore;
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
   skipLocalAuth?: boolean;
   /** Skip built-in API Key auth middleware. Set true when cloud repo provides its own auth. */
@@ -127,6 +134,7 @@ export interface CreateAppResult {
 
 export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
+  const rateLimitStore = options?.rateLimitStore ?? databaseRateLimitStore;
   const transitionControlPlane =
     options?.workspaceSourceTransition?.runner === undefined
       ? options?.transitionControlPlane
@@ -145,7 +153,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
   app.use('*', responseCachePolicyMiddleware);
-  app.use('*', rateLimitL1);
+  app.use('*', createRateLimitL1(rateLimitStore));
 
   // Auth middleware: validates Bearer API key (built-in, used by OSS self-hosted)
   // Cloud repo skips this and provides its own auth middleware via options.middleware
@@ -160,7 +168,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     }
   }
 
-  app.use('*', rateLimitL2);
+  app.use('*', createRateLimitL2(rateLimitStore));
 
   // Health check at root (not under /api)
   app.route('/', healthRoutes);

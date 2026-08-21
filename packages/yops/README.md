@@ -96,6 +96,27 @@ Built-in compiler candidates:
 - `yops.recipe.omit-mapping-keys.v1`
   - base-aware mapping key omission
   - expands to `assert + set`
+- `yops.recipe.populate-mapping.v1`
+  - base-aware mapping population
+  - expands to `assert + set`
+- `yops.recipe.nest-mapping-keys.v1`
+  - base-aware mapping key nesting
+  - expands to `assert + set`
+- `yops.recipe.split-mapping-groups.v1`
+  - base-aware mapping key splitting
+  - expands to `assert + set`
+- `yops.recipe.fold-mapping-child.v1`
+  - base-aware single-child mapping fold
+  - expands to `assert + set`
+- `yops.recipe.merge-mapping-keys.v1`
+  - base-aware mapping key merge
+  - expands to `assert + set`
+- `yops.recipe.sort-sequence.v1`
+  - base-aware sequence sort
+  - expands to `assert + set`
+- `yops.recipe.unique-sequence.v1`
+  - base-aware sequence deduplication
+  - expands to `assert + set`
 
 Every compiler starts with an `assert` over the exact base value it was derived
 from, so stale base data fails before mutation. Recipe invocation provenance can
@@ -116,13 +137,23 @@ bounded contract, not as a replacement for the frozen v1 operation union:
 | `append` | `yops.recipe.append-sequence-item.v1` | asserts the base sequence, then writes the appended sequence with `set` |
 | `pick` | `yops.recipe.pick-mapping-keys.v1` | asserts the base mapping, then writes the selected mapping with `set` |
 | `omit` | `yops.recipe.omit-mapping-keys.v1` | asserts the base mapping, then writes the omitted mapping with `set` |
-| `define`, `drop`, `populate`, `nest`, `split`, `fold`, `merge`, `sort`, `unique` | not downshifted in this tranche | remain valid frozen v1 operations until a recipe has explicit equivalence coverage |
+| `populate` | `yops.recipe.populate-mapping.v1` | asserts the base mapping, then writes the populated mapping with `set` |
+| `nest` | `yops.recipe.nest-mapping-keys.v1` | asserts the base mapping, then writes the nested mapping with `set` |
+| `split` | `yops.recipe.split-mapping-groups.v1` | asserts the base mapping, then writes the split mapping with `set` |
+| `fold` | `yops.recipe.fold-mapping-child.v1` | asserts the parent mapping, then writes the folded parent with `set` |
+| `merge` | `yops.recipe.merge-mapping-keys.v1` | asserts the base mapping, then writes the merged mapping with `set` |
+| `sort` | `yops.recipe.sort-sequence.v1` | asserts the base sequence, then writes the sorted sequence with `set` |
+| `unique` | `yops.recipe.unique-sequence.v1` | asserts the base sequence, then writes the deduplicated sequence with `set` |
+| `define`, `drop` | structural v1 core | remain valid frozen v1 operations; they are not forced into recipes in this tranche |
 
 The recipe tests compare the downshifted native semantics above against their
 v1 operation results on the same base document and assert that the recipe
-expansions emit only the primitive profile. That is the intended Phase 3
-acceptance boundary; a full migration plan, dual-read rollout, or package
-release remains outside this batch.
+expansions emit only the primitive profile. `compileYOpsOperationsToPrimitiveProfile`
+uses that evidence to compile provably equivalent advanced operations before a
+new Effect is built, while the v1 runtime union remains frozen so old history
+continues to replay. That is the intended Phase 3 acceptance boundary; a full
+migration plan, dual-read rollout, or package release remains outside this
+batch.
 
 ## Install
 
@@ -257,6 +288,14 @@ compileYOpsMappingKeyRename(input): readonly YOp[]
 compileYOpsSequenceAppend(input): readonly YOp[]
 compileYOpsMappingKeyPick(input): readonly YOp[]
 compileYOpsMappingKeyOmit(input): readonly YOp[]
+compileYOpsMappingPopulate(input): readonly YOp[]
+compileYOpsMappingNest(input): readonly YOp[]
+compileYOpsMappingSplit(input): readonly YOp[]
+compileYOpsMappingFold(input): readonly YOp[]
+compileYOpsMappingMerge(input): readonly YOp[]
+compileYOpsSequenceSort(input): readonly YOp[]
+compileYOpsSequenceUnique(input): readonly YOp[]
+compileYOpsOperationsToPrimitiveProfile({ base, operations }): CompileYOpsOperationsToPrimitiveProfileResult
 
 // Record recipe provenance outside Effect identity, then flatten to YOp[]
 createYOpsRecipeInvocation(recipeId, input, { why }): YOpsRecipeInvocation

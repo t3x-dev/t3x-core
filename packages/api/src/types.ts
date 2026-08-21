@@ -1,4 +1,5 @@
 import type { ApiKey } from '@t3x-dev/core';
+import type { RateLimitStore } from './middleware/rate-limit';
 
 /**
  * Hono environment type extension.
@@ -11,5 +12,7 @@ export type AppEnv = {
     apiKey?: ApiKey;
     /** Authenticated user ID. Set by auth middleware (JWT or API Key path). Undefined when AUTH_DISABLED=true. */
     userId?: string;
+    /** Shared counter backend selected by createApp. */
+    rateLimitStore?: RateLimitStore;
   };
 };

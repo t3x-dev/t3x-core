@@ -4,7 +4,7 @@ import type { AnyDB } from '@t3x-dev/storage';
 import { createApiKey, createUser, insertConversation, insertProject } from '@t3x-dev/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { setupTestDB } from './setup';
+import { createTestRateLimitStore, setupTestDB } from './setup';
 
 let testDb: AnyDB;
 
@@ -72,7 +72,10 @@ describe('authenticated WebSocket boundary smoke', () => {
       keyValue: agentKeyValue,
     });
 
-    const { app, websocket } = createApp({ skipLocalAuth: true });
+    const { app, websocket } = createApp({
+      skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+    });
     server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0, websocket });
     if (!server.listening) {
       await new Promise<void>((resolve) => server.once('listening', resolve));

@@ -1,9 +1,7 @@
-import {
-  buildReviewSnapshot,
-  type ChangeProjectionV1,
-  projectChangeFromReviewSnapshot,
-  type ReviewSnapshotV1,
-  type TransitionInspectionView,
+import type {
+  ChangeProjectionV1,
+  ReviewSnapshotV1,
+  TransitionInspectionView,
 } from '@t3x-dev/application';
 import {
   buildReplayVerificationStatement,
@@ -38,7 +36,6 @@ import {
   findWorkspaceDraft,
   getTransitionRefHead,
   resolveTransitionProposalGraph,
-  saveTransitionReviewSnapshot,
   TransitionCommandConflictError,
   TransitionMembershipNotFoundError,
   type TransitionPolicyBinding,
@@ -59,6 +56,11 @@ import {
   materializeTransitionProposal,
   materializeTransitionStatement,
 } from './transition-control-plane/materialize';
+import {
+  buildWorkspaceReviewArtifacts,
+  persistWorkspaceReviewArtifacts,
+  reviewSnapshotCreatedAt,
+} from './workspace-review-artifacts';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -624,8 +626,11 @@ export async function reviewWorkspaceTransition(
   const prepared = await prepareWorkspaceTransition(db, input);
   const materialized = await materializePreparedWorkspaceTransition(db, prepared);
   const inspection = materializedPreparedInspection({ materialized, prepared });
-  const artifacts = reviewArtifacts({ inspection, createdAt: materialized.membership.createdAt });
-  await persistReviewArtifacts(db, artifacts);
+  const artifacts = buildWorkspaceReviewArtifacts({
+    inspection,
+    createdAt: materialized.membership.createdAt,
+  });
+  await persistWorkspaceReviewArtifacts(db, artifacts);
   return {
     transitionId: materialized.membership.transitionId,
     transition: prepared.transition,
@@ -714,48 +719,6 @@ function canonicalPrecondition(precondition: WorkspaceTransitionPrecondition, re
     statementDigests: [...precondition.statementDigests],
     policyDigest: precondition.policyDigest,
   };
-}
-
-function digestCanonicalSnapshotPayload(value: ProtocolValue): string {
-  return canonicalTransitionRequest(value).digest;
-}
-
-function reviewArtifacts(input: {
-  inspection: TransitionInspectionView;
-  createdAt: string;
-}): Pick<ReviewWorkspaceTransitionResult, 'changeProjection' | 'reviewSnapshot'> {
-  const reviewSnapshot = buildReviewSnapshot({
-    inspection: input.inspection,
-    createdAt: input.createdAt,
-    digestCanonicalRequest: digestCanonicalSnapshotPayload,
-  });
-  return {
-    reviewSnapshot,
-    changeProjection: projectChangeFromReviewSnapshot(reviewSnapshot),
-  };
-}
-
-async function persistReviewArtifacts(
-  db: AnyDB,
-  artifacts: Pick<ReviewWorkspaceTransitionResult, 'changeProjection' | 'reviewSnapshot'>
-): Promise<void> {
-  await saveTransitionReviewSnapshot(db, {
-    projectId: artifacts.reviewSnapshot.projectId,
-    workspaceId: artifacts.reviewSnapshot.workspaceId,
-    transitionId: artifacts.reviewSnapshot.transitionId,
-    snapshot: artifacts.reviewSnapshot as unknown as Record<string, unknown>,
-    changeProjection: artifacts.changeProjection as unknown as Record<string, unknown>,
-  });
-}
-
-function snapshotCreatedAt(inspection: TransitionInspectionView): string {
-  if (inspection.transition.history.observation === 'committed') {
-    return inspection.transition.history.commit.recordedAt;
-  }
-  if (inspection.transition.decision.observation === 'supplied') {
-    return inspection.transition.decision.decidedAt;
-  }
-  return inspection.createdAt;
 }
 
 function materializedPreparedInspection(input: {
@@ -906,11 +869,11 @@ export async function decideWorkspaceTransition(
     });
     const decidedInspection = inspectionWithWorkspacePrecondition(decided.view, precondition);
     if (input.outcome === 'rejected') {
-      const artifacts = reviewArtifacts({
+      const artifacts = buildWorkspaceReviewArtifacts({
         inspection: decidedInspection,
-        createdAt: snapshotCreatedAt(decidedInspection),
+        createdAt: reviewSnapshotCreatedAt(decidedInspection),
       });
-      await persistReviewArtifacts(db, artifacts);
+      await persistWorkspaceReviewArtifacts(db, artifacts);
       return {
         transitionId,
         transition: decidedInspection.transition,
@@ -973,11 +936,11 @@ export async function decideWorkspaceTransition(
       throw new WorkspaceTransitionReviewStaleError();
     }
     const committedInspection = inspectionWithTransition(decidedInspection, committed.view);
-    const artifacts = reviewArtifacts({
+    const artifacts = buildWorkspaceReviewArtifacts({
       inspection: committedInspection,
-      createdAt: snapshotCreatedAt(committedInspection),
+      createdAt: reviewSnapshotCreatedAt(committedInspection),
     });
-    await persistReviewArtifacts(db, artifacts);
+    await persistWorkspaceReviewArtifacts(db, artifacts);
     return {
       transitionId,
       transition: committed.view,

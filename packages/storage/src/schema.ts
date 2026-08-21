@@ -17,6 +17,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -88,6 +89,31 @@ export const globalSettings = pgTable('global_settings', {
   value: text('value').notNull(), // JSON as text
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Persistent fixed-window rate-limit counters.
+ *
+ * Only opaque identity hashes are stored. The composite key makes PostgreSQL
+ * the serialization point shared by every API instance.
+ */
+export const rateLimitBuckets = pgTable(
+  'rate_limit_buckets',
+  {
+    scope: text('scope').notNull(),
+    keyHash: text('key_hash').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    count: integer('count').notNull().default(1),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'rate_limit_buckets_pkey',
+      columns: [table.scope, table.keyHash, table.windowStart],
+    }),
+    index('idx_rate_limit_buckets_expires').on(table.expiresAt),
+  ]
+);
 
 /**
  * Conversations - Container for turns within a project
