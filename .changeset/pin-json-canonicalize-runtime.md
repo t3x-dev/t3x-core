@@ -1,6 +1,5 @@
 ---
 '@t3x-dev/cli': patch
-'@t3x-dev/local': patch
 '@t3x-dev/mcp': patch
 '@t3x-dev/core': patch
 ---
