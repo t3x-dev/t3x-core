@@ -1,5 +1,18 @@
 # @t3x-dev/yschema
 
+## 1.2.0
+
+### Minor Changes
+
+- [#1358](https://github.com/t3x-dev/t3x-core/pull/1358) [`7b56ef2`](https://github.com/t3x-dev/t3x-core/commit/7b56ef20168650e04567611757963d87e12d16da) Thanks [@lqw905](https://github.com/lqw905)! - Add the open YSchema Module Composition v2 contract, deterministic compiler, and immutable Blueprint-backed Schema Version publishing while preserving v1 Composition replay compatibility.
+
+### Patch Changes
+
+- [#1372](https://github.com/t3x-dev/t3x-core/pull/1372) [`6141247`](https://github.com/t3x-dev/t3x-core/commit/61412478ef38eb27a4dcd8157a3b9c9e2f064668) Thanks [@jjy0230](https://github.com/jjy0230)! - Close the YSchema P0 runtime contract against unknown schema fields, ignore inherited schema and candidate tree properties during normalization and validation, and execute required relation rules during validation.
+
+- Updated dependencies [[`78c9ae6`](https://github.com/t3x-dev/t3x-core/commit/78c9ae6730dc28d330cc12786d043a774fdd2b18), [`513dc89`](https://github.com/t3x-dev/t3x-core/commit/513dc894763ced7b2b69ae0abb442e5e0c42038e), [`72fe53d`](https://github.com/t3x-dev/t3x-core/commit/72fe53d7c069e106a57338956469c108889d14f1), [`6d201d1`](https://github.com/t3x-dev/t3x-core/commit/6d201d149fc21c174bb9eeb47ddb743390b01ef3)]:
+  - @t3x-dev/yops@1.2.0
+
 ## 1.1.0
 
 ### Minor Changes
