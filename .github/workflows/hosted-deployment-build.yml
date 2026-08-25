@@ -1,0 +1,69 @@
+name: Hosted Deployment Build
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'vercel.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'packages/api/**'
+      - 'packages/api-client/**'
+      - 'packages/application/**'
+      - 'packages/core/**'
+      - 'packages/runner/**'
+      - 'packages/storage/**'
+      - 'packages/transition/**'
+      - 'packages/yops/**'
+      - 'packages/yschema/**'
+      - 'tools/dev-package-runner.mjs'
+      - 'tools/web-next-guard.mjs'
+      - 'tools/lib/sourceDevAuthDefaults.mjs'
+      - 'tools/hooks/install-hooks.mjs'
+      - '.github/workflows/hosted-deployment-build.yml'
+  push:
+    branches: [dev]
+    paths:
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'vercel.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'tools/**'
+      - '.github/workflows/hosted-deployment-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hosted-deployment-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-image-build:
+    name: API and Web images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t t3x-api:${{ github.sha }} .
+      - name: Build WebUI image
+        run: >-
+          docker build
+          -f apps/web/Dockerfile
+          --build-arg NEXT_PUBLIC_API_URL=https://api.example.invalid
+          --build-arg NEXT_PUBLIC_AUTH_DISABLED=false
+          -t t3x-webui:${{ github.sha }}
+          .

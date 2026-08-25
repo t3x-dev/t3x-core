@@ -22,3 +22,7 @@ pnpm-debug.log*
 # Test/coverage artifacts
 coverage
 **/coverage
+
+# Deployment credentials and local provider state must never enter the context.
+.env*
+.vercel

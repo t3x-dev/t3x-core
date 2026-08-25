@@ -7,15 +7,17 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Match the packageManager declared by the workspace.
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
 
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY tools/hooks/install-hooks.sh ./tools/hooks/install-hooks.sh
+COPY tools/hooks/install-hooks.mjs ./tools/hooks/install-hooks.mjs
 COPY packages/yops/package.json ./packages/yops/
 COPY packages/yschema/package.json ./packages/yschema/
+COPY packages/transition/package.json ./packages/transition/
 COPY packages/core/package.json ./packages/core/
+COPY packages/application/package.json ./packages/application/
 COPY packages/storage/package.json ./packages/storage/
 COPY packages/api/package.json ./packages/api/
 COPY apps/api/package.json ./apps/api/
@@ -27,7 +29,9 @@ RUN pnpm install --frozen-lockfile --shamefully-hoist
 # Copy source files
 COPY packages/yops/ ./packages/yops/
 COPY packages/yschema/ ./packages/yschema/
+COPY packages/transition/ ./packages/transition/
 COPY packages/core/ ./packages/core/
+COPY packages/application/ ./packages/application/
 COPY packages/storage/ ./packages/storage/
 COPY packages/api/ ./packages/api/
 COPY apps/api/ ./apps/api/
@@ -36,7 +40,9 @@ COPY apps/runner/ ./apps/runner/
 # Build all packages
 RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/yschema build && \
+    pnpm --filter @t3x-dev/transition build && \
     pnpm --filter @t3x-dev/core build && \
+    pnpm --filter @t3x-dev/application build && \
     pnpm --filter @t3x-dev/storage build && \
     pnpm --filter @t3x-dev/runner build && \
     pnpm --filter @t3x-dev/api build && \
@@ -59,7 +65,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app ./
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD node -e "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"
+  CMD node -e "fetch('http://localhost:8000/ready').then(r => r.ok ? process.exit(0) : process.exit(1))"
 
 EXPOSE 8000
 
