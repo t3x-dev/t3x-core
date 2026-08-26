@@ -25,7 +25,7 @@ import {
   type WorkspaceSourceTransitionCapabilities,
 } from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware, type BearerTokenVerifier } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
@@ -120,6 +120,8 @@ export interface CreateAppOptions {
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
   routes?: (api: OpenAPIHono) => void;
+  /** Raw-token verifier for WebSocket upgrades. Defaults to persisted API keys. */
+  websocketTokenVerifier?: BearerTokenVerifier;
   /** Server-owned exact-source secret and Runner capabilities. */
   workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
   /** Server-owned Transition verification providers and external predicate allowlist. */
@@ -372,7 +374,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // WebSocket — real-time event push (mounted at root, not under /api)
   const { upgradeWebSocket, websocket } = setupWebSocket();
-  app.route('/', createWsRoute(upgradeWebSocket));
+  app.route('/', createWsRoute(upgradeWebSocket, options?.websocketTokenVerifier));
 
   // 404 handler
   app.notFound((c) => {
