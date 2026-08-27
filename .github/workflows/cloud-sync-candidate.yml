@@ -1,0 +1,143 @@
+name: Cloud Sync Candidate
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'apps/runner/**'
+      - 'apps/web/**'
+      - 'packages/api/**'
+      - 'packages/api-client/**'
+      - 'packages/application/**'
+      - 'packages/core/**'
+      - 'packages/storage/**'
+      - 'packages/transition/**'
+      - 'packages/yops/**'
+      - 'packages/yschema/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - 'tsconfig.json'
+      - 'tools/verify-versions.mjs'
+      - 'tools/rewrite-workspace-package-json.mjs'
+      - 'tools/restore-package-json.mjs'
+      - 'tools/sync-cloud-candidate.mjs'
+      - 'tools/lib/cloudSyncCandidate.mjs'
+      - '.github/workflows/cloud-sync-candidate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cloud-sync-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare reviewed Cloud update
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Core
+        uses: actions/checkout@v4
+        with:
+          path: t3x-core
+          fetch-depth: 0
+
+      - name: Checkout Cloud main
+        uses: actions/checkout@v4
+        with:
+          repository: t3x-dev/t3x-cloud
+          ref: main
+          token: ${{ secrets.CLOUD_SYNC_TOKEN }}
+          path: t3x-cloud
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Core dependencies
+        working-directory: t3x-core
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build Core Cloud surfaces
+        working-directory: t3x-core
+        run: corepack pnpm build
+
+      - name: Prepare artifacts and shared Web baseline
+        run: node t3x-core/tools/sync-cloud-candidate.mjs --cloud-root t3x-cloud
+
+      - name: Refresh Cloud lockfile
+        working-directory: t3x-cloud
+        run: corepack pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Verify synchronized Cloud inputs
+        working-directory: t3x-cloud
+        run: |
+          corepack pnpm core:verify
+          corepack pnpm core:web:check
+          git diff --check
+
+      - name: Push immutable sync branch
+        id: push
+        working-directory: t3x-cloud
+        shell: bash
+        env:
+          CORE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short_sha="${CORE_SHA:0:12}"
+          branch="sync/core-${short_sha}"
+
+          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
+            echo "Sync branch ${branch} already exists; leaving it unchanged."
+            echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "Cloud already matches Core ${CORE_SHA}; no branch was created."
+            echo "branch=" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "t3x-cloud-sync[bot]"
+          git config user.email "t3x-cloud-sync[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add apps package.json pnpm-lock.yaml vendor/t3x
+          git commit -m "chore(core): sync ${short_sha}"
+          git push origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish operator summary
+        shell: bash
+        env:
+          CORE_SHA: ${{ github.sha }}
+          SYNC_BRANCH: ${{ steps.push.outputs.branch }}
+          BRANCH_CREATED: ${{ steps.push.outputs.created }}
+        run: |
+          {
+            echo "## Cloud sync candidate"
+            echo
+            echo "- Core SHA: \`${CORE_SHA}\`"
+            if [[ -n "${SYNC_BRANCH}" ]]; then
+              echo "- Cloud branch: \`${SYNC_BRANCH}\`"
+              echo "- Branch created: \`${BRANCH_CREATED}\`"
+              echo "- Open PR manually: https://github.com/t3x-dev/t3x-cloud/compare/main...${SYNC_BRANCH}?expand=1"
+            else
+              echo "- Result: Cloud main already matches this Core revision."
+            fi
+            echo
+            echo "This workflow never creates or merges a Cloud PR and never deploys."
+          } >> "$GITHUB_STEP_SUMMARY"
