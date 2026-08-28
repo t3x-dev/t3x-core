@@ -5,8 +5,12 @@
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
-export async function listProjects(limit = 50, offset = 0): Promise<ProjectListData> {
-  const query = buildQueryString({ limit, offset });
+export async function listProjects(
+  limit = 50,
+  offset = 0,
+  namespace?: string
+): Promise<ProjectListData> {
+  const query = buildQueryString({ limit, offset, namespace });
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
   return handleResponse<ProjectListData>(res);
 }
@@ -18,12 +22,13 @@ export async function getProject(projectId: string): Promise<ProjectDetail> {
 
 export async function createProject(
   name: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  namespace?: string
 ): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, metadata }),
+    body: JSON.stringify({ name, metadata, namespace }),
   });
   return handleResponse<Project>(res);
 }

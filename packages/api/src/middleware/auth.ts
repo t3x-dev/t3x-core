@@ -22,6 +22,22 @@ import { createError } from '../lib/errors';
 import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/runner-service-auth';
 import { pinoLogger } from './logger';
 
+/** Normalized authority returned by raw-token entry points such as WebSocket. */
+export interface BearerTokenPrincipal {
+  userId: string | null;
+  projectId: string | null;
+  /** Null for short-lived or otherwise non-persisted credentials. */
+  keyId: string | null;
+  principalKind: ApiKeyPrincipalKind;
+  transitionScopes: readonly TransitionScope[];
+}
+
+/** Extension point for deployments that accept more than persisted API keys. */
+export type BearerTokenVerifier = (
+  db: AnyDB,
+  token: string | null
+) => Promise<BearerTokenPrincipal | null>;
+
 /** Paths that never require authentication */
 const PUBLIC_PATHS = [
   '/health',
@@ -154,13 +170,7 @@ export async function authMiddleware(c: Context, next: Next) {
 export async function verifyBearerToken(
   db: AnyDB,
   token: string | null
-): Promise<{
-  userId: string | null;
-  projectId: string | null;
-  keyId: string;
-  principalKind: ApiKeyPrincipalKind;
-  transitionScopes: readonly TransitionScope[];
-} | null> {
+): Promise<BearerTokenPrincipal | null> {
   if (!token) return null;
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;

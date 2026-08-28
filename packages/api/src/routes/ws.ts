@@ -46,16 +46,22 @@ import { createError } from '../lib/errors';
 import { replayEventsSince } from '../lib/event-replay';
 import { evaluateProjectAccess } from '../lib/project-access';
 import { type RoomConnection, roomManager } from '../lib/room-manager';
-import { verifyBearerToken } from '../middleware/auth';
+import { type BearerTokenVerifier, verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
 
-export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
+export function createWsRoute(
+  upgradeWebSocket: UpgradeWebSocket,
+  verifyToken: BearerTokenVerifier = verifyBearerToken
+) {
   const wsRoute = new Hono();
 
   wsRoute.get('/ws', async (c, next) => {
     const conversationId = c.req.query('conversation_id') ?? null;
     const projectId = c.req.query('project_id') ?? null;
-    const userId = c.req.query('user_id') ?? 'anonymous';
+    // Only AUTH_DISABLED local development may trust a caller-supplied
+    // presence label. Authenticated connections replace this with the
+    // verified principal below.
+    let connectionUserId = c.req.query('user_id') ?? 'anonymous';
     const token = c.req.query('token') ?? null;
     const lastEventIdRaw = c.req.query('last_event_id') ?? null;
     const lastEventId = lastEventIdRaw ? safeBigInt(lastEventIdRaw) : null;
@@ -76,7 +82,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
       }
       try {
         const db = await getDB();
-        const principal = await verifyBearerToken(db, token);
+        const principal = await verifyToken(db, token);
         if (!principal) {
           return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
         }
@@ -109,11 +115,16 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
             return c.json(createError(decision.code, decision.message), decision.status);
           }
         }
-        // Fire-and-forget: update last_used_at on the API key.
-        // `verifyBearerToken` is intentionally side-effect-free, so we mirror
-        // the bookkeeping done by `authMiddleware` here. Errors are swallowed
-        // so a DB hiccup during touch doesn't poison the handshake.
-        touchLastUsed(db, principal.keyId).catch(() => {});
+        connectionUserId =
+          principal.userId ??
+          `${principal.principalKind}:api-key:${principal.keyId ?? 'ephemeral'}`;
+        // Fire-and-forget: update last_used_at only for persisted credentials.
+        // Short-lived credentials such as deployment JWTs have no key row.
+        // Errors are swallowed so a DB hiccup during touch doesn't poison the
+        // handshake.
+        if (principal.keyId) {
+          touchLastUsed(db, principal.keyId).catch(() => {});
+        }
       } catch (err) {
         pinoLogger.error({ err }, 'ws auth failed');
         return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
@@ -137,7 +148,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
           const conn: RoomConnection = {
             id: connectionId,
             ws: ws as unknown as RoomConnection['ws'],
-            userId,
+            userId: connectionUserId,
             joinedAt: Date.now(),
           };
           for (const key of roomKeys) {

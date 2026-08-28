@@ -24,6 +24,9 @@ describe('repoPath', () => {
     expect(getProjectRepoPath({ id: 'proj_audit', name: 'Mobile Click Audit 1780972749777' })).toBe(
       '/t3x-dev/mobile-click-audit'
     );
+    expect(getProjectRepoPath({ id: 'proj_test', name: 'Test Project' }, 'lqw905')).toBe(
+      '/lqw905/test-project'
+    );
   });
 
   it('falls back to a stable repo slug when the name is empty', () => {

@@ -24,16 +24,18 @@ import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/sto
 
 interface AddProjectOptions {
   description?: string;
+  namespace?: string;
 }
 
 export function useProjectCrud() {
-  const list = useCallback(async (): Promise<void> => {
+  const list = useCallback(async (namespaceSlug?: string): Promise<void> => {
     const store = useProjectStore.getState();
     if (store.loading) return;
     store.setLoading(true);
     store.setError(null);
+    store.setProjectScope(namespaceSlug ?? null);
     try {
-      const response = await fetchProjects(50, 0);
+      const response = await fetchProjects(50, 0, namespaceSlug);
       store.setProjects(response.projects.map(apiProjectToSummary));
       store.setLoading(false);
       store.setInitialized(true);
@@ -57,9 +59,7 @@ export function useProjectCrud() {
       const notify = store.notifyCallback;
 
       try {
-        const project = await createProject(name, {
-          description,
-        });
+        const project = await createProject(name, { description }, options?.namespace);
         const summary = apiProjectToSummary(project);
         store.addToProjects(summary);
         notify?.(`Created project "${name}"`, 'success');

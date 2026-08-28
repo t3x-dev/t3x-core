@@ -38,7 +38,9 @@ vi.mock('@/app/project/[projectId]/page', () => ({
 }));
 
 vi.mock('@/components/project/ProjectDirectoryPage', () => ({
-  ProjectDirectoryPage: () => <div data-testid="org-directory">org directory</div>,
+  ProjectDirectoryPage: ({ ownerSlug }: { ownerSlug: string }) => (
+    <div data-testid="owner-directory">directory for {ownerSlug}</div>
+  ),
 }));
 
 vi.mock('@/components/project/NewRepositoryPage', () => ({
@@ -72,6 +74,7 @@ describe('OwnerRepoProjectPage', () => {
       error: null,
       initialized: true,
       loading: false,
+      projectScope: 't3x-dev',
       projects: [
         {
           branchesCount: 1,
@@ -127,7 +130,16 @@ describe('OwnerRepoProjectPage', () => {
 
     render(<OwnerRepoProjectPage />);
 
-    expect(screen.getByTestId('org-directory')).toBeInTheDocument();
+    expect(screen.getByTestId('owner-directory')).toHaveTextContent('directory for t3x-dev');
+  });
+
+  it('renders a personal directory for a personal namespace path', () => {
+    routeParamsValue = { owner: 'lqw905' };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('owner-directory')).toHaveTextContent('directory for lqw905');
+    expect(fetchProjects).not.toHaveBeenCalled();
   });
 
   it('renders the organization repository creation page for /owner/new', () => {
@@ -153,6 +165,9 @@ describe('OwnerRepoProjectPage', () => {
     render(<OwnerRepoProjectPage />);
 
     expect(screen.getByText('Repository not found')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute(
+      'href',
+      '/t3x-dev'
+    );
   });
 });

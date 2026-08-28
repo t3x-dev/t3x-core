@@ -7,8 +7,10 @@ import {
   branches,
   claimUnownedProjects,
   conversations,
+  DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
   deleteProject,
   ensureMainBranch,
+  findNamespaceBySlug,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,
@@ -28,6 +30,7 @@ import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
+import { canUseNamespace } from '../lib/namespace-access';
 import { hasOperatorAccess } from '../lib/operator-access';
 import {
   assertProjectAccess,
@@ -42,6 +45,7 @@ import {
   PaginationQuerySchema,
   SuccessResponseSchema,
 } from '../schemas/common';
+import { NamespaceSlugSchema } from '../schemas/namespaces';
 import {
   CreateProjectSchema,
   ListProjectsResponseSchema,
@@ -94,6 +98,7 @@ const listProjectsRoute = createRoute({
   request: {
     query: PaginationQuerySchema.extend({
       cursor: z.string().optional(),
+      namespace: NamespaceSlugSchema.optional(),
     }),
   },
   responses: {
@@ -107,6 +112,14 @@ const listProjectsRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Namespace access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Namespace not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -119,7 +132,7 @@ const listProjectsRoute = createRoute({
 });
 
 projectRoutes.openapi(listProjectsRoute, async (c) => {
-  const { limit, offset, cursor } = c.req.valid('query');
+  const { limit, offset, cursor, namespace: namespaceSlug } = c.req.valid('query');
 
   // Shared helper: enrich a project row with counts
   const enrichProject = async (
@@ -163,11 +176,23 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
-    await seedDemoWorkspaceIfEmpty(db, userId);
+    const namespace = namespaceSlug ? await findNamespaceBySlug(db, namespaceSlug) : null;
+    if (namespaceSlug && !namespace) {
+      return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
+    }
+    if (namespace && !canUseNamespace(namespace, userId)) {
+      return errorResponse(c, 'FORBIDDEN', 'Namespace access denied');
+    }
+    if (!namespaceSlug) await seedDemoWorkspaceIfEmpty(db, userId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findProjects(db, { cursor, limit, owner_id: userId });
+      const result = await findProjects(db, {
+        cursor,
+        limit,
+        owner_id: userId,
+        namespace_id: namespace?.namespaceId,
+      });
       const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
       return c.json(
         {
@@ -183,7 +208,12 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const projects = await findProjects(db, { limit, offset, owner_id: userId });
+    const projects = await findProjects(db, {
+      limit,
+      offset,
+      owner_id: userId,
+      namespace_id: namespace?.namespaceId,
+    });
 
     // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
     const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
@@ -406,6 +436,10 @@ const createProjectRoute = createRoute({
         },
       },
     },
+    404: {
+      description: 'Namespace not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -417,7 +451,6 @@ const createProjectRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
 
@@ -427,10 +460,19 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
+    const namespaceSlug = body.namespace ?? DEFAULT_ORGANIZATION_NAMESPACE_SLUG;
+    const namespace = await findNamespaceBySlug(db, namespaceSlug);
+    if (!namespace) {
+      return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
+    }
+    if (!canUseNamespace(namespace, userId)) {
+      return errorResponse(c, 'FORBIDDEN', 'Namespace access denied');
+    }
     const project = await insertProject(db, {
       name: body.name,
       metadata: body.metadata,
       ownerId: userId,
+      namespaceId: namespace.namespaceId,
     });
 
     // Bootstrap the default 'main' branch so it always exists from day one.

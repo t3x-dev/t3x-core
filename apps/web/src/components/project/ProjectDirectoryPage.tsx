@@ -24,11 +24,6 @@ import {
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
 
-const NAV_ITEMS = [
-  { label: 'Settings', href: `/${DEFAULT_OWNER_SLUG}/settings`, active: false },
-] as const;
-const NEW_REPOSITORY_PATH = `/${DEFAULT_OWNER_SLUG}/new`;
-
 function metricValue(value: number | undefined): number {
   return value ?? 0;
 }
@@ -85,11 +80,13 @@ function ProjectCard({
   compact = false,
   onDelete,
   onRename,
+  ownerSlug,
 }: {
   project: ProjectSummary;
   compact?: boolean;
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
+  ownerSlug: string;
 }) {
   return (
     <article
@@ -102,7 +99,7 @@ function ProjectCard({
     >
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
-          href={getProjectRepoPath(project)}
+          href={getProjectRepoPath(project, ownerSlug)}
           onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
@@ -113,7 +110,7 @@ function ProjectCard({
             {project.description || 'Structured state repository.'}
           </p>
           <p className="mt-2 truncate text-xs font-mono text-[var(--text-tertiary)]">
-            {getProjectRepoPath(project)}
+            {getProjectRepoPath(project, ownerSlug)}
           </p>
         </Link>
         {!compact && (
@@ -152,12 +149,19 @@ function ProjectCard({
 }
 
 function DirectoryTopBar({
+  isPersonalNamespace,
   onRefresh,
+  ownerSlug,
   refreshing,
 }: {
+  isPersonalNamespace: boolean;
   onRefresh: () => void;
+  ownerSlug: string;
   refreshing: boolean;
 }) {
+  const settingsPath = isPersonalNamespace ? '/settings/profile' : `/${ownerSlug}/settings`;
+  const newRepositoryPath = `/${ownerSlug}/new`;
+
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
       <div className="flex h-16 items-center gap-3 px-6">
@@ -165,28 +169,19 @@ function DirectoryTopBar({
           <div className="flex size-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-card)]">
             T3
           </div>
-          <span className="text-base font-bold text-[var(--text-primary)]">t3x-dev</span>
+          <span className="text-base font-bold text-[var(--text-primary)]">{ownerSlug}</span>
         </div>
-        <nav aria-label="Organization navigation" className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              aria-current={item.active ? 'page' : undefined}
-              className={cn(
-                'rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition-colors',
-                item.active
-                  ? 'text-[var(--text-primary)]'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-              )}
-              href={item.href}
-              key={item.label}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav aria-label="Namespace navigation" className="hidden items-center gap-1 md:flex">
+          <Link
+            className="rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+            href={settingsPath}
+          >
+            Settings
+          </Link>
         </nav>
         <div className="ml-auto" />
         <Button asChild className="size-9" size="icon" variant="canvas-outline">
-          <Link aria-label="New repository" href={NEW_REPOSITORY_PATH}>
+          <Link aria-label="New repository" href={newRepositoryPath}>
             <Plus className="size-4" />
           </Link>
         </Button>
@@ -206,28 +201,41 @@ function DirectoryTopBar({
   );
 }
 
-function OrganizationHeader({
+function NamespaceHeader({
   dataAvailable,
+  isPersonalNamespace,
+  ownerSlug,
   projects,
 }: {
   dataAvailable: boolean;
+  isPersonalNamespace: boolean;
+  ownerSlug: string;
   projects: ProjectSummary[];
 }) {
   const commits = projects.reduce((sum, project) => sum + metricValue(project.commitsCount), 0);
+  const avatarLabel =
+    ownerSlug
+      .replace(/[^a-z0-9]/gi, '')
+      .slice(0, 2)
+      .toUpperCase() || 'T3';
 
   return (
     <section className="border-b border-[var(--stroke-divider)] pb-7">
       <div className="flex flex-col gap-5 md:flex-row md:items-center">
         <div className="flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-panel)] bg-[var(--text-primary)] text-3xl font-bold text-[var(--surface-card)]">
-          T3
+          {avatarLabel}
         </div>
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">t3x-dev</h1>
+          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+            {ownerSlug}
+          </h1>
           <p className="mt-2 text-base font-semibold text-[var(--text-secondary)]">
-            Organization namespace for structured state repositories.
+            {isPersonalNamespace
+              ? 'Personal namespace for structured state repositories.'
+              : 'Organization namespace for structured state repositories.'}
           </p>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-            <span>3 members</span>
+            <span>{isPersonalNamespace ? 'Personal namespace' : '3 members'}</span>
             <span>{dataAvailable ? projects.length : '—'} repos</span>
             <span>{dataAvailable ? commits : '—'} commits</span>
           </div>
@@ -323,7 +331,7 @@ function DirectoryLoadFailure({
   );
 }
 
-function EmptyDirectory() {
+function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   return (
     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-center">
       <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
@@ -335,7 +343,7 @@ function EmptyDirectory() {
         apply YOps, and produce Leaf artifacts.
       </p>
       <Button asChild className="mt-5" variant="commit">
-        <Link href={NEW_REPOSITORY_PATH}>
+        <Link href={newRepositoryPath}>
           <Plus className="size-4" /> New repository
         </Link>
       </Button>
@@ -343,7 +351,7 @@ function EmptyDirectory() {
   );
 }
 
-export function ProjectDirectoryPage() {
+export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { ownerSlug?: string }) {
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
@@ -353,7 +361,7 @@ export function ProjectDirectoryPage() {
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects();
+  } = useProjects(50, ownerSlug);
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -362,6 +370,8 @@ export function ProjectDirectoryPage() {
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
+  const isPersonalNamespace = ownerSlug !== DEFAULT_OWNER_SLUG;
+  const newRepositoryPath = `/${ownerSlug}/new`;
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
@@ -454,10 +464,20 @@ export function ProjectDirectoryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <DirectoryTopBar onRefresh={handleRefreshProjects} refreshing={loading} />
+      <DirectoryTopBar
+        isPersonalNamespace={isPersonalNamespace}
+        onRefresh={handleRefreshProjects}
+        ownerSlug={ownerSlug}
+        refreshing={loading}
+      />
       <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-8">
-          <OrganizationHeader dataAvailable={dataAvailable} projects={projectSummaries} />
+          <NamespaceHeader
+            dataAvailable={dataAvailable}
+            isPersonalNamespace={isPersonalNamespace}
+            ownerSlug={ownerSlug}
+            projects={projectSummaries}
+          />
 
           {error && hasLoadedProjects && (
             <div
@@ -489,7 +509,7 @@ export function ProjectDirectoryPage() {
               retrying={loading}
             />
           ) : projectSummaries.length === 0 ? (
-            <EmptyDirectory />
+            <EmptyDirectory newRepositoryPath={newRepositoryPath} />
           ) : (
             <>
               <section>
@@ -498,7 +518,8 @@ export function ProjectDirectoryPage() {
                     Pinned repositories
                   </h2>
                   <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
-                    Organization repositories with shareable paths
+                    {isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable
+                    paths
                   </span>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
@@ -508,6 +529,7 @@ export function ProjectDirectoryPage() {
                       key={project.id}
                       onDelete={setDeleteTarget}
                       onRename={openRenameDialog}
+                      ownerSlug={ownerSlug}
                       project={project}
                     />
                   ))}
@@ -533,7 +555,7 @@ export function ProjectDirectoryPage() {
                     />
                   </label>
                   <Button asChild variant="commit">
-                    <Link href={NEW_REPOSITORY_PATH}>
+                    <Link href={newRepositoryPath}>
                       <Plus className="size-4" /> New repository
                     </Link>
                   </Button>
@@ -548,6 +570,7 @@ export function ProjectDirectoryPage() {
                         <ProjectCard
                           onDelete={setDeleteTarget}
                           onRename={openRenameDialog}
+                          ownerSlug={ownerSlug}
                           project={project}
                         />
                       </div>

@@ -29,40 +29,43 @@ function OwnerRepoProjectPageContent() {
   const hasInvalidTabSegment =
     repoSegments.length > 1 && tabSegment !== null && !isProjectTabSegment(tabSegment);
   const isDefaultOwner = ownerSlug === DEFAULT_OWNER_SLUG;
-  const isOrganizationDirectory = isDefaultOwner && repoSegments.length === 0;
-  const isNewRepositoryPage = isDefaultOwner && repoSlug === 'new' && repoSegments.length === 1;
+  const isOwnerDirectory = repoSegments.length === 0;
+  const isNewRepositoryPage = repoSlug === 'new' && repoSegments.length === 1;
   const isOrganizationSettingsPage =
     isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
   const projects = useProjectStore((state) => state.projects);
   const initialized = useProjectStore((state) => state.initialized);
+  const projectScope = useProjectStore((state) => state.projectScope);
   const loading = useProjectStore((state) => state.loading);
   const error = useProjectStore((state) => state.error);
   const { list: fetchProjects } = useProjectCrud();
 
   useEffect(() => {
-    if (isOrganizationDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
-    if (!initialized && !loading) void fetchProjects();
+    if (isOwnerDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
+    if (projectScope !== ownerSlug && !loading) void fetchProjects(ownerSlug);
   }, [
     fetchProjects,
     initialized,
     isNewRepositoryPage,
-    isOrganizationDirectory,
     isOrganizationSettingsPage,
+    isOwnerDirectory,
     loading,
+    ownerSlug,
+    projectScope,
   ]);
 
   const project = useMemo(() => {
-    if (ownerSlug !== DEFAULT_OWNER_SLUG || !repoSlug) return undefined;
+    if (!repoSlug) return undefined;
     return projects.find((item) => toRepoSlug(item.name, item.id) === repoSlug);
-  }, [ownerSlug, projects, repoSlug]);
+  }, [projects, repoSlug]);
 
   useEffect(() => {
     if (!project || !hasStateTabSegment) return;
     router.replace(`/${ownerSlug}/${repoSlug}`);
   }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
 
-  if (isOrganizationDirectory) {
-    return <ProjectDirectoryPage />;
+  if (isOwnerDirectory) {
+    return <ProjectDirectoryPage ownerSlug={ownerSlug} />;
   }
 
   if (isNewRepositoryPage) {
@@ -73,7 +76,7 @@ function OwnerRepoProjectPageContent() {
     return <OrganizationSettingsPage ownerSlug={ownerSlug} />;
   }
 
-  if (!initialized || loading) {
+  if (!initialized || loading || projectScope !== ownerSlug) {
     return (
       <div className="flex h-full flex-col">
         <LoadingSpinner message="Loading repository..." />
@@ -84,7 +87,7 @@ function OwnerRepoProjectPageContent() {
   if (error) {
     return (
       <div className="flex h-full flex-col">
-        <ErrorMessage error={error} onRetry={() => void fetchProjects()} />
+        <ErrorMessage error={error} onRetry={() => void fetchProjects(ownerSlug)} />
       </div>
     );
   }
@@ -103,9 +106,9 @@ function OwnerRepoProjectPageContent() {
           </p>
           <Link
             className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            href="/"
+            href={`/${ownerSlug || DEFAULT_OWNER_SLUG}`}
           >
-            Back to {DEFAULT_OWNER_SLUG}
+            Back to {ownerSlug || DEFAULT_OWNER_SLUG}
           </Link>
         </div>
       </div>

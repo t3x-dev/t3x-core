@@ -25,7 +25,7 @@ import {
   type WorkspaceSourceTransitionCapabilities,
 } from './lib/workspace-source-transition';
 import { setupWebSocket } from './lib/ws';
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware, type BearerTokenVerifier } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
@@ -73,6 +73,7 @@ import {
   localConfigRoutes,
   materialsRoutes,
   mergeRoutes,
+  namespaceRoutes,
   notificationsRoutes,
   pinsRoutes,
   projectRoutes,
@@ -120,6 +121,8 @@ export interface CreateAppOptions {
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
   routes?: (api: OpenAPIHono) => void;
+  /** Raw-token verifier for WebSocket upgrades. Defaults to persisted API keys. */
+  websocketTokenVerifier?: BearerTokenVerifier;
   /** Server-owned exact-source secret and Runner capabilities. */
   workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
   /** Server-owned Transition verification providers and external predicate allowlist. */
@@ -198,6 +201,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // Mount routes
   api.route('/', statusRoutes);
+  api.route('/', namespaceRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
@@ -295,6 +299,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     tags: [
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
+      { name: 'Namespaces', description: 'Personal and organization namespaces' },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Sources', description: 'Repository-owned source and evidence reads' },
@@ -372,7 +377,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // WebSocket — real-time event push (mounted at root, not under /api)
   const { upgradeWebSocket, websocket } = setupWebSocket();
-  app.route('/', createWsRoute(upgradeWebSocket));
+  app.route('/', createWsRoute(upgradeWebSocket, options?.websocketTokenVerifier));
 
   // 404 handler
   app.notFound((c) => {

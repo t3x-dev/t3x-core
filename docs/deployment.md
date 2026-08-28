@@ -123,3 +123,33 @@ an untrusted network, review:
 The public repository supports self-hosted evaluation. Managed cloud deployment,
 OAuth provider wiring, billing, teams, and tenant operations are cloud-specific
 and live outside this repository.
+
+## Hosted Deployment Qualification
+
+Hosted candidates must be built from the repository root so both application
+images can access every workspace package and build helper. The required image
+checks are:
+
+```bash
+docker build -f apps/api/Dockerfile -t t3x-api:staging .
+docker build \
+  -f apps/web/Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=https://api.example.invalid \
+  --build-arg NEXT_PUBLIC_AUTH_DISABLED=false \
+  -t t3x-webui:staging .
+```
+
+Use `/health` only as process liveness. A deployment platform must use `/ready`
+as its traffic gate because readiness verifies the database connection. Keep a
+single API replica while startup-time schema initialization is still the
+migration owner.
+
+For a persistent hosted API, `DATABASE_URL` must be a direct PostgreSQL
+connection or a session-mode pooler connection. Do not use a transaction-mode
+pooler on port `6543`; it cannot preserve the session behavior required by
+prepared statements and `LISTEN/NOTIFY`.
+
+The root `vercel.json` is a reproducible WebUI build input. Configure the
+Vercel project Root Directory to the repository root and keep Preview and
+Production environment variables separate. The Web project needs only API and
+public browser configuration; database credentials belong with the API.

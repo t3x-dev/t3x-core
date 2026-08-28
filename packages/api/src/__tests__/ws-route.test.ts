@@ -188,6 +188,35 @@ describe('ws route — query parameter validation', () => {
     expect(touchSpy).toHaveBeenCalledWith(expect.anything(), 'k_abc');
   });
 
+  it('uses an injected verifier, binds presence to its principal, and skips touch for ephemeral credentials', async () => {
+    delete process.env.AUTH_DISABLED;
+    const injectedVerifier = vi.fn().mockResolvedValue({
+      userId: 'verified-user',
+      projectId: null,
+      keyId: null,
+      principalKind: 'human',
+      transitionScopes: [],
+    });
+    findProjectSpy.mockResolvedValue({ projectId: 'proj_owned', ownerId: 'verified-user' });
+    const { fakeUpgrade, getHandlers } = makeFakeUpgrade();
+    const route = createWsRoute(fakeUpgrade as never, injectedVerifier);
+
+    const response = await route.fetch(
+      new Request('http://localhost/ws?project_id=proj_owned&user_id=spoofed-user&token=cloud-jwt')
+    );
+
+    expect(response.status).toBe(200);
+    expect(injectedVerifier).toHaveBeenCalledWith(expect.anything(), 'cloud-jwt');
+    expect(mockVerify).not.toHaveBeenCalled();
+
+    const handlers = getHandlers();
+    handlers.onOpen({} as never, { send: vi.fn() } as never);
+    expect(joinSpy).toHaveBeenCalledTimes(1);
+    expect(joinSpy.mock.calls[0][1].userId).toBe('verified-user');
+    await Promise.resolve();
+    expect(touchSpy).not.toHaveBeenCalled();
+  });
+
   it('rejects a human token subscribing to a conversation owned by another user', async () => {
     delete process.env.AUTH_DISABLED;
     mockVerify.mockResolvedValue({
@@ -428,5 +457,22 @@ describe('ws route — createApp() integration (C-1 regression)', () => {
     expect(body.error.code).toBe('UNAUTHORIZED');
     expect(body.error.message).toBe('Invalid token');
     expect(mockVerify).toHaveBeenCalledWith(expect.anything(), 'bad_token');
+  });
+
+  it('passes createApp websocket credentials to the configured verifier', async () => {
+    delete process.env.AUTH_DISABLED;
+    const injectedVerifier = vi.fn().mockResolvedValue(null);
+
+    const { createApp } = await import('../app');
+    const { app } = createApp({
+      skipLocalAuth: true,
+      rateLimitStore: createTestRateLimitStore(),
+      websocketTokenVerifier: injectedVerifier,
+    });
+
+    const response = await app.request('/ws?conversation_id=conv_x&token=cloud-short-token');
+    expect(response.status).toBe(401);
+    expect(injectedVerifier).toHaveBeenCalledWith(expect.anything(), 'cloud-short-token');
+    expect(mockVerify).not.toHaveBeenCalled();
   });
 });

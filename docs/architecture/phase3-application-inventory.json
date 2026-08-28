@@ -25,8 +25,8 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 75,
-    "filesUsingGetDB": 67,
+    "routeFiles": 76,
+    "filesUsingGetDB": 68,
     "filesUsingAssertProjectAccess": 53,
     "filesUsingRequireTransitionAuthority": 2,
     "getDBWithoutProjectAccess": [
@@ -37,6 +37,7 @@
       "packages/api/src/routes/diff.openapi.ts",
       "packages/api/src/routes/drafts-workflows.openapi.ts",
       "packages/api/src/routes/health.openapi.ts",
+      "packages/api/src/routes/namespaces.openapi.ts",
       "packages/api/src/routes/notifications.openapi.ts",
       "packages/api/src/routes/providers.openapi.ts",
       "packages/api/src/routes/relations.openapi.ts",

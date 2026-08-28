@@ -14,10 +14,12 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { createApp } from '../app';
+import { verifyBearerToken } from '../middleware/auth';
 
 const ownerKeyValue = 't3xk_ws_owner_0123456789abcdef';
 const otherKeyValue = 't3xk_ws_other_0123456789abcdef';
 const agentKeyValue = 't3xk_ws_agent_0123456789abcdef';
+const cloudShortToken = 'cloud-short-lived-token';
 
 describe('authenticated WebSocket boundary smoke', () => {
   const originalAuthDisabled = process.env.AUTH_DISABLED;
@@ -27,6 +29,7 @@ describe('authenticated WebSocket boundary smoke', () => {
   let ownerProjectId: string;
   let otherProjectId: string;
   let ownerConversationId: string;
+  let ownerUserId: string;
 
   beforeAll(async () => {
     process.env.AUTH_DISABLED = 'false';
@@ -38,6 +41,7 @@ describe('authenticated WebSocket boundary smoke', () => {
       email: 'ws-smoke-owner@example.test',
       name: 'WebSocket Smoke Owner',
     });
+    ownerUserId = owner.id;
     const other = await createUser(testDb, {
       email: 'ws-smoke-other@example.test',
       name: 'WebSocket Smoke Other',
@@ -75,6 +79,18 @@ describe('authenticated WebSocket boundary smoke', () => {
     const { app, websocket } = createApp({
       skipLocalAuth: true,
       rateLimitStore: createTestRateLimitStore(),
+      websocketTokenVerifier: async (db, token) => {
+        if (token === cloudShortToken) {
+          return {
+            userId: ownerUserId,
+            projectId: null,
+            keyId: null,
+            principalKind: 'human',
+            transitionScopes: [],
+          };
+        }
+        return verifyBearerToken(db, token);
+      },
     });
     server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0, websocket });
     if (!server.listening) {
@@ -187,6 +203,17 @@ describe('authenticated WebSocket boundary smoke', () => {
       conversationId: ownerConversationId,
       projectId: ownerProjectId,
     });
+    await closeSocket(socket);
+  });
+
+  it('accepts a deployment-provided short-lived token verifier', async () => {
+    const { socket, message } = await openAndReadWelcome({
+      project_id: ownerProjectId,
+      token: cloudShortToken,
+      user_id: 'spoofed-browser-label',
+    });
+
+    expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
     await closeSocket(socket);
   });
 

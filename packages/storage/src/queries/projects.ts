@@ -24,6 +24,8 @@ export interface CreateProjectInput {
   metadata?: Record<string, unknown>;
   /** Owner user ID. Omit or undefined → NULL (local/legacy data). */
   ownerId?: string;
+  /** Namespace resource ID. Omit only for legacy or non-namespace flows. */
+  namespaceId?: string;
 }
 
 export interface ListProjectsOptions {
@@ -33,6 +35,8 @@ export interface ListProjectsOptions {
   cursor?: string;
   /** Filter by owner. Authenticated callers receive only projects owned by this user. */
   owner_id?: string;
+  /** Filter projects by their persisted namespace resource ID. */
+  namespace_id?: string;
 }
 
 export interface ProjectStats {
@@ -61,6 +65,7 @@ export async function insertProject(db: AnyDB, input: CreateProjectInput): Promi
       projectId,
       name: input.name,
       ownerId: input.ownerId ?? null,
+      namespaceId: input.namespaceId ?? null,
       createdAt,
       metadataJson,
     })
@@ -119,12 +124,16 @@ export async function findProjects(
   // Owner filter: authenticated callers see only their own projects. Unowned
   // rows are legacy local data and must be claimed explicitly before auth use.
   const ownerCondition = options.owner_id ? eq(projects.ownerId, options.owner_id) : undefined;
+  const namespaceCondition = options.namespace_id
+    ? eq(projects.namespaceId, options.namespace_id)
+    : undefined;
 
   if (options.cursor !== undefined) {
     // Cursor pagination mode
     const conditions = [isNull(projects.deletedAt)];
 
     if (ownerCondition) conditions.push(ownerCondition);
+    if (namespaceCondition) conditions.push(namespaceCondition);
 
     if (options.cursor !== '') {
       const { t, k } = decodeCursor(options.cursor);
@@ -153,12 +162,14 @@ export async function findProjects(
 
   // Legacy offset/limit mode
   const offset = options.offset ?? 0;
+  const conditions = [isNull(projects.deletedAt)];
+  if (ownerCondition) conditions.push(ownerCondition);
+  if (namespaceCondition) conditions.push(namespaceCondition);
+
   return db
     .select()
     .from(projects)
-    .where(
-      ownerCondition ? and(ownerCondition, isNull(projects.deletedAt)) : isNull(projects.deletedAt)
-    )
+    .where(and(...conditions))
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);

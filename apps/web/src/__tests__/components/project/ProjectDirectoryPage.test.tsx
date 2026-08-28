@@ -133,6 +133,29 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('YSchema 3')).not.toBeInTheDocument();
   });
 
+  it('renders a personal namespace directory with owner-scoped links', () => {
+    render(<ProjectDirectoryPage ownerSlug="lqw905" />);
+
+    expect(screen.getByRole('heading', { name: 'lqw905' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Personal namespace for structured state repositories.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Personal namespace')).toBeInTheDocument();
+    expect(screen.queryByText('3 members')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings/profile'
+    );
+    expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
+      'href',
+      '/lqw905/prd-workflow'
+    );
+    expect(screen.getAllByText('/lqw905/prd-workflow').length).toBeGreaterThan(0);
+    for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
+      expect(link).toHaveAttribute('href', '/lqw905/new');
+    }
+  });
+
   it('orders pinned repositories from local recent-open state', () => {
     window.localStorage.setItem('t3x:recent-projects', JSON.stringify(['proj_core', 'proj_prd']));
 

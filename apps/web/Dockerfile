@@ -7,16 +7,21 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Match the packageManager declared by the workspace.
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
 
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY tools/hooks/install-hooks.sh ./tools/hooks/install-hooks.sh
+COPY tools/hooks/install-hooks.mjs ./tools/hooks/install-hooks.mjs
+COPY tools/dev-package-runner.mjs ./tools/dev-package-runner.mjs
+COPY tools/web-next-guard.mjs ./tools/web-next-guard.mjs
+COPY tools/lib/sourceDevAuthDefaults.mjs ./tools/lib/sourceDevAuthDefaults.mjs
 COPY packages/yops/package.json ./packages/yops/
 COPY packages/yschema/package.json ./packages/yschema/
+COPY packages/transition/package.json ./packages/transition/
 COPY packages/core/package.json ./packages/core/
 COPY packages/storage/package.json ./packages/storage/
+COPY packages/api-client/package.json ./packages/api-client/
 COPY apps/web/package.json ./apps/web/
 
 # Install dependencies (shamefully-hoist flattens deps for Docker compatibility)
@@ -25,15 +30,19 @@ RUN pnpm install --frozen-lockfile --shamefully-hoist
 # Copy source files
 COPY packages/yops/ ./packages/yops/
 COPY packages/yschema/ ./packages/yschema/
+COPY packages/transition/ ./packages/transition/
 COPY packages/core/ ./packages/core/
 COPY packages/storage/ ./packages/storage/
+COPY packages/api-client/ ./packages/api-client/
 COPY apps/web/ ./apps/web/
 
 # Build dependencies first
 RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/yschema build && \
+    pnpm --filter @t3x-dev/transition build && \
     pnpm --filter @t3x-dev/core build && \
-    pnpm --filter @t3x-dev/storage build
+    pnpm --filter @t3x-dev/storage build && \
+    pnpm --filter @t3x-dev/api-client build
 
 # Build webui
 # NEXT_PUBLIC_* vars must be set at build time (inlined into JS bundle)

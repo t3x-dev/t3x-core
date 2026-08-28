@@ -12,10 +12,11 @@ import { ProjectPersistenceError } from './errors';
 
 export async function createProject(
   name: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  namespace?: string
 ): Promise<Project> {
   try {
-    return await createProjectInfra(name, metadata);
+    return await createProjectInfra(name, metadata, namespace);
   } catch (cause) {
     throw new ProjectPersistenceError(
       cause instanceof Error ? cause.message : 'createProject failed',
