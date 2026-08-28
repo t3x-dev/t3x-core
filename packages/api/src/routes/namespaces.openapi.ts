@@ -73,7 +73,6 @@ const createNamespaceRoute = createRoute({
   },
 });
 
-// @ts-expect-error - handler returns several documented status variants
 namespaceRoutes.openapi(createNamespaceRoute, async (c) => {
   const denied = assertProjectCreationAccess(c);
   if (denied) return denied;
@@ -166,7 +165,6 @@ const getCurrentNamespaceRoute = createRoute({
 });
 
 // Register /me before /{slug} so it cannot be interpreted as a public slug.
-// @ts-expect-error - handler returns documented error variants
 namespaceRoutes.openapi(getCurrentNamespaceRoute, async (c) => {
   const userId = getUserId(c);
   if (!userId) {
@@ -185,7 +183,6 @@ namespaceRoutes.openapi(getCurrentNamespaceRoute, async (c) => {
   }
 });
 
-// @ts-expect-error - handler returns documented error variants
 namespaceRoutes.openapi(getNamespaceRoute, async (c) => {
   try {
     const namespace = await findNamespaceBySlug(await getDB(), c.req.valid('param').slug);

@@ -131,7 +131,6 @@ const listProjectsRoute = createRoute({
   },
 });
 
-// @ts-expect-error - handler returns documented namespace access errors
 projectRoutes.openapi(listProjectsRoute, async (c) => {
   const { limit, offset, cursor, namespace: namespaceSlug } = c.req.valid('query');
 
@@ -452,7 +451,6 @@ const createProjectRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
 
