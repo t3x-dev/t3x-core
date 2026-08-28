@@ -24,26 +24,38 @@ export interface PostgresConfig {
 let client: postgres.Sql | null = null;
 let db: PostgresDB | null = null;
 
+// Keep schema initialization serialized per database across API workers and
+// independently started processes. The second key scopes the lock to the
+// current database so isolated test databases can still initialize in parallel.
+const SCHEMA_INIT_LOCK_NAMESPACE = 0x543358;
+
 /**
  * Create PostgreSQL storage for Docker/production
  */
 export async function createPostgresStorage(config: PostgresConfig): Promise<PostgresDB> {
   // Create postgres.js client
-  client = postgres(config.connectionString, {
+  const nextClient = postgres(config.connectionString, {
     max: config.maxConnections || 10,
     onnotice: config.onnotice,
   });
 
   // Create Drizzle instance
-  db = drizzle(client, { schema });
+  const nextDb = drizzle(nextClient, { schema });
 
-  // Initialize schema (create tables if not exist)
-  await initializeSchema(client);
+  try {
+    // Initialize schema (create tables if not exist)
+    await initializeSchema(nextClient);
 
-  // Seed builtin templates
-  await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
+    // Seed builtin templates
+    await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+  } catch (error) {
+    await nextClient.end().catch(() => {});
+    throw error;
+  }
 
-  return db;
+  client = nextClient;
+  db = nextDb;
+  return nextDb;
 }
 
 /**
@@ -87,6 +99,15 @@ const SCHEMA_VERSION = 68;
  * Initialize database schema (skips if already at current version)
  */
 async function initializeSchema(sql: postgres.Sql): Promise<void> {
+  await sql.begin(async (transaction) => {
+    await transaction.unsafe(
+      `SELECT pg_advisory_xact_lock(${SCHEMA_INIT_LOCK_NAMESPACE}, hashtext(current_database()))`
+    );
+    await initializeSchemaWithLock(transaction);
+  });
+}
+
+async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   // Schema version gate — avoid re-running 900+ lines of idempotent SQL on every restart.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS _schema_version (
