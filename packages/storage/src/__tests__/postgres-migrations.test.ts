@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
+import {
+  closePostgresStorage,
+  createPostgresStorage,
+  getPostgresClient,
+} from '../adapters/postgres';
 import { createTestDB } from './setup';
 
 let cleanup: (() => Promise<void>) | undefined;
@@ -10,6 +14,40 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('serializes concurrent first-run schema initialization', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
+
+    const initialized = await Promise.all([
+      createPostgresStorage({
+        connectionString: setup.connectionString,
+        maxConnections: 1,
+        onnotice: () => {},
+      }),
+      createPostgresStorage({
+        connectionString: setup.connectionString,
+        maxConnections: 1,
+        onnotice: () => {},
+      }),
+    ]);
+
+    const activeClient = getPostgresClient();
+    for (const initializedDb of initialized) {
+      if (initializedDb.$client !== activeClient) {
+        await initializedDb.$client.end();
+      }
+    }
+    await closePostgresStorage();
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    expect(version?.version).toBe(68);
+  });
+
   it('upgrades a v60 database with the complete v61 Transition storage', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
