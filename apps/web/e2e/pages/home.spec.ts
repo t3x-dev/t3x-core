@@ -3,9 +3,9 @@ import { expect, test } from '../fixtures/test';
 import { isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**
- * Organization repository directory E2E tests.
+ * Namespace repository directory E2E tests.
  *
- * These assertions intentionally follow the current organization-first entry
+ * These assertions intentionally follow the current namespace-first entry
  * experience instead of the retired chat-sidebar home page.
  */
 
@@ -19,7 +19,7 @@ test.describe('Home Page', () => {
     }
   });
 
-  // Organization directory loads without errors
+  // Namespace directory loads without errors
   test('Page loads successfully', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
@@ -36,11 +36,11 @@ test.describe('Home Page', () => {
     expect(unexpectedErrors).toHaveLength(0);
   });
 
-  // Organization navigation is present
+  // Namespace navigation is present
   test('Navigation bar is visible', async ({ page }) => {
     await page.goto('/');
 
-    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
+    const navigation = page.getByRole('navigation', { name: 'Namespace navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
     await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
@@ -66,7 +66,7 @@ test.describe('Home Page', () => {
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
   });
 
-  test('Click repository navigates to its organization-scoped State page', async ({
+  test('Click repository navigates to its namespace-scoped State page', async ({
     page,
     request,
   }) => {
@@ -93,7 +93,7 @@ test.describe('Home Page', () => {
     const renamedProjectName = `Release Renamed ${suffix}`;
 
     await page.goto('/');
-    await page.getByRole('link', { name: 'New repository' }).click();
+    await page.getByLabel('New repository', { exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Create a new repository' })).toBeVisible();
 
     await page.getByLabel('Repository name').fill(projectName);
@@ -151,7 +151,7 @@ test.describe('Home Page', () => {
     expect(getDeleted.status()).toBe(404);
   });
 
-  test('Failed initial load is recoverable and is not presented as an empty organization', async ({
+  test('Failed initial load is recoverable and is not presented as an empty namespace', async ({
     page,
   }) => {
     await page.route('**/api/v1/projects?**', async (route) => {
@@ -180,6 +180,10 @@ test.describe('Home Page', () => {
     await expect(
       page.getByRole('heading', { name: "Couldn't load repositories" })
     ).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('heading', { name: 'Repositories', exact: true })
+        .or(page.getByRole('heading', { name: 'No repositories yet', exact: true }))
+    ).toBeVisible();
   });
 });

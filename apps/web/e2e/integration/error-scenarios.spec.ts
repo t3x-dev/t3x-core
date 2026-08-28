@@ -72,7 +72,7 @@ test.describe('Error Scenarios', () => {
 
     // Navigate to home — should work normally
     await page.goto('/');
-    const navigation = page.getByRole('navigation', { name: 'Organization navigation' });
+    const navigation = page.getByRole('navigation', { name: 'Namespace navigation' });
     await expect(navigation).toBeVisible({ timeout: 15000 });
   });
 
