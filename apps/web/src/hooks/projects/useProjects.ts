@@ -34,7 +34,7 @@ export interface UseProjectsResult {
   rename: (projectId: string, name: string) => Promise<Project>;
 }
 
-export function useProjects(limit = 50): UseProjectsResult {
+export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function useProjects(limit = 50): UseProjectsResult {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listProjects(limit, 0);
+      const data = await listProjects(limit, 0, namespaceSlug);
       setProjects(data.projects ?? []);
       setError(null);
     } catch (err) {
@@ -50,7 +50,7 @@ export function useProjects(limit = 50): UseProjectsResult {
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, namespaceSlug]);
 
   useEffect(() => {
     void refresh();

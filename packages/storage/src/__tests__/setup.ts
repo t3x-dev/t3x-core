@@ -34,10 +34,31 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Projects
+CREATE TABLE IF NOT EXISTS namespaces (
+  namespace_id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('personal', 'organization')),
+  owner_user_id TEXT,
+  display_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT namespaces_slug_format
+    CHECK (slug ~ '^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$' AND slug !~ '--')
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_namespaces_slug_unique ON namespaces(slug);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_namespaces_personal_owner_unique
+  ON namespaces(owner_user_id)
+  WHERE kind = 'personal' AND owner_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_namespaces_owner ON namespaces(owner_user_id);
+INSERT INTO namespaces (namespace_id, slug, kind, display_name)
+VALUES ('ns_t3x_dev', 't3x-dev', 'organization', 't3x-dev')
+ON CONFLICT (namespace_id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS projects (
   project_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   owner_id TEXT,
+  namespace_id TEXT REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
   metadata_json TEXT,
   provider_config TEXT,
   default_provider TEXT,
@@ -49,6 +70,7 @@ CREATE TABLE IF NOT EXISTS projects (
   deleted_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
+CREATE INDEX IF NOT EXISTS idx_projects_namespace_created ON projects(namespace_id, created_at);
 
 -- Conversations
 CREATE TABLE IF NOT EXISTS conversations (

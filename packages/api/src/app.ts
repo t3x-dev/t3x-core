@@ -73,6 +73,7 @@ import {
   localConfigRoutes,
   materialsRoutes,
   mergeRoutes,
+  namespaceRoutes,
   notificationsRoutes,
   pinsRoutes,
   projectRoutes,
@@ -200,6 +201,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // Mount routes
   api.route('/', statusRoutes);
+  api.route('/', namespaceRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
@@ -297,6 +299,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     tags: [
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
+      { name: 'Namespaces', description: 'Personal and organization namespaces' },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Sources', description: 'Repository-owned source and evidence reads' },

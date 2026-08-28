@@ -85,8 +85,9 @@ export function NewRepositoryPage() {
     try {
       const project = await createRepository(normalizedName, {
         description: description.trim() || 'Structured state repository.',
+        namespace: ownerSlug,
       });
-      const repoPath = getProjectRepoPath(project);
+      const repoPath = getProjectRepoPath(project, ownerSlug);
       router.push(setupMode === 'source' ? `${repoPath}/workspaces` : repoPath);
     } catch {
       setCreateError('Failed to create repository');

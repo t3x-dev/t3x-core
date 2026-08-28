@@ -919,6 +919,27 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "namespaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/namespaces",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
+      "source": "namespaces.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/{slug}",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted unauthenticated surface."
+    },
+    {
+      "source": "namespaces.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/me",
+      "policy": "authenticated",
+      "rationale": "Authenticated user surface without a cross-project resource."
+    },
+    {
       "source": "notifications.openapi.ts",
       "method": "GET",
       "path": "/v1/notifications",

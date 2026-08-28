@@ -235,6 +235,14 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+// Namespaces
+export {
+  DEFAULT_ORGANIZATION_NAMESPACE_ID,
+  DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
+  findNamespaceBySlug,
+  findPersonalNamespaceByOwner,
+  insertPersonalNamespace,
+} from './namespaces';
 // Node Modifications (audit trail)
 export {
   findModificationsByDraft,
