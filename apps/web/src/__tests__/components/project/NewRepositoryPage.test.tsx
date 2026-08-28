@@ -78,9 +78,11 @@ describe('NewRepositoryPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
 
     await waitFor(() =>
-      expect(mocks.createProject).toHaveBeenCalledWith('Backend project', {
-        description: 'Structured state repository.',
-      })
+      expect(mocks.createProject).toHaveBeenCalledWith(
+        'Backend project',
+        { description: 'Structured state repository.' },
+        't3x-dev'
+      )
     );
     expect(mocks.routerPush).toHaveBeenCalledWith('/t3x-dev/backend-project');
   });

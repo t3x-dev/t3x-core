@@ -8,6 +8,10 @@
 import { listProjects } from '@/infrastructure/projects';
 import type { ProjectListData } from '@/infrastructure/types';
 
-export function fetchProjects(limit = 50, offset = 0): Promise<ProjectListData> {
-  return listProjects(limit, offset);
+export function fetchProjects(
+  limit = 50,
+  offset = 0,
+  namespace?: string
+): Promise<ProjectListData> {
+  return listProjects(limit, offset, namespace);
 }

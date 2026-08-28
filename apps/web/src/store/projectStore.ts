@@ -36,6 +36,7 @@ type ProjectStore = {
   loading: boolean;
   error: Error | null;
   initialized: boolean;
+  projectScope: string | null;
   notifyCallback: NotifyCallback | null;
 
   setNotifyCallback: (cb: NotifyCallback | null) => void;
@@ -43,6 +44,7 @@ type ProjectStore = {
   setLoading: (loading: boolean) => void;
   setError: (error: Error | null) => void;
   setInitialized: (initialized: boolean) => void;
+  setProjectScope: (namespace: string | null) => void;
   addToProjects: (project: ProjectSummary) => void;
   removeProject: (id: string) => ProjectSummary | undefined;
   updateProject: (id: string, patch: Partial<ProjectSummary>) => void;
@@ -93,6 +95,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   loading: false,
   error: null,
   initialized: false,
+  projectScope: null,
   notifyCallback: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
@@ -100,6 +103,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setInitialized: (initialized) => set({ initialized }),
+  setProjectScope: (projectScope) => set({ projectScope }),
 
   addToProjects: (project) => set((state) => ({ projects: [project, ...state.projects] })),
 

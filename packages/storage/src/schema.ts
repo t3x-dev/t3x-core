@@ -36,6 +36,31 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 // Core Tables
 // ============================================================
 
+export const namespaces = pgTable(
+  'namespaces',
+  {
+    namespaceId: text('namespace_id').primaryKey(),
+    slug: text('slug').notNull(),
+    kind: text('kind').notNull(),
+    ownerUserId: text('owner_user_id'),
+    displayName: text('display_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_namespaces_slug_unique').on(table.slug),
+    uniqueIndex('idx_namespaces_personal_owner_unique')
+      .on(table.ownerUserId)
+      .where(sql`${table.kind} = 'personal' AND ${table.ownerUserId} IS NOT NULL`),
+    index('idx_namespaces_owner').on(table.ownerUserId),
+    check('namespaces_kind_check', sql`${table.kind} IN ('personal', 'organization')`),
+    check(
+      'namespaces_slug_format',
+      sql`${table.slug} ~ '^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$' AND ${table.slug} !~ '--'`
+    ),
+  ]
+);
+
 /**
  * Projects - Top level container for conversations and commits
  */
@@ -46,6 +71,9 @@ export const projects = pgTable(
     name: text('name').notNull(),
     /** Owner user ID. null = public/legacy data (AUTH_DISABLED era) */
     ownerId: text('owner_id'),
+    namespaceId: text('namespace_id').references(() => namespaces.namespaceId, {
+      onDelete: 'restrict',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     metadataJson: text('metadata_json'),
@@ -77,7 +105,10 @@ export const projects = pgTable(
       tier3: 'skip' | 'extract';
     }>(),
   },
-  (table) => [index('idx_projects_owner').on(table.ownerId)]
+  (table) => [
+    index('idx_projects_owner').on(table.ownerId),
+    index('idx_projects_namespace_created').on(table.namespaceId, table.createdAt),
+  ]
 );
 
 /**
@@ -879,6 +910,8 @@ export const validationFindings = pgTable(
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
+export type Namespace = typeof namespaces.$inferSelect;
+export type NewNamespace = typeof namespaces.$inferInsert;
 
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;

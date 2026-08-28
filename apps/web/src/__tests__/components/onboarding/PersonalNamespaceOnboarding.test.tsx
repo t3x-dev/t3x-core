@@ -1,15 +1,33 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   normalizeNamespace,
   PersonalNamespaceOnboarding,
   validateNamespace,
 } from '@/components/onboarding/PersonalNamespaceOnboarding';
 
+const routerPush = vi.fn();
+const createPersonalNamespace = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
+vi.mock('@/hooks/namespaces/usePersonalNamespace', () => ({
+  usePersonalNamespace: () => ({ create: createPersonalNamespace }),
+}));
+
 describe('PersonalNamespaceOnboarding', () => {
+  beforeEach(() => {
+    routerPush.mockReset();
+    createPersonalNamespace.mockReset();
+    createPersonalNamespace.mockResolvedValue({ slug: 'lqw905' });
+    window.localStorage.clear();
+  });
+
   it('renders a valid suggested namespace', () => {
     render(<PersonalNamespaceOnboarding suggestedNamespace="LQW905" />);
 
@@ -43,6 +61,15 @@ describe('PersonalNamespaceOnboarding', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use @lqw905' }));
 
     expect(input).toHaveValue('lqw905');
+  });
+
+  it('persists before continuing to the selected namespace homepage', async () => {
+    render(<PersonalNamespaceOnboarding suggestedNamespace="lqw905" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(createPersonalNamespace).toHaveBeenCalledWith('lqw905');
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith('/lqw905'));
   });
 });
 

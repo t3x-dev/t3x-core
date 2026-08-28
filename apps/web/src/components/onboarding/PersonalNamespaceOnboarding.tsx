@@ -1,8 +1,11 @@
 'use client';
 
 import { Check, ChevronRight, CircleCheck, CircleX, Github, LockKeyhole } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
+import { usePersonalNamespace } from '@/hooks/namespaces/usePersonalNamespace';
 import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
 
@@ -96,6 +99,10 @@ export function PersonalNamespaceOnboarding({
   );
   const [suggestion, setSuggestion] = useState(normalizedSuggestion);
   const [namespace, setNamespace] = useState(normalizedSuggestion);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const router = useRouter();
+  const { create: createPersonalNamespace } = usePersonalNamespace();
   const { getUser } = useSession();
   const validation = validateNamespace(namespace);
   const message = getValidationMessage(namespace, validation);
@@ -109,8 +116,19 @@ export function PersonalNamespaceOnboarding({
     setNamespace(username);
   }, [getUser, normalizedSuggestion]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.valid || saving) return;
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      const created = await createPersonalNamespace(namespace);
+      router.push(`/${created.slug}`);
+    } catch (error) {
+      setSubmitError(formatUserFacingError(error, 'Failed to create namespace.'));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -162,7 +180,10 @@ export function PersonalNamespaceOnboarding({
               className="min-w-0 flex-1 bg-transparent px-3 font-mono text-sm font-bold text-[var(--text-primary)] outline-none sm:px-4 sm:text-base"
               id="namespace"
               maxLength={39}
-              onChange={(event) => setNamespace(normalizeNamespace(event.target.value))}
+              onChange={(event) => {
+                setNamespace(normalizeNamespace(event.target.value));
+                setSubmitError(null);
+              }}
               spellCheck={false}
               value={namespace}
             />
@@ -219,6 +240,12 @@ export function PersonalNamespaceOnboarding({
             </ValidationRule>
           </ul>
 
+          {submitError && (
+            <p className="mt-5 text-sm font-semibold text-[var(--status-error)]" role="alert">
+              {submitError}
+            </p>
+          )}
+
           <div className="mt-7 flex flex-col-reverse items-stretch justify-between gap-5 border-t border-[var(--stroke-divider)] pt-6 sm:flex-row sm:items-center">
             <p className="flex items-center justify-center gap-2 text-xs text-[var(--text-tertiary)] sm:justify-start">
               <LockKeyhole className="size-4" />
@@ -226,10 +253,10 @@ export function PersonalNamespaceOnboarding({
             </p>
             <Button
               className="h-12 min-w-[142px] rounded-[var(--radius-lg)] px-5 text-[15px] font-bold shadow-[var(--shadow-glow)]"
-              disabled={!validation.valid}
+              disabled={!validation.valid || saving}
               type="submit"
             >
-              Continue
+              {saving ? 'Creating...' : 'Continue'}
               <ChevronRight className="size-4" />
             </Button>
           </div>

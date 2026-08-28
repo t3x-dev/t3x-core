@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 67;
+const SCHEMA_VERSION = 68;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -2051,6 +2051,45 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON transition_review_snapshots(project_id, workspace_id, created_at, snapshot_id);
     CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_transition_created
       ON transition_review_snapshots(project_id, transition_id, created_at, snapshot_id);
+  `);
+
+  // ── Schema v68: persistent namespaces and project isolation ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS namespaces (
+      namespace_id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      owner_user_id TEXT,
+      display_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT namespaces_kind_check CHECK (kind IN ('personal', 'organization')),
+      CONSTRAINT namespaces_slug_format
+        CHECK (slug ~ '^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$' AND slug !~ '--')
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_namespaces_slug_unique ON namespaces(slug);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_namespaces_personal_owner_unique
+      ON namespaces(owner_user_id)
+      WHERE kind = 'personal' AND owner_user_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_namespaces_owner ON namespaces(owner_user_id);
+
+    INSERT INTO namespaces (namespace_id, slug, kind, display_name)
+    VALUES ('ns_t3x_dev', 't3x-dev', 'organization', 't3x-dev')
+    ON CONFLICT (namespace_id) DO NOTHING;
+
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS namespace_id TEXT;
+    UPDATE projects SET namespace_id = 'ns_t3x_dev' WHERE namespace_id IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_projects_namespace_created
+      ON projects(namespace_id, created_at);
+
+    DO $$
+    BEGIN
+      ALTER TABLE projects
+        ADD CONSTRAINT fk_projects_namespace
+        FOREIGN KEY (namespace_id) REFERENCES namespaces(namespace_id) ON DELETE RESTRICT;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

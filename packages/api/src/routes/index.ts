@@ -35,6 +35,7 @@ export { llmRoutes } from './llm.openapi';
 export { localConfigRoutes } from './local-config.openapi';
 export { materialsRoutes } from './materials.openapi';
 export { mergeRoutes } from './merge.openapi';
+export { namespaceRoutes } from './namespaces.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects.openapi';

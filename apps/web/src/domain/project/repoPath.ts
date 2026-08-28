@@ -21,8 +21,11 @@ export function toRepoSlug(name: string, fallbackId?: string): string {
   return fallbackSlug ? `repo-${fallbackSlug}` : 'repo';
 }
 
-export function getProjectRepoPath(project: { id?: string; name: string }): string {
-  return `/${DEFAULT_OWNER_SLUG}/${toRepoSlug(project.name, project.id)}`;
+export function getProjectRepoPath(
+  project: { id?: string; name: string },
+  ownerSlug = DEFAULT_OWNER_SLUG
+): string {
+  return `/${ownerSlug}/${toRepoSlug(project.name, project.id)}`;
 }
 
 /** Project-id entry points resolve to the canonical owner/repository URL in the route layer. */
