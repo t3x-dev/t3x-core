@@ -39,7 +39,19 @@ import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { readMergeDraftDecision } from '../lib/merge-draft-decisions';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
-import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
+import {
+  getRepositorySemanticCommit,
+  RepositoryStateDecisionDeniedError,
+  TransitionReviewStaleError,
+} from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  toTrustedTransitionAuthor,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { buildPipelineContext } from '../ops/context';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -248,8 +260,11 @@ async function toApiDetail(db: AnyDB, pullRequest: StoredPullRequest) {
   };
 }
 
-function errorBody(code: string, message: string) {
-  return { success: false as const, error: { code, message } };
+function errorBody(code: string, message: string, details?: Record<string, unknown>) {
+  return {
+    success: false as const,
+    error: { code, message, ...(details === undefined ? {} : { details }) },
+  };
 }
 
 async function requireProject(c: Parameters<typeof assertProjectAccess>[0], projectId: string) {
@@ -1244,6 +1259,10 @@ const mergePullRequestRoute = createRoute({
       description: 'Project or pull request not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Credential lacks required Transition authority',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     409: {
       description: 'Pull request is not ready or its reviewed branch heads changed',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -1255,14 +1274,13 @@ const mergePullRequestRoute = createRoute({
   },
 });
 
-// @ts-expect-error OpenAPI cannot narrow the transaction error response union.
 pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const body = c.req.valid('json');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
-  const author = await getAuthorFromContext(c);
-  const actorId = getUserId(c) ?? author.id ?? 'current-user';
+  const contextAuthor = await getAuthorFromContext(c);
+  const contextActorId = getUserId(c) ?? contextAuthor.id ?? 'current-user';
   const pipelineContext = await buildPipelineContext(c, projectId);
 
   try {
@@ -1270,6 +1288,17 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
       await acquirePullRequestLock(tx, projectId, number);
       const pullRequest = await findPullRequestByNumber(tx, projectId, number);
       if (!pullRequest) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
+      const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+        db: tx,
+        apiKey: transitionApiKey(c),
+        projectId,
+        refName: pullRequest.targetBranch,
+      });
+      const author = toTrustedTransitionAuthor(writeAuthority.principal, contextAuthor);
+      const actorId =
+        writeAuthority.principal.actor.kind === 'human'
+          ? contextActorId
+          : writeAuthority.principal.actor.id;
       const recordedChecks = await listPullRequestChecks(tx, pullRequest.pullRequestId);
       const conflictDecisionCanUnblock =
         pullRequest.status === 'blocked' &&
@@ -1407,6 +1436,12 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
               body.message ?? `Merge pull request #${pullRequest.number}: ${pullRequest.title}`,
             branch: pullRequest.targetBranch,
             author,
+            writeAuthority: {
+              actor: writeAuthority.principal.actor,
+              ...(writeAuthority.policyBinding === null
+                ? {}
+                : { policyBinding: writeAuthority.policyBinding }),
+            },
           },
           context
         )
@@ -1444,6 +1479,24 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
       200
     );
   } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    ) {
+      return c.json(errorBody(error.code, error.message), 403);
+    }
+    if (
+      error instanceof TransitionPolicyBindingRequiredError ||
+      error instanceof TransitionReviewStaleError
+    ) {
+      return c.json(errorBody(error.code, error.message), 409);
+    }
+    if (error instanceof RepositoryStateDecisionDeniedError) {
+      return c.json(
+        errorBody('DECISION_NOT_PERMITTED', error.message, { failures: error.failures }),
+        409
+      );
+    }
     if (error instanceof MergeError) {
       if (error.code === 'PULL_REQUEST_NOT_FOUND') {
         return c.json(errorBody(error.code, error.message), 404);

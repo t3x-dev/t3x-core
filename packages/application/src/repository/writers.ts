@@ -1,4 +1,5 @@
 import {
+  type AcceptancePolicy,
   buildReplayVerificationStatement,
   COMMIT_V2_MEDIA_TYPE,
   type CommitV2,
@@ -24,6 +25,7 @@ import type {
   Effect,
   EvidenceRef,
   ProtocolObject,
+  ResourceDescriptor,
   StringClaim,
 } from '@t3x-dev/transition';
 
@@ -175,16 +177,34 @@ export class RepositoryStateDecisionDeniedError extends Error {
   }
 }
 
+export interface RepositoryWriterPolicyBinding {
+  readonly policy: AcceptancePolicy;
+  readonly resource: ResourceDescriptor;
+}
+
+export interface RepositoryWriterServerPolicyBindingExpectation {
+  readonly expected: RepositoryWriterPolicyBinding | null;
+  readonly required: boolean;
+}
+
+export interface PreparedRepositoryTransitionTarget {
+  readonly projectId: string;
+  readonly refName: string;
+  readonly expectedHead: string | null;
+}
+
 export interface PreparedRepositoryTransitionWrite {
-  proposal: ProposalStatement;
-  effect: Effect;
-  result: State;
-  rationale: StringClaim;
-  decidedAt: CanonicalTimestamp;
-  authority: RepositoryDecisionAuthority;
-  parents: readonly CommitV2[];
-  objects: readonly ProtocolObject[];
-  yopsLogIds?: readonly string[];
+  readonly target: PreparedRepositoryTransitionTarget;
+  readonly proposal: ProposalStatement;
+  readonly effect: Effect;
+  readonly result: State;
+  readonly rationale: StringClaim;
+  readonly decidedAt: CanonicalTimestamp;
+  readonly authority: RepositoryDecisionAuthority;
+  readonly parents: readonly CommitV2[];
+  readonly objects: readonly ProtocolObject[];
+  readonly yopsLogIds?: readonly string[];
+  readonly serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
 }
 
 export interface PrepareRepositoryYOpsStateWriteInput {
@@ -199,6 +219,8 @@ export interface PrepareRepositoryYOpsStateWriteInput {
   rationale?: string;
   evidence?: readonly EvidenceRef[];
   yopsLogIds?: readonly string[];
+  policyBinding: RepositoryWriterPolicyBinding;
+  serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
   recordedAt: CanonicalTimestamp;
 }
 
@@ -217,6 +239,8 @@ export interface PrepareRepositoryYOpsMergeWriteInput {
   decisions: MergeDecision;
   actor: RepositoryWriterActorRef;
   message: string;
+  policyBinding: RepositoryWriterPolicyBinding;
+  serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
   recordedAt: CanonicalTimestamp;
 }
 
@@ -226,25 +250,132 @@ export interface PreparedRepositoryYOpsMergeWrite extends PreparedRepositoryTran
 }
 
 function createRepositoryDecisionAuthority(input: {
+  target: PreparedRepositoryTransitionTarget;
+  proposal: ProposalStatement;
+  effect: Effect;
   actor: RepositoryWriterActorRef;
   observations: readonly StatementObservation[];
-  policy: typeof REPOSITORY_STATE_POLICY | typeof REPOSITORY_MERGE_POLICY;
+  policyBinding: RepositoryWriterPolicyBinding;
   sources: readonly string[];
 }): RepositoryDecisionAuthority {
-  return {
-    async resolve() {
+  const proposalDescriptor = describeTransitionObject(input.proposal);
+  const effectDescriptor = describeTransitionObject(input.effect);
+  const actor = immutableSnapshot(input.actor);
+  const observations = immutableSnapshot(input.observations);
+  const policyBinding = immutableSnapshot(input.policyBinding);
+  const authority: RepositoryDecisionAuthority = {
+    async resolve(request) {
+      if (request.projectId !== input.target.projectId) {
+        throw new TypeError(
+          'Prepared repository Decision authority cannot be reused for a different project'
+        );
+      }
+      if (request.refName !== input.target.refName) {
+        throw new TypeError(
+          'Prepared repository Decision authority cannot be reused for a different ref'
+        );
+      }
+      if (!sameDescriptor(describeTransitionObject(request.proposal), proposalDescriptor)) {
+        throw new TypeError(
+          'Prepared repository Decision authority cannot be reused for a different Proposal'
+        );
+      }
+      if (!sameDescriptor(describeTransitionObject(request.effect), effectDescriptor)) {
+        throw new TypeError(
+          'Prepared repository Decision authority cannot be reused for a different Effect'
+        );
+      }
       return {
-        actorContext: { actor: input.actor },
+        actorContext: { actor },
         observationScope: {
           completeness: 'complete',
           sources: [...input.sources],
         },
-        policy: input.policy.policy,
-        policyResource: input.policy.resource,
-        statements: input.observations,
+        policy: policyBinding.policy,
+        policyResource: policyBinding.resource,
+        statements: observations,
       };
     },
   };
+  return Object.freeze(authority);
+}
+
+const PREPARED_REPOSITORY_WRITE_BY_AUTHORITY = new WeakMap<
+  RepositoryDecisionAuthority,
+  PreparedRepositoryTransitionWrite
+>();
+
+function bindPreparedRepositoryTransitionWrite<T extends PreparedRepositoryTransitionWrite>(
+  prepared: T
+): T {
+  PREPARED_REPOSITORY_WRITE_BY_AUTHORITY.set(prepared.authority, prepared);
+  return prepared;
+}
+
+/**
+ * Prove that a commit boundary received the exact target capability issued
+ * alongside this prepared authority, rather than a structurally forged target.
+ */
+export function assertPreparedRepositoryTransitionAuthorityTarget(input: {
+  authority: RepositoryDecisionAuthority;
+  target: PreparedRepositoryTransitionTarget;
+}): void {
+  if (PREPARED_REPOSITORY_WRITE_BY_AUTHORITY.get(input.authority)?.target !== input.target) {
+    throw new TypeError(
+      'Prepared repository Decision authority requires its exact prepared target'
+    );
+  }
+}
+
+/** Prove that every commit-consumed value came from the same prepared write. */
+export function assertPreparedRepositoryTransitionAuthorityBundle(input: {
+  authority: RepositoryDecisionAuthority;
+  target: PreparedRepositoryTransitionTarget;
+  proposal: ProposalStatement;
+  effect: Effect;
+  rationale: StringClaim;
+  decidedAt: CanonicalTimestamp;
+  parents: readonly CommitV2[];
+  objects: readonly ProtocolObject[];
+  yopsLogIds?: readonly string[];
+  serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
+}): void {
+  const prepared = PREPARED_REPOSITORY_WRITE_BY_AUTHORITY.get(input.authority);
+  if (
+    prepared === undefined ||
+    prepared.target !== input.target ||
+    prepared.proposal !== input.proposal ||
+    prepared.effect !== input.effect ||
+    prepared.rationale !== input.rationale ||
+    prepared.decidedAt !== input.decidedAt ||
+    prepared.parents !== input.parents ||
+    prepared.objects !== input.objects ||
+    prepared.yopsLogIds !== input.yopsLogIds ||
+    prepared.serverPolicyBindingExpectation !== input.serverPolicyBindingExpectation
+  ) {
+    throw new TypeError(
+      'Prepared repository Decision authority requires its exact prepared write bundle'
+    );
+  }
+}
+
+function sameDescriptor(
+  left: { kind: string; schema: string; digest: string },
+  right: { kind: string; schema: string; digest: string }
+): boolean {
+  return left.kind === right.kind && left.schema === right.schema && left.digest === right.digest;
+}
+
+function freezeRecursively<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    freezeRecursively(child);
+  }
+  return Object.freeze(value);
+}
+
+function immutableSnapshot<T>(value: T): T {
+  return freezeRecursively(structuredClone(value));
 }
 
 function normalizeAuthoredText(value: string | undefined): string | undefined {
@@ -255,6 +386,7 @@ function normalizeAuthoredText(value: string | undefined): string | undefined {
 export function prepareRepositoryYOpsStateWrite(
   input: PrepareRepositoryYOpsStateWriteInput
 ): PreparedRepositoryYOpsStateWrite {
+  const actor = immutableSnapshot(input.actor);
   const { effect, result } = createYOpsReplacementEffect({
     base: input.base,
     target: input.target,
@@ -282,7 +414,7 @@ export function prepareRepositoryYOpsStateWrite(
   const compiled = compileProposalDraft({
     draft: proposalDraft,
     effect,
-    actor: input.actor,
+    actor,
   });
   if (!compiled.ok) throw new RepositoryStateProposalError(compiled.issues);
 
@@ -304,33 +436,53 @@ export function prepareRepositoryYOpsStateWrite(
     { statement: replay, issuerContext: { actor: REPOSITORY_STATE_REPLAY_ACTOR } },
   ];
   const parents = input.parentCommit === undefined ? [] : [input.parentCommit];
-  return {
+  const preparedTarget = Object.freeze({
+    projectId: input.projectId,
+    refName: input.refName,
+    expectedHead: input.expectedHead,
+  });
+  const rationale: StringClaim = normalizeAuthoredText(input.rationale)
+    ? {
+        mode: 'authored',
+        value: normalizeAuthoredText(input.rationale)!,
+        evidence: [],
+      }
+    : { mode: 'unspecified' };
+  const graph: Omit<PreparedRepositoryYOpsStateWrite, 'target' | 'authority'> = immutableSnapshot({
     proposal: compiled.proposal,
     effect,
     result,
-    rationale: normalizeAuthoredText(input.rationale)
-      ? {
-          mode: 'authored',
-          value: normalizeAuthoredText(input.rationale)!,
-          evidence: [],
-        }
-      : { mode: 'unspecified' },
+    rationale,
     decidedAt: input.recordedAt,
-    authority: createRepositoryDecisionAuthority({
-      actor: input.actor,
-      observations,
-      policy: REPOSITORY_STATE_POLICY,
-      sources: REPOSITORY_STATE_OBSERVATION_SCOPE.sources,
-    }),
     parents,
     objects: [input.base, result, ...parents],
     ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: [...input.yopsLogIds] }),
-  };
+    ...(input.serverPolicyBindingExpectation === undefined
+      ? {}
+      : { serverPolicyBindingExpectation: input.serverPolicyBindingExpectation }),
+  });
+  const authority = createRepositoryDecisionAuthority({
+    target: preparedTarget,
+    proposal: graph.proposal,
+    effect: graph.effect,
+    actor: graph.proposal.actor,
+    observations,
+    policyBinding: input.policyBinding,
+    sources: REPOSITORY_STATE_OBSERVATION_SCOPE.sources,
+  });
+  return bindPreparedRepositoryTransitionWrite(
+    Object.freeze({
+      target: preparedTarget,
+      ...graph,
+      authority,
+    })
+  );
 }
 
 export function prepareRepositoryYOpsMergeWrite(
   input: PrepareRepositoryYOpsMergeWriteInput
 ): PreparedRepositoryYOpsMergeWrite {
+  const actor = immutableSnapshot(input.actor);
   const merged = createSemanticMergeEffect({
     target: input.targetState,
     mergeBase: input.mergeBaseState,
@@ -362,7 +514,7 @@ export function prepareRepositoryYOpsMergeWrite(
       review: emptyProposalReview(),
     },
     effect: merged.effect,
-    actor: input.actor,
+    actor,
   });
   if (!compiled.ok) throw new RepositoryStateProposalError(compiled.issues);
 
@@ -385,18 +537,17 @@ export function prepareRepositoryYOpsMergeWrite(
   ];
   const keptFromSource = new Set(input.decisions.keepFromSource).size;
   const keptFromTarget = new Set(input.decisions.keepFromTarget).size;
-  return {
+  const preparedTarget = Object.freeze({
+    projectId: input.projectId,
+    refName: input.refName,
+    expectedHead: input.targetDigest,
+  });
+  const graph: Omit<PreparedRepositoryYOpsMergeWrite, 'target' | 'authority'> = immutableSnapshot({
     proposal: compiled.proposal,
     effect: merged.effect,
     result: merged.result,
-    rationale: { mode: 'unspecified' },
+    rationale: { mode: 'unspecified' as const },
     decidedAt: input.recordedAt,
-    authority: createRepositoryDecisionAuthority({
-      actor: input.actor,
-      observations,
-      policy: REPOSITORY_MERGE_POLICY,
-      sources: REPOSITORY_MERGE_OBSERVATION_SCOPE.sources,
-    }),
     parents: [input.targetCommit, input.sourceCommit],
     objects: [
       input.targetState,
@@ -418,5 +569,24 @@ export function prepareRepositoryYOpsMergeWrite(
         (merged.prepared.onlyInTarget.length - keptFromTarget),
       total_nodes: flattenTrees(merged.content.trees).length,
     },
-  };
+    ...(input.serverPolicyBindingExpectation === undefined
+      ? {}
+      : { serverPolicyBindingExpectation: input.serverPolicyBindingExpectation }),
+  });
+  const authority = createRepositoryDecisionAuthority({
+    target: preparedTarget,
+    proposal: graph.proposal,
+    effect: graph.effect,
+    actor: graph.proposal.actor,
+    observations,
+    policyBinding: input.policyBinding,
+    sources: REPOSITORY_MERGE_OBSERVATION_SCOPE.sources,
+  });
+  return bindPreparedRepositoryTransitionWrite(
+    Object.freeze({
+      target: preparedTarget,
+      ...graph,
+      authority,
+    })
+  );
 }

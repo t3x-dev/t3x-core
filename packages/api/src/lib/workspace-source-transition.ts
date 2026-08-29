@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import type {
-  ChangeProjectionV1,
-  ReviewSnapshotV1,
-  TransitionInspectionView,
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  sameTransitionPolicyResource,
+  type TransitionInspectionView,
 } from '@t3x-dev/application';
 import {
   bindEspHomeSourceInputs,
@@ -1693,7 +1694,6 @@ async function decidePreparedWorkspaceSourceTransition(
   capabilities: WorkspaceSourceTransitionCapabilities
 ): Promise<DecideWorkspaceSourceTransitionResult> {
   try {
-    const policyBinding = input.policyBinding ?? WORKSPACE_SOURCE_POLICY;
     let transitionId = input.transitionId;
     if (prepared !== undefined) {
       const materialized = await materializePreparedWorkspaceSourceTransition(db, prepared);
@@ -1736,20 +1736,36 @@ async function decidePreparedWorkspaceSourceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: policyBinding.resource.digest,
-        authority: {
-          async resolve() {
-            return {
-              actorContext: { actor: input.actor },
-              observationScope: OBSERVATION_SCOPE,
-              policy: policyBinding.policy,
-              policyResource: policyBinding.resource,
-              statements: graph.observations.map((observation) => ({
-                statement: observation.statement as StatementObservation['statement'],
-                issuerContext: observation.issuerContext,
-              })),
-            };
-          },
+        select({ graph: lockedGraph, refPolicyBinding }) {
+          if (
+            input.policyBinding !== undefined &&
+            (input.policyBinding === null || refPolicyBinding === null
+              ? input.policyBinding !== refPolicyBinding
+              : !sameTransitionPolicyResource(
+                  input.policyBinding.resource,
+                  refPolicyBinding.resource
+                ))
+          ) {
+            throw new TransitionReviewStaleError();
+          }
+          const policyBinding = refPolicyBinding ?? WORKSPACE_SOURCE_POLICY;
+          return {
+            policyDigest: policyBinding.resource.digest,
+            authority: {
+              async resolve() {
+                return {
+                  actorContext: { actor: input.actor },
+                  observationScope: OBSERVATION_SCOPE,
+                  policy: policyBinding.policy,
+                  policyResource: policyBinding.resource,
+                  statements: lockedGraph.observations.map((observation) => ({
+                    statement: observation.statement as StatementObservation['statement'],
+                    issuerContext: observation.issuerContext,
+                  })),
+                };
+              },
+            },
+          };
         },
       },
     });

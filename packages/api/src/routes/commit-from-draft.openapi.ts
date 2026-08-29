@@ -23,12 +23,21 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   getRepositoryConversationEvidence,
+  RepositoryStateDecisionDeniedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -97,6 +106,14 @@ const postCommitFromDraftRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Project access or Transition capability denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Ref head conflict or required machine policy binding is missing',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -154,6 +171,12 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     }
 
     // Step 4: Resolve the exact CommitV2 ref head observed by this command.
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: project_id,
+      refName: targetBranch,
+    });
     if (targetBranch === 'main') await ensureMainBranch(db, project_id);
     const observedHead = await getTransitionRefHead(db, {
       projectId: project_id,
@@ -190,7 +213,6 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       trees: commitTrees,
       relations: [],
     });
-    const userId = getUserId(c);
     let commitDigest: string | undefined;
     await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
@@ -203,10 +225,11 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
         refName: targetBranch,
         expectedHead,
         target,
-        actor: {
-          kind: 'human',
-          id: userId ? `user:${userId}` : 'human:local-user',
-        },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         intent: message ?? `Draft: ${draft.title}`,
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
@@ -243,6 +266,23 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       201
     );
   } catch (err) {
+    if (
+      err instanceof TransitionScopeDeniedError ||
+      err instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
+    }
+    if (
+      err instanceof TransitionPolicyBindingRequiredError ||
+      err instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
+    }
+    if (err instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
+        failures: err.failures,
+      });
+    }
     if (err instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
     }

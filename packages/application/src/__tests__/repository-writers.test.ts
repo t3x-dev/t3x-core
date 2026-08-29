@@ -3,10 +3,12 @@ import {
   createYOpsState,
   describeTransitionObject,
   type SemanticContent,
+  type StatementObservation,
 } from '@t3x-dev/core';
 import { type CommitV2, parseCommitV2, type State } from '@t3x-dev/transition';
 import { describe, expect, it } from 'vitest';
 import {
+  assertPreparedRepositoryTransitionAuthorityTarget,
   prepareRepositoryYOpsMergeWrite,
   prepareRepositoryYOpsStateWrite,
   REPOSITORY_MERGE_POLICY,
@@ -63,9 +65,17 @@ describe('repository writer preparation', () => {
       rationale: ' Exact target State was reviewed. ',
       evidence,
       yopsLogIds: ['yop_1'],
+      policyBinding: REPOSITORY_STATE_POLICY,
       recordedAt: RECORDED_AT,
     });
 
+    expect(prepared.target).toEqual({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: describeTransitionObject(parentCommit).digest,
+    });
+    expect(Object.isFrozen(prepared)).toBe(true);
+    expect(Object.isFrozen(prepared.target)).toBe(true);
     expect(prepared.effect.result).toEqual(describeTransitionObject(target));
     expect(prepared.parents).toEqual([parentCommit]);
     expect(prepared.objects).toEqual([base, prepared.result, parentCommit]);
@@ -126,6 +136,7 @@ describe('repository writer preparation', () => {
       rationale: 'Exact target State was reviewed.',
       evidence,
       yopsLogIds,
+      policyBinding: REPOSITORY_STATE_POLICY,
       recordedAt: RECORDED_AT,
     });
     evidence[0]!.locator.value.quote = 'mutated after preparation';
@@ -139,6 +150,198 @@ describe('repository writer preparation', () => {
       ],
     });
     expect(prepared.yopsLogIds).toEqual(['yop_1']);
+    expect(Object.isFrozen(prepared.yopsLogIds)).toBe(true);
+    expect(() => (prepared.yopsLogIds as unknown as string[]).push('yop_attacker')).toThrow(
+      TypeError
+    );
+  });
+
+  it('deeply seals caller-owned graph inputs and returned protocol values', async () => {
+    const base = createYOpsState({ service: { enabled: false } });
+    const target = createYOpsState({ service: { enabled: true } });
+    const parentCommit = commitFor(base, 'c');
+    const prepared = prepareRepositoryYOpsStateWrite({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: describeTransitionObject(parentCommit).digest,
+      base,
+      target,
+      parentCommit,
+      actor: ACTOR,
+      intent: 'Seal the prepared graph',
+      rationale: 'Every committed object was reviewed.',
+      yopsLogIds: ['yop_sealed'],
+      policyBinding: REPOSITORY_STATE_POLICY,
+      recordedAt: RECORDED_AT,
+    });
+    const descriptors = {
+      proposal: describeTransitionObject(prepared.proposal),
+      effect: describeTransitionObject(prepared.effect),
+      result: describeTransitionObject(prepared.result),
+      parents: prepared.parents.map(describeTransitionObject),
+      objects: prepared.objects.map(describeTransitionObject),
+    };
+
+    (base.value as { service: { enabled: boolean } }).service.enabled = true;
+    Object.assign(parentCommit.decision, { digest: `sha256:${'d'.repeat(64)}` });
+
+    expect(prepared.parents[0]).not.toBe(parentCommit);
+    expect(prepared.objects[0]).not.toBe(base);
+    expect(prepared.objects.at(-1)).toBe(prepared.parents[0]);
+    expect({
+      proposal: describeTransitionObject(prepared.proposal),
+      effect: describeTransitionObject(prepared.effect),
+      result: describeTransitionObject(prepared.result),
+      parents: prepared.parents.map(describeTransitionObject),
+      objects: prepared.objects.map(describeTransitionObject),
+    }).toEqual(descriptors);
+    expect((prepared.objects[0] as State).value).toEqual({ service: { enabled: false } });
+
+    expect(Object.isFrozen(prepared.proposal)).toBe(true);
+    expect(Object.isFrozen(prepared.effect)).toBe(true);
+    expect(Object.isFrozen(prepared.result)).toBe(true);
+    expect(Object.isFrozen(prepared.rationale)).toBe(true);
+    expect(Object.isFrozen(prepared.parents)).toBe(true);
+    expect(Object.isFrozen(prepared.parents[0])).toBe(true);
+    expect(Object.isFrozen(prepared.objects)).toBe(true);
+    expect(Object.isFrozen(prepared.objects[0])).toBe(true);
+    expect(Object.isFrozen((prepared.objects[0] as State).value)).toBe(true);
+    expect(() => Object.assign(prepared.proposal.actor, { id: 'human:attacker' })).toThrow(
+      TypeError
+    );
+    expect(() => Object.assign(prepared.rationale, { value: 'mutated rationale' })).toThrow(
+      TypeError
+    );
+    expect(() =>
+      Object.assign((prepared.objects[0] as State).value as object, {
+        service: { enabled: 'attacker' },
+      })
+    ).toThrow(TypeError);
+    expect(() =>
+      Object.assign(prepared.parents[0]!.decision, { digest: `sha256:${'e'.repeat(64)}` })
+    ).toThrow(TypeError);
+
+    await expect(
+      prepared.authority.resolve({
+        projectId: prepared.target.projectId,
+        refName: prepared.target.refName,
+        proposal: prepared.proposal,
+        effect: prepared.effect,
+      })
+    ).resolves.toMatchObject({
+      actorContext: { actor: ACTOR },
+      policyResource: REPOSITORY_STATE_POLICY.resource,
+    });
+  });
+
+  it('binds a parentless prepared authority to its immutable repository target and graph', async () => {
+    const base = createYOpsState({});
+    const target = createYOpsState({ service: { enabled: true } });
+    const actor = { kind: 'human' as const, id: 'human:prepared-original' };
+    const policyBinding = {
+      policy: structuredClone(REPOSITORY_STATE_POLICY.policy),
+      resource: {
+        ...REPOSITORY_STATE_POLICY.resource,
+        uri: 't3x://projects/project_1/policies/repository-state',
+      },
+    };
+    const expectedPolicyBinding = structuredClone(policyBinding);
+    const prepared = prepareRepositoryYOpsStateWrite({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: null,
+      base,
+      target,
+      actor,
+      intent: 'Create root state',
+      policyBinding,
+      serverPolicyBindingExpectation: { expected: policyBinding, required: false },
+      recordedAt: RECORDED_AT,
+    });
+    const foreign = prepareRepositoryYOpsStateWrite({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: null,
+      base,
+      target: createYOpsState({ service: { enabled: false } }),
+      actor: ACTOR,
+      intent: 'Create a different root state',
+      policyBinding: REPOSITORY_STATE_POLICY,
+      recordedAt: RECORDED_AT,
+    });
+    const request = {
+      projectId: prepared.target.projectId,
+      refName: prepared.target.refName,
+      proposal: prepared.proposal,
+      effect: prepared.effect,
+    };
+
+    expect(prepared.target.expectedHead).toBeNull();
+    expect(prepared.parents).toEqual([]);
+    expect(Object.isFrozen(prepared)).toBe(true);
+    expect(Object.isFrozen(prepared.target)).toBe(true);
+    expect(Object.isFrozen(prepared.serverPolicyBindingExpectation)).toBe(true);
+    expect(Object.isFrozen(prepared.serverPolicyBindingExpectation?.expected)).toBe(true);
+    expect(Object.isFrozen(prepared.authority)).toBe(true);
+    expect(() =>
+      Object.assign(prepared.authority, {
+        resolve: async () => ({
+          actorContext: { actor: { kind: 'human', id: 'human:attacker' } },
+          observationScope: { completeness: 'complete', sources: [] },
+          policy: REPOSITORY_STATE_POLICY.policy,
+          policyResource: REPOSITORY_STATE_POLICY.resource,
+          statements: [],
+        }),
+      })
+    ).toThrow(TypeError);
+    expect(() =>
+      Object.assign(prepared.target, { expectedHead: `sha256:${'f'.repeat(64)}` })
+    ).toThrow(TypeError);
+    expect(() =>
+      assertPreparedRepositoryTransitionAuthorityTarget({
+        authority: prepared.authority,
+        target: foreign.target,
+      })
+    ).toThrow('exact prepared target');
+
+    actor.id = 'human:mutated-after-preparation';
+    policyBinding.resource.uri = 't3x://projects/attacker/policies/repository-state';
+    const facts = await prepared.authority.resolve(request);
+    expect(facts).toMatchObject({
+      actorContext: { actor: { kind: 'human', id: 'human:prepared-original' } },
+      policy: expectedPolicyBinding.policy,
+      policyResource: expectedPolicyBinding.resource,
+    });
+    expect(prepared.serverPolicyBindingExpectation).toEqual({
+      expected: expectedPolicyBinding,
+      required: false,
+    });
+    expect(Object.isFrozen(facts.actorContext.actor)).toBe(true);
+    expect(Object.isFrozen(facts.statements)).toBe(true);
+    expect(Object.isFrozen(facts.statements[0])).toBe(true);
+    expect(() => (facts.statements as StatementObservation[]).splice(0, 1)).toThrow(TypeError);
+    expect(() =>
+      Object.assign(facts.statements[0]!.issuerContext.actor, { id: 'service:attacker' })
+    ).toThrow(TypeError);
+
+    const repeatedFacts = await prepared.authority.resolve(request);
+    expect(repeatedFacts.actorContext.actor).toEqual({
+      kind: 'human',
+      id: 'human:prepared-original',
+    });
+    expect(repeatedFacts.statements).toHaveLength(1);
+    await expect(
+      prepared.authority.resolve({ ...request, projectId: 'project_2' })
+    ).rejects.toThrow('different project');
+    await expect(prepared.authority.resolve({ ...request, refName: 'feature' })).rejects.toThrow(
+      'different ref'
+    );
+    await expect(
+      prepared.authority.resolve({ ...request, proposal: foreign.proposal })
+    ).rejects.toThrow('different Proposal');
+    await expect(
+      prepared.authority.resolve({ ...request, effect: foreign.effect })
+    ).rejects.toThrow('different Effect');
   });
 
   it('builds a deterministic two-parent semantic merge bundle', async () => {
@@ -181,9 +384,15 @@ describe('repository writer preparation', () => {
       },
       actor: ACTOR,
       message: 'Merge feature into main',
+      policyBinding: REPOSITORY_MERGE_POLICY,
       recordedAt: RECORDED_AT,
     });
 
+    expect(prepared.target).toEqual({
+      projectId: 'project_1',
+      refName: 'main',
+      expectedHead: targetDigest,
+    });
     expect(prepared.parents).toEqual([targetCommit, sourceCommit]);
     expect(prepared.objects).toEqual([
       targetState,
@@ -204,6 +413,8 @@ describe('repository writer preparation', () => {
       kept_from_target: 1,
       total_nodes: 3,
     });
+    expect(Object.isFrozen(prepared.content)).toBe(true);
+    expect(Object.isFrozen(prepared.mergeSummary)).toBe(true);
     expect(prepared.proposal.predicate.rationale).toMatchObject({
       mode: 'inferred',
       evidence: [

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
-import { createYOpsState, yvalueToTrees } from '@t3x-dev/core';
+import { type ApiKey, createYOpsState, yvalueToTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createMaterial,
@@ -13,7 +13,7 @@ import {
 } from '@t3x-dev/storage';
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 import { commitSemanticFixture } from './transition-fixture';
 
@@ -41,7 +41,15 @@ import {
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
+  let requestApiKey: ApiKey | undefined;
   const app = new Hono();
+  app.use('*', async (context, next) => {
+    if (requestApiKey !== undefined) {
+      context.set('apiKey', requestApiKey);
+      if (requestApiKey.user_id !== null) context.set('userId', requestApiKey.user_id);
+    }
+    await next();
+  });
   app.route('/', pullRequestRoutes);
   let cleanup: () => Promise<void>;
 
@@ -55,6 +63,26 @@ describe('Pull request routes', () => {
   afterAll(async () => {
     await cleanup();
   });
+
+  beforeEach(() => {
+    requestApiKey = undefined;
+  });
+
+  function machineKey(projectId: string): ApiKey {
+    return {
+      id: 'ak_pr_machine',
+      key_prefix: 't3xk_prm',
+      key_hash: 'pr-machine-hash',
+      name: 'Pull request machine',
+      project_id: projectId,
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: [],
+      created_at: '2026-08-29T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    };
+  }
 
   async function createRepositoryCommit(input: {
     projectId: string;
@@ -768,6 +796,49 @@ describe('Pull request routes', () => {
         expect.objectContaining({ key: 'release', slots: { ready: true } }),
       ])
     );
+  });
+
+  it('denies an unscoped machine merge without mutating the reviewed PR or draft', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const readinessResponse = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    const readiness = (await readinessResponse.json()) as ApiResponse;
+    expect(readinessResponse.status).toBe(200);
+    expect(readiness.data.status).toBe('ready');
+    requestApiKey = machineKey(fixture.projectId);
+
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
+      {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+
+    expect(response.status).toBe(403);
+    expect((await response.json()) as ApiResponse).toMatchObject({
+      success: false,
+      error: { code: 'TRANSITION_SCOPE_DENIED' },
+    });
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      fixture.target.hash
+    );
+    expect((await getMergeDraft(mockDB, readiness.data.merge_draft_id))?.status).toBe('pending');
+    requestApiKey = undefined;
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    expect(((await detail.json()) as ApiResponse).data).toMatchObject({
+      status: 'ready',
+      merge_commit_id: null,
+    });
   });
 
   it('rejects unresolved conflicts without changing the target branch or merge draft', async () => {

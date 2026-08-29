@@ -510,6 +510,11 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export {
+  acquireTransitionPolicyBindingLock,
+  acquireTransitionReviewLock,
+  type TransitionReviewLockResult,
+} from './transition-review-lock';
 export * from './transition-review-snapshots';
 export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)

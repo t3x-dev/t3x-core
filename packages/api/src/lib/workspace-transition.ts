@@ -1,7 +1,8 @@
-import type {
-  ChangeProjectionV1,
-  ReviewSnapshotV1,
-  TransitionInspectionView,
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  sameTransitionPolicyResource,
+  type TransitionInspectionView,
 } from '@t3x-dev/application';
 import {
   buildReplayVerificationStatement,
@@ -784,7 +785,6 @@ export async function decideWorkspaceTransition(
   input: DecideWorkspaceTransitionInput
 ): Promise<DecideWorkspaceTransitionResult> {
   try {
-    const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
     let transitionId = input.transitionId;
     if (transitionId === undefined) {
       if (input.content === undefined) {
@@ -850,20 +850,36 @@ export async function decideWorkspaceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: policyBinding.resource.digest,
-        authority: {
-          async resolve() {
-            return {
-              actorContext: { actor: input.actor },
-              observationScope: OBSERVATION_SCOPE,
-              policy: policyBinding.policy,
-              policyResource: policyBinding.resource,
-              statements: graph.observations.map((observation) => ({
-                statement: observation.statement,
-                issuerContext: observation.issuerContext,
-              })) as TrustedDecisionFacts['statements'],
-            };
-          },
+        select({ graph: lockedGraph, refPolicyBinding }) {
+          if (
+            input.policyBinding !== undefined &&
+            (input.policyBinding === null || refPolicyBinding === null
+              ? input.policyBinding !== refPolicyBinding
+              : !sameTransitionPolicyResource(
+                  input.policyBinding.resource,
+                  refPolicyBinding.resource
+                ))
+          ) {
+            throw new TransitionReviewStaleError();
+          }
+          const policyBinding = refPolicyBinding ?? WORKSPACE_POLICY;
+          return {
+            policyDigest: policyBinding.resource.digest,
+            authority: {
+              async resolve() {
+                return {
+                  actorContext: { actor: input.actor },
+                  observationScope: OBSERVATION_SCOPE,
+                  policy: policyBinding.policy,
+                  policyResource: policyBinding.resource,
+                  statements: lockedGraph.observations.map((observation) => ({
+                    statement: observation.statement,
+                    issuerContext: observation.issuerContext,
+                  })) as TrustedDecisionFacts['statements'],
+                };
+              },
+            },
+          };
         },
       },
     });

@@ -281,9 +281,25 @@
         {
           "file": "packages/api/src/__tests__/repository-state-transition.test.ts",
           "token": "rolls back Decision audit, CommitV2, and ref when commit persistence fails"
+        },
+        {
+          "file": "packages/api/src/lib/transition-authority.ts",
+          "token": "export async function resolveCompatibilityTransitionWriteAuthority("
+        },
+        {
+          "file": "packages/api/src/__tests__/commit-from-draft.test.ts",
+          "token": "uses the scoped machine actor and server-selected ref policy"
+        },
+        {
+          "file": "packages/api/src/__tests__/drafts.test.ts",
+          "token": "audits a scoped machine with the server-selected ref policy"
+        },
+        {
+          "file": "packages/api/src/__tests__/autopilot.test.ts",
+          "token": "audits a scoped machine with the server-selected ref policy"
         }
       ],
-      "progress": "Repository State task adapters retain their input preparation and projections, but accepted Decision authorization, audit persistence, CommitV2 construction, ref CAS, and YOps log linking now execute through the shared repository lifecycle boundary in one transaction.",
+      "progress": "Repository State task adapters retain their input preparation and projections, but accepted Decision authorization, audit persistence, CommitV2 construction, ref CAS, and YOps log linking now execute through the shared repository lifecycle boundary in one transaction. Authenticated agent and service callers require the Proposal, Decision, Commit, and ref-advance capabilities; their actor is derived from trusted authentication state and their Decision uses the server-selected target-ref policy.",
       "remaining_gap": "These shortcuts remain one-shot compatibility commands without durable transition_id review or request receipts. Route retirement still requires explicit canonical replacements, caller migration, deprecation metadata, and observability.",
       "replacement": "Preserve each task input adapter but execute Propose, Verify, Decide, and Commit through the same canonical application use cases.",
       "removal_gate": "Do not delete a task shortcut until its semantics and first-party callers have an explicit canonical replacement; no shortcut may remain solely to preserve a deprecated writer."
@@ -330,9 +346,17 @@
         {
           "file": "packages/mcp/src/tools/advanced/merge.ts",
           "token": "t3x_merge execute requires T3X_MCP_BACKEND=api."
+        },
+        {
+          "file": "packages/api/src/ops/merge.ts",
+          "token": "writeAuthority: {"
+        },
+        {
+          "file": "packages/api/src/__tests__/pull-requests.test.ts",
+          "token": "denies an unscoped machine merge without mutating the reviewed PR or draft"
         }
       ],
-      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary. MCP storage mode may prepare and resolve drafts locally, but execute is fail-closed and the API-backed path calls the shared merge commit command.",
+      "progress": "Merge keeps its deterministic preparation, resolution, summary, and two-parent semantics while Decision authorization, audit persistence, CommitV2 construction, and ref CAS execute through the shared repository lifecycle boundary. Authenticated machine merges require the Proposal, Decision, Commit, and ref-advance capabilities plus the server-selected target-ref policy, and request-shaped authors no longer supply Decision identity. MCP storage mode may prepare and resolve drafts locally, but execute is fail-closed and the API-backed path calls the shared merge commit command.",
       "remaining_gap": "Merge remains a task adapter and does not yet expose durable canonical review or command receipts. Retiring governance ownership requires canonical merge lifecycle parity and any remaining first-party caller migration.",
       "replacement": "Keep Merge as a task-level adapter while its deterministic multi-parent Effect, Statements, Decision, and Commit use the canonical lifecycle.",
       "removal_gate": "The task endpoint may remain, but it must stop owning governance orchestration once canonical merge lifecycle parity is covered."

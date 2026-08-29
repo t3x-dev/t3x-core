@@ -8,11 +8,17 @@
  * - POST /v1/drafts/:draftId/auto-commit
  */
 
+import { REPOSITORY_STATE_POLICY } from '@t3x-dev/application';
+import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  bindTransitionPolicy,
   branches,
   ensureMainBranch,
+  findBranchByName,
   findDraftById,
+  getRepositoryDecisionAudit,
+  getTransitionRefHead,
   insertDraft,
   insertProject,
   updateAutopilotConfig,
@@ -20,13 +26,14 @@ import {
 } from '@t3x-dev/storage';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 let mockDB: AnyDB;
+let requestApiKey: ApiKey | undefined;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -52,6 +59,10 @@ describe('Autopilot Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();
+  app.use('*', async (context, next) => {
+    if (requestApiKey !== undefined) context.set('apiKey', requestApiKey);
+    await next();
+  });
   app.route('/', autopilotRoutes);
 
   beforeAll(async () => {
@@ -66,6 +77,56 @@ describe('Autopilot Routes', () => {
   afterAll(async () => {
     await cleanup();
   });
+
+  beforeEach(() => {
+    requestApiKey = undefined;
+  });
+
+  function machineKey(projectId: string, scopes: ApiKey['transition_scopes']): ApiKey {
+    return {
+      id: 'ak_autopilot_machine',
+      key_prefix: 't3xk_aut',
+      key_hash: 'autopilot-machine-hash',
+      name: 'Autopilot machine',
+      project_id: projectId,
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: scopes,
+      created_at: '2026-08-29T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    };
+  }
+
+  async function createQualifyingAutoCommitDraft(projectId: string, title: string) {
+    await updateAutopilotConfig(mockDB, projectId, {
+      enabled: true,
+      min_nodes: 1,
+      target_branch: 'main',
+    });
+    const draft = await insertDraft(mockDB, { project_id: projectId, title });
+    await updateDraft(
+      mockDB,
+      draft.id,
+      {
+        extraction_mode: 'llm',
+        semantic_points: [
+          {
+            id: `sp_${draft.id}`,
+            text: 'A qualifying state point.',
+            zone: 'ready',
+            status: 'auto_landed',
+            staged: true,
+            extraction_mode: 'llm_extracted',
+            evidence: [],
+            position: 0,
+          },
+        ],
+      },
+      draft.revision
+    );
+    return draft;
+  }
 
   // ── GET /v1/projects/:projectId/autopilot/config ──────────
 
@@ -160,6 +221,78 @@ describe('Autopilot Routes', () => {
   // ── POST /v1/drafts/:draftId/auto-commit ──────────────────
 
   describe('POST /auto-commit', () => {
+    it('denies an unscoped machine before lazy branch creation', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Denied autopilot machine' })
+      );
+      const draft = await createQualifyingAutoCommitDraft(
+        project.projectId,
+        'Denied autopilot draft'
+      );
+      requestApiKey = machineKey(project.projectId, []);
+
+      const response = await app.request(`/v1/drafts/${draft.id}/auto-commit`, {
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+        },
+      });
+      await expect(findBranchByName(mockDB, project.projectId, 'main')).resolves.toBeNull();
+    });
+
+    it('audits a scoped machine with the server-selected ref policy', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Authorized autopilot machine' })
+      );
+      const binding = await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/authorized-autopilot-machine',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+      const draft = await createQualifyingAutoCommitDraft(
+        project.projectId,
+        'Authorized autopilot draft'
+      );
+      requestApiKey = machineKey(project.projectId, [
+        'transition:propose',
+        'transition:decide:accept',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ]);
+
+      const response = await app.request(`/v1/drafts/${draft.id}/auto-commit`, {
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(200);
+      const head = await getTransitionRefHead(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+      });
+      expect(head.format).toBe('transition_v2');
+      if (head.format !== 'transition_v2') throw new Error('Expected CommitV2 head');
+      await expect(
+        getRepositoryDecisionAudit(mockDB, {
+          projectId: project.projectId,
+          refName: 'main',
+          decisionDigest: head.commit.decision.digest,
+        })
+      ).resolves.toMatchObject({
+        actor: { kind: 'agent', id: 'agent:api-key:ak_autopilot_machine' },
+        policyResource: { digest: binding.resource.digest },
+      });
+    });
+
     it('returns 404 for non-existent draft', async () => {
       const res = await app.request('/v1/drafts/draft_nonexistent/auto-commit', {
         method: 'POST',

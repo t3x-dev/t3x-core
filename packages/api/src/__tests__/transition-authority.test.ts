@@ -10,10 +10,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   deriveTrustedTransitionPrincipal,
   requireTransitionAuthority,
+  resolveCompatibilityTransitionWriteAuthority,
   resolveTransitionControlPlane,
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
+  toTrustedTransitionAuthor,
 } from '../lib/transition-authority';
 import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import { setupTestDB, testData } from './setup';
@@ -60,6 +62,17 @@ describe('Transition API authority', () => {
         key({ id: 'ak_human', principal_kind: 'human', user_id: 'user_one' })
       ).actor
     ).toEqual({ kind: 'human', id: 'user:user_one' });
+    const service = deriveTrustedTransitionPrincipal(
+      key({ id: 'ak_service', principal_kind: 'service' })
+    );
+    expect(service.actor).toEqual({ kind: 'service', id: 'service:api-key:ak_service' });
+    expect(
+      toTrustedTransitionAuthor(service, { type: 'human', id: 'spoofed', name: 'Spoofed' })
+    ).toEqual({
+      type: 'system',
+      id: 'service:api-key:ak_service',
+      name: 'service:api-key:ak_service',
+    });
   });
 
   it('requires each capability independently', () => {
@@ -95,6 +108,147 @@ describe('Transition API authority', () => {
       projectId: null,
       scopes: [],
     });
+  });
+
+  it('preserves project-authorized human-key compatibility without legacy scopes', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Legacy human authority project' })
+    );
+
+    const resolved = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: key({
+        id: 'ak_human_legacy',
+        project_id: project.projectId,
+        principal_kind: 'human',
+        user_id: 'legacy_user',
+        transition_scopes: [],
+      }),
+      projectId: project.projectId,
+      refName: 'main',
+    });
+
+    expect(resolved).toEqual({
+      principal: {
+        actor: { kind: 'human', id: 'user:legacy_user' },
+        keyId: 'ak_human_legacy',
+        projectId: project.projectId,
+        scopes: [],
+      },
+      policyBinding: null,
+    });
+  });
+
+  it('requires every compatibility write scope for service principals', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Service authority project' })
+    );
+
+    await expect(
+      resolveCompatibilityTransitionWriteAuthority({
+        db,
+        apiKey: key({
+          id: 'ak_service',
+          project_id: project.projectId,
+          principal_kind: 'service',
+          transition_scopes: [
+            'transition:decide:accept',
+            'transition:commit:create',
+            'transition:ref:advance',
+          ],
+        }),
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).rejects.toMatchObject({
+      code: 'TRANSITION_SCOPE_DENIED',
+      scope: 'transition:propose',
+    });
+
+    await expect(
+      resolveCompatibilityTransitionWriteAuthority({
+        db,
+        apiKey: key({
+          id: 'ak_service',
+          project_id: project.projectId,
+          principal_kind: 'service',
+          transition_scopes: [
+            'transition:propose',
+            'transition:commit:create',
+            'transition:ref:advance',
+          ],
+        }),
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).rejects.toMatchObject({
+      code: 'TRANSITION_SCOPE_DENIED',
+      scope: 'transition:decide:accept',
+    });
+
+    await expect(
+      resolveCompatibilityTransitionWriteAuthority({
+        db,
+        apiKey: key({
+          id: 'ak_service',
+          project_id: project.projectId,
+          principal_kind: 'service',
+          transition_scopes: ['transition:propose', 'transition:decide:accept'],
+        }),
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).rejects.toMatchObject({
+      code: 'TRANSITION_SCOPE_DENIED',
+      scope: 'transition:commit:create',
+    });
+
+    await expect(
+      resolveCompatibilityTransitionWriteAuthority({
+        db,
+        apiKey: key({
+          id: 'ak_service',
+          project_id: project.projectId,
+          principal_kind: 'service',
+          transition_scopes: [
+            'transition:propose',
+            'transition:decide:accept',
+            'transition:commit:create',
+          ],
+        }),
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).rejects.toMatchObject({
+      code: 'TRANSITION_SCOPE_DENIED',
+      scope: 'transition:ref:advance',
+    });
+  });
+
+  it('fails closed when a fully scoped machine ref has no server policy', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Unbound machine authority project' })
+    );
+
+    await expect(
+      resolveCompatibilityTransitionWriteAuthority({
+        db,
+        apiKey: key({
+          project_id: project.projectId,
+          transition_scopes: [
+            'transition:propose',
+            'transition:decide:accept',
+            'transition:commit:create',
+            'transition:ref:advance',
+          ],
+        }),
+        projectId: project.projectId,
+        refName: 'main',
+      })
+    ).rejects.toBeInstanceOf(TransitionPolicyBindingRequiredError);
   });
 
   it('denies agent Decision authority when the ref has no server-selected policy', async () => {

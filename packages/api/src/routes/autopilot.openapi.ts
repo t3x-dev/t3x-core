@@ -35,7 +35,16 @@ import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   getRepositoryConversationEvidence,
+  RepositoryStateDecisionDeniedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -326,8 +335,16 @@ const autoCommitRoute = createRoute({
       description: 'Draft not in valid state for auto-commit',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Project or Transition authority denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Transition policy or concurrent state conflict',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -420,6 +437,12 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
 
     // 8. Persist one full CommitV2 graph and claim the draft in the same
     // transaction. A failed CAS or claim rolls the graph back.
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: draft.project_id,
+      refName: config.target_branch,
+    });
     if (config.target_branch === 'main') await ensureMainBranch(db, draft.project_id);
     const observedHead = await getTransitionRefHead(db, {
       projectId: draft.project_id,
@@ -447,7 +470,11 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
         refName: config.target_branch,
         expectedHead,
         target,
-        actor: { kind: 'agent', id: 'agent:autopilot' },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         intent: `Auto-commit: ${qualifyingSPs.length} node(s)`,
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
@@ -499,6 +526,23 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (
+      err instanceof TransitionScopeDeniedError ||
+      err instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
+    }
+    if (
+      err instanceof TransitionPolicyBindingRequiredError ||
+      err instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
+    }
+    if (err instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
+        failures: err.failures,
+      });
+    }
     if (err instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
     }

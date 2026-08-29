@@ -1,9 +1,11 @@
-import { describeTransitionObject } from '@t3x-dev/core';
+import { describeTransitionObject, parseAcceptancePolicy } from '@t3x-dev/core';
 import {
   type AnyDB,
+  bindTransitionPolicy,
   createMaterial,
   ensureMainBranch,
   insertProject,
+  listRepositoryDecisionAudit,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -35,6 +37,70 @@ function commandResult(): LocalOciCommandResult {
 
 const runnerExecutor: LocalOciCommandExecutor = async () => commandResult();
 
+function policy(allowSelfApproval: boolean) {
+  return parseAcceptancePolicy({
+    schema: 't3x.dev/acceptance-policy/v1',
+    version: 1,
+    authorization: {
+      decide: { actors: { mode: 'any' } },
+      override: { actors: { mode: 'any' } },
+      allowSelfApproval,
+    },
+    claims: {
+      intent: {
+        allowedModes: ['unspecified'],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required',
+      },
+      rationale: {
+        allowedModes: ['authored'],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required',
+      },
+    },
+    checks: {
+      replay: {
+        issuers: { mode: 'any' },
+        tools: { mode: 'any' },
+        environments: { mode: 'any' },
+      },
+      validation: {
+        requirement: 'optional',
+        issuers: { mode: 'any' },
+        tools: { mode: 'any' },
+        environments: { mode: 'any' },
+        profiles: { mode: 'any' },
+        schemas: { mode: 'any' },
+        contexts: { mode: 'any' },
+      },
+      humanConfirmation: { issuers: { mode: 'any' } },
+    },
+    override: {
+      allowClaimFailures: false,
+      allowFailedValidation: false,
+      allowMissingHumanConfirmation: false,
+      allowMissingValidation: false,
+    },
+  });
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function tracked<T>(promise: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+  let didSettle = false;
+  const trackedPromise = promise.finally(() => {
+    didSettle = true;
+  });
+  void trackedPromise.catch(() => {});
+  return { promise: trackedPromise, settled: () => didSettle };
+}
+
 describe('Workspace source Transition durable review', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
@@ -46,6 +112,125 @@ describe('Workspace source Transition durable review', () => {
   });
 
   afterAll(async () => cleanup());
+
+  it.each([
+    { operation: 'policy rebind', suffix: 'rebind', hasReviewedBinding: true },
+    { operation: 'first policy bind', suffix: 'first-bind', hasReviewedBinding: false },
+  ])('rejects a reviewed source Decision when a concurrent $operation wins the lock', async ({
+    suffix,
+    hasReviewedBinding,
+  }) => {
+    const project = await insertProject(db, testData.project({ name: `Source policy ${suffix}` }));
+    await ensureMainBranch(db, project.projectId);
+    const workspaceId = `workspace_source_policy_${suffix}`;
+    const source = ['esphome:', `  name: policy-${suffix}`, 'esp32:', '  board: esp32dev'].join(
+      '\n'
+    );
+    const material = await createMaterial(db, {
+      project_id: project.projectId,
+      source_type: 'document',
+      title: `policy-${suffix}.yaml`,
+      content_text: source,
+      content_hash: `sha256:source-policy-${suffix}`,
+    });
+    const draft = await upsertWorkspaceDraft(db, {
+      project_id: project.projectId,
+      workspace_id: workspaceId,
+      title: 'Source policy rebind Workspace',
+      target_branch: 'main',
+      workspace_state: {
+        id: workspaceId,
+        projectId: project.projectId,
+        title: 'Source policy rebind Workspace',
+        targetBranch: 'main',
+      },
+    });
+    const reviewedPolicy = hasReviewedBinding
+      ? await bindTransitionPolicy(db, {
+          projectId: project.projectId,
+          refName: 'main',
+          uri: `t3x://policies/source-policy-${suffix}/v1`,
+          policy: policy(false),
+          actor: { kind: 'human', id: 'human:policy-admin' },
+        })
+      : null;
+    const actor = { kind: 'human' as const, id: 'human:source-policy-reviewer' };
+    const capabilities = { runner: { executor: runnerExecutor } };
+    const reviewInput = {
+      projectId: project.projectId,
+      workspaceId,
+      artifact: {
+        format: 't3x.dev/workspace-source-artifact/v1' as const,
+        rootPath: `policy-${suffix}.yaml`,
+        resources: [],
+      },
+      change: {
+        mode: 'import' as const,
+        root: { materialId: material.id, contentHash: material.content_hash },
+      },
+      why: hasReviewedBinding
+        ? 'Review under the original policy binding.'
+        : 'Review under the custom fallback with no binding.',
+      expectedRevision: draft.revision,
+      actor,
+      policyBinding: reviewedPolicy,
+    };
+    const reviewed = await reviewWorkspaceSourceTransition(db, reviewInput, capabilities);
+
+    const rebindReady = deferred();
+    const releaseRebind = deferred();
+    const rebind = (
+      db as unknown as {
+        transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+      }
+    ).transaction(async (rawTx) => {
+      await bindTransitionPolicy(rawTx as AnyDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: `t3x://policies/source-policy-${suffix}/${hasReviewedBinding ? 'v2' : 'v1'}`,
+        policy: policy(true),
+        actor: { kind: 'human', id: 'human:policy-admin' },
+      });
+      rebindReady.resolve();
+      await releaseRebind.promise;
+    });
+    let pendingDecision:
+      | {
+          promise: ReturnType<typeof decideWorkspaceSourceTransition>;
+          settled: () => boolean;
+        }
+      | undefined;
+    try {
+      await rebindReady.promise;
+      pendingDecision = tracked(
+        decideWorkspaceSourceTransition(
+          db,
+          {
+            ...reviewInput,
+            transitionId: reviewed.transitionId,
+            outcome: 'accepted',
+            precondition: reviewed.precondition,
+          },
+          capabilities
+        )
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(pendingDecision.settled()).toBe(false);
+
+      releaseRebind.resolve();
+      await rebind;
+      await expect(pendingDecision.promise).rejects.toBeInstanceOf(
+        WorkspaceTransitionReviewStaleError
+      );
+      await expect(
+        listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })
+      ).resolves.toEqual([]);
+    } finally {
+      releaseRebind.resolve();
+      await Promise.allSettled([rebind, pendingDecision?.promise ?? Promise.resolve()]);
+    }
+  });
 
   it('materializes one inspectable Transition and reuses an exact review retry', async () => {
     const project = await insertProject(db, testData.project({ name: 'Source review identity' }));
