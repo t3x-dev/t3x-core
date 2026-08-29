@@ -108,7 +108,8 @@ test('Cloud sync workflow prepares a branch without creating a PR or deploying',
   assert.match(source, /ref: dev/);
   assert.doesNotMatch(source, /ref: main/);
   assert.match(source, /compare\/dev\.\.\./);
-  assert.match(source, /git add apps database package\.json pnpm-lock\.yaml vendor\/t3x/);
+  assert.match(source, /corepack pnpm recovery:check/);
+  assert.match(source, /git add apps database recovery package\.json pnpm-lock\.yaml vendor\/t3x/);
   assert.match(source, /git push origin/);
   assert.doesNotMatch(source, /gh pr create|pulls\.create|vercel deploy|railway up/i);
 

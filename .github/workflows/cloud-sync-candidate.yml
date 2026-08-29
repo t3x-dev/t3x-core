@@ -84,6 +84,7 @@ jobs:
         run: |
           corepack pnpm core:verify
           corepack pnpm core:web:check
+          corepack pnpm recovery:check
           git diff --check
 
       - name: Push immutable sync branch
@@ -114,7 +115,7 @@ jobs:
           git config user.name "t3x-cloud-sync[bot]"
           git config user.email "t3x-cloud-sync[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git add apps database package.json pnpm-lock.yaml vendor/t3x
+          git add apps database recovery package.json pnpm-lock.yaml vendor/t3x
           git commit -m "chore(core): sync ${short_sha}"
           git push origin "HEAD:refs/heads/${branch}"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
