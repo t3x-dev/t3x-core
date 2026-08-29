@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 68;
+export const POSTGRES_SCHEMA_VERSION = 69;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2276,6 +2276,111 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END $$;
+  `);
+
+  // ── Schema v69: canonical namespace memberships and project grants ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'uq_projects_id_namespace'
+          AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id);
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS namespace_memberships (
+      membership_id TEXT PRIMARY KEY,
+      namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+      principal_kind TEXT NOT NULL,
+      principal_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      CONSTRAINT namespace_memberships_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT namespace_memberships_role_check
+        CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+      CONSTRAINT namespace_memberships_status_check
+        CHECK (status IN ('active', 'revoked')),
+      CONSTRAINT namespace_memberships_owner_human_check
+        CHECK (role <> 'owner' OR principal_kind = 'human'),
+      CONSTRAINT namespace_memberships_revocation_check
+        CHECK (
+          (status = 'active' AND revoked_at IS NULL)
+          OR (status = 'revoked' AND revoked_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_namespace_memberships_principal
+      ON namespace_memberships(namespace_id, principal_kind, principal_id);
+    CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_principal
+      ON namespace_memberships(principal_kind, principal_id, namespace_id)
+      WHERE status = 'active';
+    CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_namespace
+      ON namespace_memberships(namespace_id, role)
+      WHERE status = 'active';
+
+    CREATE TABLE IF NOT EXISTS project_grants (
+      grant_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      namespace_id TEXT NOT NULL,
+      principal_kind TEXT NOT NULL,
+      principal_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      CONSTRAINT project_grants_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT project_grants_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT project_grants_role_check
+        CHECK (role IN ('admin', 'editor', 'viewer')),
+      CONSTRAINT project_grants_status_check
+        CHECK (status IN ('active', 'revoked')),
+      CONSTRAINT project_grants_revocation_check
+        CHECK (
+          (status = 'active' AND revoked_at IS NULL)
+          OR (status = 'revoked' AND revoked_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_project_grants_principal
+      ON project_grants(project_id, principal_kind, principal_id);
+    CREATE INDEX IF NOT EXISTS idx_project_grants_active_principal
+      ON project_grants(principal_kind, principal_id, project_id)
+      WHERE status = 'active';
+    CREATE INDEX IF NOT EXISTS idx_project_grants_active_project
+      ON project_grants(project_id, role)
+      WHERE status = 'active';
+
+    INSERT INTO namespace_memberships (
+      membership_id,
+      namespace_id,
+      principal_kind,
+      principal_id,
+      role,
+      status
+    )
+    SELECT
+      'nsm_' || md5(namespace.namespace_id || ':' || namespace.owner_user_id),
+      namespace.namespace_id,
+      'human',
+      namespace.owner_user_id,
+      'owner',
+      'active'
+    FROM namespaces AS namespace
+    INNER JOIN users AS owner_user ON owner_user.id = namespace.owner_user_id
+    WHERE namespace.kind = 'personal'
+      AND namespace.owner_user_id IS NOT NULL
+    ON CONFLICT (namespace_id, principal_kind, principal_id) DO NOTHING;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

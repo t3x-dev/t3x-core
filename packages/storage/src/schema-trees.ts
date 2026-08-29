@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -25,7 +26,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { conversations, projects } from './schema';
+import { conversations, namespaces, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // users: Authentication (identity, keyed by email)
@@ -80,6 +81,114 @@ export const users = pgTable('users', {
 
 export type UserRecord = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// namespace_memberships / project_grants: Canonical stored access facts
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Namespace-wide authority for a human, agent, or service principal.
+ *
+ * Rows are revoked in place so a former grant cannot disappear from the
+ * authorization history. Billing and commercial eligibility deliberately do
+ * not live in this shared Core table.
+ */
+export const namespaceMemberships = pgTable(
+  'namespace_memberships',
+  {
+    membershipId: text('membership_id').primaryKey(),
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    principalKind: text('principal_kind').notNull(),
+    principalId: text('principal_id').notNull(),
+    role: text('role').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('uq_namespace_memberships_principal').on(
+      table.namespaceId,
+      table.principalKind,
+      table.principalId
+    ),
+    index('idx_namespace_memberships_active_principal')
+      .on(table.principalKind, table.principalId, table.namespaceId)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_namespace_memberships_active_namespace')
+      .on(table.namespaceId, table.role)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      'namespace_memberships_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'namespace_memberships_role_check',
+      sql`${table.role} IN ('owner', 'admin', 'editor', 'viewer')`
+    ),
+    check('namespace_memberships_status_check', sql`${table.status} IN ('active', 'revoked')`),
+    check(
+      'namespace_memberships_owner_human_check',
+      sql`${table.role} <> 'owner' OR ${table.principalKind} = 'human'`
+    ),
+    check(
+      'namespace_memberships_revocation_check',
+      sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+/** Project-scoped guest authority, isolated from namespace membership. */
+export const projectGrants = pgTable(
+  'project_grants',
+  {
+    grantId: text('grant_id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    namespaceId: text('namespace_id').notNull(),
+    principalKind: text('principal_kind').notNull(),
+    principalId: text('principal_id').notNull(),
+    role: text('role').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.namespaceId],
+      foreignColumns: [projects.projectId, projects.namespaceId],
+      name: 'project_grants_project_namespace_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('uq_project_grants_principal').on(
+      table.projectId,
+      table.principalKind,
+      table.principalId
+    ),
+    index('idx_project_grants_active_principal')
+      .on(table.principalKind, table.principalId, table.projectId)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_project_grants_active_project')
+      .on(table.projectId, table.role)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      'project_grants_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    check('project_grants_role_check', sql`${table.role} IN ('admin', 'editor', 'viewer')`),
+    check('project_grants_status_check', sql`${table.status} IN ('active', 'revoked')`),
+    check(
+      'project_grants_revocation_check',
+      sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+export type NamespaceMembershipRecord = typeof namespaceMemberships.$inferSelect;
+export type NamespaceMembershipInsert = typeof namespaceMemberships.$inferInsert;
+export type ProjectGrantRecord = typeof projectGrants.$inferSelect;
+export type ProjectGrantInsert = typeof projectGrants.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // accounts: OAuth Provider Records (many-to-one with users)

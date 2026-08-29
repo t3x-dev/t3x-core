@@ -108,6 +108,7 @@ export const projects = pgTable(
   (table) => [
     index('idx_projects_owner').on(table.ownerId),
     index('idx_projects_namespace_created').on(table.namespaceId, table.createdAt),
+    unique('uq_projects_id_namespace').on(table.projectId, table.namespaceId),
   ]
 );
 
