@@ -57,6 +57,9 @@ describe('PostgreSQL schema migrations', () => {
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
+      DROP TABLE project_grants;
+      DROP TABLE namespace_memberships;
+      ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       DROP TABLE namespaces;
       CREATE TABLE namespaces (incompatible INTEGER);
@@ -313,6 +316,9 @@ describe('PostgreSQL schema migrations', () => {
     await setup.sql.unsafe(`
       INSERT INTO projects (project_id, name, created_at)
       VALUES ('project_before_namespaces', 'Legacy project', NOW());
+      DROP TABLE project_grants;
+      DROP TABLE namespace_memberships;
+      ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       ALTER TABLE projects DROP COLUMN namespace_id;
       DROP TABLE namespaces;
@@ -335,9 +341,97 @@ describe('PostgreSQL schema migrations', () => {
       "SELECT slug, kind FROM namespaces WHERE namespace_id = 'ns_t3x_dev'"
     );
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(project?.namespace_id).toBe('ns_t3x_dev');
     expect(namespace).toEqual({ slug: 't3x-dev', kind: 'organization' });
+  });
+
+  it('upgrades a v68 database with fail-closed memberships and tenant-bound grants', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      INSERT INTO users (id, email_verified)
+      VALUES ('user_personal_owner', TRUE);
+      INSERT INTO namespaces (
+        namespace_id, slug, kind, owner_user_id, display_name
+      ) VALUES (
+        'ns_personal_owner', 'personal-owner', 'personal',
+        'user_personal_owner', 'Personal Owner'
+      );
+      INSERT INTO projects (project_id, name, namespace_id, created_at)
+      VALUES ('project_personal', 'Personal project', 'ns_personal_owner', NOW());
+      DROP TABLE project_grants;
+      DROP TABLE namespace_memberships;
+      ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
+      UPDATE _schema_version SET version = 68 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresStorage({
+      connectionString: setup.connectionString,
+      maxConnections: 1,
+      onnotice: () => {},
+    });
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const memberships = await setup.sql.unsafe<
+      Array<{
+        namespace_id: string;
+        principal_kind: string;
+        principal_id: string;
+        role: string;
+        status: string;
+      }>
+    >(`
+      SELECT namespace_id, principal_kind, principal_id, role, status
+      FROM namespace_memberships
+      ORDER BY namespace_id
+    `);
+
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(memberships).toEqual([
+      {
+        namespace_id: 'ns_personal_owner',
+        principal_kind: 'human',
+        principal_id: 'user_personal_owner',
+        role: 'owner',
+        status: 'active',
+      },
+    ]);
+
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO namespace_memberships (
+          membership_id, namespace_id, principal_kind, principal_id, role, status
+        ) VALUES (
+          'nsm_invalid_service_owner', 'ns_personal_owner', 'service',
+          'service_invalid', 'owner', 'active'
+        )
+      `)
+    ).rejects.toThrow();
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO project_grants (
+          grant_id, project_id, namespace_id, principal_kind, principal_id, role, status
+        ) VALUES (
+          'pg_cross_tenant', 'project_personal', 'ns_t3x_dev',
+          'human', 'user_guest', 'viewer', 'active'
+        )
+      `)
+    ).rejects.toThrow();
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO project_grants (
+          grant_id, project_id, namespace_id, principal_kind, principal_id, role, status
+        ) VALUES (
+          'pg_owner_role', 'project_personal', 'ns_personal_owner',
+          'human', 'user_guest', 'owner', 'active'
+        )
+      `)
+    ).rejects.toThrow();
   });
 
   it('runtime startup neither repairs an old schema nor refreshes builtin seeds', async () => {

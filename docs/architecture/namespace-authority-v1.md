@@ -72,5 +72,23 @@ ambiguous legacy row.
    automation, and shared WebUI DTOs.
 4. Transactional invitation, membership, last-owner, grant, and transfer lifecycle.
 
+## Storage foundation
+
+Schema version 69 introduces `namespace_memberships` and `project_grants` as the
+stored access facts consumed by the application evaluator. Both use closed
+principal, role, and lifecycle values; revocation is recorded in place rather
+than deleting authority history.
+
+`project_grants` carries both `project_id` and `namespace_id` under one composite
+foreign key to `projects`. PostgreSQL therefore rejects a grant whose claimed
+namespace differs from the project's canonical owner. The migration creates
+owner memberships only for personal namespaces whose `owner_user_id` resolves
+to a current user. It creates no membership for the legacy `t3x-dev` namespace
+and does not infer organization access from slugs or project provenance.
+
+These tables contain no plan, billing, provider-secret, or managed-AI fields.
+The schema does not itself make routes authoritative; repository reads and the
+existing project access path remain a following application/API slice.
+
 Cloud consumes this reusable collaboration authority and separately intersects commercial
 entitlement and spending policy. Cloud must not create a parallel organization/member store.

@@ -67,10 +67,67 @@ CREATE TABLE IF NOT EXISTS projects (
   business_rules JSONB DEFAULT '[]',
   extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ
+  deleted_at TIMESTAMPTZ,
+  CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id)
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_namespace_created ON projects(namespace_id, created_at);
+
+CREATE TABLE IF NOT EXISTS namespace_memberships (
+  membership_id TEXT PRIMARY KEY,
+  namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  principal_kind TEXT NOT NULL CHECK (principal_kind IN ('human', 'agent', 'service')),
+  principal_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ,
+  CONSTRAINT namespace_memberships_owner_human_check
+    CHECK (role <> 'owner' OR principal_kind = 'human'),
+  CONSTRAINT namespace_memberships_revocation_check
+    CHECK (
+      (status = 'active' AND revoked_at IS NULL)
+      OR (status = 'revoked' AND revoked_at IS NOT NULL)
+    )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_namespace_memberships_principal
+  ON namespace_memberships(namespace_id, principal_kind, principal_id);
+CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_principal
+  ON namespace_memberships(principal_kind, principal_id, namespace_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_namespace
+  ON namespace_memberships(namespace_id, role)
+  WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS project_grants (
+  grant_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL,
+  principal_kind TEXT NOT NULL CHECK (principal_kind IN ('human', 'agent', 'service')),
+  principal_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'viewer')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ,
+  CONSTRAINT project_grants_project_namespace_fk
+    FOREIGN KEY (project_id, namespace_id)
+    REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+  CONSTRAINT project_grants_revocation_check
+    CHECK (
+      (status = 'active' AND revoked_at IS NULL)
+      OR (status = 'revoked' AND revoked_at IS NOT NULL)
+    )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_project_grants_principal
+  ON project_grants(project_id, principal_kind, principal_id);
+CREATE INDEX IF NOT EXISTS idx_project_grants_active_principal
+  ON project_grants(principal_kind, principal_id, project_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_project_grants_active_project
+  ON project_grants(project_id, role)
+  WHERE status = 'active';
 
 -- Conversations
 CREATE TABLE IF NOT EXISTS conversations (
