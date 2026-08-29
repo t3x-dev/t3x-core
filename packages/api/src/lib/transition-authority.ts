@@ -1,6 +1,7 @@
 import {
   type ApiKey,
   type ApiKeyPrincipalKind,
+  type Author,
   isTransitionScope,
   type TransitionScope,
 } from '@t3x-dev/core';
@@ -9,6 +10,7 @@ import {
   getTransitionPolicyBinding,
   type TransitionPolicyBinding,
 } from '@t3x-dev/storage';
+import type { Context } from 'hono';
 
 export type TrustedTransitionPrincipal = {
   actor: { kind: ApiKeyPrincipalKind; id: string };
@@ -16,6 +18,11 @@ export type TrustedTransitionPrincipal = {
   projectId: string | null;
   scopes: readonly TransitionScope[];
 };
+
+/** Read authentication middleware state through Hono's shared context contract. */
+export function transitionApiKey(c: Context): ApiKey | undefined {
+  return c.get('apiKey') as ApiKey | undefined;
+}
 
 export class TransitionScopeDeniedError extends Error {
   readonly code = 'TRANSITION_SCOPE_DENIED';
@@ -89,6 +96,19 @@ export function deriveTrustedTransitionPrincipal(
   };
 }
 
+/** Keep legacy merge projections compatible without trusting request-shaped machine authors. */
+export function toTrustedTransitionAuthor(
+  principal: TrustedTransitionPrincipal,
+  humanFallback: Author
+): Author {
+  if (principal.actor.kind === 'human') return humanFallback;
+  return {
+    type: principal.actor.kind === 'service' ? 'system' : 'agent',
+    id: principal.actor.id,
+    name: principal.actor.id,
+  };
+}
+
 /**
  * Authorize one Transition operation. Missing auth context is allowed only for
  * the existing AUTH_DISABLED local mode; authenticated credentials require an
@@ -131,6 +151,61 @@ export async function resolveTransitionControlPlane(input: {
     POLICY_BOUND_SCOPES.has(input.scope) &&
     policyBinding === null
   ) {
+    throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName);
+  }
+  return { principal, policyBinding };
+}
+
+/**
+ * Resolve the complete authority required by a compatibility endpoint that
+ * creates an accepted Decision and advances a repository ref in one request.
+ *
+ * These routes predate the canonical Transition endpoints, but they must not
+ * become a machine-capability bypass: authenticated agent/service callers need
+ * every constituent scope and a server-selected ref policy. Existing human API
+ * keys remain governed by project access for legacy compatibility, while still
+ * using a ref policy when one is present. Actor identity is always derived from
+ * the credential rather than request-shaped author fields. AUTH_DISABLED local
+ * mode keeps the existing trusted local human behavior.
+ */
+export async function resolveCompatibilityTransitionWriteAuthority(input: {
+  db: AnyDB;
+  apiKey: ApiKey | undefined;
+  projectId: string;
+  refName: string;
+}): Promise<{
+  principal: TrustedTransitionPrincipal;
+  policyBinding: TransitionPolicyBinding | null;
+}> {
+  const principal = deriveTrustedTransitionPrincipal(input.apiKey);
+  if (principal.projectId !== null && principal.projectId !== input.projectId) {
+    throw new TransitionProjectScopeDeniedError(input.projectId);
+  }
+  if (principal.actor.kind !== 'human') {
+    requireTransitionAuthority({
+      apiKey: input.apiKey,
+      projectId: input.projectId,
+      scope: 'transition:propose',
+    });
+    requireTransitionAuthority({
+      apiKey: input.apiKey,
+      projectId: input.projectId,
+      scope: 'transition:decide:accept',
+    });
+    requireTransitionAuthority({
+      apiKey: input.apiKey,
+      projectId: input.projectId,
+      scope: 'transition:commit:create',
+    });
+    requireTransitionAuthority({
+      apiKey: input.apiKey,
+      projectId: input.projectId,
+      scope: 'transition:ref:advance',
+    });
+  }
+
+  const policyBinding = await getTransitionPolicyBinding(input.db, input.projectId, input.refName);
+  if (principal.actor.kind !== 'human' && policyBinding === null) {
     throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName);
   }
   return { principal, policyBinding };

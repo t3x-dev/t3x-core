@@ -28,15 +28,24 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   decodeRepositorySemanticContentState,
   getRepositoryConversationEvidence,
   getRepositorySemanticCommit,
+  RepositoryStateDecisionDeniedError,
   RepositoryStateDomainUnsupportedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import {
   ErrorResponseSchema,
@@ -202,6 +211,14 @@ const createCommitRoute = createRoute({
       description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Project access or Transition capability denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Ref head conflict or required machine policy binding is missing',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Internal server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -242,6 +259,12 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       yopsLogIds = await findUncommittedYOpsIds(db, sourceConversationId, body.project_id);
     }
     const targetBranch = body.branch ?? 'main';
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: body.project_id,
+      refName: targetBranch,
+    });
     if (targetBranch === 'main') await ensureMainBranch(db, body.project_id);
     const expectedHead = body.expected_head;
     if (inheritedParentHash !== null && inheritedParentHash !== expectedHead) {
@@ -267,7 +290,6 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       );
     }
     const target = createRepositoryYOpsStateFromSemanticContent(content);
-    const userId = getUserId(c);
     let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
     await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as typeof db;
@@ -280,10 +302,11 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
         refName: targetBranch,
         expectedHead,
         target,
-        actor: {
-          kind: 'human',
-          id: userId ? `user:${userId}` : 'human:local-user',
-        },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         ...(body.message?.trim() ? { intent: body.message.trim() } : {}),
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
@@ -314,6 +337,23 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (
+      err instanceof TransitionScopeDeniedError ||
+      err instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
+    }
+    if (
+      err instanceof TransitionPolicyBindingRequiredError ||
+      err instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
+    }
+    if (err instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
+        failures: err.failures,
+      });
+    }
     if (err instanceof SourceConversationAlreadyCommittedError) {
       return errorResponse(c, 'ALREADY_COMMITTED', err.message);
     }

@@ -1,4 +1,9 @@
-import { type ApiKey, parseAcceptancePolicy } from '@t3x-dev/core';
+import {
+  type ApiKey,
+  createAcceptancePolicyResource,
+  parseAcceptancePolicy,
+  type StatementObservation,
+} from '@t3x-dev/core';
 import {
   type AnyDB,
   bindTransitionPolicy,
@@ -18,6 +23,23 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+const decisionAuthorizationGate = vi.hoisted(() => ({
+  wait: null as (() => Promise<void>) | null,
+}));
+
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
+  return {
+    ...actual,
+    async authorizeDecisionForRepository(
+      input: Parameters<typeof actual.authorizeDecisionForRepository>[0]
+    ) {
+      if (decisionAuthorizationGate.wait !== null) await decisionAuthorizationGate.wait();
+      return actual.authorizeDecisionForRepository(input);
+    },
+  };
+});
+
 let mockDB: AnyDB;
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -25,7 +47,12 @@ vi.mock('../lib/db', () => ({
 }));
 
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
-import { commitTransition } from '../lib/transition-control-plane/lifecycle';
+import {
+  commitTransition,
+  decideTransition,
+  type TransitionReviewPrecondition,
+  TransitionReviewStaleError,
+} from '../lib/transition-control-plane/lifecycle';
 import { createWorkspaceSourceRunnerProvider } from '../lib/workspace-source-transition';
 import type { LocalOciCommandExecutor } from '../lib/workspace-validation/local-oci-provider';
 import { createTransitionControlPlaneRoutes } from '../routes/transition-control-plane.openapi';
@@ -230,6 +257,42 @@ async function commit(input: {
       expected_head: input.expectedHead,
     }
   );
+}
+
+function lifecyclePrecondition(input: WirePrecondition): TransitionReviewPrecondition {
+  return {
+    workspaceRevision: input.workspace_revision,
+    refName: input.ref_name,
+    refHead: input.ref_head,
+    effectDigest: input.effect_digest,
+    proposalDigest: input.proposal_digest,
+    statementDigests: [...input.statement_digests],
+    policyDigest: input.policy_digest,
+    ...(input.review_digest === undefined ? {} : { reviewDigest: input.review_digest }),
+  };
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function tracked<T>(promise: Promise<T>): {
+  promise: Promise<T>;
+  settled: () => boolean;
+} {
+  let didSettle = false;
+  const trackedPromise = promise.finally(() => {
+    didSettle = true;
+  });
+  void trackedPromise.catch(() => {});
+  return {
+    promise: trackedPromise,
+    settled: () => didSettle,
+  };
 }
 
 let cleanup: () => Promise<void>;
@@ -807,6 +870,224 @@ describe('Transition Decision and Commit routes', () => {
       apiKey: reviewer,
     });
     expect(staleStatements.status).toBe(409);
+  });
+
+  it('keeps every reviewed row sealed until Decision persistence completes', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Review seal race' }));
+    const workspace = await createWorkspace(project.projectId, 'ws_review_seal');
+    await bindPolicy(project.projectId, 'review-seal/v1');
+    const writer = key(project.projectId, 'seal-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(project.projectId, 'seal-reviewer', 'human', ['transition:decide:accept']);
+    const committer = key(project.projectId, 'seal-committer', 'service', [
+      'transition:commit:create',
+      'transition:ref:advance',
+    ]);
+    const reviewed = await propose({
+      projectId: project.projectId,
+      workspaceId: 'ws_review_seal',
+      requestId: 'proposal:review-seal',
+      apiKey: writer,
+    });
+    const reviewedPrecondition = await verify({
+      projectId: project.projectId,
+      transitionId: reviewed.transitionId,
+      requestId: 'verify:review-seal:1',
+      apiKey: writer,
+    });
+
+    // Prepare a second accepted Transition before pausing the reviewed Decision,
+    // so its Commit is a real competing ref-head mutation rather than raw SQL.
+    const competing = await propose({
+      projectId: project.projectId,
+      workspaceId: 'ws_review_seal',
+      requestId: 'proposal:review-seal:competitor',
+      apiKey: writer,
+    });
+    const competingPrecondition = await verify({
+      projectId: project.projectId,
+      transitionId: competing.transitionId,
+      requestId: 'verify:review-seal:competitor',
+      apiKey: writer,
+    });
+    const competingDecision = await decide({
+      projectId: project.projectId,
+      transitionId: competing.transitionId,
+      requestId: 'decision:review-seal:competitor',
+      outcome: 'accepted',
+      precondition: competingPrecondition,
+      apiKey: reviewer,
+    });
+    expect(competingDecision.status).toBe(200);
+    const competingDecisionPayload = (await competingDecision.json()) as {
+      data: { decision_digest: string };
+    };
+
+    const enteredAuthorization = deferred();
+    const releaseAuthorization = deferred();
+    decisionAuthorizationGate.wait = async () => {
+      enteredAuthorization.resolve();
+      await releaseAuthorization.promise;
+    };
+
+    const pendingDecision = decide({
+      projectId: project.projectId,
+      transitionId: reviewed.transitionId,
+      requestId: 'decision:review-seal',
+      outcome: 'accepted',
+      precondition: reviewedPrecondition,
+      apiKey: reviewer,
+    });
+    const competingMutations: Promise<unknown>[] = [];
+
+    try {
+      await enteredAuthorization.promise;
+      const statementMutation = tracked(
+        verify({
+          projectId: project.projectId,
+          transitionId: reviewed.transitionId,
+          requestId: 'verify:review-seal:2',
+          apiKey: writer,
+        })
+      );
+      const workspaceMutation = tracked(
+        upsertWorkspaceDraft(
+          mockDB,
+          {
+            project_id: project.projectId,
+            workspace_id: 'ws_review_seal',
+            title: 'Workspace changed during review',
+            target_branch: 'main',
+            workspace_state: {
+              ...(workspace.workspace_state ?? {}),
+              concurrentReviewMutation: true,
+            },
+          },
+          workspace.revision
+        )
+      );
+      const refMutation = tracked(
+        commit({
+          projectId: project.projectId,
+          transitionId: competing.transitionId,
+          requestId: 'commit:review-seal:competitor',
+          decisionDigest: competingDecisionPayload.data.decision_digest,
+          expectedHead: null,
+          apiKey: committer,
+        })
+      );
+      const policyMutation = tracked(bindPolicy(project.projectId, 'review-seal/v2', true));
+      competingMutations.push(
+        statementMutation.promise,
+        workspaceMutation.promise,
+        refMutation.promise,
+        policyMutation.promise
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect({
+        statements: statementMutation.settled(),
+        workspace: workspaceMutation.settled(),
+        refHead: refMutation.settled(),
+        policy: policyMutation.settled(),
+      }).toEqual({ statements: false, workspace: false, refHead: false, policy: false });
+
+      releaseAuthorization.resolve();
+      const response = await pendingDecision;
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as { data: { decision_digest: string } };
+      await expect(
+        findTransitionCommandReceipt(mockDB, {
+          projectId: project.projectId,
+          transitionId: reviewed.transitionId,
+          actor: { kind: 'human', id: 'user:seal-reviewer' },
+          requestId: 'decision:review-seal',
+        })
+      ).resolves.toMatchObject({ resultDigest: payload.data.decision_digest });
+
+      await Promise.allSettled(competingMutations);
+    } finally {
+      decisionAuthorizationGate.wait = null;
+      releaseAuthorization.resolve();
+      await Promise.allSettled([pendingDecision, ...competingMutations]);
+    }
+  });
+
+  it('rejects a custom authority whose evaluated policy differs from the reviewed digest', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Authority policy mismatch' })
+    );
+    await createWorkspace(project.projectId, 'ws_authority_policy_mismatch');
+    await bindPolicy(project.projectId, 'authority-policy-reviewed/v1');
+    const writer = key(project.projectId, 'authority-mismatch-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const proposed = await propose({
+      projectId: project.projectId,
+      workspaceId: 'ws_authority_policy_mismatch',
+      requestId: 'proposal:authority-policy-mismatch',
+      apiKey: writer,
+    });
+    const review = await verify({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'verify:authority-policy-mismatch',
+      apiKey: writer,
+    });
+    const mismatched = createAcceptancePolicyResource({
+      uri: 't3x://policies/authority-policy-mismatch/v2',
+      policy: policy(true),
+    });
+    expect(mismatched.resource.digest).not.toBe(review.policy_digest);
+    const actor = { kind: 'human' as const, id: 'user:authority-mismatch-reviewer' };
+
+    await expect(
+      decideTransition({
+        db: mockDB,
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        actor,
+        requestId: 'decision:authority-policy-mismatch',
+        outcome: 'accepted',
+        precondition: lifecyclePrecondition(review),
+        authoritySelection: {
+          select({ graph }) {
+            return {
+              policyDigest: review.policy_digest,
+              authority: {
+                async resolve() {
+                  return {
+                    actorContext: { actor },
+                    observationScope: {
+                      completeness: 'complete' as const,
+                      sources: ['repository:transition-statement-memberships'],
+                    },
+                    policy: mismatched.policy,
+                    policyResource: mismatched.resource,
+                    statements: graph.observations.map((observation) => ({
+                      statement: observation.statement as StatementObservation['statement'],
+                      issuerContext: observation.issuerContext,
+                    })),
+                  };
+                },
+              },
+            };
+          },
+        },
+      })
+    ).rejects.toBeInstanceOf(TransitionReviewStaleError);
+    await expect(
+      findTransitionCommandReceipt(mockDB, {
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        actor,
+        requestId: 'decision:authority-policy-mismatch',
+      })
+    ).resolves.toBeNull();
   });
 
   it('allows only one concurrent Commit to advance a shared ref', async () => {

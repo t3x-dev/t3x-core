@@ -4,11 +4,20 @@
  * Integration tests for Draft CRUD + preview + commit + fork endpoints.
  */
 
-import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
+import { REPOSITORY_STATE_POLICY } from '@t3x-dev/application';
+import { type ApiKey, DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import {
+  bindTransitionPolicy,
+  findBranchByName,
+  getRepositoryDecisionAudit,
+  getTransitionRefHead,
+  insertDraft,
+  insertProject,
+  updateDraft,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
@@ -16,6 +25,7 @@ type ApiResponse = any;
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
+let requestApiKey: ApiKey | undefined;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -44,6 +54,10 @@ describe('Drafts Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();
+  app.use('*', async (context, next) => {
+    if (requestApiKey !== undefined) context.set('apiKey', requestApiKey);
+    await next();
+  });
   app.route('/', draftsRoutes);
 
   beforeAll(async () => {
@@ -62,6 +76,26 @@ describe('Drafts Routes', () => {
   afterAll(async () => {
     await cleanup();
   });
+
+  beforeEach(() => {
+    requestApiKey = undefined;
+  });
+
+  function machineKey(projectId: string, scopes: ApiKey['transition_scopes']): ApiKey {
+    return {
+      id: 'ak_workflow_machine',
+      key_prefix: 't3xk_wor',
+      key_hash: 'workflow-machine-hash',
+      name: 'Workflow machine',
+      project_id: projectId,
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: scopes,
+      created_at: '2026-08-29T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    };
+  }
 
   // ============================================================
   // CRUD Tests
@@ -554,6 +588,114 @@ describe('Drafts Routes', () => {
   // ============================================================
 
   describe('POST /v1/drafts/:id/commit', () => {
+    it('denies an unscoped machine before lazy branch creation', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Denied workflow machine' })
+      );
+      const draft = await insertDraft(mockDB, {
+        project_id: project.projectId,
+        title: 'Denied machine draft',
+      });
+      await updateDraft(
+        mockDB,
+        draft.id,
+        {
+          nodes: [
+            {
+              id: 'ds_denied_machine',
+              text: 'This write must be denied.',
+              origin: { type: 'manual' },
+              position: 0,
+              included: true,
+            },
+          ],
+        },
+        draft.revision
+      );
+      requestApiKey = machineKey(project.projectId, []);
+
+      const response = await app.request(`/v1/drafts/${draft.id}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+        },
+      });
+      await expect(findBranchByName(mockDB, project.projectId, 'main')).resolves.toBeNull();
+    });
+
+    it('audits a scoped machine with the server-selected ref policy', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Authorized workflow machine' })
+      );
+      const binding = await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/authorized-workflow-machine',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+      const draft = await insertDraft(mockDB, {
+        project_id: project.projectId,
+        title: 'Authorized machine draft',
+      });
+      await updateDraft(
+        mockDB,
+        draft.id,
+        {
+          nodes: [
+            {
+              id: 'ds_authorized_machine',
+              text: 'This write is authorized.',
+              origin: { type: 'manual' },
+              position: 0,
+              included: true,
+            },
+          ],
+        },
+        draft.revision
+      );
+      requestApiKey = machineKey(project.projectId, [
+        'transition:propose',
+        'transition:decide:accept',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ]);
+
+      const response = await app.request(`/v1/drafts/${draft.id}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(response.status).toBe(201);
+      const head = await getTransitionRefHead(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+      });
+      expect(head.format).toBe('transition_v2');
+      if (head.format !== 'transition_v2') throw new Error('Expected CommitV2 head');
+      await expect(
+        getRepositoryDecisionAudit(mockDB, {
+          projectId: project.projectId,
+          refName: 'main',
+          decisionDigest: head.commit.decision.digest,
+        })
+      ).resolves.toMatchObject({
+        actor: { kind: 'agent', id: 'agent:api-key:ak_workflow_machine' },
+        policyResource: { digest: binding.resource.digest },
+      });
+    });
+
     it('returns 404 for non-existent draft', async () => {
       const res = await app.request('/v1/drafts/draft_nonexistent/commit', {
         method: 'POST',

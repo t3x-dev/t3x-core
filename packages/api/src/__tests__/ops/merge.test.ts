@@ -89,6 +89,21 @@ const executeInput: MergeExecuteInput = {
   message: 'Merge feature into main',
   branch: 'main',
   author: { type: 'human', id: 'user-1', name: 'Alice' },
+  writeAuthority: {
+    actor: { kind: 'agent', id: 'agent:api-key:ak_merge' },
+    policyBinding: {
+      projectId: 'project-1',
+      refName: 'main',
+      policy: {} as any,
+      resource: {
+        uri: 't3x://policies/merge-test',
+        mediaType: 'application/vnd.t3x.acceptance-policy+json',
+        digest: `sha256:${'d'.repeat(64)}`,
+      },
+      updatedBy: { kind: 'human', id: 'user:policy-admin' },
+      updatedAt: '2026-08-03T00:00:00.000Z',
+    },
+  },
 };
 
 describe('CommitV2 merge operations', () => {
@@ -128,7 +143,9 @@ describe('CommitV2 merge operations', () => {
       expect.objectContaining({
         projectId: 'project-1',
         refName: 'main',
-        actor: { kind: 'human', id: 'user-1' },
+        actor: { kind: 'agent', id: 'agent:api-key:ak_merge' },
+        policyBinding: executeInput.writeAuthority.policyBinding,
+        policyBindingSource: 'server-selected',
       })
     );
     expect(output.commit).toMatchObject({

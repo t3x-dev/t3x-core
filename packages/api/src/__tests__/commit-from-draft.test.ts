@@ -4,9 +4,14 @@
  * Integration tests for POST /v1/commit endpoint.
  */
 
+import { REPOSITORY_STATE_POLICY } from '@t3x-dev/application';
+import { type ApiKey, parseAcceptancePolicy } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  bindTransitionPolicy,
   ensureMainBranch,
+  findBranchByName,
+  getRepositoryDecisionAudit,
   getTransitionRefHead,
   insertBranch,
   insertDraft,
@@ -19,9 +24,13 @@ import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
+type TxRunner = {
+  transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+};
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
+let requestApiKey: ApiKey | undefined;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -43,6 +52,13 @@ describe('Commit-from-Draft Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();
+  app.use('*', async (context, next) => {
+    if (requestApiKey !== undefined) {
+      context.set('apiKey', requestApiKey);
+      if (requestApiKey.user_id !== null) context.set('userId', requestApiKey.user_id);
+    }
+    await next();
+  });
   app.route('/', commitFromDraftRoutes);
 
   beforeAll(async () => {
@@ -65,7 +81,24 @@ describe('Commit-from-Draft Routes', () => {
 
   beforeEach(() => {
     mockDispatch.mockClear();
+    requestApiKey = undefined;
   });
+
+  function machineKey(projectId: string, scopes: ApiKey['transition_scopes']): ApiKey {
+    return {
+      id: 'ak_draft_machine',
+      key_prefix: 't3xk_dra',
+      key_hash: 'draft-machine-hash',
+      name: 'Draft machine',
+      project_id: projectId,
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: scopes,
+      created_at: '2026-08-29T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    };
+  }
 
   /** Helper: create a draft with tree nodes ready for commit */
   async function createDraftWithTrees(
@@ -81,6 +114,224 @@ describe('Commit-from-Draft Routes', () => {
   }
 
   describe('POST /v1/commit', () => {
+    it('denies an unscoped machine before lazy main-branch creation', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Denied machine draft commit' })
+      );
+      const draftId = await createDraftWithTrees(project.projectId, [
+        { key: 's_denied', slots: { text: 'Denied.' }, children: [] },
+      ]);
+      requestApiKey = machineKey(project.projectId, []);
+
+      const response = await app.request('/v1/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.projectId, draft_id: draftId }),
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          details: { protocol_code: 'TRANSITION_SCOPE_DENIED' },
+        },
+      });
+      await expect(findBranchByName(mockDB, project.projectId, 'main')).resolves.toBeNull();
+    });
+
+    it('uses the scoped machine actor and server-selected ref policy', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Authorized machine draft commit' })
+      );
+      const binding = await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/authorized-machine-draft',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+      const draftId = await createDraftWithTrees(project.projectId, [
+        { key: 's_authorized', slots: { text: 'Authorized.' }, children: [] },
+      ]);
+      requestApiKey = machineKey(project.projectId, [
+        'transition:propose',
+        'transition:decide:accept',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ]);
+
+      const response = await app.request('/v1/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.projectId, draft_id: draftId }),
+      });
+
+      expect(response.status).toBe(201);
+      const head = await getTransitionRefHead(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+      });
+      expect(head.format).toBe('transition_v2');
+      if (head.format !== 'transition_v2') throw new Error('Expected CommitV2 head');
+      const audit = await getRepositoryDecisionAudit(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        decisionDigest: head.commit.decision.digest,
+      });
+      expect(audit).toMatchObject({
+        actor: { kind: 'agent', id: 'agent:api-key:ak_draft_machine' },
+        policyResource: { digest: binding.resource.digest },
+      });
+    });
+
+    it('returns a retryable conflict when the selected ref policy is rebound mid-request', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Rebound machine draft commit' })
+      );
+      await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/rebound-machine-draft/selected',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+      const draftId = await createDraftWithTrees(project.projectId, [
+        { key: 's_rebound', slots: { text: 'Rebound.' }, children: [] },
+      ]);
+      requestApiKey = machineKey(project.projectId, [
+        'transition:propose',
+        'transition:decide:accept',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ]);
+
+      const backingDB = mockDB;
+      let rebound = false;
+      const bindProperty = (target: object, property: string | symbol) => {
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === 'function' ? value.bind(target) : value;
+      };
+      mockDB = new Proxy(backingDB as object, {
+        get(target, property) {
+          if (property !== 'transaction') return bindProperty(target, property);
+          return async (runOuter: (tx: unknown) => Promise<unknown>) =>
+            (backingDB as unknown as TxRunner).transaction(async (rawTx) => {
+              const tx = rawTx as AnyDB;
+              const racingTx = new Proxy(tx as object, {
+                get(txTarget, txProperty) {
+                  if (txProperty !== 'transaction') return bindProperty(txTarget, txProperty);
+                  return async (runCommit: (nestedTx: unknown) => Promise<unknown>) => {
+                    if (!rebound) {
+                      rebound = true;
+                      await bindTransitionPolicy(backingDB, {
+                        projectId: project.projectId,
+                        refName: 'main',
+                        uri: 't3x://policies/rebound-machine-draft/replacement',
+                        policy: REPOSITORY_STATE_POLICY.policy,
+                        actor: { kind: 'human', id: 'user:policy-admin' },
+                      });
+                    }
+                    return (tx as unknown as TxRunner).transaction(runCommit);
+                  };
+                },
+              }) as AnyDB;
+              return runOuter(racingTx);
+            });
+        },
+      }) as AnyDB;
+
+      let response: Response;
+      try {
+        response = await app.request('/v1/commit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: project.projectId, draft_id: draftId }),
+        });
+      } finally {
+        mockDB = backingDB;
+      }
+
+      expect(rebound).toBe(true);
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          details: { protocol_code: 'TRANSITION_REVIEW_STALE' },
+        },
+      });
+      await expect(
+        getTransitionRefHead(backingDB, { projectId: project.projectId, refName: 'main' })
+      ).resolves.toMatchObject({ format: 'empty', head: null });
+    });
+
+    it('returns policy failures when the server-selected policy denies the Decision', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Restricted machine draft commit' })
+      );
+      const restrictivePolicy = parseAcceptancePolicy({
+        ...REPOSITORY_STATE_POLICY.policy,
+        authorization: {
+          ...REPOSITORY_STATE_POLICY.policy.authorization,
+          decide: {
+            actors: {
+              mode: 'one_of',
+              values: [{ kind: 'human', id: 'human:designated-reviewer' }],
+            },
+          },
+        },
+      });
+      await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/restricted-machine-draft',
+        policy: restrictivePolicy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+      const draftId = await createDraftWithTrees(project.projectId, [
+        { key: 's_restricted', slots: { text: 'Restricted.' }, children: [] },
+      ]);
+      requestApiKey = {
+        ...machineKey(project.projectId, []),
+        id: 'ak_restricted_human',
+        name: 'Restricted human',
+        user_id: 'route-reviewer',
+        principal_kind: 'human',
+      };
+
+      const response = await app.request('/v1/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.projectId, draft_id: draftId }),
+      });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: {
+          code: 'DECISION_NOT_PERMITTED',
+          details: {
+            failures: [
+              {
+                code: 'UNAUTHORIZED_DECISION',
+                message: expect.any(String),
+              },
+            ],
+          },
+        },
+      });
+      const head = await getTransitionRefHead(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+      });
+      expect(head.head).toBeNull();
+    });
+
     it('creates commit from draft (happy path)', async () => {
       const draftId = await createDraftWithTrees(testProjectId, [
         { key: 's_001', slots: { text: 'The deadline is next Friday.' }, children: [] },

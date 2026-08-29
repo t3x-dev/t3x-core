@@ -23,6 +23,14 @@ import {
   TransitionRequestConflictError,
   TransitionStatementConflictError,
 } from '../queries/transition-memberships';
+import {
+  bindTransitionPolicy,
+  getTransitionPolicyBinding,
+} from '../queries/transition-policy-bindings';
+import {
+  acquireTransitionReviewLock,
+  type TransitionReviewLockResult,
+} from '../queries/transition-review-lock';
 import { createTestDB, testData } from './setup';
 
 const ACTOR = { kind: 'agent' as const, id: 'agent:test-proposer' };
@@ -250,6 +258,104 @@ describe('Transition proposal and Statement memberships', () => {
     await expect(
       resolveTransitionProposalGraph(db, other.projectId, created.membership.transitionId)
     ).rejects.toBeInstanceOf(TransitionMembershipNotFoundError);
+  });
+
+  it('blocks a first policy binding while an absent binding is sealed for review', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Policy lock phantom' }));
+    const created = await createTransitionProposalMembership(
+      db,
+      membershipInput(project.projectId, 'policy-lock-phantom')
+    );
+
+    let releaseReview!: () => void;
+    const reviewCanFinish = new Promise<void>((resolve) => {
+      releaseReview = resolve;
+    });
+    let reportLocked!: (value: TransitionReviewLockResult) => void;
+    const lockedReview = new Promise<TransitionReviewLockResult>((resolve) => {
+      reportLocked = resolve;
+    });
+    const review = (
+      db as unknown as {
+        transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+      }
+    ).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      const locked = await acquireTransitionReviewLock(
+        tx,
+        project.projectId,
+        created.membership.transitionId
+      );
+      reportLocked(locked);
+      await reviewCanFinish;
+    });
+    expect(await lockedReview).toEqual({ membershipFound: true, policyBindingFound: false });
+
+    let bindingSettled = false;
+    const binding = bindTransitionPolicy(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      uri: 't3x://policies/first-bind-during-review/v1',
+      policy: {
+        schema: 't3x.dev/acceptance-policy/v1',
+        version: 1,
+        authorization: {
+          decide: { actors: { mode: 'any' } },
+          override: { actors: { mode: 'any' } },
+          allowSelfApproval: false,
+        },
+        claims: {
+          intent: {
+            allowedModes: ['unspecified'],
+            minimumEvidence: 0,
+            humanConfirmation: 'not_required',
+          },
+          rationale: {
+            allowedModes: ['unspecified'],
+            minimumEvidence: 0,
+            humanConfirmation: 'not_required',
+          },
+        },
+        checks: {
+          replay: {
+            issuers: { mode: 'any' },
+            tools: { mode: 'any' },
+            environments: { mode: 'any' },
+          },
+          validation: {
+            requirement: 'optional',
+            issuers: { mode: 'any' },
+            tools: { mode: 'any' },
+            environments: { mode: 'any' },
+            profiles: { mode: 'any' },
+            schemas: { mode: 'any' },
+            contexts: { mode: 'any' },
+          },
+          humanConfirmation: { issuers: { mode: 'any' } },
+        },
+        override: {
+          allowClaimFailures: false,
+          allowFailedValidation: false,
+          allowMissingHumanConfirmation: false,
+          allowMissingValidation: false,
+        },
+      },
+      actor: { kind: 'human', id: 'user:policy-admin' },
+    }).finally(() => {
+      bindingSettled = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(bindingSettled).toBe(false);
+    } finally {
+      releaseReview();
+      await review;
+    }
+    await expect(binding).resolves.toMatchObject({
+      projectId: project.projectId,
+      refName: 'main',
+    });
+    await expect(getTransitionPolicyBinding(db, project.projectId, 'main')).resolves.not.toBeNull();
   });
 
   it('records trusted issuer facts, preserves all runs, and conflicts on changed retry facts', async () => {

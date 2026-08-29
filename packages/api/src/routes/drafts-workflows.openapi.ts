@@ -39,12 +39,21 @@ import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId, resolveProjectResourceAccess } from '../lib/project-access';
+import { resolveProjectResourceAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   getRepositoryConversationEvidence,
+  RepositoryStateDecisionDeniedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -180,6 +189,10 @@ const commitDraftRoute = createRoute({
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     403: ProjectAccessDeniedResponse,
+    409: {
+      description: 'Transition authority, policy, or concurrent state conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Draft not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -448,8 +461,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       notFoundMessage: `Draft not found: ${id}`,
     });
     if (draft instanceof Response) return draft;
-    const userId = getUserId(c);
-
     // 2. Validate state
     if (draft.status !== 'editing') {
       return errorResponse(
@@ -459,8 +470,15 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
+    const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: draft.project_id,
+      refName: targetBranch,
+    });
+
     if (draft.goal === DEMO_WORKSPACE_REPLAY_GOAL) {
-      const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
       const expectedHead = await observeDraftCommitHead(db, {
         projectId: draft.project_id,
         targetBranch,
@@ -480,7 +498,11 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           refName: targetBranch,
           expectedHead,
           target,
-          actor: { kind: 'service', id: 'service:demo-fixture-replay' },
+          actor: writeAuthority.principal.actor,
+          policyBindingSource: 'server-selected',
+          ...(writeAuthority.policyBinding === null
+            ? {}
+            : { policyBinding: writeAuthority.policyBinding }),
           intent,
         });
         const createdLeaf = await createLeaf(tx, {
@@ -625,7 +647,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       });
     }
 
-    const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
     const expectedHead = await observeDraftCommitHead(db, {
       projectId: draft.project_id,
       targetBranch,
@@ -676,10 +697,11 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         refName: targetBranch,
         expectedHead,
         target,
-        actor: {
-          kind: 'human',
-          id: userId ? `user:${userId}` : 'human:local-user',
-        },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         intent,
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
@@ -751,6 +773,23 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (err) {
+    if (
+      err instanceof TransitionScopeDeniedError ||
+      err instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
+    }
+    if (
+      err instanceof TransitionPolicyBindingRequiredError ||
+      err instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
+    }
+    if (err instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
+        failures: err.failures,
+      });
+    }
     if (err instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
     }
