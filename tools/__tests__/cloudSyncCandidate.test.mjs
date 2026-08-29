@@ -105,6 +105,13 @@ test('Cloud sync workflow prepares a branch without creating a PR or deploying',
   assert.deepEqual(workflow.on.push.branches, ['dev']);
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.match(source, /secrets\.CLOUD_SYNC_TOKEN/);
+  assert.match(source, /ref: dev/);
+  assert.doesNotMatch(source, /ref: main/);
+  assert.match(source, /compare\/dev\.\.\./);
+  assert.match(source, /git add apps database package\.json pnpm-lock\.yaml vendor\/t3x/);
   assert.match(source, /git push origin/);
   assert.doesNotMatch(source, /gh pr create|pulls\.create|vercel deploy|railway up/i);
+
+  const syncTool = readFileSync(new URL('tools/sync-cloud-candidate.mjs', root), 'utf8');
+  assert.match(syncTool, /sync-core-database-contract\.mjs/);
 });

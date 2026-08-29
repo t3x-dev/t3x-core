@@ -64,6 +64,15 @@ try {
     env: { ...process.env, T3X_CORE_ROOT: coreRoot },
     stdio: 'inherit',
   });
+  execFileSync(
+    'node',
+    [path.join(cloudRoot, 'scripts', 'sync-core-database-contract.mjs'), '--write'],
+    {
+      cwd: cloudRoot,
+      env: { ...process.env, T3X_CORE_ROOT: coreRoot },
+      stdio: 'inherit',
+    }
+  );
 
   console.log(`Prepared Cloud artifacts and shared Web baseline from Core ${sourceSha}.`);
 } finally {
