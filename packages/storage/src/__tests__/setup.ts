@@ -10,7 +10,7 @@
 
 import postgres from 'postgres';
 import type { AnyDB } from '../adapters';
-import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
+import { closePostgresStorage, createPostgresBootstrapStorage } from '../adapters/postgres';
 import { getTestPostgresPort } from './pgTestConfig';
 
 /**
@@ -1114,7 +1114,7 @@ export async function createTestDB(): Promise<{
   await adminSql.end();
 
   // Let the real adapter own schema bootstrap so tests exercise production init once.
-  const db = await createPostgresStorage({
+  const db = await createPostgresBootstrapStorage({
     connectionString,
     onnotice: ignoreNotice,
   });

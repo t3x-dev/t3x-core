@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   closePostgresStorage,
+  createPostgresBootstrapStorage,
+  createPostgresRuntimeStorage,
   createPostgresStorage,
   getPostgresClient,
+  POSTGRES_SCHEMA_VERSION,
 } from '../adapters/postgres';
 import { createTestDB } from './setup';
 
@@ -45,7 +48,38 @@ describe('PostgreSQL schema migrations', () => {
     const [version] = await setup.sql.unsafe<{ version: number }[]>(
       'SELECT version FROM _schema_version WHERE singleton = TRUE'
     );
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+  });
+
+  it('rolls back the complete schema transaction when an upgrade step fails', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
+      DROP TABLE namespaces;
+      CREATE TABLE namespaces (incompatible INTEGER);
+      DROP TABLE rate_limit_buckets;
+      UPDATE _schema_version SET version = 67 WHERE singleton = TRUE;
+    `);
+
+    await expect(
+      createPostgresBootstrapStorage({
+        connectionString: setup.connectionString,
+        maxConnections: 1,
+        onnotice: () => {},
+      })
+    ).rejects.toThrow();
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [table] = await setup.sql.unsafe<Array<{ rateLimitBuckets: string | null }>>(
+      `SELECT to_regclass('public.rate_limit_buckets')::text AS "rateLimitBuckets"`
+    );
+    expect(version?.version).toBe(67);
+    expect(table?.rateLimitBuckets).toBeNull();
   });
 
   it('upgrades a v60 database with the complete v61 Transition storage', async () => {
@@ -79,7 +113,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.transition_review_snapshots')::text AS review_snapshots
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(tables).toEqual({
       preparations: 'transition_proposal_preparations',
       verification_receipts: 'transition_verification_receipts',
@@ -124,7 +158,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.yschema_composition_snapshots')::text AS "compositionSnapshots"
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(tables).toEqual({
       artifacts: 'yschema_artifacts',
       artifactVersions: 'yschema_artifact_versions',
@@ -170,7 +204,7 @@ describe('PostgreSQL schema migrations', () => {
       WHERE template_id = 'tmpl_v62_legacy'
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(template).toEqual({
       owner_id: null,
       provenance: {
@@ -210,7 +244,7 @@ describe('PostgreSQL schema migrations', () => {
       ORDER BY column_name
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(columns.map((column) => column.column_name)).toEqual([
       'decision_json',
       'decision_revision',
@@ -240,7 +274,7 @@ describe('PostgreSQL schema migrations', () => {
       SELECT to_regclass('public.transition_review_snapshots')::text AS review_snapshots
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(tables).toEqual({ review_snapshots: 'transition_review_snapshots' });
   });
 
@@ -267,7 +301,7 @@ describe('PostgreSQL schema migrations', () => {
       SELECT to_regclass('public.rate_limit_buckets')::text AS rate_limit_buckets
     `);
 
-    expect(version?.version).toBe(68);
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
     expect(table).toEqual({ rate_limit_buckets: 'rate_limit_buckets' });
   });
 
@@ -304,5 +338,134 @@ describe('PostgreSQL schema migrations', () => {
     expect(version?.version).toBe(68);
     expect(project?.namespace_id).toBe('ns_t3x_dev');
     expect(namespace).toEqual({ slug: 't3x-dev', kind: 'organization' });
+  });
+
+  it('runtime startup neither repairs an old schema nor refreshes builtin seeds', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      UPDATE templates
+      SET title = 'runtime must preserve this title'
+      WHERE template_id = (SELECT template_id FROM templates WHERE is_builtin = TRUE LIMIT 1);
+      UPDATE _schema_version
+      SET version = ${POSTGRES_SCHEMA_VERSION - 1}
+      WHERE singleton = TRUE;
+    `);
+
+    await expect(
+      createPostgresRuntimeStorage({
+        connectionString: setup.connectionString,
+        maxConnections: 1,
+        onnotice: () => {},
+      })
+    ).rejects.toThrow(/migratePostgresStorage.*no DDL or seed repair/i);
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [template] = await setup.sql.unsafe<Array<{ title: string }>>(
+      "SELECT title FROM templates WHERE title = 'runtime must preserve this title'"
+    );
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION - 1);
+    expect(template?.title).toBe('runtime must preserve this title');
+  });
+
+  it('runtime startup leaves a missing schema missing', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
+
+    await expect(
+      createPostgresRuntimeStorage({
+        connectionString: setup.connectionString,
+        maxConnections: 1,
+        onnotice: () => {},
+      })
+    ).rejects.toThrow(/schema is missing.*migratePostgresStorage/i);
+
+    const [schema] = await setup.sql.unsafe<Array<{ versionTable: string | null }>>(
+      `SELECT to_regclass('public._schema_version')::text AS "versionTable"`
+    );
+    expect(schema?.versionTable).toBeNull();
+  });
+
+  it('starts and reads/writes application data as a non-owner NOINHERIT runtime role', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await closePostgresStorage();
+
+    const role = `t3x_runtime_${Math.random().toString(36).slice(2, 10)}`;
+    const password = `runtime_${Math.random().toString(36).slice(2, 14)}`;
+    const database = new URL(setup.connectionString).pathname.slice(1);
+    let roleCreated = false;
+
+    try {
+      await setup.sql.unsafe(`CREATE ROLE "${role}" LOGIN NOINHERIT PASSWORD '${password}'`);
+      roleCreated = true;
+      await setup.sql.unsafe(`
+        GRANT CONNECT ON DATABASE "${database}" TO "${role}";
+        GRANT USAGE ON SCHEMA public TO "${role}";
+        REVOKE CREATE ON SCHEMA public FROM "${role}";
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}";
+        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}";
+      `);
+
+      const runtimeUrl = new URL(setup.connectionString);
+      runtimeUrl.username = role;
+      runtimeUrl.password = password;
+      await createPostgresRuntimeStorage({
+        connectionString: runtimeUrl.toString(),
+        maxConnections: 1,
+        onnotice: () => {},
+      });
+      const runtimeSql = getPostgresClient();
+      const [identity] = await runtimeSql.unsafe<
+        Array<{
+          currentUser: string;
+          tableOwner: string;
+          canCreate: boolean;
+          ownsOrInheritsOwner: boolean;
+        }>
+      >(`
+        SELECT
+          current_user AS "currentUser",
+          tableowner AS "tableOwner",
+          has_schema_privilege(current_user, 'public', 'CREATE') AS "canCreate",
+          pg_has_role(current_user, tableowner, 'MEMBER') AS "ownsOrInheritsOwner"
+        FROM pg_tables
+        WHERE schemaname = 'public' AND tablename = 'projects'
+      `);
+
+      expect(identity).toMatchObject({
+        currentUser: role,
+        canCreate: false,
+        ownsOrInheritsOwner: false,
+      });
+      expect(identity?.tableOwner).not.toBe(role);
+      await expect(runtimeSql.unsafe(`SET ROLE "${identity?.tableOwner}"`)).rejects.toThrow();
+      await expect(
+        runtimeSql.unsafe('CREATE TABLE runtime_role_forbidden (id INTEGER)')
+      ).rejects.toThrow();
+
+      await runtimeSql.unsafe(`
+        INSERT INTO projects (project_id, name, created_at)
+        VALUES ('runtime_role_project', 'Runtime role project', NOW())
+      `);
+      const [project] = await runtimeSql.unsafe<Array<{ name: string }>>(
+        "SELECT name FROM projects WHERE project_id = 'runtime_role_project'"
+      );
+      expect(project?.name).toBe('Runtime role project');
+      await runtimeSql.unsafe("DELETE FROM projects WHERE project_id = 'runtime_role_project'");
+    } finally {
+      await closePostgresStorage();
+      if (roleCreated) {
+        await setup.sql.unsafe(`DROP OWNED BY "${role}"`);
+        await setup.sql.unsafe(`DROP ROLE "${role}"`);
+      }
+    }
   });
 });

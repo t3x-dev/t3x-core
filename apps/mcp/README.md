@@ -176,6 +176,7 @@ see the same data without each process trying to own embedded Postgres.
 | `T3X_API_URL` | Base API URL for `api` backend | `http://localhost:8000/api` |
 | `T3X_API_KEY` | Optional API key for `api` backend | unset |
 | `DATABASE_URL` | Postgres connection string; when omitted, embedded Postgres is used | unset |
+| `T3X_POSTGRES_STARTUP_MODE` | External Postgres startup: read-only `runtime` validation or explicit `bootstrap` migration/seed | `runtime` |
 | `T3X_DATA_DIR` | Embedded Postgres data directory | `.t3x/pg-data` |
 | `T3X_PG_PORT` | Embedded Postgres port | `5445` |
 | `ANTHROPIC_API_KEY` | Optional fallback for Anthropic-backed generation/extraction | unset |

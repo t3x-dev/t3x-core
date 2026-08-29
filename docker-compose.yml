@@ -59,6 +59,9 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
+      # Preserve the fresh-install self-hosted path. Hosted deployments should
+      # run a separate migration job and set runtime mode on application services.
+      - T3X_POSTGRES_STARTUP_MODE=bootstrap
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION=${AUTH_DISABLED:-false}
       - T3X_OPERATOR_USER_IDS=${T3X_OPERATOR_USER_IDS:-}
@@ -95,6 +98,7 @@ services:
     environment:
       - DATABASE_ADAPTER=postgres
       - DATABASE_URL=postgresql://t3x:t3x_dev_password@postgres:5432/t3x
+      - T3X_POSTGRES_STARTUP_MODE=runtime
       # Note: NEXT_PUBLIC_* env vars are set at BUILD time in Dockerfile
       # Runtime values here are ignored by client-side code
       - NEXT_PUBLIC_API_URL=http://t3x-api:8000

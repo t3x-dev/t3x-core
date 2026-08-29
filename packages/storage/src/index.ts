@@ -16,8 +16,8 @@
  * const db = await createEmbeddedStorage({ dataDir: '.t3x/pg-data' });
  *
  * // Docker / production
- * import { createPostgresStorage } from '@t3x-dev/storage';
- * const db = await createPostgresStorage({ connectionString: process.env.DATABASE_URL });
+ * import { createPostgresRuntimeStorage } from '@t3x-dev/storage';
+ * const db = await createPostgresRuntimeStorage({ connectionString: process.env.DATABASE_URL });
  *
  * // Supabase
  * import { createSupabaseStorage } from '@t3x-dev/storage/supabase';
@@ -28,11 +28,20 @@
 // Database adapters
 export {
   closePostgresStorage,
+  createPostgresBootstrapStorage,
+  createPostgresRuntimeStorage,
   createPostgresStorage,
   getPostgresClient,
   getPostgresDB,
+  inspectPostgresSchema,
+  migratePostgresStorage,
+  POSTGRES_SCHEMA_VERSION,
   type PostgresConfig,
   type PostgresDB,
+  type PostgresSchemaMetadata,
+  type PostgresSchemaStatus,
+  PostgresSchemaVersionError,
+  type PostgresSchemaVersionErrorReason,
 } from './adapters/postgres';
 export {
   closeSupabaseStorage,

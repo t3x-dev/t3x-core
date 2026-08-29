@@ -21,6 +21,37 @@ export interface PostgresConfig {
   onnotice?: (notice: postgres.Notice) => void;
 }
 
+export type PostgresSchemaStatus = 'missing' | 'unversioned' | 'outdated' | 'current' | 'newer';
+
+/** Metadata that deployment hosts can use to coordinate their own migration job. */
+export interface PostgresSchemaMetadata {
+  table: 'public._schema_version';
+  currentVersion: number | null;
+  expectedVersion: number;
+  status: PostgresSchemaStatus;
+}
+
+export type PostgresSchemaVersionErrorReason =
+  | Exclude<PostgresSchemaStatus, 'current'>
+  | 'unreadable';
+
+/**
+ * Raised when the read-only runtime entry point cannot safely use the database.
+ * Runtime startup never attempts to repair the condition represented here.
+ */
+export class PostgresSchemaVersionError extends Error {
+  readonly code = 'T3X_POSTGRES_SCHEMA_INCOMPATIBLE';
+
+  constructor(
+    message: string,
+    readonly reason: PostgresSchemaVersionErrorReason,
+    readonly metadata?: PostgresSchemaMetadata
+  ) {
+    super(message);
+    this.name = 'PostgresSchemaVersionError';
+  }
+}
+
 let client: postgres.Sql | null = null;
 let db: PostgresDB | null = null;
 
@@ -29,25 +60,30 @@ let db: PostgresDB | null = null;
 // current database so isolated test databases can still initialize in parallel.
 const SCHEMA_INIT_LOCK_NAMESPACE = 0x543358;
 
-/**
- * Create PostgreSQL storage for Docker/production
- */
-export async function createPostgresStorage(config: PostgresConfig): Promise<PostgresDB> {
-  // Create postgres.js client
-  const nextClient = postgres(config.connectionString, {
-    max: config.maxConnections || 10,
+function createClient(config: PostgresConfig, maxConnections?: number): postgres.Sql {
+  return postgres(config.connectionString, {
+    max: maxConnections ?? config.maxConnections ?? 10,
     onnotice: config.onnotice,
   });
+}
 
-  // Create Drizzle instance
+async function activatePostgresStorage(
+  config: PostgresConfig,
+  mode: 'bootstrap' | 'runtime'
+): Promise<PostgresDB> {
+  const nextClient = postgres(config.connectionString, {
+    max: config.maxConnections ?? 10,
+    onnotice: config.onnotice,
+  });
   const nextDb = drizzle(nextClient, { schema });
 
   try {
-    // Initialize schema (create tables if not exist)
-    await initializeSchema(nextClient);
-
-    // Seed builtin templates
-    await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+    if (mode === 'bootstrap') {
+      await initializeSchema(nextClient);
+      await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+    } else {
+      await validatePostgresSchema(nextClient);
+    }
   } catch (error) {
     await nextClient.end().catch(() => {});
     throw error;
@@ -59,11 +95,66 @@ export async function createPostgresStorage(config: PostgresConfig): Promise<Pos
 }
 
 /**
+ * Backward-compatible bootstrap connection for local development and tests.
+ * Deployment runtimes should use createPostgresRuntimeStorage instead.
+ */
+export async function createPostgresStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return createPostgresBootstrapStorage(config);
+}
+
+/** Open storage after explicitly applying schema migrations and builtin seeds. */
+export async function createPostgresBootstrapStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return activatePostgresStorage(config, 'bootstrap');
+}
+
+/**
+ * Open storage for application traffic using read-only schema validation.
+ * This entry point never executes schema DDL or seed mutations.
+ */
+export async function createPostgresRuntimeStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return activatePostgresStorage(config, 'runtime');
+}
+
+/**
+ * Run the storage-owned migration and seed workflow as a standalone job.
+ * The job owns a transient connection and never replaces the runtime singleton.
+ */
+export async function migratePostgresStorage(
+  config: PostgresConfig
+): Promise<PostgresSchemaMetadata> {
+  const migrationClient = createClient(config, 1);
+  const migrationDb = drizzle(migrationClient, { schema });
+
+  try {
+    await initializeSchema(migrationClient);
+    await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    return await inspectPostgresSchemaWithClient(migrationClient);
+  } finally {
+    await migrationClient.end().catch(() => {});
+  }
+}
+
+/** Read the storage schema version without running migrations or seeds. */
+export async function inspectPostgresSchema(
+  config: PostgresConfig
+): Promise<PostgresSchemaMetadata> {
+  const inspectionClient = createClient(config, 1);
+  try {
+    return await inspectPostgresSchemaWithClient(inspectionClient);
+  } finally {
+    await inspectionClient.end().catch(() => {});
+  }
+}
+
+/**
  * Get the current database instance
  */
 export function getPostgresDB(): PostgresDB {
   if (!db) {
-    throw new Error('PostgreSQL database not initialized. Call createPostgresStorage() first.');
+    throw new Error(
+      'PostgreSQL database not initialized. Call createPostgresRuntimeStorage() or ' +
+        'createPostgresBootstrapStorage() first.'
+    );
   }
   return db;
 }
@@ -74,7 +165,10 @@ export function getPostgresDB(): PostgresDB {
  */
 export function getPostgresClient(): postgres.Sql {
   if (!client) {
-    throw new Error('PostgreSQL client not initialized. Call createPostgresStorage() first.');
+    throw new Error(
+      'PostgreSQL client not initialized. Call createPostgresRuntimeStorage() or ' +
+        'createPostgresBootstrapStorage() first.'
+    );
   }
   return client;
 }
@@ -93,7 +187,78 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 68;
+export const POSTGRES_SCHEMA_VERSION = 68;
+
+function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
+  if (!tableExists) return 'missing';
+  if (currentVersion === null) return 'unversioned';
+  if (currentVersion < POSTGRES_SCHEMA_VERSION) return 'outdated';
+  if (currentVersion > POSTGRES_SCHEMA_VERSION) return 'newer';
+  return 'current';
+}
+
+async function inspectPostgresSchemaWithClient(sql: postgres.Sql): Promise<PostgresSchemaMetadata> {
+  const [table] = await sql.unsafe<Array<{ tableName: string | null }>>(
+    `SELECT to_regclass('public._schema_version')::text AS "tableName"`
+  );
+  const tableExists = table?.tableName !== null && table?.tableName !== undefined;
+  let currentVersion: number | null = null;
+
+  if (tableExists) {
+    const [version] = await sql.unsafe<Array<{ version: number }>>(
+      'SELECT version FROM public._schema_version WHERE singleton = TRUE'
+    );
+    currentVersion = version?.version ?? null;
+  }
+
+  return {
+    table: 'public._schema_version',
+    currentVersion,
+    expectedVersion: POSTGRES_SCHEMA_VERSION,
+    status: schemaStatus(currentVersion, tableExists),
+  };
+}
+
+async function validatePostgresSchema(sql: postgres.Sql): Promise<PostgresSchemaMetadata> {
+  let metadata: PostgresSchemaMetadata;
+  try {
+    metadata = await inspectPostgresSchemaWithClient(sql);
+  } catch (error) {
+    const detail = error instanceof Error ? ` PostgreSQL reported: ${error.message}` : '';
+    throw new PostgresSchemaVersionError(
+      'PostgreSQL runtime cannot read public._schema_version. Grant the runtime role USAGE on ' +
+        'schema public and SELECT on public._schema_version; run migrations with a separate ' +
+        `migration-owner role before startup.${detail}`,
+      'unreadable'
+    );
+  }
+
+  if (metadata.status === 'current') return metadata;
+
+  if (metadata.status === 'newer') {
+    throw new PostgresSchemaVersionError(
+      `PostgreSQL schema version ${metadata.currentVersion} is newer than this runtime supports ` +
+        `(${metadata.expectedVersion}). Upgrade the T3X runtime; runtime startup will not modify ` +
+        'or downgrade the database.',
+      metadata.status,
+      metadata
+    );
+  }
+
+  const current =
+    metadata.status === 'missing'
+      ? 'is missing'
+      : metadata.status === 'unversioned'
+        ? 'has no recorded version'
+        : `is version ${metadata.currentVersion}`;
+  throw new PostgresSchemaVersionError(
+    `PostgreSQL schema ${current}; version ${metadata.expectedVersion} is required. Run ` +
+      'migratePostgresStorage() with the migration-owner connection before starting the runtime role. ' +
+      'Runtime startup performs no DDL or seed repair.',
+    metadata.status,
+    metadata
+  );
+}
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -126,7 +291,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     await ensurePullRequestsSchema(sql);
   }
 
-  if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
+  if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
     return;
   }
 
@@ -2119,8 +2284,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
-    VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
-    ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+    VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())
+    ON CONFLICT (singleton) DO UPDATE SET version = ${POSTGRES_SCHEMA_VERSION}, applied_at = NOW()
   `);
 }
 
