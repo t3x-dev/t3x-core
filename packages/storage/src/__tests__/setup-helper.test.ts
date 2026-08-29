@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { postgresMock, createPostgresStorageMock, closePostgresStorageMock } = vi.hoisted(() => ({
-  postgresMock: vi.fn(),
-  createPostgresStorageMock: vi.fn(),
-  closePostgresStorageMock: vi.fn(),
-}));
+const { postgresMock, createPostgresBootstrapStorageMock, closePostgresStorageMock } = vi.hoisted(
+  () => ({
+    postgresMock: vi.fn(),
+    createPostgresBootstrapStorageMock: vi.fn(),
+    closePostgresStorageMock: vi.fn(),
+  })
+);
 
 vi.mock('postgres', () => ({
   default: postgresMock,
 }));
 
 vi.mock('../adapters/postgres', () => ({
-  createPostgresStorage: createPostgresStorageMock,
+  createPostgresBootstrapStorage: createPostgresBootstrapStorageMock,
   closePostgresStorage: closePostgresStorageMock,
 }));
 
@@ -27,7 +29,7 @@ function makeSqlClient() {
 describe('storage test setup helper', () => {
   beforeEach(() => {
     postgresMock.mockReset();
-    createPostgresStorageMock.mockReset();
+    createPostgresBootstrapStorageMock.mockReset();
     closePostgresStorageMock.mockReset();
   });
 
@@ -41,7 +43,7 @@ describe('storage test setup helper', () => {
       .mockReturnValueOnce(adminSql)
       .mockReturnValueOnce(rawSql)
       .mockReturnValueOnce(dropSql);
-    createPostgresStorageMock.mockResolvedValue(db);
+    createPostgresBootstrapStorageMock.mockResolvedValue(db);
 
     const env = await createTestDB();
 
@@ -56,7 +58,7 @@ describe('storage test setup helper', () => {
       expect.stringContaining('/test_'),
       expect.objectContaining({ max: 5, onnotice: expect.any(Function) })
     );
-    expect(createPostgresStorageMock).toHaveBeenCalledWith(
+    expect(createPostgresBootstrapStorageMock).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionString: expect.stringContaining('/test_'),
         onnotice: expect.any(Function),

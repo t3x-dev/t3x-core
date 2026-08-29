@@ -57,10 +57,20 @@ async function initializeDB(): Promise<AnyDB> {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (databaseUrl) {
-    // Docker/production: Use PostgreSQL
+    // External PostgreSQL defaults to read-only schema validation. The migration
+    // owner must run the explicit storage migration workflow before app startup.
+    const startupMode = process.env.T3X_POSTGRES_STARTUP_MODE || 'runtime';
+    if (startupMode !== 'bootstrap' && startupMode !== 'runtime') {
+      throw new Error(
+        `Invalid T3X_POSTGRES_STARTUP_MODE=${startupMode}; expected "runtime" or "bootstrap"`
+      );
+    }
     console.log('[db] Using PostgreSQL:', databaseUrl.replace(/:[^:@]+@/, ':****@'));
-    const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
-    dbInstance = await createPostgresStorage({ connectionString: databaseUrl });
+    const { closePostgresStorage, createPostgresBootstrapStorage, createPostgresRuntimeStorage } =
+      await import('@t3x-dev/storage');
+    dbInstance = await (startupMode === 'bootstrap'
+      ? createPostgresBootstrapStorage({ connectionString: databaseUrl })
+      : createPostgresRuntimeStorage({ connectionString: databaseUrl }));
     closeDbFn = closePostgresStorage;
     console.log('[db] PostgreSQL initialized');
   } else {
@@ -75,8 +85,10 @@ async function initializeDB(): Promise<AnyDB> {
       // Connect to embedded PostgreSQL via standard postgres adapter
       const connectionString = `postgresql://postgres:password@localhost:${port}/t3x`;
       console.log('[db] Connecting to embedded PostgreSQL on port', port);
-      const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
-      dbInstance = await createPostgresStorage({ connectionString });
+      const { createPostgresRuntimeStorage, closePostgresStorage } = await import(
+        '@t3x-dev/storage'
+      );
+      dbInstance = await createPostgresRuntimeStorage({ connectionString });
       closeDbFn = closePostgresStorage;
       console.log('[db] Connected to embedded PostgreSQL');
     } else {

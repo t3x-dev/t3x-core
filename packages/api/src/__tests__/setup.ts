@@ -8,6 +8,10 @@ import { createTestDB } from '../../../storage/src/__tests__/setup';
 import type { RateLimitStore } from '../middleware/rate-limit';
 
 process.env.T3X_CREDENTIAL_ENCRYPTION_KEY ??= Buffer.alloc(32, 0x42).toString('base64');
+// CI supplies an external PostgreSQL service. Tests own that disposable database,
+// so select the explicit bootstrap path instead of exercising production's
+// fail-closed runtime startup against an intentionally empty schema.
+process.env.T3X_POSTGRES_STARTUP_MODE ??= 'bootstrap';
 
 export async function setupTestDB(): Promise<{
   db: Awaited<ReturnType<typeof createTestDB>>['db'];

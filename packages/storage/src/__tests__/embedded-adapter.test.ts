@@ -5,7 +5,7 @@ const embeddedStart = vi.fn();
 const embeddedInitialise = vi.fn();
 const embeddedCreateDatabase = vi.fn();
 const embeddedCtor = vi.fn();
-const createPostgresStorage = vi.fn();
+const createPostgresBootstrapStorage = vi.fn();
 const closePostgresStorage = vi.fn();
 
 vi.mock('node:net', () => ({
@@ -53,7 +53,7 @@ vi.mock('embedded-postgres', () => ({
 }));
 
 vi.mock('../adapters/postgres', () => ({
-  createPostgresStorage,
+  createPostgresBootstrapStorage,
   closePostgresStorage,
 }));
 
@@ -64,7 +64,7 @@ describe('createEmbeddedStorage', () => {
     embeddedInitialise.mockReset();
     embeddedStart.mockReset();
     embeddedCreateDatabase.mockReset();
-    createPostgresStorage.mockReset();
+    createPostgresBootstrapStorage.mockReset();
     closePostgresStorage.mockReset();
   });
 
@@ -78,6 +78,6 @@ describe('createEmbeddedStorage', () => {
     expect(embeddedCtor).not.toHaveBeenCalled();
     expect(embeddedInitialise).not.toHaveBeenCalled();
     expect(embeddedStart).not.toHaveBeenCalled();
-    expect(createPostgresStorage).not.toHaveBeenCalled();
+    expect(createPostgresBootstrapStorage).not.toHaveBeenCalled();
   });
 });
