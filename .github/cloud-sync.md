@@ -22,8 +22,8 @@ full source identity, for example `sync/core-e05165ed747e`. The workflow:
 1. packs the exact internal Core packages consumed by Cloud;
 2. updates `vendor/t3x/manifest.json`, package pins, and the lockfile;
 3. synchronizes the shared Web baseline while preserving Cloud overlays;
-4. refreshes Cloud's exact Core artifact and PostgreSQL compatibility contract;
-5. verifies artifact hashes and Web drift;
+4. refreshes Cloud's exact Core artifact, PostgreSQL compatibility contract, and recovery fixture;
+5. verifies artifact hashes, Web drift, and recovery evidence;
 6. pushes the candidate branch and prints a `dev` PR link for a human to open.
 
 If the branch already exists, the workflow never force-pushes it. Delete an
