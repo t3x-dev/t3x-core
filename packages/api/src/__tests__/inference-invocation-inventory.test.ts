@@ -92,10 +92,10 @@ describe('server-side inference invocation inventory', () => {
     );
   });
 
-  it('records the first covered call family without claiming streaming completion', () => {
+  it('records the first fully migrated call family', () => {
     const chat = inventory.sources.find(
       (source) => source.file === 'packages/api/src/routes/chat.openapi.ts'
     );
-    expect(chat).toMatchObject({ status: 'partial', coveredCount: 3, observedCount: 7 });
+    expect(chat).toMatchObject({ status: 'migrated', coveredCount: 7, observedCount: 7 });
   });
 });

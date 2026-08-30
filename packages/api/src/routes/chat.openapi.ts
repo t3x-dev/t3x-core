@@ -37,6 +37,8 @@ import {
   type InferenceAttempt,
   type InferenceFinishStatus,
   type InferenceReceipt,
+  type InferenceStream,
+  type InferenceTerminal,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
@@ -670,6 +672,83 @@ function createChatReceipt(
   };
 }
 
+function createStreamingChatReceipt(input: {
+  attempt: InferenceAttempt;
+  providerId: ChatRuntimeProviderId;
+  resolvedModel: string;
+  usage: { input_tokens?: number; output_tokens?: number };
+  finishStatus: InferenceFinishStatus;
+  startedAt: string;
+}): InferenceReceipt {
+  return {
+    contractVersion: INFERENCE_CONTRACT_VERSION,
+    generationId: input.attempt.generationId,
+    runId: input.attempt.runId,
+    requestedModel: input.attempt.requestedModel,
+    resolvedModel: input.resolvedModel,
+    resolvedProvider: input.providerId,
+    usage: {
+      inputTokens: input.usage.input_tokens ?? 0,
+      outputTokens: input.usage.output_tokens ?? 0,
+    },
+    finishStatus: input.finishStatus,
+    startedAt: input.startedAt,
+    completedAt: new Date().toISOString(),
+  };
+}
+
+function createTerminalDeferred(): {
+  promise: Promise<InferenceTerminal>;
+  resolve: (terminal: InferenceTerminal) => void;
+} {
+  let resolvePromise!: (terminal: InferenceTerminal) => void;
+  let resolved = false;
+  const promise = new Promise<InferenceTerminal>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve(terminal) {
+      if (resolved) return;
+      resolved = true;
+      resolvePromise(terminal);
+    },
+  };
+}
+
+function createLazyAsyncIterable<T>(factory: () => AsyncIterable<T>): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator]() {
+      return factory()[Symbol.asyncIterator]();
+    },
+  };
+}
+
+function inferenceStreamResponseBody(
+  stream: InferenceStream<Uint8Array>
+): ReadableStream<Uint8Array> {
+  const iterator = stream.chunks[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (!next.done) {
+          controller.enqueue(next.value);
+          return;
+        }
+        await stream.terminal;
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      await iterator.return?.(reason);
+      await stream.terminal;
+    },
+  });
+}
+
 // -----------------------------------------------------------------------
 // OpenAPI route definitions
 // -----------------------------------------------------------------------
@@ -1003,11 +1082,31 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
   const systemMessage = messages.find((m) => m.role === 'system');
   const otherMessages = messages.filter((m) => m.role !== 'system');
 
-  const stream = createHeartbeatSseStream({
-    async start(controller) {
+  const terminal = createTerminalDeferred();
+  const upstreamAbort = new AbortController();
+  let startedAt: string | undefined;
+  let attempt: InferenceAttempt | undefined;
+  let upstreamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let cancelled = false;
+  let resolvedModel = model;
+  let finishStatus: InferenceFinishStatus = 'unknown';
+  let observedProviderTerminal = false;
+  const usage: { input_tokens?: number; output_tokens?: number } = {};
+  const currentAttempt = (): InferenceAttempt => {
+    if (!attempt) throw new Error('Inference stream started before admission');
+    return attempt;
+  };
+  const currentStartedAt = (): string => startedAt ?? currentAttempt().createdAt;
+
+  const directStreamSource = {
+    async start(controller: ReadableStreamDefaultController<Uint8Array>) {
+      startedAt = new Date().toISOString();
       let upstreamResponse: Response | undefined;
-      let resolvedModel = model;
-      const usage: { input_tokens?: number; output_tokens?: number } = {};
+      const upstreamTimeout = setTimeout(
+        () => upstreamAbort.abort(new Error('Provider stream timed out')),
+        120_000
+      );
+      upstreamTimeout.unref?.();
       try {
         const proxyFetch = getProxyFetch();
         if (providerId === 'anthropic') {
@@ -1035,7 +1134,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                 content: message.content,
               })),
             }),
-            signal: AbortSignal.timeout(120000),
+            signal: upstreamAbort.signal,
           })) as unknown as Response;
         } else if (providerId === 'openai') {
           if (body.web_search) {
@@ -1062,7 +1161,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   content: toOpenAIResponsesInputContent(message.content),
                 })),
               }),
-              signal: AbortSignal.timeout(120000),
+              signal: upstreamAbort.signal,
             })) as unknown as Response;
           } else {
             upstreamResponse = (await proxyFetch('https://api.openai.com/v1/chat/completions', {
@@ -1089,7 +1188,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   content: toOpenAIContent(message.content),
                 })),
               }),
-              signal: AbortSignal.timeout(120000),
+              signal: upstreamAbort.signal,
             })) as unknown as Response;
           }
         } else if (providerId === 'google-ai') {
@@ -1132,7 +1231,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   tools: [{ googleSearch: {} }],
                 }),
               }),
-              signal: AbortSignal.timeout(120000),
+              signal: upstreamAbort.signal,
             }
           )) as unknown as Response;
         } else {
@@ -1145,8 +1244,8 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
           throw new Error(`${providerId} API error: ${upstreamResponse.status}`);
         }
 
-        const reader = upstreamResponse.body?.getReader();
-        if (!reader) {
+        upstreamReader = upstreamResponse.body?.getReader();
+        if (!upstreamReader) {
           throw new Error(`No response body from ${providerId} API`);
         }
 
@@ -1174,7 +1273,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         };
 
         while (true) {
-          const { done, value } = await reader.read();
+          const { done, value } = await upstreamReader.read();
           if (done) break;
 
           buffer += decoder.decode(value as Uint8Array, { stream: true });
@@ -1201,6 +1300,8 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
 
             if (!dataStr) continue;
             if (providerId === 'openai' && dataStr === '[DONE]') {
+              observedProviderTerminal = true;
+              if (finishStatus === 'unknown') finishStatus = 'stop';
               emitDone();
               continue;
             }
@@ -1277,6 +1378,8 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                 }
 
                 if (openAIEventType === 'response.completed') {
+                  observedProviderTerminal = true;
+                  finishStatus = 'stop';
                   emitDone();
                   continue;
                 }
@@ -1313,6 +1416,8 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   );
                 }
                 if (typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0) {
+                  observedProviderTerminal = true;
+                  finishStatus = normalizeFinishStatus(choice.finish_reason);
                   emitDone();
                 }
               }
@@ -1365,6 +1470,8 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                   typeof candidate.finishReason === 'string' &&
                   candidate.finishReason.length > 0
                 ) {
+                  observedProviderTerminal = true;
+                  finishStatus = normalizeFinishStatus(candidate.finishReason);
                   emitDone();
                 }
               }
@@ -1402,11 +1509,17 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
                 );
               }
             } else if (eventType === 'message_delta') {
+              const delta = parsed.delta as Record<string, unknown> | undefined;
+              if (typeof delta?.stop_reason === 'string') {
+                finishStatus = normalizeFinishStatus(delta.stop_reason);
+              }
               const u = parsed.usage as Record<string, number> | undefined;
               if (u?.output_tokens) {
                 usage.output_tokens = u.output_tokens;
               }
             } else if (eventType === 'message_stop') {
+              observedProviderTerminal = true;
+              if (finishStatus === 'unknown') finishStatus = 'stop';
               emitDone();
             }
           }
@@ -1418,14 +1531,58 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         if (!emittedDoneEvent) {
           emitDone();
         }
-        reader.releaseLock();
-      } catch (err) {
-        pinoLogger.error({ err }, 'Chat stream error');
-        controller.enqueue(
-          encodeSseEvent(JSON.stringify({ type: 'error', message: sanitizeError(err) }))
+
+        const receipt = createStreamingChatReceipt({
+          attempt: currentAttempt(),
+          providerId,
+          resolvedModel,
+          usage,
+          finishStatus,
+          startedAt: currentStartedAt(),
+        });
+        terminal.resolve(
+          observedProviderTerminal
+            ? { kind: 'receipt', receipt }
+            : {
+                kind: 'uncertain',
+                reason: 'interrupted_stream',
+                detail: 'Provider stream ended without a terminal event',
+                partialReceipt: receipt,
+              }
         );
-        controller.enqueue(encodeSseEvent('[DONE]'));
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        terminal.resolve({
+          kind: 'uncertain',
+          reason: cancelled ? 'interrupted_stream' : 'provider_error',
+          detail,
+          partialReceipt: createStreamingChatReceipt({
+            attempt: currentAttempt(),
+            providerId,
+            resolvedModel,
+            usage,
+            finishStatus: cancelled ? 'cancelled' : 'error',
+            startedAt: currentStartedAt(),
+          }),
+        });
+        if (!cancelled) {
+          pinoLogger.error({ err }, 'Chat stream error');
+          try {
+            controller.enqueue(
+              encodeSseEvent(JSON.stringify({ type: 'error', message: sanitizeError(err) }))
+            );
+            controller.enqueue(encodeSseEvent('[DONE]'));
+          } catch {
+            // The downstream may have disconnected while the provider failed.
+          }
+        }
       } finally {
+        clearTimeout(upstreamTimeout);
+        try {
+          upstreamReader?.releaseLock();
+        } catch {
+          // A cancelled reader may already have released its lock.
+        }
         // Record token usage (fire-and-forget, only if project_id provided)
         if (body?.project_id && (usage.input_tokens || usage.output_tokens)) {
           // biome-ignore lint/suspicious/noExplicitAny: generic error handler
@@ -1443,12 +1600,77 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
             )
             .catch((err) => pinoLogger.warn({ err }, 'Failed to record stream chat usage'));
         }
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Closing an already-cancelled response stream is a no-op.
+        }
       }
     },
-  });
+    async cancel(reason) {
+      cancelled = true;
+      upstreamAbort.abort(reason);
+      try {
+        await upstreamReader?.cancel(reason);
+      } catch {
+        // Cancellation is already represented by the terminal state.
+      }
+      terminal.resolve({
+        kind: 'uncertain',
+        reason: 'interrupted_stream',
+        detail: reason instanceof Error ? reason.message : String(reason ?? 'client disconnected'),
+        partialReceipt: createStreamingChatReceipt({
+          attempt: currentAttempt(),
+          providerId,
+          resolvedModel,
+          usage,
+          finishStatus: 'cancelled',
+          startedAt: currentStartedAt(),
+        }),
+      });
+    },
+  };
+  const directChunks = createLazyAsyncIterable(() => createHeartbeatSseStream(directStreamSource));
 
-  return new Response(stream, {
+  let inferenceStream: InferenceStream<Uint8Array>;
+  try {
+    inferenceStream = await (getInferenceRuntime(c) ?? defaultInferenceRuntime).stream(
+      {
+        runId: resolveInferenceRunId(c),
+        feature: 'generation.chat.stream',
+        requestedModel: body.model?.trim() || model,
+        scope: {
+          actor: resolveInferenceActor(c),
+          ...(body.project_id && { projectId: body.project_id, projectVisibility: 'unknown' }),
+        },
+      },
+      async (authorizedAttempt) => {
+        attempt = authorizedAttempt;
+        return { chunks: directChunks, terminal: terminal.promise };
+      }
+    );
+  } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'RATE_LIMITED' as const, message: err.message },
+        },
+        429
+      );
+    }
+    pinoLogger.error({ err }, 'Chat stream setup error');
+    const classified = classifyChatError(err);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: classified.code, message: sanitizeError(err) },
+      },
+      classified.status
+    );
+  }
+
+  return new Response(inferenceStreamResponseBody(inferenceStream), {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
