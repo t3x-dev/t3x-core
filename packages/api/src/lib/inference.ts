@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { MiddlewareHandler } from 'hono';
 
 /**
  * Provider-neutral inference execution contracts.
@@ -409,4 +410,35 @@ export function createInferenceRuntime(options: InferenceRuntimeOptions = {}): I
       };
     },
   };
+}
+
+type InferenceRuntimeContext = {
+  get(key: string): unknown;
+  set(key: string, value: unknown): void;
+};
+
+function asInferenceRuntimeContext(context: unknown): InferenceRuntimeContext {
+  return context as InferenceRuntimeContext;
+}
+
+/** Bind one application-scoped runtime without introducing process-global state. */
+export function createInferenceRuntimeMiddleware(runtime: InferenceRuntime): MiddlewareHandler {
+  return async (context, next) => {
+    asInferenceRuntimeContext(context).set('inferenceRuntime', runtime);
+    await next();
+  };
+}
+
+/** Read the runtime installed by createApp or an embedding application. */
+export function getInferenceRuntime(context: unknown): InferenceRuntime | undefined {
+  const runtime = asInferenceRuntimeContext(context).get('inferenceRuntime');
+  if (
+    !runtime ||
+    typeof runtime !== 'object' ||
+    typeof (runtime as InferenceRuntime).execute !== 'function' ||
+    typeof (runtime as InferenceRuntime).stream !== 'function'
+  ) {
+    return undefined;
+  }
+  return runtime as InferenceRuntime;
 }

@@ -25,6 +25,7 @@ import {
 } from './lib/deployment-capabilities';
 import {
   createInferenceRuntime,
+  createInferenceRuntimeMiddleware,
   type InferenceRuntime,
   type InferenceRuntimeOptions,
 } from './lib/inference';
@@ -171,6 +172,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
   app.use('*', createDeploymentCapabilitiesMiddleware(options?.deploymentCapabilities));
+  app.use('*', createInferenceRuntimeMiddleware(inferenceRuntime));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
   app.use('*', responseCachePolicyMiddleware);
