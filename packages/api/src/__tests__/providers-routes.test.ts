@@ -42,11 +42,17 @@ vi.mock('../lib/provider-registry', () => ({
   saveRegistryConfig: vi.fn(() => Promise.resolve()),
 }));
 
+import {
+  type DeploymentCapabilities,
+  SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+} from '@t3x-dev/api-client';
+import { createDeploymentCapabilitiesMiddleware } from '../lib/deployment-capabilities';
 import { refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { providersRoutes } from '../routes/providers.openapi';
 
 describe('Provider Routes', () => {
   const app = new Hono();
+  app.use('*', createDeploymentCapabilitiesMiddleware());
   app.use('*', async (c, next) => {
     // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
     (c as any).set('apiKey', {
@@ -59,8 +65,12 @@ describe('Provider Routes', () => {
   });
   app.route('/', providersRoutes);
 
-  function principalApp(principalKind: 'human' | 'agent' | 'service') {
+  function principalApp(
+    principalKind: 'human' | 'agent' | 'service',
+    capabilities: DeploymentCapabilities = SELF_HOSTED_DEPLOYMENT_CAPABILITIES
+  ) {
     const principal = new Hono();
+    principal.use('*', createDeploymentCapabilitiesMiddleware(capabilities));
     principal.use('*', async (c, next) => {
       // biome-ignore lint/suspicious/noExplicitAny: test-only authenticated context fixture
       (c as any).set('apiKey', {
@@ -158,6 +168,36 @@ describe('Provider Routes', () => {
   it('keeps provider administration available to configured human operators', async () => {
     mockRegistry.listProviders.mockReturnValue([]);
     expect((await principalApp('human').request('/v1/providers')).status).toBe(200);
+  });
+
+  it('rejects provider administration server-side in managed deployments', async () => {
+    const managed = principalApp('human', {
+      ...SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+      deployment_mode: 'managed',
+      provider_credentials: { administration: 'disabled' },
+      inference: { mode: 'managed' },
+      identity: {
+        ...SELF_HOSTED_DEPLOYMENT_CAPABILITIES.identity,
+        mode: 'managed',
+        auth_operations: ['sign_in', 'sign_out'],
+      },
+      usage: { mode: 'credits' },
+      ui_extensions: { account: true, billing: true },
+    });
+
+    expect((await managed.request('/v1/providers')).status).toBe(403);
+    expect(
+      (
+        await managed.request('/v1/providers/local/openai', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: 'must-not-be-stored' }),
+        })
+      ).status
+    ).toBe(403);
+    expect(mockRegistry.listProviders).not.toHaveBeenCalled();
+    const bundle = await storage.getProviderCredentialBundle(mockDB);
+    expect(bundle.secrets.OPENAI_API_KEY).toBeUndefined();
   });
 
   it('supports explicit human API-key operator bootstrap', async () => {

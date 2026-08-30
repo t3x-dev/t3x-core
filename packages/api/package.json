@@ -41,6 +41,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@mozilla/readability": "^0.6.0",
     "@scalar/hono-api-reference": "^0.9.30",
+    "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/application": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/runner": "workspace:*",

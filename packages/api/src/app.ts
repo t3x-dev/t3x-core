@@ -20,6 +20,10 @@ import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import {
+  createDeploymentCapabilitiesMiddleware,
+  type DeploymentCapabilitiesSource,
+} from './lib/deployment-capabilities';
+import {
   createInferenceRuntime,
   type InferenceRuntime,
   type InferenceRuntimeOptions,
@@ -59,6 +63,7 @@ import {
   createWorkspaceSourceTransitionRoutes,
   curateRoutes,
   deployAgentRoutes,
+  deploymentCapabilitiesRoutes,
   diffRoutes,
   docsYopsRoutes,
   draftsRoutes,
@@ -134,6 +139,8 @@ export interface CreateAppOptions {
   transitionControlPlane?: TransitionControlPlaneOptions;
   /** Provider-neutral execution gateway and admission policy. Defaults preserve OSS behavior. */
   inference?: InferenceRuntimeOptions;
+  /** Public deployment-scoped capabilities. Dynamic sources fail closed per request. */
+  deploymentCapabilities?: DeploymentCapabilitiesSource;
 }
 
 export interface CreateAppResult {
@@ -163,6 +170,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // → L1 Rate Limit → Auth/[extensions] → L2 Rate Limit). The cache policy wraps
   // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
+  app.use('*', createDeploymentCapabilitiesMiddleware(options?.deploymentCapabilities));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
   app.use('*', responseCachePolicyMiddleware);
@@ -211,6 +219,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // Mount routes
   api.route('/', statusRoutes);
+  api.route('/', deploymentCapabilitiesRoutes);
   api.route('/', namespaceRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
@@ -307,6 +316,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     },
     servers: [{ url: 'http://localhost:8000/api', description: 'Local development' }],
     tags: [
+      { name: 'Deployment', description: 'Public deployment capability discovery' },
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },

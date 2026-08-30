@@ -45,6 +45,7 @@ function createTestApp() {
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.get('/api/docs', (c) => c.json({ docs: true }));
   app.get('/api/openapi.json', (c) => c.json({ openapi: '3.0' }));
+  app.get('/api/v1/deployment/capabilities', (c) => c.json({ version: 1 }));
   app.get('/api/v1/share/:token', (c) => c.json({ shared: true }));
   app.post('/api/v1/runs/ingest', (c) => c.json({ ingested: true }));
   app.get('/api/v1/runs/by-runner-id/:id', (c) => c.json({ run: c.req.param('id') }));
@@ -190,6 +191,15 @@ describe('Auth Middleware', () => {
       process.env.AUTH_DISABLED = 'false';
 
       const res = await app.request('/api/openapi.json');
+
+      expect(res.status).toBe(200);
+      expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
+    });
+
+    it('bypasses auth for public deployment capabilities', async () => {
+      process.env.AUTH_DISABLED = 'false';
+
+      const res = await app.request('/api/v1/deployment/capabilities');
 
       expect(res.status).toBe(200);
       expect(mockFindApiKeyByValue).not.toHaveBeenCalled();

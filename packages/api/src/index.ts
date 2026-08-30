@@ -5,12 +5,29 @@
  * so consumers (apps/api thin launcher, t3x_cloud) can import from '@t3x-dev/api'.
  */
 
+export {
+  type AccountOperation,
+  AccountOperationSchema,
+  type AuthOperation,
+  AuthOperationSchema,
+  DEPLOYMENT_CAPABILITIES_VERSION,
+  type DeploymentCapabilities,
+  DeploymentCapabilitiesSchema,
+  SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+  UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
+} from '@t3x-dev/api-client';
 // Standalone runtime database maintenance.
 export { cleanupExpiredRateLimitBuckets, cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
 export { createApp } from './app';
 // Database
 export { closeDB, getDB, getRuntimePostgresClient } from './lib/db';
+export {
+  createDeploymentCapabilitiesMiddleware,
+  type DeploymentCapabilitiesSource,
+  getDeploymentCapabilities,
+  parseDeploymentCapabilities,
+} from './lib/deployment-capabilities';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
 export {
