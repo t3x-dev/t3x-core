@@ -16,7 +16,9 @@ export { createError, errorResponse, zodErrorHook } from './lib/errors';
 export {
   allowAllInferenceAdmissionPolicy,
   createInferenceRuntime,
+  createInferenceRuntimeMiddleware,
   directInferenceGateway,
+  getInferenceRuntime,
   INFERENCE_CONTRACT_VERSION,
   type InferenceActor,
   type InferenceAdmission,
