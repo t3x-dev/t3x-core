@@ -21,6 +21,7 @@ import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import {
   createInferenceRuntime,
+  createInferenceRuntimeMiddleware,
   type InferenceRuntime,
   type InferenceRuntimeOptions,
 } from './lib/inference';
@@ -163,6 +164,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // → L1 Rate Limit → Auth/[extensions] → L2 Rate Limit). The cache policy wraps
   // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
+  app.use('*', createInferenceRuntimeMiddleware(inferenceRuntime));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
   app.use('*', responseCachePolicyMiddleware);

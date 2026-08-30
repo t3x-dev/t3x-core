@@ -22,6 +22,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { createInferenceRuntime, createInferenceRuntimeMiddleware } from '../lib/inference';
 import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-registry';
 import { chatRoutes, generationRoutes } from '../routes/chat.openapi';
 
@@ -116,6 +117,128 @@ describe('Chat Routes', () => {
   });
 
   describe('POST /v1/chat', () => {
+    it('denies before provider I/O when the injected admission policy rejects the attempt', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const authorize = vi.fn(async () => ({
+        outcome: 'denied' as const,
+        code: 'quota_exhausted',
+        reason: 'No hosted generation grant remains',
+      }));
+      const deniedApp = new Hono();
+      deniedApp.use(
+        '*',
+        createInferenceRuntimeMiddleware(
+          createInferenceRuntime({
+            createGenerationId: () => 'gen_denied_chat',
+            admissionPolicy: {
+              authorize,
+              settle: vi.fn(),
+              release: vi.fn(),
+            },
+          })
+        )
+      );
+      deniedApp.route('/', generationRoutes);
+
+      const response = await deniedApp.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          messages: [{ role: 'user', content: 'Do not invoke upstream' }],
+        }),
+      });
+
+      expect(response.status).toBe(429);
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        error: { code: 'RATE_LIMITED', message: 'No hosted generation grant remains' },
+      });
+      expect(authorize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationId: 'gen_denied_chat',
+          feature: 'generation.chat.complete',
+          scope: { actor: { kind: 'anonymous', id: null } },
+        })
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('settles one normalized receipt for successful non-streaming generation', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              model: 'gpt-5.4-resolved',
+              choices: [{ message: { content: 'Accounted response' }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 17, completion_tokens: 9 },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+      );
+      const settle = vi.fn(async () => {});
+      const accountedApp = new Hono();
+      accountedApp.use(
+        '*',
+        createInferenceRuntimeMiddleware(
+          createInferenceRuntime({
+            createGenerationId: () => 'gen_accounted_chat',
+            admissionPolicy: {
+              async authorize(attempt) {
+                return {
+                  outcome: 'admitted',
+                  admission: { id: `admission:${attempt.generationId}` },
+                };
+              },
+              settle,
+              release: vi.fn(),
+            },
+          })
+        )
+      );
+      accountedApp.route('/', generationRoutes);
+
+      const response = await accountedApp.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-5.4',
+          messages: [{ role: 'user', content: 'Account this request' }],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(settle).toHaveBeenCalledOnce();
+      expect(settle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          admission: { id: 'admission:gen_accounted_chat' },
+          terminal: {
+            kind: 'receipt',
+            receipt: expect.objectContaining({
+              generationId: 'gen_accounted_chat',
+              requestedModel: 'gpt-5.4',
+              resolvedModel: 'gpt-5.4-resolved',
+              resolvedProvider: 'openai',
+              usage: { inputTokens: 17, outputTokens: 9 },
+              finishStatus: 'stop',
+            }),
+          },
+        })
+      );
+    });
+
     it('returns 400 for invalid JSON', async () => {
       const res = await app.request('/v1/chat', {
         method: 'POST',

@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "patternVersion": 1,
+  "scope": [
+    "apps/api/src",
+    "apps/mcp/src",
+    "apps/runner/src",
+    "packages/api/src",
+    "packages/core/src",
+    "packages/mcp/src"
+  ],
+  "excludedAdapterRoots": [
+    "packages/core/src/providers/embedding",
+    "packages/core/src/providers/llm"
+  ],
+  "totalObservedCalls": 35,
+  "sources": [
+    {
+      "file": "packages/api/src/lib/proposal-generation.ts",
+      "feature": "proposal-generation",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/lib/provider-registry.ts",
+      "feature": "generation-fallback",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/lib/source-chat-draft-reply.ts",
+      "feature": "source-chat-draft-reply",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/lib/usage-tracking.ts",
+      "feature": "legacy-usage-wrapper",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/ops/leaf-gen.ts",
+      "feature": "leaf-generation-operation",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/routes/agent-drafts.openapi.ts",
+      "feature": "agent-drafts",
+      "status": "pending",
+      "observedCount": 2
+    },
+    {
+      "file": "packages/api/src/routes/chat.openapi.ts",
+      "feature": "generation-chat",
+      "status": "partial",
+      "coveredCount": 3,
+      "observedCount": 7,
+      "note": "Non-streaming chat is covered; four streaming transports remain."
+    },
+    {
+      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "feature": "draft-workflows",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/routes/leaves-ml.openapi.ts",
+      "feature": "leaf-ml-routes",
+      "status": "pending",
+      "observedCount": 2
+    },
+    {
+      "file": "packages/core/src/extractors/v2/compress.ts",
+      "feature": "extraction-compression",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/extractors/v2/pipeline.ts",
+      "feature": "extraction-pipeline",
+      "status": "pending",
+      "observedCount": 3
+    },
+    {
+      "file": "packages/core/src/leaf/constraintSuggester.ts",
+      "feature": "constraint-suggestion",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/leaf/generate.ts",
+      "feature": "leaf-generation",
+      "status": "pending",
+      "observedCount": 2
+    },
+    {
+      "file": "packages/core/src/leaf/multi-round-generate.ts",
+      "feature": "multi-round-leaf-generation",
+      "status": "pending",
+      "observedCount": 4
+    },
+    {
+      "file": "packages/core/src/pipeline/ambiguityDetector.ts",
+      "feature": "ambiguity-detection",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/pipeline/driftDetector.ts",
+      "feature": "drift-detection",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/providers/registry.ts",
+      "feature": "provider-connection-test",
+      "status": "provider-administration",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/semantic/businessGate.ts",
+      "feature": "business-gate",
+      "status": "pending",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/semantic/gate.ts",
+      "feature": "semantic-gate",
+      "status": "pending",
+      "observedCount": 2
+    },
+    {
+      "file": "packages/mcp/src/tools/core/generate.ts",
+      "feature": "external-mcp-local-generation",
+      "status": "external-client",
+      "observedCount": 1,
+      "note": "Runs in the external MCP process with its configured provider; it is not a hosted server call."
+    }
+  ]
+}

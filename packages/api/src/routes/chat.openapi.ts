@@ -9,17 +9,35 @@
  * GET  /v1/chat/providers — List available providers (OpenAPI route)
  */
 
+import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { GenerationRuntimeProviderId, LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
+import type {
+  ApiKey,
+  GenerationRuntimeProviderId,
+  LLMPrompt,
+  LLMProvider,
+  LLMResult,
+} from '@t3x-dev/core';
 import {
   GENERATION_RUNTIME_PROVIDER_IDS,
   isGenerationRuntimeProviderId,
   LLMProviderError,
 } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
+import type { Context } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  INFERENCE_CONTRACT_VERSION,
+  type InferenceActor,
+  InferenceAdmissionDeniedError,
+  type InferenceAttempt,
+  type InferenceFinishStatus,
+  type InferenceReceipt,
+} from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
@@ -570,13 +588,87 @@ async function callClaudeNonStreaming(
   };
 }
 
-// ============================================================================
-// Routes
-// ============================================================================
+type InferenceContextReader = {
+  get(key: string): unknown;
+};
 
-export const generationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
-/** @deprecated Compatibility export for callers that still use the old capability name. */
-export const chatRoutes = generationRoutes;
+function readInferenceContext(c: Context): InferenceContextReader {
+  return c as unknown as InferenceContextReader;
+}
+
+function getAuthenticatedUserId(c: Context): string | undefined {
+  const context = readInferenceContext(c);
+  const hostedUserId = context.get('userId');
+  if (typeof hostedUserId === 'string' && hostedUserId.length > 0) return hostedUserId;
+  return getUserId(c);
+}
+
+function resolveInferenceActor(c: Context): InferenceActor {
+  const context = readInferenceContext(c);
+  const hostedUserId = context.get('userId');
+  if (typeof hostedUserId === 'string' && hostedUserId.length > 0) {
+    return { kind: 'user', id: hostedUserId };
+  }
+
+  const apiKey = context.get('apiKey') as ApiKey | undefined;
+  if (apiKey?.principal_kind === 'human' && apiKey.user_id) {
+    return { kind: 'user', id: apiKey.user_id };
+  }
+  if (apiKey?.principal_kind === 'agent' || apiKey?.principal_kind === 'service') {
+    return { kind: apiKey.principal_kind, id: `${apiKey.principal_kind}:api-key:${apiKey.id}` };
+  }
+  return { kind: 'anonymous', id: null };
+}
+
+function resolveInferenceRunId(c: Context): string {
+  const requestId = readInferenceContext(c).get('requestId');
+  return typeof requestId === 'string' && requestId.length > 0
+    ? `request:${requestId}`
+    : `request:${randomUUID()}`;
+}
+
+function normalizeFinishStatus(value: string | undefined): InferenceFinishStatus {
+  switch (value?.toLowerCase()) {
+    case 'stop':
+    case 'end_turn':
+      return 'stop';
+    case 'length':
+    case 'max_tokens':
+      return 'length';
+    case 'tool_call':
+    case 'tool_calls':
+    case 'tool_use':
+      return 'tool_call';
+    case 'content_filter':
+    case 'safety':
+      return 'content_filter';
+    default:
+      return 'unknown';
+  }
+}
+
+function createChatReceipt(
+  attempt: InferenceAttempt,
+  providerId: ChatRuntimeProviderId,
+  result: ChatResponse,
+  startedAt: string
+): InferenceReceipt {
+  return {
+    contractVersion: INFERENCE_CONTRACT_VERSION,
+    generationId: attempt.generationId,
+    runId: attempt.runId,
+    requestedModel: attempt.requestedModel,
+    resolvedModel: result.model,
+    resolvedProvider: providerId,
+    usage: {
+      inputTokens: result.usage?.input_tokens ?? 0,
+      outputTokens: result.usage?.output_tokens ?? 0,
+    },
+    finishStatus: normalizeFinishStatus(result.finish_reason),
+    startedAt,
+    completedAt: new Date().toISOString(),
+  };
+}
 
 // -----------------------------------------------------------------------
 // OpenAPI route definitions
@@ -646,6 +738,11 @@ const providersRoute = createRoute({
 // POST /v1/chat — Non-streaming chat (OpenAPI handler)
 // -----------------------------------------------------------------------
 
+const defaultInferenceRuntime = createInferenceRuntime();
+export const generationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+/** @deprecated Compatibility export for callers that still use the old capability name. */
+export const chatRoutes = generationRoutes;
+
 generationRoutes.openapi(generationRoute, async (c) => {
   const body = c.req.valid('json') as {
     messages?: unknown[];
@@ -678,7 +775,7 @@ generationRoutes.openapi(generationRoute, async (c) => {
     provider: body.provider,
     model: body.model,
     projectId: body.project_id,
-    userId: getUserId(c),
+    userId: getAuthenticatedUserId(c),
   });
   if ('error' in target) {
     return c.json({ success: false as const, error: target.error }, 400);
@@ -702,29 +799,65 @@ generationRoutes.openapi(generationRoute, async (c) => {
   );
 
   try {
-    const result = await (async () => {
-      if (providerId === 'anthropic' && (body.thinking || body.web_search)) {
-        const apiKey = await resolveProviderApiKey(registry, providerId);
-        if (!apiKey) {
-          throw new Error('Anthropic API key not configured');
+    const execution = await (getInferenceRuntime(c) ?? defaultInferenceRuntime).execute(
+      {
+        runId: resolveInferenceRunId(c),
+        feature: 'generation.chat.complete',
+        requestedModel: body.model?.trim() || model,
+        scope: {
+          actor: resolveInferenceActor(c),
+          ...(body.project_id && { projectId: body.project_id, projectVisibility: 'unknown' }),
+        },
+      },
+      async (attempt) => {
+        const startedAt = new Date().toISOString();
+        let result: ChatResponse;
+
+        if (providerId === 'anthropic' && (body.thinking || body.web_search)) {
+          const apiKey = await resolveProviderApiKey(registry, providerId);
+          if (!apiKey) {
+            return {
+              ok: false,
+              error: new Error('Anthropic API key not configured'),
+              terminal: { kind: 'released', reason: 'pre_upstream_failure' },
+            };
+          }
+
+          result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
+            thinking: body.thinking,
+          });
+        } else if (providerId === 'openai') {
+          const apiKey = await resolveProviderApiKey(registry, providerId);
+          if (!apiKey) {
+            return {
+              ok: false,
+              error: new Error('OpenAI API key not configured'),
+              terminal: { kind: 'released', reason: 'pre_upstream_failure' },
+            };
+          }
+
+          result = await callOpenAINonStreaming(messages, model, apiKey, temperature, maxTokens);
+        } else {
+          result = await callProviderNonStreaming(
+            provider,
+            model,
+            messages,
+            temperature,
+            maxTokens
+          );
         }
 
-        return callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
-          thinking: body.thinking,
-        });
+        return {
+          ok: true,
+          value: result,
+          terminal: {
+            kind: 'receipt',
+            receipt: createChatReceipt(attempt, providerId, result, startedAt),
+          },
+        };
       }
-
-      if (providerId === 'openai') {
-        const apiKey = await resolveProviderApiKey(registry, providerId);
-        if (!apiKey) {
-          throw new Error('OpenAI API key not configured');
-        }
-
-        return callOpenAINonStreaming(messages, model, apiKey, temperature, maxTokens);
-      }
-
-      return callProviderNonStreaming(provider, model, messages, temperature, maxTokens);
-    })();
+    );
+    const result = execution.value;
 
     if (body?.project_id && result.usage) {
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler
@@ -745,6 +878,15 @@ generationRoutes.openapi(generationRoute, async (c) => {
 
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'RATE_LIMITED' as const, message: err.message },
+        },
+        429
+      );
+    }
     pinoLogger.error({ err }, 'Chat error');
     const classified = classifyChatError(err);
     return c.json(
@@ -808,7 +950,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
     provider: body.provider,
     model: body.model,
     projectId: body.project_id,
-    userId: getUserId(c),
+    userId: getAuthenticatedUserId(c),
     supportedProviders: GENERATION_RUNTIME_PROVIDER_IDS,
   });
   if ('error' in target) {
