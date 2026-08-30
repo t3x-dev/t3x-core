@@ -1,4 +1,4 @@
-import { ProvidersSettingsPanel } from '@/components/settings/ProvidersSettingsPanel';
+import { ProviderSettingsCapabilityGate } from '@/components/settings/ProviderSettingsCapabilityGate';
 
 export default function ProvidersPage() {
   return (
@@ -9,7 +9,7 @@ export default function ProvidersPage() {
           Configure LLM, embedding, and NLP providers for T3X features.
         </p>
       </div>
-      <ProvidersSettingsPanel />
+      <ProviderSettingsCapabilityGate />
     </div>
   );
 }
