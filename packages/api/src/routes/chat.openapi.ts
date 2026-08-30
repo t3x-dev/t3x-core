@@ -724,6 +724,23 @@ function createLazyAsyncIterable<T>(factory: () => AsyncIterable<T>): AsyncItera
   };
 }
 
+async function* readableStreamChunks<T>(stream: ReadableStream<T>): AsyncGenerator<T, void, void> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) return;
+      yield next.value;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
 function inferenceStreamResponseBody(
   stream: InferenceStream<Uint8Array>
 ): ReadableStream<Uint8Array> {
@@ -742,7 +759,7 @@ function inferenceStreamResponseBody(
         controller.error(error);
       }
     },
-    async cancel(reason) {
+    async cancel(reason: unknown) {
       await iterator.return?.(reason);
       await stream.terminal;
     },
@@ -1607,7 +1624,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         }
       }
     },
-    async cancel(reason) {
+    async cancel(reason: unknown) {
       cancelled = true;
       upstreamAbort.abort(reason);
       try {
@@ -1630,7 +1647,9 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
       });
     },
   };
-  const directChunks = createLazyAsyncIterable(() => createHeartbeatSseStream(directStreamSource));
+  const directChunks = createLazyAsyncIterable(() =>
+    readableStreamChunks(createHeartbeatSseStream(directStreamSource))
+  );
 
   let inferenceStream: InferenceStream<Uint8Array>;
   try {
