@@ -54,10 +54,10 @@
     {
       "file": "packages/api/src/routes/chat.openapi.ts",
       "feature": "generation-chat",
-      "status": "partial",
-      "coveredCount": 3,
+      "status": "migrated",
+      "coveredCount": 7,
       "observedCount": 7,
-      "note": "Non-streaming chat is covered; four streaming transports remain."
+      "note": "Non-streaming and provider-specific streaming transports share the execution lifecycle."
     },
     {
       "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
