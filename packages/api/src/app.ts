@@ -19,6 +19,11 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import {
+  createInferenceRuntime,
+  type InferenceRuntime,
+  type InferenceRuntimeOptions,
+} from './lib/inference';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
   createWorkspaceSourceRunnerProvider,
@@ -127,10 +132,14 @@ export interface CreateAppOptions {
   workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
   /** Server-owned Transition verification providers and external predicate allowlist. */
   transitionControlPlane?: TransitionControlPlaneOptions;
+  /** Provider-neutral execution gateway and admission policy. Defaults preserve OSS behavior. */
+  inference?: InferenceRuntimeOptions;
 }
 
 export interface CreateAppResult {
   app: Hono;
+  /** Provider-neutral inference boundary composed for this application. */
+  inferenceRuntime: InferenceRuntime;
   /** Pass to the `websocket` option of @hono/node-server v2 `serve()`. */
   websocket: ReturnType<typeof setupWebSocket>['websocket'];
 }
@@ -138,6 +147,7 @@ export interface CreateAppResult {
 export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
   const rateLimitStore = options?.rateLimitStore ?? databaseRateLimitStore;
+  const inferenceRuntime = createInferenceRuntime(options?.inference);
   const transitionControlPlane =
     options?.workspaceSourceTransition?.runner === undefined
       ? options?.transitionControlPlane
@@ -408,7 +418,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     );
   });
 
-  return { app, websocket };
+  return { app, inferenceRuntime, websocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──

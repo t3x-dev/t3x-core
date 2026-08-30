@@ -13,6 +13,33 @@ export { createApp } from './app';
 export { closeDB, getDB, getRuntimePostgresClient } from './lib/db';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
+export {
+  allowAllInferenceAdmissionPolicy,
+  createInferenceRuntime,
+  directInferenceGateway,
+  INFERENCE_CONTRACT_VERSION,
+  type InferenceActor,
+  type InferenceAdmission,
+  type InferenceAdmissionDecision,
+  InferenceAdmissionDeniedError,
+  type InferenceAdmissionPolicy,
+  type InferenceAttempt,
+  type InferenceExecution,
+  InferenceExecutionError,
+  type InferenceExecutionInput,
+  type InferenceExecutionResult,
+  type InferenceFinishStatus,
+  type InferenceGateway,
+  type InferenceGatewayStream,
+  type InferenceProviderCost,
+  type InferenceReceipt,
+  type InferenceRuntime,
+  type InferenceRuntimeOptions,
+  type InferenceScope,
+  type InferenceStream,
+  type InferenceTerminal,
+  type InferenceUsage,
+} from './lib/inference';
 // Background tasks
 export {
   defaultFetchEventById,
