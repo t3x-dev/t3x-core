@@ -380,6 +380,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "deployment-capabilities.openapi.ts",
+      "method": "GET",
+      "path": "/v1/deployment/capabilities",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted deployment metadata without account or entitlement data."
+    },
+    {
       "source": "diff.openapi.ts",
       "method": "POST",
       "path": "/v1/diff/frame",
