@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
 import { RETURN_TO_PARAM, safeInternalReturnTo } from '@/utils/navigationReturn';
@@ -95,6 +96,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
   const currentPath = pathname ?? '';
   const { clear, getKey } = useSession();
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
 
   useEffect(() => {
     setIsAuthEnabled(!!getKey());
@@ -113,44 +115,50 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h2>
         </div>
         <nav className="flex flex-1 flex-col gap-4">
-          {NAV_GROUPS.map((group) => (
-            <section key={group.label} className="space-y-1">
-              <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                {group.label}
-              </div>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isExact = 'exact' in item && item.exact;
-                const isActive = isExact
-                  ? currentPath === item.href
-                  : currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+          {NAV_GROUPS.map((group) => {
+            const items =
+              group.label === 'AI' && !canAdministerProviderCredentials ? [] : group.items;
+            if (items.length === 0 && !group.note) return null;
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={cn(
-                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium',
-                      'transition-colors duration-150',
-                      isActive
-                        ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-              {group.note && (
-                <p className="rounded-lg px-3 py-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-                  <GitBranch className="mr-1.5 inline h-3.5 w-3.5 align-[-2px]" />
-                  {group.note}
-                </p>
-              )}
-            </section>
-          ))}
+            return (
+              <section key={group.label} className="space-y-1">
+                <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                  {group.label}
+                </div>
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const isExact = 'exact' in item && item.exact;
+                  const isActive = isExact
+                    ? currentPath === item.href
+                    : currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium',
+                        'transition-colors duration-150',
+                        isActive
+                          ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+                {group.note && (
+                  <p className="rounded-lg px-3 py-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
+                    <GitBranch className="mr-1.5 inline h-3.5 w-3.5 align-[-2px]" />
+                    {group.note}
+                  </p>
+                )}
+              </section>
+            );
+          })}
         </nav>
 
         {isAuthEnabled && (

@@ -2,6 +2,7 @@
 
 import { Blocks, Monitor, Settings, User } from 'lucide-react';
 import Link from 'next/link';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -12,6 +13,7 @@ export function SettingsModal() {
   const activeTab = useSettingsModalStore((state) => state.activeTab);
   const closeSettingsModal = useSettingsModalStore((state) => state.closeSettingsModal);
   const density = useSettingsStore((state) => state.density);
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeSettingsModal()}>
@@ -46,14 +48,16 @@ export function SettingsModal() {
               isActive={activeTab === 'preferences'}
               onNavigate={closeSettingsModal}
             />
-            <QuickSettingRow
-              icon={Blocks}
-              title="Provider readiness"
-              detail="Check model, extraction, and generation credentials."
-              href="/settings/providers"
-              isActive={activeTab === 'providers'}
-              onNavigate={closeSettingsModal}
-            />
+            {canAdministerProviderCredentials && (
+              <QuickSettingRow
+                icon={Blocks}
+                title="Provider readiness"
+                detail="Check model, extraction, and generation credentials."
+                href="/settings/providers"
+                isActive={activeTab === 'providers'}
+                onNavigate={closeSettingsModal}
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-[var(--stroke-divider)] px-5 py-4">
