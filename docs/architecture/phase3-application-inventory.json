@@ -25,7 +25,7 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 76,
+    "routeFiles": 77,
     "filesUsingGetDB": 68,
     "filesUsingAssertProjectAccess": 53,
     "filesUsingRequireTransitionAuthority": 2,

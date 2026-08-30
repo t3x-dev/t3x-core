@@ -33,6 +33,7 @@ import {
 } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
+import { getDeploymentCapabilities } from '../lib/deployment-capabilities';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { hasOperatorAccess } from '../lib/operator-access';
 import {
@@ -58,6 +59,9 @@ export const providersRoutes = new OpenAPIHono({
 });
 
 async function requireProviderOperator(c: Context, next: Next) {
+  if ((await getDeploymentCapabilities(c)).provider_credentials.administration !== 'local') {
+    return errorResponse(c, 'FORBIDDEN', 'Provider administration is disabled for this deployment');
+  }
   if (!hasOperatorAccess(c)) {
     return errorResponse(c, 'FORBIDDEN', 'Provider administration requires operator access');
   }

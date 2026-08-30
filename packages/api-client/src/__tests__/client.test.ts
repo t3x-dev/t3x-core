@@ -305,6 +305,46 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('deployment capabilities', () => {
+    const capabilities = {
+      version: 1 as const,
+      deployment_mode: 'self_hosted' as const,
+      provider_credentials: { administration: 'local' as const },
+      inference: { mode: 'direct' as const },
+      identity: {
+        mode: 'local' as const,
+        auth_operations: ['register', 'sign_in', 'sign_out'] as const,
+        account_operations: ['read', 'update'] as const,
+        namespaces: true,
+      },
+      usage: { mode: 'telemetry' as const },
+      ui_extensions: { account: true, billing: false },
+    };
+
+    it('fetches and validates the shared versioned contract', async () => {
+      const fn = mockFetch(successResponse(capabilities));
+      const client = createTestClient(fn);
+
+      await expect(client.getDeploymentCapabilities()).resolves.toEqual(capabilities);
+      expect(fn).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/deployment/capabilities',
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it.each([
+      { ...capabilities, version: 2 },
+      { ...capabilities, unexpected: 'actor-specific-data' },
+      { ...capabilities, identity: { ...capabilities.identity, plan: 'pro' } },
+    ])('rejects stale or expanded wire contracts', async (payload) => {
+      const client = createTestClient(mockFetch(successResponse(payload)));
+
+      await expect(client.getDeploymentCapabilities()).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    });
+  });
+
   // =========================================================================
   // Projects
   // =========================================================================

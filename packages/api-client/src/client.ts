@@ -5,6 +5,10 @@
  */
 
 import { ZodError, type ZodType } from 'zod';
+import {
+  type DeploymentCapabilities,
+  DeploymentCapabilitiesSchema,
+} from './deployment-capabilities.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
   ApiErrorResponse,
@@ -282,6 +286,18 @@ export class T3xClient {
 
   async status(): Promise<StatusResponse> {
     return this.request<StatusResponse>('GET', '/v1/status');
+  }
+
+  /** Public deployment-scoped capabilities; never actor entitlements. */
+  async getDeploymentCapabilities(): Promise<DeploymentCapabilities> {
+    return this.request<DeploymentCapabilities>(
+      'GET',
+      '/v1/deployment/capabilities',
+      undefined,
+      undefined,
+      undefined,
+      DeploymentCapabilitiesSchema
+    );
   }
 
   // ============================================

@@ -20,6 +20,17 @@ vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
   ProvidersSettingsPanel: () => <div>Mock Providers Settings Panel</div>,
 }));
 
+vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
+  useDeploymentCapabilities: () => ({
+    status: 'ready',
+    canAdministerProviderCredentials: true,
+    capabilities: {
+      deployment_mode: 'self_hosted',
+      inference: { mode: 'direct' },
+    },
+  }),
+}));
+
 describe('settings pages', () => {
   it('renders the overview as an entry map without unverified runtime claims', () => {
     render(<SettingsPage />);
