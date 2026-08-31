@@ -185,6 +185,13 @@
     },
     {
       "source": "collaboration-commands.openapi.ts",
+      "method": "POST",
+      "path": "/v1/namespaces/{id}/ownership-transfer",
+      "policy": "authenticated",
+      "rationale": "Only the current authenticated human owner may atomically transfer namespace ownership."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
       "method": "PUT",
       "path": "/v1/projects/{id}/guests",
       "policy": "project",
@@ -196,6 +203,13 @@
       "path": "/v1/projects/{id}/guests/{grantId}",
       "policy": "project",
       "rationale": "Project administration authorization is evaluated before a guest grant is revoked."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{id}/transfer",
+      "policy": "project",
+      "rationale": "Source project transfer and target namespace project-create authority are both evaluated before the compare-and-set move."
     },
     {
       "source": "collaboration-invitations.openapi.ts",
