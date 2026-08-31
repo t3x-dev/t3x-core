@@ -28,6 +28,7 @@ import { type ArchivedYOpsRow, useArchivedYopsLog } from '@/hooks/yops/useArchiv
 import { cn } from '@/utils/cn';
 
 interface ArchivedOpsPanelProps {
+  projectId: string | null;
   conversationId: string | null;
   /**
    * Optional topic filter — passes through to the API. Leave null to
@@ -58,10 +59,15 @@ function summarizeArchivedRow(row: ArchivedYOpsRow): string {
   return `${ops.length} ops`;
 }
 
-export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOpsPanelProps) {
-  const state = useArchivedYopsLog(conversationId, topicId);
+export function ArchivedOpsPanel({
+  projectId,
+  conversationId,
+  topicId = null,
+}: ArchivedOpsPanelProps) {
+  const state = useArchivedYopsLog(projectId, conversationId, topicId);
   const isLoading =
-    state.status === 'loading' || (conversationId !== null && state.status === 'idle');
+    state.status === 'loading' ||
+    (projectId !== null && conversationId !== null && state.status === 'idle');
 
   return (
     <div

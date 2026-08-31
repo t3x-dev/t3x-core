@@ -461,6 +461,31 @@ describe('T3xClient', () => {
       );
     });
 
+    it('reads legacy YOps only through the project-scoped evidence capability', async () => {
+      const data = {
+        mode: 'historical_evidence',
+        authoritative_for_project_state: false,
+        items: [],
+        page: { total: 0, limit: 50, offset: 0 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      await expect(
+        client.sourceThreads.legacyYOpsEvidence('proj_1', 'conv_1', {
+          archivedOnly: true,
+          topicId: 'topic_1',
+          order: 'desc',
+          limit: 50,
+        })
+      ).resolves.toEqual(data);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/projects/proj_1/sources/conversations/conv_1/legacy-yops');
+      expect(url).toContain('archived_only=true');
+      expect(url).toContain('topic_id=topic_1');
+      expect(url).toContain('order=desc');
+    });
+
     it('listConversations adds project_id to query', async () => {
       const fn = mockFetch(successResponse({ conversations: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);

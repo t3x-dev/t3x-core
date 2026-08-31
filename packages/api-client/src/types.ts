@@ -196,6 +196,38 @@ export interface ConversationSourceEvidence {
   referring_commits: SourceCommitReference[];
 }
 
+export interface LegacyYOpsEvidence {
+  mode: 'historical_evidence';
+  authoritative_for_project_state: false;
+  items: Array<{
+    id: string;
+    conversation_id: string;
+    project_id: string;
+    source: string;
+    turn_hash: string | null;
+    topic_id: string | null;
+    yops: unknown;
+    metadata: unknown | null;
+    created_at: string;
+    lifecycle: {
+      status: 'committed' | 'superseded' | 'legacy_uncommitted';
+      superseded_at: string | null;
+      committed_by: string[];
+    };
+  }>;
+  page: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface LegacyYOpsEvidenceParams extends PaginationParams {
+  topicId?: string;
+  archivedOnly?: boolean;
+  order?: 'asc' | 'desc';
+}
+
 export interface CommitDescriptorV2 {
   kind: 'commit';
   schema: 't3x/commit/v2';
@@ -589,6 +621,11 @@ export interface SourceThreadCapability {
     conversationId: string,
     params?: PaginationParams
   ): Promise<SourceThreadEvidence>;
+  legacyYOpsEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: LegacyYOpsEvidenceParams
+  ): Promise<LegacyYOpsEvidence>;
 }
 
 /** Persisted Repository Review Workspace projection. */

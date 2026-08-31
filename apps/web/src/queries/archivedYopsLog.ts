@@ -8,13 +8,12 @@
  * workspace (replay walks active rows only) but they're audit-relevant
  * — users should be able to see what got replaced and when.
  *
- * The existing `loadYOpsLog` infrastructure already supports
- * `activeOnly: boolean`. We call it with `false`, then filter out the
- * active rows client-side and keep just the archived ones.
+ * This query uses the project-scoped Source/Evidence boundary. Legacy
+ * conversation CRUD is no longer the historical-read authority.
  */
 
+import { getLegacyYOpsEvidence } from '@/infrastructure/sourceEvidence';
 import type { YOpsLogEntry } from '@/infrastructure/trees';
-import { loadYOpsLog } from '@/infrastructure/yopsLog';
 
 export interface ArchivedYOpsRow extends YOpsLogEntry {
   /** Always non-null on archived rows — narrowed by the filter below. */
@@ -30,16 +29,33 @@ export interface ArchivedYOpsRow extends YOpsLogEntry {
  * shouldn't conflate "no archived rows" with "feature not available."
  */
 export async function fetchArchivedYopsLog(
+  projectId: string,
   conversationId: string,
   topicId: string | null = null
 ): Promise<ArchivedYOpsRow[]> {
-  const all = await loadYOpsLog(conversationId, topicId ?? undefined, {
-    activeOnly: false,
+  const evidence = await getLegacyYOpsEvidence(projectId, conversationId, {
+    topicId: topicId ?? undefined,
+    archivedOnly: true,
+    order: 'desc',
+    limit: 200,
   });
-  const archived = all.filter(
-    (row): row is ArchivedYOpsRow =>
-      row.superseded_at !== null && typeof row.superseded_at === 'string'
-  );
-  archived.sort((a, b) => b.superseded_at.localeCompare(a.superseded_at));
-  return archived;
+  return evidence.items.flatMap((item): ArchivedYOpsRow[] => {
+    const supersededAt = item.lifecycle.superseded_at;
+    if (supersededAt === null) return [];
+    return [
+      {
+        id: item.id,
+        conversation_id: item.conversation_id,
+        project_id: item.project_id,
+        source: item.source as YOpsLogEntry['source'],
+        turn_hash: item.turn_hash ?? undefined,
+        yops: item.yops,
+        created_at: item.created_at,
+        metadata: item.metadata as Record<string, unknown> | null,
+        superseded_at: supersededAt,
+        is_committed: item.lifecycle.status === 'committed',
+        committed_by: item.lifecycle.committed_by,
+      },
+    ];
+  });
 }

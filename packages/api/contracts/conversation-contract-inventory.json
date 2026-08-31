@@ -287,6 +287,11 @@
           "method": "GET",
           "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}",
           "source": "packages/api/src/routes/source-evidence.openapi.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}/legacy-yops",
+          "source": "packages/api/src/routes/source-evidence.openapi.ts"
         }
       ],
       "consumers": [
@@ -301,9 +306,19 @@
           "token": "getConversationSourceEvidence"
         },
         {
+          "kind": "historical_read",
+          "file": "apps/web/src/queries/archivedYopsLog.ts",
+          "token": "getLegacyYOpsEvidence("
+        },
+        {
           "kind": "mcp",
           "file": "packages/mcp/src/tools/core/query.ts",
           "token": "client.sourceThreads.evidence("
+        },
+        {
+          "kind": "typed_client",
+          "file": "packages/api-client/src/client.ts",
+          "token": "this.getLegacyYOpsEvidence("
         }
       ]
     },
@@ -409,11 +424,6 @@
           "kind": "application",
           "file": "apps/web/src/infrastructure/yopsLog.ts",
           "token": "createYOpsEntry("
-        },
-        {
-          "kind": "historical_read",
-          "file": "apps/web/src/queries/archivedYopsLog.ts",
-          "token": "loadYOpsLog("
         },
         {
           "kind": "compatibility_adapter",
