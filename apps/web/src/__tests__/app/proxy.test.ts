@@ -35,6 +35,16 @@ describe('proxy auth gating', () => {
     expect(response.headers.get('location')).toBe('http://localhost/login?callbackUrl=%2Fchat');
   });
 
+  it('preserves local query state in the post-login callback', () => {
+    process.env.AUTH_DISABLED = 'false';
+
+    const response = proxy(createRequest('/chat?projectId=project_1&view=canvas'));
+
+    expect(response.headers.get('location')).toBe(
+      'http://localhost/login?callbackUrl=%2Fchat%3FprojectId%3Dproject_1%26view%3Dcanvas'
+    );
+  });
+
   it('allows authenticated chat routes through when auth is enabled', () => {
     process.env.AUTH_DISABLED = 'false';
 
