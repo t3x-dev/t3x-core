@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   CollaborationMutationResultSchema,
+  TransferNamespaceOwnershipRequestSchema,
+  TransferProjectRequestSchema,
   UpsertNamespaceMemberRequestSchema,
   UpsertNamespaceMemberResponseSchema,
   UpsertProjectGuestRequestSchema,
@@ -10,6 +12,8 @@ import {
 import {
   assertOwnerMutationAllowed,
   assertProjectGrantExpiry,
+  buildNamespaceOwnershipTransferPlan,
+  buildProjectTransferPlan,
   type CollaborationCommandKind,
   CollaborationInvariantError,
 } from '@t3x-dev/application';
@@ -17,11 +21,12 @@ import {
   CollaborationStorageError,
   createPostgresCollaborationLifecycleUnitOfWork,
   findNamespaceById,
+  findNamespaceMembershipForPrincipal,
   type StoredCollaborationPrincipalDto,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
-import { assertNamespaceAccess } from '../lib/namespace-access';
+import { assertNamespaceAccess, getNamespacePrincipal } from '../lib/namespace-access';
 import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -34,6 +39,15 @@ const MemberParamSchema = IdParamSchema.extend({
 const GuestParamSchema = IdParamSchema.extend({
   grantId: z.string().trim().min(1).max(200),
 });
+
+function mutationResponse(description: string) {
+  return {
+    description,
+    content: {
+      'application/json': { schema: SuccessResponseSchema(CollaborationMutationResultSchema) },
+    },
+  };
+}
 
 class CollaborationCommandRouteError extends Error {
   constructor(
@@ -337,6 +351,144 @@ collaborationCommandRoutes.openapi(revokeGuestRoute, async (c) => {
     return c.json({
       success: true as const,
       data: mutation('project_guest.revoke', evaluatedAt, outcome),
+    });
+  } catch (error) {
+    return commandError(c, error);
+  }
+});
+
+const transferNamespaceOwnershipRoute = createRoute({
+  method: 'post',
+  path: '/v1/namespaces/{id}/ownership-transfer',
+  tags: ['Collaboration'],
+  summary: 'Atomically transfer namespace ownership to an active human member',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: TransferNamespaceOwnershipRequestSchema } },
+    },
+  },
+  responses: {
+    200: mutationResponse('Namespace ownership transferred'),
+    403: {
+      description: 'Access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Namespace or membership not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Ownership transfer conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationCommandRoutes.openapi(transferNamespaceOwnershipRoute, async (c) => {
+  const db = await getDB();
+  const { id } = c.req.valid('param');
+  const namespace = await findNamespaceById(db, id);
+  if (!namespace) return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
+  const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:ownership:transfer');
+  if (denied) return denied;
+
+  const actor = getNamespacePrincipal(c);
+  if (!actor || actor.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Namespace ownership requires a human owner');
+  }
+  const currentOwner = await findNamespaceMembershipForPrincipal(db, {
+    namespaceId: id,
+    principal: { kind: actor.kind, principalId: actor.principal_id },
+  });
+  if (!currentOwner) return errorResponse(c, 'FORBIDDEN', 'Namespace access denied');
+
+  const evaluatedAt = new Date().toISOString();
+  try {
+    const { target_membership_id: targetMembershipId } = c.req.valid('json');
+    await createPostgresCollaborationLifecycleUnitOfWork(db).transaction(async (transaction) => {
+      await transaction.lockNamespace(id);
+      const lockedCurrentOwner = await transaction.findNamespaceMembershipForUpdate({
+        namespaceId: id,
+        membershipId: currentOwner.membershipId,
+      });
+      const target = await transaction.findNamespaceMembershipForUpdate({
+        namespaceId: id,
+        membershipId: targetMembershipId,
+      });
+      if (!lockedCurrentOwner || !target) {
+        throw new CollaborationCommandRouteError('NOT_FOUND', 'Membership not found');
+      }
+      await transaction.applyOwnershipTransfer(
+        buildNamespaceOwnershipTransferPlan({
+          namespace_id: id,
+          current_owner: lockedCurrentOwner,
+          target,
+        }),
+        evaluatedAt
+      );
+    });
+    return c.json({
+      success: true as const,
+      data: mutation('namespace_ownership.transfer', evaluatedAt),
+    });
+  } catch (error) {
+    return commandError(c, error);
+  }
+});
+
+const transferProjectRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{id}/transfer',
+  tags: ['Collaboration'],
+  summary: 'Atomically transfer a clean project between authorized namespaces',
+  request: {
+    params: IdParamSchema,
+    body: { content: { 'application/json': { schema: TransferProjectRequestSchema } } },
+  },
+  responses: {
+    200: mutationResponse('Project transferred'),
+    403: {
+      description: 'Source or target namespace access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project or target namespace not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Project transfer conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationCommandRoutes.openapi(transferProjectRoute, async (c) => {
+  const db = await getDB();
+  const { id } = c.req.valid('param');
+  const project = await assertProjectAccess(c, db, id, 'project:transfer');
+  if (project instanceof Response) return project;
+  if (!project.namespaceId) return errorResponse(c, 'FORBIDDEN', 'Project access denied');
+
+  const { target_namespace_id: targetNamespaceId } = c.req.valid('json');
+  const targetNamespace = await findNamespaceById(db, targetNamespaceId);
+  if (!targetNamespace) return errorResponse(c, 'NOT_FOUND', 'Target namespace not found');
+  const targetDenied = await assertNamespaceAccess(c, db, targetNamespace, 'project:create');
+  if (targetDenied) return targetDenied;
+
+  const evaluatedAt = new Date().toISOString();
+  try {
+    const plan = buildProjectTransferPlan({
+      project_id: id,
+      source_namespace_id: project.namespaceId,
+      target_namespace_id: targetNamespaceId,
+    });
+    await createPostgresCollaborationLifecycleUnitOfWork(db).transaction((transaction) =>
+      transaction.applyProjectTransfer(plan)
+    );
+    return c.json({
+      success: true as const,
+      data: mutation('project.transfer', evaluatedAt),
     });
   } catch (error) {
     return commandError(c, error);
