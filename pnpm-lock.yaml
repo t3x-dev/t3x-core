@@ -981,9 +981,6 @@ importers:
       '@swc/core':
         specifier: ^1.15.18
         version: 1.15.18
-      '@t3x-dev/application':
-        specifier: workspace:*
-        version: link:../application
       '@t3x-dev/transition':
         specifier: workspace:*
         version: link:../transition

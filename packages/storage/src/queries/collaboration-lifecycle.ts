@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { CollaborationLifecycleUnitOfWork } from '@t3x-dev/application';
 import { and, eq, gt, inArray, ne, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { namespaces, projects } from '../schema';
@@ -551,5 +550,5 @@ export function createPostgresCollaborationLifecycleUnitOfWork(
       );
     },
   };
-  return unitOfWork satisfies CollaborationLifecycleUnitOfWork;
+  return unitOfWork;
 }
