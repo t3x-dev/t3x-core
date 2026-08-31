@@ -72,8 +72,10 @@
     {
       "file": "packages/api/src/routes/leaves-ml.openapi.ts",
       "feature": "leaf-ml-routes",
-      "status": "pending",
-      "observedCount": 2
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Edit learning and per-model comparison calls use server-derived scopes and normalized receipts; shared constraint generation remains tracked at its Core call site."
     },
     {
       "file": "packages/core/src/extractors/v2/compress.ts",

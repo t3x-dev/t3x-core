@@ -26,6 +26,14 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  executeMeteredInference,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
@@ -36,6 +44,7 @@ import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../sc
 export const leavesMLRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+const defaultInferenceRuntime = createInferenceRuntime();
 
 // ============================================================
 // Local Schemas
@@ -406,8 +415,8 @@ leavesMLRoutes.openapi(learnFromEditsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
-    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, leaf.project_id);
+    if (project instanceof Response) return project;
 
     // Collect edit history for this leaf
     const edits = await findEditsByLeafId(db, id, { limit: 20 });
@@ -477,7 +486,27 @@ Return at most ${body.max_suggestions} suggestions.
 Respond with ONLY a JSON array of constraint objects, no markdown or explanation:
 [{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "dimension": "style"}, ...]`;
 
-    const genResult = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+    const execution = await executeMeteredInference({
+      runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+      input: {
+        runId: resolveInferenceRunId(c),
+        feature: 'leaf.learn-from-edits',
+        requestedModel: llm.id,
+        scope: {
+          actor: resolveInferenceActor(c),
+          projectId: leaf.project_id,
+          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+          projectVisibility: 'unknown',
+        },
+      },
+      resolvedProvider: llm.id,
+      resolvedModel: llm.id,
+      async invoke() {
+        const result = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+        return { value: result, usage: result.usage };
+      },
+    });
+    const genResult = execution.value;
     const raw = genResult.text;
 
     // Record usage (fire-and-forget)
@@ -543,6 +572,12 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
       200
     );
   } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: 'RATE_LIMITED', message: err.message } },
+        429
+      );
+    }
     if (err instanceof Error && err.name === 'AllProvidersFailedError') {
       return c.json(
         {
@@ -676,8 +711,8 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
-    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, leaf.project_id);
+    if (project instanceof Response) return project;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
@@ -688,6 +723,8 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
     const registry = await getProviderRegistry();
     const additionalInstructions =
       typeof leaf.config?.user_instruction === 'string' ? leaf.config.user_instruction : undefined;
+    const runId = resolveInferenceRunId(c);
+    const actor = resolveInferenceActor(c);
 
     // Run all models in parallel
     const results = await Promise.allSettled(
@@ -707,13 +744,33 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
         }
 
         try {
-          const result = await generateLeafOutput({
-            knowledge: compareKnowledge,
-            leaf,
-            // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-            provider: resolved.provider as any,
-            additionalInstructions,
+          const execution = await executeMeteredInference({
+            runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+            input: {
+              runId,
+              feature: 'leaf.compare-model',
+              requestedModel: modelSpec,
+              scope: {
+                actor,
+                projectId: leaf.project_id,
+                ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+                projectVisibility: 'unknown',
+              },
+            },
+            resolvedProvider: resolved.provider.id,
+            resolvedModel: resolved.model,
+            async invoke() {
+              const result = await generateLeafOutput({
+                knowledge: compareKnowledge,
+                leaf,
+                // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+                provider: resolved.provider as any,
+                additionalInstructions,
+              });
+              return { value: result, usage: result.usage };
+            },
           });
+          const result = execution.value;
 
           const latencyMs = Date.now() - start;
 
