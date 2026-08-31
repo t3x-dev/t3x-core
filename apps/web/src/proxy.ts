@@ -9,7 +9,11 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 /** Paths that are always public (even when auth is enabled) */
-const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/share', '/invite'];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 export function proxy(request: NextRequest) {
   const authDisabled =
@@ -25,7 +29,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
