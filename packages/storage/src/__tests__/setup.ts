@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS project_grants (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ,
   CONSTRAINT project_grants_project_namespace_fk
     FOREIGN KEY (project_id, namespace_id)
@@ -118,7 +119,9 @@ CREATE TABLE IF NOT EXISTS project_grants (
     CHECK (
       (status = 'active' AND revoked_at IS NULL)
       OR (status = 'revoked' AND revoked_at IS NOT NULL)
-    )
+    ),
+  CONSTRAINT project_grants_expiry_check
+    CHECK (expires_at IS NULL OR expires_at > created_at)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_project_grants_principal
   ON project_grants(project_id, principal_kind, principal_id);
@@ -128,6 +131,72 @@ CREATE INDEX IF NOT EXISTS idx_project_grants_active_principal
 CREATE INDEX IF NOT EXISTS idx_project_grants_active_project
   ON project_grants(project_id, role)
   WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS collaboration_invitations (
+  invitation_id TEXT PRIMARY KEY,
+  namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  project_id TEXT,
+  recipient_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  recipient_email TEXT,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'viewer')),
+  token_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'revoked', 'expired')),
+  created_by_principal_kind TEXT NOT NULL
+    CHECK (created_by_principal_kind IN ('human', 'agent', 'service')),
+  created_by_principal_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ,
+  accepted_by_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  revoked_at TIMESTAMPTZ,
+  expired_at TIMESTAMPTZ,
+  CONSTRAINT collaboration_invitations_project_namespace_fk
+    FOREIGN KEY (project_id, namespace_id)
+    REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+  CONSTRAINT collaboration_invitations_recipient_check
+    CHECK (recipient_user_id IS NOT NULL OR recipient_email IS NOT NULL),
+  CONSTRAINT collaboration_invitations_email_check
+    CHECK (
+      recipient_email IS NULL
+      OR (recipient_email = lower(btrim(recipient_email)) AND length(recipient_email) > 0)
+    ),
+  CONSTRAINT collaboration_invitations_expiry_check
+    CHECK (expires_at > created_at),
+  CONSTRAINT collaboration_invitations_recipient_acceptance_check
+    CHECK (
+      recipient_user_id IS NULL
+      OR accepted_by_user_id IS NULL
+      OR recipient_user_id = accepted_by_user_id
+    ),
+  CONSTRAINT collaboration_invitations_lifecycle_check
+    CHECK (
+      (status = 'pending' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NULL AND expired_at IS NULL)
+      OR (status = 'accepted' AND accepted_at IS NOT NULL AND accepted_by_user_id IS NOT NULL
+        AND revoked_at IS NULL AND expired_at IS NULL)
+      OR (status = 'revoked' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NOT NULL AND expired_at IS NULL)
+      OR (status = 'expired' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NULL AND expired_at IS NOT NULL)
+    )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_user
+  ON collaboration_invitations(namespace_id, COALESCE(project_id, ''), recipient_user_id)
+  WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_email
+  ON collaboration_invitations(namespace_id, COALESCE(project_id, ''), recipient_email)
+  WHERE status = 'pending' AND recipient_email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_user
+  ON collaboration_invitations(recipient_user_id, expires_at)
+  WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_email
+  ON collaboration_invitations(recipient_email, expires_at)
+  WHERE status = 'pending' AND recipient_email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_target
+  ON collaboration_invitations(namespace_id, project_id, expires_at)
+  WHERE status = 'pending';
 
 -- Conversations
 CREATE TABLE IF NOT EXISTS conversations (

@@ -57,6 +57,7 @@ describe('PostgreSQL schema migrations', () => {
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
+      DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
@@ -316,6 +317,7 @@ describe('PostgreSQL schema migrations', () => {
     await setup.sql.unsafe(`
       INSERT INTO projects (project_id, name, created_at)
       VALUES ('project_before_namespaces', 'Legacy project', NOW());
+      DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
@@ -362,6 +364,7 @@ describe('PostgreSQL schema migrations', () => {
       );
       INSERT INTO projects (project_id, name, namespace_id, created_at)
       VALUES ('project_personal', 'Personal project', 'ns_personal_owner', NOW());
+      DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
@@ -429,6 +432,59 @@ describe('PostgreSQL schema migrations', () => {
         ) VALUES (
           'pg_owner_role', 'project_personal', 'ns_personal_owner',
           'human', 'user_guest', 'owner', 'active'
+        )
+      `)
+    ).rejects.toThrow();
+  });
+
+  it('upgrades a v69 database with expiring grants and recipient-bound invitations', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      INSERT INTO projects (project_id, name, namespace_id, created_at)
+      VALUES ('project_before_invites', 'Existing grant project', 'ns_t3x_dev', NOW());
+      INSERT INTO project_grants (
+        grant_id, project_id, namespace_id, principal_kind, principal_id, role, status
+      ) VALUES (
+        'grant_before_expiry', 'project_before_invites', 'ns_t3x_dev',
+        'human', 'user_existing_guest', 'viewer', 'active'
+      );
+      DROP TABLE collaboration_invitations;
+      ALTER TABLE project_grants DROP CONSTRAINT project_grants_expiry_check;
+      ALTER TABLE project_grants DROP COLUMN expires_at;
+      UPDATE _schema_version SET version = 69 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresStorage({
+      connectionString: setup.connectionString,
+      maxConnections: 1,
+      onnotice: () => {},
+    });
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [grant] = await setup.sql.unsafe<Array<{ expires_at: Date | null }>>(`
+      SELECT expires_at FROM project_grants WHERE grant_id = 'grant_before_expiry'
+    `);
+    const [invitationTable] = await setup.sql.unsafe<Array<{ table_name: string | null }>>(`
+      SELECT to_regclass('public.collaboration_invitations')::text AS table_name
+    `);
+
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(grant?.expires_at).toBeNull();
+    expect(invitationTable?.table_name).toBe('collaboration_invitations');
+
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO collaboration_invitations (
+          invitation_id, namespace_id, recipient_email, role, token_hash,
+          created_by_principal_kind, created_by_principal_id, expires_at
+        ) VALUES (
+          'invite_owner_role', 'ns_t3x_dev', 'owner@example.com', 'owner',
+          'hash_owner_role', 'human', 'user_inviter', NOW() + INTERVAL '1 day'
         )
       `)
     ).rejects.toThrow();

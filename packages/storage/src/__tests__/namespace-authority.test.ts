@@ -8,7 +8,12 @@ import {
 import { insertPersonalNamespace } from '../queries/namespaces';
 import { findProjects, insertProject } from '../queries/projects';
 import { namespaces } from '../schema';
-import { namespaceMemberships, projectGrants } from '../schema-trees';
+import {
+  collaborationInvitations,
+  namespaceMemberships,
+  projectGrants,
+  users,
+} from '../schema-trees';
 import { createTestDB } from './setup';
 
 describe('canonical namespace authority storage', () => {
@@ -111,6 +116,10 @@ describe('canonical namespace authority storage', () => {
       name: 'Revoked project',
       namespaceId: otherNamespace.namespaceId,
     });
+    const expiredProject = await insertProject(db, {
+      name: 'Expired project',
+      namespaceId: otherNamespace.namespaceId,
+    });
     await db.insert(projectGrants).values([
       {
         grantId: 'grant_authority_active',
@@ -131,6 +140,17 @@ describe('canonical namespace authority storage', () => {
         status: 'revoked',
         revokedAt: new Date('2026-08-30T00:00:00.000Z'),
       },
+      {
+        grantId: 'grant_authority_list_expired',
+        projectId: expiredProject.projectId,
+        namespaceId: otherNamespace.namespaceId,
+        principalKind: 'human',
+        principalId: 'user_list_authority',
+        role: 'viewer',
+        status: 'active',
+        createdAt: new Date('2026-08-28T00:00:00.000Z'),
+        expiresAt: new Date('2026-08-29T00:00:00.000Z'),
+      },
     ]);
 
     const visible = await findProjects(db, {
@@ -142,6 +162,72 @@ describe('canonical namespace authority storage', () => {
     expect(ids).toContain(guestProject.projectId);
     expect(ids).not.toContain(hiddenProject.projectId);
     expect(ids).not.toContain(revokedProject.projectId);
+    expect(ids).not.toContain(expiredProject.projectId);
+  });
+
+  it('persists recipient-bound invitations and rejects ambiguous authority', async () => {
+    await db.insert(users).values([
+      { id: 'user_invitation_recipient', emailVerified: true },
+      { id: 'user_invitation_other', emailVerified: true },
+    ]);
+    const namespace = await insertPersonalNamespace(db, {
+      slug: 'authority-invitations',
+      ownerUserId: 'user_invitation_owner',
+    });
+    const project = await insertProject(db, {
+      name: 'Invitation project',
+      namespaceId: namespace.namespaceId,
+    });
+    const base = {
+      namespaceId: namespace.namespaceId,
+      projectId: project.projectId,
+      recipientUserId: 'user_invitation_recipient',
+      recipientEmail: 'recipient@example.com',
+      role: 'viewer' as const,
+      createdByPrincipalKind: 'human' as const,
+      createdByPrincipalId: 'user_invitation_owner',
+      expiresAt: new Date(Date.now() + 86_400_000),
+    };
+
+    await db.insert(collaborationInvitations).values({
+      ...base,
+      invitationId: 'invite_bound',
+      tokenHash: 'sha256:bound-token',
+    });
+
+    await expect(
+      db.insert(collaborationInvitations).values({
+        ...base,
+        invitationId: 'invite_duplicate_recipient',
+        tokenHash: 'sha256:duplicate-recipient',
+      })
+    ).rejects.toThrow();
+    await expect(
+      db.insert(collaborationInvitations).values({
+        ...base,
+        invitationId: 'invite_owner_role',
+        tokenHash: 'sha256:owner-role',
+        role: 'owner',
+      })
+    ).rejects.toThrow();
+    await expect(
+      db.insert(collaborationInvitations).values({
+        ...base,
+        invitationId: 'invite_wrong_acceptor',
+        tokenHash: 'sha256:wrong-acceptor',
+        status: 'accepted',
+        acceptedAt: new Date(),
+        acceptedByUserId: 'user_invitation_other',
+      })
+    ).rejects.toThrow();
+    await expect(
+      db.insert(collaborationInvitations).values({
+        ...base,
+        invitationId: 'invite_cross_tenant',
+        tokenHash: 'sha256:cross-tenant',
+        namespaceId: 'ns_t3x_dev',
+      })
+    ).rejects.toThrow();
   });
 
   it('does not infer authority from namespace ownership metadata alone', async () => {

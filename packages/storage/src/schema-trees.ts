@@ -83,7 +83,8 @@ export type UserRecord = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// namespace_memberships / project_grants: Canonical stored access facts
+// namespace_memberships / project_grants / collaboration_invitations:
+// Canonical stored access facts
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -153,6 +154,7 @@ export const projectGrants = pgTable(
     status: text('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (table) => [
@@ -179,8 +181,102 @@ export const projectGrants = pgTable(
     check('project_grants_role_check', sql`${table.role} IN ('admin', 'editor', 'viewer')`),
     check('project_grants_status_check', sql`${table.status} IN ('active', 'revoked')`),
     check(
+      'project_grants_expiry_check',
+      sql`${table.expiresAt} IS NULL OR ${table.expiresAt} > ${table.createdAt}`
+    ),
+    check(
       'project_grants_revocation_check',
       sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+/**
+ * Recipient-bound invitation to namespace membership or one project grant.
+ *
+ * `project_id = null` identifies a namespace invitation. The raw invitation
+ * secret is never stored; callers persist only a one-way token hash. Owner is
+ * deliberately excluded because ownership changes use the transfer workflow.
+ */
+export const collaborationInvitations = pgTable(
+  'collaboration_invitations',
+  {
+    invitationId: text('invitation_id').primaryKey(),
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    projectId: text('project_id'),
+    recipientUserId: text('recipient_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    recipientEmail: text('recipient_email'),
+    role: text('role').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    status: text('status').notNull().default('pending'),
+    createdByPrincipalKind: text('created_by_principal_kind').notNull(),
+    createdByPrincipalId: text('created_by_principal_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedByUserId: text('accepted_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    expiredAt: timestamp('expired_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.namespaceId],
+      foreignColumns: [projects.projectId, projects.namespaceId],
+      name: 'collaboration_invitations_project_namespace_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('uq_collaboration_invitations_pending_user')
+      .on(table.namespaceId, sql`COALESCE(${table.projectId}, '')`, table.recipientUserId)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientUserId} IS NOT NULL`),
+    uniqueIndex('uq_collaboration_invitations_pending_email')
+      .on(table.namespaceId, sql`COALESCE(${table.projectId}, '')`, table.recipientEmail)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientEmail} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_user')
+      .on(table.recipientUserId, table.expiresAt)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientUserId} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_email')
+      .on(table.recipientEmail, table.expiresAt)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientEmail} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_target')
+      .on(table.namespaceId, table.projectId, table.expiresAt)
+      .where(sql`${table.status} = 'pending'`),
+    check(
+      'collaboration_invitations_recipient_check',
+      sql`${table.recipientUserId} IS NOT NULL OR ${table.recipientEmail} IS NOT NULL`
+    ),
+    check(
+      'collaboration_invitations_email_check',
+      sql`${table.recipientEmail} IS NULL OR (${table.recipientEmail} = lower(btrim(${table.recipientEmail})) AND length(${table.recipientEmail}) > 0)`
+    ),
+    check(
+      'collaboration_invitations_principal_kind_check',
+      sql`${table.createdByPrincipalKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'collaboration_invitations_role_check',
+      sql`${table.role} IN ('admin', 'editor', 'viewer')`
+    ),
+    check(
+      'collaboration_invitations_status_check',
+      sql`${table.status} IN ('pending', 'accepted', 'revoked', 'expired')`
+    ),
+    check('collaboration_invitations_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+    check(
+      'collaboration_invitations_recipient_acceptance_check',
+      sql`${table.recipientUserId} IS NULL OR ${table.acceptedByUserId} IS NULL OR ${table.recipientUserId} = ${table.acceptedByUserId}`
+    ),
+    check(
+      'collaboration_invitations_lifecycle_check',
+      sql`(${table.status} = 'pending' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'accepted' AND ${table.acceptedAt} IS NOT NULL AND ${table.acceptedByUserId} IS NOT NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'revoked' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NOT NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'expired' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NOT NULL)`
     ),
   ]
 );
@@ -189,6 +285,8 @@ export type NamespaceMembershipRecord = typeof namespaceMemberships.$inferSelect
 export type NamespaceMembershipInsert = typeof namespaceMemberships.$inferInsert;
 export type ProjectGrantRecord = typeof projectGrants.$inferSelect;
 export type ProjectGrantInsert = typeof projectGrants.$inferInsert;
+export type CollaborationInvitationRecord = typeof collaborationInvitations.$inferSelect;
+export type CollaborationInvitationInsert = typeof collaborationInvitations.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // accounts: OAuth Provider Records (many-to-one with users)
