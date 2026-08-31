@@ -13,6 +13,7 @@ import {
   assertInvitationMayBeAccepted,
   type CollaborationCommandKind,
   CollaborationInvariantError,
+  type HumanPrincipalDto,
 } from '@t3x-dev/application';
 import {
   CollaborationStorageError,
@@ -397,12 +398,16 @@ collaborationInvitationRoutes.openapi(acceptInvitationRoute, async (c) => {
   if (!actor || actor.kind !== 'human') {
     return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
   }
+  const humanActor: HumanPrincipalDto = {
+    kind: 'human',
+    principal_id: actor.principal_id,
+  };
   const { token } = c.req.valid('json');
   const tokenHash = hashCollaborationInvitationToken(token);
   if (!tokenHash) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
   const firstRead = await findCollaborationInvitationViewByTokenHash(db, tokenHash);
   if (!firstRead) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
-  const user = await findUserById(db, actor.principal_id);
+  const user = await findUserById(db, humanActor.principal_id);
   const verifiedEmails = user?.email_verified && user.email ? [user.email] : [];
   const evaluatedAt = new Date().toISOString();
 
@@ -417,7 +422,7 @@ collaborationInvitationRoutes.openapi(acceptInvitationRoute, async (c) => {
         }
         assertInvitationMayBeAccepted({
           invitation,
-          actor,
+          actor: humanActor,
           verified_emails: verifiedEmails,
           evaluated_at: evaluatedAt,
         });
@@ -428,7 +433,7 @@ collaborationInvitationRoutes.openapi(acceptInvitationRoute, async (c) => {
                 kind: 'namespace_membership' as const,
                 membership: await transaction.upsertNamespaceMembership({
                   namespaceId: invitation.target.namespace_id,
-                  principal: actor,
+                  principal: humanActor,
                   role: invitation.role,
                 }),
               }
@@ -437,14 +442,14 @@ collaborationInvitationRoutes.openapi(acceptInvitationRoute, async (c) => {
                 grant: await transaction.upsertProjectGrant({
                   namespaceId: invitation.target.namespace_id,
                   projectId: invitation.target.project_id,
-                  principal: actor,
+                  principal: humanActor,
                   role: invitation.role,
                   expiresAt: null,
                 }),
               };
         await transaction.acceptInvitation({
           invitationId: invitation.invitation_id,
-          acceptedByUserId: actor.principal_id,
+          acceptedByUserId: humanActor.principal_id,
           acceptedAt: evaluatedAt,
         });
         return materialized;
