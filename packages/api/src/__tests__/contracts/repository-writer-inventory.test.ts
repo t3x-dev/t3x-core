@@ -99,7 +99,7 @@ describe('repository writer convergence inventory', () => {
 
   it('distinguishes canonical adapters from the legacy writers that remain', () => {
     const surfaces: Surface[] = ['webui', 'rest', 'cli', 'mcp'];
-    const surfacesWithLegacyWriters = new Set<Surface>(['webui', 'rest', 'mcp']);
+    const surfacesWithLegacyWriters = new Set<Surface>(['webui', 'rest']);
     for (const surface of surfaces) {
       const entries = inventory.interfaces.filter((entry) => entry.surface === surface);
       expect(

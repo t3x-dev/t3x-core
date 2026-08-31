@@ -642,38 +642,47 @@ describe('MCP protocol tool flows', () => {
     await client.close();
   });
 
-  it('stops storage-backed commit writes before they bypass the API/application kernel', async () => {
+  it('stops compatibility mutation tools before they bypass the API/application kernel', async () => {
     const { client } = await connectClientAndServer();
 
-    const project = parseTextResult(
+    const extract = await client.callTool({
+      name: 't3x_extract',
+      arguments: {
+        project_id: 'prj_protocol',
+        workspace_id: 'ws_protocol',
+        source_thread_id: 'src_protocol',
+        turn_hashes: ['sha256:turn'],
+      },
+    });
+    const edit = parseTextResult(
       await client.callTool({
-        name: 't3x_admin',
-        arguments: { action: 'create_project', name: 'Protocol Flow' },
-      })
-    );
-
-    const firstExtract = parseTextResult(
-      await client.callTool({
-        name: 't3x_extract',
+        name: 't3x_edit',
         arguments: {
-          project_id: project.project_id,
-          text: 'Plan a Tokyo trip with budget 5000',
+          project_id: 'prj_protocol',
+          workspace_id: 'ws_protocol',
+          request_id: 'req_edit_protocol',
+          operations: [{ op: 'set', path: '/budget', value: 5000 }],
         },
       })
     );
 
-    const commit = await client.callTool({
-      name: 't3x_commit',
-      arguments: {
-        project_id: project.project_id,
-        draft_id: firstExtract.draft_id,
-        message: 'First snapshot',
-      },
-    });
+    const commit = parseTextResult(
+      await client.callTool({
+        name: 't3x_commit',
+        arguments: {
+          project_id: 'prj_protocol',
+          transition_id: 'trn_protocol',
+          request_id: 'req_commit_protocol',
+          decision_digest: 'sha256:decision',
+          expected_head: null,
+        },
+      })
+    );
 
-    expect(commit.isError).toBe(true);
-    expect(commit.content[0].text).toContain('t3x_commit requires T3X_MCP_BACKEND=api');
-    expect(commit.content[0].text).toContain('shared API/application command');
+    expect(extract.isError).toBe(true);
+    expect(extract.content[0].text).toContain('t3x_extract requires T3X_MCP_BACKEND=api');
+    expect(edit.error.code).toBe('API_BACKEND_REQUIRED');
+    expect(commit.error.code).toBe('API_BACKEND_REQUIRED');
 
     await client.close();
   });

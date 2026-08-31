@@ -263,10 +263,6 @@
         {
           "file": "packages/api-client/src/client.ts",
           "token": "async commitFromDraft("
-        },
-        {
-          "file": "packages/mcp/src/tools/core/commit.ts",
-          "token": "client.commitFromDraft("
         }
       ],
       "migration_proofs": [

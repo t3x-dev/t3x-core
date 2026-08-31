@@ -211,37 +211,34 @@
       "removal_gate": "The top-level spelling may remain while it requires Decision digest and exact expected-head CAS."
     },
     {
-      "id": "mcp-legacy-extract",
+      "id": "mcp-workspace-extract",
       "surface": "mcp",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "packages/mcp/src/tools/core/extract.ts",
-      "anchors": ["client.extract("],
-      "replacement": "Workspace extraction candidate plus propose_transition.",
-      "removal_gate": "Retire after t3x_extract creates only server-owned Workspace candidates.",
-      "issue": 1297
+      "anchors": ["createExtractionProposal(projectId, workspaceId"],
+      "replacement": null,
+      "removal_gate": "Retain as the MCP Source-to-Workspace proposal adapter."
     },
     {
-      "id": "mcp-legacy-edit",
+      "id": "mcp-transition-proposal-alias",
       "surface": "mcp",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "packages/mcp/src/tools/core/edit.ts",
-      "anchors": ["client.applyYOps("],
-      "replacement": "propose_transition with structured_yops operations.",
-      "removal_gate": "Retire after t3x_edit targets Workspace Transition proposals only.",
-      "issue": 1297
+      "anchors": ["proposeTransitionHandler({ ...args, kind: 'structured_yops' })"],
+      "replacement": null,
+      "removal_gate": "The t3x_edit spelling may remain only as a canonical proposal alias."
     },
     {
-      "id": "mcp-legacy-commit",
+      "id": "mcp-transition-commit-alias",
       "surface": "mcp",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "packages/mcp/src/tools/core/commit.ts",
-      "anchors": ["client.commitFromDraft("],
-      "replacement": "decide_transition and commit_transition with exact expected head.",
-      "removal_gate": "Retire after t3x_commit delegates only to the Transition lifecycle.",
-      "issue": 1297
+      "anchors": ["commitHandler: ToolHandler = commitTransitionHandler"],
+      "replacement": null,
+      "removal_gate": "The t3x_commit spelling may remain only as a canonical commit alias."
     }
   ],
   "legacy_caller_guards": [
@@ -252,21 +249,6 @@
         "apps/web/src/commands/yops/llmAdapter.ts",
         "apps/web/src/infrastructure/llm.ts"
       ]
-    },
-    {
-      "symbol": "client.extract(",
-      "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": ["packages/mcp/src/tools/core/extract.ts"]
-    },
-    {
-      "symbol": "client.applyYOps(",
-      "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": ["packages/mcp/src/tools/core/edit.ts"]
-    },
-    {
-      "symbol": "client.commitFromDraft(",
-      "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": ["packages/mcp/src/tools/core/commit.ts"]
     }
   ],
   "retirement_policy": {
