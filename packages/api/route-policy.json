@@ -170,6 +170,41 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces",
+      "policy": "authenticated",
+      "rationale": "Returns only namespaces visible to the authenticated principal."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/{id}/members",
+      "policy": "authenticated",
+      "rationale": "Namespace authorization is evaluated for the authenticated principal before membership data is returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/{id}/invitations",
+      "policy": "authenticated",
+      "rationale": "Namespace authorization is evaluated for the authenticated principal before invitation data is returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/guests",
+      "policy": "project",
+      "rationale": "Project authorization is evaluated before guest grants are returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/invitations",
+      "policy": "project",
+      "rationale": "Project authorization is evaluated before project invitations are returned."
+    },
+    {
       "source": "commit-from-draft.openapi.ts",
       "method": "POST",
       "path": "/v1/commit",
