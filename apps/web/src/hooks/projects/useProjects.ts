@@ -5,7 +5,7 @@
  * components do not import `@/infrastructure/*` directly.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
@@ -38,22 +38,30 @@ export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResu
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await listProjects(limit, 0, namespaceSlug);
+      if (requestId !== requestIdRef.current) return;
       setProjects(data.projects ?? []);
       setError(null);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(formatUserFacingError(err, 'Failed to load projects.'));
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [limit, namespaceSlug]);
 
   useEffect(() => {
+    setProjects([]);
     void refresh();
+    return () => {
+      requestIdRef.current += 1;
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -85,12 +93,17 @@ export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResu
     dispatchProjectDeleted({ projectId });
   }, []);
 
-  const create = useCallback(async (rawName?: string): Promise<Project> => {
-    const name = (rawName ?? '').trim() || DEFAULT_PROJECT_NAME;
-    const project = (await createProjectCommand(name)) as Project;
-    setProjects((prev) => [project, ...prev]);
-    return project;
-  }, []);
+  const create = useCallback(
+    async (rawName?: string): Promise<Project> => {
+      const name = (rawName ?? '').trim() || DEFAULT_PROJECT_NAME;
+      const project = (await (namespaceSlug
+        ? createProjectCommand(name, undefined, namespaceSlug)
+        : createProjectCommand(name))) as Project;
+      setProjects((prev) => [project, ...prev]);
+      return project;
+    },
+    [namespaceSlug]
+  );
 
   const rename = useCallback(async (projectId: string, rawName: string): Promise<Project> => {
     const name = rawName.trim();
