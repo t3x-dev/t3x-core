@@ -10,6 +10,7 @@ export { autopilotRoutes } from './autopilot.openapi';
 export { branchRoutes } from './branches.openapi';
 export { chatRoutes, generationRoutes } from './chat.openapi';
 export { checkRoutes } from './check.openapi';
+export { collaborationReadRoutes } from './collaboration-reads.openapi';
 export { commitFromDraftRoutes } from './commit-from-draft.openapi';
 export { commitRoutes } from './commits.openapi';
 export { comparisonsRoutes } from './comparisons.openapi';

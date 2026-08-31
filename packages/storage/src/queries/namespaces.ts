@@ -12,6 +12,15 @@ export async function findNamespaceBySlug(db: AnyDB, slug: string): Promise<Name
   return namespace ?? null;
 }
 
+export async function findNamespaceById(db: AnyDB, namespaceId: string): Promise<Namespace | null> {
+  const [namespace] = await db
+    .select()
+    .from(namespaces)
+    .where(eq(namespaces.namespaceId, namespaceId))
+    .limit(1);
+  return namespace ?? null;
+}
+
 export async function findPersonalNamespaceByOwner(
   db: AnyDB,
   ownerUserId: string
