@@ -381,7 +381,7 @@
       "id": "legacy-conversation-yops",
       "owner": "legacy_conversation_workflow",
       "compatibility": "compatibility",
-      "removal_gate": "Remove writes only after Workspace parity is proven; retain mixed-history reads until #1297 proves archived YOps remain readable elsewhere.",
+      "removal_gate": "Disable writes after first-party callers reach zero; remove the routes only after immutable archived YOps evidence is readable through the repository evidence boundary. Preserve historical rows without treating them as current authority.",
       "routes": [
         {
           "method": "POST",
