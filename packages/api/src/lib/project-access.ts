@@ -24,6 +24,7 @@ import {
   PROJECT_GRANT_ROLES,
   type ProjectAction,
   type ProjectGrantDto,
+  type TrustedNamespaceAuthorityFacts,
 } from '@t3x-dev/application';
 import type { ApiKey, ApiKeyPrincipalKind } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
@@ -34,6 +35,7 @@ import {
   listTransitionCommitProjectIds,
   type NamespaceMembershipRecord,
   type ProjectGrantRecord,
+  type StoredProjectAuthorityFacts,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from './auth-config';
@@ -102,6 +104,27 @@ function projectGrantDto(record: ProjectGrantRecord | null): ProjectGrantDto | n
   };
 }
 
+function trustedProjectAuthorityFacts(
+  stored: StoredProjectAuthorityFacts,
+  principal: CanonicalPrincipalDto,
+  credential: ProjectAccessPrincipal
+): TrustedNamespaceAuthorityFacts | null {
+  if (!stored.project.namespaceId) return null;
+  return {
+    principal,
+    project: {
+      project_id: stored.project.projectId,
+      namespace_id: stored.project.namespaceId,
+    },
+    namespace_membership: membershipDto(stored.namespaceMembership),
+    project_grant: projectGrantDto(stored.projectGrant),
+    evaluated_at: new Date().toISOString(),
+    ...(credential.projectId
+      ? { credential_scope: { project_id: credential.projectId, actions: PROJECT_ACTIONS } }
+      : {}),
+  };
+}
+
 async function evaluateProjectAccessFromFacts(
   db: AnyDB,
   projectId: string,
@@ -145,7 +168,8 @@ async function evaluateProjectAccessFromFacts(
     };
   }
 
-  if (!facts.project.namespaceId) {
+  const authorityFacts = trustedProjectAuthorityFacts(facts, trustedPrincipal, principal);
+  if (!authorityFacts) {
     return {
       allowed: false,
       status: 403,
@@ -154,22 +178,7 @@ async function evaluateProjectAccessFromFacts(
     };
   }
 
-  const decision = evaluateProjectAction(
-    {
-      principal: trustedPrincipal,
-      project: {
-        project_id: facts.project.projectId,
-        namespace_id: facts.project.namespaceId,
-      },
-      namespace_membership: membershipDto(facts.namespaceMembership),
-      project_grant: projectGrantDto(facts.projectGrant),
-      evaluated_at: new Date().toISOString(),
-      ...(principal.projectId
-        ? { credential_scope: { project_id: principal.projectId, actions: PROJECT_ACTIONS } }
-        : {}),
-    },
-    action
-  );
+  const decision = evaluateProjectAction(authorityFacts, action);
   if (!decision.allowed) {
     return {
       allowed: false,
@@ -211,7 +220,7 @@ export async function evaluateProjectAccessIncludingDeleted(
   });
 }
 
-function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
+export function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   if (!apiKey) return undefined;
   return {
@@ -220,6 +229,27 @@ function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefin
     principalKind: apiKey.principal_kind,
     keyId: apiKey.id,
   };
+}
+
+/** Resolve all server-authorized project actions from one stored-state read. */
+export async function listAuthorizedProjectActions(
+  c: Context,
+  db: AnyDB,
+  projectId: string
+): Promise<ProjectAction[]> {
+  const credential = getProjectAccessPrincipal(c);
+  if (!credential) return isAuthenticationDisabled() ? [...PROJECT_ACTIONS] : [];
+
+  const principal = canonicalPrincipal(credential);
+  if (!principal) return [];
+  const stored = await findProjectAuthorityFacts(db, {
+    projectId,
+    principal: { kind: principal.kind, principalId: principal.principal_id },
+  });
+  if (!stored) return [];
+  const facts = trustedProjectAuthorityFacts(stored, principal, credential);
+  if (!facts) return [];
+  return PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed);
 }
 
 /** Principal shape used by tenant-safe project list queries. */

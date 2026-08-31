@@ -79,6 +79,17 @@ export {
   type StoredProjectGrantRole,
   type StoredProjectTransferPlan,
 } from './collaboration-lifecycle';
+export {
+  listNamespaceAccountFacts,
+  listNamespaceInvitationViews,
+  listNamespaceMemberViews,
+  listProjectGrantViews,
+  listProjectInvitationViews,
+  type StoredNamespaceAccountFacts,
+  type StoredNamespaceMemberView,
+  type StoredPrincipalProfile,
+  type StoredProjectGrantView,
+} from './collaboration-reads';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
@@ -268,6 +279,7 @@ export {
 export {
   DEFAULT_ORGANIZATION_NAMESPACE_ID,
   DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
+  findNamespaceById,
   findNamespaceBySlug,
   findPersonalNamespaceByOwner,
   insertPersonalNamespace,

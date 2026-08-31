@@ -1,6 +1,8 @@
 import {
+  type CanonicalPrincipalDto,
   evaluateNamespaceAction,
   MEMBERSHIP_STATUSES,
+  NAMESPACE_ACTIONS,
   NAMESPACE_ROLES,
   type NamespaceAction,
   type NamespaceMembershipDto,
@@ -41,31 +43,63 @@ function membershipDto(record: NamespaceMembershipRecord | null): NamespaceMembe
   };
 }
 
+export function getNamespacePrincipal(c: Context): CanonicalPrincipalDto | null {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  if (!apiKey) return null;
+  const kind = apiKey.principal_kind ?? 'human';
+  const principalId = kind === 'human' ? apiKey.user_id : apiKey.id;
+  return principalId && includesValue(PRINCIPAL_KINDS, kind)
+    ? { kind, principal_id: principalId }
+    : null;
+}
+
+export function authorizedNamespaceActionsFromFacts(
+  principal: CanonicalPrincipalDto,
+  namespaceId: string,
+  membership: NamespaceMembershipRecord | null
+): NamespaceAction[] {
+  const facts = {
+    principal,
+    namespace: { namespace_id: namespaceId },
+    namespace_membership: membershipDto(membership),
+  };
+  return NAMESPACE_ACTIONS.filter((action) => evaluateNamespaceAction(facts, action).allowed);
+}
+
+/** Resolve all namespace actions from one exact stored membership read. */
+export async function listAuthorizedNamespaceActions(
+  c: Context,
+  db: AnyDB,
+  namespace: Namespace
+): Promise<NamespaceAction[]> {
+  const principal = getNamespacePrincipal(c);
+  if (!principal) return isAuthenticationDisabled() ? [...NAMESPACE_ACTIONS] : [];
+  const membership = await findNamespaceMembershipForPrincipal(db, {
+    namespaceId: namespace.namespaceId,
+    principal: { kind: principal.kind, principalId: principal.principal_id },
+  });
+  return authorizedNamespaceActionsFromFacts(principal, namespace.namespaceId, membership);
+}
+
 export async function assertNamespaceAccess(
   c: Context,
   db: AnyDB,
   namespace: Namespace,
   action: NamespaceAction
 ): Promise<void | Response> {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) {
+  const principal = getNamespacePrincipal(c);
+  if (!principal) {
     if (isAuthenticationDisabled()) return;
-    return c.json(createError('FORBIDDEN', 'Namespace access denied'), 403);
-  }
-
-  const kind = apiKey.principal_kind ?? 'human';
-  const principalId = kind === 'human' ? apiKey.user_id : apiKey.id;
-  if (!principalId || !includesValue(PRINCIPAL_KINDS, kind)) {
     return c.json(createError('FORBIDDEN', 'Namespace access denied'), 403);
   }
 
   const membership = await findNamespaceMembershipForPrincipal(db, {
     namespaceId: namespace.namespaceId,
-    principal: { kind, principalId },
+    principal: { kind: principal.kind, principalId: principal.principal_id },
   });
   const decision = evaluateNamespaceAction(
     {
-      principal: { kind, principal_id: principalId },
+      principal,
       namespace: { namespace_id: namespace.namespaceId },
       namespace_membership: membershipDto(membership),
     },

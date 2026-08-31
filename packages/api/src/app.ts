@@ -55,6 +55,7 @@ import {
   autopilotRoutes,
   branchRoutes,
   checkRoutes,
+  collaborationReadRoutes,
   commitFromDraftRoutes,
   commitRoutes,
   comparisonsRoutes,
@@ -223,6 +224,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', statusRoutes);
   api.route('/', deploymentCapabilitiesRoutes);
   api.route('/', namespaceRoutes);
+  api.route('/', collaborationReadRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
@@ -322,6 +324,10 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },
+      {
+        name: 'Collaboration',
+        description: 'Namespace membership, project guest, and invitation management',
+      },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Sources', description: 'Repository-owned source and evidence reads' },
