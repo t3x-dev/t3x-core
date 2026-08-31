@@ -324,6 +324,10 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },
+      {
+        name: 'Collaboration',
+        description: 'Namespace membership, project guest, and invitation management',
+      },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Sources', description: 'Repository-owned source and evidence reads' },
