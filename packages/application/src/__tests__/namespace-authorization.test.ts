@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  evaluateNamespaceAction,
   evaluateProjectAction,
   LEGACY_OWNERSHIP_FIXTURES,
   NAMESPACE_ACTIONS,
@@ -80,6 +81,22 @@ describe('stored project authority', () => {
     });
   });
 
+  it('fails closed when a project grant has expired or has an invalid timestamp', () => {
+    const expired = authorizationFixture('project_guest_editor');
+    if (!expired.project_grant) throw new Error('fixture requires project grant');
+    expired.project_grant.expires_at = '2026-08-01T00:00:00.000Z';
+    expect(evaluateProjectAction(expired, 'project:read')).toEqual({
+      allowed: false,
+      reason: 'expired_project_grant',
+    });
+
+    expired.project_grant.expires_at = 'not-a-timestamp';
+    expect(evaluateProjectAction(expired, 'project:read')).toEqual({
+      allowed: false,
+      reason: 'expired_project_grant',
+    });
+  });
+
   it('intersects machine authority with its explicit project and action scope', () => {
     const service = authorizationFixture('scoped_service_principal');
     expect(evaluateProjectAction(service, 'project:read')).toEqual({
@@ -104,6 +121,73 @@ describe('stored project authority', () => {
       allowed: false,
       reason: 'machine_principal_requires_project_scope',
     });
+  });
+});
+
+describe('stored namespace authority', () => {
+  it('uses the same role matrix for namespace-wide actions', () => {
+    const owner = authorizationFixture('organization_owner');
+    expect(
+      evaluateNamespaceAction(
+        {
+          principal: owner.principal,
+          namespace: { namespace_id: owner.project.namespace_id },
+          namespace_membership: owner.namespace_membership,
+        },
+        'namespace:ownership:transfer'
+      )
+    ).toEqual({ allowed: true, source: 'namespace_membership' });
+
+    if (!owner.namespace_membership) throw new Error('fixture requires membership');
+    owner.namespace_membership.role = 'viewer';
+    expect(
+      evaluateNamespaceAction(
+        {
+          principal: owner.principal,
+          namespace: { namespace_id: owner.project.namespace_id },
+          namespace_membership: owner.namespace_membership,
+        },
+        'project:create'
+      )
+    ).toEqual({ allowed: false, reason: 'role_denied' });
+  });
+
+  it('rejects revoked, cross-namespace, and machine namespace authority', () => {
+    const revoked = authorizationFixture('revoked_member');
+    expect(
+      evaluateNamespaceAction(
+        {
+          principal: revoked.principal,
+          namespace: { namespace_id: revoked.project.namespace_id },
+          namespace_membership: revoked.namespace_membership,
+        },
+        'namespace:read'
+      )
+    ).toEqual({ allowed: false, reason: 'inactive_membership' });
+
+    const crossNamespace = authorizationFixture('organization_owner');
+    expect(
+      evaluateNamespaceAction(
+        {
+          principal: crossNamespace.principal,
+          namespace: { namespace_id: 'namespace_other' },
+          namespace_membership: crossNamespace.namespace_membership,
+        },
+        'namespace:read'
+      )
+    ).toEqual({ allowed: false, reason: 'namespace_mismatch' });
+
+    const service = authorizationFixture('scoped_service_principal');
+    expect(
+      evaluateNamespaceAction(
+        {
+          principal: service.principal,
+          namespace: { namespace_id: service.project.namespace_id },
+          namespace_membership: service.namespace_membership,
+        },
+        'namespace:read'
+      )
+    ).toEqual({ allowed: false, reason: 'machine_principal_requires_namespace_scope' });
   });
 });
 

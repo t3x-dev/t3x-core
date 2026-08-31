@@ -235,6 +235,13 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+export {
+  findNamespaceMembershipForPrincipal,
+  findProjectAuthorityFacts,
+  type StoredAuthorityPrincipal,
+  type StoredPrincipalKind,
+  type StoredProjectAuthorityFacts,
+} from './namespace-authority';
 // Namespaces
 export {
   DEFAULT_ORGANIZATION_NAMESPACE_ID,

@@ -101,6 +101,7 @@ export interface DemoWorkspaceSeedMarker {
 
 export interface SeedDemoWorkspaceOptions {
   ownerId?: string | null;
+  namespaceId?: string;
   resetDeleted?: boolean;
 }
 
@@ -141,7 +142,7 @@ async function seedDemoWorkspaceTransaction(
     }
 
     if (options.resetDeleted) {
-      const created = await createDemoWorkspaceRows(db, ownerId);
+      const created = await createDemoWorkspaceRows(db, ownerId, options.namespaceId);
       await setGlobalSetting(db, settingKey, {
         fixture_id: DEMO_WORKSPACE_FIXTURE.id,
         fixture_version: DEMO_WORKSPACE_FIXTURE.project.metadata.demo_fixture_version,
@@ -163,7 +164,7 @@ async function seedDemoWorkspaceTransaction(
     return { status: 'skipped_deleted', project: null };
   }
 
-  const created = await createDemoWorkspaceRows(db, ownerId);
+  const created = await createDemoWorkspaceRows(db, ownerId, options.namespaceId);
   await setGlobalSetting(db, settingKey, {
     fixture_id: DEMO_WORKSPACE_FIXTURE.id,
     fixture_version: DEMO_WORKSPACE_FIXTURE.project.metadata.demo_fixture_version,
@@ -178,7 +179,8 @@ async function seedDemoWorkspaceTransaction(
 
 async function createDemoWorkspaceRows(
   db: AnyDB,
-  ownerId: string | null
+  ownerId: string | null,
+  namespaceId?: string
 ): Promise<{
   project: Project;
   conversation: Conversation;
@@ -196,6 +198,7 @@ async function createDemoWorkspaceRows(
     name: DEMO_WORKSPACE_FIXTURE.project.name,
     metadata,
     ownerId: ownerId ?? undefined,
+    namespaceId,
   });
   await ensureMainBranch(db, project.projectId);
 

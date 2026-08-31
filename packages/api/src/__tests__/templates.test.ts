@@ -12,6 +12,7 @@ type ApiResponse = Record<string, unknown>;
 let mockDB: AnyDB;
 const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
 const originalOperatorKeyIds = process.env.T3X_OPERATOR_KEY_IDS;
+const originalAuthDisabled = process.env.AUTH_DISABLED;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -97,6 +98,7 @@ describe('Templates Routes', () => {
   });
 
   beforeEach(() => {
+    process.env.AUTH_DISABLED = 'false';
     process.env.T3X_OPERATOR_USER_IDS = 'user_template_operator';
     delete process.env.T3X_OPERATOR_KEY_IDS;
   });
@@ -106,6 +108,8 @@ describe('Templates Routes', () => {
     else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
     if (originalOperatorKeyIds === undefined) delete process.env.T3X_OPERATOR_KEY_IDS;
     else process.env.T3X_OPERATOR_KEY_IDS = originalOperatorKeyIds;
+    if (originalAuthDisabled === undefined) delete process.env.AUTH_DISABLED;
+    else process.env.AUTH_DISABLED = originalAuthDisabled;
     await cleanup();
   });
 

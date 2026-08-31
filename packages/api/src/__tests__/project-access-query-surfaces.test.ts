@@ -1,8 +1,9 @@
+import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { createMaterial, ensureMainBranch, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { setupTestDB } from './setup';
+import { grantTestMachineProjectAccess, setupTestDB } from './setup';
 
 let mockDB: AnyDB;
 
@@ -41,17 +42,23 @@ function createAuthenticatedApp(userId: string) {
 
 function createProjectAgentApp(projectId: string) {
   const app = new Hono();
+  const apiKey: ApiKey = {
+    id: 'ak_project_agent',
+    key_hash: 'hash_project_agent',
+    user_id: null,
+    project_id: projectId,
+    principal_kind: 'agent',
+    transition_scopes: ['transition:inspect'],
+    key_prefix: 't3xk_agent',
+    name: 'project agent',
+    created_at: '2026-08-31T00:00:00.000Z',
+    last_used_at: null,
+    revoked_at: null,
+  };
   app.use('*', async (c, next) => {
+    await grantTestMachineProjectAccess(mockDB, apiKey);
     // biome-ignore lint/suspicious/noExplicitAny: test context fixture
-    (c as any).set('apiKey', {
-      id: 'ak_project_agent',
-      user_id: null,
-      project_id: projectId,
-      principal_kind: 'agent',
-      transition_scopes: ['transition:inspect'],
-      key_prefix: 't3xk_agent',
-      name: 'project agent',
-    });
+    (c as any).set('apiKey', apiKey);
     return next();
   });
   app.route('/', generationRoutes);

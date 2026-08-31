@@ -3,7 +3,7 @@ import type { AnyDB } from '@t3x-dev/storage';
 import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { setupTestDB } from './setup';
+import { grantTestMachineProjectAccess, setupTestDB } from './setup';
 
 let mockDB: AnyDB;
 
@@ -50,6 +50,7 @@ function createApp(apiKey?: ApiKey) {
   const app = new Hono();
   if (apiKey) {
     app.use('*', async (c, next) => {
+      await grantTestMachineProjectAccess(mockDB, apiKey);
       // biome-ignore lint/suspicious/noExplicitAny: test context fixture
       (c as any).set('apiKey', apiKey);
       return next();

@@ -14,7 +14,7 @@ import {
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setupTestDB, testData } from './setup';
+import { grantTestMachineProjectAccess, setupTestDB, testData } from './setup';
 import { commitSemanticFixture } from './transition-fixture';
 
 type ApiResponse = any;
@@ -45,6 +45,7 @@ describe('Pull request routes', () => {
   const app = new Hono();
   app.use('*', async (context, next) => {
     if (requestApiKey !== undefined) {
+      await grantTestMachineProjectAccess(mockDB, requestApiKey);
       context.set('apiKey', requestApiKey);
       if (requestApiKey.user_id !== null) context.set('userId', requestApiKey.user_id);
     }

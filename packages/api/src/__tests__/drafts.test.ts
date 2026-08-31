@@ -18,7 +18,7 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setupTestDB, testData } from './setup';
+import { grantTestMachineProjectAccess, setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
@@ -55,7 +55,10 @@ describe('Drafts Routes', () => {
   let testProjectId: string;
   const app = new Hono();
   app.use('*', async (context, next) => {
-    if (requestApiKey !== undefined) context.set('apiKey', requestApiKey);
+    if (requestApiKey !== undefined) {
+      await grantTestMachineProjectAccess(mockDB, requestApiKey);
+      context.set('apiKey', requestApiKey);
+    }
     await next();
   });
   app.route('/', draftsRoutes);

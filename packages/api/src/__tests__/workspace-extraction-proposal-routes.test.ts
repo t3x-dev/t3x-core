@@ -10,7 +10,34 @@ const storageMock = vi.hoisted(() => ({
 vi.mock('../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve({})) }));
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
-  findProjectById: vi.fn((_db, projectId: string) => Promise.resolve({ projectId, ownerId: null })),
+  findProjectById: vi.fn((_db, projectId: string) =>
+    Promise.resolve({ projectId, namespaceId: 'ns_test', ownerId: null })
+  ),
+  findProjectAuthorityFacts: vi.fn(
+    (
+      _db,
+      input: {
+        projectId: string;
+        principal: { kind: 'human' | 'agent' | 'service'; principalId: string };
+      }
+    ) =>
+      Promise.resolve({
+        project: { projectId: input.projectId, namespaceId: 'ns_test', ownerId: null },
+        namespaceMembership: null,
+        projectGrant: {
+          grantId: `grant_${input.principal.principalId}`,
+          projectId: input.projectId,
+          namespaceId: 'ns_test',
+          principalKind: input.principal.kind,
+          principalId: input.principal.principalId,
+          role: 'editor',
+          status: 'active',
+          createdAt: new Date('2026-08-31T00:00:00.000Z'),
+          updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+          revokedAt: null,
+        },
+      })
+  ),
   ...storageMock,
 }));
 

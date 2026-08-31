@@ -20,7 +20,7 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setupTestDB, testData } from './setup';
+import { grantTestScopedCredentialProjectAccess, setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
@@ -54,6 +54,7 @@ describe('Commit-from-Draft Routes', () => {
   const app = new Hono();
   app.use('*', async (context, next) => {
     if (requestApiKey !== undefined) {
+      await grantTestScopedCredentialProjectAccess(mockDB, requestApiKey);
       context.set('apiKey', requestApiKey);
       if (requestApiKey.user_id !== null) context.set('userId', requestApiKey.user_id);
     }

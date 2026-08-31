@@ -10,7 +10,7 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { setupTestDB, testData } from './setup';
+import { grantTestScopedCredentialProjectAccess, setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
 vi.mock('../lib/db', () => ({
@@ -81,6 +81,7 @@ function key(
 function app(apiKey: ApiKey, options: TransitionControlPlaneOptions) {
   const instance = new Hono<{ Variables: { apiKey: ApiKey } }>();
   instance.use('*', async (context, next) => {
+    await grantTestScopedCredentialProjectAccess(mockDB, apiKey);
     context.set('apiKey', apiKey);
     await next();
   });

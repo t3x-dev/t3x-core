@@ -103,6 +103,8 @@ export interface TrustedNamespaceAuthorityFacts {
   project: { project_id: string; namespace_id: string };
   namespace_membership: NamespaceMembershipDto | null;
   project_grant: ProjectGrantDto | null;
+  /** Server clock captured before evaluation; never accepted from request JSON. */
+  evaluated_at: string;
   /**
    * Server-resolved credential restriction. Undefined represents a browser or
    * other full human session. It is never populated from request JSON.
@@ -123,8 +125,27 @@ export type ProjectActionDecision =
         | 'machine_principal_requires_project_scope'
         | 'inactive_membership'
         | 'inactive_project_grant'
+        | 'expired_project_grant'
         | 'namespace_mismatch'
         | 'project_mismatch'
+        | 'role_denied'
+        | 'no_authority';
+    };
+
+export interface TrustedNamespaceActionFacts {
+  principal: CanonicalPrincipalDto;
+  namespace: { namespace_id: string };
+  namespace_membership: NamespaceMembershipDto | null;
+}
+
+export type NamespaceActionDecision =
+  | { allowed: true; source: 'namespace_membership' }
+  | {
+      allowed: false;
+      reason:
+        | 'machine_principal_requires_namespace_scope'
+        | 'inactive_membership'
+        | 'namespace_mismatch'
         | 'role_denied'
         | 'no_authority';
     };
@@ -191,6 +212,17 @@ export function evaluateProjectAction(
     if (grant.status !== 'active') {
       return { allowed: false, reason: 'inactive_project_grant' };
     }
+    if (grant.expires_at !== null) {
+      const evaluatedAt = Date.parse(facts.evaluated_at);
+      const expiresAt = Date.parse(grant.expires_at);
+      if (
+        !Number.isFinite(evaluatedAt) ||
+        !Number.isFinite(expiresAt) ||
+        expiresAt <= evaluatedAt
+      ) {
+        return { allowed: false, reason: 'expired_project_grant' };
+      }
+    }
     if (PROJECT_GRANT_ACTIONS[grant.role].includes(action)) {
       return { allowed: true, source: 'project_grant' };
     }
@@ -198,6 +230,31 @@ export function evaluateProjectAction(
 
   if (membership || grant) return { allowed: false, reason: 'role_denied' };
   return { allowed: false, reason: 'no_authority' };
+}
+
+/** Evaluate namespace-wide actions from one exact current membership fact. */
+export function evaluateNamespaceAction(
+  facts: TrustedNamespaceActionFacts,
+  action: NamespaceAction
+): NamespaceActionDecision {
+  if (facts.principal.kind !== 'human') {
+    return { allowed: false, reason: 'machine_principal_requires_namespace_scope' };
+  }
+
+  const membership = facts.namespace_membership;
+  if (!membership || !samePrincipal(membership.principal, facts.principal)) {
+    return { allowed: false, reason: 'no_authority' };
+  }
+  if (membership.namespace_id !== facts.namespace.namespace_id) {
+    return { allowed: false, reason: 'namespace_mismatch' };
+  }
+  if (membership.status !== 'active') {
+    return { allowed: false, reason: 'inactive_membership' };
+  }
+  if (!namespaceRoleAllows(membership.role, action)) {
+    return { allowed: false, reason: 'role_denied' };
+  }
+  return { allowed: true, source: 'namespace_membership' };
 }
 
 export function namespaceRoleAllows(role: NamespaceRole, action: NamespaceAction): boolean {
