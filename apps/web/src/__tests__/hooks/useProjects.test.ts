@@ -88,6 +88,24 @@ describe('useProjects.create', () => {
     expect(createProjectCommand).toHaveBeenCalledWith('Untitled workspace');
   });
 
+  it('scopes project listing and creation to the selected namespace slug', async () => {
+    const fake = {
+      project_id: 'proj_team',
+      name: 'Team project',
+      created_at: '2026-08-31T00:00:00Z',
+    };
+    (createProjectCommand as ReturnType<typeof vi.fn>).mockResolvedValue(fake);
+
+    const { result } = renderHook(() => useProjects(50, 't3x-team'));
+    await waitForHook();
+    expect(listProjects).toHaveBeenCalledWith(50, 0, 't3x-team');
+
+    await act(async () => {
+      await result.current.create('Team project');
+    });
+    expect(createProjectCommand).toHaveBeenCalledWith('Team project', undefined, 't3x-team');
+  });
+
   it('propagates errors from the command layer', async () => {
     (createProjectCommand as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
 

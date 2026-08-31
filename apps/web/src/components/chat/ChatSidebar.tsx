@@ -16,6 +16,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { NamespaceAccountSelector } from '@/components/layout/NamespaceAccountSelector';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,6 +56,10 @@ import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useCanvasStore } from '@/store/canvasStore';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
+import {
+  selectActiveNamespaceAccount,
+  useNamespaceAccountStore,
+} from '@/store/namespaceAccountStore';
 import { useProjectStore } from '@/store/projectStore';
 import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -245,6 +250,7 @@ export function ChatSidebar() {
   const temporaryChats = useTemporaryChatsStore((s) => s.chats);
   const getOrCreateEmptyTemporaryChat = useTemporaryChatsStore((s) => s.getOrCreateEmptyChat);
   const removeTemporaryChat = useTemporaryChatsStore((s) => s.removeChat);
+  const activeNamespaceAccount = useNamespaceAccountStore(selectActiveNamespaceAccount);
 
   const {
     projects,
@@ -252,7 +258,7 @@ export function ChatSidebar() {
     remove: removeProject,
     create: createProject,
     rename: renameProject,
-  } = useProjects();
+  } = useProjects(50, activeNamespaceAccount?.namespace.slug);
   const {
     conversationsByProject: projectConversations,
     load: loadConversations,
@@ -1933,6 +1939,7 @@ export function ChatSidebar() {
             collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >
+          <NamespaceAccountSelector collapsed={collapsed} />
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>
