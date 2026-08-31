@@ -128,6 +128,11 @@ export interface PostgresCollaborationLifecycleTransaction {
     role: StoredProjectGrantRole;
     expiresAt: string | null;
   }): Promise<StoredProjectGrantDto>;
+  findProjectGrantForUpdate(input: {
+    namespaceId: string;
+    projectId: string;
+    grantId: string;
+  }): Promise<StoredProjectGrantDto | null>;
   revokeProjectGrant(grantId: string, revokedAt: string): Promise<void>;
   applyProjectTransfer(plan: StoredProjectTransferPlan): Promise<void>;
   createInvitation(invitation: StoredCollaborationInvitationInsert): Promise<void>;
@@ -351,6 +356,22 @@ function createTransactionAdapter(db: AnyDB): PostgresCollaborationLifecycleTran
         .returning();
       if (!record) throw new Error('Project grant upsert returned no row');
       return projectGrantDto(record);
+    },
+
+    async findProjectGrantForUpdate(input) {
+      const [record] = await db
+        .select()
+        .from(projectGrants)
+        .where(
+          and(
+            eq(projectGrants.namespaceId, input.namespaceId),
+            eq(projectGrants.projectId, input.projectId),
+            eq(projectGrants.grantId, input.grantId)
+          )
+        )
+        .for('update')
+        .limit(1);
+      return record ? projectGrantDto(record) : null;
     },
 
     async revokeProjectGrant(grantId, revokedAt) {

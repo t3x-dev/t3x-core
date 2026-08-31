@@ -343,6 +343,11 @@ export interface CollaborationLifecycleTransaction {
     role: ProjectGrantRole;
     expiresAt: string | null;
   }): Promise<ProjectGrantDto>;
+  findProjectGrantForUpdate(input: {
+    namespaceId: string;
+    projectId: string;
+    grantId: string;
+  }): Promise<ProjectGrantDto | null>;
   revokeProjectGrant(grantId: string, revokedAt: string): Promise<void>;
   applyProjectTransfer(plan: ProjectTransferPlan): Promise<void>;
   createInvitation(invitation: StoredCollaborationInvitationDto): Promise<void>;

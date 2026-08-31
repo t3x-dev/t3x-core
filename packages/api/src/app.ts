@@ -55,6 +55,7 @@ import {
   autopilotRoutes,
   branchRoutes,
   checkRoutes,
+  collaborationCommandRoutes,
   collaborationReadRoutes,
   commitFromDraftRoutes,
   commitRoutes,
@@ -225,6 +226,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', deploymentCapabilitiesRoutes);
   api.route('/', namespaceRoutes);
   api.route('/', collaborationReadRoutes);
+  api.route('/', collaborationCommandRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
