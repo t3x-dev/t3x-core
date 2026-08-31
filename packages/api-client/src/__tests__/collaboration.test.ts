@@ -11,6 +11,12 @@ import {
 const NOW = '2026-08-31T00:00:00.000Z';
 const LATER = '2026-09-07T00:00:00.000Z';
 const TOKEN = `t3xi_v1_${'a'.repeat(43)}`;
+const mutation = {
+  request_id: 'request_123',
+  kind: 'invitation.create' as const,
+  outcome: 'applied' as const,
+  evaluated_at: NOW,
+};
 
 const human = {
   kind: 'human' as const,
@@ -139,6 +145,7 @@ describe('collaboration API contracts', () => {
       CreateCollaborationInvitationResponseSchema.parse({
         invitation: namespaceInvitation,
         delivery: { mode: 'manual', token: TOKEN },
+        mutation,
       }).delivery
     ).toEqual({ mode: 'manual', token: TOKEN });
     expect(AcceptCollaborationInvitationRequestSchema.parse({ token: TOKEN })).toEqual({
@@ -148,6 +155,7 @@ describe('collaboration API contracts', () => {
       CreateCollaborationInvitationResponseSchema.safeParse({
         invitation: namespaceInvitation,
         delivery: { mode: 'email_queued', token: TOKEN },
+        mutation,
       }).success
     ).toBe(false);
   });

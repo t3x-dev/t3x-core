@@ -6,6 +6,35 @@
 
 import { ZodError, type ZodType } from 'zod';
 import {
+  type AcceptCollaborationInvitationRequest,
+  type AcceptCollaborationInvitationResponse,
+  AcceptCollaborationInvitationResponseSchema,
+  type CollaborationMutationResult,
+  CollaborationMutationResultSchema,
+  type CreateCollaborationInvitationResponse,
+  CreateCollaborationInvitationResponseSchema,
+  type CreateNamespaceInvitationRequest,
+  type CreateProjectInvitationRequest,
+  type ListNamespaceAccountsResponse,
+  ListNamespaceAccountsResponseSchema,
+  type ListNamespaceInvitationsResponse,
+  ListNamespaceInvitationsResponseSchema,
+  type ListNamespaceMembersResponse,
+  ListNamespaceMembersResponseSchema,
+  type ListProjectGuestsResponse,
+  ListProjectGuestsResponseSchema,
+  type ListProjectInvitationsResponse,
+  ListProjectInvitationsResponseSchema,
+  type TransferNamespaceOwnershipRequest,
+  type TransferProjectRequest,
+  type UpsertNamespaceMemberRequest,
+  type UpsertNamespaceMemberResponse,
+  UpsertNamespaceMemberResponseSchema,
+  type UpsertProjectGuestRequest,
+  type UpsertProjectGuestResponse,
+  UpsertProjectGuestResponseSchema,
+} from './collaboration.js';
+import {
   type DeploymentCapabilities,
   DeploymentCapabilitiesSchema,
 } from './deployment-capabilities.js';
@@ -297,6 +326,231 @@ export class T3xClient {
       undefined,
       undefined,
       DeploymentCapabilitiesSchema
+    );
+  }
+
+  // ============================================
+  // Namespace collaboration
+  // ============================================
+
+  async listNamespaceAccounts(options?: T3xRequestOptions): Promise<ListNamespaceAccountsResponse> {
+    return this.request<ListNamespaceAccountsResponse>(
+      'GET',
+      '/v1/namespaces',
+      undefined,
+      undefined,
+      options,
+      ListNamespaceAccountsResponseSchema
+    );
+  }
+
+  async listNamespaceMembers(
+    namespaceId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListNamespaceMembersResponse> {
+    return this.request<ListNamespaceMembersResponse>(
+      'GET',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members`,
+      undefined,
+      undefined,
+      options,
+      ListNamespaceMembersResponseSchema
+    );
+  }
+
+  async upsertNamespaceMember(
+    namespaceId: string,
+    input: UpsertNamespaceMemberRequest,
+    options?: T3xRequestOptions
+  ): Promise<UpsertNamespaceMemberResponse> {
+    return this.request<UpsertNamespaceMemberResponse>(
+      'PUT',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members`,
+      input,
+      undefined,
+      options,
+      UpsertNamespaceMemberResponseSchema
+    );
+  }
+
+  async revokeNamespaceMember(
+    namespaceId: string,
+    membershipId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members/${encodeURIComponent(
+        membershipId
+      )}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async transferNamespaceOwnership(
+    namespaceId: string,
+    input: TransferNamespaceOwnershipRequest,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'POST',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/ownership-transfer`,
+      input,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async listNamespaceInvitations(
+    namespaceId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListNamespaceInvitationsResponse> {
+    return this.request<ListNamespaceInvitationsResponse>(
+      'GET',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/invitations`,
+      undefined,
+      undefined,
+      options,
+      ListNamespaceInvitationsResponseSchema
+    );
+  }
+
+  async createNamespaceInvitation(
+    namespaceId: string,
+    input: CreateNamespaceInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<CreateCollaborationInvitationResponse> {
+    return this.request<CreateCollaborationInvitationResponse>(
+      'POST',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/invitations`,
+      input,
+      undefined,
+      options,
+      CreateCollaborationInvitationResponseSchema
+    );
+  }
+
+  // ============================================
+  // Project collaboration
+  // ============================================
+
+  async listProjectGuests(
+    projectId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListProjectGuestsResponse> {
+    return this.request<ListProjectGuestsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests`,
+      undefined,
+      undefined,
+      options,
+      ListProjectGuestsResponseSchema
+    );
+  }
+
+  async upsertProjectGuest(
+    projectId: string,
+    input: UpsertProjectGuestRequest,
+    options?: T3xRequestOptions
+  ): Promise<UpsertProjectGuestResponse> {
+    return this.request<UpsertProjectGuestResponse>(
+      'PUT',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests`,
+      input,
+      undefined,
+      options,
+      UpsertProjectGuestResponseSchema
+    );
+  }
+
+  async revokeProjectGuest(
+    projectId: string,
+    grantId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests/${encodeURIComponent(grantId)}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async transferProject(
+    projectId: string,
+    input: TransferProjectRequest,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transfer`,
+      input,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async listProjectInvitations(
+    projectId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListProjectInvitationsResponse> {
+    return this.request<ListProjectInvitationsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/invitations`,
+      undefined,
+      undefined,
+      options,
+      ListProjectInvitationsResponseSchema
+    );
+  }
+
+  async createProjectInvitation(
+    projectId: string,
+    input: CreateProjectInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<CreateCollaborationInvitationResponse> {
+    return this.request<CreateCollaborationInvitationResponse>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/invitations`,
+      input,
+      undefined,
+      options,
+      CreateCollaborationInvitationResponseSchema
+    );
+  }
+
+  async revokeCollaborationInvitation(
+    invitationId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/invitations/${encodeURIComponent(invitationId)}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async acceptCollaborationInvitation(
+    input: AcceptCollaborationInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<AcceptCollaborationInvitationResponse> {
+    return this.request<AcceptCollaborationInvitationResponse>(
+      'POST',
+      '/v1/invitations/accept',
+      input,
+      undefined,
+      options,
+      AcceptCollaborationInvitationResponseSchema
     );
   }
 
