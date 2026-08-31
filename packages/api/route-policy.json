@@ -198,6 +198,34 @@
       "rationale": "Project administration authorization is evaluated before a guest grant is revoked."
     },
     {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/namespaces/{id}/invitations",
+      "policy": "authenticated",
+      "rationale": "Namespace administration authorization is evaluated before an invitation is issued."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{id}/invitations",
+      "policy": "project",
+      "rationale": "Project administration authorization is evaluated before an invitation is issued."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/invitations/{id}",
+      "policy": "authenticated",
+      "rationale": "The invitation target is resolved and its namespace or project administration authorization is evaluated before revocation."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/invitations/accept",
+      "policy": "authenticated",
+      "rationale": "Invitation acceptance requires an authenticated principal bound to the one-time invitation token."
+    },
+    {
       "source": "collaboration-reads.openapi.ts",
       "method": "GET",
       "path": "/v1/namespaces",
