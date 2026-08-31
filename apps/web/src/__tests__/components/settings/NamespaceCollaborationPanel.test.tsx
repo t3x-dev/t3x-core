@@ -162,7 +162,7 @@ describe('NamespaceCollaborationPanel', () => {
     expect(screen.getByText('pending@example.com · editor')).toBeInTheDocument();
   });
 
-  it('creates an invitation and exposes a manual token once', async () => {
+  it('creates an invitation and exposes a fragment-protected manual link once', async () => {
     const collaboration = mockCollaboration();
     render(<NamespaceCollaborationPanel />);
 
@@ -177,7 +177,10 @@ describe('NamespaceCollaborationPanel', () => {
         'editor'
       );
     });
-    expect(await screen.findByText(INVITATION_TOKEN)).toBeInTheDocument();
+    expect(
+      await screen.findByText(`http://localhost:3000/invite#token=${INVITATION_TOKEN}`)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
   });
 
   it('stays hidden when the account projection does not authorize member reads', () => {

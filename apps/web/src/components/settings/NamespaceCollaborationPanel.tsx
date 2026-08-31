@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { buildInvitationUrl } from '@/domain/collaboration/invitationLink';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
 import {
@@ -48,14 +49,14 @@ export function NamespaceCollaborationPanel() {
   } = useNamespaceCollaboration({ namespaceId, canReadMembers, canManageInvitations });
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<NamespaceMemberRole>('editor');
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
 
   useEffect(() => {
     setInviteEmail('');
-    setInvitationToken(null);
+    setInvitationUrl(null);
   }, [namespaceId]);
 
   if (!activeAccount || !namespaceId || !canReadMembers) return null;
@@ -96,16 +97,20 @@ export function NamespaceCollaborationPanel() {
     event.preventDefault();
     if (!namespaceId || !inviteEmail.trim()) return;
     setIsInviting(true);
-    setInvitationToken(null);
+    setInvitationUrl(null);
     try {
       const response = await createInvitationCommand(inviteEmail.trim(), inviteRole);
       if (!response) return;
       setInviteEmail('');
-      setInvitationToken(response.delivery.mode === 'manual' ? response.delivery.token : null);
+      setInvitationUrl(
+        response.delivery.mode === 'manual'
+          ? buildInvitationUrl(window.location.origin, response.delivery.token)
+          : null
+      );
       toast.success(
         response.delivery.mode === 'email_queued'
           ? 'Invitation email queued'
-          : 'Invitation created—copy the one-time link token'
+          : 'Invitation created—copy the one-time link'
       );
     } catch (error) {
       toast.error(formatUserFacingError(error, 'Failed to create invitation.'));
@@ -127,13 +132,13 @@ export function NamespaceCollaborationPanel() {
     }
   }
 
-  async function copyInvitationToken() {
-    if (!invitationToken) return;
+  async function copyInvitationUrl() {
+    if (!invitationUrl) return;
     try {
-      await navigator.clipboard.writeText(invitationToken);
-      toast.success('Invitation token copied');
+      await navigator.clipboard.writeText(invitationUrl);
+      toast.success('Invitation link copied');
     } catch {
-      toast.error('Could not copy invitation token');
+      toast.error('Could not copy invitation link');
     }
   }
 
@@ -263,16 +268,16 @@ export function NamespaceCollaborationPanel() {
             </Button>
           </form>
 
-          {invitationToken && (
+          {invitationUrl && (
             <div className="flex items-center gap-2 rounded-xl bg-[var(--surface-secondary)] p-3">
-              <code className="min-w-0 flex-1 truncate text-xs">{invitationToken}</code>
+              <code className="min-w-0 flex-1 truncate text-xs">{invitationUrl}</code>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void copyInvitationToken()}
+                onClick={() => void copyInvitationUrl()}
               >
-                <Copy className="h-3.5 w-3.5" /> Copy token
+                <Copy className="h-3.5 w-3.5" /> Copy link
               </Button>
             </div>
           )}

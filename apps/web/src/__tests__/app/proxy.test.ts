@@ -53,4 +53,13 @@ describe('proxy auth gating', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
   });
+
+  it('allows the invitation landing route to capture its browser-only fragment', () => {
+    process.env.AUTH_DISABLED = 'false';
+
+    const response = proxy(createRequest('/invite'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
 });
