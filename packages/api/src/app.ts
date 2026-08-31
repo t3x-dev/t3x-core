@@ -56,6 +56,7 @@ import {
   branchRoutes,
   checkRoutes,
   collaborationCommandRoutes,
+  collaborationInvitationRoutes,
   collaborationReadRoutes,
   commitFromDraftRoutes,
   commitRoutes,
@@ -227,6 +228,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', namespaceRoutes);
   api.route('/', collaborationReadRoutes);
   api.route('/', collaborationCommandRoutes);
+  api.route('/', collaborationInvitationRoutes);
   api.route('/', projectRoutes);
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);

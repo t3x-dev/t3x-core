@@ -193,6 +193,18 @@ export function assertProjectGrantExpiry(input: {
   }
 }
 
+/** Validate an invitation expiry against the server clock before persistence. */
+export function assertInvitationExpiry(input: { expires_at: string; evaluated_at: string }): void {
+  const expiresAt = timestamp(input.expires_at);
+  const evaluatedAt = timestamp(input.evaluated_at);
+  if (expiresAt === null || evaluatedAt === null || expiresAt <= evaluatedAt) {
+    throw new CollaborationInvariantError(
+      'INVALID_EXPIRY',
+      'Invitation expiry must be a valid timestamp after the server evaluation time'
+    );
+  }
+}
+
 /**
  * Enforce the last-owner invariant after the namespace authority row is locked.
  * Storage adapters must count active human owners in the same transaction.
@@ -352,6 +364,7 @@ export interface CollaborationLifecycleTransaction {
   applyProjectTransfer(plan: ProjectTransferPlan): Promise<void>;
   createInvitation(invitation: StoredCollaborationInvitationDto): Promise<void>;
   findInvitationByTokenHashForUpdate(tokenHash: string): Promise<CollaborationInvitationDto | null>;
+  findInvitationByIdForUpdate(invitationId: string): Promise<CollaborationInvitationDto | null>;
   acceptInvitation(input: {
     invitationId: string;
     acceptedByUserId: string;

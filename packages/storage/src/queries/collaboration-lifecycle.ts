@@ -139,6 +139,9 @@ export interface PostgresCollaborationLifecycleTransaction {
   findInvitationByTokenHashForUpdate(
     tokenHash: string
   ): Promise<StoredCollaborationInvitationDto | null>;
+  findInvitationByIdForUpdate(
+    invitationId: string
+  ): Promise<StoredCollaborationInvitationDto | null>;
   acceptInvitation(input: {
     invitationId: string;
     acceptedByUserId: string;
@@ -454,6 +457,16 @@ function createTransactionAdapter(db: AnyDB): PostgresCollaborationLifecycleTran
         .select()
         .from(collaborationInvitations)
         .where(eq(collaborationInvitations.tokenHash, tokenHash))
+        .for('update')
+        .limit(1);
+      return record ? invitationDto(record) : null;
+    },
+
+    async findInvitationByIdForUpdate(invitationId) {
+      const [record] = await db
+        .select()
+        .from(collaborationInvitations)
+        .where(eq(collaborationInvitations.invitationId, invitationId))
         .for('update')
         .limit(1);
       return record ? invitationDto(record) : null;
