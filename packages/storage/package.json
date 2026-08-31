@@ -62,6 +62,7 @@
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
+    "@t3x-dev/application": "workspace:*",
     "@t3x-dev/transition": "workspace:*",
     "@t3x-dev/yschema": "workspace:*",
     "@types/js-yaml": "^4.0.9",
