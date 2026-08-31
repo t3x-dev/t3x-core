@@ -12,6 +12,10 @@ vi.mock('@/components/settings/AccessSettingsPanel', () => ({
   AccessSettingsPanel: () => <div>Mock Access Settings Panel</div>,
 }));
 
+vi.mock('@/components/settings/NamespaceCollaborationPanel', () => ({
+  NamespaceCollaborationPanel: () => <div>Mock Namespace Collaboration Panel</div>,
+}));
+
 vi.mock('@/components/settings/PreferencesSettingsPanel', () => ({
   PreferencesSettingsPanel: () => <div>Mock Preferences Settings Panel</div>,
 }));
@@ -61,12 +65,11 @@ describe('settings pages', () => {
   it('renders the access page shell around the shared panel', () => {
     render(<AccessPage />);
 
-    expect(screen.getByRole('heading', { name: 'API Access' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Access' })).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Manage T3X API keys plus the local API URL/key used by WebUI, CLI, and MCP.'
-      )
+      screen.getByText('Manage workspace members, invitations, API keys, and local client access.')
     ).toBeInTheDocument();
+    expect(screen.getByText('Mock Namespace Collaboration Panel')).toBeInTheDocument();
     expect(screen.getByText('Mock Access Settings Panel')).toBeInTheDocument();
   });
 
