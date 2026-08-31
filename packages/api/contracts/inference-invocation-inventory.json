@@ -30,8 +30,10 @@
     {
       "file": "packages/api/src/lib/source-chat-draft-reply.ts",
       "feature": "source-chat-draft-reply",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Structured Source Chat drafts use the shared admission and terminal receipt lifecycle."
     },
     {
       "file": "packages/api/src/lib/usage-tracking.ts",

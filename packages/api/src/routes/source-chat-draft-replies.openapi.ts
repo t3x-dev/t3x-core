@@ -1,6 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   createSourceChatDraftReply,
@@ -93,8 +100,15 @@ const draftReplyRoute = createRoute({
 });
 
 export const sourceChatDraftReplyRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+const defaultInferenceRuntime = createInferenceRuntime();
 
 function sourceChatDraftErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (error instanceof InferenceAdmissionDeniedError) {
+    return c.json(
+      { success: false as const, error: { code: 'RATE_LIMITED' as const, message: error.message } },
+      429
+    );
+  }
   if (error instanceof SourceChatDraftReplyError) {
     if (error.kind === 'source_not_found') return errorResponse(c, 'NOT_FOUND', error.message);
     if (error.kind === 'source_project_mismatch') {
@@ -122,8 +136,8 @@ sourceChatDraftReplyRoutes.openapi(draftReplyRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const request = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
-  if (access instanceof Response) return access;
+  const project = await assertProjectAccess(c, db, projectId);
+  if (project instanceof Response) return project;
 
   try {
     const created = await createSourceChatDraftReply(db, {
@@ -135,6 +149,16 @@ sourceChatDraftReplyRoutes.openapi(draftReplyRoute, async (c) => {
       provider: request.provider,
       model: request.model,
       userId: getUserId(c),
+      inference: {
+        runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+        runId: resolveInferenceRunId(c),
+        scope: {
+          actor: resolveInferenceActor(c),
+          projectId,
+          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+          projectVisibility: 'unknown',
+        },
+      },
     });
     return c.json({ success: true as const, data: created }, 200);
   } catch (error) {
