@@ -4,20 +4,17 @@ import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { toast } from 'sonner';
 import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';
 import { traceYamlToChat } from '@/domain/hoverTrace';
 import type { SourceMapping } from '@/domain/sourceMap';
 import type { SourceTextDraftSpan } from '@/domain/sourceTextDrafts';
-import { useSlotActions } from '@/hooks/shared/useSlotActions';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { Citation } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
-import { SourceHighlight } from './SourceHighlight';
 import { ThinkingSection } from './ThinkingSection';
 
 interface ChatMessageProps {
@@ -236,15 +233,11 @@ function SourceMappedText({
   mappings,
   hoveredNodeId,
   onClickSlot,
-  isReviewPhase,
-  onDeleteSlot,
 }: {
   content: string;
   mappings: SourceMapping[];
   hoveredNodeId: string | null;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
-  isReviewPhase: boolean;
-  onDeleteSlot?: (nodeId: string, slotKey: string) => void;
 }) {
   const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
 
@@ -258,22 +251,7 @@ function SourceMappedText({
         const m = seg.mapping;
         const isActive = hoveredNodeId === m.treePath;
 
-        // For review phase: use SourceHighlight with tooltip + edit/delete
-        if (isReviewPhase) {
-          return (
-            <SourceHighlight
-              key={seg.key}
-              text={seg.text}
-              nodeId={m.treePath}
-              slotKey={m.slotKey ?? ''}
-              isActive={isActive}
-              onEdit={(nid, sk) => onClickSlot(nid, sk)}
-              onDelete={onDeleteSlot ? (nid, sk) => onDeleteSlot(nid, sk) : undefined}
-            />
-          );
-        }
-
-        // Non-review phase: green underline default, purple when active
+        // Source evidence remains traceable here; mutations happen in Repository Workspace.
         const spanStyle: React.CSSProperties = {
           background: isActive
             ? 'color-mix(in srgb, var(--source) 30%, transparent)'
@@ -469,15 +447,11 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
-  const { deleteSlot } = useSlotActions();
   const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
   const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
   const hoverSourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
-  const wsMode = useWorkspaceStore((s) => s.mode);
-  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const isReviewPhase = !isCommitted && (wsMode === 'executed' || wsMode === 'committing');
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -564,8 +538,6 @@ export function ChatMessage({
     !useSourceMappedSpans &&
     !useCoverageHighlights &&
     hasCommittedHighlights;
-
-  const showSourceEditHint = !isCommitted && !isUser && !isStreaming && Boolean(turnHash);
 
   return (
     <div
@@ -661,8 +633,6 @@ export function ChatMessage({
                         mappings={sourceMap!}
                         hoveredNodeId={hoveredNodeId}
                         onClickSlot={handleClickSlot}
-                        isReviewPhase={isReviewPhase}
-                        onDeleteSlot={deleteSlot}
                       />
                     ) : useCommittedHighlightSpans ? (
                       <CommittedHighlightText content={content} highlights={committedHighlights!} />
@@ -674,19 +644,6 @@ export function ChatMessage({
               </div>
             ) : (
               <div className="relative">
-                {showSourceEditHint && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      toast.message('Select source text to Insert after, Replace, or Delete.')
-                    }
-                    className="absolute right-0 top-0 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-tertiary)] opacity-0 transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] hover:opacity-100 group-hover:opacity-55"
-                    title="Select text to Insert after, Replace, or Delete"
-                    aria-label="Source text edit hint"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
                 {thinkingContent && (
                   <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
                 )}
@@ -694,7 +651,6 @@ export function ChatMessage({
                   ref={textRef}
                   className={cn(
                     'prose-chat text-[14px] leading-[1.7] text-[var(--text-primary)]',
-                    showSourceEditHint && 'pr-9',
                     isStreaming && 'streaming-text'
                   )}
                 >
@@ -719,8 +675,6 @@ export function ChatMessage({
                         mappings={sourceMap!}
                         hoveredNodeId={hoveredNodeId}
                         onClickSlot={handleClickSlot}
-                        isReviewPhase={isReviewPhase}
-                        onDeleteSlot={deleteSlot}
                       />
                     </div>
                   ) : useCommittedHighlightSpans ? (

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHAT_WORKSPACE_TOUR_STEPS, ChatWorkspace } from '@/components/chat/ChatWorkspace';
@@ -14,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   ensureProject: vi.fn(),
   addPin: vi.fn(),
   fetchPins: vi.fn(),
-  handleExtract: vi.fn(),
   handleModelChange: vi.fn(),
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
@@ -31,20 +29,6 @@ const mocks = vi.hoisted(() => ({
   refreshProjectMaterials: vi.fn(),
   uploadMaterial: vi.fn(),
   archiveMaterial: vi.fn(),
-  textSelection: {
-    current: null as null | {
-      selection: {
-        text: string;
-        turnHash: string;
-        turnRole: string;
-        turnText: string;
-        startChar: number;
-        endChar: number;
-        rect: DOMRect;
-      };
-      clearSelection: () => void;
-    },
-  },
 }));
 
 vi.mock('sonner', () => ({
@@ -106,13 +90,6 @@ vi.mock('@/hooks/conversations/useConversationChat', () => ({
   },
 }));
 
-vi.mock('@/hooks/drafts/useExtraction', () => ({
-  useExtraction: () => ({
-    handleExtract: mocks.handleExtract,
-    isExtracting: false,
-  }),
-}));
-
 vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
   useProjectLeaves: () => ({
     leaves: mocks.projectLeaves,
@@ -169,11 +146,6 @@ vi.mock('@/hooks/shared/useRealtimeSync', () => ({
   useRealtimeSync: () => undefined,
 }));
 
-vi.mock('@/hooks/shared/useTextSelection', () => ({
-  useTextSelection: () =>
-    mocks.textSelection.current ?? { selection: null, clearSelection: vi.fn() },
-}));
-
 vi.mock('@/hooks/shared/useUndo', () => ({
   useUndo: () => undefined,
   useUndoTracker: () => ({ trackAction: vi.fn() }),
@@ -181,10 +153,6 @@ vi.mock('@/hooks/shared/useUndo', () => ({
 
 vi.mock('@/components/chat/ChatMessage', () => ({
   ChatMessage: () => null,
-}));
-
-vi.mock('@/components/chat/ChatSpanActions', () => ({
-  ChatSpanActions: () => <div data-testid="chat-span-actions" />,
 }));
 
 function makeContextManifest(): ConversationContextManifest {
@@ -256,17 +224,11 @@ const sourceDocumentMaterial = {
   created_by: null,
 } satisfies Material;
 
-const extractedOp = {
-  set: { path: 'concepts/title', value: 'understand' },
-  source: { type: 'llm', provider: 'anthropic', model: 'claude-sonnet' },
-} as SourcedYOp;
-
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
-    mocks.textSelection.current = null;
     mocks.parentConversationId = null;
     mocks.contextManifest = null;
     mocks.projectLeaves = [];
@@ -282,7 +244,7 @@ describe('ChatWorkspace', () => {
     workspace.setActiveProject('proj_123');
     workspace.setConversation('conv_123');
     workspace.setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
-    useChatStore.setState({ activeBranch: 'main' });
+    useChatStore.setState({ activeBranch: 'main', activeProjectId: 'proj_123' });
     usePinsStore.setState({
       pins: [],
       loading: false,
@@ -292,26 +254,24 @@ describe('ChatWorkspace', () => {
     });
   });
 
-  it('guides the demo through commit before moving to canvas', () => {
+  it('guides the demo from exact Sources into Repository Workspace', () => {
     const stepIds = CHAT_WORKSPACE_TOUR_STEPS.map((step) => step.id);
 
-    expect(stepIds.slice(stepIds.indexOf('apply') + 1)).toEqual([
-      'commit',
-      'commit-confirm',
-      'canvas',
-    ]);
-    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'commit')?.target).toBe(
-      'chat-commit-action'
-    );
-    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'commit-confirm')?.target).toBe(
-      'chat-commit-confirm'
-    );
-    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'canvas')?.target).toBe(
-      'sidebar-canvas-tab'
+    expect(stepIds).toEqual(['sources', 'conversation', 'workspace']);
+    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'workspace')?.target).toBe(
+      'chat-workspace-action'
     );
   });
 
-  it('opens source chooser inside Sources instead of the composer or message stream', () => {
+  it('hands the exact conversation and branch to Repository Workspace', () => {
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.getByTestId('open-workspace-button').getAttribute('href')).toBe(
+      '/project/proj_123?branch=main&tab=workspaces&sourceConversation=conv_123'
+    );
+  });
+
+  it('keeps the source chooser explicit and separate from repository mutation', () => {
     mocks.parentConversationId = 'conv_parent';
     mocks.contextManifest = makeContextManifest();
     useWorkspaceStore.getState().setDerived({
@@ -323,16 +283,7 @@ describe('ChatWorkspace', () => {
     });
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent('t3x:extract-requested', {
-          detail: { chooseSources: true },
-        })
-      );
-    });
-
-    expect(mocks.handleExtract).not.toHaveBeenCalled();
-    expect(mocks.toastMessage).not.toHaveBeenCalledWith('No pinned sources yet');
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
 
     const manifest = screen.getByRole('region', { name: /sources/i });
     const messageScroll = screen.getByTestId('chat-message-scroll');
@@ -381,103 +332,6 @@ describe('ChatWorkspace', () => {
     expect(screen.queryByText('Baseline parent')).toBeNull();
   });
 
-  it('hides source text actions before YOps content exists', () => {
-    mocks.textSelection.current = {
-      selection: {
-        text: 'understand',
-        turnHash: 'sha256:t1',
-        turnRole: 'assistant',
-        turnText: 'hello',
-        startChar: 10,
-        endChar: 20,
-        rect: new DOMRect(),
-      },
-      clearSelection: vi.fn(),
-    };
-    useWorkspaceStore.getState().setMode('idle');
-
-    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
-
-    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
-  });
-
-  it('shows source text actions for a valid selection after YOps content is applied', () => {
-    mocks.textSelection.current = {
-      selection: {
-        text: 'understand',
-        turnHash: 'sha256:t1',
-        turnRole: 'assistant',
-        turnText: 'hello',
-        startChar: 10,
-        endChar: 20,
-        rect: new DOMRect(),
-      },
-      clearSelection: vi.fn(),
-    };
-    useWorkspaceStore.getState().setMode('idle');
-    useWorkspaceStore.getState().setDerived({
-      tree: { trees: [], relations: [] },
-      sourceIndex: new Map(),
-      opsLog: [extractedOp],
-    });
-
-    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
-
-    expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
-  });
-
-  it('hides source text actions while an extraction draft is waiting for Apply', () => {
-    mocks.textSelection.current = {
-      selection: {
-        text: 'understand',
-        turnHash: 'sha256:t1',
-        turnRole: 'assistant',
-        turnText: 'hello',
-        startChar: 10,
-        endChar: 20,
-        rect: new DOMRect(),
-      },
-      clearSelection: vi.fn(),
-    };
-    useWorkspaceStore.getState().setMode('idle');
-    useWorkspaceStore.getState().setDraft({
-      ops: [extractedOp],
-      tree: { trees: [], relations: [] },
-    });
-
-    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
-
-    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
-  });
-
-  it('hides source text actions while manual YOps changes are waiting to run', () => {
-    mocks.textSelection.current = {
-      selection: {
-        text: 'understand',
-        turnHash: 'sha256:t1',
-        turnRole: 'assistant',
-        turnText: 'hello',
-        startChar: 10,
-        endChar: 20,
-        rect: new DOMRect(),
-      },
-      clearSelection: vi.fn(),
-    };
-    useWorkspaceStore.getState().setMode('idle');
-    useWorkspaceStore.getState().setDerived({
-      tree: { trees: [], relations: [] },
-      sourceIndex: new Map(),
-      opsLog: [extractedOp],
-    });
-    useWorkspaceStore
-      .getState()
-      .setEditorOverride('yops:\n  - set:\n      path: x\n      value: y\n');
-
-    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
-
-    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
-  });
-
   it('hides project context controls for temporary chats', () => {
     render(<ChatWorkspace conversationId="temp_chat_1" />);
 
@@ -507,25 +361,6 @@ describe('ChatWorkspace', () => {
       );
     });
     expect(mocks.useContextManifest).toHaveBeenLastCalledWith(null);
-  });
-
-  it('does not show source text actions for a user question selection', () => {
-    mocks.textSelection.current = {
-      selection: {
-        text: 'question text',
-        turnHash: 'sha256:t1',
-        turnRole: 'user',
-        turnText: 'question text',
-        startChar: 0,
-        endChar: 12,
-        rect: new DOMRect(),
-      },
-      clearSelection: vi.fn(),
-    };
-
-    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
-
-    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
   });
 
   it('uploads a material and immediately adds it to the current conversation context', async () => {

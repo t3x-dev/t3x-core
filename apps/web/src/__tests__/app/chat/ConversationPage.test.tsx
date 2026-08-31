@@ -6,11 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 let searchParamsValue: URLSearchParams = new URLSearchParams();
 let storeProjectId: string | null = null;
 let routeConversationId = 'conv_123';
-let compactViewport = false;
-const workspaceMock = vi.hoisted(() => ({
-  expanded: false,
-  setActiveProject: vi.fn(),
-}));
 const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
@@ -29,19 +24,11 @@ vi.mock('@/components/chat/ChatWorkspace', () => ({
   ChatWorkspace: vi.fn(() => null),
 }));
 
-vi.mock('@/components/chat/YOpsWorkspace', () => ({
-  YOpsWorkspace: vi.fn(() => null),
-}));
-
 vi.mock('@/hooks/conversations/useInheritFromCommit', () => ({
   useInheritFromCommit: () => ({
     inheritFromCommitHash: null,
     clearInherit: vi.fn(),
   }),
-}));
-
-vi.mock('@/hooks/shared/useChatCompactViewport', () => ({
-  useChatCompactViewport: () => compactViewport,
 }));
 
 vi.mock('@/store/chatStore', () => ({
@@ -53,31 +40,14 @@ vi.mock('@/store/temporaryChatsStore', () => ({
   isTemporaryChatId: (id: string) => id.startsWith('temp_'),
 }));
 
-vi.mock('@/store/workspaceStore', () => {
-  type WorkspaceMockState = {
-    setActiveProject: (id: string | null) => void;
-  };
-  const state: WorkspaceMockState = {
-    setActiveProject: workspaceMock.setActiveProject,
-  };
-  return {
-    selectPanelExpanded: () => workspaceMock.expanded,
-    useWorkspaceStore: (selector: (s: WorkspaceMockState) => unknown) => selector(state),
-  };
-});
-
 import ConversationPage from '@/app/chat/[conversationId]/page';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
-import { CHAT_COLUMN_MIN_WIDTH } from '@/utils/chatWorkspaceLayout';
 
 afterEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
   storeProjectId = null;
   routeConversationId = 'conv_123';
-  compactViewport = false;
-  workspaceMock.expanded = false;
   redirectResolverMock.mockReset().mockResolvedValue({ project_id: 'proj_resolved' });
 });
 
@@ -155,47 +125,6 @@ describe('ConversationPage', () => {
         projectId: undefined,
       })
     );
-    expect(workspaceMock.setActiveProject).toHaveBeenCalledWith(null);
-  });
-
-  it('clamps the expanded workspace width against the actual chat container on first layout', async () => {
-    workspaceMock.expanded = true;
-    searchParamsValue = new URLSearchParams({ projectId: 'proj_url' });
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1280,
-    });
-    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      right: 1072,
-      top: 0,
-      bottom: 720,
-      width: 1072,
-      height: 720,
-      toJSON: () => ({}),
-    });
-
-    render(<ConversationPage />);
-
-    await waitFor(() => {
-      expect(vi.mocked(YOpsWorkspace).mock.calls.at(-1)?.[0].customWidth).toBe(536);
-    });
-    expect(vi.mocked(ChatWorkspace).mock.calls.at(-1)?.[0].style).toEqual({
-      minWidth: CHAT_COLUMN_MIN_WIDTH,
-    });
-
-    rectSpy.mockRestore();
-  });
-
-  it('hides the workspace rail on compact viewports so chat keeps usable width', () => {
-    compactViewport = true;
-    workspaceMock.expanded = true;
-
-    render(<ConversationPage />);
-
-    expect(vi.mocked(YOpsWorkspace)).not.toHaveBeenCalled();
   });
 
   it('redirects an explicitly marked provenance deep link without opening Chat', async () => {
