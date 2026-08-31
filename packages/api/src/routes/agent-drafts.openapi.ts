@@ -16,8 +16,17 @@ import {
   insertAgentDraft,
   updateAgentDraft,
 } from '@t3x-dev/storage';
+import { generateAgentDraftText } from '../lib/agent-draft-generation';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  InferenceExecutionError,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
@@ -529,6 +538,11 @@ const PatchAgentDraftRequestSchema = z.object({
 // ============================================================================
 
 export const agentDraftRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+const defaultInferenceRuntime = createInferenceRuntime();
+
+function agentDraftProviderError(error: unknown): unknown {
+  return error instanceof InferenceExecutionError ? error.cause : error;
+}
 
 // POST /v1/agent/drafts
 const createAgentDraftRoute = createRoute({
@@ -567,8 +581,8 @@ agentDraftRoutes.openapi(createAgentDraftRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const accessResult = await assertProjectAccess(c, db, body.project_id);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, body.project_id);
+    if (project instanceof Response) return project;
 
     // Verify conversation exists
     const conversation = await findConversationById(db, body.conversation_id);
@@ -644,10 +658,23 @@ agentDraftRoutes.openapi(createAgentDraftRoute, async (c) => {
     }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const genResult = await llmProviderInstance!.generate(fullPrompt, {
+    const execution = await generateAgentDraftText({
+      runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+      runId: resolveInferenceRunId(c),
+      feature: 'agent-draft.create',
+      scope: {
+        actor: resolveInferenceActor(c),
+        projectId: body.project_id,
+        ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+        projectVisibility: 'unknown',
+      },
+      provider: llmProviderInstance!,
+      model: llmConfig.model,
+      prompt: fullPrompt,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });
+    const genResult = execution.value;
     const generatedText = genResult.text;
 
     // Record usage (fire-and-forget)
@@ -704,11 +731,18 @@ agentDraftRoutes.openapi(createAgentDraftRoute, async (c) => {
 
     return c.json({ success: true as const, data }, 201);
   } catch (err) {
-    if (err instanceof LLMProviderError) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: 'RATE_LIMITED', message: err.message } },
+        429
+      );
+    }
+    const providerError = agentDraftProviderError(err);
+    if (providerError instanceof LLMProviderError) {
       return c.json(
         {
           success: false as const,
-          error: { code: 'LLM_ERROR', message: err.message },
+          error: { code: 'LLM_ERROR', message: providerError.message },
         },
         500
       );
@@ -843,8 +877,8 @@ agentDraftRoutes.openapi(patchAgentDraftRoute, async (c) => {
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft ${draftId} not found`);
     }
-    const accessResult = await assertProjectAccess(c, db, draft.projectId);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, draft.projectId);
+    if (project instanceof Response) return project;
 
     // Parse existing data
     const bridgePayload = draft.bridgePayloadJson ? JSON.parse(draft.bridgePayloadJson) : {};
@@ -904,10 +938,23 @@ agentDraftRoutes.openapi(patchAgentDraftRoute, async (c) => {
     }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const genResult = await patchProvider.generate(fullPrompt, {
+    const execution = await generateAgentDraftText({
+      runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+      runId: resolveInferenceRunId(c),
+      feature: 'agent-draft.patch',
+      scope: {
+        actor: resolveInferenceActor(c),
+        projectId: draft.projectId,
+        ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+        projectVisibility: 'unknown',
+      },
+      provider: patchProvider,
+      model: llmConfig.model,
+      prompt: fullPrompt,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });
+    const genResult = execution.value;
     const generatedText = genResult.text;
 
     // Record usage (fire-and-forget)
@@ -954,11 +1001,18 @@ agentDraftRoutes.openapi(patchAgentDraftRoute, async (c) => {
 
     return c.json({ success: true as const, data }, 200);
   } catch (err) {
-    if (err instanceof LLMProviderError) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: 'RATE_LIMITED', message: err.message } },
+        429
+      );
+    }
+    const providerError = agentDraftProviderError(err);
+    if (providerError instanceof LLMProviderError) {
       return c.json(
         {
           success: false as const,
-          error: { code: 'LLM_ERROR', message: err.message },
+          error: { code: 'LLM_ERROR', message: providerError.message },
         },
         500
       );
