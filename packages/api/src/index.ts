@@ -20,6 +20,17 @@ export {
 export { cleanupExpiredRateLimitBuckets, cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
 export { createApp } from './app';
+export {
+  COLLABORATION_INVITATION_TOKEN_PREFIX,
+  COLLABORATION_INVITATION_TOKEN_SECRET_BYTES,
+  type CollaborationInvitationToken,
+  type CollaborationInvitationTokenHash,
+  hashCollaborationInvitationToken,
+  type IssuedCollaborationInvitationToken,
+  isCollaborationInvitationToken,
+  issueCollaborationInvitationToken,
+  verifyCollaborationInvitationToken,
+} from './lib/collaboration-invitation-token';
 // Database
 export { closeDB, getDB, getRuntimePostgresClient } from './lib/db';
 export {
