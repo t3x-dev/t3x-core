@@ -205,3 +205,29 @@ export async function listProjectInvitationViews(
     .orderBy(asc(collaborationInvitations.createdAt), asc(collaborationInvitations.invitationId));
   return rows.map(invitationDto);
 }
+
+/** Resolve one safe invitation by id before authorization; no token hash is returned. */
+export async function findCollaborationInvitationViewById(
+  db: AnyDB,
+  invitationId: string
+): Promise<StoredCollaborationInvitationDto | null> {
+  const [row] = await db
+    .select()
+    .from(collaborationInvitations)
+    .where(eq(collaborationInvitations.invitationId, invitationId))
+    .limit(1);
+  return row ? invitationDto(row) : null;
+}
+
+/** First stage of deadlock-safe acceptance; re-read under lock before mutation. */
+export async function findCollaborationInvitationViewByTokenHash(
+  db: AnyDB,
+  tokenHash: string
+): Promise<StoredCollaborationInvitationDto | null> {
+  const [row] = await db
+    .select()
+    .from(collaborationInvitations)
+    .where(eq(collaborationInvitations.tokenHash, tokenHash))
+    .limit(1);
+  return row ? invitationDto(row) : null;
+}

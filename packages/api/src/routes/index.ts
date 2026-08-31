@@ -11,6 +11,7 @@ export { branchRoutes } from './branches.openapi';
 export { chatRoutes, generationRoutes } from './chat.openapi';
 export { checkRoutes } from './check.openapi';
 export { collaborationCommandRoutes } from './collaboration-commands.openapi';
+export { collaborationInvitationRoutes } from './collaboration-invitations.openapi';
 export { collaborationReadRoutes } from './collaboration-reads.openapi';
 export { commitFromDraftRoutes } from './commit-from-draft.openapi';
 export { commitRoutes } from './commits.openapi';

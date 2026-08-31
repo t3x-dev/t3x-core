@@ -80,6 +80,8 @@ export {
   type StoredProjectTransferPlan,
 } from './collaboration-lifecycle';
 export {
+  findCollaborationInvitationViewById,
+  findCollaborationInvitationViewByTokenHash,
   listNamespaceAccountFacts,
   listNamespaceInvitationViews,
   listNamespaceMemberViews,
