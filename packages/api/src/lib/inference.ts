@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { MiddlewareHandler } from 'hono';
+import type { ApiKey } from '@t3x-dev/core';
+import type { Context, MiddlewareHandler } from 'hono';
 
 /**
  * Provider-neutral inference execution contracts.
@@ -183,6 +184,23 @@ export interface InferenceRuntime {
   ): Promise<InferenceStream<T>>;
 }
 
+export interface MeteredInferenceResult<T> {
+  value: T;
+  usage: InferenceUsage;
+  finishStatus?: InferenceFinishStatus;
+  providerRequestId?: string;
+  providerReportedCost?: InferenceProviderCost;
+}
+
+export interface MeteredInferenceCall<T> {
+  runtime: InferenceRuntime;
+  input: InferenceExecutionInput;
+  resolvedProvider: string;
+  resolvedModel: string;
+  invoke(): Promise<MeteredInferenceResult<T>>;
+  now?: () => Date;
+}
+
 export class InferenceAdmissionDeniedError extends Error {
   constructor(
     public readonly code: string,
@@ -203,6 +221,84 @@ export class InferenceExecutionError extends Error {
     super(cause instanceof Error ? cause.message : 'Inference execution failed');
     this.name = 'InferenceExecutionError';
   }
+}
+
+/** Resolve the authenticated actor from trusted middleware context only. */
+export function resolveInferenceActor(context: Context): InferenceActor {
+  const hostedUserId = context.get('userId');
+  if (typeof hostedUserId === 'string' && hostedUserId.length > 0) {
+    return { kind: 'user', id: hostedUserId };
+  }
+
+  const apiKey = context.get('apiKey') as ApiKey | undefined;
+  if (apiKey?.principal_kind === 'human' && apiKey.user_id) {
+    return { kind: 'user', id: apiKey.user_id };
+  }
+  if (apiKey?.principal_kind === 'agent' || apiKey?.principal_kind === 'service') {
+    return {
+      kind: apiKey.principal_kind,
+      id: `${apiKey.principal_kind}:api-key:${apiKey.id}`,
+    };
+  }
+  return { kind: 'anonymous', id: null };
+}
+
+/** Preserve an installed request ID as the parent run across model attempts. */
+export function resolveInferenceRunId(context: Context): string {
+  const requestId = context.get('requestId');
+  return typeof requestId === 'string' && requestId.length > 0
+    ? `request:${requestId}`
+    : `request:${randomUUID()}`;
+}
+
+/**
+ * Adapt one non-streaming provider call to the admission and settlement lifecycle.
+ * Once invocation starts, an error is conservatively uncertain because the shared
+ * layer cannot prove whether the upstream provider accepted the request.
+ */
+export function executeMeteredInference<T>(
+  call: MeteredInferenceCall<T>
+): Promise<InferenceExecution<T>> {
+  const now = call.now ?? (() => new Date());
+  return call.runtime.execute(call.input, async (attempt) => {
+    const startedAt = now().toISOString();
+    try {
+      const result = await call.invoke();
+      return {
+        ok: true,
+        value: result.value,
+        terminal: {
+          kind: 'receipt',
+          receipt: {
+            contractVersion: INFERENCE_CONTRACT_VERSION,
+            generationId: attempt.generationId,
+            runId: attempt.runId,
+            requestedModel: attempt.requestedModel,
+            resolvedModel: call.resolvedModel,
+            resolvedProvider: call.resolvedProvider,
+            ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
+            usage: result.usage,
+            ...(result.providerReportedCost
+              ? { providerReportedCost: result.providerReportedCost }
+              : {}),
+            finishStatus: result.finishStatus ?? 'stop',
+            startedAt,
+            completedAt: now().toISOString(),
+          },
+        },
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error,
+        terminal: {
+          kind: 'uncertain',
+          reason: 'provider_error',
+          detail: errorDetail(error),
+        },
+      };
+    }
+  });
 }
 
 export const allowAllInferenceAdmissionPolicy: InferenceAdmissionPolicy = {

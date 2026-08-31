@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
 import {
   createInferenceRuntime,
+  executeMeteredInference,
   INFERENCE_CONTRACT_VERSION,
   InferenceAdmissionDeniedError,
   type InferenceAdmissionPolicy,
@@ -63,6 +64,69 @@ function recordingPolicy(events: string[]): InferenceAdmissionPolicy {
 }
 
 describe('provider-neutral inference runtime', () => {
+  it('adapts a metered provider result into one normalized receipt', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_metered',
+      now: () => new Date('2026-08-30T00:00:00.000Z'),
+    });
+    const timestamps = [new Date('2026-08-30T00:00:01.000Z'), new Date('2026-08-30T00:00:02.000Z')];
+
+    const result = await executeMeteredInference({
+      runtime,
+      input: executionInput,
+      resolvedProvider: 'openai',
+      resolvedModel: 'gpt-resolved',
+      now: () => timestamps.shift()!,
+      async invoke() {
+        events.push('provider');
+        return {
+          value: 'generated',
+          usage: { inputTokens: 12, outputTokens: 7, cacheReadTokens: 3 },
+          providerRequestId: 'provider-request-metered',
+        };
+      },
+    });
+
+    expect(result.value).toBe('generated');
+    expect(result.receipt).toMatchObject({
+      generationId: 'gen_metered',
+      resolvedProvider: 'openai',
+      resolvedModel: 'gpt-resolved',
+      providerRequestId: 'provider-request-metered',
+      usage: { inputTokens: 12, outputTokens: 7, cacheReadTokens: 3 },
+      finishStatus: 'stop',
+      startedAt: '2026-08-30T00:00:01.000Z',
+      completedAt: '2026-08-30T00:00:02.000Z',
+    });
+    expect(events).toEqual(['authorize:gen_metered', 'provider', 'settle:receipt']);
+  });
+
+  it('treats a metered provider error as uncertain after admission', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_metered_error',
+    });
+
+    await expect(
+      executeMeteredInference({
+        runtime,
+        input: executionInput,
+        resolvedProvider: 'anthropic',
+        resolvedModel: 'claude-resolved',
+        async invoke() {
+          throw new Error('connection ended after request write');
+        },
+      })
+    ).rejects.toMatchObject({
+      name: InferenceExecutionError.name,
+      terminal: { kind: 'uncertain', reason: 'provider_error' },
+    });
+    expect(events).toEqual(['authorize:gen_metered_error', 'settle:uncertain']);
+  });
+
   it('allocates one generation identity before authorization and settles a receipt', async () => {
     const events: string[] = [];
     const runtime = createInferenceRuntime({

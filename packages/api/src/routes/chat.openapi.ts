@@ -9,15 +9,8 @@
  * GET  /v1/chat/providers — List available providers (OpenAPI route)
  */
 
-import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type {
-  ApiKey,
-  GenerationRuntimeProviderId,
-  LLMPrompt,
-  LLMProvider,
-  LLMResult,
-} from '@t3x-dev/core';
+import type { GenerationRuntimeProviderId, LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
 import {
   GENERATION_RUNTIME_PROVIDER_IDS,
   isGenerationRuntimeProviderId,
@@ -32,13 +25,14 @@ import {
   createInferenceRuntime,
   getInferenceRuntime,
   INFERENCE_CONTRACT_VERSION,
-  type InferenceActor,
   InferenceAdmissionDeniedError,
   type InferenceAttempt,
   type InferenceFinishStatus,
   type InferenceReceipt,
   type InferenceStream,
   type InferenceTerminal,
+  resolveInferenceActor,
+  resolveInferenceRunId,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
@@ -603,30 +597,6 @@ function getAuthenticatedUserId(c: Context): string | undefined {
   const hostedUserId = context.get('userId');
   if (typeof hostedUserId === 'string' && hostedUserId.length > 0) return hostedUserId;
   return getUserId(c);
-}
-
-function resolveInferenceActor(c: Context): InferenceActor {
-  const context = readInferenceContext(c);
-  const hostedUserId = context.get('userId');
-  if (typeof hostedUserId === 'string' && hostedUserId.length > 0) {
-    return { kind: 'user', id: hostedUserId };
-  }
-
-  const apiKey = context.get('apiKey') as ApiKey | undefined;
-  if (apiKey?.principal_kind === 'human' && apiKey.user_id) {
-    return { kind: 'user', id: apiKey.user_id };
-  }
-  if (apiKey?.principal_kind === 'agent' || apiKey?.principal_kind === 'service') {
-    return { kind: apiKey.principal_kind, id: `${apiKey.principal_kind}:api-key:${apiKey.id}` };
-  }
-  return { kind: 'anonymous', id: null };
-}
-
-function resolveInferenceRunId(c: Context): string {
-  const requestId = readInferenceContext(c).get('requestId');
-  return typeof requestId === 'string' && requestId.length > 0
-    ? `request:${requestId}`
-    : `request:${randomUUID()}`;
 }
 
 function normalizeFinishStatus(value: string | undefined): InferenceFinishStatus {

@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMock = vi.hoisted(() => ({
-  findProjectById: vi.fn((_db, projectId: string) => Promise.resolve({ projectId, ownerId: null })),
+  findProjectById: vi.fn((_db, projectId: string) =>
+    Promise.resolve({ projectId, ownerId: null, namespaceId: 'ns_1' })
+  ),
 }));
 
 const draftReplyMock = vi.hoisted(() => ({ createSourceChatDraftReply: vi.fn() }));
@@ -86,6 +88,15 @@ describe('Source Chat draft reply routes', () => {
         provider: 'google',
         model: 'gemini-3.6-flash',
         expectedRevision: 7,
+        inference: expect.objectContaining({
+          runId: expect.stringMatching(/^request:/),
+          scope: {
+            actor: { kind: 'anonymous', id: null },
+            namespaceId: 'ns_1',
+            projectId: 'proj_1',
+            projectVisibility: 'unknown',
+          },
+        }),
       })
     );
     await expect(response.json()).resolves.toMatchObject({

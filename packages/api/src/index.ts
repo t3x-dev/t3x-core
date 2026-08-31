@@ -53,6 +53,7 @@ export {
   createInferenceRuntime,
   createInferenceRuntimeMiddleware,
   directInferenceGateway,
+  executeMeteredInference,
   getInferenceRuntime,
   INFERENCE_CONTRACT_VERSION,
   type InferenceActor,
@@ -76,6 +77,10 @@ export {
   type InferenceStream,
   type InferenceTerminal,
   type InferenceUsage,
+  type MeteredInferenceCall,
+  type MeteredInferenceResult,
+  resolveInferenceActor,
+  resolveInferenceRunId,
 } from './lib/inference';
 // Background tasks
 export {
