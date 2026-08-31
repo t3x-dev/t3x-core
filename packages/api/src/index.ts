@@ -5,6 +5,13 @@
  * so consumers (apps/api thin launcher, t3x_cloud) can import from '@t3x-dev/api'.
  */
 
+import type { CollaborationLifecycleUnitOfWork } from '@t3x-dev/application';
+import type { PostgresCollaborationLifecycleUnitOfWork } from '@t3x-dev/storage';
+
+type AssertCollaborationPortCompatibility<T extends CollaborationLifecycleUnitOfWork> = T;
+type _PostgresCollaborationPortCompatibility =
+  AssertCollaborationPortCompatibility<PostgresCollaborationLifecycleUnitOfWork>;
+
 export {
   type AccountOperation,
   AccountOperationSchema,

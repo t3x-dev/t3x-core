@@ -57,6 +57,28 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
+// Collaboration lifecycle
+export {
+  CollaborationStorageError,
+  type CollaborationStorageErrorCode,
+  createPostgresCollaborationLifecycleUnitOfWork,
+  type PostgresCollaborationLifecycleTransaction,
+  type PostgresCollaborationLifecycleUnitOfWork,
+  type StoredCollaborationInvitationDto,
+  type StoredCollaborationInvitationInsert,
+  type StoredCollaborationInvitationTarget,
+  type StoredCollaborationPrincipalDto,
+  type StoredCollaborationPrincipalKind,
+  type StoredInvitationStatus,
+  type StoredMembershipStatus,
+  type StoredNamespaceMemberRole,
+  type StoredNamespaceMembershipDto,
+  type StoredNamespaceOwnershipTransferPlan,
+  type StoredNamespaceRole,
+  type StoredProjectGrantDto,
+  type StoredProjectGrantRole,
+  type StoredProjectTransferPlan,
+} from './collaboration-lifecycle';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
