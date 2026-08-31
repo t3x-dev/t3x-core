@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 69;
+export const POSTGRES_SCHEMA_VERSION = 70;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2381,6 +2381,104 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     WHERE namespace.kind = 'personal'
       AND namespace.owner_user_id IS NOT NULL
     ON CONFLICT (namespace_id, principal_kind, principal_id) DO NOTHING;
+  `);
+
+  // ── Schema v70: expiring grants and recipient-bound invitations ──
+  await sql.unsafe(`
+    ALTER TABLE project_grants
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'project_grants_expiry_check'
+          AND conrelid = 'project_grants'::regclass
+      ) THEN
+        ALTER TABLE project_grants
+          ADD CONSTRAINT project_grants_expiry_check
+          CHECK (expires_at IS NULL OR expires_at > created_at);
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS collaboration_invitations (
+      invitation_id TEXT PRIMARY KEY,
+      namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+      project_id TEXT,
+      recipient_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+      recipient_email TEXT,
+      role TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_by_principal_kind TEXT NOT NULL,
+      created_by_principal_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      accepted_at TIMESTAMPTZ,
+      accepted_by_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+      revoked_at TIMESTAMPTZ,
+      expired_at TIMESTAMPTZ,
+      CONSTRAINT collaboration_invitations_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT collaboration_invitations_recipient_check
+        CHECK (recipient_user_id IS NOT NULL OR recipient_email IS NOT NULL),
+      CONSTRAINT collaboration_invitations_email_check
+        CHECK (
+          recipient_email IS NULL
+          OR (recipient_email = lower(btrim(recipient_email)) AND length(recipient_email) > 0)
+        ),
+      CONSTRAINT collaboration_invitations_principal_kind_check
+        CHECK (created_by_principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT collaboration_invitations_role_check
+        CHECK (role IN ('admin', 'editor', 'viewer')),
+      CONSTRAINT collaboration_invitations_status_check
+        CHECK (status IN ('pending', 'accepted', 'revoked', 'expired')),
+      CONSTRAINT collaboration_invitations_expiry_check
+        CHECK (expires_at > created_at),
+      CONSTRAINT collaboration_invitations_recipient_acceptance_check
+        CHECK (
+          recipient_user_id IS NULL
+          OR accepted_by_user_id IS NULL
+          OR recipient_user_id = accepted_by_user_id
+        ),
+      CONSTRAINT collaboration_invitations_lifecycle_check
+        CHECK (
+          (status = 'pending' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NULL AND expired_at IS NULL)
+          OR (status = 'accepted' AND accepted_at IS NOT NULL AND accepted_by_user_id IS NOT NULL
+            AND revoked_at IS NULL AND expired_at IS NULL)
+          OR (status = 'revoked' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NOT NULL AND expired_at IS NULL)
+          OR (status = 'expired' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NULL AND expired_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_user
+      ON collaboration_invitations(
+        namespace_id,
+        COALESCE(project_id, ''),
+        recipient_user_id
+      )
+      WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_email
+      ON collaboration_invitations(
+        namespace_id,
+        COALESCE(project_id, ''),
+        recipient_email
+      )
+      WHERE status = 'pending' AND recipient_email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_user
+      ON collaboration_invitations(recipient_user_id, expires_at)
+      WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_email
+      ON collaboration_invitations(recipient_email, expires_at)
+      WHERE status = 'pending' AND recipient_email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_target
+      ON collaboration_invitations(namespace_id, project_id, expires_at)
+      WHERE status = 'pending';
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

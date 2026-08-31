@@ -82,6 +82,8 @@ async function grantProject(input: {
   principalKind?: 'human' | 'agent' | 'service';
   role?: 'admin' | 'editor' | 'viewer';
   status?: 'active' | 'revoked';
+  createdAt?: Date;
+  expiresAt?: Date;
 }) {
   const status = input.status ?? 'active';
   await mockDB.insert(projectGrants).values({
@@ -92,6 +94,8 @@ async function grantProject(input: {
     principalId: input.principalId,
     role: input.role ?? 'viewer',
     status,
+    createdAt: input.createdAt,
+    expiresAt: input.expiresAt,
     revokedAt: status === 'revoked' ? new Date() : null,
   });
 }
@@ -263,6 +267,25 @@ describe('canonical project access', () => {
         )
       ).status
     ).toBe(403);
+  });
+
+  it('rejects expired project grants in lists and direct access', async () => {
+    const expired = await insertMemberProject('user_expired_owner', 'Expired guest project');
+    if (!expired.namespaceId) throw new Error('project namespace missing');
+    await grantProject({
+      projectId: expired.projectId,
+      namespaceId: expired.namespaceId,
+      principalId: 'user_expired_guest',
+      createdAt: new Date('2026-08-28T00:00:00.000Z'),
+      expiresAt: new Date('2026-08-29T00:00:00.000Z'),
+    });
+
+    const guest = createApp({ userId: 'user_expired_guest' });
+    const listResponse = await guest.request('/v1/projects');
+    expect(listResponse.status).toBe(200);
+    const payload: ApiResponse = await listResponse.json();
+    expect(payload.data?.projects).toEqual([]);
+    expect((await guest.request(`/v1/projects/${expired.projectId}`)).status).toBe(403);
   });
 
   it('requires both exact project binding and a stored grant for machine credentials', async () => {

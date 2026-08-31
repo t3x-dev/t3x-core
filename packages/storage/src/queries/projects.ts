@@ -150,6 +150,7 @@ export async function findProjects(
             AND project_grant.principal_kind = ${options.authority.principal_kind}
             AND project_grant.principal_id = ${options.authority.principal_id}
             AND project_grant.status = 'active'
+            AND (project_grant.expires_at IS NULL OR project_grant.expires_at > NOW())
         )
       )`
     : undefined;

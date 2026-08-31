@@ -74,10 +74,17 @@ ambiguous legacy row.
 
 ## Storage foundation
 
-Schema version 69 introduces `namespace_memberships` and `project_grants` as the
+Schema version 69 introduced `namespace_memberships` and `project_grants` as the
 stored access facts consumed by the application evaluator. Both use closed
 principal, role, and lifecycle values; revocation is recorded in place rather
 than deleting authority history.
+
+Schema version 70 adds optional expiry to project grants and a
+`collaboration_invitations` staging table. Invitations are bound to a registered
+user, a normalized email, or both; contain only a one-way token hash; and target
+either a namespace or a tenant-bound project. PostgreSQL enforces recipient,
+role, expiry, and terminal-state consistency. Invitations cannot grant owner:
+the explicit ownership-transfer workflow remains the only ownership path.
 
 `project_grants` carries both `project_id` and `namespace_id` under one composite
 foreign key to `projects`. PostgreSQL therefore rejects a grant whose claimed

@@ -98,7 +98,7 @@ function projectGrantDto(record: ProjectGrantRecord | null): ProjectGrantDto | n
     status: record.status,
     created_at: record.createdAt.toISOString(),
     updated_at: record.updatedAt.toISOString(),
-    expires_at: null,
+    expires_at: record.expiresAt?.toISOString() ?? null,
   };
 }
 
