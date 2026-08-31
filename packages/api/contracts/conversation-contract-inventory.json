@@ -461,11 +461,6 @@
           "token": "postExtractYops("
         },
         {
-          "kind": "application",
-          "file": "apps/web/src/hooks/canvas/usePendingCommitExtraction.ts",
-          "token": "api.extractIncremental("
-        },
-        {
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
           "token": "async extract("

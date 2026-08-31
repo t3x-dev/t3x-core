@@ -138,7 +138,6 @@ function CanvasWorkspaceInner({
     projectId,
     loading: canvasLoading,
     updateNode,
-    commitPendingCommit,
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -403,20 +402,6 @@ function CanvasWorkspaceInner({
       closeNodeModal();
     }
   }, [closeNodeModal, modalNode, modalViewMode]);
-
-  const pendingCommitBranchMode = useCanvasStore((state) => {
-    if (!openNodeId) {
-      return undefined;
-    }
-    const pendingNode = state.nodes.find(
-      (node) =>
-        node.id === openNodeId && node.data.kind === 'unit' && node.data.commitStatus === 'staging'
-    );
-    if (!pendingNode) {
-      return undefined;
-    }
-    return state.getPendingCommitBranchMode(openNodeId);
-  });
 
   // Get effective constraints for pending commit nodes
   const effectiveConstraints = useMemo(() => {
@@ -742,27 +727,6 @@ function CanvasWorkspaceInner({
             onClose={closeNodeModal}
             onUpdate={(patch) => updateNode(modalNode.id, patch)}
             viewMode={modalViewMode || 'commit'}
-            onConvertDraft={
-              modalNode.data.kind === 'unit' &&
-              modalNode.data.commitStatus === 'staging' &&
-              pendingCommitBranchMode !== 'blocked'
-                ? () => {
-                    commitPendingCommit(modalNode.id);
-                    closeNodeModal();
-                    notify?.('Unit committed successfully', 'success');
-                  }
-                : undefined
-            }
-            onBranchChange={
-              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-                ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
-                : undefined
-            }
-            onBranchNameChange={
-              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-                ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
-                : undefined
-            }
             onSaveConstraints={
               modalNode.data.kind === 'unit'
                 ? (constraints) => saveConversationConstraints(modalNode.id, constraints)

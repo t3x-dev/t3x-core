@@ -181,28 +181,6 @@
       "issue": 1297
     },
     {
-      "id": "web-legacy-pending-commit-extraction",
-      "surface": "webui",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "apps/web/src/hooks/canvas/usePendingCommitExtraction.ts",
-      "anchors": ["api.extractIncremental("],
-      "replacement": "Repository Workspace extraction candidate flow.",
-      "removal_gate": "Retire with the legacy pending-commit canvas after repository Workspace parity is covered.",
-      "issue": 1292
-    },
-    {
-      "id": "web-legacy-pending-commit-commit",
-      "surface": "webui",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "apps/web/src/hooks/canvas/usePendingCommitState.ts",
-      "anchors": ["api.commitWorkbenchDraft("],
-      "replacement": "ReviewSnapshot and Decision through useWorkspaceTransition.",
-      "removal_gate": "Retire with the legacy pending-commit canvas after its navigation and test callers reach zero.",
-      "issue": 1292
-    },
-    {
       "id": "cli-legacy-extract",
       "surface": "cli",
       "state": "legacy_writer",
@@ -277,16 +255,6 @@
         "apps/web/src/commands/yops/llmAdapter.ts",
         "apps/web/src/infrastructure/llm.ts"
       ]
-    },
-    {
-      "symbol": "api.extractIncremental(",
-      "roots": ["apps/web/src"],
-      "allowed_files": ["apps/web/src/hooks/canvas/usePendingCommitExtraction.ts"]
-    },
-    {
-      "symbol": "api.commitWorkbenchDraft(",
-      "roots": ["apps/web/src"],
-      "allowed_files": ["apps/web/src/hooks/canvas/usePendingCommitState.ts"]
     },
     {
       "symbol": "client.extract(",
