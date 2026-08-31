@@ -352,13 +352,6 @@ export const CollaborationInvitationDeliverySchema = z.discriminatedUnion('mode'
     .strict(),
 ]);
 
-export const CreateCollaborationInvitationResponseSchema = z
-  .object({
-    invitation: CollaborationInvitationSchema,
-    delivery: CollaborationInvitationDeliverySchema,
-  })
-  .strict();
-
 export const CollaborationMutationResultSchema = z
   .object({
     request_id: ResourceIdSchema,
@@ -375,6 +368,48 @@ export const CollaborationMutationResultSchema = z
     ]),
     outcome: z.enum(['applied', 'unchanged']),
     evaluated_at: InstantSchema,
+  })
+  .strict();
+
+export const UpsertNamespaceMemberResponseSchema = z
+  .object({
+    member: NamespaceMembershipSchema,
+    mutation: CollaborationMutationResultSchema,
+  })
+  .strict();
+
+export const UpsertProjectGuestResponseSchema = z
+  .object({
+    guest: ProjectGrantSchema,
+    mutation: CollaborationMutationResultSchema,
+  })
+  .strict();
+
+export const CreateCollaborationInvitationResponseSchema = z
+  .object({
+    invitation: CollaborationInvitationSchema,
+    delivery: CollaborationInvitationDeliverySchema,
+    mutation: CollaborationMutationResultSchema,
+  })
+  .strict();
+
+export const AcceptCollaborationInvitationResponseSchema = z
+  .object({
+    authority: z.union([
+      z
+        .object({
+          kind: z.literal('namespace_membership'),
+          membership: NamespaceMembershipSchema,
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('project_grant'),
+          grant: ProjectGrantSchema,
+        })
+        .strict(),
+    ]),
+    mutation: CollaborationMutationResultSchema,
   })
   .strict();
 
@@ -421,3 +456,8 @@ export type CreateCollaborationInvitationResponse = z.infer<
   typeof CreateCollaborationInvitationResponseSchema
 >;
 export type CollaborationMutationResult = z.infer<typeof CollaborationMutationResultSchema>;
+export type UpsertNamespaceMemberResponse = z.infer<typeof UpsertNamespaceMemberResponseSchema>;
+export type UpsertProjectGuestResponse = z.infer<typeof UpsertProjectGuestResponseSchema>;
+export type AcceptCollaborationInvitationResponse = z.infer<
+  typeof AcceptCollaborationInvitationResponseSchema
+>;
