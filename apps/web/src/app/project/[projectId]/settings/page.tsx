@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
+import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -428,6 +429,8 @@ export default function ProjectSettingsPage() {
         </p>
         <AutopilotSettings projectId={projectId} />
       </div>
+
+      <ProjectCollaborationPanel projectId={projectId} />
     </div>
   );
 }
