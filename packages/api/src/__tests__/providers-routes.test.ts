@@ -18,6 +18,7 @@ let mockDB: AnyDB;
 let cleanup: (() => Promise<void>) | null = null;
 const originalOperatorUserIds = process.env.T3X_OPERATOR_USER_IDS;
 const originalOperatorKeyIds = process.env.T3X_OPERATOR_KEY_IDS;
+const originalAuthDisabled = process.env.AUTH_DISABLED;
 
 const mockRegistry = {
   getEntry: vi.fn((id: string) => ({ id })),
@@ -92,6 +93,7 @@ describe('Provider Routes', () => {
   });
 
   beforeEach(async () => {
+    process.env.AUTH_DISABLED = 'false';
     process.env.T3X_OPERATOR_USER_IDS = 'user_owner';
     delete process.env.T3X_OPERATOR_KEY_IDS;
     mockRegistry.getEntry.mockImplementation((id: string) => ({ id }));
@@ -114,6 +116,8 @@ describe('Provider Routes', () => {
     else process.env.T3X_OPERATOR_USER_IDS = originalOperatorUserIds;
     if (originalOperatorKeyIds === undefined) delete process.env.T3X_OPERATOR_KEY_IDS;
     else process.env.T3X_OPERATOR_KEY_IDS = originalOperatorKeyIds;
+    if (originalAuthDisabled === undefined) delete process.env.AUTH_DISABLED;
+    else process.env.AUTH_DISABLED = originalAuthDisabled;
     if (cleanup) {
       await cleanup();
     }

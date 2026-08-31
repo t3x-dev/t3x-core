@@ -20,7 +20,7 @@ import { canonicalizeProtocolValue, type ProtocolValue, parseStatement } from '@
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
-import { setupTestDB, testData } from './setup';
+import { grantTestScopedCredentialProjectAccess, setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
 vi.mock('../lib/db', () => ({
@@ -50,6 +50,7 @@ function app(input?: { apiKey?: ApiKey; options?: TransitionControlPlaneOptions 
   const instance = new Hono();
   if (input?.apiKey !== undefined) {
     instance.use('*', async (context, next) => {
+      await grantTestScopedCredentialProjectAccess(mockDB, input.apiKey);
       context.set('apiKey', input.apiKey);
       await next();
     });

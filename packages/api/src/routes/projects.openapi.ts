@@ -11,6 +11,7 @@ import {
   deleteProject,
   ensureMainBranch,
   findNamespaceBySlug,
+  findPersonalNamespaceByOwner,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,
@@ -28,14 +29,16 @@ import {
 } from '@t3x-dev/storage';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
-import { canUseNamespace } from '../lib/namespace-access';
+import { assertNamespaceAccess } from '../lib/namespace-access';
 import { hasOperatorAccess } from '../lib/operator-access';
 import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
   assertProjectCreationAccess,
+  getProjectListAuthority,
   getUserId,
 } from '../lib/project-access';
 import {
@@ -176,21 +179,26 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
+    const authority = getProjectListAuthority(c);
+    if (!authority && !isAuthenticationDisabled()) {
+      return errorResponse(c, 'FORBIDDEN', 'Project access denied');
+    }
     const namespace = namespaceSlug ? await findNamespaceBySlug(db, namespaceSlug) : null;
     if (namespaceSlug && !namespace) {
       return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
     }
-    if (namespace && !canUseNamespace(namespace, userId)) {
-      return errorResponse(c, 'FORBIDDEN', 'Namespace access denied');
+    if (namespace) {
+      const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:read');
+      if (denied) return denied;
     }
-    if (!namespaceSlug) await seedDemoWorkspaceIfEmpty(db, userId);
+    if (!namespaceSlug && !authority) await seedDemoWorkspaceIfEmpty(db, userId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await findProjects(db, {
         cursor,
         limit,
-        owner_id: userId,
+        authority,
         namespace_id: namespace?.namespaceId,
       });
       const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
@@ -211,7 +219,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     const projects = await findProjects(db, {
       limit,
       offset,
-      owner_id: userId,
+      authority,
       namespace_id: namespace?.namespaceId,
     });
 
@@ -330,7 +338,16 @@ projectRoutes.openapi(claimUnownedProjectsRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const claimed = await claimUnownedProjects(db, userId, c.req.valid('json').project_ids);
+    const namespace = await findPersonalNamespaceByOwner(db, userId);
+    if (!namespace) {
+      return errorResponse(c, 'NOT_FOUND', 'Personal namespace not created yet');
+    }
+    const claimed = await claimUnownedProjects(
+      db,
+      userId,
+      namespace.namespaceId,
+      c.req.valid('json').project_ids
+    );
     return c.json({ success: true as const, data: { projects: claimed.map(toApiProject) } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -369,13 +386,28 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
-    const existingProjects = await findProjects(db, { limit: 100, owner_id: userId });
+    const namespace = userId ? await findPersonalNamespaceByOwner(db, userId) : null;
+    if (userId && !namespace) {
+      return errorResponse(c, 'NOT_FOUND', 'Personal namespace not created yet');
+    }
+    if (namespace) {
+      const denied = await assertNamespaceAccess(c, db, namespace, 'project:create');
+      if (denied) return denied;
+    }
+    const existingProjects = await findProjects(db, {
+      limit: 100,
+      ...(userId ? { authority: getProjectListAuthority(c) } : {}),
+    });
     const existingDemo = existingProjects.find(isDemoProject);
     if (existingDemo) {
       return c.json({ success: true as const, data: toApiProject(existingDemo) }, 200);
     }
 
-    const result = await seedDemoWorkspace(db, { ownerId: userId ?? null, resetDeleted: true });
+    const result = await seedDemoWorkspace(db, {
+      ownerId: userId ?? null,
+      namespaceId: namespace?.namespaceId,
+      resetDeleted: true,
+    });
     if (result.project) {
       return c.json({ success: true as const, data: toApiProject(result.project) }, 200);
     }
@@ -460,14 +492,20 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
-    const namespaceSlug = body.namespace ?? DEFAULT_ORGANIZATION_NAMESPACE_SLUG;
-    const namespace = await findNamespaceBySlug(db, namespaceSlug);
+    const namespace = body.namespace
+      ? await findNamespaceBySlug(db, body.namespace)
+      : userId
+        ? await findPersonalNamespaceByOwner(db, userId)
+        : await findNamespaceBySlug(db, DEFAULT_ORGANIZATION_NAMESPACE_SLUG);
     if (!namespace) {
-      return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
+      return errorResponse(
+        c,
+        'NOT_FOUND',
+        userId ? 'Personal namespace not created yet' : 'Namespace not found'
+      );
     }
-    if (!canUseNamespace(namespace, userId)) {
-      return errorResponse(c, 'FORBIDDEN', 'Namespace access denied');
-    }
+    const namespaceDenied = await assertNamespaceAccess(c, db, namespace, 'project:create');
+    if (namespaceDenied) return namespaceDenied;
     const project = await insertProject(db, {
       name: body.name,
       metadata: body.metadata,

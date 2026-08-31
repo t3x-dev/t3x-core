@@ -18,6 +18,8 @@ import {
   resolveIpRateLimitPolicy,
 } from '../middleware/rate-limit';
 
+const originalAuthDisabled = process.env.AUTH_DISABLED;
+
 class MemoryRateLimitStore implements RateLimitStore {
   private readonly counters = new Map<string, number>();
 
@@ -69,6 +71,7 @@ function createL2TestApp(store: RateLimitStore = new MemoryRateLimitStore()) {
 
 describe('Rate Limit Middleware', () => {
   beforeEach(() => {
+    process.env.AUTH_DISABLED = 'false';
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-21T00:00:00.000Z'));
     // Trust proxy headers in tests (simulates reverse proxy deployment)
@@ -78,6 +81,8 @@ describe('Rate Limit Middleware', () => {
   afterEach(() => {
     vi.useRealTimers();
     delete process.env.TRUST_PROXY;
+    if (originalAuthDisabled === undefined) delete process.env.AUTH_DISABLED;
+    else process.env.AUTH_DISABLED = originalAuthDisabled;
   });
 
   describe('L1 — IP-based rate limiting', () => {

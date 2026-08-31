@@ -29,6 +29,8 @@ export interface RestoreResult {
 export interface RestoreOptions {
   /** Owner assigned to the newly-created project. Omit for local/public restores. */
   ownerId?: string;
+  /** Canonical namespace assigned to the newly-created project. */
+  namespaceId?: string;
 }
 
 /**
@@ -49,6 +51,7 @@ export async function restoreFromCfpack(
   const project = await insertProject(db, {
     name: cfpack.project.name,
     ownerId: options.ownerId,
+    namespaceId: options.namespaceId,
   });
 
   const newProjectId = project.projectId;

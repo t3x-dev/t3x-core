@@ -59,6 +59,7 @@ export const NAMESPACE_AUTHORIZATION_FIXTURES: readonly AuthorizationFixture[] =
     facts: {
       principal: { kind: 'human', principal_id: 'user_owner' },
       project: { project_id: 'project_team', namespace_id: 'namespace_team' },
+      evaluated_at: AT,
       namespace_membership: membership({
         id: 'membership_owner',
         namespaceId: 'namespace_team',
@@ -73,6 +74,7 @@ export const NAMESPACE_AUTHORIZATION_FIXTURES: readonly AuthorizationFixture[] =
     facts: {
       principal: { kind: 'human', principal_id: 'user_guest' },
       project: { project_id: 'project_team', namespace_id: 'namespace_team' },
+      evaluated_at: AT,
       namespace_membership: null,
       project_grant: projectGrant({
         id: 'grant_guest',
@@ -87,6 +89,7 @@ export const NAMESPACE_AUTHORIZATION_FIXTURES: readonly AuthorizationFixture[] =
     facts: {
       principal: { kind: 'human', principal_id: 'user_removed' },
       project: { project_id: 'project_team', namespace_id: 'namespace_team' },
+      evaluated_at: AT,
       namespace_membership: membership({
         id: 'membership_removed',
         namespaceId: 'namespace_team',
@@ -102,6 +105,7 @@ export const NAMESPACE_AUTHORIZATION_FIXTURES: readonly AuthorizationFixture[] =
     facts: {
       principal: { kind: 'service', principal_id: 'service_ci' },
       project: { project_id: 'project_team', namespace_id: 'namespace_team' },
+      evaluated_at: AT,
       namespace_membership: {
         ...membership({
           id: 'membership_service',
