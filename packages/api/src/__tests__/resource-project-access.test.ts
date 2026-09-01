@@ -4,7 +4,6 @@ import {
   createLeafHistory,
   createMergeDraft,
   createPin,
-  createTopic,
   createWebhook,
   insertConversation,
   insertNotification,
@@ -29,7 +28,6 @@ import { mergeRoutes } from '../routes/merge.openapi';
 import { notificationsRoutes } from '../routes/notifications.openapi';
 import { pinsRoutes } from '../routes/pins.openapi';
 import { runsRoutes } from '../routes/runs.openapi';
-import { topicsRoutes } from '../routes/topics.openapi';
 import { webhooksRoutes } from '../routes/webhooks.openapi';
 
 function createAuthenticatedApp(userId: string) {
@@ -51,7 +49,6 @@ function createAuthenticatedApp(userId: string) {
   app.route('/', webhooksRoutes);
   app.route('/', runsRoutes);
   app.route('/', notificationsRoutes);
-  app.route('/', topicsRoutes);
   app.route('/', leavesHistoryRoutes);
   app.route('/', leavesMLRoutes);
   app.route('/', mergeRoutes);
@@ -229,42 +226,6 @@ describe('project ownership on child-resource routes', () => {
         })
       ).status
     ).toBe(403);
-  });
-
-  it('blocks cross-project topic reads and mutations', async () => {
-    const conversation = await insertConversation(mockDB, {
-      projectId: otherProjectId,
-      title: 'Private conversation',
-    });
-    const topic = await createTopic(mockDB, {
-      conversationId: conversation.conversationId,
-      projectId: otherProjectId,
-      name: 'Private topic',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect(
-      (await app.request(`/v1/conversations/${conversation.conversationId}/topics`)).status
-    ).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/conversations/${conversation.conversationId}/topics`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/topics/${topic.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/topics/${topic.id}`, { method: 'DELETE' })).status).toBe(403);
   });
 
   it('blocks gate checks from resolving a conversation in another project', async () => {

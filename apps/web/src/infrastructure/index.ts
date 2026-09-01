@@ -32,7 +32,6 @@ export * from './relations';
 export * from './runner';
 export * from './sourceEvidence';
 export * from './sourceThreads';
-export * from './topics';
 export * from './treeDiff';
 export * from './turns';
 export * from './types';

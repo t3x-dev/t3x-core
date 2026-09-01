@@ -495,14 +495,6 @@ export {
   type UsageTotal,
   type UsageTotalOptions,
 } from './token-usage';
-// Topics (multi-topic conversations)
-export {
-  createTopic,
-  deleteTopic,
-  getTopicById,
-  listTopicsByConversation,
-  updateTopic,
-} from './topics';
 // Transition Decision/Commit command idempotency receipts
 export * from './transition-command-receipts';
 // CommitV2 repository path

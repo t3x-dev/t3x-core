@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
-import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
+import { fetchConversationMeta } from '@/queries/chatInitFetch';
 import { fetchParentCommitData } from '@/queries/hydrateFromParent';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -30,7 +30,6 @@ interface UseChatInitParams {
  *  - `loadConversation.hydrateConversation` — turns + ops log replay
  *  - `hydrateFromParent`                    — parent-commit inheritance
  *  - `chatInitFetch.fetchConversationMeta`  — convId → projectId lookup
- *  - `chatInitFetch.fetchConversationTopics` — topics list (display only)
  *
  * Returns `parentConversationId` so the UI can render the "View parent"
  * banner on inherited conversations.
@@ -108,21 +107,15 @@ export function useChatInit({
     };
 
     if (convId && convId !== 'new' && projectIdForConversation && !isTemporaryConversation) {
-      hydrateConversationToStore(projectIdForConversation, convId)
-        .then(async () => {
-          // Topics are display-only until a workspaceStore slot exists.
-          // TODO(topics-state): route through workspaceStore once the schema lands.
-          await fetchConversationTopics(convId);
-        })
-        .catch((err) => {
-          if (inheritFromCommitHash) {
-            void runInheritance(inheritFromCommitHash, projectIdForConversation);
-            return;
-          }
-          const store = useWorkspaceStore.getState();
-          store.setMode('error');
-          store.setError(formatWorkspaceError(err));
-        });
+      hydrateConversationToStore(projectIdForConversation, convId).catch((err) => {
+        if (inheritFromCommitHash) {
+          void runInheritance(inheritFromCommitHash, projectIdForConversation);
+          return;
+        }
+        const store = useWorkspaceStore.getState();
+        store.setMode('error');
+        store.setError(formatWorkspaceError(err));
+      });
     } else if (inheritFromCommitHash) {
       useCommitStore.getState().setProjectId(projectIdForConversation || null);
       void runInheritance(inheritFromCommitHash, projectIdForConversation || undefined);

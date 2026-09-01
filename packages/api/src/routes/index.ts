@@ -52,7 +52,6 @@ export { sourceEvidenceRoutes } from './source-evidence.openapi';
 export { sourceTextRevisionRoutes } from './source-text-revisions.openapi';
 export { statusRoutes } from './status.openapi';
 export { templatesRoutes } from './templates.openapi';
-export { topicsRoutes } from './topics.openapi';
 export { createTransitionControlPlaneRoutes } from './transition-control-plane.openapi';
 export { transitionPolicyBindingRoutes } from './transition-policy-bindings.openapi';
 export { turnRoutes } from './turns.openapi';

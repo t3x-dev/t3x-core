@@ -1465,34 +1465,6 @@
       "rationale": "Explicit server-operator administration boundary."
     },
     {
-      "source": "topics.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/{id}/topics",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "POST",
-      "path": "/v1/conversations/{id}/topics",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "DELETE",
-      "path": "/v1/topics/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "PATCH",
-      "path": "/v1/topics/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
       "source": "transition-control-plane.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/proposal-generations",

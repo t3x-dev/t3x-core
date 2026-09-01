@@ -100,7 +100,6 @@ import {
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
-  topicsRoutes,
   transitionPolicyBindingRoutes,
   turnRoutes,
   usageRoutes,
@@ -273,7 +272,6 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', contextRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
-  api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);
   api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
   api.route('/', workspaceExtractionProposalRoutes);
