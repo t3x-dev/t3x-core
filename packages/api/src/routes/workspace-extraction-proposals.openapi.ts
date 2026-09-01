@@ -9,6 +9,14 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  InferenceExecutionError,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   requireTransitionAuthority,
@@ -102,6 +110,14 @@ const route = createRoute({
       description: 'Workspace revision or target ref conflict',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    429: {
+      description: 'Inference admission denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    503: {
+      description: 'Inference provider outcome is uncertain',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Extraction or stored Transition integrity failure',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -157,6 +173,18 @@ function linkedExtractionCandidate(requestCanonicalJson: string): string | null 
 }
 
 function proposalErrorResponse(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  if (error instanceof InferenceAdmissionDeniedError) {
+    return errorResponse(c, 'RATE_LIMITED', error.message, {
+      admission_code: error.code,
+      generation_id: error.attempt.generationId,
+    });
+  }
+  if (error instanceof InferenceExecutionError) {
+    return errorResponse(c, 'SERVICE_UNAVAILABLE', error.message, {
+      generation_id: error.attempt.generationId,
+      terminal: error.terminal.kind,
+    });
+  }
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError
@@ -196,6 +224,7 @@ function proposalErrorResponse(c: Parameters<typeof errorResponse>[0], error: un
 }
 
 export const workspaceExtractionProposalRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+const defaultInferenceRuntime = createInferenceRuntime();
 
 workspaceExtractionProposalRoutes.openapi(linkRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
@@ -269,6 +298,16 @@ workspaceExtractionProposalRoutes.openapi(route, async (c) => {
       model: request.model,
       userId: getUserId(c),
       actor: principal.actor,
+      inference: {
+        runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+        runId: resolveInferenceRunId(c),
+        scope: {
+          actor: resolveInferenceActor(c),
+          projectId,
+          ...(access.namespaceId ? { namespaceId: access.namespaceId } : {}),
+          projectVisibility: 'unknown',
+        },
+      },
     });
     return c.json({
       success: true as const,

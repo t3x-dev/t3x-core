@@ -13,7 +13,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 32,
+  "totalObservedCalls": 35,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -28,6 +28,14 @@
       "feature": "generation-fallback",
       "status": "pending",
       "observedCount": 1
+    },
+    {
+      "file": "packages/api/src/lib/inference-provider.ts",
+      "feature": "provider-neutral-inference-adapter",
+      "status": "migrated",
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "Provider methods are invoked only after shared admission and produce normalized terminal receipts."
     },
     {
       "file": "packages/api/src/lib/source-chat-draft-reply.ts",
@@ -74,8 +82,10 @@
     {
       "file": "packages/core/src/extractors/v2/pipeline.ts",
       "feature": "extraction-pipeline",
-      "status": "pending",
-      "observedCount": 3
+      "status": "migrated",
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "All API and operation entry points bind resolved extraction providers to the shared inference runtime before entering Core."
     },
     {
       "file": "packages/core/src/leaf/constraintSuggester.ts",

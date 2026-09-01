@@ -35,6 +35,13 @@ describe('buildPipelineContext', () => {
     expect(ctx.projectId).toBe('proj_123');
     expect(ctx.userId).toBe('user_abc');
     expect(ctx.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(ctx.inference).toMatchObject({
+      scope: {
+        actor: { kind: 'user', id: 'user_abc' },
+        projectId: 'proj_123',
+        projectVisibility: 'unknown',
+      },
+    });
   });
 
   it('sets userId to undefined when not present in Hono context', async () => {
