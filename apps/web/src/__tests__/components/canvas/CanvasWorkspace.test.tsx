@@ -134,13 +134,6 @@ vi.mock('@/components/canvas/NodeModal', async () => {
   };
 });
 
-vi.mock('@/components/draft/DraftQuickSheet', async () => {
-  const React = await import('react');
-  return {
-    DraftQuickSheet: () => React.createElement('div', { 'data-testid': 'draft-quick-sheet' }),
-  };
-});
-
 vi.mock('@/components/import/ImportDialog', async () => {
   const React = await import('react');
   return {
@@ -424,16 +417,16 @@ describe('CanvasWorkspace initial fit view', () => {
       ...unitNode('sha256:parent'),
       data: { ...unitNode('sha256:parent').data, commitHash: 'sha256:parent' },
     };
-    const draft = {
-      ...unitNode('draft_1'),
+    const pending = {
+      ...unitNode('conv_pending'),
       data: {
-        ...unitNode('draft_1').data,
+        ...unitNode('conv_pending').data,
         branchType: undefined,
-        commitStatus: 'draft' as const,
-        draftId: 'draft_1',
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending',
       },
     };
-    const nodes = [committed, draft];
+    const nodes = [committed, pending];
     useCanvasStore.setState({
       edges: [],
       hasDbPositions: true,

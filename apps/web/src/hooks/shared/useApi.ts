@@ -8,7 +8,6 @@ import type {
   Commit,
   CommitDetail,
   Conversation,
-  Draft,
   Project,
   ProjectDetail,
   Turn,
@@ -176,20 +175,6 @@ export function useCurrentBranch(projectId: string | undefined) {
 }
 
 // ============================================================================
-// Drafts
-// ============================================================================
-
-export function useDraft(draftId: string | undefined) {
-  return useApiCall(
-    (id: string | undefined) => async () => {
-      if (!id) return null;
-      return api.getDraft(id);
-    },
-    [draftId]
-  );
-}
-
-// ============================================================================
 // Re-export types for convenience
 // ============================================================================
 
@@ -202,5 +187,4 @@ export type {
   Branch,
   Commit,
   CommitDetail,
-  Draft,
 };

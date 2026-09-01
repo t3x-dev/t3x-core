@@ -45,7 +45,6 @@ describe('composeCanvasFromFetches', () => {
       ],
       [commit({ hash: 'sha256:branch_head', branch: '111' })],
       [],
-      [],
       new Map(),
       new Map()
     );
@@ -68,7 +67,6 @@ describe('composeCanvasFromFetches', () => {
           metadata: { target_branch: 'draft/root' },
         }),
       ],
-      [],
       [],
       [],
       new Map(),
@@ -100,7 +98,6 @@ describe('composeCanvasFromFetches', () => {
           created_at: '2026-05-28T00:02:00.000Z',
         }),
       ],
-      [],
       [],
       [],
       new Map(),

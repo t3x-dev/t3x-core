@@ -1,7 +1,7 @@
 import { BaseEdge, type EdgeProps, getSmoothStepPath, useStore } from '@xyflow/react';
 import { useState } from 'react';
 
-export type SemanticEdgeType = 'evolve' | 'merge' | 'draft';
+export type SemanticEdgeType = 'evolve' | 'merge';
 export type EdgeRhythm = 'default' | 'selected' | 'dimmed';
 export type EdgePathTone = 'commit' | 'branch';
 
@@ -22,12 +22,6 @@ const edgeColors: Record<
     selected: 'var(--edge-merge-selected)',
     glow: 'var(--edge-merge-glow)',
   },
-  draft: {
-    base: 'var(--edge-draft-base)',
-    hover: 'var(--edge-draft-hover)',
-    selected: 'var(--edge-draft-selected)',
-    glow: 'var(--edge-draft-glow)',
-  },
 };
 
 const pathToneColors: Record<EdgePathTone, { selected: string; glow: string }> = {
@@ -47,7 +41,6 @@ const pathToneColors: Record<EdgePathTone, { selected: string; glow: string }> =
  * Edge types:
  * - evolve (blue): Single-parent commit lineage
  * - merge (purple): Multi-parent merge commit
- * - draft (gray, dashed+animated): Draft/staging edges
  *
  * Supports hover, selected, and dragging states with color/width transitions.
  */
@@ -97,7 +90,7 @@ export function AnimatedEdge({
     if (isRhythmSelected) return 2.5;
     if (isHovered) return 2.25;
     if (edgeRhythm === 'dimmed') return 1.25;
-    return edgeType === 'draft' ? 1.35 : 2;
+    return 2;
   };
 
   const getStrokeColor = () => {
@@ -113,7 +106,7 @@ export function AnimatedEdge({
     return 'var(--edge-default-opacity)';
   };
 
-  // Merge edges use dashed stroke; draft edges keep their own dashed style from edge.style
+  // Merge edges use a dashed stroke.
   const dashOverride = isDragging ? '6 4' : edgeType === 'merge' ? '8 5' : undefined;
 
   return (

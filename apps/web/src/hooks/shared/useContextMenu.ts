@@ -60,7 +60,6 @@ export function useContextMenu({
     (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
       event.preventDefault();
       event.stopPropagation();
-      const isDraft = node.data.commitStatus === 'draft';
       const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
       const commitHash = node.data.commit?.hash || node.data.commitHash || '';
@@ -92,7 +91,6 @@ export function useContextMenu({
               useCanvasStore.getState().onNodesChange([change]);
             }
           : undefined,
-        isDraft,
         isDeveloperMode,
         hasConversation,
       });
