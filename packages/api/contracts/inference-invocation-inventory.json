@@ -18,8 +18,10 @@
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
       "feature": "proposal-generation",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Governed Proposal generation uses trusted project scope, pre-invocation admission, provider-reported usage, and terminal receipts."
     },
     {
       "file": "packages/api/src/lib/provider-registry.ts",
