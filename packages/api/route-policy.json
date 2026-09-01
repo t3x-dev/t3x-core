@@ -346,13 +346,6 @@
     },
     {
       "source": "conversations.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/:id/context-export",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "conversations.openapi.ts",
       "method": "PATCH",
       "path": "/v1/conversations/{conversation_id}/rename",
       "policy": "project",

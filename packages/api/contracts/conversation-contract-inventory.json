@@ -135,6 +135,11 @@
         },
         {
           "method": "GET",
+          "path": "/v1/conversations/{id}/context-manifest",
+          "source": "packages/api/src/routes/conversations.openapi.ts"
+        },
+        {
+          "method": "GET",
           "path": "/v1/conversations/{id}/memory",
           "source": "packages/api/src/routes/conversations.openapi.ts"
         }
@@ -154,6 +159,11 @@
           "kind": "compatibility_adapter",
           "file": "apps/web/src/infrastructure/pins.ts",
           "token": "getConversationContext("
+        },
+        {
+          "kind": "application",
+          "file": "apps/web/src/components/chat/ChatWorkspace.tsx",
+          "token": "useContextManifest("
         }
       ]
     },
@@ -304,36 +314,6 @@
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
           "token": "this.getLegacyYOpsEvidence("
-        }
-      ]
-    },
-    {
-      "id": "legacy-context-projection",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "removal_gate": "Remove only after repository Source/Evidence and Generation cover every live context consumer and external compatibility is explicitly ended.",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "/v1/conversations/{id}/context-manifest",
-          "source": "packages/api/src/routes/conversations.openapi.ts"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/conversations/{id}/context-export",
-          "source": "packages/api/src/routes/conversations.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "legacy_application",
-          "file": "apps/web/src/components/chat/ChatWorkspace.tsx",
-          "token": "useContextManifest("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/conversations.ts",
-          "token": "exportConversationContext("
         }
       ]
     },
@@ -499,20 +479,14 @@
       "method": "PATCH",
       "path": "/v1/agent/drafts/{id}",
       "reason": "Retired with legacy-agent-drafts; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversations/{id}/context-export",
+      "reason": "Retired after its only first-party consumer was a zero-caller compatibility adapter; the live context manifest remains Source Thread-owned."
     }
   ],
   "deprecated_caller_guards": [
-    {
-      "symbol": "getContextManifest",
-      "allowed_files": [
-        "apps/web/src/infrastructure/contextManifest.ts",
-        "apps/web/src/queries/contextManifest.ts"
-      ]
-    },
-    {
-      "symbol": "exportConversationContext",
-      "allowed_files": ["apps/web/src/infrastructure/conversations.ts"]
-    },
     {
       "symbol": "listTopics",
       "allowed_files": [

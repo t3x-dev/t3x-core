@@ -10,11 +10,10 @@
  * PUT    /v1/conversations/:id/context - Update context config
  * GET    /v1/conversations/:id/context-manifest - Get structured context manifest
  * GET    /v1/conversations/:id/memory - Get built memory string (requires Track A)
- * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type BuiltContext, getCanonicalModelId } from '@t3x-dev/core';
+import { getCanonicalModelId } from '@t3x-dev/core';
 import {
   ConversationHistoryReferencedError,
   deleteConversation,
@@ -27,7 +26,6 @@ import {
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
-import { formatContextForExport } from '../lib/context-formatter';
 import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
@@ -889,70 +887,6 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'GET_MEMORY_FAILED', message } }, 500);
-  }
-});
-
-/**
- * GET /v1/conversations/:id/context-export - Export context as file
- *
- * Exports the built context as a downloadable file (JSON or Markdown).
- *
- * Query params:
- * - format: 'json' (default) | 'markdown'
- *
- * Response headers:
- * - Content-Type: application/json or text/markdown
- * - Content-Disposition: attachment; filename="..."
- */
-conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
-  const conversationId = c.req.param('id');
-  const format = c.req.query('format') === 'markdown' ? 'markdown' : 'json';
-
-  try {
-    const db = await getDB();
-
-    // 1. Verify conversation exists.
-    const conversation = await findConversationById(db, conversationId);
-    if (!conversation) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Conversation ${conversationId} not found` },
-        },
-        404
-      );
-    }
-    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
-    if (accessResult instanceof Response) return accessResult;
-
-    // 2. Build export context from the same manifest-backed context as /memory.
-    const manifest = await buildConversationContextManifest(db, conversationId);
-    const builtContext: BuiltContext = {
-      text: manifest.chat_context_text,
-      token_estimate: manifest.token_estimate,
-      sources: manifest.sources,
-    };
-
-    // 3. Format for export
-    const { content, contentType, fileExtension } = formatContextForExport(
-      builtContext,
-      conversationId,
-      format
-    );
-
-    // 4. Return as downloadable file
-    const filename = `${conversationId}-context.${fileExtension}`;
-
-    return new Response(content, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'EXPORT_FAILED', message } }, 500);
   }
 });
 
