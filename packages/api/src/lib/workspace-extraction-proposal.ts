@@ -14,6 +14,7 @@ import {
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
 import { runApiExtractionV2 } from './extraction-v2';
+import type { InferenceRuntime, InferenceScope } from './inference';
 import {
   resolveWorkspaceExtractionContext,
   WorkspaceTransitionReviewStaleError,
@@ -39,6 +40,11 @@ export interface CreateWorkspaceExtractionProposalInput {
   model?: string;
   userId?: string;
   actor: ActorRef;
+  inference: {
+    runtime: InferenceRuntime;
+    runId: string;
+    scope: InferenceScope;
+  };
 }
 
 export interface WorkspaceExtractionProposal {
@@ -313,6 +319,7 @@ export async function createWorkspaceExtractionProposal(
     provider: input.provider,
     model: input.model,
     userId: input.userId,
+    inference: input.inference,
   });
   if (!extraction.ok) throw extractionError(extraction);
 

@@ -51,7 +51,8 @@ export const extractOp: Operation<ExtractInput, ExtractOutput> = {
       turnHashes: input.turnHashes,
       provider: input.provider,
       model: input.model,
-      userId: input.userId,
+      userId: apiCtx.userId,
+      inference: apiCtx.inference,
     });
 
     yield {

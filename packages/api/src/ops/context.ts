@@ -1,6 +1,14 @@
 import type { OpsPipelineContext } from '@t3x-dev/core';
 import type { Context as HonoContext } from 'hono';
 import { getDB } from '../lib/db';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  type InferenceRuntime,
+  type InferenceScope,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { getProviderRegistry } from '../lib/provider-registry';
 
 /**
@@ -9,7 +17,10 @@ import { getProviderRegistry } from '../lib/provider-registry';
 export interface ApiPipelineContext extends OpsPipelineContext {
   db: Awaited<ReturnType<typeof getDB>>;
   providerRegistry: Awaited<ReturnType<typeof getProviderRegistry>>;
+  inference: { runtime: InferenceRuntime; runId: string; scope: InferenceScope };
 }
+
+const defaultInferenceRuntime = createInferenceRuntime();
 
 /**
  * Build a PipelineContext from a Hono request context.
@@ -28,6 +39,15 @@ export async function buildPipelineContext(
     projectId,
     userId,
     providerRegistry,
+    inference: {
+      runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+      runId: resolveInferenceRunId(c),
+      scope: {
+        actor: resolveInferenceActor(c),
+        projectId,
+        projectVisibility: 'unknown',
+      },
+    },
     abortSignal: c.req.raw.signal,
   };
 }

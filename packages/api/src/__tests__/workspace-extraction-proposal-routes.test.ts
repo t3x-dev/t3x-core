@@ -137,6 +137,14 @@ describe('Workspace extraction proposal routes', () => {
         source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_1'] },
         actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
         userId: 'user_1',
+        inference: expect.objectContaining({
+          scope: {
+            actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
+            namespaceId: 'ns_test',
+            projectId: 'proj_1',
+            projectVisibility: 'unknown',
+          },
+        }),
       })
     );
   });
