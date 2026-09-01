@@ -18,6 +18,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { createInferenceRuntime, type InferenceRuntime } from '../lib/inference';
 import type { ProposalGenerationModel } from '../lib/proposal-generation';
 import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
 import { createTransitionControlPlaneRoutes } from '../routes/transition-control-plane.openapi';
@@ -78,11 +79,20 @@ function key(
   };
 }
 
-function app(apiKey: ApiKey, options: TransitionControlPlaneOptions) {
-  const instance = new Hono<{ Variables: { apiKey: ApiKey } }>();
+const defaultInferenceRuntime = createInferenceRuntime();
+
+function app(
+  apiKey: ApiKey,
+  options: TransitionControlPlaneOptions,
+  inferenceRuntime: InferenceRuntime = defaultInferenceRuntime
+) {
+  const instance = new Hono<{
+    Variables: { apiKey: ApiKey; inferenceRuntime: InferenceRuntime };
+  }>();
   instance.use('*', async (context, next) => {
     await grantTestScopedCredentialProjectAccess(mockDB, apiKey);
     context.set('apiKey', apiKey);
+    context.set('inferenceRuntime', inferenceRuntime);
     await next();
   });
   instance.route('/', createTransitionControlPlaneRoutes(options));
@@ -184,7 +194,7 @@ async function fixture(name: string) {
     policy: policy(),
     actor: { kind: 'human', id: 'user:policy-admin' },
   });
-  return { projectId: project.projectId, workspaceId, material, workspace };
+  return { project, projectId: project.projectId, workspaceId, material, workspace };
 }
 
 function draft(
@@ -238,7 +248,11 @@ function draft(
   };
 }
 
-function options(value: string, generate = vi.fn(async () => draft(value))) {
+function options(value: string, generateDraft = vi.fn(async () => draft(value))) {
+  const generate = vi.fn(async (input: Parameters<ProposalGenerationModel['generate']>[0]) => ({
+    draft: await generateDraft(input),
+    usage: { inputTokens: 29, outputTokens: 17 },
+  }));
   const selected: ProposalGenerationModel = {
     provider: 'e2e-provider',
     model: 'e2e-model',
@@ -265,6 +279,106 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('Proposal generation HTTP lifecycle E2E', () => {
+  it('admits with trusted scope and settles provider-reported usage', async () => {
+    const data = await fixture('Proposal generation inference receipt');
+    const selected = options('enterprise operators');
+    const writer = key(data.projectId, 'metered-writer', 'agent', ['transition:propose']);
+    const authorize = vi.fn(async () => ({
+      outcome: 'admitted' as const,
+      admission: { id: 'reservation:proposal-generation' },
+    }));
+    const settle = vi.fn(async () => {});
+    const runtime = createInferenceRuntime({
+      admissionPolicy: { authorize, settle, release: vi.fn(async () => {}) },
+      createGenerationId: () => 'gen_proposal_generation_e2e',
+      now: () => new Date('2026-08-13T00:00:00.000Z'),
+    });
+
+    const response = await post(
+      app(writer, selected.options, runtime),
+      `/v1/projects/${data.projectId}/proposal-generations`,
+      {
+        request_id: 'generation:e2e:metered',
+        workspace_id: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Structure the launch audience.',
+        source_material_ids: [data.material.id],
+        model: 'requested-model',
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(authorize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationId: 'gen_proposal_generation_e2e',
+        feature: 'transition.proposal-generation',
+        requestedModel: 'requested-model',
+        scope: expect.objectContaining({
+          actor: { kind: 'agent', id: `agent:api-key:${writer.id}` },
+          projectId: data.projectId,
+          namespaceId: expect.any(String),
+          projectVisibility: 'unknown',
+        }),
+      })
+    );
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminal: {
+          kind: 'receipt',
+          receipt: expect.objectContaining({
+            generationId: 'gen_proposal_generation_e2e',
+            requestedModel: 'requested-model',
+            resolvedProvider: 'e2e-provider',
+            resolvedModel: 'e2e-model',
+            usage: { inputTokens: 29, outputTokens: 17 },
+          }),
+        },
+      })
+    );
+  });
+
+  it('denies before provider invocation when inference admission rejects the call', async () => {
+    const data = await fixture('Proposal generation admission denial');
+    const selected = options('enterprise operators');
+    const writer = key(data.projectId, 'denied-writer', 'agent', ['transition:propose']);
+    const runtime = createInferenceRuntime({
+      admissionPolicy: {
+        authorize: async () => ({
+          outcome: 'denied',
+          code: 'quota_exhausted',
+          reason: 'Monthly inference grant exhausted',
+        }),
+        settle: vi.fn(async () => {}),
+        release: vi.fn(async () => {}),
+      },
+      createGenerationId: () => 'gen_proposal_generation_denied',
+    });
+
+    const response = await post(
+      app(writer, selected.options, runtime),
+      `/v1/projects/${data.projectId}/proposal-generations`,
+      {
+        request_id: 'generation:e2e:denied',
+        workspace_id: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Structure the launch audience.',
+        source_material_ids: [data.material.id],
+      }
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'RATE_LIMITED',
+        details: {
+          admission_code: 'quota_exhausted',
+          generation_id: 'gen_proposal_generation_denied',
+        },
+      },
+    });
+    expect(selected.generate).not.toHaveBeenCalled();
+  });
+
   it('generates, verifies, requires a human Decision, and commits the exact result', async () => {
     const data = await fixture('Proposal generation happy path');
     const selected = options('enterprise operators');

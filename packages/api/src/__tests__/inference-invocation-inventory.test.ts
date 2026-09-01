@@ -92,10 +92,11 @@ describe('server-side inference invocation inventory', () => {
     );
   });
 
-  it('records the first fully migrated call family', () => {
-    const chat = inventory.sources.find(
-      (source) => source.file === 'packages/api/src/routes/chat.openapi.ts'
-    );
-    expect(chat).toMatchObject({ status: 'migrated', coveredCount: 7, observedCount: 7 });
+  it.each([
+    ['packages/api/src/routes/chat.openapi.ts', 7],
+    ['packages/api/src/lib/proposal-generation.ts', 1],
+  ])('records migrated call family %s', (file, coveredCount) => {
+    const source = inventory.sources.find((candidate) => candidate.file === file);
+    expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });
   });
 });
