@@ -49,12 +49,6 @@
   },
   "compatibilityWriterReferences": [
     {
-      "path": "apps/cli/src/commands/commit.ts",
-      "patterns": [
-        "commitFromDraft"
-      ]
-    },
-    {
       "path": "apps/cli/src/commands/merge.ts",
       "patterns": [
         "createMergeDraft",

@@ -181,37 +181,34 @@
       "issue": 1297
     },
     {
-      "id": "cli-legacy-extract",
+      "id": "cli-workspace-extract",
       "surface": "cli",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "apps/cli/src/commands/extract.ts",
-      "anchors": ["client.extract("],
-      "replacement": "Workspace extraction proposal plus transition propose.",
-      "removal_gate": "Retire the fallback after the Workspace arguments are the only supported mode.",
-      "issue": 1297
+      "anchors": ["client.workspaces.createExtractionProposal("],
+      "replacement": null,
+      "removal_gate": "Retain as the CLI Source-to-Workspace proposal adapter."
     },
     {
-      "id": "cli-legacy-edit",
+      "id": "cli-yops-transition-proposal",
       "surface": "cli",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "apps/cli/src/commands/yops.ts",
-      "anchors": ["client.applyYOps("],
-      "replacement": "transition propose --operations-json against an exact base.",
-      "removal_gate": "Retire after command help and tests use Transition proposals exclusively.",
-      "issue": 1297
+      "anchors": ["proposeTransition(options.project"],
+      "replacement": null,
+      "removal_gate": "The yops apply spelling is a compatibility alias; it may not write a legacy Draft."
     },
     {
-      "id": "cli-legacy-commit",
+      "id": "cli-transition-commit-alias",
       "surface": "cli",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
       "file": "apps/cli/src/commands/commit.ts",
-      "anchors": ["client.commitFromDraft("],
-      "replacement": "transition decide followed by transition commit with expected head.",
-      "removal_gate": "Retire after transition commands provide the only first-party commit path.",
-      "issue": 1297
+      "anchors": ["client.commitTransition("],
+      "replacement": null,
+      "removal_gate": "The top-level spelling may remain while it requires Decision digest and exact expected-head CAS."
     },
     {
       "id": "mcp-legacy-extract",
@@ -259,20 +256,17 @@
     {
       "symbol": "client.extract(",
       "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": [
-        "apps/cli/src/commands/extract.ts",
-        "packages/mcp/src/tools/core/extract.ts"
-      ]
+      "allowed_files": ["packages/mcp/src/tools/core/extract.ts"]
     },
     {
       "symbol": "client.applyYOps(",
       "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": ["apps/cli/src/commands/yops.ts", "packages/mcp/src/tools/core/edit.ts"]
+      "allowed_files": ["packages/mcp/src/tools/core/edit.ts"]
     },
     {
       "symbol": "client.commitFromDraft(",
       "roots": ["apps/cli/src", "packages/mcp/src"],
-      "allowed_files": ["apps/cli/src/commands/commit.ts", "packages/mcp/src/tools/core/commit.ts"]
+      "allowed_files": ["packages/mcp/src/tools/core/commit.ts"]
     }
   ],
   "retirement_policy": {
