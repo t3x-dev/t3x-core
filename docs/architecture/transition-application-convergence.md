@@ -1,130 +1,128 @@
 # Transition Application Convergence
 
-Status: proposed
-Phase: 3
-Baseline: `origin/dev` at `df6b7ffa98514b353f872116eee905308c741859`
+Status: converged on the Wave 2 stack
 
-T3X already has the protocol spine:
+T3X is a deterministic, repository-based change system in which incremental
+operations are evaluated against an exact checkpoint, reviewed as immutable
+evidence, and committed through one authoritative path.
+
+The protocol spine remains:
 
 ```text
 Result = Replay(Base, DefinitionOf(Effect))
 Propose -> Verify* -> Decide -> Commit?
 ```
 
-The remaining problem is not a new protocol concept. It is that first-party
-product surfaces still assemble project lookup, authorization, storage
-transactions, compatibility writers, and response mapping in too many places.
-Phase 3 introduces one internal application boundary so those surfaces call the
-same use cases while the public protocol nouns stay unchanged.
+The convergence proof is checked from
+[`repository-convergence-proof.json`](../../packages/api/contracts/repository-convergence-proof.json).
+It anchors supported architecture claims to executable integration and contract
+tests. The existing architecture inventory remains checked by
+`pnpm check:architecture-inventory`.
 
-## Current Inventory
+## Why convergence was necessary
 
-The checked snapshot lives in
-[`phase3-application-inventory.json`](phase3-application-inventory.json). Update
-it with:
+T3X evolved in two stages:
 
-```bash
-node tools/check-architecture-inventory.mjs --write
+1. The original conversation and draft workflow introduced `yops_log`,
+   extraction routes, and direct WebUI, CLI, and MCP writers.
+2. The repository model introduced stronger authority: Workspace revisions,
+   deterministic YOps, Transition, ReviewSnapshot, Decision, exact-head CAS,
+   and CommitV2.
+
+The repository model arrived before every caller and delivery mechanism had
+migrated. That was architectural debt around a sound foundation, not a reason
+to introduce another protocol.
+
+Wave 0 protected Cloud-owned overlays and inventoried every live writer. Wave 1
+moved active WebUI, REST, CLI, and MCP mutations to Transition application
+commands and retired legacy writer code only after callers reached zero. Wave 2
+re-owned the live context manifest as a Source Thread contract, retired the
+unused context export and Topics workflow, and added this durable closure gate.
+
+Historical rows and physical schemas are not deleted by this convergence. Old
+YOps remain readable as archived evidence, but cannot define current repository
+state.
+
+## One authority boundary
+
+The active lifecycle is:
+
+```text
+Source -> Workspace -> Proposal -> ReviewSnapshot -> Decision -> CommitV2 -> Evidence
 ```
 
-Verify it with:
+- `@t3x-dev/transition` owns the provider-independent protocol and replay rules.
+- `@t3x-dev/application` owns commands, authorization inputs, idempotency, and
+  canonical application errors.
+- Storage implements persistence, transactions, exact expected-head CAS, and
+  immutable evidence reads.
+- API, WebUI, CLI, and MCP are transports or adapters; they do not implement an
+  alternate writer.
+- Cloud may compose billing, usage, risk, and provider adapters around an exact
+  Core pin, but those overlays do not redefine Core project state.
 
-```bash
-pnpm check:architecture-inventory
-```
+The executable inventories enforce both sides of that boundary:
 
-The baseline records these facts:
+- [`repository-writer-inventory.json`](../../packages/api/contracts/repository-writer-inventory.json)
+  requires every first-party mutation surface to use Transition authority.
+- [`conversation-contract-inventory.json`](../../packages/api/contracts/conversation-contract-inventory.json)
+  requires every Source Thread and Generation route to have a non-legacy owner
+  and prevents retired compatibility routes from returning.
 
-| Area | Baseline |
-|---|---:|
-| `packages/application` | missing |
-| Transition control-plane files | 4 |
-| Transition control-plane lines | 2037 |
-| API route files | 75 |
-| API route files using `getDB` | 67 |
-| API route files using `assertProjectAccess` | 53 |
-| API route files using `requireTransitionAuthority` | 2 |
-| Compatibility writer files | 17 |
-| Surface runtime files importing `@t3x-dev/storage` | 12 |
-| MCP runtime files with hardcoded actors | 2 |
-| YOps v1 operations | 18 |
-| `ReviewSnapshot` references | 0 |
+## Supported claims
 
-## Decision
+After the Wave 2 stack lands, T3X can accurately claim:
 
-Add internal `@t3x-dev/application` use cases before moving more runtime
-behavior between API, Web, CLI, and MCP.
+- repository-first deterministic incremental updates against a known base;
+- replay-verifiable transitions with stable digests;
+- optimistic concurrency protection through exact expected-head CAS;
+- one active mutation authority across WebUI, REST, CLI, and MCP;
+- immutable proposals, reviews, decisions, receipts, and CommitV2 evidence;
+- historical compatibility without historical authority;
+- safe Core-to-Cloud composition with explicitly owned commercial overlays;
+- provider-independent domain history.
 
-The package may own:
+## Explicit non-claims
 
-- command and query DTOs;
-- trusted request context and actor identity types;
-- resource-to-project-to-authority evaluation interfaces;
-- transaction, CAS, idempotency, and audit ports;
-- canonical application errors;
-- derived product projections.
+This architecture is not:
 
-The package must not own:
+- Debezium-compatible CDC or database-level change streaming;
+- a general-purpose event bus or Kafka-style consumer replay system;
+- distributed exactly-once processing;
+- full event sourcing of every system entity;
+- multi-master or offline collaborative merging;
+- automatic conflict-free rebasing.
 
-- Hono, React, Next.js, MCP SDK, Commander, or transport-specific types;
-- Drizzle schema, concrete database connections, migrations, or SQL clients;
-- environment reads, system clock, randomness, LLM clients, or network clients;
-- new public protocol nouns or changes to State, Effect, Statement, or CommitV2.
+Checkpointing, ordering, idempotency, and verifiable replay are useful
+incremental-system disciplines. They do not turn T3X into a streaming platform.
+A rebase-preview or offline-merge subsystem should only be considered when real
+concurrent or offline editing requirements justify it.
 
-Storage implements the persistence ports. API, Web, CLI, and MCP are composition
-roots or clients, not alternate command implementations.
-
-## Migration Order
-
-1. Add the application package, ports, trusted context, errors, and the read-only
-   transition inspection query.
-2. Move propose, verify, and attach-statement commands behind the same resource
-   and authority evaluator.
-3. Move decide and commit commands behind one transaction, CAS, idempotency, and
-   review-seal path.
-4. Route first-party repository draft and merge writers through the application
-   commands while keeping the existing compatibility facade.
-5. Make API, MCP, Web, and CLI call the same command surface for consequential
-   transition mutations.
-6. Add the versioned YOps recipe compiler foundation without changing the
-   frozen v1 18-op contract or existing Effect digests.
-7. Add derived ChangeProjection and append-only ReviewSnapshot foundations while
-   keeping existing PR records and URLs readable.
-
-## Compatibility Rules
+## Invariants
 
 - Do not add a fifth public protocol noun.
 - Do not make `@t3x-dev/transition` depend on application, storage, transports,
-  UI, clocks, randomness, or LLMs.
-- Do not shrink or rewrite the YOps v1 operation union.
-- Do not rewrite historical Effect, Statement, CommitV2, draft, or PR records.
-- Keep old API methods and project review URLs as compatibility aliases until a
-  separate deprecation PR removes them.
-- Rejected decisions remain auditable and must not advance repository refs.
-- Any stale base, stale snapshot, missing authority, or failed replay must fail
-  before commit.
+  UI, clocks, randomness, LLM clients, or network clients.
+- Do not shrink or rewrite the frozen YOps v1 operation union.
+- Do not rewrite historical Effect, Statement, CommitV2, draft, PR, or YOps
+  evidence.
+- Rejected Decisions remain auditable and cannot advance repository refs.
+- A stale base, stale ReviewSnapshot, missing authority, or failed replay must
+  fail before commit.
+- Retire compatibility code with its last caller; preserve historical evidence
+  unless a separately reviewed retention policy authorizes deletion.
 
-## Open Ownership
+## Verification
 
-Existing owning issues:
+Run the closure contract with:
 
-- [#1305](https://github.com/t3x-dev/t3x-core/issues/1305): CommitV2 writer
-  convergence.
-- [#1236](https://github.com/t3x-dev/t3x-core/issues/1236): MCP
-  Decision/Commit automation.
+```bash
+pnpm --dir packages/api exec vitest run \
+  src/__tests__/contracts/repository-convergence-proof.test.ts \
+  src/__tests__/contracts/repository-writer-inventory.test.ts \
+  src/__tests__/contracts/conversation-contract-inventory.test.ts
+```
 
-Before changing a frozen architecture decision, update the relevant owning
-issue or create a small owner issue for the specific application, YOps recipe,
-or ReviewSnapshot decision.
-
-## Phase 2 Prerequisite
-
-At this baseline, these Phase 2 PRs are green but still waiting for review:
-
-- [#1375](https://github.com/t3x-dev/t3x-core/pull/1375): Decision review seal.
-- [#1376](https://github.com/t3x-dev/t3x-core/pull/1376): workspace typecheck
-  gate.
-
-Runtime migration PRs must refresh the inventory from the latest clean
-`origin/dev` after these prerequisites are merged or explicitly rebased into
-the branch.
+The proof references, but does not duplicate, the durable runtime suites for
+repository writer preparation, Workspace source transitions, Decision and
+Commit routes, native Verify providers, CAS contention, and source evidence.

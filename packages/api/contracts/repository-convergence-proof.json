@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "purpose": "Prove that active first-party repository mutations converge on one deterministic Transition authority without claiming a streaming architecture.",
+  "canonical_flow": [
+    "source",
+    "workspace",
+    "proposal",
+    "review_snapshot",
+    "decision",
+    "commit_v2",
+    "evidence"
+  ],
+  "evidence": [
+    {
+      "id": "deterministic-preparation",
+      "file": "packages/application/src/__tests__/repository-writers.test.ts",
+      "anchors": [
+        "builds the repository State replacement proposal, replay Statement, and policy bundle",
+        "builds a deterministic two-parent semantic merge bundle"
+      ]
+    },
+    {
+      "id": "durable-review-and-native-verify",
+      "file": "packages/api/src/__tests__/workspace-source-transition-integration.test.ts",
+      "anchors": [
+        "materializes one inspectable Transition and reuses an exact review retry",
+        "runs the native ESPHome provider from canonical exact-source Verify"
+      ]
+    },
+    {
+      "id": "decision-commit-and-cas",
+      "file": "packages/api/src/__tests__/transition-decision-commit-routes.test.ts",
+      "anchors": [
+        "decides and commits from trusted facts with exact command retries",
+        "commits canonical exact-source import, edit, and revert with trusted projections",
+        "allows only one concurrent Commit to advance a shared ref"
+      ]
+    },
+    {
+      "id": "immutable-and-archived-evidence",
+      "file": "packages/api/src/__tests__/source-evidence.test.ts",
+      "anchors": [
+        "returns CommitV2 evidence and marks a paginated turn view partial",
+        "projects committed, superseded, and uncommitted YOps as non-authoritative evidence"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "deterministic-incremental-updates",
+      "evidence": ["deterministic-preparation", "durable-review-and-native-verify"]
+    },
+    {
+      "id": "replay-verifiable-transitions",
+      "evidence": ["deterministic-preparation", "durable-review-and-native-verify"]
+    },
+    {
+      "id": "optimistic-concurrency-protection",
+      "evidence": ["decision-commit-and-cas"]
+    },
+    {
+      "id": "one-active-mutation-authority",
+      "evidence": ["decision-commit-and-cas"]
+    },
+    {
+      "id": "immutable-governance-evidence",
+      "evidence": ["decision-commit-and-cas", "immutable-and-archived-evidence"]
+    },
+    {
+      "id": "historical-compatibility-without-historical-authority",
+      "evidence": ["immutable-and-archived-evidence"]
+    },
+    {
+      "id": "provider-independent-domain-history",
+      "evidence": ["durable-review-and-native-verify", "immutable-and-archived-evidence"]
+    }
+  ],
+  "authority_inventories": {
+    "writers": "packages/api/contracts/repository-writer-inventory.json",
+    "source_and_generation": "packages/api/contracts/conversation-contract-inventory.json"
+  },
+  "retired_route_gates": [
+    "GET /v1/conversations/{id}/context-export",
+    "GET /v1/conversations/{id}/topics",
+    "POST /v1/conversations/{id}/topics",
+    "PATCH /v1/topics/{id}",
+    "DELETE /v1/topics/{id}"
+  ],
+  "non_claims": [
+    "debezium-compatible-cdc",
+    "general-purpose-event-bus",
+    "database-level-change-streaming",
+    "distributed-exactly-once-processing",
+    "full-event-sourcing-of-every-system-entity",
+    "kafka-style-consumer-replay",
+    "multi-master-or-offline-collaborative-merging",
+    "automatic-conflict-free-rebasing"
+  ]
+}
