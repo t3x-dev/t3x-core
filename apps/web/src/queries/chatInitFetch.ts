@@ -9,7 +9,6 @@
 
 import { type ApiCommit, getApiCommit } from '@/infrastructure/commits';
 import { getConversation } from '@/infrastructure/conversations';
-import { listTopics, type Topic } from '@/infrastructure/topics';
 import type { Conversation } from '@/infrastructure/types';
 
 export async function fetchCommitForInheritance(
@@ -24,13 +23,5 @@ export async function fetchConversationMeta(convId: string): Promise<Conversatio
     return await getConversation(convId);
   } catch {
     return null;
-  }
-}
-
-export async function fetchConversationTopics(convId: string): Promise<Topic[]> {
-  try {
-    return await listTopics(convId);
-  } catch {
-    return [];
   }
 }

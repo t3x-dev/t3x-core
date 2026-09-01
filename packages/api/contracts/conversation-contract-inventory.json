@@ -8,7 +8,6 @@
     "packages/api/src/routes/source-chat-draft-replies.openapi.ts",
     "packages/api/src/routes/source-evidence.openapi.ts",
     "packages/api/src/routes/source-text-revisions.openapi.ts",
-    "packages/api/src/routes/topics.openapi.ts",
     "packages/api/src/routes/turns.openapi.ts"
   ],
   "contracts": [
@@ -316,46 +315,6 @@
           "token": "this.getLegacyYOpsEvidence("
         }
       ]
-    },
-    {
-      "id": "legacy-topics",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "removal_gate": "Remove after the legacy Chat initializer is retired and the caller guard observes no application consumer.",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "/v1/conversations/{id}/topics",
-          "source": "packages/api/src/routes/topics.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/conversations/{id}/topics",
-          "source": "packages/api/src/routes/topics.openapi.ts"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/topics/{id}",
-          "source": "packages/api/src/routes/topics.openapi.ts"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/topics/{id}",
-          "source": "packages/api/src/routes/topics.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "legacy_application",
-          "file": "apps/web/src/queries/chatInitFetch.ts",
-          "token": "listTopics("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/topics.ts",
-          "token": "createTopicApi("
-        }
-      ]
     }
   ],
   "related_modules": [
@@ -484,27 +443,27 @@
       "method": "GET",
       "path": "/v1/conversations/{id}/context-export",
       "reason": "Retired after its only first-party consumer was a zero-caller compatibility adapter; the live context manifest remains Source Thread-owned."
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversations/{id}/topics",
+      "reason": "Retired after the legacy initializer's display-only request was removed; historical topic rows remain preserved without active workflow authority."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/{id}/topics",
+      "reason": "Retired with the legacy topic workflow after first-party callers reached zero; no historical rows or schema are deleted."
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/topics/{id}",
+      "reason": "Retired with the legacy topic workflow after first-party callers reached zero; no historical rows or schema are deleted."
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/topics/{id}",
+      "reason": "Retired with the legacy topic workflow after first-party callers reached zero; no historical rows or schema are deleted."
     }
   ],
-  "deprecated_caller_guards": [
-    {
-      "symbol": "listTopics",
-      "allowed_files": [
-        "apps/web/src/infrastructure/topics.ts",
-        "apps/web/src/queries/chatInitFetch.ts"
-      ]
-    },
-    {
-      "symbol": "createTopicApi",
-      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
-    },
-    {
-      "symbol": "updateTopicApi",
-      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
-    },
-    {
-      "symbol": "deleteTopicApi",
-      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
-    }
-  ]
+  "deprecated_caller_guards": []
 }

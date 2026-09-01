@@ -25,9 +25,9 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 69,
-    "filesUsingGetDB": 61,
-    "filesUsingAssertProjectAccess": 47,
+    "routeFiles": 68,
+    "filesUsingGetDB": 60,
+    "filesUsingAssertProjectAccess": 46,
     "filesUsingRequireTransitionAuthority": 2,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
