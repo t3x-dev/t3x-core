@@ -15,6 +15,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   collectLessonsFromAssertions,
   generateLeafOutput,
+  type LLMProvider,
   suggestConstraints,
   suggestionsToConstraints,
 } from '@t3x-dev/core';
@@ -34,10 +35,11 @@ import {
   resolveInferenceActor,
   resolveInferenceRunId,
 } from '../lib/inference';
+import { bindInferenceProvider } from '../lib/inference-provider';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
+import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -319,8 +321,8 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
-    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, leaf.project_id);
+    if (project instanceof Response) return project;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
@@ -339,37 +341,34 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     }
 
     const registry = await getProviderRegistry();
-    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const result = await registry.tryWithFallback('generation', async (provider: any) => {
-      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
-      trackedUsage.inputTokens = 0;
-      trackedUsage.outputTokens = 0;
-      const r = await suggestConstraints(
-        tracked as Parameters<typeof suggestConstraints>[0],
-        knowledge,
-        leaf.type,
-        {
-          maxSuggestions: body.max_suggestions,
-          instructions: body.instructions,
-        }
-      );
-      trackedUsage.inputTokens = usage.inputTokens;
-      trackedUsage.outputTokens = usage.outputTokens;
-      return r;
-    });
-
-    // Record usage (fire-and-forget)
-    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: leaf.project_id,
-        endpoint: 'leaf_suggest_constraints',
-        model: result.model,
-        input_tokens: trackedUsage.inputTokens,
-        output_tokens: trackedUsage.outputTokens,
+    const runId = resolveInferenceRunId(c);
+    const actor = resolveInferenceActor(c);
+    const result = await registry.tryWithFallback<
+      LLMProvider,
+      Awaited<ReturnType<typeof suggestConstraints>>
+    >('generation', async (provider) => {
+      const resolvedModel = registry.getEntry(provider.id)?.defaultModel ?? provider.id;
+      const meteredProvider = bindInferenceProvider(provider, {
+        runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+        input: {
+          runId,
+          feature: 'leaf.suggest-constraints',
+          requestedModel: resolvedModel,
+          scope: {
+            actor,
+            projectId: leaf.project_id,
+            ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+            projectVisibility: 'unknown',
+          },
+        },
+        resolvedProvider: provider.id,
+        resolvedModel,
       });
-    }
+      return suggestConstraints(meteredProvider, knowledge, leaf.type, {
+        maxSuggestions: body.max_suggestions,
+        instructions: body.instructions,
+      });
+    });
 
     // Convert suggestions to proper Constraint objects with IDs
     const constraints = await suggestionsToConstraints(result.suggestions);
@@ -386,6 +385,12 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: 'RATE_LIMITED', message: err.message } },
+        429
+      );
+    }
     if (err instanceof Error && err.name === 'AllProvidersFailedError') {
       return c.json(
         {
@@ -444,7 +449,6 @@ leavesMLRoutes.openapi(learnFromEditsRoute, async (c) => {
         503
       );
     }
-
     // Build edit summaries for the LLM prompt.
     // Each edit is truncated to 500 chars per side (before/after), max 20 edits.
     // Worst case: ~20 * 1100 ≈ 22k chars of edit data + ~1k prompt = ~23k chars total.
@@ -603,8 +607,8 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
     }
-    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
-    if (accessResult instanceof Response) return accessResult;
+    const project = await assertProjectAccess(c, db, leaf.project_id);
+    if (project instanceof Response) return project;
 
     const unifiedCommit = await getRepositorySemanticCommit(db, leaf.commit_hash, leaf.project_id);
     if (!unifiedCommit) {
@@ -643,6 +647,8 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
         503
       );
     }
+    const registry = await getProviderRegistry();
+    const resolvedModel = registry.getEntry(llm.id)?.defaultModel ?? llm.id;
 
     // Use suggestConstraints but augment the instructions with lessons
     const lessonsContext = lessons
@@ -650,8 +656,23 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
       .map((l, i) => `${i + 1}. ${l.signal}`)
       .join('\n');
 
-    const { provider: trackedLlm, usage: rlUsage } = wrapWithUsageTracking(llm);
-    const result = await suggestConstraints(trackedLlm, rlKnowledge, leaf.type, {
+    const meteredLlm = bindInferenceProvider(llm, {
+      runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+      input: {
+        runId: resolveInferenceRunId(c),
+        feature: 'leaf.reverse-learn',
+        requestedModel: resolvedModel,
+        scope: {
+          actor: resolveInferenceActor(c),
+          projectId: leaf.project_id,
+          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+          projectVisibility: 'unknown',
+        },
+      },
+      resolvedProvider: llm.id,
+      resolvedModel,
+    });
+    const result = await suggestConstraints(meteredLlm, rlKnowledge, leaf.type, {
       maxSuggestions: body.max_suggestions,
       instructions: `The following lessons were learned from FAILED validations on previous outputs.
 Generate constraints that would PREVENT these failures:
@@ -660,18 +681,6 @@ ${lessonsContext}
 
 Focus on constraints that directly address these failures.`,
     });
-
-    // Record usage (fire-and-forget)
-    if (rlUsage.inputTokens || rlUsage.outputTokens) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: leaf.project_id,
-        endpoint: 'leaf_reverse_learn',
-        model: result.model,
-        input_tokens: rlUsage.inputTokens,
-        output_tokens: rlUsage.outputTokens,
-      });
-    }
 
     return c.json(
       {
@@ -685,6 +694,12 @@ Focus on constraints that directly address these failures.`,
       200
     );
   } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: 'RATE_LIMITED', message: err.message } },
+        429
+      );
+    }
     if (err instanceof Error && err.name === 'AllProvidersFailedError') {
       return c.json(
         {

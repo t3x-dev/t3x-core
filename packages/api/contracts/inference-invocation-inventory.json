@@ -94,8 +94,10 @@
     {
       "file": "packages/core/src/leaf/constraintSuggester.ts",
       "feature": "constraint-suggestion",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Hosted suggestion and reverse-learning routes bind each selected or fallback provider to canonical admission and terminal receipts."
     },
     {
       "file": "packages/core/src/leaf/generate.ts",
