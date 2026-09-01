@@ -99,6 +99,7 @@ describe('server-side inference invocation inventory', () => {
     ['packages/api/src/ops/leaf-gen.ts', 1],
     ['packages/core/src/extractors/v2/compress.ts', 1],
     ['packages/core/src/extractors/v2/pipeline.ts', 3],
+    ['packages/core/src/leaf/constraintSuggester.ts', 1],
     ['packages/core/src/leaf/generate.ts', 2],
     ['packages/core/src/leaf/multi-round-generate.ts', 4],
   ])('records migrated call family %s', (file, coveredCount) => {
