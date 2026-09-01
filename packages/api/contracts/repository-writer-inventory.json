@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "purpose": "Track every first-party repository mutation surface until WebUI, REST, CLI, and MCP converge on Transition authority.",
+  "canonical_authority": {
+    "id": "transition_control_plane",
+    "application_command": "packages/application/src/transition/commands.ts",
+    "commit_authority": "packages/storage/src/queries/transition-commits.ts",
+    "invariants": [
+      "deterministic_effect",
+      "immutable_review_snapshot",
+      "recorded_decision",
+      "exact_expected_head_cas",
+      "commit_v2"
+    ]
+  },
+  "states": ["canonical", "canonical_adapter", "legacy_writer"],
+  "interfaces": [
+    {
+      "id": "rest-transition-control-plane",
+      "surface": "rest",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/transition-control-plane.openapi.ts",
+      "anchors": ["createTransitionControlPlaneRoutes", "commitTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal. This is the provider-independent repository mutation API."
+    },
+    {
+      "id": "rest-workspace-transition-adapter",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/workspaces.openapi.ts",
+      "anchors": ["reviewWorkspaceTransitionRoute", "decideWorkspaceTransitionRoute"],
+      "replacement": null,
+      "removal_gate": "Retain while the WebUI needs Workspace-shaped requests; the adapter must continue deriving Transition authority facts on the server."
+    },
+    {
+      "id": "rest-workspace-source-transition-adapter",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/workspace-source-transition.openapi.ts",
+      "anchors": ["createWorkspaceSourceTransitionRoutes", "decideWorkspaceSourceTransition("],
+      "replacement": null,
+      "removal_gate": "Retain while exact-source operations need a server-owned Workspace adapter; it may not create a second commit authority."
+    },
+    {
+      "id": "web-workspace-transition",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
+      "anchors": ["reviewWorkspaceTransition(", "decideWorkspaceTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal while it remains the WebUI adapter to canonical review and decision commands."
+    },
+    {
+      "id": "web-workspace-source-transition",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
+      "anchors": ["reviewWorkspaceSourceTransition(", "reviewWorkspaceSourceRevert("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal while exact-source review remains server-owned."
+    },
+    {
+      "id": "web-workspace-review-snapshot-decision",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
+      "anchors": ["preconditionFromSnapshot(", "decideWorkspaceTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal. Decisions must remain bound to an immutable server-authored ReviewSnapshot."
+    },
+    {
+      "id": "cli-transition-commands",
+      "surface": "cli",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "apps/cli/src/commands/transition.ts",
+      "anchors": [
+        "client.proposeTransition(",
+        "client.decideTransition(",
+        "client.commitTransition("
+      ],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal."
+    },
+    {
+      "id": "mcp-transition-tools",
+      "surface": "mcp",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "packages/mcp/src/tools/transition/index.ts",
+      "anchors": [
+        "client.proposeTransition(",
+        "client.decideTransition(",
+        "client.commitTransition("
+      ],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal."
+    },
+    {
+      "id": "rest-conversation-yops-log",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/yops-log.openapi.ts",
+      "anchors": ["createYOpsRoute", "deleteYOpsRoute"],
+      "replacement": "Transition structured_yops proposal plus immutable archived YOps evidence reads.",
+      "removal_gate": "Disable writes after first-party writer count reaches zero; retire routes after archived evidence reads replace yops_log reads. Preserve historical rows.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/extract.openapi.ts",
+      "anchors": ["postExtractRoute", "path: '/v1/extract'"],
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "removal_gate": "Retire after WebUI, CLI, and MCP callers use authenticated Workspace extraction and the legacy caller guards reach zero.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract-yops",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/extract-yops.openapi.ts",
+      "anchors": ["extractYopsRoutes", "path: '/v1/extract-yops'"],
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "removal_gate": "Retire after the WebUI proposal generator no longer calls the conversation extraction adapter.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-incremental-extract",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/extract-incremental.openapi.ts",
+      "anchors": ["incrementalExtractRoute", "path: '/v1/extract/incremental'"],
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "removal_gate": "Retire after the pending-commit WebUI is removed or migrated and its caller count reaches zero.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-draft-workflows",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "anchors": ["draftsWorkflowRoutes", "commitDraftRoute"],
+      "replacement": "Workspace revision, ReviewSnapshot, Decision, and CommitV2 lifecycle.",
+      "removal_gate": "Retire after CLI, MCP, and WebUI draft mutation callers reach zero; keep historical draft evidence readable.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-commit-from-draft",
+      "surface": "rest",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/api/src/routes/commit-from-draft.openapi.ts",
+      "anchors": ["postCommitFromDraftRoute", "path: '/v1/commit'"],
+      "replacement": "Decision-authorized commit_transition with exact expected-head CAS.",
+      "removal_gate": "Retire after CLI and MCP commitFromDraft callers reach zero.",
+      "issue": 1297
+    },
+    {
+      "id": "web-legacy-conversation-yops",
+      "surface": "webui",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/web/src/commands/yops/llmAdapter.ts",
+      "anchors": ["postExtractYops("],
+      "replacement": "Workspace proposal generation and useWorkspaceTransition.",
+      "removal_gate": "Migrate the last caller, then delete the adapter in the same PR.",
+      "issue": 1297
+    },
+    {
+      "id": "web-legacy-pending-commit-extraction",
+      "surface": "webui",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/web/src/hooks/canvas/usePendingCommitExtraction.ts",
+      "anchors": ["api.extractIncremental("],
+      "replacement": "Repository Workspace extraction candidate flow.",
+      "removal_gate": "Retire with the legacy pending-commit canvas after repository Workspace parity is covered.",
+      "issue": 1292
+    },
+    {
+      "id": "web-legacy-pending-commit-commit",
+      "surface": "webui",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/web/src/hooks/canvas/usePendingCommitState.ts",
+      "anchors": ["api.commitWorkbenchDraft("],
+      "replacement": "ReviewSnapshot and Decision through useWorkspaceTransition.",
+      "removal_gate": "Retire with the legacy pending-commit canvas after its navigation and test callers reach zero.",
+      "issue": 1292
+    },
+    {
+      "id": "cli-legacy-extract",
+      "surface": "cli",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/cli/src/commands/extract.ts",
+      "anchors": ["client.extract("],
+      "replacement": "Workspace extraction proposal plus transition propose.",
+      "removal_gate": "Retire the fallback after the Workspace arguments are the only supported mode.",
+      "issue": 1297
+    },
+    {
+      "id": "cli-legacy-edit",
+      "surface": "cli",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/cli/src/commands/yops.ts",
+      "anchors": ["client.applyYOps("],
+      "replacement": "transition propose --operations-json against an exact base.",
+      "removal_gate": "Retire after command help and tests use Transition proposals exclusively.",
+      "issue": 1297
+    },
+    {
+      "id": "cli-legacy-commit",
+      "surface": "cli",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "apps/cli/src/commands/commit.ts",
+      "anchors": ["client.commitFromDraft("],
+      "replacement": "transition decide followed by transition commit with expected head.",
+      "removal_gate": "Retire after transition commands provide the only first-party commit path.",
+      "issue": 1297
+    },
+    {
+      "id": "mcp-legacy-extract",
+      "surface": "mcp",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/mcp/src/tools/core/extract.ts",
+      "anchors": ["client.extract("],
+      "replacement": "Workspace extraction candidate plus propose_transition.",
+      "removal_gate": "Retire after t3x_extract creates only server-owned Workspace candidates.",
+      "issue": 1297
+    },
+    {
+      "id": "mcp-legacy-edit",
+      "surface": "mcp",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/mcp/src/tools/core/edit.ts",
+      "anchors": ["client.applyYOps("],
+      "replacement": "propose_transition with structured_yops operations.",
+      "removal_gate": "Retire after t3x_edit targets Workspace Transition proposals only.",
+      "issue": 1297
+    },
+    {
+      "id": "mcp-legacy-commit",
+      "surface": "mcp",
+      "state": "legacy_writer",
+      "authority": "legacy_workbench",
+      "file": "packages/mcp/src/tools/core/commit.ts",
+      "anchors": ["client.commitFromDraft("],
+      "replacement": "decide_transition and commit_transition with exact expected head.",
+      "removal_gate": "Retire after t3x_commit delegates only to the Transition lifecycle.",
+      "issue": 1297
+    }
+  ],
+  "legacy_caller_guards": [
+    {
+      "symbol": "postExtractYops(",
+      "roots": ["apps/web/src"],
+      "allowed_files": [
+        "apps/web/src/commands/yops/llmAdapter.ts",
+        "apps/web/src/infrastructure/llm.ts"
+      ]
+    },
+    {
+      "symbol": "api.extractIncremental(",
+      "roots": ["apps/web/src"],
+      "allowed_files": ["apps/web/src/hooks/canvas/usePendingCommitExtraction.ts"]
+    },
+    {
+      "symbol": "api.commitWorkbenchDraft(",
+      "roots": ["apps/web/src"],
+      "allowed_files": ["apps/web/src/hooks/canvas/usePendingCommitState.ts"]
+    },
+    {
+      "symbol": "client.extract(",
+      "roots": ["apps/cli/src", "packages/mcp/src"],
+      "allowed_files": [
+        "apps/cli/src/commands/extract.ts",
+        "packages/mcp/src/tools/core/extract.ts"
+      ]
+    },
+    {
+      "symbol": "client.applyYOps(",
+      "roots": ["apps/cli/src", "packages/mcp/src"],
+      "allowed_files": ["apps/cli/src/commands/yops.ts", "packages/mcp/src/tools/core/edit.ts"]
+    },
+    {
+      "symbol": "client.commitFromDraft(",
+      "roots": ["apps/cli/src", "packages/mcp/src"],
+      "allowed_files": ["apps/cli/src/commands/commit.ts", "packages/mcp/src/tools/core/commit.ts"]
+    }
+  ],
+  "retirement_policy": {
+    "delete_code_with_last_caller": true,
+    "delete_historical_rows": false,
+    "drop_tables_in_wave_1": false,
+    "required_exit_gates": [
+      "replacement_is_live",
+      "legacy_caller_guard_is_empty",
+      "archived_evidence_is_readable",
+      "route_and_typed_client_are_removed_together",
+      "replay_and_cas_tests_pass"
+    ]
+  }
+}
