@@ -9,7 +9,6 @@ import {
   findBranchesByProject,
   findConversationById,
   findConversationsByProject,
-  findDraftById,
   findLeafById,
   findLeavesByProject,
   findPinById,
@@ -18,7 +17,6 @@ import {
   findProjects,
   getVerifiedTransitionCommitGraph,
   listCommitHistory,
-  listDraftsByProject,
 } from '@t3x-dev/storage';
 
 import { getApiClient, isApiBackend, unwrapListPayload } from '../../backend.js';
@@ -29,7 +27,6 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 const SINGULAR_TARGETS = [
   'project',
-  'draft',
   'commit',
   'leaf',
   'pin',
@@ -40,7 +37,6 @@ const SINGULAR_TARGETS = [
 ] as const;
 const PLURAL_TARGETS = [
   'projects',
-  'drafts',
   'commits',
   'leaves',
   'pins',
@@ -61,13 +57,12 @@ export const queryDef: ToolDef = {
     'Read any T3X resource.',
     '',
     'Singular targets (require `id`):',
-    '  project, draft, commit, leaf, pin, source_thread, source_evidence, workspace',
+    '  project, commit, leaf, pin, source_thread, source_evidence, workspace',
     '',
     'Plural targets (require `project_id`, except `projects`):',
-    '  projects, drafts, commits, leaves, pins, branches, source_threads, workspaces',
+    '  projects, commits, leaves, pins, branches, source_threads, workspaces',
     '',
     'Notes:',
-    '  draft / drafts = workbench drafts used by extract/edit/commit',
     '  source_evidence also requires `project_id` and is available through the API backend',
     '  workspace / workspaces require `project_id` and the authenticated API backend',
     '  conversation / conversations are compatibility aliases for source_thread / source_threads',
@@ -140,8 +135,6 @@ export const queryHandler: ToolHandler = async (args) => {
       switch (target) {
         case 'project':
           return ok(await client.getProject(id));
-        case 'draft':
-          return ok((await client.getDraft(id)) as unknown as Record<string, unknown>);
         case 'commit':
           if (!projectId) {
             return fail('"project_id" is required for target="commit".');
@@ -179,10 +172,6 @@ export const queryHandler: ToolHandler = async (args) => {
     switch (target) {
       case 'projects':
         return ok(unwrapListPayload(await client.listProjects({ limit, offset }), 'projects'));
-      case 'drafts':
-        return ok(
-          unwrapListPayload(await client.listDrafts(projectId!, { limit, offset }), 'drafts')
-        );
       case 'commits':
         return ok(
           unwrapListPayload(await client.listCommits(projectId!, { limit, offset }), 'commits')
@@ -232,10 +221,6 @@ export const queryHandler: ToolHandler = async (args) => {
         const project = await findProjectById(db, id);
         return project ? ok(project) : fail(`Project not found: ${id}`);
       }
-      case 'draft': {
-        const draft = await findDraftById(db, id);
-        return draft ? ok(draft) : fail(`Draft not found: ${id}`);
-      }
       case 'commit': {
         if (!projectId) {
           return fail('"project_id" is required for target="commit".');
@@ -273,13 +258,6 @@ export const queryHandler: ToolHandler = async (args) => {
   switch (target) {
     case 'projects': {
       const rows = await findProjects(db, { limit, offset });
-      return ok(rows);
-    }
-    case 'drafts': {
-      const rows = await listDraftsByProject(db, projectId!, {
-        limit,
-        offset,
-      });
       return ok(rows);
     }
     case 'commits': {

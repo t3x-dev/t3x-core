@@ -2,7 +2,6 @@
  * Route exports
  */
 
-export { agentDraftRoutes } from './agent-drafts.openapi';
 export { apiKeysRoutes } from './api-keys.openapi';
 export { authLocalRoutes } from './auth-local.openapi';
 export { authMeRoutes } from './auth-me.openapi';
@@ -13,7 +12,6 @@ export { checkRoutes } from './check.openapi';
 export { collaborationCommandRoutes } from './collaboration-commands.openapi';
 export { collaborationInvitationRoutes } from './collaboration-invitations.openapi';
 export { collaborationReadRoutes } from './collaboration-reads.openapi';
-export { commitFromDraftRoutes } from './commit-from-draft.openapi';
 export { commitRoutes } from './commits.openapi';
 export { comparisonsRoutes } from './comparisons.openapi';
 export { contextRoutes } from './context.openapi';
@@ -23,11 +21,7 @@ export { deployAgentRoutes } from './deploy-agents.openapi';
 export { deploymentCapabilitiesRoutes } from './deployment-capabilities.openapi';
 export { diffRoutes } from './diff.openapi';
 export { docsYopsRoutes } from './docs-yops.openapi';
-export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
-export { extractRoutes as integrationExtractRoutes } from './extract.openapi';
-export { extractIncrementalRoutes } from './extract-incremental.openapi';
-export { extractYopsRoutes } from './extract-yops.openapi';
 export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { gateRoutes } from './gate.openapi';
 export { healthRoutes } from './health.openapi';
@@ -71,7 +65,6 @@ export {
 } from './workspace-source-transition.openapi';
 export { workspaceValidationRoutes } from './workspace-validation.openapi';
 export { workspaceRoutes } from './workspaces.openapi';
-export { yopsLogRoutes } from './yops-log.openapi';
 export { yopsValidateRoutes } from './yops-validate.openapi';
 export { yschemaCompositionRoutes } from './yschema-composition.openapi';
 export { yschemaPrdSmokeRoutes } from './yschema-prd-smoke.openapi';

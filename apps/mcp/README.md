@@ -89,7 +89,6 @@ The server currently exposes these resource templates:
 - `t3x://projects/{project_id}/commits/{commit_digest}`
 - `t3x://projects/{project_id}/transitions/{transition_id}`
 - `t3x://projects/{project_id}/workspaces/{workspace_id}`
-- `t3x://workbench-drafts/{draft_id}`
 - `t3x://source-threads/{source_thread_id}`
 - `t3x://leaves/{leaf_id}`
 - `t3x://merge-drafts/{draft_id}`
@@ -102,7 +101,6 @@ source-thread resource.
 The server currently exposes these workflow prompts:
 
 - `extract_review_commit`
-- `inspect_workbench_draft`
 - `prepare_resolve_merge`
 - `generate_from_leaf`
 
@@ -160,8 +158,10 @@ direct-storage fallback for authenticated authority or issuer context.
 API-backed resources and Source evidence reads also pass through the API
 boundary. `source_evidence` is unavailable in storage mode because project
 authorization and observation completeness belong to the Source service.
-Direct storage remains available for the legacy single-user extract/edit/commit
-workflow; it is not a mutation authority for Source or Transition operations.
+Direct storage remains useful for local read and generation surfaces, but it is
+not repository mutation authority. The compatibility-named `t3x_extract`,
+`t3x_edit`, and `t3x_commit` tools require the API backend and adapt requests to
+the same Workspace/Transition path as WebUI and CLI.
 
 Local Codex/Cursor development should prefer the `api` backend so MCP and CLI
 see the same data without each process trying to own embedded Postgres.
@@ -186,13 +186,19 @@ see the same data without each process trying to own embedded Postgres.
 ## Example Workflow
 
 ```text
-Legacy compatibility: Extract -> Inspect -> Edit -> Commit
+Repository workflow (requires `T3X_MCP_BACKEND=api`)
 
-1. t3x_admin({ action: "create_project", name })         -> project_id
-2. t3x_extract({ project_id, text })                     -> draft_id
-3. t3x_query({ target: "draft", id: draft_id })          -> inspect workbench draft
-4. t3x_edit({ draft_id, yops, if_revision })             -> refine draft
-5. t3x_commit({ project_id, draft_id, message })         -> commit_hash
+1. t3x_query({ target: "source_evidence", project_id, id: source_thread_id })
+                                                           -> exact immutable turn hashes
+2. t3x_extract({ project_id, workspace_id, source_thread_id, turn_hashes })
+                                                           -> extraction_candidate_id
+3. propose_transition({ project_id, workspace_id, extraction_candidate_id, request_id })
+                                                           -> transition_id
+4. inspect_transition({ project_id, transition_id })      -> immutable review view
+5. verify_transition({ project_id, transition_id, request_id })
+6. decide_transition({ project_id, transition_id, request_id, outcome, precondition })
+7. commit_transition({ project_id, transition_id, request_id, decision_digest, expected_head })
+                                                           -> CommitV2 digest
 
 Merge
 
@@ -202,14 +208,8 @@ Merge
 4. t3x_merge({ action: "resolve", ... })
 5. t3x_merge({ action: "execute", ... })                 -> merge commit_hash
 
-Transition (requires `T3X_MCP_BACKEND=api`)
-
-1. propose_transition({ project_id, ... })              -> transition_id + TransitionViewV1
-2. inspect_transition({ project_id, transition_id })    -> current task-oriented view
-3. verify_transition({ project_id, transition_id, ... }) -> replay/validation observations
-4. attach_statement({ project_id, transition_id, ... }) -> updated view
-5. decide_transition({ project_id, transition_id, ... }) -> decision_digest + updated view
-6. commit_transition({ project_id, transition_id, ... }) -> commit_digest + TransitionViewV1
+Historical YOps remain available only through the project-scoped archived
+evidence read model. They are audit material, not a competing mutation path.
 ```
 
 ## Build

@@ -5,9 +5,9 @@
 
 import type { YOpsLogEntry } from '@t3x-dev/core';
 import { getConversation } from '@/infrastructure/conversations';
+import { getLegacyYOpsEvidence } from '@/infrastructure/sourceEvidence';
 import { listTurns } from '@/infrastructure/turns';
 import type { Turn } from '@/infrastructure/types';
-import { loadYOpsLog } from './yopsLog';
 
 export type { Turn as LoadedTurn };
 
@@ -26,11 +26,29 @@ export async function loadConversation(
   projectId: string,
   convId: string
 ): Promise<LoadedConversation> {
-  const [conversation, turnsData, opsLog] = await Promise.all([
+  const [conversation, turnsData, evidence] = await Promise.all([
     getConversation(convId),
     listTurns(projectId, convId),
-    loadYOpsLog(convId),
+    getLegacyYOpsEvidence(projectId, convId, { order: 'asc', limit: 200 }),
   ]);
+  const opsLog: YOpsLogEntry[] = evidence.items.flatMap((item) => {
+    if (item.lifecycle.superseded_at !== null) return [];
+    return [
+      {
+        id: item.id,
+        conversation_id: item.conversation_id,
+        project_id: item.project_id,
+        source: item.source as YOpsLogEntry['source'],
+        turn_hash: item.turn_hash ?? undefined,
+        yops: item.yops,
+        created_at: item.created_at,
+        metadata: item.metadata as Record<string, unknown> | null,
+        superseded_at: null,
+        is_committed: item.lifecycle.status === 'committed',
+        committed_by: item.lifecycle.committed_by,
+      },
+    ];
+  });
   return {
     convId,
     title: conversation.title ?? null,

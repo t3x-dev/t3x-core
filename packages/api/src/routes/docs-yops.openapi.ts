@@ -42,17 +42,17 @@ const YOPS_REFERENCE = {
   },
 
   workflow: {
-    description: 'Typical agent workflow for editing a structured state tree:',
+    description: 'Canonical workflow for proposing deterministic structured-state changes:',
     steps: [
-      'POST /v1/extract — extract a state tree from text → returns draft_id',
-      'GET /v1/drafts/{draft_id} — view the extracted tree and get revision number',
-      'POST /v1/drafts/{draft_id}/apply-yops — edit the tree with YOps (pass if_revision)',
-      'POST /v1/drafts/{draft_id}/commit — save as immutable commit',
+      'Create or open a project Workspace at an exact repository revision',
+      'POST exact Source turn hashes to the Workspace extraction-proposal endpoint',
+      'POST /v1/projects/{projectId}/transitions with kind=structured_yops and the extraction candidate',
+      'Verify, decide, and commit the Transition using its immutable precondition and exact expected head',
     ],
     tips: [
-      'Use GET /v1/drafts/{id} to see the current tree before editing',
-      'Always pass if_revision from the last GET/apply response (optimistic locking)',
-      'Use POST /v1/yops/validate for dry-run testing without modifying the draft',
+      'Inspect the Workspace revision and Transition before deciding',
+      'Always commit with the exact expected repository head (optimistic concurrency)',
+      'Use POST /v1/yops/validate for a stateless dry run before proposing a Transition',
       'Prefer set/populate for updating existing nodes over define for creating new ones',
     ],
   },
@@ -343,8 +343,7 @@ const docsYopsRoute = createRoute({
   description:
     'Returns the complete YOps specification as structured JSON. ' +
     'Includes all 18 operations with descriptions, field syntax, examples, and error codes. ' +
-    'Also includes path syntax and the recommended workflow.\n\n' +
-    'Call this before using `POST /v1/drafts/{id}/apply-yops` to learn the available operations.',
+    'Also includes path syntax and the canonical Workspace/Transition workflow.',
   responses: {
     200: {
       description: 'YOps reference',

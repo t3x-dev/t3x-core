@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockClient = { proposeTransition: vi.fn() };
+const mockClient = {
+  proposeTransition: vi.fn(),
+  sourceThreads: { legacyYOpsEvidence: vi.fn() },
+};
 vi.mock('@t3x-dev/api-client', () => ({ createClient: vi.fn(() => mockClient) }));
 const mockSpinner = { start: vi.fn(), stop: vi.fn(), succeed: vi.fn(), fail: vi.fn() };
 vi.mock('ora', () => ({ default: vi.fn(() => mockSpinner) }));
@@ -79,5 +82,34 @@ describe('yops apply', () => {
 
     expect(mockClient.proposeTransition).toHaveBeenCalledOnce();
     expect('applyYOps' in mockClient).toBe(false);
+  });
+});
+
+describe('yops log', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reads project-scoped archived evidence instead of the retired route', async () => {
+    mockClient.sourceThreads.legacyYOpsEvidence.mockResolvedValue({
+      mode: 'historical_evidence',
+      authoritative_for_project_state: false,
+      items: [],
+      page: { total: 0, limit: 100, offset: 0 },
+    });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'yops',
+      'log',
+      '--project',
+      'proj_1',
+      '--conversation',
+      'conv_1',
+    ]);
+
+    expect(mockClient.sourceThreads.legacyYOpsEvidence).toHaveBeenCalledWith('proj_1', 'conv_1', {
+      order: 'asc',
+      archivedOnly: true,
+    });
   });
 });

@@ -212,7 +212,10 @@ Business logic calls functions in `queries/`, never raw SQL.
 
 ### Extraction pipeline (`packages/core/src/extractors/`)
 
-LLM proposes YOps; the pipeline applies them deterministically. `yops_log` is the audit trail for every mutation.
+LLM proposes YOps; the pipeline applies them deterministically inside a
+Repository Workspace and records the result as Transition evidence. Historical
+`yops_log` rows remain readable for migration and audit, but they are not
+authority for current project state.
 
 | Stage | Files |
 |---|---|
@@ -224,7 +227,7 @@ LLM proposes YOps; the pipeline applies them deterministically. `yops_log` is th
 | Compression | `compressor.ts`, `compressPrompt.ts` |
 | Thresholds | `adaptiveThresholds.ts` |
 
-Flow: `turns → prompt → LLM → YOps YAML → parser → @t3x-dev/yops engine → transforms → yops_log + commit`.
+Flow: `immutable turns → Workspace candidate → YOps parser/engine → transforms → Transition review → Decision → CommitV2`.
 
 ### Diff & merge (`packages/core/src/semantic/`)
 
@@ -495,15 +498,22 @@ pnpm dev:api
 
 ### Agent workflow
 
-Umbrellas dispatch to sub-actions via `target` / `action` / etc. Typical flow:
+Umbrellas dispatch to sub-actions via `target` / `action` / etc. Repository
+mutations require the API backend and converge on the Transition lifecycle:
 
 ```
-Extract → Inspect → Edit → Commit:
-  t3x_admin({ action: "create_project", name })            → project_id
-  t3x_extract({ project_id, text })                        → draft_id
-  t3x_query({ target: "draft", id: draft_id })             → nodes, revision
-  t3x_edit({ draft_id, yops, if_revision })                → updated trees
-  t3x_commit({ project_id, draft_id, message })            → commit_hash
+Source → Workspace → Transition → Decision → CommitV2:
+  t3x_query({ target: "source_evidence", project_id, id: source_thread_id })
+                                                               → immutable turn hashes
+  t3x_extract({ project_id, workspace_id, source_thread_id, turn_hashes })
+                                                               → extraction_candidate_id
+  propose_transition({ project_id, workspace_id, extraction_candidate_id, request_id })
+                                                               → transition_id
+  verify_transition({ project_id, transition_id, request_id }) → review evidence
+  decide_transition({ project_id, transition_id, request_id, outcome, precondition })
+                                                               → decision_digest
+  commit_transition({ project_id, transition_id, request_id, decision_digest, expected_head })
+                                                               → CommitV2 digest
 
 Merge (advanced toolset):
   t3x_merge({ action: "prepare", source_hash, target_hash })  → autoKept, conflicts

@@ -3,8 +3,8 @@
  * `ExtractionV2PipelineResult`-shaped success/failure pair) into the
  * canonical `ExtractionOutcome` envelope the API exposes on the wire.
  *
- * This adapter exists so callers (the `/v1/extract-yops` route, future
- * MCP tools, tests) consume one stable wire shape without any layer
+ * This adapter exists so Workspace, MCP, CLI, and test callers consume
+ * one stable wire shape without any layer
  * needing to know about the pipeline's internal `ok | failure` shape.
  *
  * Implementation notes:

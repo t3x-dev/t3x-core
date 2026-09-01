@@ -81,29 +81,23 @@ Repository Workspace workflow (API backend):
 2. t3x_extract — create a v2 SourcedYOps proposal in an existing Workspace
 3. t3x_query workspace — inspect the persisted proposal
 
-Legacy compatibility workflow:
-1. t3x_extract with raw text — create a workbench draft
-2. t3x_query — inspect what was extracted (or any other resource)
-3. t3x_edit — refine the draft with YOps (YAML operations)
-4. t3x_commit — save a snapshot
-
 Source reads:
 - query source_thread or source_threads for durable source metadata
 - query source_evidence with project_id and source-thread id for repository evidence
 - conversation and conversations remain compatibility aliases
 
 Additional capabilities (if advanced toolset enabled):
-5. t3x_diff — compare two commits
-6. t3x_merge — branch and merge structured state
-7. t3x_admin — manage projects, branches, pins
+4. t3x_diff — compare two commits
+5. t3x_merge — branch and merge structured state
+6. t3x_admin — manage projects, branches, pins
 
 Transition lifecycle (only if the opt-in transition toolset and API backend are enabled):
-8. propose_transition — prepare a replayable change without deciding or committing; pass the extraction_candidate_id returned by t3x_extract to load canonical Workspace SourcedYOps on the server
-9. inspect_transition — inspect task state, assurance, and immutable preconditions
-10. verify_transition — run mandatory Replay plus configured external checks
-11. attach_statement — attach an allowlisted claim through authenticated API authority
-12. decide_transition — record an accepted, rejected, or overridden Decision from the latest review precondition
-13. commit_transition — create CommitV2 and advance the ref by exact expected-head CAS
+7. propose_transition — prepare a replayable change without deciding or committing; pass the extraction_candidate_id returned by t3x_extract to load canonical Workspace SourcedYOps on the server
+8. inspect_transition — inspect task state, assurance, and immutable preconditions
+9. verify_transition — run mandatory Replay plus configured external checks
+10. attach_statement — attach an allowlisted claim through authenticated API authority
+11. decide_transition — record an accepted, rejected, or overridden Decision from the latest review precondition
+12. commit_transition — create CommitV2 and advance the ref by exact expected-head CAS
 
 t3x_generate creates validated outputs from committed state.`;
 

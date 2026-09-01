@@ -48,7 +48,6 @@ import {
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import {
-  agentDraftRoutes,
   apiKeysRoutes,
   authLocalRoutes,
   authMeRoutes,
@@ -58,7 +57,6 @@ import {
   collaborationCommandRoutes,
   collaborationInvitationRoutes,
   collaborationReadRoutes,
-  commitFromDraftRoutes,
   commitRoutes,
   comparisonsRoutes,
   contextRoutes,
@@ -70,17 +68,13 @@ import {
   deploymentCapabilitiesRoutes,
   diffRoutes,
   docsYopsRoutes,
-  draftsRoutes,
   exportRoutes,
-  extractIncrementalRoutes,
   extractionFeedbackRoutes,
-  extractYopsRoutes,
   gateRoutes,
   generationRoutes,
   healthRoutes,
   importRoutes,
   ingestRoutes,
-  integrationExtractRoutes,
   knowledgeGraphRoutes,
   leavesRoutes,
   llmRoutes,
@@ -114,7 +108,6 @@ import {
   workspaceExtractionProposalRoutes,
   workspaceRoutes,
   workspaceValidationRoutes,
-  yopsLogRoutes,
   yopsValidateRoutes,
   yschemaCompositionRoutes,
   yschemaPrdSmokeRoutes,
@@ -235,7 +228,6 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', turnRoutes);
   api.route('/', commitRoutes);
   api.route('/', branchRoutes);
-  api.route('/', agentDraftRoutes);
   api.route('/', generationRoutes);
   api.route('/', curateRoutes);
   api.route('/', diffRoutes);
@@ -243,9 +235,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', mergeRoutes);
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
-  api.route('/', draftsRoutes);
   api.route('/', gateRoutes); // /v1/gate/check
-  api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
   api.route('/', yschemaCompositionRoutes); // /v1/yschema/artifacts and /v1/yschema/compositions/preview
@@ -281,11 +271,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', autopilotRoutes);
   api.route('/', checkRoutes);
   api.route('/', contextRoutes);
-  api.route('/', integrationExtractRoutes);
-  api.route('/', commitFromDraftRoutes);
   api.route('/', relationsRoutes);
-  api.route('/', extractYopsRoutes); // /v1/extract-yops
-  api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);

@@ -10,7 +10,6 @@
 
 export type {
   AdaptiveResult,
-  AutoCommitResult,
   AutopilotConfig,
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';

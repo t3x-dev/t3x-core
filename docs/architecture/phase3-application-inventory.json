@@ -25,9 +25,9 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 80,
-    "filesUsingGetDB": 71,
-    "filesUsingAssertProjectAccess": 56,
+    "routeFiles": 69,
+    "filesUsingGetDB": 61,
+    "filesUsingAssertProjectAccess": 47,
     "filesUsingRequireTransitionAuthority": 2,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
@@ -35,7 +35,6 @@
       "packages/api/src/routes/comparisons.openapi.ts",
       "packages/api/src/routes/deploy-agents.openapi.ts",
       "packages/api/src/routes/diff.openapi.ts",
-      "packages/api/src/routes/drafts-workflows.openapi.ts",
       "packages/api/src/routes/health.openapi.ts",
       "packages/api/src/routes/namespaces.openapi.ts",
       "packages/api/src/routes/notifications.openapi.ts",
@@ -48,12 +47,6 @@
     ]
   },
   "compatibilityWriterReferences": [
-    {
-      "path": "apps/cli/src/commands/commit.ts",
-      "patterns": [
-        "commitFromDraft"
-      ]
-    },
     {
       "path": "apps/cli/src/commands/merge.ts",
       "patterns": [
@@ -156,12 +149,6 @@
         "commitMergeDraft",
         "prepareRepositoryYOpsMerge"
       ]
-    },
-    {
-      "path": "packages/mcp/src/tools/core/commit.ts",
-      "patterns": [
-        "commitFromDraft"
-      ]
     }
   ],
   "surfaceStorageImports": [
@@ -180,8 +167,6 @@
         "packages/mcp/src/resources/index.ts",
         "packages/mcp/src/tools/advanced/admin.ts",
         "packages/mcp/src/tools/advanced/merge.ts",
-        "packages/mcp/src/tools/core/edit.ts",
-        "packages/mcp/src/tools/core/extract.ts",
         "packages/mcp/src/tools/core/generate.ts",
         "packages/mcp/src/tools/core/query.ts"
       ]

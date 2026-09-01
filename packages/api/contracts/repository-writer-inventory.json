@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Track every first-party repository mutation surface until WebUI, REST, CLI, and MCP converge on Transition authority.",
+  "purpose": "Prove that every first-party repository mutation surface converges on Transition authority.",
   "canonical_authority": {
     "id": "transition_control_plane",
     "application_command": "packages/application/src/transition/commands.ts",
@@ -114,72 +114,6 @@
       "removal_gate": "Not scheduled for removal."
     },
     {
-      "id": "rest-conversation-yops-log",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/yops-log.openapi.ts",
-      "anchors": ["createYOpsRoute", "deleteYOpsRoute"],
-      "replacement": "Transition structured_yops proposal plus immutable archived YOps evidence reads.",
-      "removal_gate": "Disable writes after first-party writer count reaches zero; retire routes after archived evidence reads replace yops_log reads. Preserve historical rows.",
-      "issue": 1297
-    },
-    {
-      "id": "rest-legacy-extract",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/extract.openapi.ts",
-      "anchors": ["postExtractRoute", "path: '/v1/extract'"],
-      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
-      "removal_gate": "Retire after WebUI, CLI, and MCP callers use authenticated Workspace extraction and the legacy caller guards reach zero.",
-      "issue": 1297
-    },
-    {
-      "id": "rest-legacy-extract-yops",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/extract-yops.openapi.ts",
-      "anchors": ["extractYopsRoutes", "path: '/v1/extract-yops'"],
-      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
-      "removal_gate": "Retire after the WebUI proposal generator no longer calls the conversation extraction adapter.",
-      "issue": 1297
-    },
-    {
-      "id": "rest-legacy-incremental-extract",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/extract-incremental.openapi.ts",
-      "anchors": ["incrementalExtractRoute", "path: '/v1/extract/incremental'"],
-      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
-      "removal_gate": "Retire after the pending-commit WebUI is removed or migrated and its caller count reaches zero.",
-      "issue": 1297
-    },
-    {
-      "id": "rest-legacy-draft-workflows",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
-      "anchors": ["draftsWorkflowRoutes", "commitDraftRoute"],
-      "replacement": "Workspace revision, ReviewSnapshot, Decision, and CommitV2 lifecycle.",
-      "removal_gate": "Retire after CLI, MCP, and WebUI draft mutation callers reach zero; keep historical draft evidence readable.",
-      "issue": 1297
-    },
-    {
-      "id": "rest-legacy-commit-from-draft",
-      "surface": "rest",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "packages/api/src/routes/commit-from-draft.openapi.ts",
-      "anchors": ["postCommitFromDraftRoute", "path: '/v1/commit'"],
-      "replacement": "Decision-authorized commit_transition with exact expected-head CAS.",
-      "removal_gate": "Retire after CLI and MCP commitFromDraft callers reach zero.",
-      "issue": 1297
-    },
-    {
       "id": "cli-workspace-extract",
       "surface": "cli",
       "state": "canonical_adapter",
@@ -243,22 +177,123 @@
   "legacy_caller_guards": [
     {
       "symbol": "createWorkbenchDraft(",
-      "roots": ["apps/web/src"],
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
       "allowed_files": []
     },
     {
       "symbol": "commitWorkbenchDraft(",
-      "roots": ["apps/web/src"],
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
       "allowed_files": []
     },
     {
       "symbol": "extractIncremental(",
-      "roots": ["apps/web/src"],
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
       "allowed_files": []
     },
     {
       "symbol": "extractToDraft(",
-      "roots": ["apps/web/src"],
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.getDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.listDrafts(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.createDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.deleteDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.getAgentDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.createAgentDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "/v1/drafts/{draftId}/auto-commit",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
       "allowed_files": []
     }
   ],
@@ -273,5 +308,49 @@
       "route_and_typed_client_are_removed_together",
       "replay_and_cas_tests_pass"
     ]
-  }
+  },
+  "retired_interfaces": [
+    {
+      "id": "rest-conversation-yops-log",
+      "former_file": "packages/api/src/routes/yops-log.openapi.ts",
+      "replacement": "Transition structured_yops proposal plus immutable archived YOps evidence reads.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract",
+      "former_file": "packages/api/src/routes/extract.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract-yops",
+      "former_file": "packages/api/src/routes/extract-yops.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-incremental-extract",
+      "former_file": "packages/api/src/routes/extract-incremental.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-draft-workflows",
+      "former_file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "replacement": "Workspace revision, ReviewSnapshot, Decision, and CommitV2 lifecycle.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-commit-from-draft",
+      "former_file": "packages/api/src/routes/commit-from-draft.openapi.ts",
+      "replacement": "Decision-authorized commit_transition with exact expected-head CAS.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-autopilot-draft-commit",
+      "former_file": "packages/api/src/routes/autopilot.openapi.ts",
+      "replacement": "Decision-authorized commit_transition; historical recipe actions fail closed.",
+      "issue": 1297
+    }
+  ]
 }

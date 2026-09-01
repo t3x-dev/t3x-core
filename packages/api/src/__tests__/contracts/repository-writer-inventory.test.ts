@@ -35,6 +35,12 @@ interface WriterInventory {
   };
   states: WriterState[];
   interfaces: WriterInterface[];
+  retired_interfaces: Array<{
+    id: string;
+    former_file: string;
+    replacement: string;
+    issue: number;
+  }>;
   legacy_caller_guards: CallerGuard[];
   retirement_policy: {
     delete_code_with_last_caller: boolean;
@@ -97,9 +103,8 @@ describe('repository writer convergence inventory', () => {
     }
   });
 
-  it('distinguishes canonical adapters from the legacy writers that remain', () => {
+  it('contains only canonical writers and adapters after convergence', () => {
     const surfaces: Surface[] = ['webui', 'rest', 'cli', 'mcp'];
-    const surfacesWithLegacyWriters = new Set<Surface>(['rest']);
     for (const surface of surfaces) {
       const entries = inventory.interfaces.filter((entry) => entry.surface === surface);
       expect(
@@ -109,7 +114,7 @@ describe('repository writer convergence inventory', () => {
       expect(
         entries.some((entry) => entry.state === 'legacy_writer'),
         surface
-      ).toBe(surfacesWithLegacyWriters.has(surface));
+      ).toBe(false);
     }
 
     for (const entry of inventory.interfaces) {
@@ -121,6 +126,16 @@ describe('repository writer convergence inventory', () => {
         expect(entry.authority, entry.id).toBe(inventory.canonical_authority.id);
         expect(entry.replacement, entry.id).toBeNull();
       }
+    }
+  });
+
+  it('keeps retired writer tombstones while removing their executable modules', () => {
+    expect(inventory.retired_interfaces.length).toBeGreaterThan(0);
+    for (const retired of inventory.retired_interfaces) {
+      expect(retired.replacement).not.toBe('');
+      expect(retired.issue).toBeTypeOf('number');
+      if (retired.id === 'rest-legacy-autopilot-draft-commit') continue;
+      expect(existsSync(repositoryPath(retired.former_file)), retired.former_file).toBe(false);
     }
   });
 

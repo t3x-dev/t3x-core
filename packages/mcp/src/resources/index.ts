@@ -1,6 +1,5 @@
 import {
   findConversationById,
-  findDraftById,
   findLeafById,
   findProjectById,
   getMergeDraft,
@@ -13,14 +12,12 @@ import {
   toLeafReadModel,
   toMergeDraftReadModel,
   toProjectReadModel,
-  toWorkbenchDraftReadModel,
 } from '../read-models/index.js';
 
 type ResourceKind =
   | 'project'
   | 'commit'
   | 'transition'
-  | 'workbench_draft'
   | 'workspace'
   | 'source_thread'
   | 'leaf'
@@ -49,12 +46,6 @@ export const RESOURCE_TEMPLATES = [
     name: 'transition',
     uriTemplate: 't3x://projects/{project_id}/transitions/{transition_id}',
     description: 'Read a project-scoped Transition review view through authenticated API access.',
-    mimeType: 'application/json',
-  },
-  {
-    name: 'workbench_draft',
-    uriTemplate: 't3x://workbench-drafts/{draft_id}',
-    description: 'Read a workbench draft used by extract/edit/commit.',
     mimeType: 'application/json',
   },
   {
@@ -122,8 +113,6 @@ function parseResourceUri(uri: string): ParsedResourceUri {
       }
       return { kind: 'project', id };
     }
-    case 'workbench-drafts':
-      return { kind: 'workbench_draft', id };
     case 'source-threads':
     case 'conversations':
       return { kind: 'source_thread', id };
@@ -171,11 +160,6 @@ export async function readResource(uri: string) {
         return jsonTextContent(uri, {
           kind: 'transition',
           ...(await client.inspectTransition(parsed.projectId, parsed.id)),
-        });
-      case 'workbench_draft':
-        return jsonTextContent(uri, {
-          kind: 'workbench_draft',
-          ...(await client.getDraft(parsed.id)),
         });
       case 'workspace':
         if (!parsed.projectId)
@@ -238,13 +222,6 @@ export async function readResource(uri: string) {
         recorded_at: commit.recordedAt,
         object: commit.commit,
       });
-    }
-    case 'workbench_draft': {
-      const draft = await findDraftById(db, parsed.id);
-      if (!draft) {
-        throw new Error(`Workbench draft not found: ${parsed.id}`);
-      }
-      return jsonTextContent(uri, toWorkbenchDraftReadModel(draft));
     }
     case 'source_thread': {
       const conversation = await findConversationById(db, parsed.id);
