@@ -12,6 +12,7 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  getYOpsLogEntry,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
@@ -157,6 +158,7 @@ describe('validateSourcedYOpsStructure (unit)', () => {
 describe('POST /v1/conversations/:id/yops — source enforcement', () => {
   let cleanup: () => Promise<void>;
   let testConversationId: string;
+  let testProjectId: string;
   const app = new Hono();
   app.route('/', yopsLogRoutes);
 
@@ -166,6 +168,7 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
     cleanup = setup.cleanup;
 
     const project = await insertProject(mockDB, testData.project({ name: 'Source Test' }));
+    testProjectId = project.projectId;
     const conversation = await insertConversation(
       mockDB,
       testData.conversation(project.projectId, { title: 'Source Test Conv' })
@@ -175,6 +178,29 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
 
   afterAll(async () => {
     await cleanup();
+  });
+
+  it('archives compatibility undo rows instead of physically deleting evidence', async () => {
+    const entry = await insertYOpsLogEntry(mockDB, {
+      conversationId: testConversationId,
+      projectId: testProjectId,
+      source: 'manual',
+      yops: testYOps('archived_undo'),
+    });
+
+    const response = await app.request(`/v1/conversations/${testConversationId}/yops/${entry.id}`, {
+      method: 'DELETE',
+    });
+    expect(response.status).toBe(200);
+
+    const preserved = await getYOpsLogEntry(mockDB, entry.id);
+    expect(preserved?.supersededAt).toBeInstanceOf(Date);
+
+    const activeResponse = await app.request(
+      `/v1/conversations/${testConversationId}/yops?active_only=true`
+    );
+    const activeBody = (await activeResponse.json()) as ApiResponse;
+    expect(activeBody.data.some((row: { id: string }) => row.id === entry.id)).toBe(false);
   });
 
   it('rejects op missing per-op source', async () => {

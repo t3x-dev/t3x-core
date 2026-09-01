@@ -1,12 +1,14 @@
 import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  archiveYOpsLogEntryForUndo,
   conversations,
   ensureMainBranch,
   insertConversation,
   insertProject,
   insertSourceTextRevision,
   insertTurn,
+  insertYOpsLogEntry,
 } from '@t3x-dev/storage';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -34,6 +36,15 @@ interface SourceEvidenceTestBody {
     revisions: unknown[];
     evidence_selection: { mode: string; turn_hashes: string[] };
     referring_commits: Array<{ commit_digest: string; evidence_refs: unknown[] }>;
+  };
+}
+
+interface LegacyYOpsEvidenceTestBody {
+  data: {
+    mode: string;
+    authoritative_for_project_state: boolean;
+    items: Array<{ id: string; lifecycle: { status: string; superseded_at: string | null } }>;
+    page: { total: number; limit: number; offset: number };
   };
 }
 
@@ -65,7 +76,12 @@ function app(apiKey?: ApiKey) {
   return instance;
 }
 
-async function commitConversation(projectId: string, conversationId: string, intent: string) {
+async function commitConversation(
+  projectId: string,
+  conversationId: string,
+  intent: string,
+  yopsLogIds: string[] = []
+) {
   await ensureMainBranch(mockDB, projectId);
   const evidence = await getRepositoryConversationEvidence(mockDB, projectId, conversationId);
   return commitRepositoryYOpsState({
@@ -77,6 +93,7 @@ async function commitConversation(projectId: string, conversationId: string, int
     actor: { kind: 'human', id: 'human:test-maintainer' },
     intent,
     evidence,
+    yopsLogIds,
   });
 }
 
@@ -207,6 +224,78 @@ describe('source evidence routes', () => {
     expect(body.data.availability).toEqual({ mode: 'available', reasons: [] });
     expect(body.data.turns).toMatchObject({ total: 1, completeness: 'complete' });
     expect(body.data.referring_commits).toEqual([]);
+  });
+
+  it('projects committed, superseded, and uncommitted YOps as non-authoritative evidence', async () => {
+    const project = await insertProject(mockDB, { name: 'Legacy YOps Evidence API' });
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Preserved legacy operations',
+    });
+    const committed = await insertYOpsLogEntry(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [],
+    });
+    const superseded = await insertYOpsLogEntry(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [],
+    });
+    const active = await insertYOpsLogEntry(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      source: 'manual',
+      yops: [],
+    });
+    await archiveYOpsLogEntryForUndo(mockDB, superseded.id);
+    await commitConversation(
+      project.projectId,
+      conversation.conversationId,
+      'Consume preserved YOps evidence',
+      [committed.id]
+    );
+
+    const response = await app().request(
+      `/v1/projects/${project.projectId}/sources/conversations/${conversation.conversationId}/legacy-yops`
+    );
+    const body = (await response.json()) as LegacyYOpsEvidenceTestBody;
+    const statusById = new Map(body.data.items.map((item) => [item.id, item.lifecycle.status]));
+
+    expect(response.status).toBe(200);
+    expect(body.data.mode).toBe('historical_evidence');
+    expect(body.data.authoritative_for_project_state).toBe(false);
+    expect(body.data.page.total).toBe(3);
+    expect(statusById).toEqual(
+      new Map([
+        [committed.id, 'committed'],
+        [superseded.id, 'superseded'],
+        [active.id, 'legacy_uncommitted'],
+      ])
+    );
+
+    const archivedResponse = await app().request(
+      `/v1/projects/${project.projectId}/sources/conversations/${conversation.conversationId}/legacy-yops?archived_only=true&order=desc`
+    );
+    const archivedBody = (await archivedResponse.json()) as LegacyYOpsEvidenceTestBody;
+    expect(archivedBody.data.items.map((item) => item.id)).toEqual([superseded.id]);
+    expect(archivedBody.data.items[0]?.lifecycle.superseded_at).toEqual(expect.any(String));
+  });
+
+  it('does not expose legacy YOps through a different project scope', async () => {
+    const owner = await insertProject(mockDB, { name: 'Legacy YOps Owner' });
+    const other = await insertProject(mockDB, { name: 'Legacy YOps Other' });
+    const conversation = await insertConversation(mockDB, {
+      projectId: owner.projectId,
+      title: 'Scoped evidence',
+    });
+
+    const response = await app().request(
+      `/v1/projects/${other.projectId}/sources/conversations/${conversation.conversationId}/legacy-yops`
+    );
+    expect(response.status).toBe(404);
   });
 
   it('returns 404 for an unknown source and 403 across an ownership boundary', async () => {

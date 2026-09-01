@@ -640,6 +640,7 @@ export {
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
   acquireProjectSupersedeLock,
+  archiveYOpsLogEntryForUndo,
   deleteYOpsLogEntry,
   findCommitHashesByYOpsLogIds,
   getYOpsForCommit,
@@ -648,6 +649,7 @@ export {
   type InsertYOpsLogInput,
   insertYOpsLogEntry,
   listActiveYOpsLogByConversation,
+  listLegacyYOpsEvidencePage,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
   supersedeActiveLLMSuggestions,

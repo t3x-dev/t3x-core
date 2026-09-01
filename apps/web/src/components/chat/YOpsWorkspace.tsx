@@ -56,6 +56,7 @@ export function YOpsWorkspace({
   const draftOps = useWorkspaceStore((s) => s.draftOps);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const conversationId = useWorkspaceStore((s) => s.conversationId);
+  const projectId = useWorkspaceStore((s) => s.activeProjectId);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
   const [topView, setTopViewState] = useState<TopView>('script');
@@ -271,7 +272,7 @@ export function YOpsWorkspace({
           {topView === 'script' ? (
             <ScriptEditor />
           ) : topView === 'archived' ? (
-            <ArchivedOpsPanel conversationId={conversationId} />
+            <ArchivedOpsPanel projectId={projectId} conversationId={conversationId} />
           ) : (
             <YOpsLogPanel tab={topView} mode={topView === 'applied' ? 'materialized' : 'ledger'} />
           )}

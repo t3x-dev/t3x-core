@@ -92,6 +92,8 @@ import type {
   ImportUrlResult,
   InspectTransitionResult,
   Leaf,
+  LegacyYOpsEvidence,
+  LegacyYOpsEvidenceParams,
   ListBranchesResponse,
   ListCommitsResponse,
   ListConversationsResponse,
@@ -204,6 +206,8 @@ export class T3xClient {
       memory: (id) => this.getSourceThreadMemory(id),
       evidence: (projectId, conversationId, params) =>
         this.getSourceThreadEvidence(projectId, conversationId, params),
+      legacyYOpsEvidence: (projectId, conversationId, params) =>
+        this.getLegacyYOpsEvidence(projectId, conversationId, params),
     });
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
@@ -643,6 +647,27 @@ export class T3xClient {
       {
         limit: params?.limit,
         offset: params?.offset,
+      }
+    );
+  }
+
+  async getLegacyYOpsEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: LegacyYOpsEvidenceParams
+  ): Promise<LegacyYOpsEvidence> {
+    return this.request<LegacyYOpsEvidence>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/sources/conversations/${encodeURIComponent(
+        conversationId
+      )}/legacy-yops`,
+      undefined,
+      {
+        limit: params?.limit,
+        offset: params?.offset,
+        topic_id: params?.topicId,
+        archived_only: params?.archivedOnly === undefined ? undefined : String(params.archivedOnly),
+        order: params?.order,
       }
     );
   }

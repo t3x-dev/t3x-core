@@ -8,7 +8,7 @@
  * - POST   /v1/conversations/:conversationId/yops        - Append yops
  * - GET    /v1/conversations/:conversationId/yops        - List yops
  * - GET    /v1/conversations/:conversationId/draft        - Compute current draft
- * - DELETE /v1/conversations/:conversationId/yops/:yopsId - Delete a yops entry (undo)
+ * - DELETE /v1/conversations/:conversationId/yops/:yopsId - Archive a yops entry (compatibility undo)
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops log routes rebuild state through loosely typed DB transactions pending repository type cleanup */
@@ -16,7 +16,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import {
-  deleteYOpsLogEntry,
+  archiveYOpsLogEntryForUndo,
   findCommitHashesByYOpsLogIds,
   findConversationById,
   getYOpsLogEntry,
@@ -325,19 +325,20 @@ const getDraftRoute = createRoute({
   },
 });
 
-// DELETE /v1/conversations/:conversationId/yops/:yopsId
+// DELETE compatibility route: archive one row out of active replay without erasing evidence.
 const deleteYOpsRoute = createRoute({
   method: 'delete',
   path: '/v1/conversations/{conversationId}/yops/{yopsId}',
   tags: ['YOps Log'],
-  summary: 'Delete a yops entry (undo)',
-  description: 'Deletes a yops log entry by ID. Used for undo operations.',
+  summary: 'Archive a yops entry (compatibility undo)',
+  description:
+    'Removes an uncommitted yops entry from active replay by setting superseded_at. The historical row is preserved as evidence.',
   request: {
     params: YOpsIdParam,
   },
   responses: {
     200: {
-      description: 'YOps entry deleted successfully',
+      description: 'YOps entry archived successfully',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(z.null()),
@@ -504,7 +505,7 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
   }
 });
 
-// DELETE /v1/conversations/:conversationId/yops/:yopsId
+// DELETE compatibility route: archive without physical deletion.
 yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
   const { conversationId, yopsId } = c.req.valid('param');
 
@@ -519,9 +520,10 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, existing.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    // Undo: delete yops entry + rebuild trees atomically
+    // Undo: archive the row + rebuild active trees atomically. Historical
+    // content remains readable through the repository Source/Evidence API.
     await (db as any).transaction(async (tx: any) => {
-      await deleteYOpsLogEntry(tx, yopsId);
+      await archiveYOpsLogEntryForUndo(tx, yopsId);
       const remainingRecords = await listActiveYOpsLogByConversation(tx, conversationId);
       const rebuilt = replayEntriesOnBaselineFailFast(
         await getConversationInheritedBaseline(tx, conversationId),

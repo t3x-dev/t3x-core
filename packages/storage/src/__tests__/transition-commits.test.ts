@@ -44,6 +44,7 @@ import {
   TransitionYOpsLogMembershipError,
 } from '../queries/transition-commits';
 import {
+  archiveYOpsLogEntryForUndo,
   deleteYOpsLogEntry,
   findCommitHashesByYOpsLogIds,
   getYOpsForTransitionCommit,
@@ -718,6 +719,7 @@ describe('CommitV2 repository', () => {
       supersedeActiveUncommittedYOpsLogEntries(db, conversation.conversationId)
     ).resolves.toEqual([]);
     await expect(deleteYOpsLogEntry(db, yops.id)).resolves.toBeUndefined();
+    await expect(archiveYOpsLogEntryForUndo(db, yops.id)).resolves.toBeUndefined();
     await expect(getYOpsLogEntry(db, yops.id)).resolves.toMatchObject({
       id: yops.id,
       supersededAt: null,

@@ -30,19 +30,20 @@ export interface UseArchivedYopsLogResult {
 const IDLE: UseArchivedYopsLogResult = { status: 'idle', rows: [], error: null };
 
 export function useArchivedYopsLog(
+  projectId: string | null,
   conversationId: string | null,
   topicId: string | null = null
 ): UseArchivedYopsLogResult {
   const [state, setState] = useState<UseArchivedYopsLogResult>(IDLE);
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!projectId || !conversationId) {
       setState(IDLE);
       return;
     }
     let cancelled = false;
     setState({ status: 'loading', rows: [], error: null });
-    fetchArchivedYopsLog(conversationId, topicId)
+    fetchArchivedYopsLog(projectId, conversationId, topicId)
       .then((rows) => {
         if (cancelled) return;
         setState({ status: 'ready', rows, error: null });
@@ -55,7 +56,7 @@ export function useArchivedYopsLog(
     return () => {
       cancelled = true;
     };
-  }, [conversationId, topicId]);
+  }, [conversationId, projectId, topicId]);
 
   return state;
 }

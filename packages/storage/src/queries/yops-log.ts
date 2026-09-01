@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { transitionYOpsLogConsumptions } from '../schema-transition-commits';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
@@ -84,8 +84,44 @@ export async function listYOpsLogByConversation(
     .orderBy(asc(yopsLog.createdAt));
 }
 
+/** Project-scoped, stable page for the repository historical-evidence API. */
+export async function listLegacyYOpsEvidencePage(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    conversationId: string;
+    limit: number;
+    offset: number;
+    topicId?: string;
+    archivedOnly?: boolean;
+    newestFirst?: boolean;
+  }
+): Promise<{ items: YOpsLogRecord[]; total: number }> {
+  const where = and(
+    eq(yopsLog.projectId, input.projectId),
+    eq(yopsLog.conversationId, input.conversationId),
+    input.topicId === undefined ? undefined : eq(yopsLog.topicId, input.topicId),
+    input.archivedOnly ? isNotNull(yopsLog.supersededAt) : undefined
+  );
+  const [totalRow] = await db.select({ value: count() }).from(yopsLog).where(where);
+  const items = await db
+    .select()
+    .from(yopsLog)
+    .where(where)
+    .orderBy(
+      input.newestFirst ? desc(yopsLog.createdAt) : asc(yopsLog.createdAt),
+      input.newestFirst ? desc(yopsLog.id) : asc(yopsLog.id)
+    )
+    .limit(input.limit)
+    .offset(input.offset);
+  return { items, total: totalRow?.value ?? 0 };
+}
+
 /**
- * Delete a yops log entry by ID (for undo).
+ * Physically delete an uncommitted YOps row for compensating cleanup only.
+ *
+ * User-visible undo must use `archiveYOpsLogEntryForUndo` so historical
+ * operations remain available as evidence.
  */
 export async function deleteYOpsLogEntry(
   db: AnyDB,
@@ -109,6 +145,44 @@ export async function deleteYOpsLogEntry(
     if (consumption !== undefined) return undefined;
     const [deleted] = await tx.delete(yopsLog).where(eq(yopsLog.id, id)).returning();
     return deleted;
+  })) as YOpsLogRecord | undefined;
+}
+
+/**
+ * Remove an uncommitted YOps row from active replay without erasing it.
+ *
+ * The row payload and identity stay intact; `superseded_at` records the
+ * lifecycle change. Committed rows remain immutable and cannot be archived
+ * through the compatibility undo path.
+ */
+export async function archiveYOpsLogEntryForUndo(
+  db: AnyDB,
+  id: string
+): Promise<YOpsLogRecord | undefined> {
+  return (await (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    const [entry] = await tx.select().from(yopsLog).where(eq(yopsLog.id, id)).limit(1);
+    if (entry === undefined) return undefined;
+    await acquireProjectSupersedeLock(tx, entry.projectId);
+    const [consumption] = await tx
+      .select({ id: transitionYOpsLogConsumptions.yopsLogId })
+      .from(transitionYOpsLogConsumptions)
+      .where(
+        and(
+          eq(transitionYOpsLogConsumptions.projectId, entry.projectId),
+          eq(transitionYOpsLogConsumptions.yopsLogId, id)
+        )
+      )
+      .limit(1);
+    if (consumption !== undefined) return undefined;
+    if (entry.supersededAt !== null) return entry;
+
+    const [archived] = await tx
+      .update(yopsLog)
+      .set({ supersededAt: new Date() })
+      .where(and(eq(yopsLog.id, id), isNull(yopsLog.supersededAt)))
+      .returning();
+    return archived;
   })) as YOpsLogRecord | undefined;
 }
 

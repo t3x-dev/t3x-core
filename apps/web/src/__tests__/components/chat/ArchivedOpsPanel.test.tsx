@@ -35,7 +35,7 @@ describe('ArchivedOpsPanel', () => {
   afterEach(() => fetchArchivedYopsLogMock.mockReset());
 
   it('renders an empty state when no conversation is active', () => {
-    const { container } = render(<ArchivedOpsPanel conversationId={null} />);
+    const { container } = render(<ArchivedOpsPanel projectId={null} conversationId={null} />);
     // Idle status — no fetch issued, no error, no rows.
     expect(fetchArchivedYopsLogMock).not.toHaveBeenCalled();
     expect(container.querySelectorAll('[data-testid^="archived-op-"]').length).toBe(0);
@@ -47,7 +47,7 @@ describe('ArchivedOpsPanel', () => {
       archivedRow('yl_b', '2026-04-26T02:00:00Z', 1),
     ]);
 
-    const { container } = render(<ArchivedOpsPanel conversationId="conv_1" />);
+    const { container } = render(<ArchivedOpsPanel projectId="proj_1" conversationId="conv_1" />);
     expect(container.textContent).toContain('loading');
 
     await waitFor(() => {
@@ -64,7 +64,7 @@ describe('ArchivedOpsPanel', () => {
 
   it('renders an empty-but-loaded state when the conversation has no archived rows', async () => {
     fetchArchivedYopsLogMock.mockResolvedValueOnce([]);
-    const { container } = render(<ArchivedOpsPanel conversationId="conv_1" />);
+    const { container } = render(<ArchivedOpsPanel projectId="proj_1" conversationId="conv_1" />);
     await waitFor(() => {
       expect(container.textContent).toContain('No archived ops');
     });
@@ -72,7 +72,7 @@ describe('ArchivedOpsPanel', () => {
 
   it('surfaces a failure message when the fetch rejects', async () => {
     fetchArchivedYopsLogMock.mockRejectedValueOnce(new Error('network blip'));
-    const { container } = render(<ArchivedOpsPanel conversationId="conv_1" />);
+    const { container } = render(<ArchivedOpsPanel projectId="proj_1" conversationId="conv_1" />);
     await waitFor(() => {
       expect(container.textContent).toContain('Couldn');
       expect(container.textContent).toContain('network blip');
@@ -81,9 +81,9 @@ describe('ArchivedOpsPanel', () => {
 
   it('passes the topicId filter through to the query', async () => {
     fetchArchivedYopsLogMock.mockResolvedValueOnce([]);
-    render(<ArchivedOpsPanel conversationId="conv_1" topicId="topic_42" />);
+    render(<ArchivedOpsPanel projectId="proj_1" conversationId="conv_1" topicId="topic_42" />);
     await waitFor(() => {
-      expect(fetchArchivedYopsLogMock).toHaveBeenCalledWith('conv_1', 'topic_42');
+      expect(fetchArchivedYopsLogMock).toHaveBeenCalledWith('proj_1', 'conv_1', 'topic_42');
     });
   });
 });
