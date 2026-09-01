@@ -262,18 +262,8 @@
       "consumers": [
         {
           "kind": "application",
-          "file": "apps/web/src/hooks/shared/useSourceTextDraft.ts",
-          "token": "createSourceTextRevision("
-        },
-        {
-          "kind": "application",
           "file": "apps/web/src/hooks/conversations/hydrateConversationToStore.ts",
           "token": "listSourceTextRevisions("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/sourceTextRevisions.ts",
-          "token": "updateSourceTextRevision("
         }
       ]
     },
@@ -421,9 +411,9 @@
       ],
       "consumers": [
         {
-          "kind": "application",
+          "kind": "compatibility_reader",
           "file": "apps/web/src/infrastructure/yopsLog.ts",
-          "token": "createYOpsEntry("
+          "token": "loadYOpsLog("
         },
         {
           "kind": "compatibility_adapter",
@@ -455,11 +445,6 @@
         }
       ],
       "consumers": [
-        {
-          "kind": "application",
-          "file": "apps/web/src/commands/yops/llmAdapter.ts",
-          "token": "postExtractYops("
-        },
         {
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
@@ -604,13 +589,6 @@
     },
     { "symbol": "createTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
     { "symbol": "updateTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
-    { "symbol": "deleteTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
-    {
-      "symbol": "postExtractYops",
-      "allowed_files": [
-        "apps/web/src/commands/yops/llmAdapter.ts",
-        "apps/web/src/infrastructure/llm.ts"
-      ]
-    }
+    { "symbol": "deleteTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] }
   ]
 }

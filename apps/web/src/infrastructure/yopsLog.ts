@@ -1,28 +1,21 @@
 /**
- * L1 — yops log persistence adapter.
+ * Read-only legacy YOps evidence adapter.
  *
  * Thin typed wrapper around the existing API client. Presents a
  * SourcedYOp-based interface to Layer 2 and maps HTTP errors to
  * typed PersistenceError.
  */
 
-import type { SourcedYOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
+import type { YOpsLogEntry } from '@t3x-dev/core';
 import { ApiError } from '@/infrastructure/core';
-import {
-  type CreateYOpsEntryOptions,
-  createYOpsEntry,
-  deleteYOpsEntry,
-  listYOpsLog,
-} from '@/infrastructure/trees';
-
-export type AppendYOpsOptions = CreateYOpsEntryOptions;
+import { listYOpsLog } from '@/infrastructure/trees';
 export interface LoadYOpsLogOptions {
   activeOnly?: boolean;
 }
 
 export class PersistenceError extends Error {
   constructor(
-    public operation: 'load' | 'append' | 'delete',
+    public operation: 'load',
     public code: string,
     message: string,
     public cause?: unknown
@@ -41,41 +34,6 @@ function wrapError(operation: PersistenceError['operation'], err: unknown): Pers
   return new PersistenceError(operation, 'UNKNOWN', msg, err);
 }
 
-/**
- * Derive the row-level source tag from per-op sources.
- * - All LLM ops → 'pipeline'
- * - Any human ops (or mixed) → 'manual'
- *
- * The row-level tag is a coarser, per-row classification, distinct from the
- * fine-grained per-op `source.type`. Both are real and load-bearing:
- * compression-v2 reads the row tag to flag manual edits, while the engine
- * and replay use the per-op source for provenance and validation.
- */
-export function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
-  if (ops.length === 0) return 'manual';
-  const allLLM = ops.every((o) => (o as { source: { type: string } }).source.type === 'llm');
-  return allLLM ? 'pipeline' : 'manual';
-}
-
-export async function appendYOps(
-  conversationId: string,
-  ops: SourcedYOp[],
-  options?: AppendYOpsOptions
-): Promise<YOpsLogEntry> {
-  try {
-    const rowSource = deriveRowSource(ops);
-    return await createYOpsEntry(
-      conversationId,
-      ops as unknown as Parameters<typeof createYOpsEntry>[1],
-      rowSource,
-      undefined,
-      options
-    );
-  } catch (err) {
-    throw wrapError('append', err);
-  }
-}
-
 export async function loadYOpsLog(
   conversationId: string,
   topicId?: string,
@@ -85,13 +43,5 @@ export async function loadYOpsLog(
     return await listYOpsLog(conversationId, topicId, { activeOnly: options?.activeOnly ?? true });
   } catch (err) {
     throw wrapError('load', err);
-  }
-}
-
-export async function removeYOpsEntry(conversationId: string, yopsId: string): Promise<void> {
-  try {
-    await deleteYOpsEntry(conversationId, yopsId);
-  } catch (err) {
-    throw wrapError('delete', err);
   }
 }

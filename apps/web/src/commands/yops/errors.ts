@@ -1,66 +1,6 @@
-/**
- * L3 — typed errors surfaced to components for the YOps (SemanticContent)
- * aggregate. Per v2 §2.4, all aggregate errors inherit from CommandError.
- *
- * Consumers pattern-match via `instanceof` (specific subclass for
- * branch-on-failure UX, or `CommandError` for generic fallback).
- *
- * Source policy: YOps is the strictest aggregate. Every op MUST carry
- * a `LLMSource` or `HumanSource`; SourceValidationError is thrown at
- * the entry by `commands/yops/yopsService.commitOps`.
- *
- * Optimistic-update style: caller-rollback. Hooks (useGoldEdit) save
- * pre-opsLog, optimistically replay, and on any of these errors restore
- * the pre-state via `setDerived(replay(pre-opsLog))`.
- */
+/** Typed failure for replaying historical conversation YOps evidence. */
 
-import type { ExtractionFailure, ExtractionFailureCode } from '@t3x-dev/core';
 import { CommandError } from '../CommandError';
-import type { RetryFailingOp } from './types';
-
-export class ExtractionFailedError extends CommandError {
-  constructor(
-    public failingOps: RetryFailingOp[],
-    public lastAttempt: number,
-    public reason:
-      | 'missing_source'
-      | 'unverifiable_quote'
-      | 'invalid_structure'
-      | 'exhausted_retries'
-      | 'llm_error'
-      | 'provider_key_missing'
-      | 'provider_auth'
-      | 'provider_rate_limited'
-      | 'provider_unavailable',
-    message?: string,
-    public failureCode?: ExtractionFailureCode
-  ) {
-    super('extraction_failed', message ?? `Extraction failed after ${lastAttempt} attempts`);
-    this.name = 'ExtractionFailedError';
-  }
-}
-
-export class ExtractionRequestError extends CommandError {
-  constructor(
-    public failure: ExtractionFailure,
-    public status?: number,
-    public apiCode?: string
-  ) {
-    super('extraction_request', failure.message);
-    this.name = 'ExtractionRequestError';
-  }
-}
-
-export class SourceValidationError extends CommandError {
-  constructor(
-    public opIndex: number,
-    public missingField: string,
-    message?: string
-  ) {
-    super('source_validation', message ?? `op[${opIndex}] missing ${missingField}`);
-    this.name = 'SourceValidationError';
-  }
-}
 
 export class YOpsReplayError extends CommandError {
   constructor(
