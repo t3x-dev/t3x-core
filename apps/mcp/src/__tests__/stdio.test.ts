@@ -1,5 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -50,54 +49,17 @@ async function connectConfiguredClient(envOverrides?: Record<string, string>) {
 }
 
 const openClients: Client[] = [];
-const tempDirs: string[] = [];
 
 function parseTextResult(result: { content: Array<{ type?: string; text?: string }> }) {
   return JSON.parse(result.content[0].text ?? '{}');
 }
 
-function createRealE2EEnv(): Record<string, string> {
-  const dataDir = mkdtempSync(path.join(tmpdir(), 't3x-mcp-stdio-'));
-  tempDirs.push(dataDir);
-
-  const env: Record<string, string> = {
-    T3X_DATA_DIR: dataDir,
-    T3X_PG_PORT: String(6400 + Math.floor(Math.random() * 500)),
-  };
-
-  const passthroughKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_AI_STUDIO_KEY'] as const;
-
-  for (const key of passthroughKeys) {
-    const value = process.env[key];
-    if (value) {
-      env[key] = value;
-    }
-  }
-
-  return env;
-}
-
-const runRealE2E =
-  process.env.T3X_RUN_REAL_MCP_E2E === '1' &&
-  Boolean(
-    process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_AI_STUDIO_KEY
-  );
-
-const maybeRealE2E = runRealE2E ? it : it.skip;
 const stdioSmokeTimeoutMs = 20_000;
-const realE2ETimeoutMs = 60_000;
 
 afterEach(async () => {
   while (openClients.length > 0) {
     const client = openClients.pop();
     await client?.close();
-  }
-
-  while (tempDirs.length > 0) {
-    const dir = tempDirs.pop();
-    if (dir) {
-      rmSync(dir, { recursive: true, force: true });
-    }
   }
 });
 
@@ -267,81 +229,5 @@ describe('apps/mcp stdio subprocess smoke', () => {
       });
     },
     stdioSmokeTimeoutMs
-  );
-
-  maybeRealE2E(
-    'runs create_project -> extract -> commit -> create_leaf -> generate over the real stdio subprocess',
-    async () => {
-      const { client } = await connectConfiguredClient(createRealE2EEnv());
-      openClients.push(client);
-
-      const project = parseTextResult(
-        await client.callTool({
-          name: 't3x_admin',
-          arguments: {
-            action: 'create_project',
-            name: 'Real MCP Leaf Flow',
-          },
-        })
-      );
-
-      const extract = parseTextResult(
-        await client.callTool({
-          name: 't3x_extract',
-          arguments: {
-            project_id: project.project_id,
-            text: 'Plan a Tokyo trip with budget 5000 and include one short summary.',
-          },
-        })
-      );
-
-      const commit = parseTextResult(
-        await client.callTool({
-          name: 't3x_commit',
-          arguments: {
-            project_id: project.project_id,
-            draft_id: extract.draft_id,
-            message: 'Snapshot for real stdio leaf generation',
-          },
-        })
-      );
-
-      const leaf = parseTextResult(
-        await client.callTool({
-          name: 't3x_admin',
-          arguments: {
-            action: 'create_leaf',
-            project_id: project.project_id,
-            commit_hash: commit.commit_hash,
-            leaf_type: 'tweet',
-            title: 'Trip summary',
-            constraints: [
-              {
-                type: 'require',
-                match_mode: 'exact',
-                value: 'Tokyo',
-              },
-            ],
-          },
-        })
-      );
-
-      const generated = parseTextResult(
-        await client.callTool({
-          name: 't3x_generate',
-          arguments: {
-            leaf_id: leaf.leaf_id,
-          },
-        })
-      );
-
-      expect(leaf.commit_hash).toBe(commit.commit_hash);
-      expect(leaf.type).toBe('tweet');
-      expect(generated.leaf_id).toBe(leaf.leaf_id);
-      expect(typeof generated.output).toBe('string');
-      expect(generated.output.length).toBeGreaterThan(0);
-      expect(generated.score.total).toBeGreaterThanOrEqual(1);
-    },
-    realE2ETimeoutMs
   );
 });

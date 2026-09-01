@@ -98,15 +98,13 @@ describe('t3x --help', () => {
       }
 
       const listHelp = runCliHelp(['list', '--help']);
-      expect(commandIsListed(listHelp, 'drafts')).toBe(true);
-      expect(commandIsListed(listHelp, 'projects')).toBe(false);
+      expect(commandIsListed(listHelp, 'projects')).toBe(true);
       expect(commandIsListed(listHelp, 'commits')).toBe(false);
       expect(commandIsListed(listHelp, 'branches')).toBe(false);
       expect(commandIsListed(listHelp, 'leaves')).toBe(false);
 
       const showHelp = runCliHelp(['show', '--help']);
-      expect(commandIsListed(showHelp, 'draft')).toBe(true);
-      expect(commandIsListed(showHelp, 'project')).toBe(false);
+      expect(commandIsListed(showHelp, 'project')).toBe(true);
       expect(commandIsListed(showHelp, 'commit')).toBe(false);
       expect(commandIsListed(showHelp, 'leaf')).toBe(false);
       expect(commandIsListed(showHelp, 'content')).toBe(false);

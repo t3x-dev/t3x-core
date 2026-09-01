@@ -43,14 +43,11 @@ import type {
   ApiErrorResponse,
   ApiResponse,
   ApiSuccessResponse,
-  ApplyYOpsResult,
   AttachTransitionStatementInput,
   AttachTransitionStatementResult,
   Branch,
   CheckInput,
   CheckResult,
-  CommitFromDraftInput,
-  CommitFromDraftResult,
   CommitRepositoryStateInput,
   CommitTransitionInput,
   CommitTransitionResult,
@@ -60,7 +57,6 @@ import type {
   ConversationSourceEvidence,
   CreateBranchInput,
   CreateConversationInput,
-  CreateDraftInput,
   CreatedRepositoryCommit,
   CreateLeafInput,
   CreateMergeDraftInput,
@@ -74,11 +70,8 @@ import type {
   DecideTransitionResult,
   DecideWorkspaceTransitionInput,
   DiffResult,
-  Draft,
   ExportCfpackInput,
   ExportLedgerInput,
-  ExtractInput,
-  ExtractResult,
   GenerateLeafInput,
   GenerationCapability,
   GenerationProviderCatalog,
@@ -97,7 +90,6 @@ import type {
   ListBranchesResponse,
   ListCommitsResponse,
   ListConversationsResponse,
-  ListDraftsResponse,
   ListLeavesResponse,
   ListPinsResponse,
   ListProjectsResponse,
@@ -813,48 +805,6 @@ export class T3xClient {
   }
 
   // ============================================
-  // Drafts
-  // ============================================
-
-  async listDrafts(projectId: string, params?: PaginationParams): Promise<ListDraftsResponse> {
-    return this.request<ListDraftsResponse>('GET', '/v1/drafts', undefined, {
-      project_id: projectId,
-      ...params,
-    });
-  }
-
-  async getDraft(id: string): Promise<Draft> {
-    return this.request<Draft>('GET', `/v1/drafts/${id}`);
-  }
-
-  async createDraft(input: CreateDraftInput): Promise<Draft> {
-    return this.request<Draft>('POST', '/v1/drafts', input);
-  }
-
-  async deleteDraft(id: string): Promise<void> {
-    await this.request<void>('DELETE', `/v1/drafts/${id}`);
-  }
-
-  async applyYOps(draftId: string, yops: unknown[], ifRevision: number): Promise<ApplyYOpsResult> {
-    return this.request<ApplyYOpsResult>('POST', `/v1/drafts/${draftId}/apply-yops`, {
-      yops,
-      if_revision: ifRevision,
-    });
-  }
-
-  // ============================================
-  // Agent Drafts
-  // ============================================
-
-  async getAgentDraft(id: string): Promise<Draft> {
-    return this.request<Draft>('GET', `/v1/agent/drafts/${id}`);
-  }
-
-  async createAgentDraft(input: CreateDraftInput): Promise<Draft> {
-    return this.request<Draft>('POST', '/v1/agent/drafts', input);
-  }
-
-  // ============================================
   // Merge
   // ============================================
 
@@ -1177,10 +1127,6 @@ export class T3xClient {
   // Integration Verbs
   // ============================================
 
-  async extract(input: ExtractInput): Promise<ExtractResult> {
-    return this.request<ExtractResult>('POST', '/v1/extract', input);
-  }
-
   async listRepositoryWorkspaces(projectId: string): Promise<ListRepositoryWorkspacesResponse> {
     return this.request<ListRepositoryWorkspacesResponse>(
       'GET',
@@ -1291,10 +1237,6 @@ export class T3xClient {
       undefined,
       params as Record<string, string | number | undefined>
     );
-  }
-
-  async commitFromDraft(input: CommitFromDraftInput): Promise<CommitFromDraftResult> {
-    return this.request<CommitFromDraftResult>('POST', '/v1/commit', input);
   }
 
   // ============================================

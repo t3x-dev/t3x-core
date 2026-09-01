@@ -12,8 +12,8 @@
  * conversation CRUD is no longer the historical-read authority.
  */
 
+import type { YOpsLogEntry } from '@t3x-dev/core';
 import { getLegacyYOpsEvidence } from '@/infrastructure/sourceEvidence';
-import type { YOpsLogEntry } from '@/infrastructure/trees';
 
 export interface ArchivedYOpsRow extends YOpsLogEntry {
   /** Always non-null on archived rows — narrowed by the filter below. */

@@ -34,6 +34,5 @@ export * from './sourceEvidence';
 export * from './sourceThreads';
 export * from './topics';
 export * from './treeDiff';
-export * from './trees';
 export * from './turns';
 export * from './types';

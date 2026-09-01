@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const {
   mockFindProjectById,
   mockGetVerifiedTransitionCommitGraph,
-  mockFindDraftById,
   mockFindConversationById,
   mockFindLeafById,
   mockGetMergeDraft,
@@ -13,7 +12,6 @@ const {
 } = vi.hoisted(() => ({
   mockFindProjectById: vi.fn(),
   mockGetVerifiedTransitionCommitGraph: vi.fn(),
-  mockFindDraftById: vi.fn(),
   mockFindConversationById: vi.fn(),
   mockFindLeafById: vi.fn(),
   mockGetMergeDraft: vi.fn(),
@@ -21,7 +19,6 @@ const {
     getProject: vi.fn(),
     getCommit: vi.fn(),
     inspectTransition: vi.fn(),
-    getDraft: vi.fn(),
     getLeaf: vi.fn(),
     getMergeDraft: vi.fn(),
     sourceThreads: { get: vi.fn() },
@@ -41,8 +38,6 @@ vi.mock('@t3x-dev/api-client', () => ({
 vi.mock('@t3x-dev/storage', () => ({
   findProjects: vi.fn(),
   findProjectById: mockFindProjectById,
-  findDraftById: mockFindDraftById,
-  listDraftsByProject: vi.fn(),
   findAgentDraftById: vi.fn(),
   findAgentDraftsByProject: vi.fn(),
   findBranchesByProject: vi.fn(),
@@ -165,10 +160,6 @@ describe('MCP resources', () => {
         uriTemplate: 't3x://projects/{project_id}/transitions/{transition_id}',
       }),
       expect.objectContaining({
-        name: 'workbench_draft',
-        uriTemplate: 't3x://workbench-drafts/{draft_id}',
-      }),
-      expect.objectContaining({
         name: 'workspace',
         uriTemplate: 't3x://projects/{project_id}/workspaces/{workspace_id}',
       }),
@@ -249,50 +240,6 @@ describe('MCP resources', () => {
       digest: 'sha256:commit123',
       recorded_at: '2026-04-21T11:00:00.000Z',
       object: { schema: 't3x/commit/v2' },
-    });
-
-    await client.close();
-  });
-
-  it('reads a workbench draft resource from a stable URI', async () => {
-    mockFindDraftById.mockResolvedValue({
-      id: 'draft_123',
-      project_id: 'proj_123',
-      title: 'Extracted knowledge',
-      goal: undefined,
-      parent_commit_hash: undefined,
-      forked_from: undefined,
-      nodes: [{ key: 'budget', slots: { amount: '5000' }, children: [] }],
-      constraints: [],
-      instructions: undefined,
-      preview_type: undefined,
-      preview_output: undefined,
-      preview_generated_at: undefined,
-      status: 'editing',
-      committed_as: undefined,
-      committed_leaf_id: undefined,
-      target_branch: 'main',
-      revision: 3,
-      created_at: '2026-04-21T12:00:00.000Z',
-      updated_at: '2026-04-21T12:05:00.000Z',
-      extraction_mode: 'deterministic',
-      semantic_points: undefined,
-      extraction_cursor: undefined,
-    });
-    const { client } = await connectClientAndServer();
-
-    const result = await client.readResource({ uri: 't3x://workbench-drafts/draft_123' });
-
-    expect(JSON.parse(result.contents[0].text)).toMatchObject({
-      kind: 'workbench_draft',
-      draft_id: 'draft_123',
-      project_id: 'proj_123',
-      title: 'Extracted knowledge',
-      status: 'editing',
-      revision: 3,
-      node_count: 1,
-      constraint_count: 0,
-      target_branch: 'main',
     });
 
     await client.close();

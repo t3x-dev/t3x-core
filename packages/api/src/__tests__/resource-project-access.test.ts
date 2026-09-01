@@ -7,7 +7,6 @@ import {
   createTopic,
   createWebhook,
   insertConversation,
-  insertDraft,
   insertNotification,
   insertProject,
   insertRun,
@@ -23,8 +22,6 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { draftsCrudRoutes } from '../routes/drafts-crud.openapi';
-import { draftsWorkflowRoutes } from '../routes/drafts-workflows.openapi';
 import { gateRoutes } from '../routes/gate.openapi';
 import { leavesHistoryRoutes } from '../routes/leaves-history.openapi';
 import { leavesMLRoutes } from '../routes/leaves-ml.openapi';
@@ -49,8 +46,6 @@ function createAuthenticatedApp(userId: string) {
     });
     return next();
   });
-  app.route('/', draftsCrudRoutes);
-  app.route('/', draftsWorkflowRoutes);
   app.route('/', gateRoutes);
   app.route('/', pinsRoutes);
   app.route('/', webhooksRoutes);
@@ -65,7 +60,6 @@ function createAuthenticatedApp(userId: string) {
 
 describe('project ownership on child-resource routes', () => {
   let cleanup: () => Promise<void>;
-  let ownerProjectId: string;
   let otherProjectId: string;
 
   beforeAll(async () => {
@@ -73,63 +67,12 @@ describe('project ownership on child-resource routes', () => {
     mockDB = setup.db;
     cleanup = setup.cleanup;
 
-    ownerProjectId = (await insertProject(mockDB, { name: 'Owner project', ownerId: 'user_owner' }))
-      .projectId;
     otherProjectId = (await insertProject(mockDB, { name: 'Other project', ownerId: 'user_other' }))
       .projectId;
   });
 
   afterAll(async () => {
     await cleanup();
-  });
-
-  it('blocks cross-project draft create, list, read, update, and delete', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: otherProjectId,
-      title: 'Private draft',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect(
-      (
-        await app.request('/v1/drafts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: otherProjectId, title: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/drafts?project_id=${otherProjectId}`)).status).toBe(403);
-    expect((await app.request(`/v1/drafts/${draft.id}`)).status).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/drafts/${draft.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: 'Unauthorized', if_revision: 1 }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/drafts/${draft.id}`, { method: 'DELETE' })).status).toBe(403);
-  });
-
-  it('blocks every cross-project draft workflow before generation, search, fork, or commit', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: otherProjectId,
-      title: 'Private workflow draft',
-      goal: 'private retrieval intent',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    for (const action of ['preview', 'commit', 'suggest']) {
-      const response = await app.request(`/v1/drafts/${draft.id}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      expect(response.status, action).toBe(403);
-    }
-    expect((await app.request(`/v1/drafts/${draft.id}/fork`, { method: 'POST' })).status).toBe(403);
   });
 
   it('blocks every cross-project merge-draft read and mutation before downstream work', async () => {
@@ -236,17 +179,6 @@ describe('project ownership on child-resource routes', () => {
     expect(
       (await app.request(`/v1/webhooks/${webhook.webhook_id}/test`, { method: 'POST' })).status
     ).toBe(403);
-  });
-
-  it('allows owners to access resources in their own project', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: ownerProjectId,
-      title: 'Owned draft',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect((await app.request(`/v1/drafts/${draft.id}`)).status).toBe(200);
-    expect((await app.request(`/v1/drafts?project_id=${ownerProjectId}`)).status).toBe(200);
   });
 
   it('blocks cross-project run reads, mutations, lists, and aggregate metadata', async () => {

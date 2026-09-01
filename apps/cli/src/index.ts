@@ -7,7 +7,7 @@
  * Action-first command style (kubectl-like):
  *   t3x list projects      t3x show commit <hash>
  *   t3x create project      t3x delete project <id>
- *   t3x commit <draft-id>   t3x generate leaf <id>
+ *   t3x transition commit <transition-id>   t3x generate leaf <id>
  */
 import { Command, Option } from 'commander';
 import { registerAuthCommands } from './commands/auth.js';
@@ -25,7 +25,6 @@ import { registerComposeCommands } from './commands/compose.js';
 import { registerConfigCommands } from './commands/config.js';
 // Diff command
 import { registerDiffCommand } from './commands/diff.js';
-import { registerDeleteDraft, registerListDrafts, registerShowDraft } from './commands/drafts.js';
 // Independent commands (unchanged)
 import { registerExportCommands } from './commands/export.js';
 import { registerExtractCommands } from './commands/extract.js';
@@ -101,14 +100,12 @@ registerListProjects(listCmd);
 registerListCommits(listCmd);
 registerListBranches(listCmd);
 registerListLeaves(listCmd);
-registerListDrafts(listCmd);
 
 // t3x show <resource>
 const showCmd = program.command('show').description('Show resource details');
 registerShowProject(showCmd);
 registerShowCommit(showCmd);
 registerShowLeaf(showCmd);
-registerShowDraft(showCmd);
 registerShowContent(showCmd);
 
 // t3x create <resource>
@@ -121,7 +118,6 @@ registerCreateLeaf(createCmd);
 const deleteCmd = program.command('delete').description('Delete a resource');
 registerDeleteProject(deleteCmd);
 registerDeleteLeaf(deleteCmd);
-registerDeleteDraft(deleteCmd);
 
 // t3x restore <resource>
 const restoreCmd = program.command('restore').description('Restore a deleted resource');
@@ -166,8 +162,8 @@ registerComposeCommands(program);
 // keep the main path visible, but retain secondary commands for direct invocation.
 hideCommand(deleteCmd);
 hideCommand(restoreCmd);
-hideSubcommands(listCmd, ['projects', 'commits', 'branches', 'leaves']);
-hideSubcommands(showCmd, ['project', 'commit', 'leaf', 'content']);
+hideSubcommands(listCmd, ['commits', 'branches', 'leaves']);
+hideSubcommands(showCmd, ['commit', 'leaf', 'content']);
 hideSubcommands(createCmd, ['branch']);
 hideCommand(findCommand(program, 'switch-branch'));
 hideCommand(findCommand(program, 'current-branch'));

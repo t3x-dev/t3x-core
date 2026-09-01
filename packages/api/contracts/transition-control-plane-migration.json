@@ -236,21 +236,6 @@
           "method": "POST",
           "path": "/v1/commits",
           "source": "packages/api/src/routes/commits.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/commit",
-          "source": "packages/api/src/routes/commit-from-draft.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/drafts/{id}/commit",
-          "source": "packages/api/src/routes/drafts-workflows.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/drafts/{draftId}/auto-commit",
-          "source": "packages/api/src/routes/autopilot.openapi.ts"
         }
       ],
       "application_sources": ["packages/api/src/lib/repository-state-transition.ts"],
@@ -259,10 +244,6 @@
         {
           "file": "packages/api-client/src/client.ts",
           "token": "async commitRepositoryState("
-        },
-        {
-          "file": "packages/api-client/src/client.ts",
-          "token": "async commitFromDraft("
         }
       ],
       "migration_proofs": [
@@ -281,24 +262,12 @@
         {
           "file": "packages/api/src/lib/transition-authority.ts",
           "token": "export async function resolveCompatibilityTransitionWriteAuthority("
-        },
-        {
-          "file": "packages/api/src/__tests__/commit-from-draft.test.ts",
-          "token": "uses the scoped machine actor and server-selected ref policy"
-        },
-        {
-          "file": "packages/api/src/__tests__/drafts.test.ts",
-          "token": "audits a scoped machine with the server-selected ref policy"
-        },
-        {
-          "file": "packages/api/src/__tests__/autopilot.test.ts",
-          "token": "audits a scoped machine with the server-selected ref policy"
         }
       ],
-      "progress": "Repository State task adapters retain their input preparation and projections, but accepted Decision authorization, audit persistence, CommitV2 construction, ref CAS, and YOps log linking now execute through the shared repository lifecycle boundary in one transaction. Authenticated agent and service callers require the Proposal, Decision, Commit, and ref-advance capabilities; their actor is derived from trusted authentication state and their Decision uses the server-selected target-ref policy.",
-      "remaining_gap": "These shortcuts remain one-shot compatibility commands without durable transition_id review or request receipts. Route retirement still requires explicit canonical replacements, caller migration, deprecation metadata, and observability.",
+      "progress": "The remaining POST /v1/commits task adapter uses the shared repository lifecycle boundary; accepted Decision authorization, audit persistence, CommitV2 construction, and exact-head CAS remain server-owned.",
+      "remaining_gap": "POST /v1/commits remains a one-shot compatibility command without a durable transition_id review receipt.",
       "replacement": "Preserve each task input adapter but execute Propose, Verify, Decide, and Commit through the same canonical application use cases.",
-      "removal_gate": "Do not delete a task shortcut until its semantics and first-party callers have an explicit canonical replacement; no shortcut may remain solely to preserve a deprecated writer."
+      "removal_gate": "Retire POST /v1/commits after its callers use the canonical Proposal, Verify, Decide, and Commit lifecycle."
     },
     {
       "id": "merge-governance",
@@ -378,6 +347,30 @@
       "remaining_gap": "The demo seed remains an internal fixture application service and intentionally owns its bundled fixture policy and projections. It is not a public canonical Transition API and should not be reused for product writes.",
       "replacement": "Seed a valid canonical Transition graph through a fixture-specific application boundary.",
       "removal_gate": "The seed must not call the storage Commit primitive directly after a fixture/application boundary exists."
+    }
+  ],
+  "retired_contracts": [
+    {
+      "id": "legacy-workbench-commit-shortcuts",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/v1/commit",
+          "source": "packages/api/src/routes/commit-from-draft.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/{id}/commit",
+          "source": "packages/api/src/routes/drafts-workflows.openapi.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/{draftId}/auto-commit",
+          "source": "packages/api/src/routes/autopilot.openapi.ts"
+        }
+      ],
+      "replacement": "Workspace revision, immutable ReviewSnapshot, recorded Decision, and exact-head commit_transition.",
+      "preservation": "Historical workbench Draft and YOps rows remain stored as evidence; executable routes and clients are removed."
     }
   ]
 }

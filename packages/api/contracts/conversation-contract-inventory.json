@@ -1,20 +1,15 @@
 {
   "schema_version": 1,
-  "purpose": "Own the Generation, Source Thread, and legacy conversation workflow contracts during the repository-first migration.",
+  "purpose": "Own the Generation and Source Thread contracts after repository-writer convergence.",
   "compatibility_states": ["retained", "compatibility", "removal_candidate"],
   "route_modules": [
-    "packages/api/src/routes/agent-drafts.openapi.ts",
     "packages/api/src/routes/chat.openapi.ts",
     "packages/api/src/routes/conversations.openapi.ts",
-    "packages/api/src/routes/extract-incremental.openapi.ts",
-    "packages/api/src/routes/extract-yops.openapi.ts",
-    "packages/api/src/routes/extract.openapi.ts",
     "packages/api/src/routes/source-chat-draft-replies.openapi.ts",
     "packages/api/src/routes/source-evidence.openapi.ts",
     "packages/api/src/routes/source-text-revisions.openapi.ts",
     "packages/api/src/routes/topics.openapi.ts",
-    "packages/api/src/routes/turns.openapi.ts",
-    "packages/api/src/routes/yops-log.openapi.ts"
+    "packages/api/src/routes/turns.openapi.ts"
   ],
   "contracts": [
     {
@@ -381,115 +376,9 @@
           "token": "createTopicApi("
         }
       ]
-    },
-    {
-      "id": "legacy-conversation-yops",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "removal_gate": "Disable writes after first-party callers reach zero; remove the routes only after immutable archived YOps evidence is readable through the repository evidence boundary. Preserve historical rows without treating them as current authority.",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "/v1/conversations/{conversationId}/yops",
-          "source": "packages/api/src/routes/yops-log.openapi.ts"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/conversations/{conversationId}/yops",
-          "source": "packages/api/src/routes/yops-log.openapi.ts"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/conversations/{conversationId}/draft",
-          "source": "packages/api/src/routes/yops-log.openapi.ts"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/conversations/{conversationId}/yops/{yopsId}",
-          "source": "packages/api/src/routes/yops-log.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "compatibility_reader",
-          "file": "apps/web/src/infrastructure/yopsLog.ts",
-          "token": "loadYOpsLog("
-        },
-        {
-          "kind": "compatibility_adapter",
-          "file": "apps/web/src/infrastructure/trees.ts",
-          "token": "getSemanticDraft("
-        }
-      ]
-    },
-    {
-      "id": "legacy-conversation-extraction",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "removal_gate": "Remove only after Workspace proposal creation and MCP extraction use authenticated Source/Workspace services with equivalent behavior.",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "/v1/extract",
-          "source": "packages/api/src/routes/extract.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/extract-yops",
-          "source": "packages/api/src/routes/extract-yops.openapi.ts"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/extract/incremental",
-          "source": "packages/api/src/routes/extract-incremental.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "typed_client",
-          "file": "packages/api-client/src/client.ts",
-          "token": "async extract("
-        }
-      ]
-    },
-    {
-      "id": "legacy-agent-drafts",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "removal_gate": "Remove after the remaining typed-client compatibility methods have no verified first-party consumers.",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "/v1/agent/drafts",
-          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/agent/drafts/{id}",
-          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/agent/drafts/{id}",
-          "source": "packages/api/src/routes/agent-drafts.openapi.ts"
-        }
-      ],
-      "consumers": [
-        {
-          "kind": "typed_client",
-          "file": "packages/api-client/src/client.ts",
-          "token": "async getAgentDraft("
-        }
-      ]
     }
   ],
   "related_modules": [
-    {
-      "file": "packages/api/src/routes/commit-from-draft.openapi.ts",
-      "owner": "repository_review",
-      "compatibility": "retained",
-      "reason": "Carries source conversation provenance into a repository commit."
-    },
     {
       "file": "packages/api/src/routes/commits.openapi.ts",
       "owner": "repository_review",
@@ -501,12 +390,6 @@
       "owner": "repository_review",
       "compatibility": "retained",
       "reason": "Accepts an optional source conversation for curation provenance."
-    },
-    {
-      "file": "packages/api/src/routes/drafts-workflows.openapi.ts",
-      "owner": "legacy_conversation_workflow",
-      "compatibility": "compatibility",
-      "reason": "Legacy draft workflow still accepts conversation identity."
     },
     {
       "file": "packages/api/src/routes/export.openapi.ts",
@@ -566,6 +449,56 @@
       "method": "POST",
       "path": "/v1/conversations/{conversationId}/compress",
       "reason": "Removed after the executable inventory proved zero production callers."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversations/{conversationId}/yops",
+      "reason": "Retired with legacy-conversation-yops; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversations/{conversationId}/yops",
+      "reason": "Retired with legacy-conversation-yops; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversations/{conversationId}/draft",
+      "reason": "Retired with legacy-conversation-yops; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/conversations/{conversationId}/yops/{yopsId}",
+      "reason": "Retired with legacy-conversation-yops; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract",
+      "reason": "Retired with legacy-conversation-extraction; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract-yops",
+      "reason": "Retired with legacy-conversation-extraction; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/extract/incremental",
+      "reason": "Retired with legacy-conversation-extraction; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agent/drafts",
+      "reason": "Retired with legacy-agent-drafts; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agent/drafts/{id}",
+      "reason": "Retired with legacy-agent-drafts; Workspace/Transition authority and archived evidence replace this compatibility route."
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/agent/drafts/{id}",
+      "reason": "Retired with legacy-agent-drafts; Workspace/Transition authority and archived evidence replace this compatibility route."
     }
   ],
   "deprecated_caller_guards": [
@@ -587,8 +520,17 @@
         "apps/web/src/queries/chatInitFetch.ts"
       ]
     },
-    { "symbol": "createTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
-    { "symbol": "updateTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] },
-    { "symbol": "deleteTopicApi", "allowed_files": ["apps/web/src/infrastructure/topics.ts"] }
+    {
+      "symbol": "createTopicApi",
+      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
+    },
+    {
+      "symbol": "updateTopicApi",
+      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
+    },
+    {
+      "symbol": "deleteTopicApi",
+      "allowed_files": ["apps/web/src/infrastructure/topics.ts"]
+    }
   ]
 }

@@ -308,42 +308,6 @@ export interface ListBranchesResponse {
   offset: number;
 }
 
-// Draft types
-export interface Draft {
-  draft_id: string;
-  project_id: string;
-  conversation_id: string;
-  bridge_id: string;
-  intent: string;
-  status: 'pending' | 'active' | 'committed' | 'discarded';
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-}
-
-export interface CreateDraftInput {
-  project_id: string;
-  conversation_id: string;
-  bridge_id: string;
-  intent: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ListDraftsResponse {
-  drafts: Draft[];
-  limit: number;
-  offset: number;
-}
-
-// Apply YOps
-export interface ApplyYOpsResult {
-  draft_id: string;
-  revision: number;
-  trees: unknown[];
-  applied_count: number;
-  tree_count: number;
-  slot_count: number;
-}
-
 // Diff types
 export interface DiffResult {
   changes: DiffChange[];
@@ -982,49 +946,6 @@ export interface PlatformImportResult {
 // Integration Verbs
 // ============================================
 
-// Extract
-export interface ExtractInput {
-  project_id: string;
-  text: string;
-  conversation_id?: string;
-  source?: string;
-}
-
-export interface ExtractTree {
-  key: string;
-  slots: Record<string, unknown>;
-  children: ExtractTree[];
-  source?: string;
-}
-
-export interface DriftItem {
-  node_path: string;
-  before: string;
-  after: string;
-}
-
-export interface ExtractResult {
-  conversation_id: string;
-  draft_id: string;
-  trees: ExtractTree[];
-  yaml?: string;
-  drift?: DriftItem[];
-}
-
-// Commit from Draft
-export interface CommitFromDraftInput {
-  project_id: string;
-  draft_id: string;
-  message?: string;
-  branch?: string;
-}
-
-export interface CommitFromDraftResult {
-  commit_hash: string;
-  tree_count: number;
-  branch: string;
-}
-
 // Check
 export interface CheckInput {
   project_id: string;
@@ -1046,6 +967,13 @@ export interface CheckResult {
 }
 
 // Context
+export interface ExtractTree {
+  key: string;
+  slots: Record<string, unknown>;
+  children: ExtractTree[];
+  source?: string;
+}
+
 export interface ContextParams {
   branch?: string;
   format?: 'json' | 'yaml';

@@ -1,82 +1,31 @@
 /**
  * Autopilot Routes (OpenAPI)
  *
- * Knowledge autopilot configuration and auto-commit endpoints.
+ * Knowledge autopilot configuration endpoints.
  *
  * GET  /v1/projects/:projectId/autopilot/config     - Get autopilot config
  * PUT  /v1/projects/:projectId/autopilot/config     - Update autopilot config
  * GET  /v1/projects/:projectId/autopilot/adaptive   - Get adaptive threshold suggestion
- * POST /v1/drafts/:draftId/auto-commit              - Evaluate and auto-commit a draft
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { computeAdaptiveConfig, DEFAULT_AUTOPILOT_CONFIG } from '@t3x-dev/core';
 import {
-  computeAdaptiveConfig,
-  DEFAULT_AUTOPILOT_CONFIG,
-  evaluateAutoCommit,
-  mergeAutopilotConfig,
-} from '@t3x-dev/core';
-import {
-  type AnyDB,
-  commitDraft,
-  ensureMainBranch,
-  findDraftById,
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
-  getTransitionRefHead,
-  TransitionHeadConflictError,
-  TransitionRefNotFoundError,
   updateAutopilotConfig,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import {
-  commitRepositoryYOpsState,
-  createRepositoryYOpsStateFromSemanticContent,
-  getRepositoryConversationEvidence,
-  RepositoryStateDecisionDeniedError,
-  TransitionReviewStaleError,
-} from '../lib/repository-state-transition';
-import {
-  resolveCompatibilityTransitionWriteAuthority,
-  TransitionPolicyBindingRequiredError,
-  TransitionProjectScopeDeniedError,
-  TransitionScopeDeniedError,
-  transitionApiKey,
-} from '../lib/transition-authority';
-import { webhookDispatcher } from '../lib/webhook-dispatcher';
-import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema } from '../schemas/common';
-import { pushNotification } from './notifications.openapi';
 
 export const autopilotRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
-
-function committedAtFromTransition(
-  transition: Awaited<ReturnType<typeof commitRepositoryYOpsState>>['transition']
-): string {
-  return transition.history.observation === 'committed'
-    ? transition.history.commit.recordedAt
-    : new Date().toISOString();
-}
-
-type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
-
-class AutoCommitClaimConflictError extends Error {
-  constructor(readonly draftId: string) {
-    super(`Draft ${draftId} was already committed by another request`);
-    this.name = 'AutoCommitClaimConflictError';
-  }
-}
 
 // ── Shared Schemas ──────────────────────────────────────────
 
 const ProjectIdParam = z.object({
   projectId: z.string().openapi({ description: 'Project ID' }),
-});
-
-const DraftIdParam = z.object({
-  draftId: z.string().openapi({ description: 'Draft ID' }),
 });
 
 const AutopilotConfigSchema = z.object({
@@ -287,276 +236,5 @@ autopilotRoutes.openapi(getAdaptiveRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GET_FAILED', message);
-  }
-});
-
-// ── POST /v1/drafts/:draftId/auto-commit ────────────────────
-
-const AutoCommitResponseSchema = z.object({
-  success: z.literal(true),
-  data: z.object({
-    auto_committed: z.boolean(),
-    reason: z.string().optional(),
-    commit: z
-      .object({
-        hash: z.string(),
-        branch: z.string().optional(),
-        committed_at: z.string().optional(),
-      })
-      .optional(),
-    nodes_committed: z.number().optional(),
-    nodes_skipped: z.number().optional(),
-    skipped: z
-      .array(
-        z.object({
-          id: z.string(),
-          reason: z.string(),
-        })
-      )
-      .optional(),
-  }),
-});
-
-const autoCommitRoute = createRoute({
-  method: 'post',
-  path: '/v1/drafts/{draftId}/auto-commit',
-  tags: ['Autopilot'],
-  summary: 'Evaluate and auto-commit a draft',
-  description:
-    'Evaluates a draft against autopilot rules. If all criteria are met, ' +
-    'creates a commit automatically. Only works for LLM-mode drafts in editing status.',
-  request: { params: DraftIdParam },
-  responses: {
-    200: {
-      description: 'Auto-commit result (committed or skipped)',
-      content: { 'application/json': { schema: AutoCommitResponseSchema } },
-    },
-    400: {
-      description: 'Draft not in valid state for auto-commit',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    403: {
-      description: 'Project or Transition authority denied',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    404: {
-      description: 'Draft not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    409: {
-      description: 'Transition policy or concurrent state conflict',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    500: {
-      description: 'Internal error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-autopilotRoutes.openapi(autoCommitRoute, async (c) => {
-  const { draftId } = c.req.valid('param');
-
-  try {
-    const db = await getDB();
-
-    // 1. Fetch draft
-    const draft = await findDraftById(db, draftId);
-    if (!draft) {
-      return errorResponse(c, 'DRAFT_NOT_FOUND', `Draft not found: ${draftId}`);
-    }
-    const accessResult = await assertProjectAccess(c, db, draft.project_id);
-    if (accessResult instanceof Response) return accessResult;
-
-    // 2. Validate status
-    if (draft.status !== 'editing') {
-      return errorResponse(
-        c,
-        'INVALID_STATUS',
-        `Draft status must be 'editing', got '${draft.status}'`
-      );
-    }
-
-    // 3. Validate extraction mode
-    if (draft.extraction_mode !== 'llm') {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Auto-commit requires extraction_mode 'llm', got '${draft.extraction_mode ?? 'none'}'`
-      );
-    }
-
-    // 4. Get autopilot config (with fallback to defaults)
-    const storedConfig = await getAutopilotConfig(db, draft.project_id);
-    const config = mergeAutopilotConfig(storedConfig ?? undefined);
-
-    // 5. Build candidates from state points
-    // SemanticPoint type is no longer exported; use structural typing
-    const sps = (draft.semantic_points ?? []) as Array<{
-      id: string;
-      text: string;
-      zone: string;
-      status: string;
-      staged: boolean;
-    }>;
-    const candidates = sps.map((sp) => ({
-      id: sp.id,
-      text: sp.text,
-      zone: sp.zone as 'ready' | 'review',
-      status: sp.status,
-      staged: sp.staged,
-    }));
-
-    // 6. Evaluate
-    const plan = evaluateAutoCommit(candidates, config);
-
-    if (!plan.should_commit) {
-      return c.json(
-        {
-          success: true as const,
-          data: {
-            auto_committed: false,
-            reason: plan.reason,
-            skipped: plan.skipped,
-          },
-        },
-        200
-      );
-    }
-
-    // 7. Convert qualifying SPs directly to tree nodes
-    const qualifyingIds = new Set(plan.nodes.map((s) => s.id));
-    const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
-
-    // 7. Prepare commit content.
-    const autoTrees = qualifyingSPs.map((sp) => ({
-      key: sp.id || 'legacy_node',
-      slots: { text: sp.text } as Record<string, string>,
-      children: [] as import('@t3x-dev/core').TreeNode[],
-    }));
-
-    // 8. Persist one full CommitV2 graph and claim the draft in the same
-    // transaction. A failed CAS or claim rolls the graph back.
-    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
-      db,
-      apiKey: transitionApiKey(c),
-      projectId: draft.project_id,
-      refName: config.target_branch,
-    });
-    if (config.target_branch === 'main') await ensureMainBranch(db, draft.project_id);
-    const observedHead = await getTransitionRefHead(db, {
-      projectId: draft.project_id,
-      refName: config.target_branch,
-    });
-    const expectedHead = draft.parent_commit_hash ?? observedHead.head;
-    if (draft.parent_commit_hash !== undefined && draft.parent_commit_hash !== observedHead.head) {
-      return errorResponse(c, 'BRANCH_NOT_HEAD', 'Draft parent does not match the target ref head');
-    }
-    const target = createRepositoryYOpsStateFromSemanticContent({
-      trees: autoTrees,
-      relations: [],
-    });
-    const writeAutoCommit = async (tx: AnyDB) => {
-      const autoConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
-      const yopsLogIds = autoConversationId
-        ? await findUncommittedYOpsIds(tx, autoConversationId, draft.project_id)
-        : [];
-      const evidence = autoConversationId
-        ? await getRepositoryConversationEvidence(tx, draft.project_id, autoConversationId)
-        : [];
-      const created = await commitRepositoryYOpsState({
-        db: tx,
-        projectId: draft.project_id,
-        refName: config.target_branch,
-        expectedHead,
-        target,
-        actor: writeAuthority.principal.actor,
-        policyBindingSource: 'server-selected',
-        ...(writeAuthority.policyBinding === null
-          ? {}
-          : { policyBinding: writeAuthority.policyBinding }),
-        intent: `Auto-commit: ${qualifyingSPs.length} node(s)`,
-        ...(evidence.length === 0 ? {} : { evidence }),
-        ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
-      });
-      const claimed = await commitDraft(tx, draftId, created.commitDigest);
-      if (!claimed) throw new AutoCommitClaimConflictError(draftId);
-      return created;
-    };
-    const created = (await (db as unknown as TxRunner).transaction((tx) =>
-      writeAutoCommit(tx as AnyDB)
-    )) as Awaited<ReturnType<typeof writeAutoCommit>>;
-
-    // 9. Push notification (fire-and-forget)
-    pushNotification({
-      project_id: draft.project_id,
-      type: 'commit.created',
-      title: 'Auto-commit completed',
-      message: `Autopilot committed ${qualifyingSPs.length} node(s) from draft "${draft.title}"`,
-      ref_id: created.commitDigest,
-    });
-
-    // 10. Dispatch webhook (fire-and-forget)
-    webhookDispatcher.dispatch(
-      'commit.created',
-      {
-        commit_hash: created.commitDigest,
-        project_id: draft.project_id,
-        nodes_count: qualifyingSPs.length,
-        source: 'autopilot',
-      },
-      draft.project_id
-    );
-
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          auto_committed: true,
-          commit: {
-            hash: created.commitDigest,
-            branch: config.target_branch,
-            committed_at: committedAtFromTransition(created.transition),
-          },
-          nodes_committed: qualifyingSPs.length,
-          nodes_skipped: plan.skipped.length,
-          skipped: plan.skipped,
-        },
-      },
-      200
-    );
-  } catch (err) {
-    if (
-      err instanceof TransitionScopeDeniedError ||
-      err instanceof TransitionProjectScopeDeniedError
-    ) {
-      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
-    }
-    if (
-      err instanceof TransitionPolicyBindingRequiredError ||
-      err instanceof TransitionReviewStaleError
-    ) {
-      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
-    }
-    if (err instanceof RepositoryStateDecisionDeniedError) {
-      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
-        failures: err.failures,
-      });
-    }
-    if (err instanceof TransitionHeadConflictError) {
-      return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);
-    }
-    if (err instanceof TransitionRefNotFoundError) {
-      return errorResponse(c, 'NOT_FOUND', err.message);
-    }
-    if (err instanceof AutoCommitClaimConflictError) {
-      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
-    }
-    // Suggestion-vs-baseline: surface concurrent-supersede races as
-    // 409 retryable conflict, not opaque 500.
-    const conflict = mapSupersededError(c, err);
-    if (conflict) return conflict;
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'INTERNAL_ERROR', message);
   }
 });
