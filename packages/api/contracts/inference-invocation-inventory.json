@@ -54,8 +54,10 @@
     {
       "file": "packages/api/src/ops/leaf-gen.ts",
       "feature": "leaf-generation-operation",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "The hosted operation binds its resolved provider to the shared lifecycle and no longer writes duplicate fire-and-forget usage records."
     },
     {
       "file": "packages/api/src/routes/chat.openapi.ts",
@@ -96,14 +98,18 @@
     {
       "file": "packages/core/src/leaf/generate.ts",
       "feature": "leaf-generation",
-      "status": "pending",
-      "observedCount": 2
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Hosted operation and comparison callers admit generation before entering Core; the external MCP caller remains deployment-local."
     },
     {
       "file": "packages/core/src/leaf/multi-round-generate.ts",
       "feature": "multi-round-leaf-generation",
-      "status": "pending",
-      "observedCount": 4
+      "status": "migrated",
+      "coveredCount": 4,
+      "observedCount": 4,
+      "note": "Each hosted refinement round executes through the provider binding and produces its own terminal receipt."
     },
     {
       "file": "packages/core/src/pipeline/ambiguityDetector.ts",
