@@ -1,9 +1,9 @@
 /**
- * Integration test: setAliasIfNull → conversation.renamed trigger.
+ * Integration test: setAliasIfNull -> conversation.renamed trigger.
  *
- * Uses a real PGlite/Postgres DB so that the DB-level trigger runs. The
- * per-file extraction-pipeline-alias.test.ts mocks storage, so it cannot
- * verify that a trigger fires. This test covers that gap.
+ * Uses a real PGlite/Postgres database so the database-level trigger runs.
+ * Source Thread alias persistence remains live independently of the retired
+ * extraction pipeline.
  */
 
 import {
@@ -17,7 +17,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestDB } from './setup';
 
-describe('setAliasIfNull → conversation.renamed event (trigger integration)', () => {
+describe('setAliasIfNull -> conversation.renamed event (trigger integration)', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
 
