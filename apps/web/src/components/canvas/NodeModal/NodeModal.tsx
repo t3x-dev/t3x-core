@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
@@ -138,8 +139,9 @@ export function buildWorkspaceHandoffPath(projectId: string | null, data: Canvas
   if (!projectId) return '/';
   const branch =
     data.pendingBranch === 'branch' ? data.pendingBranchName?.trim() || 'main' : 'main';
-  const params = new URLSearchParams({ branch, tab: 'workspaces' });
   const conversationId = data.sourceConversationId || data.conversationId;
-  if (conversationId) params.set('sourceConversation', conversationId);
-  return `/project/${encodeURIComponent(projectId)}?${params.toString()}`;
+  return getProjectIdWorkspacePath(projectId, {
+    branch,
+    sourceConversationId: conversationId,
+  });
 }

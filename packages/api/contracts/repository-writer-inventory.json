@@ -76,6 +76,16 @@
       "removal_gate": "Not scheduled for removal. Decisions must remain bound to an immutable server-authored ReviewSnapshot."
     },
     {
+      "id": "web-chat-source-workspace-handoff",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/components/chat/ChatHeader.tsx",
+      "anchors": ["getProjectIdWorkspacePath(", "sourceConversationId: conversationId"],
+      "replacement": null,
+      "removal_gate": "Retain while Chat captures immutable Source turns; review and mutation must remain in Repository Workspace."
+    },
+    {
       "id": "cli-transition-commands",
       "surface": "cli",
       "state": "canonical",
@@ -177,7 +187,7 @@
       "file": "apps/web/src/commands/yops/llmAdapter.ts",
       "anchors": ["postExtractYops("],
       "replacement": "Workspace proposal generation and useWorkspaceTransition.",
-      "removal_gate": "Migrate the last caller, then delete the adapter in the same PR.",
+      "removal_gate": "The production Chat route is migrated. Delete the now-unmounted adapter and its orphaned component graph before closing Wave 1.",
       "issue": 1297
     },
     {
