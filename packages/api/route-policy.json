@@ -1542,6 +1542,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "source-evidence.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}/legacy-yops",
+      "policy": "project",
+      "rationale": "Project-scoped, read-only access to archived legacy YOps evidence."
+    },
+    {
       "source": "source-text-revisions.openapi.ts",
       "method": "GET",
       "path": "/v1/source-text-revisions",
