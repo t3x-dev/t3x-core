@@ -81,7 +81,6 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           node.data.kind === 'leaf' ||
           (node.data.kind === 'unit' &&
             node.data.commitStatus !== 'committed' &&
-            !node.data.draftId &&
             !node.data.conversationId)
       );
       const retainedNodeIds = new Set(retainedNodes.map((n) => n.id));

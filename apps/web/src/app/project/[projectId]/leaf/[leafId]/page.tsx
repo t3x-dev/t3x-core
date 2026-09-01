@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
-import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LeafInspector } from '@/components/leaf/LeafInspector';
 import { LeafOutputDisplay } from '@/components/leaf/LeafOutputDisplay';
 import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
@@ -479,11 +478,6 @@ export function LeafDetailWorkspace({
                   handleAddConstraint(constraint.type, constraint.value, constraint.match_mode);
                 }}
               />
-            )}
-
-            {/* Extract leaf output to draft */}
-            {leaf.output && (
-              <LeafExtractToDraft leafId={leafId} projectId={projectId} outputText={leaf.output} />
             )}
           </div>
 

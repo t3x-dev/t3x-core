@@ -1,7 +1,4 @@
-/**
- * useSuggestConstraints — thin wrapper over the L1 `suggestLeafConstraints`
- * call for the Suggest Constraints dialog.
- */
+/** Provider-backed constraint suggestions for a repository Leaf. */
 
 import { useCallback } from 'react';
 import { type SuggestConstraintsResult, suggestLeafConstraints } from '@/infrastructure/leaves';

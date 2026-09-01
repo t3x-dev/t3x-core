@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { useSuggestConstraints } from '@/hooks/drafts/useSuggestConstraints';
+import { useSuggestConstraints } from '@/hooks/leaves/useSuggestConstraints';
 import type { SuggestedConstraint } from '@/types/api';
 import { cn } from '@/utils/cn';
 

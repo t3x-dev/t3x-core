@@ -42,7 +42,6 @@ export function buildUnitNodeMenu(opts: {
   onCreateBranch: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
-  isDraft: boolean;
   isDeveloperMode: boolean;
   hasConversation?: boolean;
 }): ContextMenuGroup[] {

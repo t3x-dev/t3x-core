@@ -56,10 +56,6 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/components/canvas/AutoDraftBadge', () => ({
-  AutoDraftBadge: () => <span data-testid="auto-draft-badge" />,
-}));
-
 vi.mock('@/components/canvas/SealAnimation', () => ({
   SealAnimation: () => null,
 }));

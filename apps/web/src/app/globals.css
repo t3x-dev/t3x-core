@@ -178,10 +178,6 @@
   --edge-merge-hover: var(--accent-branch);
   --edge-merge-selected: var(--accent-branch);
   --edge-merge-glow: color-mix(in srgb, var(--accent-branch) 34%, transparent);
-  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 44%, transparent);
-  --edge-draft-hover: var(--accent-pending);
-  --edge-draft-selected: var(--accent-pending);
-  --edge-draft-glow: color-mix(in srgb, var(--accent-pending) 28%, transparent);
   --edge-commit-selected: var(--accent-commit);
   --edge-commit-glow: color-mix(in srgb, var(--accent-commit) 34%, transparent);
   --edge-branch-selected: var(--accent-branch);
@@ -687,7 +683,6 @@
   --edge-selected-color: var(--accent-commit);
   --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 52%, transparent);
   --edge-merge-base: color-mix(in srgb, var(--accent-branch) 52%, transparent);
-  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
   --edge-default-opacity: 0.5;
   --edge-dim-opacity: 0.2;
 }

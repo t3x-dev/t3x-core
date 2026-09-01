@@ -52,7 +52,6 @@ import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
-import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
@@ -714,13 +713,6 @@ function CanvasWorkspaceInner({
       )}
       <CanvasStatusBar />
       {modalNode &&
-        modalNode.data.commitStatus === 'draft' &&
-        modalNode.data.draftId &&
-        projectId && (
-          <DraftQuickSheet open onClose={closeNodeModal} draftId={modalNode.data.draftId} />
-        )}
-      {modalNode &&
-        modalNode.data.commitStatus !== 'draft' &&
         (modalNode.data.commitStatus !== 'committed' || modalViewMode === 'conversation') && (
           <NodeModal
             node={modalNode}

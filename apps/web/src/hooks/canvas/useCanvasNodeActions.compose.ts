@@ -23,7 +23,6 @@ import {
   edgeType,
   limitPendingUnitNodes,
   resolveLatestMainUnitId,
-  snapPosition,
   unitToNode,
 } from '@/store/canvasStoreUtils';
 import { isDeveloperMode } from '@/store/shared';
@@ -73,13 +72,6 @@ export function composeCanvasFromFetches(
   conversations: Conversation[],
   apiCommits: ApiCommit[],
   projectLeaves: Leaf[],
-  editingDrafts: Array<{
-    id: string;
-    title: string;
-    created_at: string;
-    updated_at: string;
-    nodes: Array<{ source?: { conversation_id: string } | null }>;
-  }>,
   turnToConvMap: Map<string, string>,
   existingNodePositions: Map<string, { x: number; y: number }>
 ): ComposedCanvas {
@@ -253,77 +245,6 @@ export function composeCanvasFromFetches(
           animated: true,
           style: { ...edgeStyle, strokeDasharray: '5 5' },
           data: { edgeType: 'evolve' },
-        });
-      }
-    }
-  }
-
-  // Editing drafts as nodes + source conversation edges
-  const convToNodeId = new Map<string, string>();
-  for (const node of nodes) {
-    if (node.data.conversationId) {
-      convToNodeId.set(node.data.conversationId, node.id);
-    }
-  }
-  const existingNodeIds = new Set(nodes.map((n) => n.id));
-
-  for (const draft of editingDrafts) {
-    if (existingNodeIds.has(draft.id)) continue;
-
-    const sourceConvIds = new Set(
-      draft.nodes.filter((s) => s.source?.conversation_id).map((s) => s.source!.conversation_id)
-    );
-    let posX = 140 + (nodes.length % 3) * 220;
-    let posY = 100 + Math.floor(nodes.length / 3) * 180;
-    if (sourceConvIds.size > 0) {
-      let sumX = 0;
-      let sumY = 0;
-      let count = 0;
-      for (const convId of sourceConvIds) {
-        const nodeId = convToNodeId.get(convId);
-        const sourceNode = nodeId ? nodes.find((n) => n.id === nodeId) : undefined;
-        if (sourceNode) {
-          sumX += sourceNode.position.x;
-          sumY += sourceNode.position.y;
-          count++;
-        }
-      }
-      if (count > 0) {
-        posX = sumX / count + 300;
-        posY = sumY / count;
-      }
-    }
-
-    const existingPos = existingNodePositions.get(draft.id);
-    const draftNode: Node<CanvasNodeData> = {
-      id: draft.id,
-      type: 'unit',
-      position: existingPos ?? snapPosition({ x: posX, y: posY }),
-      data: {
-        entryId: draft.id.replace(/^draft_/, '').slice(0, 8),
-        title: draft.title,
-        summary: `${draft.nodes.length} nodes`,
-        status: 'draft',
-        timestamp: draft.updated_at,
-        tags: ['draft'],
-        kind: 'unit',
-        commitStatus: 'draft',
-        draftId: draft.id,
-      },
-    };
-    nodes.push(draftNode);
-
-    for (const convId of sourceConvIds) {
-      const sourceNodeId = convToNodeId.get(convId);
-      if (sourceNodeId) {
-        edges.push({
-          id: `draft-${sourceNodeId}-${draft.id}`,
-          source: sourceNodeId,
-          target: draft.id,
-          type: edgeType,
-          animated: true,
-          style: { ...edgeStyle, strokeDasharray: '5 5' },
-          data: { edgeType: 'draft' },
         });
       }
     }

@@ -240,7 +240,28 @@
       "removal_gate": "The t3x_commit spelling may remain only as a canonical commit alias."
     }
   ],
-  "legacy_caller_guards": [],
+  "legacy_caller_guards": [
+    {
+      "symbol": "createWorkbenchDraft(",
+      "roots": ["apps/web/src"],
+      "allowed_files": []
+    },
+    {
+      "symbol": "commitWorkbenchDraft(",
+      "roots": ["apps/web/src"],
+      "allowed_files": []
+    },
+    {
+      "symbol": "extractIncremental(",
+      "roots": ["apps/web/src"],
+      "allowed_files": []
+    },
+    {
+      "symbol": "extractToDraft(",
+      "roots": ["apps/web/src"],
+      "allowed_files": []
+    }
+  ],
   "retirement_policy": {
     "delete_code_with_last_caller": true,
     "delete_historical_rows": false,

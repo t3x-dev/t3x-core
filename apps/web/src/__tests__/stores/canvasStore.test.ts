@@ -39,10 +39,6 @@ vi.mock('@/queries/turns', () => ({
   fetchTurn: vi.fn(),
 }));
 
-vi.mock('@/queries/workbenchDrafts', () => ({
-  fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
-}));
-
 // queries/mergeApi is now reads-only; writes live in @/commands/merge.
 // Slice no longer imports either path, but mock kept minimal in case
 // the test suite imports an indirect that resolves the module.
@@ -69,28 +65,6 @@ const createStagingUnitNode = (
     tags: ['unit'],
     commitStatus: 'staging',
     conversationId: `conv_${id}`,
-    ...overrides,
-  },
-});
-
-// Helper to create a mock workbench draft node
-const createDraftUnitNode = (
-  id: string,
-  overrides: Partial<CanvasNodeData> = {}
-): Node<CanvasNodeData> => ({
-  id,
-  type: 'unit',
-  position: { x: 50, y: 0 },
-  data: {
-    kind: 'unit',
-    entryId: id,
-    title: 'Draft Unit',
-    summary: '2 nodes',
-    status: 'draft',
-    timestamp: 'just now',
-    tags: ['draft'],
-    commitStatus: 'draft',
-    draftId: id,
     ...overrides,
   },
 });
@@ -154,7 +128,6 @@ const resetStore = () => {
     leafPanelOpen: false,
     leafPanelCommitId: undefined,
     deleteConversationCallback: null,
-    deleteDraftCallback: null,
     deletionConfirmation: null,
   });
 };
@@ -340,9 +313,8 @@ describe('Canvas Store - Unit Node Model', () => {
   // mergeProjectData Tests
   // ===========================================================================
   describe('mergeProjectData', () => {
-    it('removes stale server-backed draft and staging nodes during incremental refresh', () => {
+    it('removes stale server-backed staging nodes during incremental refresh', () => {
       const committedUnit = createCommittedUnitNode('sha256:new', 'sha256:new');
-      const staleDraft = createDraftUnitNode('draft_old');
       const staleConversation = createStagingUnitNode('conv_old', {
         conversationId: 'conv_old',
       });
@@ -351,9 +323,8 @@ describe('Canvas Store - Unit Node Model', () => {
       });
 
       useCanvasStore.setState({
-        nodes: [committedUnit, staleDraft, staleConversation, localPending],
+        nodes: [committedUnit, staleConversation, localPending],
         edges: [
-          { id: 'edge-draft', source: 'sha256:new', target: 'draft_old' },
           { id: 'edge-conv', source: 'sha256:new', target: 'conv_old' },
           { id: 'edge-local', source: 'sha256:new', target: 'unit_local' },
         ],
@@ -574,25 +545,6 @@ describe('Canvas Store - Unit Node Model', () => {
       useCanvasStore.getState().confirmDeletion();
 
       expect(deleteConversation).toHaveBeenCalledWith('conv_unit-1');
-      expect(useCanvasStore.getState().nodes).toHaveLength(0);
-      expect(useCanvasStore.getState().deletionConfirmation).toBeNull();
-    });
-
-    it('deletes a draft unit through its persisted draft callback after confirmation', () => {
-      const draftUnit = createDraftUnitNode('draft-1');
-      const deleteDraft = vi.fn();
-      useCanvasStore.setState({
-        nodes: [draftUnit],
-        edges: [],
-        deleteDraftCallback: deleteDraft,
-      });
-
-      useCanvasStore.getState().onNodesChange([{ id: 'draft-1', type: 'remove' }]);
-      expect(useCanvasStore.getState().deletionConfirmation?.nodeIds).toEqual(['draft-1']);
-
-      useCanvasStore.getState().confirmDeletion();
-
-      expect(deleteDraft).toHaveBeenCalledWith('draft-1');
       expect(useCanvasStore.getState().nodes).toHaveLength(0);
       expect(useCanvasStore.getState().deletionConfirmation).toBeNull();
     });

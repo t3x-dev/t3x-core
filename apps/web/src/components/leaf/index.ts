@@ -1,5 +1,4 @@
 export { LeafComposerDock } from './LeafComposerDock';
-export { LeafExtractToDraft } from './LeafExtractToDraft';
 export { LeafInspector } from './LeafInspector';
 export { LeafOutputDisplay } from './LeafOutputDisplay';
 export { LeafSemanticPointsPanel } from './LeafSemanticPointsPanel';

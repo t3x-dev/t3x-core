@@ -100,9 +100,6 @@ export type CanvasState = MergeSlice &
     // Per v2 §2.5, the store doesn't import @/queries — it emits, the hook calls.
     deleteConversationCallback: ((conversationId: string) => void) | null;
     setDeleteConversationCallback: (cb: ((conversationId: string) => void) | null) => void;
-    // Side-effect callback for workbench draft deletion.
-    deleteDraftCallback: ((draftId: string) => void) | null;
-    setDeleteDraftCallback: (cb: ((draftId: string) => void) | null) => void;
     // Node modal state
     openNodeId: string | null;
     modalViewMode: 'conversation' | 'commit' | null;

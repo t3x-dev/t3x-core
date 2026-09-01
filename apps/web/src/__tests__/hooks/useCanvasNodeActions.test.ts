@@ -27,21 +27,12 @@ vi.mock('@/queries/leaves', () => ({
 vi.mock('@/queries/turns', () => ({
   fetchTurn: vi.fn(),
 }));
-vi.mock('@/queries/workbenchDrafts', () => ({
-  fetchWorkbenchDrafts: vi.fn(),
-}));
-
-vi.mock('@/commands/drafts', () => ({
-  createWorkbenchDraft: vi.fn(),
-}));
 
 import { createConversation } from '@/commands/conversations';
-import { createWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { fetchCommits } from '@/infrastructure/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
-import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 import { PENDING_UNIT_LIMIT_MESSAGE } from '@/store/canvasStoreUtils';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -85,7 +76,6 @@ beforeEach(() => {
   vi.mocked(fetchConversations).mockResolvedValue({ conversations: [] } as never);
   vi.mocked(fetchCommits).mockResolvedValue([] as never);
   vi.mocked(fetchLeavesByProject).mockResolvedValue([] as never);
-  vi.mocked(fetchWorkbenchDrafts).mockResolvedValue([] as never);
 });
 
 afterEach(() => {
@@ -164,25 +154,5 @@ describe('useCanvasNodeActions.add', () => {
     expect(notify).toHaveBeenCalledWith(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
     expect(createConversation).not.toHaveBeenCalled();
     expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual(['conv_pending']);
-  });
-});
-
-describe('useCanvasNodeActions.addDraft', () => {
-  it('creates a workbench draft and appends a draft node', async () => {
-    useCanvasStore.setState({ projectId: 'proj_1' });
-    vi.mocked(createWorkbenchDraft).mockResolvedValueOnce({
-      id: 'draft_abc',
-      title: 'Untitled Draft',
-      created_at: '2026-04-12T00:00:00Z',
-    } as never);
-
-    const { result } = renderHook(() => useCanvasNodeActions());
-    await result.current.addDraft();
-    await waitForHook();
-
-    const state = useCanvasStore.getState();
-    expect(state.nodes).toHaveLength(1);
-    expect(state.nodes[0].id).toBe('draft_abc');
-    expect(state.nodes[0].data.commitStatus).toBe('draft');
   });
 });

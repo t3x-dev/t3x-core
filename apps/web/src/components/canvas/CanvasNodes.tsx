@@ -11,17 +11,14 @@ import {
   Globe,
   MessageSquare,
   MessageSquarePlus,
-  PenSquare,
   Plus,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { memo, useEffect, useRef, useState } from 'react';
-import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { commitHashLabel } from '@/domain/format/formatters';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
-import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
 import { leafContextMenuHandlerRef } from '@/hooks/shared/useContextMenu';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -148,7 +145,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
-  const { load: loadProjectData } = useCanvasNodeActions();
   const notify = useProjectStore((state) => state.notifyCallback);
   const projectName = useProjectStore((state) =>
     projectId ? state.getProject(projectId)?.name : undefined
@@ -178,7 +174,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // Check if commit is in staging state
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
-  const isDraft = data.commitStatus === 'draft';
   const semanticKind: NodeSemanticKind = isCommitted ? 'committed' : 'pending';
 
   const branchLabel = formatBranchLabel(data.branchType, data.branchName);
@@ -187,11 +182,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const hashDisplay = commitHash ? commitHashLabel(commitHash) : '';
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
-  const nodeGlowClass = isCommitted
-    ? 'node-glow-committed'
-    : isStaging || isDraft
-      ? 'node-glow-pending'
-      : '';
+  const nodeGlowClass = isCommitted ? 'node-glow-committed' : isStaging ? 'node-glow-pending' : '';
 
   // Seal animation — triggers on staging → committed transition
   const prevStatusRef = useRef(data.commitStatus);
@@ -230,17 +221,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   // B-4: Next Step button logic
   const nextStep = getNextStep({
-    isDraft,
     isStaging,
     isCommitted,
-    draftId: data.draftId,
-    projectId,
     conversationId: data.conversationId,
     nodeId: id,
     t,
-    icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
+    icons: { MessageSquarePlus, GitCommit, Plus },
     actions: {
-      navigateToDraft: () => openNodeModal(id, 'commit'),
       navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
       openLeafPanel,
@@ -255,21 +242,11 @@ const UnitNode = memo(function UnitNode(props: Props) {
         : 'bg-[var(--accent-pending-soft)] text-[var(--accent-pending)] hover:bg-[var(--accent-pending)]/15';
 
   // B-8: Compute stats for collapsed view
-  const nodeCount = isDraft
-    ? 0 // Draft shows its own summary in title area
-    : data.commit
-      ? (data.commit.content?.trees?.length ?? 0)
-      : 0;
+  const nodeCount = data.commit ? (data.commit.content?.trees?.length ?? 0) : 0;
 
   // Constellation mode — render minified dot at low zoom
   if (isConstellation) {
-    const dotType = isDraft
-      ? 'staging'
-      : isStaging
-        ? 'staging'
-        : isCommitted
-          ? 'committed'
-          : 'conversation';
+    const dotType = isStaging ? 'staging' : isCommitted ? 'committed' : 'conversation';
     const color = constellationColors[dotType] || constellationColors.committed;
     return (
       <>
@@ -331,8 +308,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
           'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
           glass.highlight,
-          // Draft: dashed amber border
-          isDraft && 'border-dashed border-2 border-[var(--accent-pending)]/70',
           // Hover
           'hover:shadow-[var(--fx-shadow-hover)]',
           // Selected state
@@ -351,16 +326,16 @@ const UnitNode = memo(function UnitNode(props: Props) {
             : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${nodeCount > 0 ? `, ${nodeCount} trees` : ''}`}
+        aria-label={`${data.title} — ${isStaging ? t('draft') : t('committed')} on ${branchLabel}${nodeCount > 0 ? `, ${nodeCount} trees` : ''}`}
         aria-selected={selected}
-        data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
+        data-node-type={isStaging ? 'conversation' : 'commit'}
         data-node-semantic-kind={semanticKind}
         data-intro-target={
           isCommitted
             ? data.leaves && data.leaves.length > 0
               ? 'canvas-commit-node-with-leaf'
               : 'canvas-commit-node'
-            : isStaging || isDraft
+            : isStaging
               ? 'canvas-pending-node'
               : undefined
         }
@@ -407,38 +382,26 @@ const UnitNode = memo(function UnitNode(props: Props) {
                 {data.title}
               </h4>
             </div>
-            {isDraft ? (
-              <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--accent-pending)]/50 text-[var(--accent-pending)] bg-[var(--accent-pending-soft)] inline-flex items-center gap-0.5">
-                <PenSquare size={10} aria-hidden="true" />
-                DRAFT
-                <span className="sr-only">Status: draft</span>
-              </span>
-            ) : (
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className={cn(
-                        'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
-                        data.branchType === 'main'
-                          ? cn(toneAccent.commit.border, toneAccent.commit.text)
-                          : cn(toneAccent.branch.border, toneAccent.branch.text)
-                      )}
-                    >
-                      {data.branchType === 'main' ? (
-                        <GitCommit size={10} />
-                      ) : (
-                        <GitBranch size={10} />
-                      )}
-                      {branchLabel}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
+                      data.branchType === 'main'
+                        ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                        : cn(toneAccent.branch.border, toneAccent.branch.text)
+                    )}
+                  >
+                    {data.branchType === 'main' ? <GitCommit size={10} /> : <GitBranch size={10} />}
                     {branchLabel}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {branchLabel}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Row 2: Commit identity (committed only, intentionally non-interactive) */}
@@ -484,18 +447,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
                     ? 'URL Import'
                     : 'Doc Import'}
               </span>
-            </div>
-          )}
-
-          {/* Auto-draft badge (conversation nodes with available auto-draft) */}
-          {isStaging && data.autoDraftId && (
-            <div className="flex items-center gap-1 mb-[var(--space-item)]">
-              <AutoDraftBadge
-                autoDraftId={data.autoDraftId}
-                onPromoted={() => {
-                  if (projectId) loadProjectData(projectId);
-                }}
-              />
             </div>
           )}
 

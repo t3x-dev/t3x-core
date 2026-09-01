@@ -4,12 +4,11 @@
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, the store doesn't import
  * @/queries. The store emits an intent via callbacks and this hook supplies
- * the conversation/draft I/O. Mount once at the canvas page root.
+ * the conversation I/O. Mount once at the canvas page root.
  */
 
 import { useEffect } from 'react';
 import { deleteConversation } from '@/commands/conversations';
-import { deleteWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { dispatchConversationDeleted } from '@/hooks/shared/deleteEvents';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -45,24 +44,9 @@ export function useCanvasDeletionWiring(enabled = true): void {
           }
         });
     };
-    const draftHandler = (draftId: string) => {
-      const projectId = useCanvasStore.getState().projectId;
-      deleteWorkbenchDraft(draftId)
-        .then(() => reloadCurrentProject(projectId))
-        .catch((err) => {
-          const store = useCanvasStore.getState();
-          store.notifyCallback?.(
-            err instanceof Error ? err.message : 'Failed to delete draft',
-            'error'
-          );
-          reloadCurrentProject(projectId);
-        });
-    };
     useCanvasStore.getState().setDeleteConversationCallback(conversationHandler);
-    useCanvasStore.getState().setDeleteDraftCallback(draftHandler);
     return () => {
       useCanvasStore.getState().setDeleteConversationCallback(null);
-      useCanvasStore.getState().setDeleteDraftCallback(null);
     };
   }, [enabled, load]);
 }
