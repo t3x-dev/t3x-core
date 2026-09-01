@@ -14,6 +14,13 @@ import {
   findConversationById,
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
+import {
+  InferenceAdmissionDeniedError,
+  InferenceExecutionError,
+  type InferenceRuntime,
+  type InferenceScope,
+} from './inference';
+import { bindInferenceProvider } from './inference-provider';
 import { resolveProviderAndModel } from './provider-resolver';
 import {
   getConversationInheritedBaseline,
@@ -26,6 +33,11 @@ export interface ApiCompressionV2Input {
   conversationId: string;
   provider?: string;
   model?: string;
+  inference: {
+    runtime: InferenceRuntime;
+    runId: string;
+    scope: InferenceScope;
+  };
 }
 
 export type ApiCompressionV2Result =
@@ -182,13 +194,30 @@ export async function runApiCompressionV2(
   });
 
   const relations: Relation[] = currentSnapshot.relations;
+  const provider = bindInferenceProvider(providerResolution.provider, {
+    runtime: input.inference.runtime,
+    input: {
+      runId: input.inference.runId,
+      feature: 'extraction.compression',
+      requestedModel: input.model ?? providerResolution.model,
+      scope: input.inference.scope,
+    },
+    resolvedProvider: providerResolution.providerId,
+    resolvedModel: providerResolution.model,
+  });
   const result = await runCompressionV2Pipeline({
-    provider: providerResolution.provider,
+    provider,
     frames: nodesWithSignals,
     relations,
   });
 
   if (!result.ok) {
+    if (
+      result.cause instanceof InferenceAdmissionDeniedError ||
+      result.cause instanceof InferenceExecutionError
+    ) {
+      throw result.cause;
+    }
     return {
       ok: false,
       kind: 'failure',

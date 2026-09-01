@@ -78,8 +78,10 @@
     {
       "file": "packages/core/src/extractors/v2/compress.ts",
       "feature": "extraction-compression",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "The API compression composition binds the resolved provider before Core execution and preserves typed admission and uncertain terminal failures."
     },
     {
       "file": "packages/core/src/extractors/v2/pipeline.ts",
