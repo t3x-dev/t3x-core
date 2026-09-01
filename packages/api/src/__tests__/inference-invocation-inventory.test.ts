@@ -96,7 +96,10 @@ describe('server-side inference invocation inventory', () => {
     ['packages/api/src/routes/chat.openapi.ts', 7],
     ['packages/api/src/lib/proposal-generation.ts', 1],
     ['packages/api/src/lib/inference-provider.ts', 3],
+    ['packages/api/src/ops/leaf-gen.ts', 1],
     ['packages/core/src/extractors/v2/pipeline.ts', 3],
+    ['packages/core/src/leaf/generate.ts', 2],
+    ['packages/core/src/leaf/multi-round-generate.ts', 4],
   ])('records migrated call family %s', (file, coveredCount) => {
     const source = inventory.sources.find((candidate) => candidate.file === file);
     expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });

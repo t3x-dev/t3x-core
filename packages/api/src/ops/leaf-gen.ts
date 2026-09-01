@@ -18,9 +18,9 @@ import {
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
+import { bindInferenceProvider } from '../lib/inference-provider';
 import { createModelBoundProvider, resolveProviderAndModel } from '../lib/provider-resolver';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
-import { recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import type { ApiPipelineContext } from './context';
 
@@ -67,7 +67,7 @@ export interface LeafGenOutput {
 export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
   name: 'leaf-generate',
   async *run(input: LeafGenInput, ctx): AsyncGenerator<PipelineEvent, LeafGenOutput> {
-    const { db } = ctx as ApiPipelineContext;
+    const { db, inference } = ctx as ApiPipelineContext;
     const { leafId, mode, userId, stylePreferences } = input;
 
     // ---- load ----
@@ -135,12 +135,23 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
     if (!boundProvider) {
       throw new Error(`Provider ${providerResolution.providerId} is unavailable`);
     }
+    const meteredProvider = bindInferenceProvider(boundProvider, {
+      runtime: inference.runtime,
+      input: {
+        runId: inference.runId,
+        feature: 'leaf.generate',
+        requestedModel: providerResolution.model,
+        scope: inference.scope,
+      },
+      resolvedProvider: providerResolution.providerId,
+      resolvedModel: providerResolution.model,
+    });
 
     if (mode !== 'fast') {
       multiRoundResult = await modeGenerate({
         knowledge,
         leaf,
-        provider: boundProvider,
+        provider: meteredProvider,
         mode,
         stylePreferences: stylePreferences
           ? {
@@ -152,26 +163,12 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
       });
       finalOutput = multiRoundResult.output;
       generationModel = providerResolution.model;
-
-      // Record multi-round usage (fire-and-forget)
-      // biome-ignore lint/suspicious/noExplicitAny: usage shape varies by provider
-      const mrUsage = (multiRoundResult as any).usage;
-      if (mrUsage?.inputTokens || mrUsage?.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: userId,
-          project_id: leaf.project_id,
-          endpoint: 'leaf_generate',
-          model: generationModel,
-          input_tokens: mrUsage.inputTokens,
-          output_tokens: mrUsage.outputTokens,
-        });
-      }
     } else {
       const result = await generateLeafOutput({
         knowledge,
         leaf,
         model: providerResolution.model,
-        provider: boundProvider,
+        provider: meteredProvider,
         lessons: lessons.length > 0 ? lessons : undefined,
         additionalInstructions:
           typeof leaf.config?.user_instruction === 'string'
@@ -180,18 +177,6 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
       });
       finalOutput = result.output;
       generationModel = result.model;
-
-      // Record single-round usage (fire-and-forget)
-      if (result.usage.inputTokens || result.usage.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: userId,
-          project_id: leaf.project_id,
-          endpoint: 'leaf_generate',
-          model: generationModel,
-          input_tokens: result.usage.inputTokens,
-          output_tokens: result.usage.outputTokens,
-        });
-      }
 
       if (result.validation) {
         validationData = {

@@ -24,10 +24,10 @@ export interface InferenceProviderBinding {
  * call they make through this adapter receives its own admitted generation ID
  * and terminal receipt while retaining the provider's native result shape.
  */
-export function bindInferenceProvider(
-  provider: InferenceLLMProvider,
+export function bindInferenceProvider<T extends InferenceLLMProvider>(
+  provider: T,
   binding: InferenceProviderBinding
-): InferenceLLMProvider {
+): T {
   const execute = async <T extends { usage: { inputTokens: number; outputTokens: number } }>(
     invoke: () => Promise<T>
   ): Promise<T> => {
@@ -44,9 +44,10 @@ export function bindInferenceProvider(
     return execution.value;
   };
 
-  const wrapped: InferenceLLMProvider = {
+  const wrapped: T = {
+    ...provider,
     generate: (prompt, options) => execute(() => provider.generate(prompt, options)),
-  };
+  } as T;
 
   if (provider.generateFromPrompt) {
     const promptProvider = provider as Required<Pick<LLMProvider, 'generateFromPrompt'>>;
