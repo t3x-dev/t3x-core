@@ -150,12 +150,6 @@
         "commitMergeDraft",
         "prepareRepositoryYOpsMerge"
       ]
-    },
-    {
-      "path": "packages/mcp/src/tools/core/commit.ts",
-      "patterns": [
-        "commitFromDraft"
-      ]
     }
   ],
   "surfaceStorageImports": [
@@ -174,8 +168,6 @@
         "packages/mcp/src/resources/index.ts",
         "packages/mcp/src/tools/advanced/admin.ts",
         "packages/mcp/src/tools/advanced/merge.ts",
-        "packages/mcp/src/tools/core/edit.ts",
-        "packages/mcp/src/tools/core/extract.ts",
         "packages/mcp/src/tools/core/generate.ts",
         "packages/mcp/src/tools/core/query.ts"
       ]

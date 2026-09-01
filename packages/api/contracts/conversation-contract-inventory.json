@@ -464,11 +464,6 @@
           "kind": "typed_client",
           "file": "packages/api-client/src/client.ts",
           "token": "async extract("
-        },
-        {
-          "kind": "mcp",
-          "file": "packages/mcp/src/tools/core/extract.ts",
-          "token": "client.extract("
         }
       ]
     },
