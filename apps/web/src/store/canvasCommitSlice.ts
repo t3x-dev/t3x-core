@@ -1,9 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
-import { getTerminology } from '@/hooks/shared/useTerminology';
-import { isDeveloperMode } from '@/store/shared';
-import { getMicrocopy } from '@/utils/microcopy';
-import type { BranchType, CanvasNodeData, SourceTextBlock } from '../types/nodes';
+import type { CanvasNodeData, SourceTextBlock } from '../types/nodes';
 import { tokenizeText } from '../utils/tokenizer';
 import type { CanvasState, CommitSlice } from './canvasStoreTypes';
 import {
@@ -14,7 +11,6 @@ import {
   edgeStyle,
   edgeType,
   getNodeCounter,
-  getNumericId,
   hasPendingUnitNode,
   isPendingUnitNode,
   nextEdgeId,
@@ -32,84 +28,6 @@ import {
  * so those hooks can atomically append a node+edge after the API resolves.
  */
 export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> = (set, get) => ({
-  commitPendingCommit: (id) => {
-    const state = get();
-    const notify = state.notifyCallback;
-
-    const pendingNode = state.nodes.find(
-      (node) => node.id === id && node.data.kind === 'unit' && node.data.commitStatus === 'staging'
-    );
-    if (!pendingNode) {
-      notify?.('Pending commit not found', 'error');
-      return;
-    }
-
-    const branchMode = determineStagingUnitBranchMode(state, id);
-    if (branchMode === 'blocked') {
-      notify?.('Cannot commit: blocked by existing commits', 'warning');
-      return;
-    }
-
-    set((state) => {
-      const isMergeCommit =
-        pendingNode.data.bridgePrompt === '/merge' && !!pendingNode.data.mergeConfig;
-      let branchType: BranchType = 'branch';
-
-      if (branchMode === 'force-main' || isMergeCommit) {
-        branchType = 'main';
-      } else if (branchMode === 'select') {
-        branchType = pendingNode.data.pendingBranch ?? 'branch';
-      }
-
-      const branchName =
-        branchType === 'branch'
-          ? pendingNode.data.pendingBranchName?.trim() || `branch-${getNumericId(id)}`
-          : undefined;
-
-      const latestMainId = resolveLatestMainUnitId(state.nodes, state.latestMainCommitId);
-
-      const updatedNodes = state.nodes.map<Node<CanvasNodeData>>((node) => {
-        if (node.id !== id || node.data.commitStatus !== 'staging') {
-          return node;
-        }
-        const nextData: CanvasNodeData = {
-          ...node.data,
-          kind: 'unit',
-          entryId: `UNIT-${getNumericId(id)}`,
-          status: (() => {
-            const dev = isDeveloperMode();
-            return `${getTerminology('committed', dev)} · awaiting ${getTerminology('diff', dev).toLowerCase()}`;
-          })(),
-          tags: Array.from(
-            new Set([...node.data.tags, 'unit', ...(isMergeCommit ? ['merge'] : [])])
-          ),
-          branchType,
-          branchName,
-          pendingBranch: undefined,
-          pendingBranchName: undefined,
-          mergeConfig: undefined,
-          isMergeCommit: isMergeCommit,
-          commitStatus: 'committed',
-        };
-
-        return {
-          ...node,
-          type: 'unit',
-          data: nextData,
-        };
-      });
-
-      return {
-        nodes: updatedNodes,
-        hasMainCommit: state.hasMainCommit || branchType === 'main',
-        latestMainCommitId: branchType === 'main' ? id : latestMainId,
-      };
-    });
-
-    const mode = isDeveloperMode() ? 'developer' : 'default';
-    notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
-  },
-
   addPendingCommitFromCommit: (commitId) =>
     set((state) => {
       const source = state.nodes.find(

@@ -47,6 +47,7 @@ interface WorkspaceWorkbenchProps {
   viewState?: WorkspaceWorkbenchViewState;
   errorMessage?: string;
   selectedWorkspaceId?: string | null;
+  sourceConversationId?: string;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
@@ -64,6 +65,7 @@ export function WorkspaceWorkbench({
   onWorkspaceBranchChange,
   projectId,
   selectedWorkspaceId,
+  sourceConversationId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
@@ -445,6 +447,7 @@ export function WorkspaceWorkbench({
             branchOptions={branchOptions}
             candidate={selectedWorkspaceWithFlow}
             flowState={selectedFlow}
+            initialSourceConversationId={sourceConversationId}
             onExtractCandidate={handleExtractCandidate}
             onGenerateProposal={handleGenerateProposal}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
@@ -524,6 +527,7 @@ function WorkspaceDetail({
   branchOptions,
   candidate,
   flowState,
+  initialSourceConversationId,
   onExtractCandidate,
   onGenerateProposal,
   onChatSourceEvidenceChange,
@@ -544,6 +548,7 @@ function WorkspaceDetail({
   branchOptions?: string[];
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
+  initialSourceConversationId?: string;
   onExtractCandidate: () => void;
   onGenerateProposal: () => void;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
@@ -585,7 +590,7 @@ function WorkspaceDetail({
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           continuationBusy={Boolean(flowState?.continuationBusy)}
-          sourceConversationId={flowState?.sourceConversationId}
+          sourceConversationId={flowState?.sourceConversationId ?? initialSourceConversationId}
           sourceParentCommitHash={
             flowState?.sourceParentCommitHash ?? getWorkspaceSourceParentCommitHash(candidate)
           }

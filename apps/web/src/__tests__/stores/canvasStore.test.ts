@@ -275,57 +275,6 @@ describe('Canvas Store - Unit Node Model', () => {
   });
 
   // ===========================================================================
-  // Commit Unit Tests (staging → committed)
-  // ===========================================================================
-  describe('commitPendingCommit (staging → committed)', () => {
-    it('changes staging unit to committed status', () => {
-      const stagingUnit = createStagingUnitNode('unit-1');
-      useCanvasStore.setState({ nodes: [stagingUnit], edges: [] });
-
-      useCanvasStore.getState().commitPendingCommit('unit-1');
-
-      const state = useCanvasStore.getState();
-      const updatedNode = state.nodes.find((n) => n.id === 'unit-1');
-      expect(updatedNode?.data.commitStatus).toBe('committed');
-    });
-
-    it('does nothing when node not found', () => {
-      useCanvasStore.setState({ nodes: [], edges: [] });
-
-      useCanvasStore.getState().commitPendingCommit('nonexistent');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-
-    it('does nothing when node is already committed', () => {
-      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
-      useCanvasStore.setState({ nodes: [committedUnit], edges: [] });
-
-      useCanvasStore.getState().commitPendingCommit('unit-1');
-
-      // Should remain unchanged
-      const state = useCanvasStore.getState();
-      expect(state.nodes[0].data.commitStatus).toBe('committed');
-    });
-
-    it('updates hasMainCommit when first unit is committed to main', () => {
-      const stagingUnit = createStagingUnitNode('unit-1');
-      useCanvasStore.setState({
-        nodes: [stagingUnit],
-        edges: [],
-        hasMainCommit: false,
-      });
-
-      useCanvasStore.getState().commitPendingCommit('unit-1');
-
-      const state = useCanvasStore.getState();
-      // First commit should go to main
-      expect(state.hasMainCommit).toBe(true);
-    });
-  });
-
-  // ===========================================================================
   // Leaf Panel Tests
   // ===========================================================================
   describe('Leaf Panel', () => {

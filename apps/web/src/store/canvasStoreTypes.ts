@@ -70,7 +70,6 @@ export interface NodeSlice {
 
 // Commit operations slice interface (passive — async I/O lives in useCanvasCommitActions)
 export interface CommitSlice {
-  commitPendingCommit: (id: string) => void;
   addPendingCommitFromCommit: (commitId: string) => void;
   addUnitFromUnit: (unitId: string) => void;
   appendNodeAndEdge: (node: Node<CanvasNodeData>, edge: Edge) => void;
