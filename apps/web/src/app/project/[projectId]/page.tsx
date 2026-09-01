@@ -28,10 +28,6 @@ import {
   COMMITS_BROADCAST_CHANNEL,
   isCommitCreatedForProject,
 } from '@/hooks/commits/commitEvents';
-import {
-  applyIntroDemoCommitToCanvasGraph,
-  readIntroDemoLocalCommit,
-} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
@@ -216,7 +212,6 @@ export function ProjectDetailPageContent({
   const canvasError = useCanvasStore((state) => state.loadError);
   const canvasAutoRefreshBlocked = isRefHeadIntegrityInvalid(canvasError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
-  const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
   const closeNodeModal = useCanvasStore((state) => state.closeNodeModal);
 
   // Parse initial viewport from URL params
@@ -341,44 +336,6 @@ export function ProjectDetailPageContent({
       void loadCanvas(projectId);
     }
   }, [isCanvasActive, projectId, loadCanvas]);
-
-  useEffect(() => {
-    if (
-      !isCanvasActive ||
-      !showIntroDemo ||
-      canvasLoading ||
-      canvasError ||
-      loadedProjectId !== projectId
-    )
-      return;
-    const localCommit = readIntroDemoLocalCommit(projectId);
-    if (!localCommit) return;
-
-    useCanvasStore.setState((state) => {
-      if (state.projectId !== projectId) return {};
-      const patched = applyIntroDemoCommitToCanvasGraph({
-        nodes: state.nodes,
-        edges: state.edges,
-        commit: localCommit,
-      });
-      if (!patched) return {};
-      return {
-        nodes: patched.nodes,
-        edges: patched.edges,
-        hasMainCommit: true,
-        latestMainCommitId:
-          localCommit.branch === 'main' ? localCommit.hash : state.latestMainCommitId,
-      };
-    });
-  }, [
-    canvasError,
-    canvasLoading,
-    canvasNodeCount,
-    isCanvasActive,
-    loadedProjectId,
-    projectId,
-    showIntroDemo,
-  ]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.

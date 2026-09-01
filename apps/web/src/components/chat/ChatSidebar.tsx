@@ -42,10 +42,6 @@ import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useTemporaryChatImport } from '@/hooks/conversations/useTemporaryChatImport';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
-import {
-  readIntroDemoLocalCommit,
-  toIntroDemoApiCommit,
-} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useEnsureDemoProject } from '@/hooks/onboarding/useEnsureDemoProject';
 import { useProjects } from '@/hooks/projects/useProjects';
 import {
@@ -401,12 +397,7 @@ export function ChatSidebar() {
       { all: projectLeaves.length, generated: 0, draft: 0, review: 0 }
     );
   }, [projectLeaves]);
-  const visibleCanvasCommits = useMemo(() => {
-    const localCommit = readIntroDemoLocalCommit(currentProjectId);
-    if (!localCommit) return canvasCommits;
-    if (canvasCommits.some((commit) => commit.hash === localCommit.hash)) return canvasCommits;
-    return [...canvasCommits, toIntroDemoApiCommit(localCommit)];
-  }, [canvasCommits, currentProjectId, refreshKey]);
+  const visibleCanvasCommits = canvasCommits;
   const currentProjectCommitCount = Math.max(
     currentProject?.commits_count ?? 0,
     visibleCanvasCommits.length

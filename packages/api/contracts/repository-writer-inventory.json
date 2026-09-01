@@ -180,17 +180,6 @@
       "issue": 1297
     },
     {
-      "id": "web-legacy-conversation-yops",
-      "surface": "webui",
-      "state": "legacy_writer",
-      "authority": "legacy_workbench",
-      "file": "apps/web/src/commands/yops/llmAdapter.ts",
-      "anchors": ["postExtractYops("],
-      "replacement": "Workspace proposal generation and useWorkspaceTransition.",
-      "removal_gate": "The production Chat route is migrated. Delete the now-unmounted adapter and its orphaned component graph before closing Wave 1.",
-      "issue": 1297
-    },
-    {
       "id": "cli-workspace-extract",
       "surface": "cli",
       "state": "canonical_adapter",
@@ -251,16 +240,7 @@
       "removal_gate": "The t3x_commit spelling may remain only as a canonical commit alias."
     }
   ],
-  "legacy_caller_guards": [
-    {
-      "symbol": "postExtractYops(",
-      "roots": ["apps/web/src"],
-      "allowed_files": [
-        "apps/web/src/commands/yops/llmAdapter.ts",
-        "apps/web/src/infrastructure/llm.ts"
-      ]
-    }
-  ],
+  "legacy_caller_guards": [],
   "retirement_policy": {
     "delete_code_with_last_caller": true,
     "delete_historical_rows": false,

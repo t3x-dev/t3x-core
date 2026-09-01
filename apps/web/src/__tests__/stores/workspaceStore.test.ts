@@ -489,7 +489,7 @@ describe('workspaceStore (state-only)', () => {
         variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
       });
       // Seed scriptText with the balanced YAML, scriptDirty false (the
-      // canonical mirror useExtraction writes after a successful Extract).
+      // canonical mirror formerly written after a successful Extract).
       useWorkspaceStore.setState({ scriptText: 'OLD-BALANCED-YAML', scriptDirty: false });
 
       useWorkspaceStore.getState().setExtractionPreset('concise');
@@ -786,7 +786,7 @@ describe('workspaceStore (state-only)', () => {
 
   describe('retainedDraftFailure (PR-B preserve-draft-on-failure)', () => {
     // The structured marker that survives a failed re-extract on top of a
-    // previously-staged draft. Set by useExtraction's catch block; cleared
+    // previously-staged draft. Set by the retired extractor's catch block; cleared
     // by the next successful extract / Discard / successful Apply / reset.
     // See `RetainedDraftFailure` in workspaceStore.ts.
     const failure = {
@@ -799,7 +799,7 @@ describe('workspaceStore (state-only)', () => {
 
     it('starts null and survives setError so the two surfaces stay independent', () => {
       // Two distinct error fields drive two distinct UI surfaces. Setting
-      // one must not silently clobber the other — useExtraction picks the
+      // one must not silently clobber the other — extraction picks the
       // right field based on whether a draft was staged at attempt start.
       expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
       useWorkspaceStore.getState().setError('separate channel');
@@ -834,7 +834,7 @@ describe('workspaceStore (state-only)', () => {
     it('clearDraft (Discard / successful Apply) also clears the failure marker', () => {
       // Discard explicitly drops the proposal — the marker referred to
       // that draft, so it must clear too. Same path is used after a
-      // successful Apply (useScriptExecution.execute). Without this the
+      // successful Apply. Without this the
       // panel would keep showing "Last extract failed... Previous draft
       // retained." after the user has already disposed of the draft.
       useWorkspaceStore.getState().setDraft({

@@ -2,8 +2,8 @@
  * useCreateMergeCommit — merge persistence boundary.
  *
  * Wrapping it in a hook keeps components free of `@/infrastructure/*` imports
- * while matching the write-path hook conventions established by
- * `useGoldEdit` / `useNewProjectChat`.
+ * while matching the write-path hook conventions used by canonical
+ * repository commands.
  */
 
 import { useCallback } from 'react';

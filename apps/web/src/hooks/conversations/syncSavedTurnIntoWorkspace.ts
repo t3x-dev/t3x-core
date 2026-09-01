@@ -1,9 +1,7 @@
 /**
  * After a chat turn is persisted server-side, push it into
- * `workspaceStore.turns` so subsequent extractions see the latest
- * turns immediately. Without this hop, `useExtraction` would read a
- * stale snapshot loaded at conversation mount and the
- * `/v1/extract-yops` handler would short-circuit on empty turns.
+ * `workspaceStore.turns` so source traces and committed highlights see the
+ * latest immutable turns immediately.
  *
  * Guards:
  *   - only writes when the workspace is currently tracking the same

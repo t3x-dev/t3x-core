@@ -54,7 +54,7 @@ describe('formatRetainedFailureRow', () => {
 
   it('omits the parenthesised context when no fields are known', () => {
     // The fallback covers the catch-block-fires-before-provider-resolved
-    // race in useExtraction. The "Previous draft retained" tail still
+    // race in the retired extractor. The "Previous draft retained" tail still
     // anchors what the user gets to do next.
     expect(formatRetainedFailureRow({ message: 'LLM call failed.' })).toBe(
       'Last extract failed: LLM call failed. Previous draft retained.'

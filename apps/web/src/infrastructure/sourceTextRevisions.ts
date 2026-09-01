@@ -31,47 +31,6 @@ export interface SourceTextRevisionDTO {
   updated_at: string;
 }
 
-export interface CreateSourceTextRevisionInput {
-  projectId: string;
-  conversationId: string;
-  turnHash: string;
-  turnRole: 'user' | 'assistant' | 'system' | 'tool';
-  action: 'add' | 'edit' | 'delete';
-  startChar: number;
-  endChar: number;
-  selectedText: string;
-  replacementText: string;
-  baseContent: string;
-  content: string;
-  spans: SourceTextDraftSpan[];
-  baseContentHash?: string;
-}
-
-export async function createSourceTextRevision(
-  input: CreateSourceTextRevisionInput
-): Promise<SourceTextRevisionDTO> {
-  const res = await fetchWithTimeout(`${API_V1}/source-text-revisions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: input.projectId,
-      conversation_id: input.conversationId,
-      turn_hash: input.turnHash,
-      turn_role: input.turnRole,
-      action: input.action,
-      start_char: input.startChar,
-      end_char: input.endChar,
-      selected_text: input.selectedText,
-      replacement_text: input.replacementText,
-      base_content: input.baseContent,
-      content: input.content,
-      spans: input.spans,
-      ...(input.baseContentHash ? { base_content_hash: input.baseContentHash } : {}),
-    }),
-  });
-  return handleResponse<SourceTextRevisionDTO>(res);
-}
-
 export async function listSourceTextRevisions(
   projectId: string,
   conversationId: string
@@ -82,27 +41,4 @@ export async function listSourceTextRevisions(
   });
   const res = await fetchWithTimeout(`${API_V1}/source-text-revisions?${params.toString()}`);
   return handleResponse<SourceTextRevisionDTO[]>(res);
-}
-
-export async function updateSourceTextRevision(
-  revisionId: string,
-  input: {
-    status?: SourceTextRevisionStatus;
-    patchOps?: unknown[] | null;
-    patchError?: string | null;
-  }
-): Promise<SourceTextRevisionDTO> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/source-text-revisions/${encodeURIComponent(revisionId)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...(input.status ? { status: input.status } : {}),
-        ...(input.patchOps !== undefined ? { patch_ops: input.patchOps } : {}),
-        ...(input.patchError !== undefined ? { patch_error: input.patchError } : {}),
-      }),
-    }
-  );
-  return handleResponse<SourceTextRevisionDTO>(res);
 }

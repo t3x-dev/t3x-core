@@ -327,25 +327,19 @@ interface WorkspaceState {
   clearEditorOverride: () => void;
   setRecentScriptApplyLineNumbers: (lineNumbers: number[]) => void;
 
-  // ── Draft (uncommitted extraction proposal) ──
+  // ── Legacy conversation projection (read compatibility only) ──
   /**
-   * The ops the LLM proposed in the most recent Extract that have NOT been
-   * applied to `yops_log` yet. Lives entirely in client state — set by
-   * `useExtraction` when calling `runExtraction({ commit: false })`,
-   * consumed by `useScriptExecution` to gate Apply, and cleared by
-   * `clearDraft()` on successful Apply or fresh hydration.
+   * Historical proposal state retained while older conversation snapshots
+   * are still readable. Active authoring uses Repository Workspace.
    */
   draftOps: SourcedYOp[];
   /**
    * Cheap dry-run preview: `applySourcedYOps(currentTree, draftOps)`. Lets
-   * AfterPanel render what the result tree would look like *if* the user
-   * clicked Apply, without persisting anything. Recomputed only on Extract;
-   * a live preview that follows manual script edits is a follow-up.
+   * older clients used for a dry-run preview. It is never repository authority.
    */
   draftTree: SemanticContent | null;
   /**
-   * True iff there's an uncommitted draft to apply. Read by
-   * `useScriptExecution.canRun` and AfterPanel's "Draft" badge.
+   * True iff a loaded historical conversation projection contains draft state.
    */
   hasDraft: boolean;
   setDraft: (input: {
@@ -430,7 +424,7 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
  *      YAML mirror so the editor agrees with AfterPanel's preview.
  *   3. `serializeOpsToYaml(opsLog)` — no draft; show the committed ledger
  *      so the editor isn't blank when there's applied history. This
- *      replaces the `useScriptExecution` committed-mirror useEffect that
+ *      replaces the retired workbench's committed-mirror effect that
  *      previously kept `scriptText` in sync via setScriptText / setDirty
  *      writes — derivation makes the effect unnecessary.
  *   4. `''` — empty conversation, no draft, no committed ops.
