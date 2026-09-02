@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { ApiKey } from '@t3x-dev/core';
 import type { Context, MiddlewareHandler } from 'hono';
+import type {
+  GenerationModelActor,
+  GenerationModelProjectVisibility,
+  GenerationModelScope,
+} from './model-runtime-contract';
 
 /**
  * Provider-neutral inference execution contracts.
@@ -12,11 +17,9 @@ import type { Context, MiddlewareHandler } from 'hono';
 
 export const INFERENCE_CONTRACT_VERSION = 1 as const;
 
-export type InferenceActor =
-  | { kind: 'user' | 'agent' | 'service'; id: string }
-  | { kind: 'anonymous'; id: null };
+export type InferenceActor = GenerationModelActor;
 
-export type InferenceProjectVisibility = 'public' | 'private' | 'unlisted' | 'unknown';
+export type InferenceProjectVisibility = GenerationModelProjectVisibility;
 
 export interface StoredInferenceProjectScope {
   projectId: string;
@@ -52,6 +55,32 @@ export function resolveInferenceProjectScope(
     projectId: project.projectId,
     ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
     projectVisibility: project.visibility,
+  };
+}
+
+/**
+ * Project canonical inference authority into the provider-neutral model seam.
+ *
+ * This is intentionally an allowlist: deployment-owned policyContext must remain
+ * inside admission/billing composition and can never become provider input.
+ */
+export function toGenerationModelScope(
+  scope: InferenceScope,
+  options: { conversationId?: string } = {}
+): GenerationModelScope {
+  const actor: GenerationModelScope['actor'] =
+    scope.actor.kind === 'anonymous'
+      ? { kind: 'anonymous', id: null }
+      : { kind: scope.actor.kind, id: scope.actor.id };
+
+  return {
+    actor,
+    ...(scope.namespaceId === undefined ? {} : { namespaceId: scope.namespaceId }),
+    ...(scope.projectId === undefined ? {} : { projectId: scope.projectId }),
+    ...(scope.projectVisibility === undefined
+      ? {}
+      : { projectVisibility: scope.projectVisibility }),
+    ...(options.conversationId === undefined ? {} : { conversationId: options.conversationId }),
   };
 }
 

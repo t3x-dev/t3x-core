@@ -258,15 +258,35 @@ export interface GenerationModel {
   ): Promise<GenerationModelStream>;
 }
 
+/** Trusted application identity carried to a provider runtime for resolution. */
+export type GenerationModelActor =
+  | { kind: 'user' | 'agent' | 'service'; id: string }
+  | { kind: 'anonymous'; id: null };
+
+export type GenerationModelProjectVisibility = 'public' | 'private' | 'unlisted' | 'unknown';
+
+/**
+ * Provider-neutral authority coordinates resolved by authenticated application code.
+ *
+ * The actor is optional only while historical callers migrate from `userId`. Hosted
+ * runtimes may require it and fail closed. Deployment-owned payer or policy objects
+ * deliberately do not cross this boundary.
+ */
+export interface GenerationModelScope {
+  actor?: GenerationModelActor;
+  namespaceId?: string;
+  projectId?: string;
+  projectVisibility?: GenerationModelProjectVisibility;
+  conversationId?: string;
+  /** @deprecated Use the canonical actor. Retained for v1 source compatibility. */
+  userId?: string;
+}
+
 export interface GenerationProviderResolutionInput {
   /** Logical alias or qualified model reference. It is a preference, not authority. */
   requestedModel?: string;
   /** Canonical identifiers resolved by authenticated application code. */
-  scope?: {
-    conversationId?: string;
-    projectId?: string;
-    userId?: string;
-  };
+  scope?: GenerationModelScope;
   requiredCapabilities?: readonly GenerationModelCapability[];
   unavailableMessage?: string;
 }

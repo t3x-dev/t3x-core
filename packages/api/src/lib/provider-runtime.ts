@@ -15,11 +15,25 @@ export const defaultGenerationProviderRuntime: GenerationProviderRuntime = Objec
   contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
   catalog: Object.freeze({ snapshot: getOssGenerationModelCatalogSnapshot }),
   async resolve(input: GenerationProviderResolutionInput = {}) {
+    const actor = input.scope?.actor;
+    const legacyUserId = input.scope?.userId;
+    if (
+      actor &&
+      legacyUserId !== undefined &&
+      (actor.kind !== 'user' || actor.id !== legacyUserId)
+    ) {
+      return {
+        ok: false as const,
+        code: 'mismatch' as const,
+        message: input.unavailableMessage ?? 'Canonical actor conflicts with legacy user identity',
+      };
+    }
+
     const resolved = await resolveProviderAndModel({
       requestedModel: input.requestedModel,
       conversationId: input.scope?.conversationId,
       projectId: input.scope?.projectId,
-      userId: input.scope?.userId,
+      userId: actor?.kind === 'user' ? actor.id : legacyUserId,
       unavailableMessage: input.unavailableMessage,
     });
     if (!resolved.ok) return resolved;

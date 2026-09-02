@@ -81,6 +81,7 @@ export {
   type MeteredInferenceResult,
   resolveInferenceActor,
   resolveInferenceRunId,
+  toGenerationModelScope,
 } from './lib/inference';
 export {
   createGenerationModelCatalogSnapshot,
@@ -88,6 +89,7 @@ export {
   GENERATION_MODEL_SPECIFICATION_VERSION,
   GENERATION_PROVIDER_RUNTIME_VERSION,
   type GenerationModel,
+  type GenerationModelActor,
   type GenerationModelCapability,
   type GenerationModelCatalog,
   type GenerationModelCatalogSnapshot,
@@ -101,8 +103,10 @@ export {
   type GenerationModelMessage,
   type GenerationModelOutputFormat,
   type GenerationModelOutputPart,
+  type GenerationModelProjectVisibility,
   type GenerationModelRequest,
   type GenerationModelResult,
+  type GenerationModelScope,
   type GenerationModelStream,
   type GenerationModelStreamPart,
   type GenerationModelStreamTerminal,

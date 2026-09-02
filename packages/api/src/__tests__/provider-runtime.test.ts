@@ -102,9 +102,21 @@ describe('application-scoped generation provider runtime', () => {
 
     const resolved = await defaultGenerationProviderRuntime.resolve({
       requestedModel: 'writing',
-      scope: { projectId: 'project-1' },
+      scope: {
+        actor: { kind: 'user', id: 'user-1' },
+        namespaceId: 'namespace-1',
+        projectId: 'project-1',
+        projectVisibility: 'private',
+      },
     });
     expect(resolved.ok).toBe(true);
+    expect(resolver.resolveProviderAndModel).toHaveBeenLastCalledWith({
+      requestedModel: 'writing',
+      conversationId: undefined,
+      projectId: 'project-1',
+      userId: 'user-1',
+      unavailableMessage: undefined,
+    });
     if (!resolved.ok) return;
     expect('generateFromPrompt' in resolved.model).toBe(false);
     await expect(
@@ -176,6 +188,52 @@ describe('application-scoped generation provider runtime', () => {
       ok: false,
       code: 'unavailable',
       message: 'Resolved model does not support required capability: tool_use',
+    });
+  });
+
+  it.each([
+    {
+      actor: { kind: 'user' as const, id: 'canonical-user' },
+      userId: 'different-user',
+    },
+    {
+      actor: { kind: 'agent' as const, id: 'agent-1' },
+      userId: 'user-1',
+    },
+    {
+      actor: { kind: 'service' as const, id: 'service-1' },
+      userId: 'user-1',
+    },
+    {
+      actor: { kind: 'anonymous' as const, id: null },
+      userId: 'user-1',
+    },
+  ])('fails closed when $actor.kind authority conflicts with legacy identity', async (scope) => {
+    resolver.resolveProviderAndModel.mockClear();
+
+    await expect(defaultGenerationProviderRuntime.resolve({ scope })).resolves.toEqual({
+      ok: false,
+      code: 'mismatch',
+      message: 'Canonical actor conflicts with legacy user identity',
+    });
+    expect(resolver.resolveProviderAndModel).not.toHaveBeenCalled();
+  });
+
+  it('retains legacy user identity only when no canonical actor is present', async () => {
+    resolver.resolveProviderAndModel.mockResolvedValueOnce({
+      ok: false,
+      code: 'unavailable',
+      message: 'expected test result',
+    });
+
+    await defaultGenerationProviderRuntime.resolve({ scope: { userId: 'legacy-user' } });
+
+    expect(resolver.resolveProviderAndModel).toHaveBeenLastCalledWith({
+      requestedModel: undefined,
+      conversationId: undefined,
+      projectId: undefined,
+      userId: 'legacy-user',
+      unavailableMessage: undefined,
     });
   });
 
