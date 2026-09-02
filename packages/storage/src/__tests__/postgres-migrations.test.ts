@@ -490,6 +490,51 @@ describe('PostgreSQL schema migrations', () => {
     ).rejects.toThrow();
   });
 
+  it('upgrades a v70 database with fail-closed project visibility', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      ALTER TABLE projects DROP CONSTRAINT projects_visibility_check;
+      DROP INDEX idx_projects_visibility_created;
+      ALTER TABLE projects DROP COLUMN visibility;
+      INSERT INTO projects (project_id, name, owner_id, namespace_id, created_at)
+      VALUES
+        ('project_owned_legacy', 'Owned legacy', 'user_legacy', 'ns_t3x_dev', NOW()),
+        ('project_unowned_legacy', 'Unowned legacy', NULL, 'ns_t3x_dev', NOW());
+      UPDATE _schema_version SET version = 70 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresStorage({
+      connectionString: setup.connectionString,
+      maxConnections: 1,
+      onnotice: () => {},
+    });
+
+    const rows = await setup.sql.unsafe<Array<{ project_id: string; visibility: string }>>(`
+      SELECT project_id, visibility
+      FROM projects
+      WHERE project_id IN ('project_owned_legacy', 'project_unowned_legacy')
+      ORDER BY project_id
+    `);
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(rows).toEqual([
+      { project_id: 'project_owned_legacy', visibility: 'private' },
+      { project_id: 'project_unowned_legacy', visibility: 'private' },
+    ]);
+
+    await expect(
+      setup.sql.unsafe(
+        "UPDATE projects SET visibility = 'discoverable' WHERE project_id = 'project_owned_legacy'"
+      )
+    ).rejects.toThrow();
+  });
+
   it('runtime startup neither repairs an old schema nor refreshes builtin seeds', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

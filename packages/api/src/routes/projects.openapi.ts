@@ -79,12 +79,14 @@ function isDemoProject(project: { name: string; metadataJson: string | null }) {
 function toApiProject(project: {
   projectId: string;
   name: string;
+  visibility: 'private' | 'unlisted' | 'public';
   createdAt: Date;
   metadataJson: string | null;
 }) {
   return {
     project_id: project.projectId,
     name: project.name,
+    visibility: project.visibility,
     created_at: project.createdAt.toISOString(),
     metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
   };
@@ -140,7 +142,13 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
   // Shared helper: enrich a project row with counts
   const enrichProject = async (
     db: Awaited<ReturnType<typeof getDB>>,
-    p: { projectId: string; name: string; createdAt: Date; metadataJson: string | null }
+    p: {
+      projectId: string;
+      name: string;
+      visibility: 'private' | 'unlisted' | 'public';
+      createdAt: Date;
+      metadataJson: string | null;
+    }
   ) => {
     const [convCountRow, commitCountRow, branchCountRow, outputCountRow] = await Promise.all([
       db
@@ -167,6 +175,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     return {
       project_id: p.projectId,
       name: p.name,
+      visibility: p.visibility,
       created_at: p.createdAt.toISOString(),
       metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
       conversations_count: Number(convCountRow?.count ?? 0),
@@ -522,6 +531,7 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
     const apiProject = {
       project_id: project.projectId,
       name: project.name,
+      visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
     };
@@ -612,6 +622,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     const apiProject = {
       project_id: project.projectId,
       name: project.name,
+      visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
@@ -735,6 +746,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     const apiProject = {
       project_id: project.projectId,
       name: project.name,
+      visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,

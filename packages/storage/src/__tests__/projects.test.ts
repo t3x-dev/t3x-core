@@ -47,6 +47,7 @@ describe('Projects Storage', () => {
       expect(result).toBeDefined();
       expect(result.projectId).toMatch(/^proj_[a-f0-9]+$/);
       expect(result.name).toBe('My Project');
+      expect(result.visibility).toBe('private');
       expect(result.createdAt).toBeInstanceOf(Date);
     });
 
@@ -78,6 +79,17 @@ describe('Projects Storage', () => {
       const metadata = JSON.parse(rows[0].metadataJson!);
       expect(metadata.tags).toEqual(['test', 'demo']);
       expect(metadata.priority).toBe(1);
+    });
+
+    it('rejects visibility values outside the explicit contract', async () => {
+      await expect(
+        db.insert(projects).values({
+          projectId: 'proj_invalid_visibility',
+          name: 'Invalid visibility',
+          createdAt: new Date(),
+          visibility: 'discoverable' as never,
+        })
+      ).rejects.toThrow();
     });
   });
 

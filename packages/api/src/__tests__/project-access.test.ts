@@ -335,10 +335,13 @@ describe('canonical project access', () => {
       body: JSON.stringify({ name: 'Created project' }),
     });
     expect(createResponse.status).toBe(201);
-    const createdId = ((await createResponse.json()) as ApiResponse).data?.project_id as string;
+    const createdPayload = (await createResponse.json()) as ApiResponse;
+    const createdId = createdPayload.data?.project_id as string;
+    expect(createdPayload.data?.visibility).toBe('private');
     expect(await findProjectById(mockDB, createdId)).toMatchObject({
       namespaceId: namespace.namespaceId,
       ownerId: 'user_creator',
+      visibility: 'private',
     });
 
     const importResponse = await app.request('/v1/import/cfpack', {
@@ -351,6 +354,7 @@ describe('canonical project access', () => {
     expect(await findProjectById(mockDB, importedId)).toMatchObject({
       namespaceId: namespace.namespaceId,
       ownerId: 'user_creator',
+      visibility: 'private',
     });
   });
 
@@ -369,6 +373,7 @@ describe('canonical project access', () => {
     expect(await findProjectById(mockDB, legacy.projectId)).toMatchObject({
       ownerId: 'user_claim_operator',
       namespaceId: namespace.namespaceId,
+      visibility: 'private',
     });
     expect((await app.request(`/v1/projects/${legacy.projectId}`)).status).toBe(200);
   });
