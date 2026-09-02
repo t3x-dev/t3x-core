@@ -82,6 +82,14 @@ export {
   resolveInferenceActor,
   resolveInferenceRunId,
 } from './lib/inference';
+export {
+  allowAllProjectVisibilityPolicy,
+  PROJECT_VISIBILITY_POLICY_VERSION,
+  type ProjectVisibilityMutation,
+  type ProjectVisibilityPolicy,
+  ProjectVisibilityPolicyDeniedError,
+  type ProjectVisibilityPolicyInput,
+} from './lib/project-visibility-policy';
 // Background tasks
 export {
   defaultFetchEventById,

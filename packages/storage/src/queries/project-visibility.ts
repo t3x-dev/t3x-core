@@ -14,6 +14,8 @@ export type ProjectVisibilityActorKind = 'human' | 'agent' | 'service' | 'local'
 export interface ChangeProjectVisibilityInput {
   projectId: string;
   namespaceId: string;
+  /** Optional compare-and-set guard bound by transport callers to their authorized read. */
+  expectedVisibility?: ProjectVisibility;
   visibility: ProjectVisibility;
   actor: { kind: ProjectVisibilityActorKind; id: string };
   publicationConfirmed: boolean;
@@ -22,6 +24,16 @@ export interface ChangeProjectVisibilityInput {
 export interface ChangeProjectVisibilityResult {
   project: Project;
   event: ProjectVisibilityEvent | null;
+}
+
+export class ProjectVisibilityConflictError extends Error {
+  constructor(
+    readonly expectedVisibility: ProjectVisibility,
+    readonly actualVisibility: ProjectVisibility
+  ) {
+    super(`Project visibility changed from expected ${expectedVisibility} to ${actualVisibility}`);
+    this.name = 'ProjectVisibilityConflictError';
+  }
 }
 
 /**
@@ -48,6 +60,9 @@ export async function changeProjectVisibility(
       .for('update')
       .limit(1);
     if (!current) return null;
+    if (input.expectedVisibility !== undefined && current.visibility !== input.expectedVisibility) {
+      throw new ProjectVisibilityConflictError(input.expectedVisibility, current.visibility);
+    }
     if (current.visibility === input.visibility) return { project: current, event: null };
 
     if (input.visibility === 'public' && !input.publicationConfirmed) {
