@@ -153,6 +153,8 @@ export interface GenerationModelRequest {
 export interface GenerationModelInvocation {
   generationId: string;
   runId: string;
+  /** Zero-based order within the logical run. One invocation is one upstream attempt. */
+  attemptIndex: number;
   /** Stable product call-site name, for example generation.chat. */
   feature: string;
   request: GenerationModelRequest;
