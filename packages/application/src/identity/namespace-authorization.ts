@@ -22,6 +22,7 @@ export const NAMESPACE_ACTIONS = [
   'project:edit',
   'project:delete',
   'project:restore',
+  'project:visibility:manage',
   'project:guests:manage',
   'project:transfer',
 ] as const;
@@ -32,6 +33,7 @@ export const PROJECT_ACTIONS = [
   'project:edit',
   'project:delete',
   'project:restore',
+  'project:visibility:manage',
   'project:guests:manage',
   'project:transfer',
 ] as const;

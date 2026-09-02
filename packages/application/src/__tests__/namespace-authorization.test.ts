@@ -24,7 +24,9 @@ describe('canonical namespace action matrix', () => {
     expect(namespaceRoleAllows('owner', 'namespace:ownership:transfer')).toBe(true);
     expect(namespaceRoleAllows('admin', 'namespace:ownership:transfer')).toBe(false);
     expect(namespaceRoleAllows('admin', 'namespace:members:manage')).toBe(true);
+    expect(namespaceRoleAllows('admin', 'project:visibility:manage')).toBe(true);
     expect(namespaceRoleAllows('editor', 'project:create')).toBe(true);
+    expect(namespaceRoleAllows('editor', 'project:visibility:manage')).toBe(false);
     expect(namespaceRoleAllows('editor', 'project:delete')).toBe(false);
     expect(namespaceRoleAllows('viewer', 'project:read')).toBe(true);
     expect(namespaceRoleAllows('viewer', 'project:edit')).toBe(false);
@@ -32,6 +34,7 @@ describe('canonical namespace action matrix', () => {
 
   it('keeps project guests project-scoped and unable to transfer ownership', () => {
     expect(PROJECT_GRANT_ACTIONS.admin).not.toContain('project:transfer');
+    expect(PROJECT_GRANT_ACTIONS.admin).not.toContain('project:visibility:manage');
     expect(projectGrantRoleAllows('admin', 'project:guests:manage')).toBe(true);
     expect(projectGrantRoleAllows('editor', 'project:edit')).toBe(true);
     expect(projectGrantRoleAllows('editor', 'project:delete')).toBe(false);

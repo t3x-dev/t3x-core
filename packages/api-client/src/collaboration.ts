@@ -30,6 +30,7 @@ export const NamespaceActionSchema = z.enum([
   'project:edit',
   'project:delete',
   'project:restore',
+  'project:visibility:manage',
   'project:guests:manage',
   'project:transfer',
 ]);
@@ -38,6 +39,7 @@ export const ProjectActionSchema = z.enum([
   'project:edit',
   'project:delete',
   'project:restore',
+  'project:visibility:manage',
   'project:guests:manage',
   'project:transfer',
 ]);
