@@ -1,11 +1,72 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createGenerationModelCatalogSnapshot,
+  GENERATION_MODEL_CATALOG_SCHEMA,
   GENERATION_MODEL_SPECIFICATION_VERSION,
   type GenerationModel,
   GenerationModelError,
 } from '../lib/model-runtime-contract';
 
 describe('provider-neutral model contract', () => {
+  it('publishes an immutable catalog projection without private binding fields', () => {
+    const snapshot = createGenerationModelCatalogSnapshot({
+      revision: 'test-1',
+      defaultModelId: 'balanced',
+      models: [
+        {
+          id: 'balanced',
+          label: 'Balanced',
+          capabilities: ['text', 'tool_use', 'tool_use'],
+          availability: 'available',
+          limits: { maxOutputTokens: 8192 },
+          providerModelId: 'private/provider-model',
+          pricing: { snapshotId: 'private-price' },
+        },
+      ],
+    });
+
+    expect(snapshot).toEqual({
+      schema: GENERATION_MODEL_CATALOG_SCHEMA,
+      revision: 'test-1',
+      defaultModelId: 'balanced',
+      models: [
+        {
+          id: 'balanced',
+          label: 'Balanced',
+          capabilities: ['text', 'tool_use'],
+          availability: 'available',
+          limits: { maxOutputTokens: 8192 },
+        },
+      ],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('providerModelId');
+    expect(JSON.stringify(snapshot)).not.toContain('pricing');
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.models[0]?.capabilities)).toBe(true);
+  });
+
+  it('rejects duplicate IDs and unavailable defaults', () => {
+    const model = {
+      id: 'fast',
+      label: 'Fast',
+      capabilities: ['text'] as const,
+      availability: 'unavailable' as const,
+    };
+    expect(() =>
+      createGenerationModelCatalogSnapshot({
+        revision: 'test-1',
+        models: [model, model],
+      })
+    ).toThrow('Duplicate model ID');
+    expect(() =>
+      createGenerationModelCatalogSnapshot({
+        revision: 'test-1',
+        defaultModelId: 'fast',
+        models: [model],
+      })
+    ).toThrow('defaultModelId must reference an available model');
+  });
+
   it('keeps stream chunks separate from an exactly-once terminal outcome', async () => {
     const evidence = {
       provider: 'test-gateway',
