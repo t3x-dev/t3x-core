@@ -11,6 +11,7 @@ import {
   type InferenceReceipt,
   type InferenceTerminal,
   resolveInferenceProjectScope,
+  toGenerationModelScope,
 } from '../lib/inference';
 
 const executionInput = {
@@ -88,6 +89,38 @@ describe('provider-neutral inference runtime', () => {
       projectId: 'project_unlisted',
       projectVisibility: 'unlisted',
     });
+  });
+
+  it.each([
+    { kind: 'user' as const, id: 'user_123' },
+    { kind: 'agent' as const, id: 'agent_123' },
+    { kind: 'service' as const, id: 'service_123' },
+    { kind: 'anonymous' as const, id: null },
+  ])('projects canonical $kind authority without policy leakage', (actor) => {
+    const projected = toGenerationModelScope(
+      {
+        actor,
+        namespaceId: 'namespace_123',
+        projectId: 'project_123',
+        projectVisibility: 'private',
+        policyContext: {
+          payerReference: 'must-not-cross-provider-boundary',
+          secret: 'must-not-cross-provider-boundary',
+        },
+      },
+      { conversationId: 'conversation_123' }
+    );
+
+    expect(projected).toEqual({
+      actor,
+      namespaceId: 'namespace_123',
+      projectId: 'project_123',
+      projectVisibility: 'private',
+      conversationId: 'conversation_123',
+    });
+    expect(projected).not.toHaveProperty('policyContext');
+    expect(projected).not.toHaveProperty('userId');
+    expect(projected.actor).not.toBe(actor);
   });
 
   it('adapts a metered provider result into one normalized receipt', async () => {
