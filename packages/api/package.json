@@ -12,6 +12,10 @@
       "types": "./dist/app.d.ts",
       "import": "./dist/app.js"
     },
+    "./model-runtime": {
+      "types": "./dist/lib/model-runtime-contract.d.ts",
+      "import": "./dist/lib/model-runtime-contract.js"
+    },
     "./repository-state-transition": {
       "types": "./dist/lib/repository-state-transition.d.ts",
       "import": "./dist/lib/repository-state-transition.js"
@@ -26,7 +30,7 @@
     "access": "restricted"
   },
   "scripts": {
-    "build": "tsup src/index.ts src/app.ts src/lib/repository-state-transition.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts src/app.ts src/lib/model-runtime-contract.ts src/lib/repository-state-transition.ts --format esm --dts --clean",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:auth-smoke": "vitest run src/__tests__/auth-boundary.smoke.test.ts src/__tests__/auth-websocket.smoke.test.ts",

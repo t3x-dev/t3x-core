@@ -10,7 +10,7 @@
     "packages/mcp/src"
   ],
   "excludedAdapterRoots": [
-    "packages/api/src/lib/provider-runtime.ts",
+    "packages/api/src/lib/legacy-generation-model-adapter.ts",
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
