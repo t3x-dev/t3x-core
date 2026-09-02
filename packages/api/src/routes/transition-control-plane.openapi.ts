@@ -23,6 +23,7 @@ import {
   InferenceAdmissionDeniedError,
   InferenceExecutionError,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -888,6 +889,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
           runId: resolveInferenceRunId(c),
           scope: {
             actor: resolveInferenceActor(c),
+            ingressChannel: resolveInferenceIngressChannel(c),
             ...resolveInferenceProjectScope(access),
           },
         },

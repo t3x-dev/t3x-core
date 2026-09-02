@@ -267,6 +267,10 @@ export type GenerationModelActor =
 
 export type GenerationModelProjectVisibility = 'public' | 'private' | 'unlisted' | 'unknown';
 
+/** Trusted application ingress; never infer this from model content or client payloads. */
+export const GENERATION_MODEL_INGRESS_CHANNELS = ['web', 'api', 'agent', 'mcp'] as const;
+export type GenerationModelIngressChannel = (typeof GENERATION_MODEL_INGRESS_CHANNELS)[number];
+
 /**
  * Provider-neutral authority coordinates resolved by authenticated application code.
  *
@@ -276,6 +280,8 @@ export type GenerationModelProjectVisibility = 'public' | 'private' | 'unlisted'
  */
 export interface GenerationModelScope {
   actor?: GenerationModelActor;
+  /** Server-resolved entry surface used by deployment admission and rate policy. */
+  ingressChannel?: GenerationModelIngressChannel;
   namespaceId?: string;
   projectId?: string;
   projectVisibility?: GenerationModelProjectVisibility;

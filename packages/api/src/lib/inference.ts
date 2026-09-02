@@ -3,9 +3,11 @@ import type { ApiKey } from '@t3x-dev/core';
 import type { Context, MiddlewareHandler } from 'hono';
 import type {
   GenerationModelActor,
+  GenerationModelIngressChannel,
   GenerationModelProjectVisibility,
   GenerationModelScope,
 } from './model-runtime-contract';
+import { GENERATION_MODEL_INGRESS_CHANNELS } from './model-runtime-contract';
 
 /**
  * Provider-neutral inference execution contracts.
@@ -21,6 +23,8 @@ export type InferenceActor = GenerationModelActor;
 
 export type InferenceProjectVisibility = GenerationModelProjectVisibility;
 
+export type InferenceIngressChannel = GenerationModelIngressChannel;
+
 export interface StoredInferenceProjectScope {
   projectId: string;
   namespaceId: string | null;
@@ -30,6 +34,8 @@ export interface StoredInferenceProjectScope {
 export interface InferenceScope {
   /** Server-derived actor. Never populate this from an unverified request body. */
   actor: InferenceActor;
+  /** Host-derived ingress. Omission preserves source compatibility and projects as `api`. */
+  ingressChannel?: InferenceIngressChannel;
   /** Canonical namespace ID when the operation is namespace-owned. */
   namespaceId?: string;
   /** Canonical project ID when the operation is project-owned. */
@@ -75,6 +81,7 @@ export function toGenerationModelScope(
 
   return {
     actor,
+    ingressChannel: scope.ingressChannel ?? 'api',
     ...(scope.namespaceId === undefined ? {} : { namespaceId: scope.namespaceId }),
     ...(scope.projectId === undefined ? {} : { projectId: scope.projectId }),
     ...(scope.projectVisibility === undefined
@@ -297,6 +304,14 @@ export function resolveInferenceActor(context: Context): InferenceActor {
     };
   }
   return { kind: 'anonymous', id: null };
+}
+
+/** Resolve only a host-installed ingress marker; ordinary HTTP remains safely classified as API. */
+export function resolveInferenceIngressChannel(context: Context): InferenceIngressChannel {
+  const channel = context.get('inferenceIngressChannel');
+  return GENERATION_MODEL_INGRESS_CHANNELS.includes(channel as InferenceIngressChannel)
+    ? (channel as InferenceIngressChannel)
+    : 'api';
 }
 
 /** Preserve an installed request ID as the parent run across model attempts. */

@@ -20,9 +20,10 @@ vi.mock('@t3x-dev/storage', () => ({
 
 import { buildPipelineContext } from '../../ops/context';
 
-function fakeHonoContext(overrides: { userId?: string } = {}) {
+function fakeHonoContext(overrides: { userId?: string; ingressChannel?: string } = {}) {
   const store = new Map<string, unknown>();
   if (overrides.userId) store.set('userId', overrides.userId);
+  if (overrides.ingressChannel) store.set('inferenceIngressChannel', overrides.ingressChannel);
 
   return {
     get: (key: string) => store.get(key),
@@ -45,7 +46,7 @@ describe('buildPipelineContext', () => {
   });
 
   it('returns db, providerRegistry, projectId, userId, and abortSignal', async () => {
-    const c = fakeHonoContext({ userId: 'user_abc' });
+    const c = fakeHonoContext({ userId: 'user_abc', ingressChannel: 'agent' });
     const ctx = await buildPipelineContext(c, 'proj_123');
 
     expect(ctx.db).toBe(mockDB);
@@ -56,6 +57,7 @@ describe('buildPipelineContext', () => {
     expect(ctx.inference).toMatchObject({
       scope: {
         actor: { kind: 'user', id: 'user_abc' },
+        ingressChannel: 'agent',
         namespaceId: 'namespace_123',
         projectId: 'proj_123',
         projectVisibility: 'private',
@@ -69,6 +71,7 @@ describe('buildPipelineContext', () => {
     const ctx = await buildPipelineContext(c, 'proj_456');
 
     expect(ctx.userId).toBeUndefined();
+    expect(ctx.inference.scope.ingressChannel).toBe('api');
   });
 
   it('rejects a missing project before exposing a billable scope', async () => {

@@ -22,6 +22,7 @@ import {
   getInferenceRuntime,
   InferenceAdmissionDeniedError,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -279,6 +280,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     const runtime = getInferenceRuntime(c) ?? defaultInferenceRuntime;
     const scope = {
       actor: resolveInferenceActor(c),
+      ingressChannel: resolveInferenceIngressChannel(c),
       ...(resolvedProject ? resolveInferenceProjectScope(resolvedProject) : {}),
     };
     const bindGateProvider = (feature: string): LLMProvider | undefined =>

@@ -33,6 +33,7 @@ import {
   getInferenceRuntime,
   InferenceAdmissionDeniedError,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -357,6 +358,7 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
           requestedModel: resolvedModel,
           scope: {
             actor,
+            ingressChannel: resolveInferenceIngressChannel(c),
             ...resolveInferenceProjectScope(project),
           },
         },
@@ -497,6 +499,7 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
         requestedModel: llm.id,
         scope: {
           actor: resolveInferenceActor(c),
+          ingressChannel: resolveInferenceIngressChannel(c),
           ...resolveInferenceProjectScope(project),
         },
       },
@@ -661,6 +664,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
         requestedModel: resolvedModel,
         scope: {
           actor: resolveInferenceActor(c),
+          ingressChannel: resolveInferenceIngressChannel(c),
           ...resolveInferenceProjectScope(project),
         },
       },
@@ -762,6 +766,7 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
               requestedModel: modelSpec,
               scope: {
                 actor,
+                ingressChannel: resolveInferenceIngressChannel(c),
                 ...resolveInferenceProjectScope(project),
               },
             },
