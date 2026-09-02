@@ -87,6 +87,8 @@ export function toGenerationModelScope(
 export interface InferenceExecutionInput {
   /** Logical parent run. Retry and fallback attempts share this value. */
   runId: string;
+  /** Zero-based order within the run. Omission remains compatible as the root attempt. */
+  attemptIndex?: number;
   /** Stable product call-site name, for example `generation.chat`. */
   feature: string;
   /** Model requested before provider routing or fallback. */
@@ -96,6 +98,7 @@ export interface InferenceExecutionInput {
 
 export interface InferenceAttempt extends InferenceExecutionInput {
   contractVersion: typeof INFERENCE_CONTRACT_VERSION;
+  attemptIndex: number;
   /** Unique per upstream attempt, allocated before admission and provider I/O. */
   generationId: string;
   createdAt: string;
@@ -421,6 +424,8 @@ function createAttempt(
   assertNonEmpty(input.runId, 'runId');
   assertNonEmpty(input.feature, 'feature');
   assertNonEmpty(input.requestedModel, 'requestedModel');
+  const attemptIndex = input.attemptIndex ?? 0;
+  assertTokenCount(attemptIndex, 'attemptIndex');
   if (input.scope.actor.kind !== 'anonymous') {
     assertNonEmpty(input.scope.actor.id, 'scope.actor.id');
   }
@@ -431,6 +436,7 @@ function createAttempt(
     ...input,
     contractVersion: INFERENCE_CONTRACT_VERSION,
     generationId,
+    attemptIndex,
     createdAt: now().toISOString(),
   };
 }

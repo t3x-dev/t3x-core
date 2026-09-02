@@ -216,6 +216,7 @@ describe('provider-neutral inference runtime', () => {
     });
 
     expect(result.attempt.generationId).toBe('gen_123');
+    expect(result.attempt.attemptIndex).toBe(0);
     expect(result.value).toBe('generated');
     expect(result.receipt.providerRequestId).toBe('provider-request-123');
     expect(events).toEqual([
@@ -225,6 +226,51 @@ describe('provider-neutral inference runtime', () => {
       'provider',
       'settle:receipt',
     ]);
+  });
+
+  it('preserves an explicit child attempt index through admission and execution', async () => {
+    const authorize = vi.fn(async (attempt: InferenceAttempt) => ({
+      outcome: 'admitted' as const,
+      admission: { id: `admission:${attempt.attemptIndex}` },
+    }));
+    const runtime = createInferenceRuntime({
+      createGenerationId: () => 'gen_retry_2',
+      admissionPolicy: { authorize, settle: vi.fn(), release: vi.fn() },
+    });
+
+    const result = await runtime.execute(
+      { ...executionInput, attemptIndex: 2 },
+      async (attempt) => ({
+        ok: true,
+        value: attempt.attemptIndex,
+        terminal: { kind: 'receipt', receipt: receipt(attempt) },
+      })
+    );
+
+    expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ attemptIndex: 2 }));
+    expect(result.attempt.attemptIndex).toBe(2);
+    expect(result.value).toBe(2);
+  });
+
+  it.each([
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('rejects invalid attempt index %s before identity, admission, or provider I/O', async (attemptIndex) => {
+    const createGenerationId = vi.fn(() => 'must-not-be-created');
+    const authorize = vi.fn();
+    const invoke = vi.fn();
+    const runtime = createInferenceRuntime({
+      createGenerationId,
+      admissionPolicy: { authorize, settle: vi.fn(), release: vi.fn() },
+    });
+
+    await expect(runtime.execute({ ...executionInput, attemptIndex }, invoke)).rejects.toThrow(
+      'attemptIndex must be a non-negative safe integer'
+    );
+    expect(createGenerationId).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('does not reach the gateway after admission denial', async () => {

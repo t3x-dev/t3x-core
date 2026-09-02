@@ -96,6 +96,7 @@ describe('provider-neutral model contract', () => {
       {
         generationId: 'generation-1',
         runId: 'run-1',
+        attemptIndex: 0,
         feature: 'test.model-stream',
         request: { messages: [{ role: 'user', content: 'Hello' }] },
       },

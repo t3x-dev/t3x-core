@@ -123,6 +123,7 @@ describe('application-scoped generation provider runtime', () => {
       resolved.model.generate({
         generationId: 'generation-1',
         runId: 'run-1',
+        attemptIndex: 0,
         feature: 'test.provider-runtime',
         request: {
           messages: [
@@ -160,6 +161,7 @@ describe('application-scoped generation provider runtime', () => {
       resolved.model.generate({
         generationId: 'generation-2',
         runId: 'run-2',
+        attemptIndex: 0,
         feature: 'test.provider-runtime.failure',
         request: { messages: [{ role: 'user', content: 'Hello' }] },
       })
