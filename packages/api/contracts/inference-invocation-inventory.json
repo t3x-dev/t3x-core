@@ -10,6 +10,7 @@
     "packages/mcp/src"
   ],
   "excludedAdapterRoots": [
+    "packages/api/src/lib/provider-runtime.ts",
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],

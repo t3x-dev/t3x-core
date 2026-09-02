@@ -101,6 +101,29 @@ export {
   ProjectVisibilityPolicyDeniedError,
   type ProjectVisibilityPolicyInput,
 } from './lib/project-visibility-policy';
+export {
+  createGenerationProviderRuntimeMiddleware,
+  defaultGenerationProviderRuntime,
+  GENERATION_MODEL_SPECIFICATION_VERSION,
+  GENERATION_PROVIDER_RUNTIME_VERSION,
+  type GenerationModel,
+  type GenerationModelCapability,
+  type GenerationModelContentPart,
+  type GenerationModelEvidence,
+  type GenerationModelFinishReason,
+  type GenerationModelMessage,
+  type GenerationModelOutputFormat,
+  type GenerationModelOutputPart,
+  type GenerationModelRequest,
+  type GenerationModelResult,
+  type GenerationModelStreamPart,
+  type GenerationModelTool,
+  type GenerationModelUsage,
+  type GenerationProviderResolution,
+  type GenerationProviderResolutionInput,
+  type GenerationProviderRuntime,
+  getGenerationProviderRuntime,
+} from './lib/provider-runtime';
 // Background tasks
 export {
   defaultFetchEventById,
