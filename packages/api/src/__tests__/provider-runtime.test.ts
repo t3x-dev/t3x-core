@@ -8,6 +8,7 @@ import {
   GENERATION_MODEL_SPECIFICATION_VERSION,
   GENERATION_PROVIDER_RUNTIME_VERSION,
   type GenerationModel,
+  type GenerationModelError,
   type GenerationProviderRuntime,
   getGenerationProviderRuntime,
 } from '../lib/provider-runtime';
@@ -108,10 +109,15 @@ describe('application-scoped generation provider runtime', () => {
     expect('generateFromPrompt' in resolved.model).toBe(false);
     await expect(
       resolved.model.generate({
-        messages: [
-          { role: 'system', content: 'Be concise' },
-          { role: 'user', content: 'Hello' },
-        ],
+        generationId: 'generation-1',
+        runId: 'run-1',
+        feature: 'test.provider-runtime',
+        request: {
+          messages: [
+            { role: 'system', content: 'Be concise' },
+            { role: 'user', content: 'Hello' },
+          ],
+        },
       })
     ).resolves.toMatchObject({
       output: [{ type: 'text', text: 'hello' }],
@@ -121,6 +127,36 @@ describe('application-scoped generation provider runtime', () => {
         usage: { inputTokens: 3, outputTokens: 1 },
       },
     });
+  });
+
+  it('normalizes ambiguous legacy provider failures for safe settlement', async () => {
+    resolver.resolveProviderAndModel.mockResolvedValueOnce({
+      ok: true,
+      providerId: 'direct-provider',
+      model: 'provider-model',
+      provider: {
+        id: 'direct-provider',
+        generate: vi.fn().mockRejectedValue(new Error('raw upstream body')),
+        resolveConflict: vi.fn(),
+      } satisfies LLMProvider,
+    });
+
+    const resolved = await defaultGenerationProviderRuntime.resolve();
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    await expect(
+      resolved.model.generate({
+        generationId: 'generation-2',
+        runId: 'run-2',
+        feature: 'test.provider-runtime.failure',
+        request: { messages: [{ role: 'user', content: 'Hello' }] },
+      })
+    ).rejects.toMatchObject({
+      name: 'GenerationModelError',
+      code: 'legacy_provider_failure',
+      outcome: 'unknown',
+      providerRequestId: null,
+    } satisfies Partial<GenerationModelError>);
   });
 
   it('fails closed when a resolved adapter lacks a required capability', async () => {
