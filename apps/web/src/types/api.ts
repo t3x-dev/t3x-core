@@ -111,6 +111,7 @@ export type {
   Conversation,
   LLMProviderInfo,
   Project,
+  ProjectVisibility,
   Turn,
 } from '@/infrastructure/types';
 export type { NodeMember } from '@/types/knowledgeGraph';

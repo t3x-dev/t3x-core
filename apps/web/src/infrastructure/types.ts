@@ -18,9 +18,12 @@ export type {
 // Project types
 // ============================================================================
 
+export type ProjectVisibility = 'private' | 'unlisted' | 'public';
+
 export interface Project {
   project_id: string;
   name: string;
+  visibility: ProjectVisibility;
   created_at: string;
   conversations_count?: number;
   turns_count?: number;
