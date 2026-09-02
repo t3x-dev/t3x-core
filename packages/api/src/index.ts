@@ -83,6 +83,17 @@ export {
   resolveInferenceRunId,
 } from './lib/inference';
 export {
+  allowAllProjectLifecyclePolicy,
+  getProjectLifecyclePolicy,
+  PROJECT_LIFECYCLE_POLICY_VERSION,
+  type ProjectLifecycleAdmission,
+  type ProjectLifecycleOperation,
+  type ProjectLifecyclePolicy,
+  ProjectLifecyclePolicyDeniedError,
+  type ProjectLifecyclePolicyInput,
+  resolveProjectLifecycleActor,
+} from './lib/project-lifecycle-policy';
+export {
   allowAllProjectVisibilityPolicy,
   PROJECT_VISIBILITY_POLICY_VERSION,
   type ProjectVisibilityMutation,

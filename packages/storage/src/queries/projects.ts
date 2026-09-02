@@ -20,6 +20,8 @@ import { transitionCommits } from '../schema-transition-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
+  /** Caller-selected resource ID for reservation-safe orchestration. */
+  projectId?: string;
   name: string;
   metadata?: Record<string, unknown>;
   /** Owner user ID. Omit or undefined → NULL (local/legacy data). */
@@ -60,7 +62,7 @@ export interface ProjectWithStats extends Project {
  * Insert a new project
  */
 export async function insertProject(db: AnyDB, input: CreateProjectInput): Promise<Project> {
-  const projectId = generateProjectId();
+  const projectId = input.projectId ?? generateProjectId();
   const createdAt = new Date();
   const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 

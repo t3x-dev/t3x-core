@@ -13,6 +13,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { generateProjectId } from '@t3x-dev/core';
 import {
   DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
   findNamespaceBySlug,
@@ -33,6 +34,12 @@ import {
 } from '../lib/import';
 import { assertNamespaceAccess } from '../lib/namespace-access';
 import { assertProjectAccess, assertProjectCreationAccess, getUserId } from '../lib/project-access';
+import {
+  getProjectLifecyclePolicy,
+  PROJECT_LIFECYCLE_POLICY_VERSION,
+  ProjectLifecyclePolicyDeniedError,
+  resolveProjectLifecycleActor,
+} from '../lib/project-lifecycle-policy';
 import { jsonError } from '../lib/response';
 import { createHeartbeatSseStream } from '../lib/sse-heartbeat';
 import { isInternalUrlResolved } from '../lib/ssrf';
@@ -209,6 +216,14 @@ const importCfpackRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    409: {
+      description: 'Project capacity conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -234,14 +249,40 @@ importRoutes.openapi(importCfpackRoute, async (c) => {
     }
     const namespaceDenied = await assertNamespaceAccess(c, db, namespace, 'project:create');
     if (namespaceDenied) return namespaceDenied;
+    const actor = resolveProjectLifecycleActor(c);
+    if (!actor) return jsonError(c, 'FORBIDDEN', 'A canonical actor is required', 403);
+    const projectId = generateProjectId();
 
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const result = await restoreFromCfpack(db, cfpack as any, {
-      ownerId: userId,
-      namespaceId: namespace.namespaceId,
-    });
+    const result = await getProjectLifecyclePolicy(c).execute(
+      {
+        contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+        operation: 'import',
+        namespaceId: namespace.namespaceId,
+        projects: [
+          {
+            projectId,
+            fromNamespaceId: null,
+            fromVisibility: null,
+            toVisibility: 'private',
+          },
+        ],
+        actor,
+      },
+      () =>
+        restoreFromCfpack(db, cfpack as Parameters<typeof restoreFromCfpack>[1], {
+          projectId,
+          ownerId: userId,
+          namespaceId: namespace.namespaceId,
+        })
+    );
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     return c.json(
       {
         success: false as const,

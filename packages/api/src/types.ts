@@ -1,4 +1,5 @@
 import type { ApiKey } from '@t3x-dev/core';
+import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
 import type { RateLimitStore } from './middleware/rate-limit';
 
 /**
@@ -14,5 +15,7 @@ export type AppEnv = {
     userId?: string;
     /** Shared counter backend selected by createApp. */
     rateLimitStore?: RateLimitStore;
+    /** Host-owned policy around project admissions into a namespace. */
+    projectLifecyclePolicy?: ProjectLifecyclePolicy;
   };
 };
