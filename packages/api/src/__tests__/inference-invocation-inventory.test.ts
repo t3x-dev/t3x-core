@@ -20,6 +20,11 @@ type Inventory = {
   sources: InventorySource[];
 };
 
+const dormantCoreCalls = [
+  ['packages/core/src/pipeline/ambiguityDetector.ts', 'detectAmbiguity'],
+  ['packages/core/src/pipeline/driftDetector.ts', 'detectDrift'],
+] as const;
+
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const inventoryPath = join(
   repositoryRoot,
@@ -77,6 +82,25 @@ function scanInvocationCounts(): Map<string, number> {
   return result;
 }
 
+function findServerCallers(symbol: string, definitionFile: string): string[] {
+  const invocation = new RegExp(`\\b${symbol}\\s*\\(`);
+  const callers: string[] = [];
+  for (const scope of inventory.scope) {
+    for (const absoluteFile of listTypeScriptFiles(join(repositoryRoot, scope))) {
+      const file = relative(repositoryRoot, absoluteFile);
+      if (file === definitionFile) continue;
+      if (
+        readFileSync(absoluteFile, 'utf8')
+          .split('\n')
+          .some((line) => invocation.test(line))
+      ) {
+        callers.push(file);
+      }
+    }
+  }
+  return callers;
+}
+
 describe('server-side inference invocation inventory', () => {
   it('matches every direct model call so new bypasses fail qualification', () => {
     expect(inventory.version).toBe(1);
@@ -105,5 +129,13 @@ describe('server-side inference invocation inventory', () => {
   ])('records migrated call family %s', (file, coveredCount) => {
     const source = inventory.sources.find((candidate) => candidate.file === file);
     expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });
+  });
+
+  it.each(
+    dormantCoreCalls
+  )('keeps dormant Core call family %s unmounted until it receives an application binding', (file, symbol) => {
+    const source = inventory.sources.find((candidate) => candidate.file === file);
+    expect(source).toMatchObject({ status: 'dormant-core-library', observedCount: 1 });
+    expect(findServerCallers(symbol, file)).toEqual([]);
   });
 });

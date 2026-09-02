@@ -112,14 +112,16 @@
     {
       "file": "packages/core/src/pipeline/ambiguityDetector.ts",
       "feature": "ambiguity-detection",
-      "status": "pending",
-      "observedCount": 1
+      "status": "dormant-core-library",
+      "observedCount": 1,
+      "note": "Provider-injected Core algorithm with no production server caller. A guard rejects mounting it without first adding an application inference binding."
     },
     {
       "file": "packages/core/src/pipeline/driftDetector.ts",
       "feature": "drift-detection",
-      "status": "pending",
-      "observedCount": 1
+      "status": "dormant-core-library",
+      "observedCount": 1,
+      "note": "Provider-injected Core algorithm with no production server caller. A guard rejects mounting it without first adding an application inference binding."
     },
     {
       "file": "packages/core/src/providers/registry.ts",
