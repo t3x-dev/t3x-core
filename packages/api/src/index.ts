@@ -83,11 +83,16 @@ export {
   resolveInferenceRunId,
 } from './lib/inference';
 export {
+  createGenerationModelCatalogSnapshot,
+  GENERATION_MODEL_CATALOG_SCHEMA,
   GENERATION_MODEL_SPECIFICATION_VERSION,
   GENERATION_PROVIDER_RUNTIME_VERSION,
   type GenerationModel,
   type GenerationModelCapability,
+  type GenerationModelCatalog,
+  type GenerationModelCatalogSnapshot,
   type GenerationModelContentPart,
+  type GenerationModelDescriptor,
   GenerationModelError,
   type GenerationModelEvidence,
   type GenerationModelFailureOutcome,

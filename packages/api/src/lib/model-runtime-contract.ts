@@ -7,6 +7,7 @@
 
 export const GENERATION_PROVIDER_RUNTIME_VERSION = 1 as const;
 export const GENERATION_MODEL_SPECIFICATION_VERSION = 't3x.language-model/v1' as const;
+export const GENERATION_MODEL_CATALOG_SCHEMA = 't3x.language-model-catalog/v1' as const;
 
 export type GenerationModelCapability =
   | 'text'
@@ -15,6 +16,106 @@ export type GenerationModelCapability =
   | 'structured_output'
   | 'tool_use'
   | 'streaming';
+
+export interface GenerationModelDescriptor {
+  /** Stable logical selection ID. It need not be a provider-native model ID. */
+  id: string;
+  label: string;
+  capabilities: readonly GenerationModelCapability[];
+  /** Deployment availability only. User eligibility remains an admission concern. */
+  availability: 'available' | 'unavailable';
+  /** Client-safe hints. The server must still enforce its own authoritative limits. */
+  limits?: {
+    maxOutputTokens?: number;
+  };
+}
+
+export interface GenerationModelCatalogSnapshot {
+  schema: typeof GENERATION_MODEL_CATALOG_SCHEMA;
+  /** Opaque deployment revision. It changes when the published projection changes. */
+  revision: string;
+  defaultModelId: string | null;
+  models: readonly GenerationModelDescriptor[];
+}
+
+export interface GenerationModelCatalog {
+  snapshot(): Promise<GenerationModelCatalogSnapshot>;
+}
+
+const GENERATION_MODEL_CAPABILITIES = new Set<GenerationModelCapability>([
+  'text',
+  'image_input',
+  'file_input',
+  'structured_output',
+  'tool_use',
+  'streaming',
+]);
+
+function assertCatalogText(value: string, field: string, maxLength: number): void {
+  if (value.length === 0 || value.length > maxLength) {
+    throw new TypeError(`${field} is invalid`);
+  }
+}
+
+/** Validate and deeply freeze a public projection before it crosses an API boundary. */
+export function createGenerationModelCatalogSnapshot(input: {
+  revision: string;
+  defaultModelId?: string | null;
+  models: readonly GenerationModelDescriptor[];
+}): GenerationModelCatalogSnapshot {
+  assertCatalogText(input.revision, 'revision', 128);
+  const ids = new Set<string>();
+  const models = input.models.map((model, index) => {
+    assertCatalogText(model.id, `models[${index}].id`, 256);
+    assertCatalogText(model.label, `models[${index}].label`, 128);
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(model.id)) {
+      throw new TypeError(`models[${index}].id is invalid`);
+    }
+    if (ids.has(model.id)) throw new TypeError(`Duplicate model ID: ${model.id}`);
+    ids.add(model.id);
+
+    const capabilities = [...new Set(model.capabilities)];
+    if (
+      capabilities.length === 0 ||
+      capabilities.some((capability) => !GENERATION_MODEL_CAPABILITIES.has(capability))
+    ) {
+      throw new TypeError(`models[${index}].capabilities is invalid`);
+    }
+    if (model.availability !== 'available' && model.availability !== 'unavailable') {
+      throw new TypeError(`models[${index}].availability is invalid`);
+    }
+    const maxOutputTokens = model.limits?.maxOutputTokens;
+    if (
+      maxOutputTokens !== undefined &&
+      (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens <= 0)
+    ) {
+      throw new TypeError(`models[${index}].limits.maxOutputTokens is invalid`);
+    }
+
+    return Object.freeze({
+      id: model.id,
+      label: model.label,
+      capabilities: Object.freeze(capabilities),
+      availability: model.availability,
+      ...(maxOutputTokens === undefined ? {} : { limits: Object.freeze({ maxOutputTokens }) }),
+    });
+  });
+
+  const defaultModelId = input.defaultModelId ?? null;
+  if (defaultModelId !== null) {
+    const defaultModel = models.find((model) => model.id === defaultModelId);
+    if (!defaultModel || defaultModel.availability !== 'available') {
+      throw new TypeError('defaultModelId must reference an available model');
+    }
+  }
+
+  return Object.freeze({
+    schema: GENERATION_MODEL_CATALOG_SCHEMA,
+    revision: input.revision,
+    defaultModelId,
+    models: Object.freeze(models),
+  });
+}
 
 export type GenerationModelContentPart =
   | { type: 'text'; text: string }
@@ -180,5 +281,7 @@ export type GenerationProviderResolution =
 
 export interface GenerationProviderRuntime {
   readonly contractVersion: typeof GENERATION_PROVIDER_RUNTIME_VERSION;
+  /** Optional in v1 so existing third-party runtimes remain source-compatible. */
+  readonly catalog?: GenerationModelCatalog;
   resolve(input?: GenerationProviderResolutionInput): Promise<GenerationProviderResolution>;
 }

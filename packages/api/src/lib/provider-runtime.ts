@@ -5,6 +5,7 @@ import {
   type GenerationProviderResolutionInput,
   type GenerationProviderRuntime,
 } from './model-runtime-contract';
+import { getOssGenerationModelCatalogSnapshot } from './oss-generation-model-catalog';
 import { resolveProviderAndModel } from './provider-resolver';
 
 export * from './model-runtime-contract';
@@ -12,6 +13,7 @@ export * from './model-runtime-contract';
 /** Existing direct providers, isolated behind the provider-neutral OSS adapter. */
 export const defaultGenerationProviderRuntime: GenerationProviderRuntime = Object.freeze({
   contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
+  catalog: Object.freeze({ snapshot: getOssGenerationModelCatalogSnapshot }),
   async resolve(input: GenerationProviderResolutionInput = {}) {
     const resolved = await resolveProviderAndModel({
       requestedModel: input.requestedModel,
