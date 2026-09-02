@@ -16,7 +16,7 @@ import {
   isGenerationRuntimeProviderId,
   LLMProviderError,
 } from '@t3x-dev/core';
-import { recordUsage } from '@t3x-dev/storage';
+import { type Project, recordUsage } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
@@ -32,6 +32,7 @@ import {
   type InferenceStream,
   type InferenceTerminal,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -832,9 +833,11 @@ generationRoutes.openapi(generationRoute, async (c) => {
   }
 
   const db = await getDB();
+  let inferenceProject: Project | null = null;
   if (body.project_id) {
     const accessResult = await assertProjectAccess(c, db, body.project_id);
     if (accessResult instanceof Response) return accessResult;
+    inferenceProject = accessResult;
   }
   const target = await resolveChatRequestTarget({
     db,
@@ -872,7 +875,7 @@ generationRoutes.openapi(generationRoute, async (c) => {
         requestedModel: body.model?.trim() || model,
         scope: {
           actor: resolveInferenceActor(c),
-          ...(body.project_id && { projectId: body.project_id, projectVisibility: 'unknown' }),
+          ...(inferenceProject ? resolveInferenceProjectScope(inferenceProject) : {}),
         },
       },
       async (attempt) => {
@@ -1007,9 +1010,11 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
   }
 
   const db = await getDB();
+  let inferenceProject: Project | null = null;
   if (body.project_id) {
     const accessResult = await assertProjectAccess(c, db, body.project_id);
     if (accessResult instanceof Response) return accessResult;
+    inferenceProject = accessResult;
   }
   const target = await resolveChatRequestTarget({
     db,
@@ -1630,7 +1635,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         requestedModel: body.model?.trim() || model,
         scope: {
           actor: resolveInferenceActor(c),
-          ...(body.project_id && { projectId: body.project_id, projectVisibility: 'unknown' }),
+          ...(inferenceProject ? resolveInferenceProjectScope(inferenceProject) : {}),
         },
       },
       async (authorizedAttempt) => {

@@ -11,7 +11,12 @@ vi.mock('../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve({})) }));
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/storage')>()),
   findProjectById: vi.fn((_db, projectId: string) =>
-    Promise.resolve({ projectId, namespaceId: 'ns_test', ownerId: null })
+    Promise.resolve({
+      projectId,
+      namespaceId: 'ns_test',
+      ownerId: null,
+      visibility: 'unlisted',
+    })
   ),
   findProjectAuthorityFacts: vi.fn(
     (
@@ -22,7 +27,12 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => ({
       }
     ) =>
       Promise.resolve({
-        project: { projectId: input.projectId, namespaceId: 'ns_test', ownerId: null },
+        project: {
+          projectId: input.projectId,
+          namespaceId: 'ns_test',
+          ownerId: null,
+          visibility: 'unlisted',
+        },
         namespaceMembership: null,
         projectGrant: {
           grantId: `grant_${input.principal.principalId}`,
@@ -142,7 +152,7 @@ describe('Workspace extraction proposal routes', () => {
             actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
             namespaceId: 'ns_test',
             projectId: 'proj_1',
-            projectVisibility: 'unknown',
+            projectVisibility: 'unlisted',
           },
         }),
       })

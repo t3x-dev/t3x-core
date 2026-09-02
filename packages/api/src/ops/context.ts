@@ -1,4 +1,5 @@
 import type { OpsPipelineContext } from '@t3x-dev/core';
+import { findProjectById } from '@t3x-dev/storage';
 import type { Context as HonoContext } from 'hono';
 import { getDB } from '../lib/db';
 import {
@@ -7,6 +8,7 @@ import {
   type InferenceRuntime,
   type InferenceScope,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -33,6 +35,10 @@ export async function buildPipelineContext(
   const db = await getDB();
   const providerRegistry = await getProviderRegistry();
   const userId = c.get('userId') as string | undefined;
+  const project = await findProjectById(db, projectId);
+  if (!project) {
+    throw new Error(`Cannot build pipeline context for missing project: ${projectId}`);
+  }
 
   return {
     db,
@@ -44,8 +50,7 @@ export async function buildPipelineContext(
       runId: resolveInferenceRunId(c),
       scope: {
         actor: resolveInferenceActor(c),
-        projectId,
-        projectVisibility: 'unknown',
+        ...resolveInferenceProjectScope(project),
       },
     },
     abortSignal: c.req.raw.signal,

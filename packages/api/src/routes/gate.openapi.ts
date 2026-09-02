@@ -9,7 +9,12 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { GateRunner, type LLMProvider } from '@t3x-dev/core';
-import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x-dev/storage';
+import {
+  findConversationById,
+  findTurnsByConversation,
+  getBusinessRules,
+  type Project,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -17,6 +22,7 @@ import {
   getInferenceRuntime,
   InferenceAdmissionDeniedError,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { bindInferenceProvider } from '../lib/inference-provider';
@@ -190,7 +196,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
   try {
     const db = await getDB();
     let resolvedProjectId = projectId;
-    let resolvedNamespaceId: string | undefined;
+    let resolvedProject: Project | undefined;
 
     // Resolve the conversation's project before reading any child records.
     if (conversationId) {
@@ -214,7 +220,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
       const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
       if (accessResult instanceof Response) return accessResult;
-      resolvedNamespaceId = accessResult.namespaceId ?? undefined;
+      resolvedProject = accessResult;
 
       if (!turns || turns.length === 0) {
         const dbTurns = await findTurnsByConversation(db, {
@@ -232,10 +238,10 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     }
 
     // Access control check (if project_id is known)
-    if (resolvedProjectId) {
+    if (resolvedProjectId && !resolvedProject) {
       const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
       if (accessResult instanceof Response) return accessResult;
-      resolvedNamespaceId = accessResult.namespaceId ?? undefined;
+      resolvedProject = accessResult;
     }
 
     if (!resolvedProjectId && (gates.includes('business') || gates.includes('semantic'))) {
@@ -273,9 +279,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     const runtime = getInferenceRuntime(c) ?? defaultInferenceRuntime;
     const scope = {
       actor: resolveInferenceActor(c),
-      ...(resolvedProjectId ? { projectId: resolvedProjectId } : {}),
-      ...(resolvedNamespaceId ? { namespaceId: resolvedNamespaceId } : {}),
-      projectVisibility: 'unknown' as const,
+      ...(resolvedProject ? resolveInferenceProjectScope(resolvedProject) : {}),
     };
     const bindGateProvider = (feature: string): LLMProvider | undefined =>
       provider && resolvedModel

@@ -6,6 +6,7 @@ import {
   getInferenceRuntime,
   InferenceAdmissionDeniedError,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -154,9 +155,7 @@ sourceChatDraftReplyRoutes.openapi(draftReplyRoute, async (c) => {
         runId: resolveInferenceRunId(c),
         scope: {
           actor: resolveInferenceActor(c),
-          projectId,
-          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
-          projectVisibility: 'unknown',
+          ...resolveInferenceProjectScope(project),
         },
       },
     });

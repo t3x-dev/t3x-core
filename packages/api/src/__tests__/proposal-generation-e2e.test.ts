@@ -317,7 +317,7 @@ describe('Proposal generation HTTP lifecycle E2E', () => {
           actor: { kind: 'agent', id: `agent:api-key:${writer.id}` },
           projectId: data.projectId,
           namespaceId: expect.any(String),
-          projectVisibility: 'unknown',
+          projectVisibility: 'private',
         }),
       })
     );
