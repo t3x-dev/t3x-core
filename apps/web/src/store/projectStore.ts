@@ -11,7 +11,7 @@
  */
 
 import { create } from 'zustand';
-import type { Project } from '@/types/api';
+import type { Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
@@ -29,6 +29,7 @@ export interface ProjectSummary {
   defaultProvider?: string | null;
   defaultModel?: string | null;
   metadata?: Record<string, unknown>;
+  visibility?: ProjectVisibility;
 }
 
 type ProjectStore = {
@@ -88,6 +89,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   defaultProvider: project.default_provider ?? null,
   defaultModel: project.default_model ?? null,
   metadata: project.metadata ?? undefined,
+  visibility: project.visibility,
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({

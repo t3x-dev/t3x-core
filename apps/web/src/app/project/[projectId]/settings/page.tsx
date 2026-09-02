@@ -23,6 +23,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
+import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -363,11 +364,9 @@ export default function ProjectSettingsPage() {
 
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-            Project Provider Settings
-          </h1>
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Project Settings</h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Override global provider configuration for this project.
+            Manage this project&apos;s privacy, collaboration, and local provider overrides.
             {saving && <span className="ml-2 text-xs text-[var(--text-tertiary)]">Saving...</span>}
           </p>
         </div>
@@ -391,7 +390,16 @@ export default function ProjectSettingsPage() {
         )}
       </div>
 
-      <div className="space-y-8">
+      <ProjectVisibilitySettings projectId={projectId} />
+
+      <div className="mt-12 border-t border-[var(--stroke-divider)] pt-8">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Provider overrides</h2>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Override the global provider order for this project.
+        </p>
+      </div>
+
+      <div className="mt-6 space-y-8">
         {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
           const roleProviders = grouped[role] ?? [];
           if (roleProviders.length === 0) return null;

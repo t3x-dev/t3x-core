@@ -6,6 +6,11 @@
  * Error surface: ProjectPersistenceError (extends CommandError).
  */
 
+export {
+  type ChangeProjectVisibilityPayload,
+  type ChangeProjectVisibilityResponse,
+  changeProjectVisibility,
+} from './changeProjectVisibility';
 export { createProject } from './createProject';
 export { type DeleteProjectResponse, deleteProject } from './deleteProject';
 export { ensureDemoProject } from './ensureDemoProject';

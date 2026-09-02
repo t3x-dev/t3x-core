@@ -5,8 +5,12 @@
  * v2 §2.4.
  */
 
-import { listProjects } from '@/infrastructure/projects';
-import type { ProjectListData } from '@/infrastructure/types';
+import { getProject, listProjects } from '@/infrastructure/projects';
+import type { ProjectDetail, ProjectListData } from '@/infrastructure/types';
+
+export function fetchProject(projectId: string): Promise<ProjectDetail> {
+  return getProject(projectId);
+}
 
 export function fetchProjects(
   limit = 50,
