@@ -22,7 +22,14 @@ import type {
 import { checkRelationSanity, validateIntegrity } from './validate';
 
 export interface GateRunnerOptions {
-  provider?: LLMProvider; // needed for Gate 2 + LLM rules in Gate 3
+  /** Compatibility provider used by both LLM gates when specialized bindings are absent. */
+  provider?: LLMProvider;
+  /** Application-bound provider for Gate 2. */
+  semanticProvider?: LLMProvider;
+  /** Application-bound provider for Gate 3 LLM rules. */
+  businessProvider?: LLMProvider;
+  /** Application control-flow errors (for example admission denial) must escape fail-safe gates. */
+  isFatalProviderError?: (error: unknown) => boolean;
   businessRules?: BusinessRuleConfig[]; // Gate 3 rules
   skipSemantic?: boolean; // skip Gate 2 (for fast checks)
   skipBusiness?: boolean; // skip Gate 3
@@ -42,15 +49,19 @@ export class GateRunner {
 
     // 2. Gate 2: Semantic (optional, needs LLM + turns)
     let semantic: SemanticGateResult | undefined;
-    if (!options.skipSemantic && options.provider && options.turns) {
-      const gate = new SemanticGate(options.provider);
+    const semanticProvider = options.semanticProvider ?? options.provider;
+    if (!options.skipSemantic && semanticProvider && options.turns) {
+      const gate = new SemanticGate(semanticProvider, options.isFatalProviderError);
       semantic = await gate.review(options.turns, content);
     }
 
     // 3. Gate 3: Business (optional, needs rules)
     let business: BusinessGateResult | undefined;
     if (!options.skipBusiness && options.businessRules && options.businessRules.length > 0) {
-      const gate = new BusinessGate(options.provider);
+      const gate = new BusinessGate(
+        options.businessProvider ?? options.provider,
+        options.isFatalProviderError
+      );
       business = await gate.evaluate(options.businessRules, content);
     }
 

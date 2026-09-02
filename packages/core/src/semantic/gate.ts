@@ -327,7 +327,10 @@ export function parseCoverageResponse(raw: string): Omit<CoverageResult, 'usage'
  * - < 0.5: reject
  */
 export class SemanticGate {
-  constructor(private readonly provider: LLMProvider) {}
+  constructor(
+    private readonly provider: LLMProvider,
+    private readonly isFatalProviderError?: (error: unknown) => boolean
+  ) {}
 
   /**
    * Review state content extracted from conversation turns.
@@ -350,7 +353,8 @@ export class SemanticGate {
       });
       const parsed = parseSemanticGateResponse(result.text);
       return { ...parsed, usage: result.usage };
-    } catch {
+    } catch (error) {
+      if (this.isFatalProviderError?.(error)) throw error;
       return {
         ...buildDegradedResult('LLM provider call failed'),
         usage: { inputTokens: 0, outputTokens: 0 },
@@ -379,7 +383,8 @@ export class SemanticGate {
       });
       const parsed = parseCoverageResponse(result.text);
       return { ...parsed, usage: result.usage };
-    } catch {
+    } catch (error) {
+      if (this.isFatalProviderError?.(error)) throw error;
       return {
         coverage_ratio: 0,
         uncovered_segments: [],

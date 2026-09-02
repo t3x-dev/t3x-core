@@ -13,7 +13,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 34,
+  "totalObservedCalls": 33,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -38,12 +38,6 @@
       "coveredCount": 1,
       "observedCount": 1,
       "note": "Structured Source Chat drafts use the shared admission and terminal receipt lifecycle."
-    },
-    {
-      "file": "packages/api/src/lib/usage-tracking.ts",
-      "feature": "legacy-usage-wrapper",
-      "status": "pending",
-      "observedCount": 1
     },
     {
       "file": "packages/api/src/ops/leaf-gen.ts",
@@ -132,14 +126,18 @@
     {
       "file": "packages/core/src/semantic/businessGate.ts",
       "feature": "business-gate",
-      "status": "pending",
-      "observedCount": 1
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Each hosted LLM business rule receives its own admission and terminal receipt through a dedicated application binding."
     },
     {
       "file": "packages/core/src/semantic/gate.ts",
       "feature": "semantic-gate",
-      "status": "pending",
-      "observedCount": 2
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Hosted semantic review uses a dedicated application binding; the dormant coverage method inherits the same bound provider when invoked."
     },
     {
       "file": "packages/mcp/src/tools/core/generate.ts",

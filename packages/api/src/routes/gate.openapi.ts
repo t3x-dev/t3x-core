@@ -12,14 +12,23 @@ import { GateRunner, type LLMProvider } from '@t3x-dev/core';
 import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  resolveInferenceActor,
+  resolveInferenceRunId,
+} from '../lib/inference';
+import { bindInferenceProvider } from '../lib/inference-provider';
 import { assertProjectAccess } from '../lib/project-access';
-import { getLLMProvider } from '../lib/provider-registry';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
+import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const gateRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+const defaultInferenceRuntime = createInferenceRuntime();
 
 // ============================================================
 // Schemas
@@ -181,6 +190,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
   try {
     const db = await getDB();
     let resolvedProjectId = projectId;
+    let resolvedNamespaceId: string | undefined;
 
     // Resolve the conversation's project before reading any child records.
     if (conversationId) {
@@ -204,6 +214,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
       const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
       if (accessResult instanceof Response) return accessResult;
+      resolvedNamespaceId = accessResult.namespaceId ?? undefined;
 
       if (!turns || turns.length === 0) {
         const dbTurns = await findTurnsByConversation(db, {
@@ -224,6 +235,7 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     if (resolvedProjectId) {
       const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
       if (accessResult instanceof Response) return accessResult;
+      resolvedNamespaceId = accessResult.namespaceId ?? undefined;
     }
 
     if (!resolvedProjectId && (gates.includes('business') || gates.includes('semantic'))) {
@@ -248,21 +260,45 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
     // Get LLM provider (for Gate 2 and/or Gate 3 LLM rules)
     let provider: LLMProvider | null = null;
-    let trackedUsage: { inputTokens: number; outputTokens: number } | null = null;
+    let resolvedModel: string | null = null;
     if (!skipSemantic || (!skipBusiness && business_rules?.some((r) => r.type === 'llm'))) {
-      const rawProvider = await getLLMProvider();
-      if (rawProvider) {
-        const tracked = wrapWithUsageTracking(rawProvider);
-        provider = tracked.provider;
-        trackedUsage = tracked.usage;
+      provider = await getLLMProvider();
+      if (provider) {
+        const registry = await getProviderRegistry();
+        resolvedModel = registry.getEntry(provider.id)?.defaultModel ?? provider.id;
       }
     }
+
+    const runId = resolveInferenceRunId(c);
+    const runtime = getInferenceRuntime(c) ?? defaultInferenceRuntime;
+    const scope = {
+      actor: resolveInferenceActor(c),
+      ...(resolvedProjectId ? { projectId: resolvedProjectId } : {}),
+      ...(resolvedNamespaceId ? { namespaceId: resolvedNamespaceId } : {}),
+      projectVisibility: 'unknown' as const,
+    };
+    const bindGateProvider = (feature: string): LLMProvider | undefined =>
+      provider && resolvedModel
+        ? bindInferenceProvider(provider, {
+            runtime,
+            input: {
+              runId,
+              feature,
+              requestedModel: resolvedModel,
+              scope,
+            },
+            resolvedProvider: provider.id,
+            resolvedModel,
+          })
+        : undefined;
 
     // Run gates
     const runner = new GateRunner();
     // biome-ignore lint/suspicious/noExplicitAny: cast validated content to SemanticContent
     const result = await runner.run(content as any, {
-      provider: provider ?? undefined,
+      semanticProvider: bindGateProvider('gate.semantic-review'),
+      businessProvider: bindGateProvider('gate.business-rule'),
+      isFatalProviderError: (error) => error instanceof InferenceAdmissionDeniedError,
       turns,
       businessRules: business_rules,
       skipSemantic,
@@ -270,18 +306,18 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     });
 
     // Record usage (fire-and-forget)
-    if (
-      trackedUsage &&
-      (trackedUsage.inputTokens || trackedUsage.outputTokens) &&
-      resolvedProjectId
-    ) {
+    const inputTokens =
+      (result.semantic?.usage.inputTokens ?? 0) + (result.business?.usage.inputTokens ?? 0);
+    const outputTokens =
+      (result.semantic?.usage.outputTokens ?? 0) + (result.business?.usage.outputTokens ?? 0);
+    if ((inputTokens || outputTokens) && resolvedProjectId) {
       recordUsageFireAndForget(db, {
         user_id: getUserId(c) ?? undefined,
         project_id: resolvedProjectId,
         endpoint: 'gate_check',
-        model: provider?.id ?? 'unknown',
-        input_tokens: trackedUsage.inputTokens,
-        output_tokens: trackedUsage.outputTokens,
+        model: resolvedModel ?? provider?.id ?? 'unknown',
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
       });
     }
 
@@ -293,6 +329,15 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (err instanceof InferenceAdmissionDeniedError) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'RATE_LIMITED' as const, message: err.message },
+        },
+        429
+      );
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'INTERNAL_ERROR', message);
   }
