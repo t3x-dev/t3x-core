@@ -16,7 +16,13 @@ export type InferenceActor =
   | { kind: 'user' | 'agent' | 'service'; id: string }
   | { kind: 'anonymous'; id: null };
 
-export type InferenceProjectVisibility = 'public' | 'private' | 'internal' | 'unknown';
+export type InferenceProjectVisibility = 'public' | 'private' | 'unlisted' | 'unknown';
+
+export interface StoredInferenceProjectScope {
+  projectId: string;
+  namespaceId: string | null;
+  visibility: Exclude<InferenceProjectVisibility, 'unknown'>;
+}
 
 export interface InferenceScope {
   /** Server-derived actor. Never populate this from an unverified request body. */
@@ -29,6 +35,24 @@ export interface InferenceScope {
   projectVisibility?: InferenceProjectVisibility;
   /** Opaque deployment-owned payer/account context. Shared code never evaluates it. */
   policyContext?: unknown;
+}
+
+/**
+ * Derive billable project scope only from a canonical stored project.
+ *
+ * Hosted policy must never trust project ownership or visibility supplied by
+ * a client. Keeping this conversion structural lets every route pass the
+ * project returned by storage/access control without coupling the inference
+ * contract to a particular storage adapter.
+ */
+export function resolveInferenceProjectScope(
+  project: StoredInferenceProjectScope
+): Pick<InferenceScope, 'namespaceId' | 'projectId' | 'projectVisibility'> {
+  return {
+    projectId: project.projectId,
+    ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
+    projectVisibility: project.visibility,
+  };
 }
 
 export interface InferenceExecutionInput {

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMock = vi.hoisted(() => ({
   findProjectById: vi.fn((_db, projectId: string) =>
-    Promise.resolve({ projectId, ownerId: null, namespaceId: 'ns_1' })
+    Promise.resolve({ projectId, ownerId: null, namespaceId: 'ns_1', visibility: 'private' })
   ),
 }));
 
@@ -94,7 +94,7 @@ describe('Source Chat draft reply routes', () => {
             actor: { kind: 'anonymous', id: null },
             namespaceId: 'ns_1',
             projectId: 'proj_1',
-            projectVisibility: 'unknown',
+            projectVisibility: 'private',
           },
         }),
       })

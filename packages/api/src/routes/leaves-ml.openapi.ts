@@ -33,6 +33,7 @@ import {
   getInferenceRuntime,
   InferenceAdmissionDeniedError,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { bindInferenceProvider } from '../lib/inference-provider';
@@ -356,9 +357,7 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
           requestedModel: resolvedModel,
           scope: {
             actor,
-            projectId: leaf.project_id,
-            ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
-            projectVisibility: 'unknown',
+            ...resolveInferenceProjectScope(project),
           },
         },
         resolvedProvider: provider.id,
@@ -498,9 +497,7 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
         requestedModel: llm.id,
         scope: {
           actor: resolveInferenceActor(c),
-          projectId: leaf.project_id,
-          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
-          projectVisibility: 'unknown',
+          ...resolveInferenceProjectScope(project),
         },
       },
       resolvedProvider: llm.id,
@@ -664,9 +661,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
         requestedModel: resolvedModel,
         scope: {
           actor: resolveInferenceActor(c),
-          projectId: leaf.project_id,
-          ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
-          projectVisibility: 'unknown',
+          ...resolveInferenceProjectScope(project),
         },
       },
       resolvedProvider: llm.id,
@@ -767,9 +762,7 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
               requestedModel: modelSpec,
               scope: {
                 actor,
-                projectId: leaf.project_id,
-                ...(project.namespaceId ? { namespaceId: project.namespaceId } : {}),
-                projectVisibility: 'unknown',
+                ...resolveInferenceProjectScope(project),
               },
             },
             resolvedProvider: resolved.provider.id,

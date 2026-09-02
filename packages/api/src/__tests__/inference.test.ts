@@ -10,6 +10,7 @@ import {
   InferenceExecutionError,
   type InferenceReceipt,
   type InferenceTerminal,
+  resolveInferenceProjectScope,
 } from '../lib/inference';
 
 const executionInput = {
@@ -64,6 +65,31 @@ function recordingPolicy(events: string[]): InferenceAdmissionPolicy {
 }
 
 describe('provider-neutral inference runtime', () => {
+  it('derives a billable scope from canonical stored project fields', () => {
+    expect(
+      resolveInferenceProjectScope({
+        projectId: 'project_public',
+        namespaceId: 'namespace_123',
+        visibility: 'public',
+      })
+    ).toEqual({
+      projectId: 'project_public',
+      namespaceId: 'namespace_123',
+      projectVisibility: 'public',
+    });
+
+    expect(
+      resolveInferenceProjectScope({
+        projectId: 'project_unlisted',
+        namespaceId: null,
+        visibility: 'unlisted',
+      })
+    ).toEqual({
+      projectId: 'project_unlisted',
+      projectVisibility: 'unlisted',
+    });
+  });
+
   it('adapts a metered provider result into one normalized receipt', async () => {
     const events: string[] = [];
     const runtime = createInferenceRuntime({

@@ -27,6 +27,7 @@ vi.mock('../lib/project-access', () => ({
   assertProjectAccess: vi.fn(async () => ({
     projectId: 'project_1',
     namespaceId: 'namespace_1',
+    visibility: 'public',
   })),
 }));
 
@@ -139,7 +140,7 @@ describe('gate inference route', () => {
           actor: { kind: 'user', id: 'user_1' },
           namespaceId: 'namespace_1',
           projectId: 'project_1',
-          projectVisibility: 'unknown',
+          projectVisibility: 'public',
         },
       });
       expect(call.terminal).toMatchObject({

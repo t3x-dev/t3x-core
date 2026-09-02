@@ -23,6 +23,7 @@ import {
   InferenceAdmissionDeniedError,
   InferenceExecutionError,
   resolveInferenceActor,
+  resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
 import { assertProjectAccess } from '../lib/project-access';
@@ -887,9 +888,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
           runId: resolveInferenceRunId(c),
           scope: {
             actor: resolveInferenceActor(c),
-            projectId,
-            ...(access.namespaceId ? { namespaceId: access.namespaceId } : {}),
-            projectVisibility: 'unknown',
+            ...resolveInferenceProjectScope(access),
           },
         },
       });
