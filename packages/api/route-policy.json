@@ -961,6 +961,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "project-visibility.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{id}/visibility",
+      "policy": "project",
+      "rationale": "Project-scoped visibility mutation guarded by explicit visibility-management authority."
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",

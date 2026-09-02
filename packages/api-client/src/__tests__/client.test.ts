@@ -401,6 +401,35 @@ describe('T3xClient', () => {
       );
     });
 
+    it('changeProjectVisibility sends an explicit compare-and-set command', async () => {
+      const data = {
+        project: { project_id: 'proj_1', name: 'Published', visibility: 'public' },
+        changed: true,
+        evidence_id: 'pve_1',
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      await expect(
+        client.changeProjectVisibility('proj_1', {
+          expected_visibility: 'private',
+          visibility: 'public',
+          confirm_publication: true,
+        })
+      ).resolves.toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/visibility'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            expected_visibility: 'private',
+            visibility: 'public',
+            confirm_publication: true,
+          }),
+        })
+      );
+    });
+
     it('deleteProject sends DELETE', async () => {
       const fn = mockFetch(successResponse(null));
       const client = createTestClient(fn);

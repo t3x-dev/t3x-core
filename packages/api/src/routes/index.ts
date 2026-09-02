@@ -36,6 +36,10 @@ export { mergeRoutes } from './merge.openapi';
 export { namespaceRoutes } from './namespaces.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
+export {
+  createProjectVisibilityRoutes,
+  projectVisibilityRoutes,
+} from './project-visibility.openapi';
 export { projectRoutes } from './projects.openapi';
 export { promptCompileRoutes } from './prompt-compile.openapi';
 export { providersRoutes } from './providers.openapi';

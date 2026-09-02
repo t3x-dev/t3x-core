@@ -46,6 +46,8 @@ import type {
   AttachTransitionStatementInput,
   AttachTransitionStatementResult,
   Branch,
+  ChangeProjectVisibilityInput,
+  ChangeProjectVisibilityResult,
   CheckInput,
   CheckResult,
   CommitRepositoryStateInput,
@@ -573,6 +575,17 @@ export class T3xClient {
 
   async updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
     return this.request<Project>('PATCH', `/v1/projects/${id}`, input);
+  }
+
+  async changeProjectVisibility(
+    id: string,
+    input: ChangeProjectVisibilityInput
+  ): Promise<ChangeProjectVisibilityResult> {
+    return this.request<ChangeProjectVisibilityResult>(
+      'PUT',
+      `/v1/projects/${id}/visibility`,
+      input
+    );
   }
 
   async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {

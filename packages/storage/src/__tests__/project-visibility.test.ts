@@ -3,6 +3,7 @@ import type { AnyDB } from '../adapters';
 import {
   changeProjectVisibility,
   listProjectVisibilityEvents,
+  ProjectVisibilityConflictError,
 } from '../queries/project-visibility';
 import { insertProject } from '../queries/projects';
 import { createTestDB } from './setup';
@@ -90,6 +91,25 @@ describe('project visibility evidence', () => {
       publicationConfirmed: true,
     });
     expect(published?.event?.publicationConfirmed).toBe(true);
+  });
+
+  it('rejects a stale compare-and-set expectation before mutation', async () => {
+    const project = await insertProject(db, {
+      name: 'Visibility compare and set',
+      namespaceId: 'ns_t3x_dev',
+    });
+
+    await expect(
+      changeProjectVisibility(db, {
+        projectId: project.projectId,
+        namespaceId: 'ns_t3x_dev',
+        expectedVisibility: 'unlisted',
+        visibility: 'public',
+        actor: { kind: 'human', id: 'user_visibility_admin' },
+        publicationConfirmed: true,
+      })
+    ).rejects.toBeInstanceOf(ProjectVisibilityConflictError);
+    expect(await listProjectVisibilityEvents(db, project.projectId)).toEqual([]);
   });
 
   it('fails closed for a stale or cross-tenant namespace', async () => {

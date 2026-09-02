@@ -29,6 +29,7 @@ import {
   type InferenceRuntime,
   type InferenceRuntimeOptions,
 } from './lib/inference';
+import type { ProjectVisibilityPolicy } from './lib/project-visibility-policy';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
   createWorkspaceSourceRunnerProvider,
@@ -61,6 +62,7 @@ import {
   comparisonsRoutes,
   contextRoutes,
   conversationRoutes,
+  createProjectVisibilityRoutes,
   createTransitionControlPlaneRoutes,
   createWorkspaceSourceTransitionRoutes,
   curateRoutes,
@@ -137,6 +139,8 @@ export interface CreateAppOptions {
   inference?: InferenceRuntimeOptions;
   /** Public deployment-scoped capabilities. Dynamic sources fail closed per request. */
   deploymentCapabilities?: DeploymentCapabilitiesSource;
+  /** Host-owned publication and private-project capacity orchestration. */
+  projectVisibilityPolicy?: ProjectVisibilityPolicy;
 }
 
 export interface CreateAppResult {
@@ -222,6 +226,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', collaborationCommandRoutes);
   api.route('/', collaborationInvitationRoutes);
   api.route('/', projectRoutes);
+  api.route('/', createProjectVisibilityRoutes(options?.projectVisibilityPolicy));
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);

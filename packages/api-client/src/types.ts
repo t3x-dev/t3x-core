@@ -60,6 +60,18 @@ export interface UpdateProjectInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface ChangeProjectVisibilityInput {
+  expected_visibility: ProjectVisibility;
+  visibility: ProjectVisibility;
+  confirm_publication?: boolean;
+}
+
+export interface ChangeProjectVisibilityResult {
+  project: Project;
+  changed: boolean;
+  evidence_id: string | null;
+}
+
 export interface ListProjectsResponse {
   projects: Project[];
   limit: number;

@@ -327,6 +327,7 @@ export {
   listProjectVisibilityEvents,
   type ProjectVisibility,
   type ProjectVisibilityActorKind,
+  ProjectVisibilityConflictError,
 } from './project-visibility';
 // Projects
 export {
