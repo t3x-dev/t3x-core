@@ -47,7 +47,6 @@ import {
   toTrustedTransitionAuthor,
   transitionApiKey,
 } from '../lib/transition-authority';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
@@ -1108,21 +1107,7 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
 
   // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
   const _conflict = prepared.conflicts[idx];
-  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
-
-  // Record usage (fire-and-forget)
-  if (usage.inputTokens || usage.outputTokens) {
-    const db = await getDB();
-    recordUsageFireAndForget(db, {
-      user_id: getUserId(c) ?? undefined,
-      project_id: draft.projectId,
-      endpoint: 'merge_suggest',
-      model: trackedLlm.id,
-      input_tokens: usage.inputTokens,
-      output_tokens: usage.outputTokens,
-    });
-  }
 
   return c.json({ success: true as const, data: { suggestion } }, 200);
 });
@@ -1217,21 +1202,7 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   }
 
   // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
-  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
-
-  // Record usage (fire-and-forget)
-  if (usage.inputTokens || usage.outputTokens) {
-    const db = await getDB();
-    recordUsageFireAndForget(db, {
-      user_id: getUserId(c) ?? undefined,
-      project_id: draft.projectId,
-      endpoint: 'merge_suggest_frame',
-      model: trackedLlm.id,
-      input_tokens: usage.inputTokens,
-      output_tokens: usage.outputTokens,
-    });
-  }
 
   return c.json({ success: true as const, data: { suggestion } }, 200);
 });

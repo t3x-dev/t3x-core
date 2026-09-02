@@ -126,6 +126,8 @@ describe('server-side inference invocation inventory', () => {
     ['packages/core/src/leaf/constraintSuggester.ts', 1],
     ['packages/core/src/leaf/generate.ts', 2],
     ['packages/core/src/leaf/multi-round-generate.ts', 4],
+    ['packages/core/src/semantic/businessGate.ts', 1],
+    ['packages/core/src/semantic/gate.ts', 2],
   ])('records migrated call family %s', (file, coveredCount) => {
     const source = inventory.sources.find((candidate) => candidate.file === file);
     expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });

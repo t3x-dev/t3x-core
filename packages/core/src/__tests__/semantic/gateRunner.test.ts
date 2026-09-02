@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { LLMProvider } from '../../llm/types';
 import { GateRunner } from '../../semantic/gateRunner';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
@@ -115,6 +116,67 @@ describe('GateRunner', () => {
       });
       expect(result.passed).toBe(true);
       expect(result.business).toBeUndefined();
+    });
+
+    it('uses independent application bindings for semantic and business gates', async () => {
+      const semanticGenerate = vi.fn(async () => ({
+        text: JSON.stringify({
+          dimensions: {
+            completeness: { score: 1 },
+            accuracy: { score: 1 },
+            relations: { score: 1 },
+            granularity: { score: 1 },
+            hallucination: { score: 1 },
+          },
+          issues: [],
+        }),
+        usage: { inputTokens: 10, outputTokens: 2 },
+      }));
+      const businessGenerate = vi.fn(async () => ({
+        text: 'yes',
+        usage: { inputTokens: 4, outputTokens: 1 },
+      }));
+      const provider = (id: string, generate: LLMProvider['generate']): LLMProvider => ({
+        id,
+        generate,
+        resolveConflict: vi.fn(),
+      });
+
+      const result = await runner.run(
+        { trees: [t('topic_a')], relations: [] },
+        {
+          semanticProvider: provider('semantic-bound', semanticGenerate),
+          businessProvider: provider('business-bound', businessGenerate),
+          turns: [{ role: 'user', content: 'hello' }],
+          businessRules: [{ id: 'r1', type: 'llm', prompt: 'Check it', severity: 'error' }],
+        }
+      );
+
+      expect(result.passed).toBe(true);
+      expect(semanticGenerate).toHaveBeenCalledOnce();
+      expect(businessGenerate).toHaveBeenCalledOnce();
+    });
+
+    it('propagates application-fatal provider errors instead of degrading them', async () => {
+      const denied = new Error('Admission denied');
+      const provider: LLMProvider = {
+        id: 'bound',
+        generate: vi.fn(async () => {
+          throw denied;
+        }),
+        resolveConflict: vi.fn(),
+      };
+
+      await expect(
+        runner.run(
+          { trees: [t('topic_a')], relations: [] },
+          {
+            semanticProvider: provider,
+            turns: [{ role: 'user', content: 'hello' }],
+            isFatalProviderError: (error) => error === denied,
+          }
+        )
+      ).rejects.toBe(denied);
     });
   });
 
