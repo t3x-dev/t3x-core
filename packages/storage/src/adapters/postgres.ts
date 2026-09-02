@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 70;
+export const POSTGRES_SCHEMA_VERSION = 71;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2479,6 +2479,39 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_target
       ON collaboration_invitations(namespace_id, project_id, expires_at)
       WHERE status = 'pending';
+  `);
+
+  // ── Schema v71: explicit fail-closed project visibility ──
+  await sql.unsafe(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS visibility TEXT;
+
+    -- Every pre-v71 project is private. Legacy ownership, owner-null rows, and
+    -- the shared bootstrap namespace are provenance, never publication intent.
+    UPDATE projects
+      SET visibility = 'private'
+      WHERE visibility IS NULL;
+
+    ALTER TABLE projects
+      ALTER COLUMN visibility SET DEFAULT 'private',
+      ALTER COLUMN visibility SET NOT NULL;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'projects_visibility_check'
+          AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT projects_visibility_check
+          CHECK (visibility IN ('private', 'unlisted', 'public'));
+      END IF;
+    END $$;
+
+    CREATE INDEX IF NOT EXISTS idx_projects_visibility_created
+      ON projects(visibility, created_at);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

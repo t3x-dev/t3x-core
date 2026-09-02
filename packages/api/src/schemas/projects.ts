@@ -22,10 +22,13 @@ const ProviderConfigSchema = z
   })
   .nullable();
 
+export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public']);
+
 // Project entity
 export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
+  visibility: ProjectVisibilitySchema,
   created_at: z.string().datetime(),
   metadata: MetadataSchema,
   provider_config: ProviderConfigSchema.optional(),

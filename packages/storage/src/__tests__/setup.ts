@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   owner_id TEXT,
   namespace_id TEXT REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  visibility TEXT NOT NULL DEFAULT 'private',
   metadata_json TEXT,
   provider_config TEXT,
   default_provider TEXT,
@@ -68,10 +69,13 @@ CREATE TABLE IF NOT EXISTS projects (
   extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at TIMESTAMPTZ,
-  CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id)
+  CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id),
+  CONSTRAINT projects_visibility_check
+    CHECK (visibility IN ('private', 'unlisted', 'public'))
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_namespace_created ON projects(namespace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_projects_visibility_created ON projects(visibility, created_at);
 
 CREATE TABLE IF NOT EXISTS namespace_memberships (
   membership_id TEXT PRIMARY KEY,

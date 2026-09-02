@@ -32,9 +32,12 @@ export interface ApiErrorResponse {
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 // Project types
+export type ProjectVisibility = 'private' | 'unlisted' | 'public';
+
 export interface Project {
   project_id: string;
   name: string;
+  visibility: ProjectVisibility;
   created_at: string;
   metadata: Record<string, unknown> | null;
 }

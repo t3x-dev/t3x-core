@@ -74,6 +74,10 @@ export const projects = pgTable(
     namespaceId: text('namespace_id').references(() => namespaces.namespaceId, {
       onDelete: 'restrict',
     }),
+    /** Explicit product visibility. Ownership or missing legacy identity never implies publication. */
+    visibility: text('visibility', { enum: ['private', 'unlisted', 'public'] })
+      .notNull()
+      .default('private'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     metadataJson: text('metadata_json'),
@@ -108,7 +112,12 @@ export const projects = pgTable(
   (table) => [
     index('idx_projects_owner').on(table.ownerId),
     index('idx_projects_namespace_created').on(table.namespaceId, table.createdAt),
+    index('idx_projects_visibility_created').on(table.visibility, table.createdAt),
     unique('uq_projects_id_namespace').on(table.projectId, table.namespaceId),
+    check(
+      'projects_visibility_check',
+      sql`${table.visibility} IN ('private', 'unlisted', 'public')`
+    ),
   ]
 );
 
