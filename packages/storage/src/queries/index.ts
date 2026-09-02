@@ -320,6 +320,14 @@ export {
   type ListPinsOptions,
   updatePinAssertions,
 } from './pins';
+export {
+  type ChangeProjectVisibilityInput,
+  type ChangeProjectVisibilityResult,
+  changeProjectVisibility,
+  listProjectVisibilityEvents,
+  type ProjectVisibility,
+  type ProjectVisibilityActorKind,
+} from './project-visibility';
 // Projects
 export {
   type CreateProjectInput,

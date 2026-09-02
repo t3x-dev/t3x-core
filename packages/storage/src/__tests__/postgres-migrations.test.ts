@@ -57,6 +57,7 @@ describe('PostgreSQL schema migrations', () => {
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
+      DROP TABLE project_visibility_events;
       DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
@@ -317,6 +318,7 @@ describe('PostgreSQL schema migrations', () => {
     await setup.sql.unsafe(`
       INSERT INTO projects (project_id, name, created_at)
       VALUES ('project_before_namespaces', 'Legacy project', NOW());
+      DROP TABLE project_visibility_events;
       DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
@@ -364,6 +366,7 @@ describe('PostgreSQL schema migrations', () => {
       );
       INSERT INTO projects (project_id, name, namespace_id, created_at)
       VALUES ('project_personal', 'Personal project', 'ns_personal_owner', NOW());
+      DROP TABLE project_visibility_events;
       DROP TABLE collaboration_invitations;
       DROP TABLE project_grants;
       DROP TABLE namespace_memberships;
@@ -532,6 +535,48 @@ describe('PostgreSQL schema migrations', () => {
       setup.sql.unsafe(
         "UPDATE projects SET visibility = 'discoverable' WHERE project_id = 'project_owned_legacy'"
       )
+    ).rejects.toThrow();
+  });
+
+  it('upgrades a v71 database with constrained visibility audit evidence', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      DROP TABLE project_visibility_events;
+      UPDATE _schema_version SET version = 71 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresStorage({
+      connectionString: setup.connectionString,
+      maxConnections: 1,
+      onnotice: () => {},
+    });
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [table] = await setup.sql.unsafe<Array<{ table_name: string | null }>>(
+      "SELECT to_regclass('public.project_visibility_events')::text AS table_name"
+    );
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(table?.table_name).toBe('project_visibility_events');
+
+    await setup.sql.unsafe(`
+      INSERT INTO projects (project_id, name, namespace_id, visibility, created_at)
+      VALUES ('project_visibility_audit', 'Audit project', 'ns_t3x_dev', 'private', NOW())
+    `);
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO project_visibility_events (
+          event_id, project_id, namespace_id, from_visibility, to_visibility,
+          actor_kind, actor_id, publication_confirmed
+        ) VALUES (
+          'pve_unconfirmed', 'project_visibility_audit', 'ns_t3x_dev',
+          'private', 'public', 'human', 'user_admin', FALSE
+        )
+      `)
     ).rejects.toThrow();
   });
 

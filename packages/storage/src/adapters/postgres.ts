@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 71;
+export const POSTGRES_SCHEMA_VERSION = 72;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2512,6 +2512,36 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_projects_visibility_created
       ON projects(visibility, created_at);
+  `);
+
+  // ── Schema v72: transactional project visibility audit evidence ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS project_visibility_events (
+      event_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      namespace_id TEXT NOT NULL,
+      from_visibility TEXT NOT NULL,
+      to_visibility TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      publication_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT project_visibility_events_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT project_visibility_events_from_check
+        CHECK (from_visibility IN ('private', 'unlisted', 'public')),
+      CONSTRAINT project_visibility_events_to_check
+        CHECK (to_visibility IN ('private', 'unlisted', 'public')),
+      CONSTRAINT project_visibility_events_actor_kind_check
+        CHECK (actor_kind IN ('human', 'agent', 'service', 'local')),
+      CONSTRAINT project_visibility_events_public_confirmation_check
+        CHECK (to_visibility <> 'public' OR publication_confirmed = TRUE),
+      CONSTRAINT project_visibility_events_transition_check
+        CHECK (from_visibility <> to_visibility)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_visibility_events_project_created
+      ON project_visibility_events(project_id, created_at, event_id);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
