@@ -13,7 +13,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 35,
+  "totalObservedCalls": 34,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -22,12 +22,6 @@
       "coveredCount": 1,
       "observedCount": 1,
       "note": "Governed Proposal generation uses trusted project scope, pre-invocation admission, provider-reported usage, and terminal receipts."
-    },
-    {
-      "file": "packages/api/src/lib/provider-registry.ts",
-      "feature": "generation-fallback",
-      "status": "pending",
-      "observedCount": 1
     },
     {
       "file": "packages/api/src/lib/inference-provider.ts",
