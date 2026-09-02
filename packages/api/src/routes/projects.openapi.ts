@@ -932,6 +932,7 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
     const apiProject = {
       project_id: restored.projectId,
       name: restored.name,
+      visibility: restored.visibility,
       created_at: restored.createdAt.toISOString(),
       metadata: restored.metadataJson ? JSON.parse(restored.metadataJson) : null,
     };
