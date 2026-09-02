@@ -31,6 +31,11 @@ import {
 } from './lib/inference';
 import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
 import type { ProjectVisibilityPolicy } from './lib/project-visibility-policy';
+import {
+  createGenerationProviderRuntimeMiddleware,
+  defaultGenerationProviderRuntime,
+  type GenerationProviderRuntime,
+} from './lib/provider-runtime';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
   createWorkspaceSourceRunnerProvider,
@@ -139,6 +144,8 @@ export interface CreateAppOptions {
   transitionControlPlane?: TransitionControlPlaneOptions;
   /** Provider-neutral execution gateway and admission policy. Defaults preserve OSS behavior. */
   inference?: InferenceRuntimeOptions;
+  /** Provider-neutral model composition. Defaults adapt the direct OSS registry. */
+  providerRuntime?: GenerationProviderRuntime;
   /** Public deployment-scoped capabilities. Dynamic sources fail closed per request. */
   deploymentCapabilities?: DeploymentCapabilitiesSource;
   /** Host-owned publication and private-project capacity orchestration. */
@@ -149,6 +156,8 @@ export interface CreateAppOptions {
 
 export interface CreateAppResult {
   app: Hono;
+  /** Provider-neutral model authority composed for this application instance. */
+  providerRuntime: GenerationProviderRuntime;
   /** Provider-neutral inference boundary composed for this application. */
   inferenceRuntime: InferenceRuntime;
   /** Pass to the `websocket` option of @hono/node-server v2 `serve()`. */
@@ -158,6 +167,7 @@ export interface CreateAppResult {
 export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
   const rateLimitStore = options?.rateLimitStore ?? databaseRateLimitStore;
+  const providerRuntime = options?.providerRuntime ?? defaultGenerationProviderRuntime;
   const inferenceRuntime = createInferenceRuntime(options?.inference);
   const transitionControlPlane =
     options?.workspaceSourceTransition?.runner === undefined
@@ -175,6 +185,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
   app.use('*', createDeploymentCapabilitiesMiddleware(options?.deploymentCapabilities));
+  app.use('*', createGenerationProviderRuntimeMiddleware(providerRuntime));
   app.use('*', createInferenceRuntimeMiddleware(inferenceRuntime));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
@@ -440,7 +451,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     );
   });
 
-  return { app, inferenceRuntime, websocket };
+  return { app, providerRuntime, inferenceRuntime, websocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──
