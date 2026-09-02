@@ -17,7 +17,7 @@
 
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import {
   createDeploymentCapabilitiesMiddleware,
@@ -29,6 +29,7 @@ import {
   type InferenceRuntime,
   type InferenceRuntimeOptions,
 } from './lib/inference';
+import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
 import type { ProjectVisibilityPolicy } from './lib/project-visibility-policy';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
@@ -115,6 +116,7 @@ import {
   yschemaValidationRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
+import type { AppEnv } from './types';
 
 export interface CreateAppOptions {
   /** Shared rate-limit backend. Defaults to persistent PostgreSQL counters. */
@@ -141,6 +143,8 @@ export interface CreateAppOptions {
   deploymentCapabilities?: DeploymentCapabilitiesSource;
   /** Host-owned publication and private-project capacity orchestration. */
   projectVisibilityPolicy?: ProjectVisibilityPolicy;
+  /** Host-owned admission policy for create, import, restore, transfer, and clone operations. */
+  projectLifecyclePolicy?: ProjectLifecyclePolicy;
 }
 
 export interface CreateAppResult {
@@ -214,6 +218,13 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       }
     },
   });
+
+  if (options?.projectLifecyclePolicy) {
+    api.use('*', async (c, next) => {
+      (c as Context<AppEnv>).set('projectLifecyclePolicy', options.projectLifecyclePolicy);
+      return next();
+    });
+  }
 
   // Project-level access control: gate all /v1/projects/:projectId/* sub-routes
   api.use('/v1/projects/:projectId/*', projectAccessMiddleware);

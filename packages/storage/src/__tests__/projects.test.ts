@@ -64,6 +64,19 @@ describe('Projects Storage', () => {
       expect(rows[0].projectId).toBe(result.projectId);
     });
 
+    it('uses a caller-selected ID for reservation-safe creation', async () => {
+      const result = await insertProject(db, {
+        projectId: 'proj_reserved_capacity_slot',
+        name: 'Reserved project',
+      });
+
+      expect(result.projectId).toBe('proj_reserved_capacity_slot');
+      expect(await findProjectById(db, result.projectId)).toMatchObject({
+        projectId: 'proj_reserved_capacity_slot',
+        name: 'Reserved project',
+      });
+    });
+
     it('stores metadata as JSON', async () => {
       const input = {
         name: 'Project with Metadata',

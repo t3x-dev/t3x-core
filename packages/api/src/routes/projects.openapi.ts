@@ -2,7 +2,12 @@
  * Projects Routes with OpenAPI
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { DEMO_WORKSPACE_FIXTURE, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
+import {
+  DEMO_WORKSPACE_FIXTURE,
+  generateProjectId,
+  getCanonicalModelId,
+  getModelInfo,
+} from '@t3x-dev/core';
 import {
   branches,
   claimUnownedProjects,
@@ -41,6 +46,12 @@ import {
   getProjectListAuthority,
   getUserId,
 } from '../lib/project-access';
+import {
+  getProjectLifecyclePolicy,
+  PROJECT_LIFECYCLE_POLICY_VERSION,
+  ProjectLifecyclePolicyDeniedError,
+  resolveProjectLifecycleActor,
+} from '../lib/project-lifecycle-policy';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -329,6 +340,14 @@ const claimUnownedProjectsRoute = createRoute({
       description: 'Operator access required',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'Project capacity conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -351,14 +370,32 @@ projectRoutes.openapi(claimUnownedProjectsRoute, async (c) => {
     if (!namespace) {
       return errorResponse(c, 'NOT_FOUND', 'Personal namespace not created yet');
     }
-    const claimed = await claimUnownedProjects(
-      db,
-      userId,
-      namespace.namespaceId,
-      c.req.valid('json').project_ids
+    const projectIds = c.req.valid('json').project_ids;
+    const actor = resolveProjectLifecycleActor(c);
+    if (!actor) return errorResponse(c, 'FORBIDDEN', 'A canonical actor is required');
+    const claimed = await getProjectLifecyclePolicy(c).execute(
+      {
+        contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+        operation: 'transfer',
+        namespaceId: namespace.namespaceId,
+        projects: projectIds.map((projectId) => ({
+          projectId,
+          fromNamespaceId: null,
+          fromVisibility: 'private',
+          toVisibility: 'private',
+        })),
+        actor,
+      },
+      () => claimUnownedProjects(db, userId, namespace.namespaceId, projectIds)
     );
     return c.json({ success: true as const, data: { projects: claimed.map(toApiProject) } }, 200);
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
   }
@@ -379,6 +416,18 @@ const ensureDemoWorkspaceRoute = createRoute({
           schema: SuccessResponseSchema(ProjectSchema),
         },
       },
+    },
+    403: {
+      description: 'Project admission denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Project capacity conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -412,11 +461,35 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
       return c.json({ success: true as const, data: toApiProject(existingDemo) }, 200);
     }
 
-    const result = await seedDemoWorkspace(db, {
-      ownerId: userId ?? null,
-      namespaceId: namespace?.namespaceId,
-      resetDeleted: true,
-    });
+    const projectId = generateProjectId();
+    const actor = resolveProjectLifecycleActor(c);
+    if (!actor) return errorResponse(c, 'FORBIDDEN', 'A canonical actor is required');
+    const mutate = () =>
+      seedDemoWorkspace(db, {
+        projectId,
+        ownerId: userId ?? null,
+        namespaceId: namespace?.namespaceId,
+        resetDeleted: true,
+      });
+    const result = namespace
+      ? await getProjectLifecyclePolicy(c).execute(
+          {
+            contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+            operation: 'create',
+            namespaceId: namespace.namespaceId,
+            projects: [
+              {
+                projectId,
+                fromNamespaceId: null,
+                fromVisibility: null,
+                toVisibility: 'private',
+              },
+            ],
+            actor,
+          },
+          mutate
+        )
+      : await mutate();
     if (result.project) {
       return c.json({ success: true as const, data: toApiProject(result.project) }, 200);
     }
@@ -432,6 +505,12 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
       500
     );
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'DEMO_SEED_FAILED', message } }, 500);
   }
@@ -481,6 +560,14 @@ const createProjectRoute = createRoute({
       description: 'Namespace not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'Project capacity conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -515,18 +602,40 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
     }
     const namespaceDenied = await assertNamespaceAccess(c, db, namespace, 'project:create');
     if (namespaceDenied) return namespaceDenied;
-    const project = await insertProject(db, {
-      name: body.name,
-      metadata: body.metadata,
-      ownerId: userId,
-      namespaceId: namespace.namespaceId,
-    });
+    const actor = resolveProjectLifecycleActor(c);
+    if (!actor) return errorResponse(c, 'FORBIDDEN', 'A canonical actor is required');
+    const projectId = generateProjectId();
+    const project = await getProjectLifecyclePolicy(c).execute(
+      {
+        contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+        operation: 'create',
+        namespaceId: namespace.namespaceId,
+        projects: [
+          {
+            projectId,
+            fromNamespaceId: null,
+            fromVisibility: null,
+            toVisibility: 'private',
+          },
+        ],
+        actor,
+      },
+      () =>
+        db.transaction(async (transaction) => {
+          const created = await insertProject(transaction, {
+            projectId,
+            name: body.name,
+            metadata: body.metadata,
+            ownerId: userId,
+            namespaceId: namespace.namespaceId,
+          });
 
-    // Bootstrap the default 'main' branch so it always exists from day one.
-    // Every commit defaults to `branch: 'main'`, so the branches table must
-    // reflect that contract from the moment the project is created.
-    // `ensureMainBranch` is idempotent, so retries are safe.
-    await ensureMainBranch(db, project.projectId);
+          // Bootstrap the default 'main' branch in the same transaction so a
+          // host never commits capacity for a partially-created repository.
+          await ensureMainBranch(transaction, created.projectId);
+          return created;
+        })
+    );
 
     const apiProject = {
       project_id: project.projectId,
@@ -538,6 +647,12 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
 
     return c.json({ success: true as const, data: apiProject }, 201);
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'CREATE_FAILED', message } }, 500);
   }
@@ -897,6 +1012,14 @@ const restoreProjectRoute = createRoute({
         },
       },
     },
+    409: {
+      description: 'Project lifecycle conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -917,8 +1040,32 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
     // Access control: must check against the deleted row
     const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
     if (accessResult instanceof Response) return accessResult;
-
-    const restored = await restoreProject(db, id);
+    const mutate = () => restoreProject(db, id);
+    let restored: Awaited<ReturnType<typeof restoreProject>>;
+    if (accessResult.namespaceId) {
+      const actor = resolveProjectLifecycleActor(c);
+      if (!actor) return errorResponse(c, 'FORBIDDEN', 'A canonical actor is required');
+      restored = await getProjectLifecyclePolicy(c).execute(
+        {
+          contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+          operation: 'restore',
+          namespaceId: accessResult.namespaceId,
+          projects: [
+            {
+              projectId: accessResult.projectId,
+              fromNamespaceId: accessResult.namespaceId,
+              fromVisibility: accessResult.visibility,
+              toVisibility: accessResult.visibility,
+            },
+          ],
+          actor,
+        },
+        mutate
+      );
+    } else {
+      // Namespace-less projects are supported only by the local/legacy OSS path.
+      restored = await mutate();
+    }
     if (!restored) {
       return c.json(
         {
@@ -939,6 +1086,12 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
 
     return c.json({ success: true as const, data: apiProject }, 200);
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'RESTORE_FAILED', message } }, 500);
   }

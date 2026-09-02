@@ -13,6 +13,11 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  ProjectLifecyclePolicy,
+  ProjectLifecyclePolicyInput,
+} from '../lib/project-lifecycle-policy';
+import { ProjectLifecyclePolicyDeniedError } from '../lib/project-lifecycle-policy';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown> & {
@@ -38,6 +43,7 @@ function createApp(input?: {
   userId?: string | null;
   projectId?: string | null;
   principalKind?: 'human' | 'agent' | 'service';
+  projectLifecyclePolicy?: ProjectLifecyclePolicy;
 }) {
   const app = new Hono();
   if (input) {
@@ -52,6 +58,13 @@ function createApp(input?: {
         key_prefix: 'test',
         name: 'test',
       });
+      return next();
+    });
+  }
+  if (input?.projectLifecyclePolicy) {
+    app.use('*', async (c, next) => {
+      // biome-ignore lint/suspicious/noExplicitAny: test context injection
+      (c as any).set('projectLifecyclePolicy', input.projectLifecyclePolicy);
       return next();
     });
   }
@@ -327,7 +340,14 @@ describe('canonical project access', () => {
 
   it('creates and imports projects into the authenticated personal namespace', async () => {
     const namespace = await ensurePersonalNamespace('user_creator');
-    const app = createApp({ userId: 'user_creator' });
+    const admissions: ProjectLifecyclePolicyInput[] = [];
+    const projectLifecyclePolicy: ProjectLifecyclePolicy = {
+      execute: async (input, mutate) => {
+        admissions.push(input);
+        return mutate();
+      },
+    };
+    const app = createApp({ userId: 'user_creator', projectLifecyclePolicy });
 
     const createResponse = await app.request('/v1/projects', {
       method: 'POST',
@@ -356,13 +376,65 @@ describe('canonical project access', () => {
       ownerId: 'user_creator',
       visibility: 'private',
     });
+    expect(admissions).toMatchObject([
+      {
+        contractVersion: 1,
+        operation: 'create',
+        namespaceId: namespace.namespaceId,
+        projects: [{ projectId: createdId, fromNamespaceId: null, toVisibility: 'private' }],
+        actor: { kind: 'human', id: 'user_creator' },
+      },
+      {
+        contractVersion: 1,
+        operation: 'import',
+        namespaceId: namespace.namespaceId,
+        projects: [{ projectId: importedId, fromNamespaceId: null, toVisibility: 'private' }],
+        actor: { kind: 'human', id: 'user_creator' },
+      },
+    ]);
+  });
+
+  it('returns lifecycle policy denials before creating a project', async () => {
+    await ensurePersonalNamespace('user_capacity_denied');
+    const response = await createApp({
+      userId: 'user_capacity_denied',
+      projectLifecyclePolicy: {
+        execute: async () => {
+          throw new ProjectLifecyclePolicyDeniedError(
+            'PRIVATE_PROJECT_CAPACITY_EXHAUSTED',
+            'Private-project capacity is exhausted',
+            409
+          );
+        },
+      },
+    }).request('/v1/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Must not exist' }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: 'PRIVATE_PROJECT_CAPACITY_EXHAUSTED' },
+    });
+    expect(await findProjects(mockDB, { owner_id: 'user_capacity_denied' })).toHaveLength(0);
   });
 
   it('migrates operator-claimed legacy projects into canonical authority', async () => {
     process.env.T3X_OPERATOR_USER_IDS = 'user_claim_operator';
     const namespace = await ensurePersonalNamespace('user_claim_operator');
     const legacy = await insertProject(mockDB, { name: 'Legacy claim' });
-    const app = createApp({ userId: 'user_claim_operator' });
+    const admissions: ProjectLifecyclePolicyInput[] = [];
+    const app = createApp({
+      userId: 'user_claim_operator',
+      projectLifecyclePolicy: {
+        execute: async (input, mutate) => {
+          admissions.push(input);
+          return mutate();
+        },
+      },
+    });
 
     const response = await app.request('/v1/projects/claim-unowned', {
       method: 'POST',
@@ -376,5 +448,19 @@ describe('canonical project access', () => {
       visibility: 'private',
     });
     expect((await app.request(`/v1/projects/${legacy.projectId}`)).status).toBe(200);
+    expect(admissions).toMatchObject([
+      {
+        operation: 'transfer',
+        namespaceId: namespace.namespaceId,
+        projects: [
+          {
+            projectId: legacy.projectId,
+            fromNamespaceId: null,
+            fromVisibility: 'private',
+            toVisibility: 'private',
+          },
+        ],
+      },
+    ]);
   });
 });
