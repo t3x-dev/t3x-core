@@ -92,6 +92,7 @@ describe('Source Chat draft reply routes', () => {
           runId: expect.stringMatching(/^request:/),
           scope: {
             actor: { kind: 'anonymous', id: null },
+            ingressChannel: 'api',
             namespaceId: 'ns_1',
             projectId: 'proj_1',
             projectVisibility: 'private',

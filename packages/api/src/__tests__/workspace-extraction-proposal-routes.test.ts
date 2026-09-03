@@ -150,6 +150,7 @@ describe('Workspace extraction proposal routes', () => {
         inference: expect.objectContaining({
           scope: {
             actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
+            ingressChannel: 'api',
             namespaceId: 'ns_test',
             projectId: 'proj_1',
             projectVisibility: 'unlisted',

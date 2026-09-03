@@ -163,7 +163,7 @@ describe('Chat Routes', () => {
         expect.objectContaining({
           generationId: 'gen_denied_chat',
           feature: 'generation.chat.complete',
-          scope: { actor: { kind: 'anonymous', id: null } },
+          scope: { actor: { kind: 'anonymous', id: null }, ingressChannel: 'api' },
         })
       );
       expect(fetchMock).not.toHaveBeenCalled();
@@ -754,7 +754,7 @@ describe('Chat Routes', () => {
         expect.objectContaining({
           generationId: 'gen_denied_stream',
           feature: 'generation.chat.stream',
-          scope: { actor: { kind: 'anonymous', id: null } },
+          scope: { actor: { kind: 'anonymous', id: null }, ingressChannel: 'api' },
         })
       );
       expect(fetchMock).not.toHaveBeenCalled();
