@@ -32,6 +32,7 @@ import {
   type InferenceStream,
   type InferenceTerminal,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -875,6 +876,7 @@ generationRoutes.openapi(generationRoute, async (c) => {
         requestedModel: body.model?.trim() || model,
         scope: {
           actor: resolveInferenceActor(c),
+          ingressChannel: resolveInferenceIngressChannel(c),
           ...(inferenceProject ? resolveInferenceProjectScope(inferenceProject) : {}),
         },
       },
@@ -1635,6 +1637,7 @@ generationRoutes.post('/v1/chat/stream', async (c) => {
         requestedModel: body.model?.trim() || model,
         scope: {
           actor: resolveInferenceActor(c),
+          ingressChannel: resolveInferenceIngressChannel(c),
           ...(inferenceProject ? resolveInferenceProjectScope(inferenceProject) : {}),
         },
       },

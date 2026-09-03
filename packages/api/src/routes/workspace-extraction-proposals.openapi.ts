@@ -15,6 +15,7 @@ import {
   InferenceAdmissionDeniedError,
   InferenceExecutionError,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -304,6 +305,7 @@ workspaceExtractionProposalRoutes.openapi(route, async (c) => {
         runId: resolveInferenceRunId(c),
         scope: {
           actor: resolveInferenceActor(c),
+          ingressChannel: resolveInferenceIngressChannel(c),
           ...resolveInferenceProjectScope(access),
         },
       },

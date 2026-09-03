@@ -10,6 +10,7 @@ import {
   InferenceExecutionError,
   type InferenceReceipt,
   type InferenceTerminal,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   toGenerationModelScope,
 } from '../lib/inference';
@@ -20,6 +21,7 @@ const executionInput = {
   requestedModel: 'model-requested',
   scope: {
     actor: { kind: 'user' as const, id: 'user_123' },
+    ingressChannel: 'web' as const,
     namespaceId: 'namespace_123',
     projectId: 'project_123',
     projectVisibility: 'private' as const,
@@ -100,6 +102,7 @@ describe('provider-neutral inference runtime', () => {
     const projected = toGenerationModelScope(
       {
         actor,
+        ingressChannel: 'mcp',
         namespaceId: 'namespace_123',
         projectId: 'project_123',
         projectVisibility: 'private',
@@ -113,6 +116,7 @@ describe('provider-neutral inference runtime', () => {
 
     expect(projected).toEqual({
       actor,
+      ingressChannel: 'mcp',
       namespaceId: 'namespace_123',
       projectId: 'project_123',
       projectVisibility: 'private',
@@ -121,6 +125,19 @@ describe('provider-neutral inference runtime', () => {
     expect(projected).not.toHaveProperty('policyContext');
     expect(projected).not.toHaveProperty('userId');
     expect(projected.actor).not.toBe(actor);
+  });
+
+  it('accepts only a host-installed ingress marker and defaults ordinary HTTP to api', () => {
+    const context = (value: unknown) =>
+      ({ get: (key: string) => (key === 'inferenceIngressChannel' ? value : undefined) }) as never;
+
+    expect(resolveInferenceIngressChannel(context('web'))).toBe('web');
+    expect(resolveInferenceIngressChannel(context('mcp'))).toBe('mcp');
+    expect(resolveInferenceIngressChannel(context('forged-client-value'))).toBe('api');
+    expect(resolveInferenceIngressChannel(context(undefined))).toBe('api');
+    expect(toGenerationModelScope({ actor: { kind: 'anonymous', id: null } })).toMatchObject({
+      ingressChannel: 'api',
+    });
   });
 
   it('adapts a metered provider result into one normalized receipt', async () => {

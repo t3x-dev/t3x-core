@@ -8,6 +8,7 @@ import {
   type InferenceRuntime,
   type InferenceScope,
   resolveInferenceActor,
+  resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
@@ -50,6 +51,7 @@ export async function buildPipelineContext(
       runId: resolveInferenceRunId(c),
       scope: {
         actor: resolveInferenceActor(c),
+        ingressChannel: resolveInferenceIngressChannel(c),
         ...resolveInferenceProjectScope(project),
       },
     },
