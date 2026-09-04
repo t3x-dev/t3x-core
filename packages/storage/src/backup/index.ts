@@ -4,6 +4,11 @@
  * Export, import, and verify project data.
  */
 
+export {
+  ArchiveRepositoryGraphError,
+  type ArchiveRepositoryRecord,
+  verifyArchiveRepositoryGraph,
+} from './archive-repository-graph';
 export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup';
 export {
   createProjectArchiveManifest,

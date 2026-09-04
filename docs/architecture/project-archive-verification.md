@@ -28,3 +28,25 @@ into a new private project remain tracked by #1418. `valid: true` from this laye
 does not establish those higher-level properties or authorize database writes.
 Future consumers must use the existing protocol verifiers rather than duplicate
 hashing/replay semantics. No account or commercial data is imported by this code.
+
+## Repository payload domain checks
+
+`verifyArchiveRepositoryGraph` separately checks `repository/graph.ndjson` records:
+
+- `object`: exact `descriptor` and `canonicalJson`, verified by the protocol parser
+  and canonical serializer. A matching archive checksum alone is insufficient.
+- `commit`: a digest declaring membership in the source project's history.
+- `ref`: a name and nullable head that must reference a declared member.
+
+Every member, including detached history, passes the shared CommitV2 structural
+verifier. Every parent must be a declared member; all required protocol objects
+resolve from this archive only. Duplicate records and unknown fields are rejected.
+The verifier bounds records (100,000), individual canonical objects (4 MiB), and
+their combined bytes (64 MiB). Diagnostics do not disclose archived content.
+
+The result explicitly says `structural_only`. It neither re-evaluates historical
+policy nor executes deterministic replay, and historical actor IDs do not grant
+current access. This helper does not prove that an exporter included every source
+record, uncommitted workspace, attachment or governance resource. It must be
+composed with envelope verification and those remaining domain checks before any
+restore. No route or write is enabled by this slice; #1418 remains open.
