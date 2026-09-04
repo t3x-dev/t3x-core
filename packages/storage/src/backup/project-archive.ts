@@ -87,6 +87,8 @@ export type ProjectArchiveEntryReader = (
 export interface ProjectArchiveVerificationLimits {
   maxEntryBytes?: number;
   maxTotalBytes?: number;
+  /** Maximum encoded bytes per JSON object, excluding the NDJSON line delimiter. */
+  maxRecordBytes?: number;
 }
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
@@ -94,6 +96,57 @@ const ENTRY_KINDS = Object.keys(PROJECT_ARCHIVE_ENTRY_CONTRACT) as ProjectArchiv
 const ENTRY_KIND_ORDER = new Map(ENTRY_KINDS.map((kind, index) => [kind, index]));
 const DEFAULT_MAX_ENTRY_BYTES = 256 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_RECORD_BYTES = 4 * 1024 * 1024;
+
+/** Bounded syntax/framing validation only, not graph closure or protocol verification. */
+function entryRecordValidator(entry: ProjectArchiveEntryDescriptor, maxRecordBytes: number) {
+  let decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  let text = '';
+  let bytes = 0;
+  let records = 0;
+  const append = (part: Uint8Array) => {
+    bytes += part.byteLength;
+    if (bytes > maxRecordBytes)
+      throw new RangeError('JSON record exceeds the configured byte bound');
+    text += decoder.decode(part, { stream: true });
+  };
+  const finishRecord = () => {
+    text += decoder.decode();
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      // Do not return archive content (potentially private source text) in diagnostics.
+      throw new TypeError('payload contains invalid JSON');
+    }
+    if (!isRecord(value)) throw new TypeError('payload records must be JSON objects');
+    records++;
+    if (records > entry.records) throw new TypeError('record count does not match the manifest');
+    text = '';
+    bytes = 0;
+    decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  };
+  return {
+    write(chunk: Uint8Array) {
+      if (entry.mediaType === 'application/json') {
+        append(chunk);
+        return;
+      }
+      let offset = 0;
+      for (let newline = chunk.indexOf(10); newline !== -1; newline = chunk.indexOf(10, offset)) {
+        append(chunk.subarray(offset, newline));
+        finishRecord();
+        offset = newline + 1;
+      }
+      append(chunk.subarray(offset));
+    },
+    finish() {
+      if (entry.mediaType === 'application/json' || bytes > 0) finishRecord();
+      if (records !== entry.records)
+        throw new TypeError('record count does not match the manifest');
+    },
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -377,7 +430,12 @@ export async function verifyProjectArchive(
 
   const maxEntryBytes = limits.maxEntryBytes ?? DEFAULT_MAX_ENTRY_BYTES;
   const maxTotalBytes = limits.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
-  if (!isPositiveSafeInteger(maxEntryBytes) || !isPositiveSafeInteger(maxTotalBytes)) {
+  const maxRecordBytes = limits.maxRecordBytes ?? DEFAULT_MAX_RECORD_BYTES;
+  if (
+    !isPositiveSafeInteger(maxEntryBytes) ||
+    !isPositiveSafeInteger(maxTotalBytes) ||
+    !isPositiveSafeInteger(maxRecordBytes)
+  ) {
     return {
       valid: false,
       errors: ['verification limits must be positive safe integers'],
@@ -395,6 +453,8 @@ export async function verifyProjectArchive(
       break;
     }
     const digest = createHash('sha256');
+    const records = entryRecordValidator(entry, maxRecordBytes);
+    let recordError: string | undefined;
     let entryBytes = 0;
     try {
       for await (const chunk of readEntry(entry.path)) {
@@ -404,6 +464,13 @@ export async function verifyProjectArchive(
           throw new RangeError('entry exceeds its declared or configured byte bound');
         }
         digest.update(chunk);
+        if (!recordError) {
+          try {
+            records.write(chunk);
+          } catch (error) {
+            recordError = error instanceof Error ? error.message : 'invalid payload records';
+          }
+        }
       }
     } catch (error) {
       errors.push(`${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
@@ -416,6 +483,17 @@ export async function verifyProjectArchive(
     }
     if (digest.digest('hex') !== entry.digest.hex) {
       errors.push(`${entry.path}: SHA-256 digest does not match the manifest`);
+      continue;
+    }
+    if (!recordError) {
+      try {
+        records.finish();
+      } catch (error) {
+        recordError = error instanceof Error ? error.message : 'invalid payload records';
+      }
+    }
+    if (recordError) {
+      errors.push(`${entry.path}: ${recordError}`);
       continue;
     }
     verifiedEntries++;

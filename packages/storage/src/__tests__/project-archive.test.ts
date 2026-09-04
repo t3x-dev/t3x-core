@@ -14,7 +14,7 @@ const kinds = Object.keys(PROJECT_ARCHIVE_ENTRY_CONTRACT) as ProjectArchiveEntry
 function fixture() {
   const payloads = new Map(
     kinds.map((kind, index) => {
-      const content = encoder.encode(`${kind}:${index}\n`);
+      const content = encoder.encode(`${JSON.stringify({ kind, index })}\n`);
       return [PROJECT_ARCHIVE_ENTRY_CONTRACT[kind].path, content] as const;
     })
   );
@@ -37,6 +37,21 @@ function fixture() {
       .reverse(),
   });
   return { manifest, payloads };
+}
+
+function withPayload(kind: ProjectArchiveEntryKind, content: Uint8Array, records: number) {
+  const { manifest, payloads } = fixture();
+  payloads.set(PROJECT_ARCHIVE_ENTRY_CONTRACT[kind].path, content);
+  return {
+    payloads,
+    manifest: createProjectArchiveManifest({
+      exportedAt: new Date(manifest.exportedAt),
+      source: manifest.source,
+      entries: manifest.entries.map((entry) =>
+        entry.kind === kind ? describeProjectArchiveEntry(kind, content, records) : entry
+      ),
+    }),
+  };
 }
 
 describe('project archive manifest', () => {
@@ -162,6 +177,108 @@ describe('project archive manifest', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain('exceeds the configured verification bounds');
+    expect(reads).toBe(0);
+  });
+
+  it.each([
+    ['project_metadata', '{private source text', 1, 'invalid JSON'],
+    ['project_metadata', '{}{}', 1, 'invalid JSON'],
+    ['project_metadata', '[]', 1, 'JSON objects'],
+    ['project_metadata', '{}', 0, 'record count'],
+    ['source_evidence', '{"id":1}\nnot-json\n', 2, 'invalid JSON'],
+    ['source_evidence', '{"id":1}\n\n', 1, 'invalid JSON'],
+    ['source_evidence', 'null\n', 1, 'JSON objects'],
+    ['source_evidence', '{}\n{}\n', 1, 'record count'],
+    ['source_evidence', '{}\n', 2, 'record count'],
+    ['source_evidence', '', 1, 'record count'],
+  ] as const)('rejects digest-valid malformed/count-mismatched %s payload %s', async (kind, text, records, error) => {
+    const archive = withPayload(kind, encoder.encode(text), records);
+    const result = await verifyProjectArchive(archive.manifest, function* (path) {
+      yield archive.payloads.get(path)!;
+    });
+    expect(result.valid).toBe(false);
+    expect(result.verifiedEntries).toBe(kinds.length - 1);
+    expect(result.errors.some((message) => message.includes(error))).toBe(true);
+    expect(result.errors.join(' ')).not.toContain('private source text');
+  });
+
+  it.each([
+    '{}\n{}\n',
+    '{}\r\n{}\r\n',
+    '{}\n{}',
+  ])('accepts supported NDJSON framing: %j', async (text) => {
+    const archive = withPayload('source_evidence', encoder.encode(text), 2);
+    const result = await verifyProjectArchive(archive.manifest, function* (path) {
+      for (const byte of archive.payloads.get(path)!) yield Uint8Array.of(byte);
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts empty zero-record NDJSON and multibyte UTF-8 split across chunks', async () => {
+    for (const [content, records] of [
+      ['', 0],
+      ['{"name":"项目 🌏"}\n', 1],
+    ] as const) {
+      const archive = withPayload('source_evidence', encoder.encode(content), records);
+      expect(
+        (
+          await verifyProjectArchive(archive.manifest, function* (path) {
+            for (const byte of archive.payloads.get(path)!) yield Uint8Array.of(byte);
+          })
+        ).valid
+      ).toBe(true);
+    }
+  });
+
+  it('rejects malformed UTF-8 instead of decoding replacement characters', async () => {
+    const archive = withPayload(
+      'source_evidence',
+      Uint8Array.from([123, 34, 120, 34, 58, 34, 255, 34, 125, 10]),
+      1
+    );
+    const result = await verifyProjectArchive(archive.manifest, function* (path) {
+      for (const byte of archive.payloads.get(path)!) yield Uint8Array.of(byte);
+    });
+    expect(result.valid).toBe(false);
+    expect(result.verifiedEntries).toBe(kinds.length - 1);
+  });
+
+  it('caps each encoded JSON record, not the aggregate size of a multi-record stream', async () => {
+    const text = `${JSON.stringify({ value: 'x'.repeat(120) })}\n`;
+    const archive = withPayload('source_evidence', encoder.encode(text.repeat(3)), 3);
+    const read = function* (path: string) {
+      yield archive.payloads.get(path)!;
+    };
+    const bytes = encoder.encode(text).length - 1;
+    expect(
+      (await verifyProjectArchive(archive.manifest, read, { maxRecordBytes: bytes })).valid
+    ).toBe(true);
+    const tooSmall = await verifyProjectArchive(archive.manifest, read, {
+      maxRecordBytes: bytes - 1,
+    });
+    expect(tooSmall.errors).toContain(
+      'source/evidence.ndjson: JSON record exceeds the configured byte bound'
+    );
+  });
+
+  it.each([
+    0,
+    -1,
+    NaN,
+    Infinity,
+    1.5,
+  ])('rejects invalid record byte bound %s without reading', async (maxRecordBytes) => {
+    const { manifest } = fixture();
+    let reads = 0;
+    const result = await verifyProjectArchive(
+      manifest,
+      function* () {
+        reads++;
+        yield new Uint8Array();
+      },
+      { maxRecordBytes }
+    );
+    expect(result.valid).toBe(false);
     expect(reads).toBe(0);
   });
 });
