@@ -7,16 +7,18 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { estimateTokens, type Material } from '@t3x-dev/core';
 import {
+  type AnyDB,
   archiveMaterial,
   createMaterial,
   findMaterialById,
   findMaterialByProjectHash,
   findMaterialsByProject,
   restoreArchivedMaterial,
+  updateMaterialContent,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
-import { parseDocument } from '../lib/import';
+import { parseDocument, parseUrl } from '../lib/import';
 import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -352,6 +354,244 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
   }
 });
 
+const createUrlMaterialRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/materials/url',
+  tags: ['Materials'],
+  summary: 'Import a URL as a source material',
+  description:
+    'Fetch, parse, and store URL content as a reusable project material for Workspace source evidence.',
+  request: {
+    params: z.object({
+      projectId: z.string(),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            url: z.string().url(),
+            title: z.string().trim().min(1).max(160).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Material created',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(MaterialResponseSchema),
+        },
+      },
+    },
+    400: {
+      description: 'URL import failed',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+materialsRoutes.openapi(createUrlMaterialRoute, async (c) => {
+  try {
+    const { projectId } = c.req.valid('param');
+    const { title: requestedTitle, url } = c.req.valid('json');
+    const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
+    const parsed = await parseUrl(url);
+    assertMaterialTextWithinLimits(parsed.raw_text);
+
+    const existing = await findMaterialByProjectHash(db, projectId, parsed.metadata.content_hash);
+    if (existing) {
+      const restored =
+        typeof existing.archived_at === 'string'
+          ? await restoreArchivedMaterial(db, existing.id)
+          : existing;
+
+      return c.json({
+        success: true as const,
+        data: toMaterialResponse(restored ?? existing),
+      });
+    }
+
+    const material = await createMaterial(db, {
+      project_id: projectId,
+      source_type: 'url',
+      title: requestedTitle ?? parsed.metadata.title ?? new URL(url).hostname,
+      filename: undefined,
+      mime_type: 'text/markdown',
+      content_text: parsed.raw_text,
+      content_hash: parsed.metadata.content_hash,
+      metadata: {
+        ...parsed.metadata,
+        source_url: url,
+      } as Record<string, unknown>,
+      token_estimate: estimateTokens(parsed.raw_text),
+    });
+
+    return c.json({
+      success: true as const,
+      data: toMaterialResponse(material),
+    });
+  } catch (err) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'MATERIAL_URL_IMPORT_FAILED',
+          message: err instanceof Error ? err.message : 'URL material import failed',
+        },
+      },
+      400
+    );
+  }
+});
+
+const reparseMaterialRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/materials/{materialId}/reparse',
+  tags: ['Materials'],
+  summary: 'Refresh a material parse preview',
+  description:
+    'Refreshes URL materials from their source URL. Uploaded documents are re-segmented from stored parsed text because raw upload bytes are not persisted.',
+  request: {
+    params: z.object({
+      projectId: z.string(),
+      materialId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Material parse refreshed',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(MaterialDetailResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Material not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+    409: {
+      description: 'Refreshed content duplicates another material',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+materialsRoutes.openapi(reparseMaterialRoute, async (c) => {
+  const { projectId, materialId } = c.req.valid('param');
+  const db = await getDB();
+  const material = await findMaterialById(db, materialId);
+
+  if (!material || material.project_id !== projectId) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'MATERIAL_NOT_FOUND', message: 'Material not found' },
+      },
+      404
+    );
+  }
+  const accessResult = await assertProjectAccess(c, db, projectId);
+  if (accessResult instanceof Response) return accessResult;
+
+  if (material.source_type !== 'url') {
+    const refreshed = await resegmentStoredMaterial(db, material);
+    return c.json({
+      success: true as const,
+      data: toMaterialDetailResponse(refreshed),
+    });
+  }
+
+  const sourceUrl = stringMetadata(material.metadata.source_url);
+  if (!sourceUrl) {
+    const refreshed = await resegmentStoredMaterial(db, material);
+    return c.json({
+      success: true as const,
+      data: toMaterialDetailResponse(refreshed),
+    });
+  }
+
+  try {
+    const parsed = await parseUrl(sourceUrl);
+    assertMaterialTextWithinLimits(parsed.raw_text);
+    const duplicate = await findMaterialByProjectHash(db, projectId, parsed.metadata.content_hash);
+    if (duplicate && duplicate.id !== material.id) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'MATERIAL_DUPLICATE',
+            message: 'The refreshed URL content matches another project material.',
+          },
+        },
+        409
+      );
+    }
+
+    const updated = await updateMaterialContent(db, material.id, {
+      title: parsed.metadata.title ?? material.title ?? new URL(sourceUrl).hostname,
+      filename: material.filename ?? null,
+      mime_type: 'text/markdown',
+      content_text: parsed.raw_text,
+      content_hash: parsed.metadata.content_hash,
+      metadata: {
+        ...parsed.metadata,
+        source_url: sourceUrl,
+        reparsed_at: new Date().toISOString(),
+        reparse_mode: 'url_refresh',
+      } as Record<string, unknown>,
+      token_estimate: estimateTokens(parsed.raw_text),
+    });
+
+    return c.json({
+      success: true as const,
+      data: toMaterialDetailResponse(updated ?? material),
+    });
+  } catch (err) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'MATERIAL_REPARSE_FAILED',
+          message: err instanceof Error ? err.message : 'Material reparse failed',
+        },
+      },
+      400
+    );
+  }
+});
+
+async function resegmentStoredMaterial(db: AnyDB, material: Material): Promise<Material> {
+  const updated = await updateMaterialContent(db, material.id, {
+    title: material.title ?? null,
+    filename: material.filename ?? null,
+    mime_type: material.mime_type ?? null,
+    content_text: material.content_text,
+    content_hash: material.content_hash,
+    metadata: {
+      ...material.metadata,
+      reparsed_at: new Date().toISOString(),
+      reparse_mode: 'stored_text_segments',
+    },
+    token_estimate: estimateTokens(material.content_text),
+  });
+
+  return updated ?? material;
+}
+
 function toMaterialResponse(material: Material) {
   const title = material.title ?? material.filename ?? material.id;
   return {
@@ -473,6 +713,22 @@ function parseQuality(material: Material) {
 
 function numberMetadata(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function stringMetadata(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function assertMaterialTextWithinLimits(text: string): void {
+  const parsedTextLength = text.trim().length;
+  if (parsedTextLength === 0) {
+    throw new Error('No readable text was extracted from this material.');
+  }
+  if (parsedTextLength > MAX_MATERIAL_TEXT_CHARS) {
+    throw new Error(
+      'Parsed text is too long for chat context. This material produced more than 20,000 characters.'
+    );
+  }
 }
 
 function excerpt(text: string): string {

@@ -9,6 +9,15 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  type ChangeProjectionV1,
+  deriveWorkspaceCurrentness,
+  type ReviewSnapshotV1,
+  WORKSPACE_CONTRACT_SCHEMA,
+  WORKSPACE_INTERACTION_CONTRACTS,
+  type WorkspaceInteractionId,
+  withChangeProjectionCurrentness,
+} from '@t3x-dev/application';
+import {
   type ApiKey,
   type Draft,
   describeTransitionObject,
@@ -19,26 +28,34 @@ import {
 import {
   type AnyDB,
   ConflictError,
+  digestWorkspaceDraftCommandRequestCanonicalJson,
+  digestWorkspaceDraftCommandResultCanonicalJson,
   findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
+  findWorkspaceDraftCommandReceipt,
   getLatestTransitionReviewSnapshot,
   getTransitionReviewSnapshot,
   insertYOpsLogEntry,
   listTransitionReviewSnapshots,
   listWorkspaceDrafts,
+  recordWorkspaceDraftCommandReceipt,
   type StoredTransitionReviewSnapshot,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
   upsertWorkspaceDraft,
+  WorkspaceDraftCommandConflictError,
+  type WorkspaceDraftCommandReceipt,
 } from '@t3x-dev/storage';
+import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
 import type { NodeSchema, SlotSchema, YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { sourceChatDraftContextText } from '../lib/source-chat-draft-context';
 import {
+  deriveTrustedTransitionPrincipal,
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
@@ -46,8 +63,10 @@ import {
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import { decideWorkspaceChange } from '../lib/workspace-change-decision';
 import {
+  type DecideWorkspaceTransitionResult,
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
+  type WorkspaceTransitionCommandResult,
   WorkspaceTransitionDecisionDeniedError,
   WorkspaceTransitionLegacyHeadError,
   WorkspaceTransitionNotFoundError,
@@ -103,6 +122,21 @@ const SaveWorkspaceRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
   if_revision: z.number().int().min(1).optional(),
 });
+
+const WorkspaceDraftCommandIds = WORKSPACE_INTERACTION_CONTRACTS.filter(
+  (contract) => contract.backend === 'command' && contract.surface === 'compose'
+).map((contract) => contract.id) as [WorkspaceInteractionId, ...WorkspaceInteractionId[]];
+
+const WorkspaceDraftCommandSchema = z.enum(WorkspaceDraftCommandIds);
+
+const ApplyWorkspaceDraftCommandRequestSchema = z
+  .object({
+    command: WorkspaceDraftCommandSchema,
+    request_id: z.string().trim().min(1).max(200),
+    workspace: z.record(z.string(), z.unknown()),
+    if_revision: z.number().int().min(1).optional(),
+  })
+  .strict();
 
 const WorkspaceValidationOverrideSchema = z.object({
   kind: z.literal('schema_review'),
@@ -189,6 +223,45 @@ const WorkspaceResponseSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
 });
 
+const WorkspaceDraftCommandReceiptSchema = z.object({
+  schema: z.literal(WORKSPACE_CONTRACT_SCHEMA),
+  command: WorkspaceDraftCommandSchema,
+  project_id: z.string(),
+  workspace_id: z.string(),
+  actor: z.object({
+    kind: z.enum(['human', 'agent', 'service']),
+    id: z.string(),
+  }),
+  request_id: z.string(),
+  request_digest: TransitionDigestSchema,
+  result_kind: z.literal('draft'),
+  result_digest: TransitionDigestSchema,
+  result_revision: z.number().int().min(1),
+  created_at: z.string(),
+  reused: z.boolean(),
+});
+
+const WorkspaceDraftCommandResponseSchema = WorkspaceResponseSchema.extend({
+  receipt: WorkspaceDraftCommandReceiptSchema,
+});
+
+const WorkspaceTransitionCommandResultSchema = z
+  .object({
+    action: z.enum(['decide', 'commit']),
+    request_id: z.string(),
+    result_kind: z.enum(['decision', 'commit']),
+    result_digest: TransitionDigestSchema,
+    reused: z.boolean(),
+  })
+  .strict();
+
+const WorkspaceTransitionCommandResultsSchema = z
+  .object({
+    decision: WorkspaceTransitionCommandResultSchema,
+    commit: WorkspaceTransitionCommandResultSchema.optional(),
+  })
+  .strict();
+
 const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
   commit: z
     .object({
@@ -199,6 +272,7 @@ const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
       result: TransitionDigestSchema,
     })
     .strict(),
+  commands: WorkspaceTransitionCommandResultsSchema.optional(),
 });
 
 const WorkspaceTransitionReviewResponseSchema = z.object({
@@ -211,6 +285,7 @@ const WorkspaceTransitionReviewResponseSchema = z.object({
 
 const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewResponseSchema.extend({
   decision_digest: TransitionDigestSchema,
+  commands: WorkspaceTransitionCommandResultsSchema.optional(),
   commit: z.any().optional(),
   workspace: z.record(z.string(), z.unknown()).optional(),
 });
@@ -242,6 +317,9 @@ const ListWorkspacesResponseSchema = z.object({
 const REVIEW_SAVE_STATUSES = new Set(['draft', 'ready_for_yops', 'schema_review']);
 
 type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
+type PersistWorkspaceDraftResult =
+  | { ok: true; draft: Draft }
+  | { ok: false; missingTargetBranch: string };
 
 const projectWorkspacesParams = z.object({
   projectId: z.string(),
@@ -450,6 +528,49 @@ const saveWorkspaceRoute = createRoute({
     },
     409: {
       description: 'Workspace revision or target branch conflict',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+const applyWorkspaceDraftCommandRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/draft-commands',
+  tags: ['Workspaces'],
+  summary: 'Apply an idempotent CAS Draft command to a Workspace staged state',
+  request: {
+    params: workspaceParams,
+    body: {
+      content: {
+        'application/json': {
+          schema: ApplyWorkspaceDraftCommandRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Workspace draft command applied or safely reused',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceDraftCommandResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Workspace target branch not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+    409: {
+      description: 'Workspace command request or revision conflict',
       content: {
         'application/json': { schema: ErrorResponseSchema },
       },
@@ -691,6 +812,13 @@ export const workspaceRoutes = new OpenAPIHono({
 });
 
 workspaceRoutes.onError((error, c) => {
+  if (error instanceof WorkspaceDraftCommandConflictError) {
+    return errorResponse(
+      c,
+      'CONFLICT',
+      'Workspace command request id was already used with different facts.'
+    );
+  }
   if (error instanceof ConflictError || isWorkspaceIdConflict(error)) {
     return errorResponse(
       c,
@@ -778,6 +906,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
       actor: authority.principal.actor,
       policyBinding: authority.policyBinding,
     });
+    const commands = workspaceTransitionCommandsToWire(decided);
     return c.json({
       success: true as const,
       data: {
@@ -785,6 +914,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
         transition: decided.transition,
         precondition: transitionPreconditionToWire(decided.precondition),
         decision_digest: decided.decisionDigest,
+        ...(commands === undefined ? {} : { commands }),
         review_snapshot: decided.reviewSnapshot,
         change_projection: decided.changeProjection,
         ...(decided.commit === undefined ? {} : { commit: decided.commit }),
@@ -809,11 +939,14 @@ workspaceRoutes.openapi(listWorkspaceTransitionReviewSnapshotsRoute, async (c) =
     ...(transitionId ? { transitionId } : {}),
     limit,
   });
+  const snapshotsWithCurrentness = await Promise.all(
+    snapshots.map((snapshot) => transitionReviewSnapshotToWireWithCurrentness(db, snapshot))
+  );
 
   return c.json(
     {
       success: true as const,
-      data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
+      data: { snapshots: snapshotsWithCurrentness },
     },
     200
   );
@@ -839,7 +972,7 @@ workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (
   return c.json(
     {
       success: true as const,
-      data: transitionReviewSnapshotToWire(snapshot),
+      data: await transitionReviewSnapshotToWireWithCurrentness(db, snapshot),
     },
     200
   );
@@ -859,7 +992,7 @@ workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => 
   return c.json(
     {
       success: true as const,
-      data: transitionReviewSnapshotToWire(snapshot),
+      data: await transitionReviewSnapshotToWireWithCurrentness(db, snapshot),
     },
     200
   );
@@ -906,57 +1039,137 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
-  const storedWorkspace = storedDraft?.workspace_state ?? {};
-  const {
-    backendCandidateId: _storedBackendCandidateId,
-    lastCommitHash: _storedLastCommitHash,
-    status: storedStatus,
-    ...storedEditableWorkspace
-  } = storedWorkspace;
-  const {
-    backendCandidateId: _ignoredBackendCandidateId,
-    lastCommitHash: _ignoredLastCommitHash,
-    status,
-    ...clientWorkspace
-  } = workspace;
-  const storedBackendCandidateId = resolveStoredBackendCandidateId(storedWorkspace);
-  const nextStatus = resolveReviewSaveStatus(status, storedStatus);
-  const savedAt = new Date().toISOString();
-  const persistedWorkspace = {
-    ...storedEditableWorkspace,
-    ...clientWorkspace,
-    id: workspaceId,
+  const result = await persistWorkspaceDraftCommand(db, {
     projectId,
-    updatedAt: savedAt,
-    ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
-    ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
-  };
-  const missingTargetBranch = await findMissingWorkspaceTargetBranch(
-    db,
-    projectId,
-    persistedWorkspace
-  );
-  if (missingTargetBranch) {
-    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${missingTargetBranch}`);
+    workspaceId,
+    workspace,
+    ifRevision,
+  });
+  if (!result.ok) {
+    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${result.missingTargetBranch}`);
   }
-  const draft = await upsertWorkspaceDraft(
-    db,
-    {
-      project_id: projectId,
-      workspace_id: workspaceId,
-      title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
-      parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
-      target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
-      workspace_state: workspaceStateForPersistence(persistedWorkspace),
-    },
-    ifRevision
-  );
 
   return c.json({
     success: true as const,
-    data: envelopeFromDraft(draft, workspaceId),
+    data: envelopeFromDraft(result.draft, workspaceId),
   });
+});
+
+workspaceRoutes.openapi(applyWorkspaceDraftCommandRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const {
+    command,
+    request_id: requestId,
+    workspace,
+    if_revision: ifRevision,
+  } = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+
+  // @ts-expect-error - OpenAPI context apiKey typing
+  const actor = deriveTrustedTransitionPrincipal(c.get('apiKey') as ApiKey | undefined).actor;
+  const requestDigest = workspaceDraftCommandRequestDigest({
+    command,
+    projectId,
+    workspaceId,
+    ifRevision,
+    workspace,
+  });
+
+  const applyCommand = async (txOrDb: AnyDB) => {
+    const prior = await findWorkspaceDraftCommandReceipt(txOrDb, {
+      projectId,
+      workspaceId,
+      actor,
+      requestId,
+    });
+    if (prior !== null) {
+      assertWorkspaceDraftCommandReceiptMatches(prior, command, requestDigest);
+      return { receipt: prior, reused: true };
+    }
+
+    const persisted = await persistWorkspaceDraftCommand(txOrDb, {
+      projectId,
+      workspaceId,
+      workspace,
+      ifRevision,
+    });
+    if (!persisted.ok) return persisted;
+
+    const resultWorkspace = workspaceFromDraft(persisted.draft, workspaceId);
+    const resultDigest = workspaceDraftCommandResultDigest({
+      projectId,
+      workspaceId,
+      command,
+      resultRevision: persisted.draft.revision,
+      workspace: workspaceStateForPersistence(resultWorkspace),
+    });
+    return recordWorkspaceDraftCommandReceipt(txOrDb, {
+      projectId,
+      workspaceId,
+      command,
+      actor,
+      requestId,
+      requestDigest,
+      resultRevision: persisted.draft.revision,
+      resultDigest,
+      resultWorkspaceState: workspaceStateForPersistence(resultWorkspace),
+    });
+  };
+
+  try {
+    const runner = db as unknown as Partial<TxRunner>;
+    const result =
+      typeof runner.transaction === 'function'
+        ? await runner.transaction((tx) => applyCommand(tx as AnyDB))
+        : await applyCommand(db);
+
+    if (!('receipt' in result)) {
+      return errorResponse(
+        c,
+        'NOT_FOUND',
+        `Target branch not found: ${result.missingTargetBranch}`
+      );
+    }
+
+    const workspaceWithRevision = {
+      ...result.receipt.resultWorkspaceState,
+      revision: result.receipt.resultRevision,
+    };
+
+    return c.json({
+      success: true as const,
+      data: {
+        ...envelopeFromWorkspace(workspaceWithRevision, workspaceId),
+        receipt: workspaceDraftCommandReceiptToWire(result.receipt, result.reused),
+      },
+    });
+  } catch (error) {
+    if (error instanceof ConflictError) {
+      const prior = await findWorkspaceDraftCommandReceipt(db, {
+        projectId,
+        workspaceId,
+        actor,
+        requestId,
+      });
+      if (prior !== null) {
+        assertWorkspaceDraftCommandReceiptMatches(prior, command, requestDigest);
+        const workspaceWithRevision = {
+          ...prior.resultWorkspaceState,
+          revision: prior.resultRevision,
+        };
+        return c.json({
+          success: true as const,
+          data: {
+            ...envelopeFromWorkspace(workspaceWithRevision, workspaceId),
+            receipt: workspaceDraftCommandReceiptToWire(prior, true),
+          },
+        });
+      }
+    }
+    throw error;
+  }
 });
 
 workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
@@ -1057,6 +1270,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
           decision: decided.commit.decision.digest,
           result: decided.commit.result.digest,
         },
+        commands: workspaceTransitionCommandsToWire(decided),
         workspace: decided.workspace,
       };
     };
@@ -1076,6 +1290,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
       data: {
         ...envelopeFromWorkspace(result.workspace, workspaceId),
         commit: result.commit,
+        ...(result.commands === undefined ? {} : { commands: result.commands }),
       },
     });
   } catch (err) {
@@ -1089,6 +1304,141 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     return workspaceTransitionErrorResponse(c, err);
   }
 });
+
+async function persistWorkspaceDraftCommand(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    workspace: Record<string, unknown>;
+    ifRevision?: number;
+  }
+): Promise<PersistWorkspaceDraftResult> {
+  const storedDraft = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
+  const storedWorkspace = storedDraft?.workspace_state ?? {};
+  const {
+    backendCandidateId: _storedBackendCandidateId,
+    lastCommitHash: _storedLastCommitHash,
+    status: storedStatus,
+    ...storedEditableWorkspace
+  } = storedWorkspace;
+  const {
+    backendCandidateId: _ignoredBackendCandidateId,
+    lastCommitHash: _ignoredLastCommitHash,
+    status,
+    ...clientWorkspace
+  } = input.workspace;
+  const storedBackendCandidateId = resolveStoredBackendCandidateId(storedWorkspace);
+  const nextStatus = resolveReviewSaveStatus(status, storedStatus);
+  const savedAt = new Date().toISOString();
+  const persistedWorkspace = {
+    ...storedEditableWorkspace,
+    ...clientWorkspace,
+    id: input.workspaceId,
+    projectId: input.projectId,
+    updatedAt: savedAt,
+    ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
+    ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
+  };
+  const missingTargetBranch = await findMissingWorkspaceTargetBranch(
+    db,
+    input.projectId,
+    persistedWorkspace
+  );
+  if (missingTargetBranch) {
+    return { ok: false, missingTargetBranch };
+  }
+  const draft = await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: input.projectId,
+      workspace_id: input.workspaceId,
+      title: stringFromWorkspace(persistedWorkspace, 'title', input.workspaceId),
+      parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
+      target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+      workspace_state: workspaceStateForPersistence(persistedWorkspace),
+    },
+    input.ifRevision
+  );
+  return { ok: true, draft };
+}
+
+function workspaceDraftCommandRequestDigest(input: {
+  command: WorkspaceInteractionId;
+  projectId: string;
+  workspaceId: string;
+  ifRevision?: number;
+  workspace: Record<string, unknown>;
+}): string {
+  return digestWorkspaceDraftCommandRequestCanonicalJson(
+    canonicalJson({
+      schema: WORKSPACE_CONTRACT_SCHEMA,
+      command: input.command,
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      ifRevision: input.ifRevision ?? null,
+      payload: { workspace: input.workspace },
+    })
+  );
+}
+
+function workspaceDraftCommandResultDigest(input: {
+  command: WorkspaceInteractionId;
+  projectId: string;
+  workspaceId: string;
+  resultRevision: number;
+  workspace: Record<string, unknown>;
+}): string {
+  return digestWorkspaceDraftCommandResultCanonicalJson(
+    canonicalJson({
+      schema: WORKSPACE_CONTRACT_SCHEMA,
+      command: input.command,
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      resultKind: 'draft',
+      resultRevision: input.resultRevision,
+      workspace: input.workspace,
+    })
+  );
+}
+
+function canonicalJson(value: unknown): string {
+  const json = JSON.stringify(value);
+  if (json === undefined) {
+    throw new TypeError('Workspace command facts must be JSON serializable');
+  }
+  return canonicalizeProtocolValue(JSON.parse(json) as ProtocolValue);
+}
+
+function assertWorkspaceDraftCommandReceiptMatches(
+  receipt: WorkspaceDraftCommandReceipt,
+  command: WorkspaceInteractionId,
+  requestDigest: string
+): void {
+  if (receipt.command !== command || receipt.requestDigest !== requestDigest) {
+    throw new WorkspaceDraftCommandConflictError(receipt.requestId);
+  }
+}
+
+function workspaceDraftCommandReceiptToWire(
+  receipt: WorkspaceDraftCommandReceipt,
+  reused: boolean
+) {
+  return {
+    schema: WORKSPACE_CONTRACT_SCHEMA,
+    command: receipt.command,
+    project_id: receipt.projectId,
+    workspace_id: receipt.workspaceId,
+    actor: receipt.actor,
+    request_id: receipt.requestId,
+    request_digest: receipt.requestDigest,
+    result_kind: 'draft' as const,
+    result_digest: receipt.resultDigest,
+    result_revision: receipt.resultRevision,
+    created_at: receipt.createdAt,
+    reused,
+  };
+}
 
 function resolveReviewSaveStatus(status: unknown, storedStatus: unknown): string {
   if (status === 'committed') return 'schema_review';
@@ -1395,6 +1745,28 @@ function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondit
   };
 }
 
+function workspaceTransitionCommandsToWire(
+  result: Pick<DecideWorkspaceTransitionResult, 'decisionCommand' | 'commitCommand'>
+) {
+  if (result.decisionCommand === undefined) return undefined;
+  return {
+    decision: workspaceTransitionCommandToWire(result.decisionCommand),
+    ...(result.commitCommand === undefined
+      ? {}
+      : { commit: workspaceTransitionCommandToWire(result.commitCommand) }),
+  };
+}
+
+function workspaceTransitionCommandToWire(command: WorkspaceTransitionCommandResult) {
+  return {
+    action: command.action,
+    request_id: command.requestId,
+    result_kind: command.resultKind,
+    result_digest: command.resultDigest,
+    reused: command.reused,
+  };
+}
+
 function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) {
   return {
     snapshot_id: record.snapshotId,
@@ -1409,6 +1781,56 @@ function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) 
     change_projection: record.changeProjection,
     created_at: record.createdAt,
   };
+}
+
+async function transitionReviewSnapshotToWireWithCurrentness(
+  db: AnyDB,
+  record: StoredTransitionReviewSnapshot
+) {
+  const projection = await changeProjectionWithCurrentness(db, record);
+  return {
+    ...transitionReviewSnapshotToWire(record),
+    change_projection: projection,
+  };
+}
+
+async function changeProjectionWithCurrentness(
+  db: AnyDB,
+  record: StoredTransitionReviewSnapshot
+): Promise<ChangeProjectionV1> {
+  const projection = record.changeProjection as unknown as ChangeProjectionV1;
+  const snapshot = record.snapshot as unknown as ReviewSnapshotV1;
+  const precondition = snapshot.review.precondition;
+  const draft = await findWorkspaceDraft(db, record.projectId, record.workspaceId);
+  const branch = await findBranchByName(db, record.projectId, precondition.refName);
+  const fingerprint = {
+    draftRevision: precondition.workspaceRevision,
+    refHead: precondition.refHead,
+    effectDigest: precondition.effectDigest,
+    proposalDigest: precondition.proposalDigest,
+    statementDigests: [...precondition.statementDigests],
+    policyDigest: precondition.policyDigest,
+  };
+  const decisionOutcome =
+    snapshot.transition.mode === 'transition' &&
+    snapshot.transition.decision.observation === 'supplied'
+      ? snapshot.transition.decision.outcome
+      : undefined;
+  return withChangeProjectionCurrentness(
+    projection,
+    deriveWorkspaceCurrentness({
+      snapshot: {
+        ...fingerprint,
+        ...(decisionOutcome === undefined ? {} : { decisionOutcome }),
+      },
+      current: {
+        ...fingerprint,
+        draftRevision: draft?.revision ?? precondition.workspaceRevision + 1,
+        refHead:
+          branch === null ? `missing-ref:${precondition.refName}` : (branch.headCommitHash ?? null),
+      },
+    })
+  );
 }
 
 function transitionPreconditionFromWire(

@@ -10,6 +10,7 @@ import type {
   ApiErrorResponse,
   ApiResponse,
   ApiSuccessResponse,
+  ApplyWorkspaceDraftCommandInput,
   ApplyYOpsResult,
   AttachTransitionStatementInput,
   AttachTransitionStatementResult,
@@ -35,6 +36,7 @@ import type {
   CreateProjectInput,
   CreateShareTokenInput,
   CreateTurnInput,
+  CreateUrlMaterialInput,
   CreateWebhookInput,
   CreateWorkspaceExtractionProposalInput,
   DecideTransitionInput,
@@ -71,6 +73,9 @@ import type {
   ListWorkspaceTransitionReviewSnapshotsParams,
   ListWorkspaceTransitionReviewSnapshotsResponse,
   ListYSchemaArtifactsParams,
+  Material,
+  MaterialDetail,
+  MaterialsCapability,
   MergeDraft,
   MergeDraftCommitInput,
   MergeDraftCommitResult,
@@ -101,6 +106,7 @@ import type {
   VerifyTransitionInput,
   VerifyTransitionResult,
   Webhook,
+  WorkspaceDraftCommandEnvelope,
   WorkspaceExtractionProposalEnvelope,
   WorkspaceTransitionDecisionEnvelope,
   WorkspaceTransitionReviewEnvelope,
@@ -145,6 +151,8 @@ export class T3xClient {
   readonly sourceThreads: SourceThreadCapability;
   /** Persisted Repository Review Workspace projections. */
   readonly workspaces: RepositoryWorkspaceCapability;
+  /** Reusable project source materials. */
+  readonly materials: MaterialsCapability;
 
   constructor(config: T3xClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -175,6 +183,8 @@ export class T3xClient {
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
+      applyDraftCommand: (projectId, workspaceId, input) =>
+        this.applyWorkspaceDraftCommand(projectId, workspaceId, input),
       createExtractionProposal: (projectId, workspaceId, input) =>
         this.createWorkspaceExtractionProposal(projectId, workspaceId, input),
       reviewTransition: (projectId, workspaceId, input) =>
@@ -187,6 +197,15 @@ export class T3xClient {
         this.getLatestWorkspaceTransitionReviewSnapshot(projectId, workspaceId, params),
       getReviewSnapshot: (projectId, workspaceId, snapshotId, options) =>
         this.getWorkspaceTransitionReviewSnapshot(projectId, workspaceId, snapshotId, options),
+    });
+    this.materials = Object.freeze<MaterialsCapability>({
+      list: (projectId) => this.listMaterials(projectId),
+      get: (projectId, materialId) => this.getMaterial(projectId, materialId),
+      uploadDocument: (projectId, file, filename) =>
+        this.uploadDocumentMaterial(projectId, file, filename),
+      createUrl: (projectId, input) => this.createUrlMaterial(projectId, input),
+      reparse: (projectId, materialId) => this.reparseMaterial(projectId, materialId),
+      archive: (projectId, materialId) => this.archiveMaterial(projectId, materialId),
     });
   }
 
@@ -741,6 +760,70 @@ export class T3xClient {
   }
 
   // ============================================
+  // Materials
+  // ============================================
+
+  async listMaterials(projectId: string): Promise<Material[]> {
+    return this.request<Material[]>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials`
+    );
+  }
+
+  async getMaterial(projectId: string, materialId: string): Promise<MaterialDetail> {
+    return this.request<MaterialDetail>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+    );
+  }
+
+  async createUrlMaterial(projectId: string, input: CreateUrlMaterialInput): Promise<Material> {
+    return this.request<Material>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/url`,
+      input
+    );
+  }
+
+  async reparseMaterial(projectId: string, materialId: string): Promise<MaterialDetail> {
+    return this.request<MaterialDetail>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}/reparse`
+    );
+  }
+
+  async archiveMaterial(projectId: string, materialId: string): Promise<MaterialDetail> {
+    return this.request<MaterialDetail>(
+      'DELETE',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+    );
+  }
+
+  async uploadDocumentMaterial(projectId: string, file: Blob, filename: string): Promise<Material> {
+    const formData = new FormData();
+    formData.append('file', file, filename);
+
+    const url = new URL(
+      `${this.baseUrl}/v1/projects/${encodeURIComponent(projectId)}/materials/document`
+    );
+    const headers = { ...this.headers };
+    delete headers['Content-Type'];
+
+    const response = await this.fetchFn(url.toString(), {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = (await response.json()) as ApiResponse<Material>;
+    if (!response.ok || !data.success) {
+      const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
+      throw new T3xApiError(error.code, error.message, response.status);
+    }
+    return (data as ApiSuccessResponse<Material>).data;
+  }
+
+  // ============================================
   // Leaves
   // ============================================
 
@@ -900,6 +983,18 @@ export class T3xClient {
     return this.request<RepositoryWorkspaceEnvelope>(
       'GET',
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
+  }
+
+  async applyWorkspaceDraftCommand(
+    projectId: string,
+    workspaceId: string,
+    input: ApplyWorkspaceDraftCommandInput
+  ): Promise<WorkspaceDraftCommandEnvelope> {
+    return this.request<WorkspaceDraftCommandEnvelope>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/draft-commands`,
+      input
     );
   }
 

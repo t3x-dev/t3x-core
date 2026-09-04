@@ -44,6 +44,11 @@ export interface MaterialDetail extends Material {
   parse_quality: MaterialParseQuality;
 }
 
+export interface CreateUrlMaterialInput {
+  url: string;
+  title?: string;
+}
+
 export async function listMaterialsByProject(projectId: string): Promise<Material[]> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/materials`
@@ -86,4 +91,34 @@ export async function uploadDocumentMaterial(projectId: string, file: File): Pro
     }
   );
   return handleResponse<Material>(res);
+}
+
+export async function createUrlMaterial(
+  projectId: string,
+  input: CreateUrlMaterialInput
+): Promise<Material> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/url`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }
+  );
+  return handleResponse<Material>(res);
+}
+
+export async function reparseProjectMaterial(
+  projectId: string,
+  materialId: string
+): Promise<MaterialDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(
+      materialId
+    )}/reparse`,
+    {
+      method: 'POST',
+    }
+  );
+  return handleResponse<MaterialDetail>(res);
 }

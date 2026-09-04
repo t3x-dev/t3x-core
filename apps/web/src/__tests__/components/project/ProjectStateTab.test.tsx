@@ -128,14 +128,17 @@ const PRD_COMMIT: ApiCommit = {
     trees: [
       {
         key: 'prd',
-        slots: { title: 'PRD audience handoff' },
+        slots: { title: 'Checkout rollout guardrails' },
         children: [
           {
             key: 'summary',
             slots: {
-              problem: 'You: i need food and drink',
-              audience: '',
-              outcome: 'Office workers',
+              problem:
+                'Checkout-api release risk is hard to audit without deterministic rollout evidence.',
+              audience: 'Release managers and checkout platform engineers',
+              outcome: 'Service checkout-api currently has replicas 4',
+              scope: 'checkout-api canary rollout',
+              source: 'source_chat:conv_d4d239f3',
             },
             children: [],
           },
@@ -144,11 +147,31 @@ const PRD_COMMIT: ApiCommit = {
             slots: {},
             children: [
               {
-                key: '0',
+                key: 'checkout_api_rollout',
                 slots: {
-                  title: 'Find food and drinks',
+                  title: 'Service checkout-api currently has replicas 4',
                   priority: 'P1',
-                  acceptance: 'Users can quickly find satisfying options',
+                  owner: 'Checkout platform',
+                  service: 'checkout-api',
+                  environment: 'production',
+                  acceptance: 'Replay confirms desired replicas before traffic promotion',
+                  release_gate: 'Replay verifies canary rollout before commit',
+                  rollback: 'Restore baseline replicas and disable canary traffic',
+                  metric: 'checkout error rate remains below 0.2 percent',
+                },
+                children: [],
+              },
+              {
+                key: 'traffic_guardrails',
+                slots: {
+                  title: 'Guard canary traffic before promotion',
+                  priority: 'P1',
+                  owner: 'Release agent',
+                  service: 'checkout-api',
+                  environment: 'production',
+                  acceptance: 'Promotion only proceeds after replay and schema checks pass',
+                  rollback: 'Hold at current exposure and page release owner',
+                  metric: 'p95 latency remains within rollout budget',
                 },
                 children: [],
               },
@@ -156,7 +179,12 @@ const PRD_COMMIT: ApiCommit = {
           },
           {
             key: 'metadata',
-            slots: { version: '1.0.0', source: 'source_chat:conv_d4d239f3' },
+            slots: {
+              version: '1.0.0',
+              source: 'source_chat:conv_d4d239f3',
+              owner: 'Release agent',
+              review_mode: 'pull-request level',
+            },
             children: [],
           },
           {
@@ -173,10 +201,21 @@ const PRD_COMMIT: ApiCommit = {
                   rollback: 'Kill switch',
                   success_gate: 'No duplicate orders',
                   verification_window: 'Seventh rollout field remains visible',
+                  schedule: 'weekday business-hours release window',
                 },
                 children: [],
               },
             ],
+          },
+          {
+            key: 'verification',
+            slots: {
+              replay: 'matched',
+              schema: 'valid',
+              evidence_review: 'pending',
+              reviewer: 'release-agent',
+            },
+            children: [],
           },
         ],
       },
@@ -266,18 +305,55 @@ const PARENT_COMMIT: ApiCommit = {
     trees: [
       {
         key: 'prd',
-        slots: { title: 'PRD audience handoff' },
+        slots: { title: 'Checkout rollout guardrails' },
         children: [
           {
             key: 'summary',
             slots: {
-              problem: 'Users need food and drink',
-              audience: '',
-              outcome: 'Find a meal',
+              problem: 'Manual rollout steps make checkout-api releases hard to audit.',
+              audience: 'Release managers and checkout platform engineers',
+              outcome: 'Reduce deployment risk with manual review checkpoints.',
+              scope: 'checkout-api canary rollout',
+              source: 'source_chat:conv_d4d239f3',
             },
             children: [],
           },
-          ...PRD_COMMIT.content.trees[0]!.children.slice(1),
+          {
+            key: 'requirements',
+            slots: {},
+            children: [
+              {
+                key: 'checkout_api_rollout',
+                slots: {
+                  title: 'Scale checkout-api manually before launch',
+                  priority: 'P1',
+                  owner: 'Checkout platform',
+                  service: 'checkout-api',
+                  environment: 'production',
+                  acceptance: 'Replay confirms desired replicas before traffic promotion',
+                  legacy_gate: 'Manual approver confirms launch note before merge',
+                  rollback: 'Restore baseline replicas and disable canary traffic',
+                  metric: 'checkout error rate remains below 0.2 percent',
+                },
+                children: [],
+              },
+              {
+                key: 'traffic_guardrails',
+                slots: {
+                  title: 'Guard canary traffic before promotion',
+                  priority: 'P1',
+                  owner: 'Release agent',
+                  service: 'checkout-api',
+                  environment: 'production',
+                  acceptance: 'Promotion only proceeds after replay and schema checks pass',
+                  rollback: 'Hold at current exposure and page release owner',
+                  metric: 'p95 latency remains within rollout budget',
+                },
+                children: [],
+              },
+            ],
+          },
+          ...PRD_COMMIT.content.trees[0]!.children.slice(2),
         ],
       },
     ],
@@ -295,10 +371,10 @@ const VALIDATION: YSchemaValidationSummary = {
   gapCount: 1,
   gaps: [
     {
-      code: 'REQUIRED_SLOT_MISSING',
-      label: 'Missing required field',
-      message: 'audience is required.',
-      path: 'prd.summary.audience',
+      code: 'RETIRED_GATE_REVIEW',
+      label: 'Retired gate review',
+      message: 'legacy_gate was removed and needs release-owner signoff.',
+      path: 'prd.requirements.checkout_api_rollout.legacy_gate',
     },
   ],
   ready: false,
@@ -465,16 +541,30 @@ function setupHookMocks() {
         source: 'source_chat',
         turn_hash: 'turn_1',
         yops: [
-          { set: { path: 'prd.summary.problem', value: 'You: i need food and drink' } },
-          { set: { path: 'prd.summary.outcome', value: 'Office workers' } },
           {
-            populate: {
-              path: 'prd.requirements.0',
-              values: {
-                title: 'Find food and drinks',
-                priority: 'P1',
-                acceptance: 'Users can quickly find satisfying options',
-              },
+            set: {
+              path: 'prd.summary.problem',
+              value:
+                'Checkout-api release risk is hard to audit without deterministic rollout evidence.',
+            },
+          },
+          {
+            set: {
+              path: 'prd.summary.outcome',
+              value: 'Service checkout-api currently has replicas 4',
+            },
+          },
+          {
+            set: {
+              path: 'prd.requirements.checkout_api_rollout.title',
+              value: 'Service checkout-api currently has replicas 4',
+            },
+          },
+          { unset: { path: 'prd.requirements.checkout_api_rollout.legacy_gate' } },
+          {
+            append: {
+              path: 'prd.requirements.checkout_api_rollout.release_gate',
+              value: 'Replay verifies canary rollout before commit',
             },
           },
         ],
@@ -512,57 +602,100 @@ describe('ProjectStateTab', () => {
     } as never);
   });
 
-  it('loads the branch HEAD and renders the structured state tree by default', async () => {
+  it('loads the branch HEAD and renders the structured state tree from the Structure view', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
+    hookMocks.projectWorkspaces = [
+      {
+        baseCommitHash: PRD_COMMIT.hash,
+        id: 'workspace_main_prd',
+        outputTargets: [
+          {
+            format: 'markdown',
+            id: 'output_prd_markdown',
+            status: 'draft_target',
+            title: 'PRD document export',
+            type: 'document',
+          },
+        ],
+        projectId: 'proj_test',
+        schemaBindings: [],
+        schemaCandidate: { fields: [], summary: 'Current branch workspace' },
+        schemaReview: { gaps: [], summary: 'Ready', verdict: 'ready' },
+        sourceBundle: [],
+        status: 'draft',
+        summary: 'Current branch workspace',
+        targetBranch: 'main',
+        title: 'Branch workspace',
+        updatedAt: '2026-07-09T08:03:00.000Z',
+        yopsDraft: { id: 'draft_workspace_main_prd', operations: [] },
+      },
+    ];
+
     renderStateTab();
 
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(await screen.findAllByText('PRD audience handoff committed')).not.toHaveLength(0);
     expect(document.querySelector('[data-state-view="structure"]')).toHaveClass(
       'h-full',
       'min-h-0',
       'overflow-hidden'
     );
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Snapshot')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Path / Key')).toBeInTheDocument();
-    expect(screen.getByText('summary')).toBeInTheDocument();
-    expect(screen.getByText('problem')).toBeInTheDocument();
+    expect(screen.getAllByText('summary')).not.toHaveLength(0);
+    expect(screen.getAllByText('problem')).not.toHaveLength(0);
     expect(screen.getAllByText('audience')).not.toHaveLength(0);
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('REMOVE')[0]).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
-    const stateDetails = screen.getByRole('heading', { name: 'State details' }).closest('section');
-    expect(stateDetails).not.toBeNull();
-    expect(within(stateDetails as HTMLElement).getAllByText('cb5813f')[0]).toHaveAttribute(
-      'title',
-      PRD_COMMIT.hash
+    const relationships = screen.getByRole('complementary', { name: 'State relationships' });
+    expect(within(relationships).queryByText('Document')).not.toBeInTheDocument();
+    expect(within(relationships).getByText('About')).toBeInTheDocument();
+    expect(
+      within(relationships).queryByText('Version control for structured state.')
+    ).not.toBeInTheDocument();
+    expect(within(relationships).queryByText('structured-state')).not.toBeInTheDocument();
+    expect(within(relationships).getByText('Revision')).toBeInTheDocument();
+    expect(within(relationships).getByText('Validation')).toBeInTheDocument();
+    expect(within(relationships).getAllByText('t3x/prd')).not.toHaveLength(0);
+    expect(within(relationships).getAllByText('prd')).not.toHaveLength(0);
+    expect(within(relationships).getByText('HEAD cb5813f')).toBeInTheDocument();
+    expect(within(relationships).getByText('1 commit')).toBeInTheDocument();
+    expect(within(relationships).getByText('5 changes')).toBeInTheDocument();
+    expect(within(relationships).getByText('1 gap')).toBeInTheDocument();
+    expect(within(relationships).getByText('Sources')).toBeInTheDocument();
+    expect(within(relationships).getByRole('link', { name: /conv_d4d239f3/ })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/project/proj_test/sources/conversations/conv_d4d239f3')
     );
-    expect(within(stateDetails as HTMLElement).getByText('base-pr')).toHaveAttribute(
-      'title',
-      PRD_COMMIT.parents[0]
+    expect(within(relationships).getByText('Used by')).toBeInTheDocument();
+    expect(within(relationships).getByRole('link', { name: /Branch workspace/ })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/workspaces?branch=main'
     );
+    expect(within(relationships).getByText('PRD document export')).toBeInTheDocument();
+    expect(within(relationships).queryByText('Contributors')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'State details' })).not.toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project%3Fview%3Dstructure%26branch%3Dmain'
     );
+    expect(screen.getByRole('link', { name: 'Use this state' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/workspaces?branch=main'
+    );
+    expect(screen.queryByRole('button', { name: 'Like 0' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Follow branch main' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
       'href',
       '/t3x-dev/test-project/workspaces?branch=main'
     );
-    expect(screen.getByRole('link', { name: 'cb5813f' })).toHaveAttribute(
-      'href',
-      `/t3x-dev/test-project?view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
-    );
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '2 changed paths' })).toHaveAttribute(
-      'href',
-      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
-    );
+    expect(screen.queryByRole('link', { name: /changed paths/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('button', { name: /Canvas/ })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
@@ -573,29 +706,204 @@ describe('ProjectStateTab', () => {
     expect(structureScroller).toHaveAttribute('tabindex', '0');
     const structureScrollArea = structureScroller.closest('[data-slot="state-scroll-area"]');
     expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
-    expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
+    expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'vertical');
     expect(within(structureView).getByRole('table')).toHaveClass(
       'w-full',
-      'min-w-[760px]',
-      'table-fixed',
-      'text-xs',
-      'leading-5'
+      'min-w-0',
+      'table-fixed'
     );
-    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[30%]');
-    expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
-      'sticky',
-      'top-0'
-    );
-    expect(within(structureView).getByText('Path / Key').closest('th')).toHaveClass(
-      'sticky',
-      'left-0'
-    );
-    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-9');
-    expect(screen.getByRole('heading', { name: 'State details' })).toHaveClass('text-base');
+    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[29%]');
+    expect(within(structureView).getByRole('table').querySelector('thead')).toBeNull();
+    expect(within(structureScroller).getByText('problem').closest('tr')).toHaveClass('h-[34px]');
+    expect(screen.queryByRole('heading', { name: 'State details' })).not.toBeInTheDocument();
 
     expect(
       screen.queryByRole('separator', { name: 'Resize state details' })
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a selected state node provenance form from Structure row clicks', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
+
+    renderStateTab();
+
+    expect(await screen.findAllByText('PRD audience handoff committed')).not.toHaveLength(0);
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    const stateRowsRegion = within(structureView).getByRole('region', { name: 'State rows' });
+    expect(stateRowsRegion.closest('[data-slot="state-scroll-area"]')).toHaveAttribute(
+      'data-scroll-axes',
+      'vertical'
+    );
+    expect(within(stateRowsRegion).getByRole('table')).toHaveClass('min-w-0');
+    const exactDiffKinds = within(stateRowsRegion)
+      .getAllByRole('row')
+      .filter((row) => row.getAttribute('data-diff-exact') === 'true')
+      .map((row) => row.getAttribute('data-diff-kind'))
+      .sort();
+    expect(exactDiffKinds).toEqual(['added', 'modified', 'modified', 'modified', 'removed']);
+    expect(within(stateRowsRegion).getAllByRole('row').length).toBeGreaterThanOrEqual(30);
+    const selectedStateRow = within(stateRowsRegion)
+      .getAllByRole('row')
+      .find((stateRow) => stateRow.getAttribute('aria-selected') === 'true');
+    expect(selectedStateRow?.getAttribute('data-diff-kind')).toBe('modified');
+    expect(selectedStateRow?.getAttribute('class')).toContain('bg-[var(--diff-modified-bg)]');
+    expect(selectedStateRow?.getAttribute('class')).toContain('[&>td]:bg-[var(--panel)]');
+    expect(selectedStateRow?.querySelector('td > span[aria-hidden="true"]')).toHaveClass(
+      'bg-[var(--diff-modified-accent)]'
+    );
+    expect(selectedStateRow?.querySelector('td')?.getAttribute('class')).not.toContain(
+      'accent-commit'
+    );
+
+    const selectedNode = screen.getByRole('complementary', { name: 'State change provenance' });
+    const selectedForm = within(selectedNode).getByRole('form', {
+      name: 'State change provenance form',
+    });
+
+    expect(within(selectedForm).getByRole('heading', { name: 'problem' })).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Selected change')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Modified')).toBeInTheDocument();
+    const stateValueChange = within(selectedForm).getByTestId('state-value-change');
+    expect(stateValueChange).toHaveClass('mt-3', 'min-w-0');
+    expect(stateValueChange.firstElementChild).toHaveClass(
+      'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+      'px-2'
+    );
+    const stateValueFrame = within(stateValueChange).getByTestId('state-value-frame');
+    expect(stateValueFrame).toHaveClass(
+      'h-9',
+      'overflow-hidden',
+      'rounded-[8px]',
+      'shadow-[var(--fx-shadow-sm)]'
+    );
+    expect(within(stateValueChange).getByTestId('state-before-value')).toHaveClass(
+      'block',
+      'overflow-hidden',
+      'rounded-[6px]',
+      'hover:bg-[var(--surface-elevated)]'
+    );
+    expect(within(stateValueChange).getByText('Before')).toHaveClass('text-[10px]');
+    expect(within(stateValueChange).getByText('Result')).toHaveClass('text-[10px]');
+    expect(within(stateValueFrame).getByText('->')).toBeInTheDocument();
+    expect(within(stateValueChange).getByTestId('state-before-value')).toHaveAttribute(
+      'aria-label',
+      'Before full value: Manual rollout steps make checkout-api releases hard to audit.'
+    );
+    expect(within(stateValueChange).getByTestId('state-before-value')).toHaveAttribute(
+      'title',
+      'Manual rollout steps make checkout-api releases hard to audit.'
+    );
+    expect(within(stateValueChange).getByTestId('state-result-value')).toHaveAttribute(
+      'aria-label',
+      'Result full value: Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+    );
+    expect(within(stateValueChange).getByTestId('state-result-value')).toHaveAttribute(
+      'title',
+      'Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+    );
+    expect(within(stateValueChange).queryByRole('button', { name: 'View full value' })).toBeNull();
+    expect(
+      within(selectedForm).getAllByText(
+        'Manual rollout steps make checkout-api releases hard to audit.'
+      ).length
+    ).toBeGreaterThan(0);
+    expect(
+      within(selectedForm).getAllByText(
+        'Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+      ).length
+    ).toBeGreaterThan(0);
+    expect(within(selectedForm).getByRole('heading', { name: 'Why' })).toBeInTheDocument();
+    expect(within(selectedForm).getByRole('heading', { name: 'Source' })).toBeInTheDocument();
+    expect(within(selectedForm).getByRole('link', { name: 'conv_d4d239f3' })).toHaveAttribute(
+      'href',
+      `/project/proj_test/sources/conversations/conv_d4d239f3?branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
+    );
+    expect(
+      within(selectedForm).getByText(
+        'problem = Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+      )
+    ).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Verified')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Replay matched · Schema valid')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Technical details')).toBeInTheDocument();
+    const detailsButton = within(selectedForm).getByRole('button', { name: 'View' });
+    expect(detailsButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(detailsButton);
+    expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
+    expect(detailsButton).toHaveTextContent('Hide');
+    expect(within(selectedForm).getByText('State path')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('prd / summary / problem')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Effect')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Replay')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Base base-pr -> HEAD cb5813f')).toBeInTheDocument();
+    expect(within(selectedForm).getByText('Commit')).toBeInTheDocument();
+    expect(within(selectedForm).getAllByText('01 SET: prd/summary/problem')).not.toHaveLength(0);
+    expect(
+      within(selectedForm).getByText(
+        'This commit updates the problem statement from its parent value.'
+      )
+    ).toBeInTheDocument();
+    expect(within(selectedForm).getByRole('button', { name: 'Edit result' })).toBeInTheDocument();
+    expect(within(selectedForm).getByRole('button', { name: 'Comment' })).toBeInTheDocument();
+    expect(within(selectedForm).queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(selectedForm).getByRole('button', { name: 'Edit result' }));
+
+    await waitFor(() =>
+      expect(within(selectedNode).getByRole('heading', { name: 'Edit result' })).toBeInTheDocument()
+    );
+    const editForm = within(selectedNode).getByRole('form', {
+      name: 'State change provenance form',
+    });
+    expect(within(editForm).getByRole('heading', { name: 'Edit result' })).toBeInTheDocument();
+    expect(
+      within(editForm).getByRole('heading', { name: 'Propose a new result' })
+    ).toBeInTheDocument();
+    expect(within(editForm).getByLabelText('Before')).toHaveTextContent(
+      'Manual rollout steps make checkout-api releases hard to audit.'
+    );
+    expect(within(editForm).getByLabelText('Proposed result')).toHaveValue(
+      'Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+    );
+    expect(within(editForm).getByLabelText('Why is this result different?')).toHaveValue(
+      'This commit updates the problem statement from its parent value.'
+    );
+    expect(within(editForm).getByLabelText('Source')).toHaveValue('conv_d4d239f3');
+    expect(
+      within(editForm).getByText('Schema checks run now; replay reruns after save.')
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(editForm).getAllByRole('button', { name: 'Cancel' })[0]);
+
+    fireEvent.click(screen.getByRole('row', { name: /legacy_gate/ }));
+
+    await waitFor(() =>
+      expect(within(selectedNode).getByRole('heading', { name: 'legacy_gate' })).toBeInTheDocument()
+    );
+    expect(within(selectedNode).getByText('1 passed · 1 needs review')).toBeInTheDocument();
+    expect(within(selectedNode).getByText('Schema needs review')).toBeInTheDocument();
+    expect(
+      within(selectedNode).getByText(
+        'Retired gate review: legacy_gate was removed and needs release-owner signoff.'
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('row', { name: /outcome Service checkout-api currently has replicas 4/ })
+    );
+
+    await waitFor(() =>
+      expect(within(selectedNode).getByRole('heading', { name: 'outcome' })).toBeInTheDocument()
+    );
+    expect(
+      within(selectedNode).getAllByText('Reduce deployment risk with manual review checkpoints.')
+        .length
+    ).toBeGreaterThan(0);
+    expect(
+      within(selectedNode).getAllByText('Service checkout-api currently has replicas 4').length
+    ).toBeGreaterThan(0);
+    fireEvent.click(within(selectedNode).getByRole('button', { name: 'View' }));
+    expect(within(selectedNode).getByText('prd / summary / outcome')).toBeInTheDocument();
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
@@ -615,93 +923,94 @@ describe('ProjectStateTab', () => {
   });
 
   it('keeps key and value adjacent and collapses parent-managed state rows', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     hookMocks.loadCommits.mockResolvedValue([MUST_CONDITIONS_COMMIT]);
     renderStateTab();
 
     await screen.findByText('PRD must conditions committed');
     const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(
-      within(structureView)
-        .getAllByRole('columnheader')
-        .map((header) => header.textContent?.trim())
-    ).toEqual(['Path / Key', 'Value', 'Type', 'Status', 'Source / Op', 'Issues']);
+    const stateRowsRegion = within(structureView).getByRole('region', { name: 'State rows' });
+    expect(within(structureView).queryAllByRole('columnheader')).toHaveLength(0);
+    expect(within(structureView).getByRole('table')).toHaveClass('table-fixed');
 
-    const mustToggle = within(structureView).getByRole('button', {
+    const mustToggle = within(stateRowsRegion).getByRole('button', {
       name: 'Expand Must conditions',
     });
     expect(mustToggle).toHaveAttribute('aria-expanded', 'false');
     for (const key of MUST_CONDITION_KEYS) {
-      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+      expect(within(stateRowsRegion).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: 'degradation_path' },
     });
     expect(
-      within(structureView).getByText('for_every_relevant_case_must_define_degradation_path')
+      within(stateRowsRegion).getByText('for_every_relevant_case_must_define_degradation_path')
     ).toBeInTheDocument();
     expect(
-      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+      within(stateRowsRegion).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: '' },
     });
-    const collapsedMustToggle = within(structureView).getByRole('button', {
+    const collapsedMustToggle = within(stateRowsRegion).getByRole('button', {
       name: 'Expand Must conditions',
     });
     fireEvent.click(collapsedMustToggle.closest('tr')!);
     expect(
-      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+      within(stateRowsRegion).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
     for (const key of MUST_CONDITION_KEYS) {
-      expect(within(structureView).getByText(key)).toBeInTheDocument();
+      expect(within(stateRowsRegion).getByText(key)).toBeInTheDocument();
     }
 
-    const problemToggle = within(structureView).getByRole('button', {
+    const problemToggle = within(stateRowsRegion).getByRole('button', {
       name: 'Collapse summary',
     });
     fireEvent.click(problemToggle.closest('tr')!);
-    expect(within(structureView).queryByText('problem')).not.toBeInTheDocument();
+    expect(within(stateRowsRegion).queryByText('problem')).not.toBeInTheDocument();
 
-    const rootToggle = within(structureView).getByRole('button', { name: 'Collapse prd' });
+    const rootToggle = within(stateRowsRegion).getByRole('button', { name: 'Collapse prd' });
     fireEvent.click(rootToggle.closest('tr')!);
     expect(
-      within(structureView).queryByRole('button', { name: 'Collapse Must conditions' })
+      within(stateRowsRegion).queryByRole('button', { name: 'Collapse Must conditions' })
     ).not.toBeInTheDocument();
-    expect(within(structureView).queryByText('title')).not.toBeInTheDocument();
+    expect(within(stateRowsRegion).queryByText('title')).not.toBeInTheDocument();
 
-    fireEvent.click(within(structureView).getByRole('button', { name: 'Expand prd' }));
+    fireEvent.click(within(stateRowsRegion).getByRole('button', { name: 'Expand prd' }));
     expect(
-      within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
+      within(stateRowsRegion).getByRole('button', { name: 'Collapse Must conditions' })
     ).toBeInTheDocument();
   });
 
   it('summarizes and collapses dense boolean rule groups by default', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     hookMocks.loadCommits.mockResolvedValue([DENSE_RULES_COMMIT]);
     renderStateTab();
 
     await screen.findByText('Dense rule groups committed');
     const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    const constraintsToggle = within(structureView).getByRole('button', {
+    const stateRowsRegion = within(structureView).getByRole('region', { name: 'State rows' });
+    const constraintsToggle = within(stateRowsRegion).getByRole('button', {
       name: 'Expand constraints',
     });
-    const retryToggle = within(structureView).getByRole('button', {
+    const retryToggle = within(stateRowsRegion).getByRole('button', {
       name: 'Expand retry_eligibility',
     });
 
     expect(constraintsToggle).toHaveAttribute('aria-expanded', 'false');
     expect(retryToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(within(structureView).getByText('4 rules · all enabled')).toBeInTheDocument();
-    expect(within(structureView).getByText('5 fields · 4/4 rules enabled')).toBeInTheDocument();
+    expect(within(stateRowsRegion).getByText('4 rules · all enabled')).toBeInTheDocument();
+    expect(within(stateRowsRegion).getByText('5 fields · 4/4 rules enabled')).toBeInTheDocument();
     for (const key of DENSE_RULE_KEYS) {
-      expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
+      expect(within(stateRowsRegion).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: 'delivery_must_be_incremental' },
     });
-    const longKey = within(structureView).getByText('delivery_must_be_incremental');
+    const longKey = within(stateRowsRegion).getByText('delivery_must_be_incremental');
     expect(longKey).toBeInTheDocument();
     expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
     expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
@@ -710,7 +1019,7 @@ describe('ProjectStateTab', () => {
       expect.stringContaining('delivery_must_be_incremental')
     );
     expect(
-      within(structureView).getByRole('button', { name: 'Collapse constraints' })
+      within(stateRowsRegion).getByRole('button', { name: 'Collapse constraints' })
     ).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -722,7 +1031,6 @@ describe('ProjectStateTab', () => {
     fireEvent.focus(window);
 
     await waitFor(() => expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('Just now')).toBeInTheDocument();
     expect(hookMocks.refreshWorkspaces).not.toHaveBeenCalled();
   });
 
@@ -754,7 +1062,7 @@ describe('ProjectStateTab', () => {
     expect(
       screen.getByRole('heading', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
-    expect(screen.getByText('main · pinned cb5813f')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'State details' })).not.toBeInTheDocument();
 
     fireEvent.click(within(update).getByRole('button', { name: 'View latest' }));
 
@@ -764,112 +1072,72 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('Newer commit available on main')).not.toBeInTheDocument();
   });
 
-  it('routes changed paths to the shared commit T3X Diff instead of drawing an inline diff', async () => {
+  it('does not draw an inline diff from the State toolbar', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     renderStateTab();
 
-    const changedPaths = await screen.findByRole('link', { name: '2 changed paths' });
-    expect(changedPaths).toHaveAttribute(
-      'href',
-      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
-    );
+    await waitFor(() => expect(screen.getAllByText('problem').length).toBeGreaterThan(0));
+    expect(screen.queryByRole('link', { name: /changed paths/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
   });
 
-  it('switches to the schema-selected Render view', async () => {
+  it('opens the schema-selected Render view from the State tabs', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     renderStateTab();
 
-    await screen.findByText('Path / Key');
+    await screen.findByText('PRD audience handoff committed');
     fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
 
-    expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
-    expect(screen.getByText('Executive summary')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Problem, audience, and intended outcome' })
+      await screen.findByRole('heading', {
+        name: /Product Requirements.*Checkout Rollout Guardrails/,
+      })
     ).toBeInTheDocument();
-    expect(screen.getByText('This field is required by the schema.')).toBeInTheDocument();
-    expect(screen.getAllByText('Find food and drinks')).not.toHaveLength(0);
-    expect(screen.getByRole('navigation', { name: 'PRD semantic nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Document outline' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'PRD inspector' })).toBeInTheDocument();
-    expect(screen.getByText('Selected semantic node')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Render/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: '1. Executive Summary' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '2. Stakeholders & Audience' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '3. Requirements Schema' })).toBeInTheDocument();
+    expect(screen.queryByText('Required field missing')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Service checkout-api currently has replicas 4')).not.toHaveLength(
+      0
+    );
+    expect(screen.queryByRole('tablist', { name: 'PRD navigation view' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('navigation', { name: 'PRD semantic nodes' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Document outline' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'PRD inspector' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Selected semantic node')).not.toBeInTheDocument();
     expect(screen.queryByText('AC-001-01')).not.toBeInTheDocument();
     expect(screen.queryByText('Seventh rollout field remains visible')).not.toBeInTheDocument();
 
     const schemaRender = screen.getByRole('region', { name: 'Schema render' });
     expect(schemaRender).toHaveClass('h-full', 'min-h-0', 'flex-1', 'overflow-hidden');
-
-    const outlineSeparator = screen.getByRole('separator', {
-      name: 'Resize document outline',
-    });
-    const inspectorSeparator = screen.getByRole('separator', {
-      name: 'Resize PRD inspector',
-    });
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '252');
-    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
-    fireEvent.keyDown(outlineSeparator, { key: 'ArrowRight' });
-    fireEvent.keyDown(inspectorSeparator, { key: 'ArrowLeft' });
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '268');
-    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '326');
-    fireEvent.doubleClick(outlineSeparator);
-    fireEvent.doubleClick(inspectorSeparator);
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '252');
-    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '310');
-
-    vi.spyOn(
-      outlineSeparator.parentElement as HTMLElement,
-      'getBoundingClientRect'
-    ).mockReturnValue({
-      bottom: 760,
-      height: 640,
-      left: 0,
-      right: 1900,
-      top: 120,
-      width: 1900,
-      x: 0,
-      y: 120,
-      toJSON: () => ({}),
-    });
-    fireEvent.mouseDown(outlineSeparator, { clientX: 252 });
-    fireEvent.mouseMove(document, { clientX: 270 });
-    expect(outlineSeparator).toHaveAttribute('aria-valuenow', '270');
-    fireEvent.mouseUp(document);
-    fireEvent.doubleClick(outlineSeparator);
-
-    fireEvent.mouseDown(inspectorSeparator, { clientX: 1590 });
-    fireEvent.mouseMove(document, { clientX: 1540 });
-    expect(inspectorSeparator).toHaveAttribute('aria-valuenow', '360');
-    fireEvent.mouseUp(document);
-    fireEvent.doubleClick(inspectorSeparator);
+    expect(
+      screen.queryByRole('separator', { name: 'Resize document outline' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('separator', { name: 'Resize PRD inspector' })
+    ).not.toBeInTheDocument();
 
     const requirementButton = screen.getByRole('button', {
-      name: 'Inspect requirement Find food and drinks',
+      name: 'Inspect requirement checkout_api_rollout',
     });
-    expect(requirementButton).toHaveAttribute('aria-expanded', 'false');
+    expect(requirementButton).toBeInTheDocument();
     fireEvent.click(requirementButton);
-    expect(requirementButton).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('AC-001-01')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Rollout Plan · rollout_plan' }));
-    expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Find food and drinks · 0' }));
-    const inspector = screen.getByRole('complementary', { name: 'PRD inspector' });
+    expect(screen.getAllByText('Validated node')).not.toHaveLength(0);
     expect(
-      within(inspector).getByRole('heading', { name: '0 · Find food and drinks' })
+      screen.getByText('Replay confirms desired replicas before traffic promotion')
     ).toBeInTheDocument();
-    expect(within(inspector).getByText('State → prd → requirements → 0')).toBeInTheDocument();
-    expect(within(inspector).getByText('1 acceptance criterion')).toBeInTheDocument();
-    expect(within(inspector).getByText('Present')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /HEAD YOps 3/ }));
-    expect(screen.getByText('HEAD materialized YOps')).toBeInTheDocument();
-    expect(screen.getByText('prd/summary/problem')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'raw' }));
-    expect(screen.getByRole('region', { name: 'Raw materialized YAML' })).toHaveTextContent('prd:');
+    fireEvent.click(
+      screen.getByRole('button', { name: /Progressive exposure and promotion gates/ })
+    );
+    expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
+    expect(screen.queryByText('HEAD materialized YOps')).not.toBeInTheDocument();
   });
 
   it('uses a current Workspace composition when the rendered HEAD has no committed composition', async () => {
@@ -919,19 +1187,14 @@ describe('ProjectStateTab', () => {
     ];
 
     renderStateTab();
-    await screen.findByText('Path / Key');
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
 
-    expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'modules' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('1 Module used')).toBeInTheDocument();
-    expect(screen.getByText('Workspace composition')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'PRD Module navigation' })).toBeInTheDocument();
+    await screen.findByText('PRD audience handoff committed');
+    expect(screen.queryByRole('tablist', { name: 'PRD navigation view' })).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Go to Rollout & Operations instance' })
-    ).toBeInTheDocument();
+      screen.queryByRole('navigation', { name: 'PRD Module navigation' })
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Open Rollout & Operations in YSchema' })
+      screen.getByRole('link', { name: 'View Rollout & Operations source Module in YSchema' })
     ).toHaveAttribute(
       'href',
       '/t3x-dev/test-project/schemas?family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
@@ -940,9 +1203,10 @@ describe('ProjectStateTab', () => {
       screen.getByText('Mapped by Workspace composition t3x/prd-rollout-operations@1.0.0')
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'outline' }));
-    expect(screen.getByRole('navigation', { name: 'PRD semantic nodes' })).toBeInTheDocument();
-    expect(screen.getByText('Rollout Plan')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /Progressive exposure and promotion gates/ })
+    );
+    expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
   });
 
   it('uses Skill-specific state labels and the Skill reader for a Skill commit', async () => {
@@ -1014,10 +1278,8 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     await screen.findByText('Add review-code Skill');
-    expect(screen.getByText('skill-state.yaml')).toBeInTheDocument();
-    expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('t3x/skill')).not.toHaveLength(0);
     expect(screen.queryByText('adapter skill.document')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
     expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
   });
@@ -1048,8 +1310,7 @@ describe('ProjectStateTab', () => {
     renderStateTab(PROMPT_VALIDATION);
 
     await screen.findByText('Add extract requirements Prompt');
-    expect(screen.getByText('prompt-state.yaml')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    expect(screen.getAllByText('t3x/prompt')).not.toHaveLength(0);
     expect(screen.getByRole('region', { name: 'Prompt schema render' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByText('messages/system_policy/template')).not.toHaveLength(0);
@@ -1086,14 +1347,13 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     await screen.findByText('Add device state');
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
-    expect(screen.getByRole('region', { name: 'Schema render' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Device' })).toBeInTheDocument();
-    expect(screen.getAllByText('Platform')).not.toHaveLength(0);
-    expect(screen.getByText('esphome')).toBeInTheDocument();
     expect(
-      screen.queryByRole('region', { name: 'Generic structured state render' })
-    ).not.toBeInTheDocument();
+      screen.getByRole('region', { name: 'Generic structured state render' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Device' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '1. Platform' })).toBeInTheDocument();
+    expect(screen.getByText('esphome')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Schema render' })).not.toBeInTheDocument();
   });
 
   it('initializes a new branch from main without inventing a schema binding', async () => {
@@ -1103,10 +1363,11 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('No commit on this branch');
     fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
-    fireEvent.change(screen.getByLabelText('Branch name'), {
+    const createBranchDialog = screen.getByRole('dialog', { name: 'Create a new branch' });
+    fireEvent.change(within(createBranchDialog).getByLabelText('Branch name'), {
       target: { value: 'feature/checkout-retry' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create branch' }));
+    fireEvent.click(within(createBranchDialog).getByRole('button', { name: 'Create branch' }));
 
     await waitFor(() => {
       expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/checkout-retry', 'main');
@@ -1128,13 +1389,15 @@ describe('ProjectStateTab', () => {
   it('switches to canonical YAML Code without exposing internal trees', async () => {
     renderStateTab();
 
-    await screen.findByText('Path / Key');
+    await screen.findByText('PRD audience handoff committed');
     fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
 
     const codeView = screen.getByRole('region', { name: 'YAML code view' });
-    expect(within(codeView).getByText('prd:')).toBeInTheDocument();
+    expect(codeView).toHaveTextContent('prd:');
     expect(codeView).toHaveTextContent('summary:');
-    expect(codeView).toHaveTextContent('problem: "You: i need food and drink"');
+    expect(codeView).toHaveTextContent(
+      'problem: Checkout-api release risk is hard to audit without deterministic rollout evidence.'
+    );
     expect(codeView).not.toHaveTextContent('trees:');
     expect(codeView).not.toHaveTextContent('slots:');
     expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
@@ -1148,16 +1411,14 @@ describe('ProjectStateTab', () => {
     expect(codeScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(codeView.querySelector('code')).toHaveClass('min-w-max');
-    expect(within(codeView).getByText('problem: "You: i need food and drink"')).toHaveClass(
-      'whitespace-pre'
-    );
+    expect(codeView.querySelector('code .whitespace-pre')).not.toBeNull();
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
     renderStateTab();
 
     await screen.findByText('PRD audience handoff committed');
-    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project?view=canvas',
@@ -1176,12 +1437,16 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.queryByRole('tab', { name: /Structure/ })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Snapshot/ }));
-
-    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith('/t3x-dev/test-project', {
-      scroll: false,
-    });
-    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Snapshot')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Canvas/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project%3Fview%3Dcanvas'
+    );
+    expect(screen.getByRole('link', { name: 'Use this state' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/workspaces?branch=main'
+    );
   });
 
   it('clarifies that an empty focused branch does not own commits shown on the all-branch canvas', async () => {
@@ -1189,7 +1454,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('No commit on this branch');
-    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
 
     expect(screen.getByRole('status')).toHaveTextContent('main has no HEAD commit.');
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -1209,6 +1474,7 @@ describe('ProjectStateTab', () => {
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     hookMocks.loadCommits.mockResolvedValue([{ ...PRD_COMMIT, parents: [], yops_log_ids: [] }]);
     hookMocks.loadOperations.mockResolvedValue({ commit_hash: PRD_COMMIT.hash, operations: [] });
     hookMocks.projectWorkspaces = [
@@ -1220,36 +1486,50 @@ describe('ProjectStateTab', () => {
         projectId: 'proj_test',
         schemaBindings: [],
         schemaCandidate: { fields: [], summary: '' },
-        schemaReview: { gaps: ['summary.audience'], summary: '', verdict: 'needs_review' },
+        schemaReview: { gaps: [], summary: '', verdict: 'ready' },
         sourceBundle: [],
         status: 'committed',
         summary: 'Reviewed PRD workspace',
         targetBranch: 'feature/prd-audience',
-        title: 'PRD audience handoff',
+        title: 'Checkout rollout guardrails',
         updatedAt: '2026-07-09T08:01:00.000Z',
         yopsDraft: {
           id: 'draft:workspace_prd_handoff',
           operations: [
             {
-              afterValue: 'You: i need food and drink',
+              afterValue:
+                'Checkout-api release risk is hard to audit without deterministic rollout evidence.',
               id: 'op_backend_1',
               op: 'set',
               path: 'prd/summary/problem',
               summary: 'Set summary.problem',
             },
             {
-              afterValue: 'Office workers',
+              afterValue: 'Service checkout-api currently has replicas 4',
               id: 'op_backend_2',
               op: 'set',
               path: 'prd/summary/outcome',
               summary: 'Set summary.outcome',
             },
             {
-              afterValue: 'Find food and drinks',
+              afterValue: 'Service checkout-api currently has replicas 4',
               id: 'op_backend_3',
               op: 'set',
-              path: 'prd/requirements/0/title',
-              summary: 'Set requirements.0.title',
+              path: 'prd/requirements/checkout_api_rollout/title',
+              summary: 'Set checkout rollout title',
+            },
+            {
+              id: 'op_backend_4',
+              op: 'unset',
+              path: 'prd/requirements/checkout_api_rollout/legacy_gate',
+              summary: 'Remove legacy release gate',
+            },
+            {
+              afterValue: 'Replay verifies canary rollout before commit',
+              id: 'op_backend_5',
+              op: 'append',
+              path: 'prd/requirements/checkout_api_rollout/release_gate',
+              summary: 'Add replay-backed release gate',
             },
           ],
         },
@@ -1258,18 +1538,18 @@ describe('ProjectStateTab', () => {
 
     renderStateTab(null);
 
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('02 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('03 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(await screen.findAllByText('PRD audience handoff committed')).not.toHaveLength(0);
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(within(structureView).getAllByText(/SET/)).toHaveLength(3);
+    expect(within(structureView).queryByText('Missing')).not.toBeInTheDocument();
+    expect(screen.getByText('Validation pending')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
     expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
     expect(screen.queryByText('INITIAL CREATE')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
   });
 
-  it('runs validation against the visible HEAD and ignores a stale validation result', async () => {
+  it('keeps stale validation state out of the State toolbar', async () => {
     const onRunValidation = vi.fn();
     render(
       <ProjectStateTab
@@ -1281,14 +1561,14 @@ describe('ProjectStateTab', () => {
     );
 
     await screen.findByText('PRD audience handoff committed');
-    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.getByText('Validation pending')).toBeInTheDocument();
     expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
-    expect(onRunValidation).toHaveBeenCalledWith(PRD_COMMIT.hash, 't3x/prd');
+    expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
+    expect(onRunValidation).not.toHaveBeenCalled();
   });
 
   it('does not reuse stale workspace gaps after the visible HEAD validates cleanly', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     hookMocks.projectWorkspaces = [
       {
         lastCommitHash: PRD_COMMIT.hash,
@@ -1307,19 +1587,21 @@ describe('ProjectStateTab', () => {
     });
 
     await screen.findByText('PRD audience handoff committed');
-    expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
-    expect(screen.queryByText('missing')).not.toBeInTheDocument();
+    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(within(structureView).queryByText('Missing')).not.toBeInTheDocument();
   });
 
   it('keeps rendering committed state when operations are unavailable', async () => {
+    navigationMocks.search = 'view=structure&branch=main';
     hookMocks.loadOperations.mockRejectedValueOnce(new Error('operations unavailable'));
 
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(screen.getByText('YOps log unavailable.')).toBeInTheDocument();
-    expect(screen.getByText('problem')).toBeInTheDocument();
+    expect(screen.queryByText('YOps log unavailable.')).not.toBeInTheDocument();
+    expect(screen.getAllByText('problem')).not.toHaveLength(0);
   });
 
   it('selects the visible DAG tip instead of trusting commit timestamp order', async () => {
@@ -1386,10 +1668,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
-    const details = screen.getByRole('heading', { name: 'State details' }).closest('section');
-    expect(details).not.toBeNull();
-    const changedLabel = within(details as HTMLElement).getByText('Changed');
-    expect(changedLabel.nextElementSibling).toHaveTextContent('0 paths');
+    expect(screen.queryByRole('heading', { name: 'State details' })).not.toBeInTheDocument();
   });
 
   it('keeps an empty main branch selected instead of redirecting to another branch', async () => {
@@ -1418,13 +1697,20 @@ describe('ProjectStateTab', () => {
   it('switches its local read-only branch focus', async () => {
     const view = renderStateTab();
 
-    await screen.findByText('Path / Key');
+    await screen.findByText('PRD audience handoff committed');
     hookMocks.loadCommits.mockResolvedValueOnce([
       { ...PRD_COMMIT, branch: 'feature/prd-audience' },
     ]);
-    fireEvent.change(screen.getByLabelText('Branch focus'), {
-      target: { value: 'feature/prd-audience' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    expect(screen.getByRole('dialog')).toHaveClass('h-[320px]', 'w-[276px]', 'rounded-[6px]');
+    const branchMenu = screen.getByRole('menu', { name: 'Switch branches/tags' });
+    expect(branchMenu).toHaveClass('min-h-0', 'flex-1');
+    expect(
+      within(branchMenu).getByRole('menuitemradio', { name: /feature\/prd-audience/ })
+    ).toHaveClass('h-9');
+    fireEvent.click(
+      within(branchMenu).getByRole('menuitemradio', { name: /feature\/prd-audience/ })
+    );
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project?branch=feature%2Fprd-audience',
@@ -1452,9 +1738,13 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('PRD audience handoff committed');
     hookMocks.loadCommits.mockReturnValueOnce(new Promise<ApiCommit[]>(() => {}));
-    fireEvent.change(screen.getByLabelText('Branch focus'), {
-      target: { value: 'feature/prd-audience' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.click(
+      within(screen.getByRole('menu', { name: 'Switch branches/tags' })).getByRole(
+        'menuitemradio',
+        { name: /feature\/prd-audience/ }
+      )
+    );
     view.rerender(
       <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
     );

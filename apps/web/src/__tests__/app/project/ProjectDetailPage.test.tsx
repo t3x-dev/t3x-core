@@ -290,8 +290,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('does not start Canvas I/O on repository surfaces', async () => {
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(
+      await screen.findByRole('complementary', { name: 'State relationships' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Snapshot')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Canvas/ })).toHaveAttribute('aria-pressed', 'false');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
     expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
     expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
@@ -303,7 +306,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /Canvas/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('canvas-workspace')).toHaveAttribute('data-embedded', 'true');
     expect(screen.getByTestId('canvas-workspace')).toHaveAttribute('data-focused-branch', 'main');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(true);
@@ -350,7 +353,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     intervalSpy.mockRestore();
   });
 
-  it('renders a verified YSchema badge from the latest validation run', async () => {
+  it('uses the latest validation run without showing validation status in the State toolbar', async () => {
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: 'sha256:abcdef1234567890',
@@ -374,14 +377,15 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-    expect((await screen.findAllByText('Validated at HEAD')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByRole('heading', { name: 'Committed PRD state' })).toBeInTheDocument();
+    expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
+    expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
     expect(screen.queryByText('output-ready')).not.toBeInTheDocument();
   });
 
-  it('shows failed YSchema gaps and can rerun validation from State', async () => {
+  it('shows failed YSchema gaps without exposing validation actions in State', async () => {
     searchParamsValue = new URLSearchParams('tab=state');
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
@@ -441,19 +445,12 @@ describe('ProjectDetailPage — project-first shell states', () => {
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('missing')).toHaveLength(2);
+    expect(await screen.findAllByText('Missing')).toHaveLength(2);
+    expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
-
-    await waitFor(() => {
-      expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test', {
-        commit_hash: STATE_COMMIT.hash,
-        schema_name: 't3x/prd',
-      });
-      expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
-    });
+    expect(runYSchemaValidation).not.toHaveBeenCalled();
     expect(screen.queryByText('output-ready')).not.toBeInTheDocument();
   });
 
@@ -469,12 +466,12 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
-    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
     expect(projectNavigation.parentElement).toHaveClass('h-dvh', 'overflow-hidden');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Render/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
 
@@ -495,7 +492,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'State relationships' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -548,7 +545,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('complementary', { name: 'State relationships' })
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -567,7 +566,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Render/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -589,7 +588,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'State relationships' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
@@ -650,7 +649,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('complementary', { name: 'State relationships' })
+      ).toBeInTheDocument();
     });
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();

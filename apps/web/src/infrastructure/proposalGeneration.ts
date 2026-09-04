@@ -20,6 +20,8 @@ export async function generateWorkspaceProposal(input: {
   posture: WorkspaceProposalPosture;
   instruction: string;
   sourceMaterialIds: string[];
+  provider?: string;
+  model?: string;
   ifRevision?: number;
 }): Promise<ProposalGenerationEnvelope> {
   const res = await fetchWithTimeout(
@@ -31,6 +33,8 @@ export async function generateWorkspaceProposal(input: {
         posture: input.posture,
         instruction: input.instruction,
         source_material_ids: input.sourceMaterialIds,
+        ...(input.provider === undefined ? {} : { provider: input.provider }),
+        ...(input.model === undefined ? {} : { model: input.model }),
         ...(input.ifRevision === undefined ? {} : { if_revision: input.ifRevision }),
       }),
       headers: { 'Content-Type': 'application/json' },

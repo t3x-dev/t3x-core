@@ -402,7 +402,14 @@ export function GenerationComposer({
         {/* Right: model selector + send */}
         <div className="flex items-center gap-2">
           {selectedModel && onModelChange && (
-            <GenerationModelSelector selectedModel={selectedModel} onModelChange={onModelChange} />
+            <GenerationModelSelector
+              onModelChange={onModelChange}
+              onThinkingChange={setThinking}
+              selectedModel={selectedModel}
+              selectedProvider={selectedProvider}
+              supportsThinking={supportsThinking}
+              thinkingEnabled={thinkingEnabled}
+            />
           )}
 
           {isStreaming ? (

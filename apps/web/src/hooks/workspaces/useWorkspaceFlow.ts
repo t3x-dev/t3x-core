@@ -1,8 +1,13 @@
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createBranch } from '@/infrastructure/branches';
-import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
-import { saveWorkspaceDraft } from '@/queries/workspaces';
+import {
+  extractWorkspaceCandidate,
+  sendWorkspaceYOpsDraft,
+  type WorkspaceExtractionOptions,
+} from '@/infrastructure/workspaceFlow';
+import type { WorkspaceDraftCommand } from '@/infrastructure/workspaces';
+import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 interface StartWorkspaceIterationOptions {
@@ -18,17 +23,29 @@ interface StartWorkspaceIterationResult {
 }
 
 export function useWorkspaceFlow() {
-  const extractCandidate = useCallback((candidate: WorkspaceCandidate) => {
-    return extractWorkspaceCandidate(candidate);
-  }, []);
+  const refreshWorkspaces = useCallback(
+    (projectId: string) => fetchProjectWorkspaces(projectId),
+    []
+  );
+  const extractCandidate = useCallback(
+    (candidate: WorkspaceCandidate, options?: WorkspaceExtractionOptions) => {
+      return extractWorkspaceCandidate(candidate, options);
+    },
+    []
+  );
 
   const sendToYOps = useCallback((candidate: WorkspaceCandidate) => {
     return sendWorkspaceYOpsDraft(candidate);
   }, []);
 
-  const saveDraft = useCallback((candidate: WorkspaceCandidate) => {
-    return saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
-  }, []);
+  const saveDraft = useCallback(
+    (candidate: WorkspaceCandidate, command?: WorkspaceDraftCommand) => {
+      return saveWorkspaceDraft(candidate.projectId, candidate.id, candidate, {
+        command: command ?? 'draft.save',
+      });
+    },
+    []
+  );
 
   const startNextIteration = useCallback(
     async ({
@@ -50,7 +67,9 @@ export function useWorkspaceFlow() {
         await createBranch(candidate.projectId, targetBranch, createBranchFrom);
       }
 
-      const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace);
+      const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace, {
+        command: 'draft.save',
+      });
 
       try {
         const conversation = await createConversation(
@@ -72,7 +91,7 @@ export function useWorkspaceFlow() {
     []
   );
 
-  return { extractCandidate, saveDraft, sendToYOps, startNextIteration };
+  return { extractCandidate, refreshWorkspaces, saveDraft, sendToYOps, startNextIteration };
 }
 
 function buildNextWorkspaceIteration(

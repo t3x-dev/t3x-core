@@ -523,6 +523,7 @@ describe('useConversationChat', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'sha256:assistant_turn',
+          content: sourceDraftReplyContent,
           rings: persistedDraftRings,
         }),
       ])

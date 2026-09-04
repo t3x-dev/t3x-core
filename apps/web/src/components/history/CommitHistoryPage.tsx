@@ -162,6 +162,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
         const commitList = await loadCommits(projectId, branch, 100);
 
         if (cancelled) return;
+        if (commitList.some((commit) => commit.project_id !== projectId)) {
+          throw new Error('History response does not match the selected project.');
+        }
 
         // Sort by committed_at descending (newest first)
         commitList.sort(
@@ -240,6 +243,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     setParentLoading(true);
     void loadCommit(parentHash, projectId)
       .then((commit) => {
+        if (commit.hash !== parentHash || commit.project_id !== projectId) {
+          throw new Error('Parent commit response does not match this historical revision.');
+        }
         if (!cancelled) setParentCommit(commit);
       })
       .catch((err) => {
@@ -348,9 +354,18 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       </header>
 
       {/* ═══════ SCROLLABLE CONTENT ═══════ */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={
+          selectedCommit
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            : 'min-h-0 flex-1 overflow-y-auto'
+        }
+      >
         {selectedCommit ? (
-          parentLoading ? (
+          parentLoading ||
+          (selectedCommit.parents[0] &&
+            parentCommit?.hash !== selectedCommit.parents[0] &&
+            !parentError) ? (
             <div className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
@@ -372,9 +387,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
             </div>
           ) : (
             <CommitHistoryDiffView
+              key={selectedCommit.hash}
               commit={selectedCommit}
               onBack={() => setSelectedCommitHash(null)}
-              parentCommit={parentCommit}
+              parentCommit={selectedCommit.parents.length === 0 ? null : parentCommit}
             />
           )
         ) : (

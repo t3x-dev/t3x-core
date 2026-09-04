@@ -27,11 +27,14 @@ describe('ProjectShell', () => {
         </ProjectShell>
       );
 
-      expect(screen.getByRole('banner')).toHaveClass('h-9', 'px-2.5');
-      expect(screen.getByRole('heading', { name: 'Test Project' })).toHaveClass('text-base');
-      expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-8');
+      expect(screen.getByRole('banner')).toHaveClass('h-14', 'px-5');
+      expect(screen.getByRole('banner')).toHaveClass('pt-2', 'bg-[var(--surface-elevated)]');
+      expect(screen.getByRole('heading', { name: 'Test Project' })).toHaveClass('text-xs');
+      expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('items-center');
       expect(screen.getByText('active')).toHaveClass('text-xs');
-      expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs1');
+      expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs');
+      expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveTextContent('T3X');
+      expect(screen.queryByRole('button', { name: 'main' })).not.toBeInTheDocument();
     }
   });
 });

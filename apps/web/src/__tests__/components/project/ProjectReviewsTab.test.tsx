@@ -90,25 +90,23 @@ describe('ProjectReviewsTab', () => {
 
     const heading = screen.getByRole('heading', { name: 'Pull requests' });
     const page = heading.closest('section');
-    const shell = heading.closest('div.flex.min-h-full');
+    const main = heading.closest('main');
+    const rail = screen.getByLabelText('Review queue');
     const createButton = screen.getByRole('button', { name: /Create PR/i });
     const search = screen.getByPlaceholderText('Search by title, branch, or author');
     const openButton = screen.getByRole('button', { name: /3\s*Open/i });
 
-    expect(page).toHaveClass('bg-[var(--surface-app)]', 'p-2');
-    expect(shell).toHaveClass(
-      'rounded-md',
-      'border-[var(--stroke-divider)]',
-      'bg-[var(--surface-panel)]'
-    );
+    expect(page).toHaveClass('grid', 'h-full', 'min-h-0', 'bg-[var(--surface-app)]');
+    expect(rail).toHaveClass('border-r', 'bg-[var(--surface-card)]');
+    expect(main).toHaveClass('overflow-hidden', 'bg-[var(--surface-panel)]');
     expect(createButton).toHaveAttribute('data-variant', 'branch');
     expect(createButton).toHaveAttribute('data-size', 'sm');
-    expect(search).toHaveClass('h-9', 'focus:ring-[var(--accent-commit)]/30');
+    expect(search).toHaveClass('h-full', 'focus:ring-[var(--accent-commit)]/30');
     expect(openButton).toHaveClass(
       'h-8',
-      'rounded-md',
-      'bg-[var(--accent-commit-soft)]',
-      'text-[var(--accent-commit)]'
+      'rounded-[5px]',
+      'bg-[var(--accent-commit)]',
+      'text-[var(--on-accent)]'
     );
     expect(container.querySelector('.rounded-2xl')).toBeNull();
     expect(screen.getByRole('button', { name: /1\s*Closed/i })).toBeInTheDocument();
@@ -128,9 +126,10 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
     const createHeading = screen.getByText('Open pull request');
-    expect(createHeading.closest('section')).toHaveClass(
-      'rounded-md',
-      'border-[var(--stroke-divider)]'
+    expect(createHeading.closest('main')).toHaveClass('bg-[var(--surface-panel)]');
+    expect(screen.getByLabelText('PR compare setup')).toHaveClass(
+      'border-r',
+      'bg-[var(--surface-card)]'
     );
     expect(screen.getByText('Branches with commits')).toBeInTheDocument();
     expect(screen.getAllByText('outputs/bundle-refresh').length).toBeGreaterThan(0);
@@ -315,9 +314,7 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    const createView = screen.getByText('Output bundle refresh').closest('section');
-    expect(createView).not.toBeNull();
-    fireEvent.click(within(createView as HTMLElement).getByRole('button', { name: 'Create PR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create PR' }));
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /4\s*Open/i })).toBeInTheDocument();
@@ -356,9 +353,7 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    const createView = screen.getByText('Output bundle refresh').closest('section');
-    expect(createView).not.toBeNull();
-    fireEvent.click(within(createView as HTMLElement).getByRole('button', { name: 'Create PR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create PR' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
 
     expect(screen.getByText('checks queued')).toBeInTheDocument();

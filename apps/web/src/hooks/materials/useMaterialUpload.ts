@@ -3,12 +3,13 @@
  */
 
 import { useCallback, useState } from 'react';
-import { uploadDocumentMaterial } from '@/infrastructure/materials';
+import { createUrlMaterial, uploadDocumentMaterial } from '@/infrastructure/materials';
 import type { Material } from '@/types/api';
 
 export interface UseMaterialUploadResult {
   uploading: boolean;
   upload: (projectId: string, file: File) => Promise<Material>;
+  uploadUrl: (projectId: string, url: string, title?: string) => Promise<Material>;
 }
 
 export function useMaterialUpload(): UseMaterialUploadResult {
@@ -23,5 +24,17 @@ export function useMaterialUpload(): UseMaterialUploadResult {
     }
   }, []);
 
-  return { uploading, upload };
+  const uploadUrl = useCallback(async (projectId: string, url: string, title?: string) => {
+    setUploading(true);
+    try {
+      return await createUrlMaterial(projectId, {
+        url,
+        ...(title?.trim() ? { title: title.trim() } : {}),
+      });
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
+  return { uploading, upload, uploadUrl };
 }

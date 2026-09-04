@@ -591,6 +591,63 @@ export interface SourceThreadCapability {
   ): Promise<SourceThreadEvidence>;
 }
 
+// Materials
+export type MaterialSourceType = 'document' | 'url' | 'platform';
+
+export interface Material {
+  id: string;
+  project_id: string;
+  source_type: MaterialSourceType;
+  title: string;
+  filename: string | null;
+  mime_type: string | null;
+  content_hash: string;
+  content_excerpt: string;
+  token_estimate: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  archived_at: string | null;
+  created_by: string | null;
+}
+
+export interface MaterialSegment {
+  id: string;
+  index: number;
+  label: string;
+  text: string;
+  char_start: number;
+  char_end: number;
+  token_estimate: number;
+}
+
+export interface MaterialParseQuality {
+  status: 'ready' | 'partial' | 'poor' | 'empty';
+  score: number;
+  message: string;
+}
+
+export interface MaterialDetail extends Material {
+  content_text: string;
+  page_count: number | null;
+  segment_count: number;
+  segments: MaterialSegment[];
+  parse_quality: MaterialParseQuality;
+}
+
+export interface CreateUrlMaterialInput {
+  url: string;
+  title?: string;
+}
+
+export interface MaterialsCapability {
+  list(projectId: string): Promise<Material[]>;
+  get(projectId: string, materialId: string): Promise<MaterialDetail>;
+  uploadDocument(projectId: string, file: Blob, filename: string): Promise<Material>;
+  createUrl(projectId: string, input: CreateUrlMaterialInput): Promise<Material>;
+  reparse(projectId: string, materialId: string): Promise<MaterialDetail>;
+  archive(projectId: string, materialId: string): Promise<MaterialDetail>;
+}
+
 /** Persisted Repository Review Workspace projection. */
 export type RepositoryWorkspace = Record<string, unknown> & {
   id: string;
@@ -606,6 +663,48 @@ export interface RepositoryWorkspaceEnvelope {
   candidate_id: string;
   yops_draft_id?: string;
   workspace: RepositoryWorkspace;
+}
+
+export type WorkspaceDraftCommand =
+  | 'source.add'
+  | 'source.include'
+  | 'source.pin'
+  | 'instruction.update'
+  | 'candidate.generate'
+  | 'candidate.edit'
+  | 'draft.save'
+  | 'draft.retry'
+  | 'review.prepare'
+  | 'scenario.create'
+  | 'scenario.duplicate'
+  | 'scenario.rename'
+  | 'scenario.archive'
+  | 'collaboration.apply_after_refresh';
+
+export interface ApplyWorkspaceDraftCommandInput {
+  command: WorkspaceDraftCommand;
+  request_id: string;
+  workspace: RepositoryWorkspace;
+  if_revision?: number;
+}
+
+export interface WorkspaceDraftCommandReceipt {
+  schema: 't3x.application/workspace-contract/v1';
+  command: WorkspaceDraftCommand;
+  project_id: string;
+  workspace_id: string;
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  request_id: string;
+  request_digest: string;
+  result_kind: 'draft';
+  result_digest: string;
+  result_revision: number;
+  created_at: string;
+  reused: boolean;
+}
+
+export interface WorkspaceDraftCommandEnvelope extends RepositoryWorkspaceEnvelope {
+  receipt: WorkspaceDraftCommandReceipt;
 }
 
 export interface CreateWorkspaceExtractionProposalInput {
@@ -714,6 +813,50 @@ export interface ChangeProjectionV1 {
   transitionId: string;
   title: string;
   status: 'reviewing' | 'accepted' | 'overridden' | 'rejected' | 'committed';
+  currentness: {
+    state: 'drafting' | 'preparing' | 'ready' | 'stale' | 'blocked';
+    reasons: Array<
+      | 'draft_revision_changed'
+      | 'ref_head_changed'
+      | 'effect_digest_changed'
+      | 'proposal_digest_changed'
+      | 'statement_digests_changed'
+      | 'policy_digest_changed'
+      | 'prepare_failed'
+      | 'decision_rejected'
+      | 'scenario_archived'
+    >;
+  };
+  stages: Array<{
+    id: 'draft' | 'review' | 'decision' | 'commit';
+    label: string;
+    status: 'pending' | 'ready' | 'needs_attention' | 'done' | 'blocked' | 'not_applicable';
+    summary: string;
+  }>;
+  nextAction?: {
+    id:
+      | 'review.accept'
+      | 'review.reject'
+      | 'review.override'
+      | 'commit.exact'
+      | 'receipt.copy'
+      | 'review.retry'
+      | 'review.edit_in_compose';
+    label: string;
+    reason: string;
+  };
+  revisionComparison: {
+    base: TransitionObjectDescriptor;
+    result: TransitionObjectDescriptor;
+    operationCount: number;
+    changedPaths: string[];
+  };
+  explanations: Array<{
+    id: 'change_scope' | 'currentness' | 'next_action';
+    source: 'derived_projection';
+    title: string;
+    body: string;
+  }>;
   review: {
     digest: string;
     refName: string;
@@ -734,8 +877,22 @@ export interface WorkspaceTransitionReviewEnvelope {
   change_projection: ChangeProjectionV1;
 }
 
+export interface WorkspaceTransitionCommandResult {
+  action: 'decide' | 'commit';
+  request_id: string;
+  result_kind: 'decision' | 'commit';
+  result_digest: string;
+  reused: boolean;
+}
+
+export interface WorkspaceTransitionCommandResults {
+  decision: WorkspaceTransitionCommandResult;
+  commit?: WorkspaceTransitionCommandResult;
+}
+
 export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransitionReviewEnvelope {
   decision_digest: string;
+  commands?: WorkspaceTransitionCommandResults;
   commit?: TransitionProtocolValue;
   workspace?: Record<string, unknown>;
 }
@@ -767,6 +924,11 @@ export interface ListWorkspaceTransitionReviewSnapshotsResponse {
 export interface RepositoryWorkspaceCapability {
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
+  applyDraftCommand(
+    projectId: string,
+    workspaceId: string,
+    input: ApplyWorkspaceDraftCommandInput
+  ): Promise<WorkspaceDraftCommandEnvelope>;
   createExtractionProposal(
     projectId: string,
     workspaceId: string,

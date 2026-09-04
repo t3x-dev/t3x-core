@@ -139,4 +139,52 @@ describe('workspace drafts', () => {
 
     expect(openWorkspace.workspace_id).toBe('workspace_next');
   });
+
+  it('allows parallel scenarios without weakening the ordinary branch draft lock', async () => {
+    await upsertWorkspaceDraft(db, {
+      project_id: projectId,
+      workspace_id: 'workspace_branch:feature/prd-audience',
+      title: 'Branch workspace',
+      target_branch: 'feature/prd-audience',
+      workspace_state: {
+        ...workspaceState('draft', projectId),
+        id: 'workspace_branch:feature/prd-audience',
+      },
+    });
+
+    for (const suffix of ['a', 'b']) {
+      const scenarioId = `workspace_scenario:${suffix}`;
+      await expect(
+        upsertWorkspaceDraft(db, {
+          project_id: projectId,
+          workspace_id: scenarioId,
+          title: `Scenario ${suffix}`,
+          target_branch: 'feature/prd-audience',
+          workspace_state: {
+            ...workspaceState('draft', projectId),
+            id: scenarioId,
+            scenario: {
+              id: scenarioId,
+              name: `Scenario ${suffix}`,
+              createdAt: '2026-08-26T00:00:00.000Z',
+              sourceWorkspaceId: 'workspace_branch:feature/prd-audience',
+            },
+          },
+        })
+      ).resolves.toMatchObject({ workspace_id: scenarioId });
+    }
+
+    await expect(
+      upsertWorkspaceDraft(db, {
+        project_id: projectId,
+        workspace_id: 'workspace_branch:duplicate',
+        title: 'Duplicate ordinary workspace',
+        target_branch: 'feature/prd-audience',
+        workspace_state: {
+          ...workspaceState('draft', projectId),
+          id: 'workspace_branch:duplicate',
+        },
+      })
+    ).rejects.toThrow();
+  });
 });

@@ -1,38 +1,94 @@
 'use client';
 
-import { Zap } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
+import { cn } from '@/utils/cn';
 
 interface GenerationModelSelectorProps {
+  onThinkingChange?: (enabled: boolean) => void;
+  selectedProvider?: string;
   selectedModel: string;
+  supportsThinking?: boolean;
+  thinkingEnabled?: boolean;
   onModelChange: (provider: string, model: string) => void;
 }
 
 export function GenerationModelSelector({
+  onThinkingChange,
+  selectedProvider,
   selectedModel,
+  supportsThinking = false,
+  thinkingEnabled = false,
   onModelChange,
 }: GenerationModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const { providers } = useAvailableModels();
+  const [activePane, setActivePane] = useState<'model' | 'reasoning' | 'provider'>('model');
+  const { defaultModel, defaultProvider, providers } = useAvailableModels();
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const hasProviders = providers.length > 0;
-  let currentLabel = hasProviders ? 'Select model' : 'No models configured';
+  const currentProvider =
+    providers.find((provider) => provider.name === selectedProvider) ??
+    providers.find((provider) => provider.models.some((model) => model.id === selectedModel)) ??
+    null;
+  const modelOptions = providers.flatMap((provider) =>
+    provider.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      provider: provider.name,
+    }))
+  );
+  const currentProviderName = currentProvider?.name ?? selectedProvider ?? '';
+  const visibleModels = currentProvider
+    ? currentProvider.models.map((model) => ({
+        id: model.id,
+        label: model.label,
+        provider: currentProvider.name,
+      }))
+    : modelOptions;
+  const hasModels = modelOptions.length > 0;
+  let currentLabel = hasModels ? 'Select model' : 'No models configured';
 
-  const selectedModelLabel = providers
-    .flatMap((p) => p.models)
-    .find((m) => m.id === selectedModel)?.label;
+  const selectedModelLabel =
+    visibleModels.find((model) => model.id === selectedModel)?.label ??
+    modelOptions.find((model) => model.id === selectedModel)?.label ??
+    currentProvider?.models.find((model) => model.id === selectedModel)?.label;
   if (selectedModelLabel) {
     currentLabel = selectedModelLabel;
   } else if (selectedModel) {
     currentLabel = selectedModel.split('-').slice(0, -1).join(' ') || selectedModel;
   }
+  const modelValueLabel = compactModelLabel(currentLabel, 'control');
+  const currentProviderLabel = currentProvider?.label ?? selectedProvider ?? '厂商';
+  const reasoningValueLabel = thinkingEnabled ? '极高' : '标准';
+  const triggerLabel = hasModels ? `${modelValueLabel} ${reasoningValueLabel}` : currentLabel;
+  const canSelectReasoning = Boolean(onThinkingChange && supportsThinking);
+  const canReset =
+    Boolean(defaultProvider && defaultModel) &&
+    (defaultProvider !== currentProviderName || defaultModel !== selectedModel);
+  const selectProvider = (providerName: string) => {
+    const provider = providers.find((entry) => entry.name === providerName);
+    if (!provider) return;
+    const providerModel =
+      (providerName === currentProviderName &&
+      provider.models.some((model) => model.id === selectedModel)
+        ? selectedModel
+        : null) ??
+      (providerName === defaultProvider &&
+      defaultModel &&
+      provider.models.some((model) => model.id === defaultModel)
+        ? defaultModel
+        : null) ??
+      provider.models[0]?.id;
 
+    if (!providerModel) return;
+    onModelChange(provider.name, providerModel);
+    setActivePane('model');
+  };
   // Close on outside click — check both button and portal dropdown
   useEffect(() => {
     if (!open) return;
@@ -50,18 +106,17 @@ export function GenerationModelSelector({
     const rect = buttonRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const popoverWidth = 280;
-    const estimatedHeight = Math.min(
-      320,
-      providers.reduce((sum, provider) => sum + 28 + provider.models.length * 34, 16)
-    );
+    const popoverWidth = 308;
+    const popoverHeight = 188;
     const spaceBelow = viewportHeight - rect.bottom - 8;
-    const openUpward = spaceBelow < Math.min(estimatedHeight, 220);
-    const left = Math.min(rect.left, viewportWidth - popoverWidth - 8);
+    const openUpward = spaceBelow < 196;
+    const left = Math.min(rect.right - popoverWidth, viewportWidth - popoverWidth - 8);
+    const top = openUpward
+      ? Math.max(8, Math.min(rect.top - popoverHeight - 4, viewportHeight - popoverHeight - 8))
+      : rect.bottom + 4;
     return {
       position: 'fixed',
-      top: openUpward ? undefined : rect.bottom + 4,
-      bottom: openUpward ? viewportHeight - rect.top + 4 : undefined,
+      top,
       left: Math.max(8, left),
       zIndex: 9999,
     };
@@ -72,62 +127,147 @@ export function GenerationModelSelector({
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          if (nextOpen) setActivePane('model');
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Select model: ${currentLabel}`}
-        className="flex h-8 max-w-[132px] shrink min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--source-dim)]"
-        style={{
-          background: 'color-mix(in srgb, var(--source-dim) 68%, transparent)',
-          color: 'var(--source)',
-          borderColor: 'color-mix(in srgb, var(--source) 18%, transparent)',
-        }}
+        className="relative flex h-8 w-[112px] max-w-full shrink min-w-0 cursor-pointer items-center justify-center rounded-full border border-transparent bg-[var(--hover-bg)] px-6 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-card)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--stroke-strong)]"
         title={currentLabel}
       >
-        <Zap className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 truncate pr-1">{currentLabel}</span>
+        <span className="min-w-0 truncate">{triggerLabel}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className="absolute right-3 h-3 w-3 shrink-0 text-[var(--text-tertiary)]"
+        />
       </button>
       {open &&
         createPortal(
           <div
             ref={dropdownRef}
-            className="rounded-lg border bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-lg)]"
+            className="flex items-start gap-0 bg-transparent text-[13px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            role="menu"
             style={{
               ...getPopoverStyle(),
-              borderColor: 'var(--stroke-default)',
-              minWidth: 220,
-              maxWidth: 280,
-              maxHeight: 'min(320px, calc(100vh - 16px))',
-              overflowY: 'auto',
-              padding: 4,
+              minWidth: 308,
+              maxWidth: 308,
+              overflow: 'visible',
             }}
           >
-            {hasProviders ? (
-              providers.map((provider) => (
-                <div key={provider.name}>
-                  <div
-                    className="text-[10px] uppercase px-2 py-1"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {provider.label}
-                  </div>
-                  {provider.models.map((model) => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => {
-                        onModelChange(provider.name, model.id);
-                        setOpen(false);
-                      }}
-                      className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--hover-bg)]"
-                      style={{ color: model.id === selectedModel ? 'var(--source)' : undefined }}
-                    >
-                      {model.id === selectedModel ? '✓ ' : '  '}
-                      {model.label}
-                    </button>
-                  ))}
+            {hasModels ? (
+              <>
+                <div className="max-h-[188px] w-[176px] overflow-y-auto rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-1.5 shadow-[var(--fx-shadow-sm)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {activePane === 'provider'
+                    ? providers.map((provider) => (
+                        <button
+                          key={provider.name}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={provider.name === currentProviderName}
+                          onClick={() => selectProvider(provider.name)}
+                          className="flex h-7 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left leading-none text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+                        >
+                          <span className="min-w-0 truncate" title={provider.label}>
+                            {provider.label}
+                          </span>
+                          {provider.name === currentProviderName ? (
+                            <Check
+                              aria-hidden="true"
+                              className="h-3.5 w-3.5 shrink-0 text-[var(--text-primary)]"
+                            />
+                          ) : null}
+                        </button>
+                      ))
+                    : activePane === 'reasoning'
+                      ? [
+                          { enabled: false, label: '标准' },
+                          { enabled: true, label: '极高' },
+                        ].map((option) => (
+                          <button
+                            key={option.label}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={option.enabled === thinkingEnabled}
+                            onClick={() => {
+                              onThinkingChange?.(option.enabled);
+                              setOpen(false);
+                            }}
+                            className="flex h-7 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left leading-none text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+                          >
+                            <span className="min-w-0 truncate">{option.label}</span>
+                            {option.enabled === thinkingEnabled ? (
+                              <Check
+                                aria-hidden="true"
+                                className="h-3.5 w-3.5 shrink-0 text-[var(--text-primary)]"
+                              />
+                            ) : null}
+                          </button>
+                        ))
+                      : visibleModels.map((model) => {
+                          const modelLabel = compactModelLabel(model.label);
+                          return (
+                            <button
+                              key={`${model.provider}:${model.id}`}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={model.id === selectedModel}
+                              onClick={() => {
+                                onModelChange(model.provider, model.id);
+                                setOpen(false);
+                              }}
+                              className="flex h-7 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left leading-none text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+                            >
+                              <span className="min-w-0 truncate" title={model.label}>
+                                {modelLabel}
+                              </span>
+                              {model.id === selectedModel ? (
+                                <Check
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5 shrink-0 text-[var(--text-primary)]"
+                                />
+                              ) : null}
+                            </button>
+                          );
+                        })}
                 </div>
-              ))
+                <div className="mt-[22px] w-[132px] -translate-x-px rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-1">
+                  <ModelSelectorPanelRow
+                    active={activePane === 'model'}
+                    label="模型"
+                    onClick={() => setActivePane('model')}
+                    value={modelValueLabel}
+                  />
+                  <ModelSelectorPanelRow
+                    active={activePane === 'reasoning'}
+                    label="推理强度"
+                    onClick={canSelectReasoning ? () => setActivePane('reasoning') : undefined}
+                    value={reasoningValueLabel}
+                  />
+                  <ModelSelectorPanelRow
+                    active={activePane === 'provider'}
+                    label="厂商"
+                    onClick={() => setActivePane('provider')}
+                    value={currentProviderLabel}
+                  />
+                  <div className="my-1 border-t border-[var(--stroke-divider)]" />
+                  <button
+                    type="button"
+                    disabled={!canReset}
+                    onClick={() => {
+                      if (!defaultProvider || !defaultModel) return;
+                      onModelChange(defaultProvider, defaultModel);
+                      setOpen(false);
+                    }}
+                    className="flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-[11px] text-[var(--text-tertiary)] transition-colors enabled:hover:bg-[var(--hover-bg)] enabled:hover:text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <span>重置为默认设置</span>
+                    <RotateCcw aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  </button>
+                </div>
+              </>
             ) : (
               <div className="px-2 py-2 space-y-2">
                 <div className="text-xs leading-5" style={{ color: 'var(--text-tertiary)' }}>
@@ -152,4 +292,68 @@ export function GenerationModelSelector({
         )}
     </>
   );
+}
+
+function compactModelLabel(label: string, mode: 'list' | 'control' = 'list') {
+  const normalized = label.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const gemini = normalized.match(/^Gemini\s+(\d+(?:\.\d+)?)(?:\s+(.+))?$/i);
+  if (gemini) {
+    if (mode === 'control') return gemini[1];
+    const family = gemini[2]?.replace(/^Flash\s+Lite$/i, 'Lite').replace(/^Flash$/i, 'Flash');
+    return family ? `Gemini ${gemini[1]} ${family}` : `Gemini ${gemini[1]}`;
+  }
+
+  const gpt = normalized.match(/^GPT\s*(\d+(?:\.\d+)?)(?:\s+(.+))?$/i);
+  if (gpt) {
+    if (mode === 'control') return gpt[1];
+    return gpt[2] ? `${gpt[1]} ${gpt[2]}` : gpt[1];
+  }
+
+  const claude = normalized.match(/^Claude\s+(Sonnet|Opus|Haiku)(?:\s+(.+))?$/i);
+  if (claude) {
+    if (mode === 'control') return claude[1];
+    return claude[2] ? `Claude ${claude[1]} ${claude[2]}` : `Claude ${claude[1]}`;
+  }
+
+  if (mode === 'control' && normalized.length > 10) return `${normalized.slice(0, 9).trim()}…`;
+  return normalized;
+}
+
+function ModelSelectorPanelRow({
+  active,
+  label,
+  onClick,
+  value,
+}: {
+  active?: boolean;
+  label: string;
+  onClick?: () => void;
+  value: string;
+}) {
+  const className = cn(
+    'flex h-7 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-[12px] leading-none text-[var(--text-primary)]',
+    onClick
+      ? 'transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--stroke-strong)]'
+      : '',
+    active ? 'bg-[var(--hover-bg)]' : ''
+  );
+  const content = (
+    <>
+      <span className="shrink-0 font-semibold">{label}</span>
+      <span className="flex min-w-0 items-center gap-1 text-[var(--text-tertiary)]">
+        <span className="truncate">{value}</span>
+        {onClick ? <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> : null}
+      </span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }

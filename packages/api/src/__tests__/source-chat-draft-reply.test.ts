@@ -95,6 +95,25 @@ describe('createSourceChatDraftReply', () => {
       expect.anything(),
       expect.objectContaining({ model: 'gemini-3.6-flash' })
     );
+    const structuredSchema = generateStructured.mock.calls[0]?.[1] as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    expect(
+      structuredSchema.safeParse({
+        schema: 't3x/source-chat-draft-reply',
+        version: 1,
+        source_items: [
+          {
+            kind: 'captured',
+            title: 'Proposal summary',
+            content: 'Use audit trail as the proposal summary.',
+            target_path: null,
+            source_quote: 'Use audit trail as the proposal summary.',
+          },
+        ],
+        warnings: [],
+      }).success
+    ).toBe(false);
     expect(result.source_items).toEqual([
       expect.objectContaining({
         id: 'S001',

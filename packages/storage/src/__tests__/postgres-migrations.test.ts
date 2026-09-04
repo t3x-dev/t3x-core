@@ -41,7 +41,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.transition_review_snapshots')::text AS review_snapshots
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(tables).toEqual({
       preparations: 'transition_proposal_preparations',
       verification_receipts: 'transition_verification_receipts',
@@ -86,7 +86,7 @@ describe('PostgreSQL schema migrations', () => {
         to_regclass('public.yschema_composition_snapshots')::text AS "compositionSnapshots"
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(tables).toEqual({
       artifacts: 'yschema_artifacts',
       artifactVersions: 'yschema_artifact_versions',
@@ -132,7 +132,7 @@ describe('PostgreSQL schema migrations', () => {
       WHERE template_id = 'tmpl_v62_legacy'
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(template).toEqual({
       owner_id: null,
       provenance: {
@@ -172,7 +172,7 @@ describe('PostgreSQL schema migrations', () => {
       ORDER BY column_name
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(columns.map((column) => column.column_name)).toEqual([
       'decision_json',
       'decision_revision',
@@ -202,7 +202,7 @@ describe('PostgreSQL schema migrations', () => {
       SELECT to_regclass('public.transition_review_snapshots')::text AS review_snapshots
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(tables).toEqual({ review_snapshots: 'transition_review_snapshots' });
   });
 
@@ -229,7 +229,7 @@ describe('PostgreSQL schema migrations', () => {
       SELECT to_regclass('public.rate_limit_buckets')::text AS rate_limit_buckets
     `);
 
-    expect(version?.version).toBe(67);
+    expect(version?.version).toBe(69);
     expect(table).toEqual({ rate_limit_buckets: 'rate_limit_buckets' });
   });
 });

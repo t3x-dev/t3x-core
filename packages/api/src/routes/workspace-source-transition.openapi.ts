@@ -29,6 +29,7 @@ import {
   type WorkspaceSourceTransitionPrecondition,
 } from '../lib/workspace-source-transition';
 import {
+  type WorkspaceTransitionCommandResult,
   WorkspaceTransitionDecisionDeniedError,
   WorkspaceTransitionLegacyHeadError,
   WorkspaceTransitionNotFoundError,
@@ -193,9 +194,27 @@ const WorkspaceSourceTransitionReviewResponseSchema = z.object({
   change_projection: z.any(),
 });
 
+const WorkspaceTransitionCommandResultSchema = z
+  .object({
+    action: z.enum(['decide', 'commit']),
+    request_id: z.string(),
+    result_kind: z.enum(['decision', 'commit']),
+    result_digest: TransitionDigestSchema,
+    reused: z.boolean(),
+  })
+  .strict();
+
+const WorkspaceTransitionCommandResultsSchema = z
+  .object({
+    decision: WorkspaceTransitionCommandResultSchema,
+    commit: WorkspaceTransitionCommandResultSchema.optional(),
+  })
+  .strict();
+
 const WorkspaceSourceTransitionDecisionResponseSchema =
   WorkspaceSourceTransitionReviewResponseSchema.extend({
     decision_digest: TransitionDigestSchema,
+    commands: WorkspaceTransitionCommandResultsSchema.optional(),
     commit: z.any().optional(),
     workspace: z.record(z.string(), z.unknown()).optional(),
   });
@@ -433,6 +452,29 @@ function preconditionToWire(precondition: WorkspaceSourceTransitionPrecondition)
   };
 }
 
+function workspaceTransitionCommandsToWire(result: {
+  decisionCommand?: WorkspaceTransitionCommandResult;
+  commitCommand?: WorkspaceTransitionCommandResult;
+}) {
+  if (result.decisionCommand === undefined) return undefined;
+  return {
+    decision: workspaceTransitionCommandToWire(result.decisionCommand),
+    ...(result.commitCommand === undefined
+      ? {}
+      : { commit: workspaceTransitionCommandToWire(result.commitCommand) }),
+  };
+}
+
+function workspaceTransitionCommandToWire(command: WorkspaceTransitionCommandResult) {
+  return {
+    action: command.action,
+    request_id: command.requestId,
+    result_kind: command.resultKind,
+    result_digest: command.resultDigest,
+    reused: command.reused,
+  };
+}
+
 function preconditionFromWire(
   precondition: z.infer<typeof WorkspaceSourceTransitionPreconditionSchema>
 ): WorkspaceSourceTransitionPrecondition {
@@ -585,6 +627,7 @@ export function createWorkspaceSourceTransitionRoutes(
         },
         capabilities
       );
+      const commands = workspaceTransitionCommandsToWire(decided);
       return c.json({
         success: true as const,
         data: {
@@ -593,6 +636,7 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          ...(commands === undefined ? {} : { commands }),
           review_snapshot: decided.reviewSnapshot,
           change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),
@@ -679,6 +723,7 @@ export function createWorkspaceSourceTransitionRoutes(
         },
         capabilities
       );
+      const commands = workspaceTransitionCommandsToWire(decided);
       return c.json({
         success: true as const,
         data: {
@@ -687,6 +732,7 @@ export function createWorkspaceSourceTransitionRoutes(
           precondition: preconditionToWire(decided.precondition),
           runner: decided.runner,
           decision_digest: decided.decisionDigest,
+          ...(commands === undefined ? {} : { commands }),
           review_snapshot: decided.reviewSnapshot,
           change_projection: decided.changeProjection,
           ...(decided.commit === undefined ? {} : { commit: decided.commit }),

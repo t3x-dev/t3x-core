@@ -10,10 +10,19 @@ vi.mock('../lib/db', () => ({
 
 const storageMock = vi.hoisted(() => {
   let workspaceDraft: Record<string, unknown> | null = null;
+  const workspaceDraftCommandReceipts = new Map<string, Record<string, unknown>>();
+  const receiptKey = (input: {
+    projectId: string;
+    workspaceId: string;
+    actor: { kind: string; id: string };
+    requestId: string;
+  }) =>
+    `${input.projectId}/${input.workspaceId}/${input.actor.kind}/${input.actor.id}/${input.requestId}`;
 
   return {
     reset: () => {
       workspaceDraft = null;
+      workspaceDraftCommandReceipts.clear();
     },
     seedWorkspaceDraft: (state: Record<string, unknown>) => {
       workspaceDraft = state;
@@ -72,6 +81,41 @@ const storageMock = vi.hoisted(() => {
       )
     ),
     listTransitionReviewSnapshots: vi.fn(),
+    findWorkspaceDraftCommandReceipt: vi.fn((_db, input) =>
+      Promise.resolve(workspaceDraftCommandReceipts.get(receiptKey(input)) ?? null)
+    ),
+    recordWorkspaceDraftCommandReceipt: vi.fn((_db, input) => {
+      const key = receiptKey(input);
+      const prior = workspaceDraftCommandReceipts.get(key);
+      if (prior) {
+        if (
+          prior.command !== input.command ||
+          prior.requestDigest !== input.requestDigest ||
+          prior.resultRevision !== input.resultRevision ||
+          prior.resultDigest !== input.resultDigest
+        ) {
+          throw Object.assign(new Error('conflicting workspace command request'), {
+            name: 'WorkspaceDraftCommandConflictError',
+          });
+        }
+        return Promise.resolve({ receipt: prior, reused: true });
+      }
+
+      const receipt = {
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+        command: input.command,
+        actor: input.actor,
+        requestId: input.requestId,
+        requestDigest: input.requestDigest,
+        resultRevision: input.resultRevision,
+        resultDigest: input.resultDigest,
+        resultWorkspaceState: input.resultWorkspaceState,
+        createdAt: '2026-07-03T00:00:00.000Z',
+      };
+      workspaceDraftCommandReceipts.set(key, receipt);
+      return Promise.resolve({ receipt, reused: false });
+    }),
     upsertWorkspaceDraft: vi.fn(
       (
         _db,
@@ -140,9 +184,11 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
     getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
     getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
+    findWorkspaceDraftCommandReceipt: storageMock.findWorkspaceDraftCommandReceipt,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
+    recordWorkspaceDraftCommandReceipt: storageMock.recordWorkspaceDraftCommandReceipt,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
 });
@@ -179,6 +225,20 @@ const mockCommitV2 = {
 };
 const mockCommitDigest = describeTransitionObject(mockCommitV2).digest;
 const mockTransitionId = `trn_${'1'.repeat(32)}`;
+const mockDecisionCommand = {
+  action: 'decide' as const,
+  requestId: 'workspace-transition:decide:mock',
+  resultKind: 'decision' as const,
+  resultDigest: mockCommitV2.decision.digest,
+  reused: false,
+};
+const mockCommitCommand = {
+  action: 'commit' as const,
+  requestId: 'workspace-transition:commit:mock',
+  resultKind: 'commit' as const,
+  resultDigest: mockCommitDigest,
+  reused: false,
+};
 const mockPrecondition = {
   workspaceRevision: 1,
   refHead: null,
@@ -331,11 +391,13 @@ describe('Workspace routes', () => {
     storageMock.findProjectById.mockClear();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
+    storageMock.findWorkspaceDraftCommandReceipt.mockClear();
     storageMock.getLatestTransitionReviewSnapshot.mockReset();
     storageMock.getTransitionReviewSnapshot.mockReset();
     storageMock.insertYOpsLogEntry.mockClear();
     storageMock.listTransitionReviewSnapshots.mockReset();
     storageMock.listWorkspaceDrafts.mockClear();
+    storageMock.recordWorkspaceDraftCommandReceipt.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
     transitionMock.reviewWorkspaceTransition.mockReset();
     transitionMock.reviewWorkspaceTransition.mockResolvedValue({
@@ -363,6 +425,8 @@ describe('Workspace routes', () => {
           transition: {},
           precondition: input.precondition,
           decisionDigest: mockCommitV2.decision.digest,
+          decisionCommand: mockDecisionCommand,
+          commitCommand: mockCommitCommand,
           commit: mockCommitV2,
           workspace: storageMock.markWorkspaceCommitted(
             mockCommitDigest,
@@ -484,6 +548,8 @@ describe('Workspace routes', () => {
       transition: {},
       precondition: mockPrecondition,
       decisionDigest: mockCommitV2.decision.digest,
+      decisionCommand: mockDecisionCommand,
+      commitCommand: mockCommitCommand,
       ...mockReviewArtifacts('committed'),
     });
 
@@ -512,6 +578,20 @@ describe('Workspace routes', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           transition_id: mockTransitionId,
+          commands: {
+            decision: expect.objectContaining({
+              action: 'decide',
+              request_id: mockDecisionCommand.requestId,
+              result_digest: mockDecisionCommand.resultDigest,
+              reused: false,
+            }),
+            commit: expect.objectContaining({
+              action: 'commit',
+              request_id: mockCommitCommand.requestId,
+              result_digest: mockCommitCommand.resultDigest,
+              reused: false,
+            }),
+          },
           review_snapshot: expect.objectContaining({ snapshotDigest: mockSnapshotDigest }),
           change_projection: expect.objectContaining({ status: 'committed' }),
         }),
@@ -540,7 +620,10 @@ describe('Workspace routes', () => {
             expect.objectContaining({
               snapshot_id: stored.snapshotId,
               snapshot_digest: stored.snapshotDigest,
-              change_projection: expect.objectContaining({ status: 'committed' }),
+              change_projection: expect.objectContaining({
+                status: 'committed',
+                currentness: { state: 'stale', reasons: ['draft_revision_changed'] },
+              }),
             }),
           ],
         },
@@ -565,6 +648,9 @@ describe('Workspace routes', () => {
         data: expect.objectContaining({
           snapshot_id: stored.snapshotId,
           review_digest: stored.reviewDigest,
+          change_projection: expect.objectContaining({
+            currentness: { state: 'stale', reasons: ['draft_revision_changed'] },
+          }),
         }),
       })
     );
@@ -585,6 +671,9 @@ describe('Workspace routes', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           snapshot: expect.objectContaining({ snapshotId: stored.snapshotId }),
+          change_projection: expect.objectContaining({
+            currentness: { state: 'stale', reasons: ['draft_revision_changed'] },
+          }),
         }),
       })
     );
@@ -1439,6 +1528,84 @@ describe('Workspace routes', () => {
     expect(getBody.data.workspace.schemaCandidate.summary).toBe('User reviewed candidate.');
   });
 
+  it('applies and reuses idempotent CAS draft commands', async () => {
+    const commandBody = {
+      command: 'draft.save',
+      request_id: 'req_workspace_save_1',
+      workspace: {
+        id: 'client_side_id_is_ignored',
+        projectId: 'client_project_is_ignored',
+        title: 'CAS PRD workspace',
+        status: 'draft',
+        targetBranch: 'main',
+        sourceBundle: [],
+        schemaBindings: [],
+        yopsDraft: { id: 'draft:cas-save', operations: [] },
+        outputTargets: [],
+      },
+    };
+
+    const first = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/draft-commands',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commandBody),
+      }
+    );
+    expect(first.status).toBe(200);
+    const firstBody: ApiResponse = await first.json();
+    expect(firstBody.data.workspace).toEqual(
+      expect.objectContaining({
+        id: 'workspace_prd_handoff',
+        projectId: 'proj_sources',
+        title: 'CAS PRD workspace',
+        revision: 1,
+      })
+    );
+    expect(firstBody.data.receipt).toEqual(
+      expect.objectContaining({
+        schema: 't3x.application/workspace-contract/v1',
+        command: 'draft.save',
+        project_id: 'proj_sources',
+        workspace_id: 'workspace_prd_handoff',
+        request_id: 'req_workspace_save_1',
+        result_kind: 'draft',
+        result_revision: 1,
+        reused: false,
+      })
+    );
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenCalledTimes(1);
+    expect(storageMock.recordWorkspaceDraftCommandReceipt).toHaveBeenCalledTimes(1);
+
+    const retry = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/draft-commands',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commandBody),
+      }
+    );
+    expect(retry.status).toBe(200);
+    const retryBody: ApiResponse = await retry.json();
+    expect(retryBody.data.receipt.reused).toBe(true);
+    expect(retryBody.data.receipt.request_digest).toBe(firstBody.data.receipt.request_digest);
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenCalledTimes(1);
+
+    const conflict = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/draft-commands',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...commandBody,
+          workspace: { ...commandBody.workspace, title: 'Conflicting CAS PRD workspace' },
+        }),
+      }
+    );
+    expect(conflict.status).toBe(409);
+  });
+
   it('maps workspace write conflicts to 409', async () => {
     const conflicts = [
       {
@@ -1779,6 +1946,22 @@ describe('Workspace routes', () => {
       parents: [],
       decision: mockCommitV2.decision.digest,
       result: mockCommitV2.result.digest,
+    });
+    expect(body.data.commands).toEqual({
+      decision: {
+        action: 'decide',
+        request_id: mockDecisionCommand.requestId,
+        result_kind: 'decision',
+        result_digest: mockDecisionCommand.resultDigest,
+        reused: false,
+      },
+      commit: {
+        action: 'commit',
+        request_id: mockCommitCommand.requestId,
+        result_kind: 'commit',
+        result_digest: mockCommitCommand.resultDigest,
+        reused: false,
+      },
     });
     expect(body.data.workspace).toEqual(
       expect.objectContaining({

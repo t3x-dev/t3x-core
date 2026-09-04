@@ -8,6 +8,7 @@ import {
   reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
   saveProjectWorkspace,
+  type WorkspaceDraftCommand,
   type WorkspaceSaveResponse,
   type WorkspaceSourceChange,
   type WorkspaceSourceTransitionDecisionResponse,
@@ -29,9 +30,10 @@ export function fetchProjectWorkspaces(projectId: string): Promise<WorkspaceCand
 export function saveWorkspaceDraft(
   projectId: string,
   workspaceId: string,
-  workspace: WorkspaceCandidate
+  workspace: WorkspaceCandidate,
+  options: { command?: WorkspaceDraftCommand; requestId?: string } = {}
 ): Promise<WorkspaceSaveResponse> {
-  return saveProjectWorkspace(projectId, workspaceId, workspace);
+  return saveProjectWorkspace(projectId, workspaceId, workspace, options);
 }
 
 export function reviewWorkspaceTransition(

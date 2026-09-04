@@ -113,14 +113,19 @@ function buildSourceChatDraftReplySchema(targets: readonly ExtractionTarget[]) {
               kind: SourceChatDraftItemKindSchema,
               title: z.string().trim().min(1).max(120),
               content: z.string().trim().min(1).max(800),
-              target_id: targetIdSchema.optional(),
-              target_path: targetPathSchema.optional(),
+              // OpenAI strict structured output requires every declared object
+              // property to be present. Null keeps "not bound to a catalog
+              // target" explicit without changing the source-item semantics.
+              target_id: targetIdSchema,
+              target_path: targetPathSchema,
               source_quote: z.string().trim().min(1).max(800).nullable(),
             })
             .strict()
         )
         .max(20),
-      warnings: z.array(z.string().trim().min(1).max(300)).max(8).optional(),
+      // Keep the array present (empty when there are no warnings) so the same
+      // schema works across OpenAI, Anthropic, and Gemini strict modes.
+      warnings: z.array(z.string().trim().min(1).max(300)).max(8),
     })
     .strict();
 }

@@ -2,7 +2,11 @@
  * L3 material readers.
  */
 
-import { getMaterialDetail, listMaterialsByProject } from '@/infrastructure/materials';
+import {
+  getMaterialDetail,
+  listMaterialsByProject,
+  reparseProjectMaterial,
+} from '@/infrastructure/materials';
 import type { Material, MaterialDetail } from '@/types/api';
 
 export function fetchMaterialsByProject(projectId: string): Promise<Material[]> {
@@ -14,4 +18,8 @@ export function fetchMaterialDetail(
   materialId: string
 ): Promise<MaterialDetail> {
   return getMaterialDetail(projectId, materialId);
+}
+
+export function reparseMaterial(projectId: string, materialId: string): Promise<MaterialDetail> {
+  return reparseProjectMaterial(projectId, materialId);
 }

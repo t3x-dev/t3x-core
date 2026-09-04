@@ -549,8 +549,16 @@ export function ProjectDetailPageContent({
       <ProjectStateTab
         key={projectId}
         onRunValidation={handleRunYSchemaValidation}
+        projectDescription={project.description}
         projectId={projectId}
         projectName={project.name}
+        projectTags={
+          Array.isArray(project.metadata?.tags)
+            ? project.metadata.tags.filter(
+                (tag): tag is string => typeof tag === 'string' && tag.trim().length > 0
+              )
+            : []
+        }
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}

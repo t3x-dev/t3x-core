@@ -13,6 +13,8 @@ export function useWorkspaceProposalGeneration() {
       posture: WorkspaceProposalPosture;
       instruction: string;
       sourceMaterialIds: string[];
+      provider?: string;
+      model?: string;
       ifRevision?: number;
     }) => generateWorkspaceProposal(input),
     []

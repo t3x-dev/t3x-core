@@ -92,6 +92,10 @@ describe('useWorkspaceReviewSnapshot', () => {
       },
     });
     expect(result.current.state.data?.change_projection.status).toBe('committed');
+    expect(result.current.state.commands?.decision.request_id).toBe(
+      'workspace-transition:decide:test'
+    );
+    expect(result.current.state.commands?.commit?.reused).toBe(true);
     expect(commitCreated).toHaveBeenCalledOnce();
     window.removeEventListener('t3x:commit-created', commitCreated);
   });
@@ -129,6 +133,22 @@ function decisionEnvelope(status: 'committed') {
       policy_digest: `sha256:${'d'.repeat(64)}`,
     },
     decision_digest: `sha256:${'f'.repeat(64)}`,
+    commands: {
+      decision: {
+        action: 'decide',
+        request_id: 'workspace-transition:decide:test',
+        result_kind: 'decision',
+        result_digest: `sha256:${'f'.repeat(64)}`,
+        reused: false,
+      },
+      commit: {
+        action: 'commit',
+        request_id: 'workspace-transition:commit:test',
+        result_kind: 'commit',
+        result_digest: `sha256:${'e'.repeat(64)}`,
+        reused: true,
+      },
+    },
     review_snapshot: snapshot,
     change_projection: changeProjectionFor(status, snapshot),
   };

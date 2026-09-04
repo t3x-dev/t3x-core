@@ -20,6 +20,16 @@ export interface ListMaterialsOptions {
   includeArchived?: boolean;
 }
 
+export interface UpdateMaterialContentInput {
+  title?: string | null;
+  filename?: string | null;
+  mime_type?: string | null;
+  content_text: string;
+  content_hash: string;
+  metadata?: Record<string, unknown>;
+  token_estimate?: number;
+}
+
 export async function createMaterial(db: AnyDB, input: CreateMaterialInput): Promise<Material> {
   const id = generateMaterialId();
   const now = new Date();
@@ -125,6 +135,28 @@ export async function restoreArchivedMaterial(db: AnyDB, id: string): Promise<Ma
   const [row] = await db
     .update(materials)
     .set({ archivedAt: null })
+    .where(eq(materials.id, id))
+    .returning();
+
+  return row ? rowToMaterial(row) : null;
+}
+
+export async function updateMaterialContent(
+  db: AnyDB,
+  id: string,
+  input: UpdateMaterialContentInput
+): Promise<Material | null> {
+  const [row] = await db
+    .update(materials)
+    .set({
+      title: input.title ?? null,
+      filename: input.filename ?? null,
+      mimeType: input.mime_type ?? null,
+      contentText: input.content_text,
+      contentHash: input.content_hash,
+      metadata: input.metadata ?? {},
+      tokenEstimate: input.token_estimate ?? 0,
+    })
     .where(eq(materials.id, id))
     .returning();
 

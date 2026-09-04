@@ -82,6 +82,7 @@ describe('YOpsDraftTab Transition write path', () => {
     });
 
     const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_legacy';
+    const draftCommandUrl = `${workspaceUrl}/draft-commands`;
     const reviewUrl = `${workspaceUrl}/transition/review`;
     const legacyCommitUrl = `${workspaceUrl}/commit`;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -92,6 +93,20 @@ describe('YOpsDraftTab Transition write path', () => {
             success: true,
             data: {
               candidate_id: 'candidate:workspace_legacy',
+              workspace: { ...candidate, revision: 2 },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url === draftCommandUrl) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              candidate_id: 'candidate:workspace_legacy',
+              command: 'review.prepare',
+              receipt: { request_id: 'test-review-prepare' },
               workspace: { ...candidate, revision: 2 },
             },
           }),

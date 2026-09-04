@@ -761,7 +761,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch
   ON drafts(project_id, target_branch)
   WHERE workspace_id IS NOT NULL
     AND status <> 'abandoned'
-    AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+    AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed'
+    AND workspace_state_json->>'scenario' IS NULL;
+
+CREATE TABLE IF NOT EXISTS workspace_draft_command_receipts (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  command TEXT NOT NULL,
+  actor_kind TEXT NOT NULL
+    CHECK (actor_kind IN ('human', 'agent', 'service')),
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL
+    CHECK (request_digest ~ '^sha256:[0-9a-f]{64}$'),
+  result_revision INTEGER NOT NULL
+    CHECK (result_revision > 0),
+  result_digest TEXT NOT NULL
+    CHECK (result_digest ~ '^sha256:[0-9a-f]{64}$'),
+  result_workspace_state_json JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, workspace_id, actor_kind, actor_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_draft_command_receipts_result
+  ON workspace_draft_command_receipts(project_id, workspace_id, result_revision);
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (

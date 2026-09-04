@@ -3,6 +3,7 @@ import type { TransitionViewV1 } from '@t3x-dev/core';
 import { useCallback, useEffect, useState } from 'react';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import type {
+  WorkspaceTransitionCommandResults,
   WorkspaceTransitionDecisionResponse,
   WorkspaceTransitionOutcome,
   WorkspaceTransitionPrecondition,
@@ -15,6 +16,7 @@ import {
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export interface WorkspaceReviewSnapshotState {
+  commands: WorkspaceTransitionCommandResults | null;
   data: WorkspaceTransitionReviewSnapshotResponse | null;
   deciding: boolean;
   error: string | null;
@@ -32,6 +34,7 @@ export function useWorkspaceReviewSnapshot(
   snapshotId: string
 ) {
   const [state, setState] = useState<WorkspaceReviewSnapshotState>({
+    commands: null,
     data: null,
     deciding: false,
     error: null,
@@ -49,10 +52,13 @@ export function useWorkspaceReviewSnapshot(
           snapshotId,
           signal
         );
-        if (!signal?.aborted) setState({ data, deciding: false, error: null, loading: false });
+        if (!signal?.aborted) {
+          setState({ commands: null, data, deciding: false, error: null, loading: false });
+        }
       } catch (error) {
         if (signal?.aborted) return;
         setState({
+          commands: null,
           data: null,
           deciding: false,
           error: error instanceof Error ? error.message : 'Unable to load the change review.',
@@ -116,6 +122,7 @@ export function useWorkspaceReviewSnapshot(
           throw new Error('Committed Workspace response did not include the latest revision.');
         }
         setState({
+          commands: decided.commands ?? null,
           data: nextSnapshot,
           deciding: false,
           error: null,

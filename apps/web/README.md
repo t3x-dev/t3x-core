@@ -15,6 +15,11 @@ Web frontend for T3X structured-state workflows, built with Next.js.
 | Animation | Framer Motion |
 | Layout | ELK.js (auto layout) |
 
+## Visual Contract
+
+The maintained WebUI design rules live in [DESIGN.md](DESIGN.md). Runtime tokens in
+`src/app/globals.css` remain the implementation source of truth.
+
 ## Directory Structure
 
 The source tree follows a four-layer v2 architecture (L1 infrastructure /

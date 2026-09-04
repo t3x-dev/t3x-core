@@ -73,6 +73,7 @@ import {
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
 import {
+  type WorkspaceTransitionCommandResult,
   WorkspaceTransitionDecisionDeniedError,
   WorkspaceTransitionNotFoundError,
   type WorkspaceTransitionPrecondition,
@@ -307,6 +308,8 @@ export interface DecideWorkspaceSourceReviewInput {
 export interface DecideWorkspaceSourceTransitionResult
   extends ReviewWorkspaceSourceTransitionResult {
   decisionDigest: string;
+  decisionCommand?: WorkspaceTransitionCommandResult;
+  commitCommand?: WorkspaceTransitionCommandResult;
   commit?: CommitV2;
   workspace?: Record<string, unknown>;
 }
@@ -1726,12 +1729,13 @@ async function decidePreparedWorkspaceSourceTransition(
         ? {}
         : { decision_reason: input.decisionReason.trim() }),
     };
+    const decisionRequestId = compatibilityRequestId('decide', decisionFacts);
     const decided = await decideTransition({
       db,
       projectId: input.projectId,
       transitionId,
       actor: input.actor,
-      requestId: compatibilityRequestId('decide', decisionFacts),
+      requestId: decisionRequestId,
       outcome: input.outcome,
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
@@ -1753,6 +1757,13 @@ async function decidePreparedWorkspaceSourceTransition(
         },
       },
     });
+    const decisionCommand: WorkspaceTransitionCommandResult = {
+      action: 'decide',
+      requestId: decisionRequestId,
+      resultKind: 'decision',
+      resultDigest: decided.decisionDigest,
+      reused: decided.reused,
+    };
     const decidedInspection = sourceInspectionWithPrecondition(
       decided.view as TransitionInspectionView,
       reviewPrecondition
@@ -1769,6 +1780,7 @@ async function decidePreparedWorkspaceSourceTransition(
         precondition: input.precondition,
         runner,
         decisionDigest: decided.decisionDigest,
+        decisionCommand,
         ...artifacts,
       };
     }
@@ -1789,12 +1801,13 @@ async function decidePreparedWorkspaceSourceTransition(
       expected_head: input.precondition.refHead,
       workspace_projection: projectionFacts,
     };
+    const commitRequestId = compatibilityRequestId('commit', commitFacts);
     const committed = await commitTransition({
       db,
       projectId: input.projectId,
       transitionId,
       actor: input.actor,
-      requestId: compatibilityRequestId('commit', commitFacts),
+      requestId: commitRequestId,
       decisionDigest: decided.decisionDigest,
       expectedHead: input.precondition.refHead,
       workspaceProjection: {
@@ -1818,12 +1831,21 @@ async function decidePreparedWorkspaceSourceTransition(
       createdAt: reviewSnapshotCreatedAt(committedInspection),
     });
     await persistWorkspaceReviewArtifacts(db, artifacts);
+    const commitCommand: WorkspaceTransitionCommandResult = {
+      action: 'commit',
+      requestId: commitRequestId,
+      resultKind: 'commit',
+      resultDigest: committed.commitDigest,
+      reused: committed.reused,
+    };
     return {
       transitionId,
       transition: committed.view,
       precondition: input.precondition,
       runner,
       decisionDigest: decided.decisionDigest,
+      decisionCommand,
+      commitCommand,
       commit: committed.commit,
       workspace: committed.workspace,
       ...artifacts,

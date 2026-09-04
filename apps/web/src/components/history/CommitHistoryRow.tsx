@@ -4,7 +4,7 @@
  * CommitHistoryRow — a single row in the commit history timeline.
  *
  * Displays: commit hash, message, author, relative time, diff stats, branch badge.
- * Clickable → opens the shared T3X Diff review inside History.
+ * Clickable → opens the shared State structure and audit view inside History.
  */
 
 import { Minus, Pencil, Plus } from 'lucide-react';

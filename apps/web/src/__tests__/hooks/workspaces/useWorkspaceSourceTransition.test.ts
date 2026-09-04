@@ -140,7 +140,9 @@ describe('useWorkspaceSourceTransition', () => {
       await result.current.review(change, '  Reduce production log volume.  ');
     });
 
-    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_esphome', candidate);
+    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_esphome', candidate, {
+      command: 'review.prepare',
+    });
     expect(reviewWorkspaceSourceTransition).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
       artifact: candidate.sourceArtifact,
       change,
@@ -167,7 +169,9 @@ describe('useWorkspaceSourceTransition', () => {
       await result.current.reviewRevert(commitId, '  Restore the previous configuration.  ');
     });
 
-    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_esphome', candidate);
+    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_esphome', candidate, {
+      command: 'review.prepare',
+    });
     expect(reviewWorkspaceSourceRevert).toHaveBeenCalledWith('proj_1', 'workspace_esphome', {
       commitId,
       why: 'Restore the previous configuration.',

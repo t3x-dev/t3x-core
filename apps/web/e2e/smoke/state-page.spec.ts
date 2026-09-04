@@ -7,17 +7,20 @@ import {
   createTestProject,
 } from '../fixtures/api-helpers';
 
-const PRD_TREE = [
+const PRD_HEAD_TREE = [
   {
     key: 'prd',
-    slots: { title: 'PRD audience handoff' },
+    slots: { title: 'Checkout rollout guardrails' },
     children: [
       {
         key: 'summary',
         slots: {
-          problem: 'You: i need food and drink',
-          audience: 'Office workers',
-          outcome: 'Office workers',
+          problem:
+            'Checkout-api release risk is hard to audit without deterministic rollout evidence.',
+          audience: 'Release managers and checkout platform engineers',
+          outcome: 'Service checkout-api currently has replicas 4',
+          scope: 'checkout-api canary rollout',
+          source: 'source_chat:conv_d4d239f3',
         },
         children: [],
       },
@@ -26,21 +29,136 @@ const PRD_TREE = [
         slots: {},
         children: [
           {
-            key: 'you_i_need_food_and_drink',
+            key: 'checkout_api_rollout',
             slots: {
-              title: 'Find food and drinks',
+              title: 'Service checkout-api currently has replicas 4',
               priority: 'P1',
-              acceptance: 'Users can quickly find satisfying options',
+              owner: 'Checkout platform',
+              service: 'checkout-api',
+              environment: 'production',
+              acceptance: 'Replay confirms desired replicas before traffic promotion',
+              release_gate: 'Replay verifies canary rollout before commit',
+              rollback: 'Restore baseline replicas and disable canary traffic',
+              metric: 'checkout error rate remains below 0.2 percent',
+            },
+            children: [],
+          },
+          {
+            key: 'traffic_guardrails',
+            slots: {
+              title: 'Guard canary traffic before promotion',
+              priority: 'P1',
+              owner: 'Release agent',
+              service: 'checkout-api',
+              environment: 'production',
+              acceptance: 'Promotion only proceeds after replay and schema checks pass',
+              rollback: 'Hold at current exposure and page release owner',
+              metric: 'p95 latency remains within rollout budget',
             },
             children: [],
           },
         ],
       },
+      {
+        key: 'metadata',
+        slots: {
+          version: '1.0.0',
+          source: 'source_chat:conv_d4d239f3',
+          owner: 'Release agent',
+          review_mode: 'pull-request level',
+        },
+        children: [],
+      },
+      {
+        key: 'rollout_plan',
+        slots: {},
+        children: [
+          {
+            key: 'phase_1',
+            slots: {
+              title: 'Progressive exposure and promotion gates',
+              owner: 'Release agent',
+              exposure: '10 percent traffic',
+              rollback: 'Kill switch',
+              success_gate: 'No duplicate orders',
+              verification_window: 'Seventh rollout field remains visible',
+              schedule: 'weekday business-hours release window',
+            },
+            children: [],
+          },
+        ],
+      },
+      {
+        key: 'verification',
+        slots: {
+          replay: 'matched',
+          schema: 'valid',
+          evidence_review: 'pending',
+          reviewer: 'release-agent',
+        },
+        children: [],
+      },
     ],
   },
 ];
 
-test('State page smoke: repository controls, snapshot views, and Canvas remain operational', async ({
+const PRD_BASE_TREE = [
+  {
+    key: 'prd',
+    slots: { title: 'Checkout rollout guardrails' },
+    children: [
+      {
+        key: 'summary',
+        slots: {
+          problem: 'Manual rollout steps make checkout-api releases hard to audit.',
+          audience: 'Release managers and checkout platform engineers',
+          outcome: 'Reduce deployment risk with manual review checkpoints.',
+          scope: 'checkout-api canary rollout',
+          source: 'source_chat:conv_d4d239f3',
+        },
+        children: [],
+      },
+      {
+        key: 'requirements',
+        slots: {},
+        children: [
+          {
+            key: 'checkout_api_rollout',
+            slots: {
+              title: 'Scale checkout-api manually before launch',
+              priority: 'P1',
+              owner: 'Checkout platform',
+              service: 'checkout-api',
+              environment: 'production',
+              acceptance: 'Replay confirms desired replicas before traffic promotion',
+              legacy_gate: 'Manual approver confirms launch note before merge',
+              rollback: 'Restore baseline replicas and disable canary traffic',
+              metric: 'checkout error rate remains below 0.2 percent',
+            },
+            children: [],
+          },
+          {
+            key: 'traffic_guardrails',
+            slots: {
+              title: 'Guard canary traffic before promotion',
+              priority: 'P1',
+              owner: 'Release agent',
+              service: 'checkout-api',
+              environment: 'production',
+              acceptance: 'Promotion only proceeds after replay and schema checks pass',
+              rollback: 'Hold at current exposure and page release owner',
+              metric: 'p95 latency remains within rollout budget',
+            },
+            children: [],
+          },
+        ],
+      },
+      ...PRD_HEAD_TREE[0]!.children.slice(2),
+    ],
+  },
+];
+
+test('State page smoke: repository controls, Structure, Render, Code, and Canvas remain operational', async ({
   page,
   request,
 }) => {
@@ -48,9 +166,9 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
   const { projectId } = await createTestProject(request, 'State page smoke PRD');
 
   try {
-    const commitHash = await createTestCommitFromTrees(request, projectId, PRD_TREE, {
+    const baseCommitHash = await createTestCommitFromTrees(request, projectId, PRD_BASE_TREE, {
       branch: 'feature/prd-audience',
-      message: 'Workspace commit: PRD audience handoff',
+      message: 'Workspace baseline: Checkout rollout guardrails',
     });
     const conversationId = await createTestConversation(
       request,
@@ -62,7 +180,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       {
         data: {
           workspace: {
-            baseCommitHash: commitHash,
+            baseCommitHash,
             id: 'workspace_prd_handoff',
             outputTargets: [],
             projectId,
@@ -84,38 +202,49 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
             status: 'schema_review',
             summary: 'Reviewed PRD workspace',
             targetBranch: 'feature/prd-audience',
-            title: 'PRD audience handoff',
+            title: 'Checkout rollout guardrails',
             updatedAt: new Date().toISOString(),
             yopsDraft: {
               id: 'draft:workspace_prd_handoff',
               operations: [
                 {
-                  afterValue: 'You: i need food and drink',
+                  afterValue:
+                    'Checkout-api release risk is hard to audit without deterministic rollout evidence.',
+                  beforeValue: 'Manual rollout steps make checkout-api releases hard to audit.',
                   id: 'op_backend_1',
                   op: 'set',
                   path: 'prd/summary/problem',
                   summary: 'Set summary.problem',
                 },
                 {
-                  afterValue: 'Office workers',
+                  afterValue: 'Service checkout-api currently has replicas 4',
+                  beforeValue: 'Reduce deployment risk with manual review checkpoints.',
                   id: 'op_backend_2',
-                  op: 'set',
-                  path: 'prd/summary/audience',
-                  summary: 'Set summary.audience',
-                },
-                {
-                  afterValue: 'Office workers',
-                  id: 'op_backend_3',
                   op: 'set',
                   path: 'prd/summary/outcome',
                   summary: 'Set summary.outcome',
                 },
                 {
-                  afterValue: 'Find food and drinks',
-                  id: 'op_backend_4',
+                  afterValue: 'Service checkout-api currently has replicas 4',
+                  beforeValue: 'Scale checkout-api manually before launch',
+                  id: 'op_backend_3',
                   op: 'set',
-                  path: 'prd/requirements/you_i_need_food_and_drink/title',
-                  summary: 'Set requirements title',
+                  path: 'prd/requirements/checkout_api_rollout/title',
+                  summary: 'Set checkout rollout title',
+                },
+                {
+                  beforeValue: 'Manual approver confirms launch note before merge',
+                  id: 'op_backend_4',
+                  op: 'remove',
+                  path: 'prd/requirements/checkout_api_rollout/legacy_gate',
+                  summary: 'Remove legacy release gate',
+                },
+                {
+                  afterValue: 'Replay verifies canary rollout before commit',
+                  id: 'op_backend_5',
+                  op: 'add',
+                  path: 'prd/requirements/checkout_api_rollout/release_gate',
+                  summary: 'Add replay-backed release gate',
                 },
               ],
             },
@@ -131,9 +260,9 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff/commit`,
       {
         data: {
-          content: { relations: [], trees: PRD_TREE },
+          content: { relations: [], trees: PRD_HEAD_TREE },
           if_revision: workspaceRevision,
-          message: 'Workspace commit: PRD audience handoff',
+          message: 'Workspace commit: Checkout rollout guardrails',
           validationOverride: {
             blockers: ['Resolve schema review before committing.'],
             kind: 'schema_review',
@@ -152,22 +281,30 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     });
 
     const response = await page.goto(
-      `/project/${projectId}?branch=${encodeURIComponent('feature/prd-audience')}`,
+      `/project/${projectId}?branch=${encodeURIComponent('feature/prd-audience')}&view=structure`,
       { waitUntil: 'networkidle' }
     );
     expect(response?.status() ?? 200).toBeLessThan(400);
 
     await expect(page.getByRole('heading', { name: 'State' }).first()).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute(
+    await expect(page.getByRole('tab', { name: /Structure/ })).toHaveAttribute(
       'aria-selected',
       'true'
     );
     await expect(page.getByLabel('Branch focus')).toHaveValue('feature/prd-audience');
-    await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
-    await expect(page.getByText('Path / Key')).toBeVisible();
-    await expect(page.getByText('01 SET').first()).toBeVisible();
-    await expect(page.getByText('02 SET').first()).toBeVisible();
-    await expect(page.getByText('03 SET').first()).toBeVisible();
+    await expect(page.getByText('Workspace commit: Checkout rollout guardrails')).toBeVisible();
+    const stateRows = page.getByRole('region', { name: 'State rows' });
+    await expect(stateRows.locator('tr[data-diff-exact="true"]')).toHaveCount(5);
+    await expect(
+      stateRows.locator('tr[data-diff-exact="true"][data-diff-kind="added"]')
+    ).toHaveCount(1);
+    await expect(
+      stateRows.locator('tr[data-diff-exact="true"][data-diff-kind="removed"]')
+    ).toHaveCount(1);
+    await expect(
+      stateRows.locator('tr[data-diff-exact="true"][data-diff-kind="modified"]')
+    ).toHaveCount(3);
+    expect(await stateRows.locator('tbody tr').count()).toBeGreaterThanOrEqual(30);
 
     await page.getByRole('button', { name: 'New branch' }).click();
     await expect(page.getByRole('dialog')).toContainText('Create a new branch');
@@ -181,13 +318,18 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     );
     await page.getByRole('button', { name: 'Run validation' }).click();
     expect((await validationResponsePromise).status()).toBe(201);
-    await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
+    await expect(page.getByText('Workspace commit: Checkout rollout guardrails')).toBeVisible();
 
     await page.getByRole('tab', { name: /Render/ }).click();
     await expect(
-      page.getByRole('heading', { exact: true, name: 'PRD audience handoff' })
+      page.getByRole('heading', {
+        name: /Product Requirements.*Checkout Rollout Guardrails/,
+      })
     ).toBeVisible();
-    await expect(page.getByText('Office workers').first()).toBeVisible();
+    await expect(page.getByText('Release managers and checkout platform engineers')).toBeVisible();
+    await expect(
+      page.getByText('Service checkout-api currently has replicas 4').first()
+    ).toBeVisible();
 
     await page.getByRole('tab', { name: /Code/ }).click();
     const codeView = page.getByRole('region', { name: 'YAML code view' });
@@ -196,7 +338,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await expect(codeView).not.toContainText('trees:');
     await expect(codeView).not.toContainText('slots:');
 
-    await page.getByRole('tab', { name: /Canvas/ }).click();
+    await page.getByRole('button', { name: /Canvas/ }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
@@ -213,9 +355,6 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
           ((repositoryBox?.y ?? 0) + (repositoryBox?.height ?? 0))
       )
     ).toBeLessThanOrEqual(2);
-
-    await page.getByRole('tab', { name: /Snapshot/ }).click();
-    await expect(page.getByRole('region', { name: 'YAML code view' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Open workspace' }).click();
     await expect(page).toHaveURL((url) => {

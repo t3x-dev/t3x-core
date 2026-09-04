@@ -1,7 +1,11 @@
 import {
+  type WorkspaceDraftCommand as ApiWorkspaceDraftCommand,
   type ChangeProjectionV1,
+  type RepositoryWorkspace,
   type ReviewSnapshotV1,
   T3xApiError,
+  type WorkspaceDraftCommandReceipt,
+  type WorkspaceTransitionCommandResults,
   type WorkspaceTransitionReviewSnapshotEnvelope,
 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
@@ -15,6 +19,9 @@ import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
 import { getSharedApiClient } from './sharedApiClient';
 
+export type WorkspaceDraftCommand = ApiWorkspaceDraftCommand;
+export type { WorkspaceTransitionCommandResults };
+
 interface ProjectWorkspacesResponse {
   workspaces: WorkspaceCandidate[];
 }
@@ -23,6 +30,10 @@ export interface WorkspaceSaveResponse {
   candidate_id: string;
   yops_draft_id?: string;
   workspace: WorkspaceCandidate;
+}
+
+export interface WorkspaceDraftCommandResponse extends WorkspaceSaveResponse {
+  receipt: WorkspaceDraftCommandReceipt;
 }
 
 export interface WorkspaceExtractionTransitionLink {
@@ -39,6 +50,7 @@ export interface WorkspaceControlPlaneTransitionResponse {
 
 export interface WorkspaceCommitResponse extends WorkspaceSaveResponse {
   commit: { hash: string };
+  commands?: WorkspaceTransitionCommandResults;
 }
 
 export type WorkspaceTransitionOutcome = 'accepted' | 'overridden' | 'rejected';
@@ -67,6 +79,7 @@ export interface WorkspaceTransitionReviewResponse {
 
 export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransitionReviewResponse {
   decision_digest: string;
+  commands?: WorkspaceTransitionCommandResults;
   commit?: unknown;
   workspace?: WorkspaceCandidate;
 }
@@ -117,6 +130,7 @@ export interface WorkspaceSourceTransitionReviewResponse {
 export interface WorkspaceSourceTransitionDecisionResponse
   extends WorkspaceSourceTransitionReviewResponse {
   decision_digest: string;
+  commands?: WorkspaceTransitionCommandResults;
   commit?: unknown;
   workspace?: WorkspaceCandidate;
 }
@@ -127,6 +141,26 @@ export function workspaceWritePayload(workspace: WorkspaceCandidate) {
     workspace: workspaceState,
     ...(revision === undefined ? {} : { if_revision: revision }),
   };
+}
+
+export function workspaceDraftCommandPayload(
+  command: WorkspaceDraftCommand,
+  requestId: string,
+  workspace: WorkspaceCandidate
+) {
+  return {
+    command,
+    request_id: requestId,
+    ...workspaceWritePayload(workspace),
+  };
+}
+
+export function createWorkspaceDraftCommandRequestId(command: WorkspaceDraftCommand): string {
+  const entropy =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `webui:${command}:${entropy}`;
 }
 
 export async function listProjectWorkspaces(projectId: string): Promise<WorkspaceCandidate[]> {
@@ -190,19 +224,44 @@ export async function getWorkspaceTransitionReviewSnapshot(
 export async function saveProjectWorkspace(
   projectId: string,
   workspaceId: string,
-  workspace: WorkspaceCandidate
+  workspace: WorkspaceCandidate,
+  options: {
+    command?: WorkspaceDraftCommand;
+    requestId?: string;
+  } = {}
 ): Promise<WorkspaceSaveResponse> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(
-      workspaceId
-    )}`,
-    {
-      body: JSON.stringify(workspaceWritePayload(workspace)),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'PATCH',
+  return applyProjectWorkspaceDraftCommand(projectId, workspaceId, {
+    command: options.command ?? 'draft.save',
+    requestId: options.requestId,
+    workspace,
+  });
+}
+
+export async function applyProjectWorkspaceDraftCommand(
+  projectId: string,
+  workspaceId: string,
+  input: {
+    command: WorkspaceDraftCommand;
+    requestId?: string;
+    workspace: WorkspaceCandidate;
+  }
+): Promise<WorkspaceDraftCommandResponse> {
+  const requestId = input.requestId ?? createWorkspaceDraftCommandRequestId(input.command);
+  const { revision, ...workspaceState } = input.workspace;
+  try {
+    const result = await getSharedApiClient().workspaces.applyDraftCommand(projectId, workspaceId, {
+      command: input.command,
+      request_id: requestId,
+      workspace: workspaceState as RepositoryWorkspace,
+      ...(revision === undefined ? {} : { if_revision: revision }),
+    });
+    return { ...result, workspace: result.workspace as unknown as WorkspaceCandidate };
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      throw new ApiError(error.code, error.message, error.details);
     }
-  );
-  return handleResponse<WorkspaceSaveResponse>(res);
+    throw error;
+  }
 }
 
 export async function commitProjectWorkspace(

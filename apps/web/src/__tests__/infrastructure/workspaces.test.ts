@@ -3,6 +3,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const fetchWithTimeoutMock = vi.fn();
 const handleResponseMock = vi.fn();
+const applyDraftCommandMock = vi.fn();
 
 vi.mock('@/infrastructure/core', () => ({
   API_V1: 'https://api.test/api/v1',
@@ -10,7 +11,18 @@ vi.mock('@/infrastructure/core', () => ({
   handleResponse: (...args: unknown[]) => handleResponseMock(...args),
 }));
 
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({
+    workspaces: {
+      applyDraftCommand: (...args: unknown[]) => applyDraftCommandMock(...args),
+      getReviewSnapshot: vi.fn(),
+    },
+    inspectTransition: vi.fn(),
+  }),
+}));
+
 import {
+  applyProjectWorkspaceDraftCommand,
   commitProjectWorkspace,
   decideProjectWorkspaceSourceRevert,
   decideProjectWorkspaceSourceTransition,
@@ -49,16 +61,15 @@ describe('infrastructure/workspaces', () => {
     expect(handleResponseMock).toHaveBeenCalledWith(response);
   });
 
-  it('saves reviewed workspace state with encoded route ids', async () => {
-    const response = new Response('{}');
+  it('saves reviewed workspace state through an idempotent draft command', async () => {
     const workspace = {
       id: 'workspace_prd_handoff',
       projectId: 'proj/with space',
       title: 'Reviewed workspace',
+      revision: 7,
     } as WorkspaceCandidate;
 
-    fetchWithTimeoutMock.mockResolvedValueOnce(response);
-    handleResponseMock.mockResolvedValueOnce({
+    applyDraftCommandMock.mockResolvedValueOnce({
       candidate_id: 'candidate:workspace_prd_handoff',
       workspace,
     });
@@ -70,15 +81,55 @@ describe('infrastructure/workspaces', () => {
       workspace,
     });
 
-    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
-      'https://api.test/api/v1/projects/proj%2Fwith%20space/workspaces/workspace%2Fprd%20handoff',
-      expect.objectContaining({
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace }),
-      })
-    );
-    expect(handleResponseMock).toHaveBeenCalledWith(response);
+    expect(applyDraftCommandMock).toHaveBeenCalledWith('proj/with space', 'workspace/prd handoff', {
+      command: 'draft.save',
+      if_revision: 7,
+      request_id: expect.stringMatching(/^webui:draft\.save:/),
+      workspace: {
+        id: 'workspace_prd_handoff',
+        projectId: 'proj/with space',
+        title: 'Reviewed workspace',
+      },
+    });
+  });
+
+  it('applies explicit workspace draft commands with a caller request id', async () => {
+    const workspace = {
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_1',
+      title: 'Edited workspace',
+    } as WorkspaceCandidate;
+
+    applyDraftCommandMock.mockResolvedValueOnce({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      workspace,
+      receipt: {
+        schema: 't3x.application/workspace-contract/v1',
+        command: 'candidate.edit',
+        project_id: 'proj_1',
+        workspace_id: 'workspace_prd_handoff',
+        actor: { kind: 'human', id: 'human:local-user' },
+        request_id: 'req_fixed',
+        request_digest: `sha256:${'a'.repeat(64)}`,
+        result_kind: 'draft',
+        result_digest: `sha256:${'b'.repeat(64)}`,
+        result_revision: 1,
+        created_at: '2026-08-26T00:00:00.000Z',
+        reused: false,
+      },
+    });
+
+    await applyProjectWorkspaceDraftCommand('proj_1', 'workspace_prd_handoff', {
+      command: 'candidate.edit',
+      requestId: 'req_fixed',
+      workspace,
+    });
+
+    expect(applyDraftCommandMock).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', {
+      command: 'candidate.edit',
+      request_id: 'req_fixed',
+      workspace,
+    });
   });
 
   it('commits a workspace through the workspace-scoped route', async () => {

@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import { ApiError } from '@/infrastructure/core';
 import type {
+  WorkspaceTransitionCommandResults,
   WorkspaceTransitionContent,
   WorkspaceTransitionOutcome,
   WorkspaceTransitionPrecondition,
@@ -25,6 +26,7 @@ export type WorkspaceTransitionPhase =
 
 export interface WorkspaceTransitionState {
   changeProjection: ChangeProjectionV1 | null;
+  commands: WorkspaceTransitionCommandResults | null;
   error: string | null;
   errorCode: string | null;
   phase: WorkspaceTransitionPhase;
@@ -46,6 +48,7 @@ export interface WorkspaceTransitionCommitResult {
 
 const INITIAL_STATE: WorkspaceTransitionState = {
   changeProjection: null,
+  commands: null,
   error: null,
   errorCode: null,
   phase: 'idle',
@@ -73,7 +76,9 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
       setState({ ...INITIAL_STATE, phase: 'reviewing' });
 
       try {
-        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
+        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate, {
+          command: 'review.prepare',
+        });
         const revision = saved.workspace.revision;
         if (revision === undefined) {
           throw new Error('Saved Workspace did not return a review revision.');
@@ -95,6 +100,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
         };
         setState({
           changeProjection: reviewed.change_projection,
+          commands: null,
           error: null,
           errorCode: null,
           phase: 'reviewed',
@@ -155,6 +161,7 @@ export function useWorkspaceTransition(candidate: WorkspaceCandidate) {
         }
         setState({
           changeProjection: decided.change_projection,
+          commands: decided.commands ?? null,
           error: null,
           errorCode: null,
           phase: commitId ? 'committed' : 'rejected',
@@ -216,6 +223,7 @@ function failedState(
   if (error instanceof ApiError) {
     return {
       ...artifacts,
+      commands: null,
       error:
         error.code === 'LEGACY_HEAD_READ_ONLY'
           ? 'Verified changes are not enabled for this legacy branch yet. Existing history remains readable, but this branch needs an explicit migration before it can save a Transition.'
@@ -227,6 +235,7 @@ function failedState(
   }
   return {
     ...artifacts,
+    commands: null,
     error: error instanceof Error ? error.message : 'Workspace Transition failed.',
     errorCode: null,
     phase,

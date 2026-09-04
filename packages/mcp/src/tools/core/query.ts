@@ -36,6 +36,7 @@ const SINGULAR_TARGETS = [
   'source_thread',
   'source_evidence',
   'workspace',
+  'workspace_change',
   'conversation',
 ] as const;
 const PLURAL_TARGETS = [
@@ -47,6 +48,7 @@ const PLURAL_TARGETS = [
   'branches',
   'source_threads',
   'workspaces',
+  'workspace_changes',
   'conversations',
 ] as const;
 const ALL_TARGETS = [...SINGULAR_TARGETS, ...PLURAL_TARGETS] as const;
@@ -61,15 +63,16 @@ export const queryDef: ToolDef = {
     'Read any T3X resource.',
     '',
     'Singular targets (require `id`):',
-    '  project, draft, commit, leaf, pin, source_thread, source_evidence, workspace',
+    '  project, draft, commit, leaf, pin, source_thread, source_evidence, workspace, workspace_change',
     '',
     'Plural targets (require `project_id`, except `projects`):',
-    '  projects, drafts, commits, leaves, pins, branches, source_threads, workspaces',
+    '  projects, drafts, commits, leaves, pins, branches, source_threads, workspaces, workspace_changes',
     '',
     'Notes:',
     '  draft / drafts = workbench drafts used by extract/edit/commit',
     '  source_evidence also requires `project_id` and is available through the API backend',
     '  workspace / workspaces require `project_id` and the authenticated API backend',
+    '  workspace_change reads a derived ChangeProjection from the latest or specified ReviewSnapshot',
     '  conversation / conversations are compatibility aliases for source_thread / source_threads',
     '',
     'Examples:',
@@ -93,6 +96,19 @@ export const queryDef: ToolDef = {
       project_id: {
         type: 'string',
         description: 'Project scope (required for plural targets except `projects`).',
+      },
+      workspace_id: {
+        type: 'string',
+        description:
+          'Workspace scope for workspace_changes. For workspace_change, `id` is the workspace_id.',
+      },
+      snapshot_id: {
+        type: 'string',
+        description: 'Optional ReviewSnapshot ID for target="workspace_change".',
+      },
+      transition_id: {
+        type: 'string',
+        description: 'Optional Transition ID filter for workspace_change / workspace_changes.',
       },
       limit: {
         type: 'number',
@@ -124,6 +140,9 @@ export const queryHandler: ToolHandler = async (args) => {
 
   const id = args.id as string | undefined;
   const projectId = args.project_id as string | undefined;
+  const workspaceIdArg = args.workspace_id as string | undefined;
+  const snapshotId = args.snapshot_id as string | undefined;
+  const transitionId = args.transition_id as string | undefined;
   const limit = (args.limit as number | undefined) ?? 20;
   const offset = (args.offset as number | undefined) ?? 0;
 
@@ -166,6 +185,18 @@ export const queryHandler: ToolHandler = async (args) => {
             return fail('"project_id" is required for target="workspace".');
           }
           return ok(await client.workspaces.get(projectId, id));
+        case 'workspace_change':
+          if (!projectId) {
+            return fail('"project_id" is required for target="workspace_change".');
+          }
+          if (snapshotId) {
+            return ok(await client.workspaces.getReviewSnapshot(projectId, id, snapshotId));
+          }
+          return ok(
+            await client.workspaces.getLatestReviewSnapshot(projectId, id, {
+              ...(transitionId === undefined ? {} : { transition_id: transitionId }),
+            })
+          );
       }
     }
 
@@ -205,12 +236,32 @@ export const queryHandler: ToolHandler = async (args) => {
         );
       case 'workspaces':
         return ok((await client.workspaces.list(projectId!)).workspaces);
+      case 'workspace_changes': {
+        const workspaceId = workspaceIdArg ?? id;
+        if (!workspaceId) {
+          return fail('"workspace_id" is required for target="workspace_changes".');
+        }
+        return ok(
+          (
+            await client.workspaces.listReviewSnapshots(projectId!, workspaceId, {
+              limit,
+              ...(transitionId === undefined ? {} : { transition_id: transitionId }),
+            })
+          ).snapshots
+        );
+      }
       default:
         return fail(`Unhandled target: ${target}`);
     }
   }
 
-  if (target === 'source_evidence' || target === 'workspace' || target === 'workspaces') {
+  if (
+    target === 'source_evidence' ||
+    target === 'workspace' ||
+    target === 'workspaces' ||
+    target === 'workspace_change' ||
+    target === 'workspace_changes'
+  ) {
     return fail(
       `target="${target}" requires T3X_MCP_BACKEND=api so authorization stays at the Source/Workspace service boundary.`
     );

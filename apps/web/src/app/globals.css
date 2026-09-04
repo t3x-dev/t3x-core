@@ -26,19 +26,22 @@
      Multiple .dark blocks with hue conflict → unified hue 260, single block
    ============================================ */
 :root {
-  /* Typography — Inter + JetBrains Mono (Unified Design v2) */
-  font-family: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Typography — Geist Sans + Geist Mono */
+  font-family:
+    var(--font-geist-sans, "Geist"), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
   /* Note: no font-size override on :root — browser default 16px preserved to avoid breaking rem units */
   line-height: 1.6;
   font-weight: 400;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-kerning: normal;
+  font-optical-sizing: auto;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
   /* Monospace font for code & YAML */
   --font-mono:
-    var(--font-jetbrains-mono), "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, monospace;
+    var(--font-geist-mono, "Geist Mono"), "SF Mono", "Roboto Mono", ui-monospace, monospace;
 
   /* Brand Colors - Modern Blue/Indigo */
   --color-brand: #4f46e5;
@@ -117,6 +120,12 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
   --radius-full: 9999px;
+
+  /* Dense workbench radius profile — matched to the State surface */
+  --radius-workbench: 10px;
+  --radius-workbench-group: 6px;
+  --radius-workbench-control: 5px;
+  --radius-workbench-inner: 4px;
 
   /* Modern Shadows - softer, layered (Linear/Vercel style) */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -211,6 +220,7 @@
   /* Word-level highlights — strong contrast against line bg */
   --diff-added-word-bg: rgba(22, 163, 74, 0.28);
   --diff-removed-word-bg: rgba(220, 38, 38, 0.25);
+  --diff-modified-word-bg: rgba(217, 119, 6, 0.2);
   /* Backward compat: --diff-*-line → --diff-*-accent (migrate to proper tokens in #360) */
   --diff-added-line: var(--diff-added-accent);
   --diff-removed-line: var(--diff-removed-accent);
@@ -584,6 +594,7 @@
   --diff-identical-text: #a9b2c2;
   --diff-added-word-bg: rgba(123, 201, 159, 0.28);
   --diff-removed-word-bg: rgba(223, 133, 133, 0.26);
+  --diff-modified-word-bg: rgba(200, 155, 84, 0.24);
   /* Unified aliases */
   --diff-add-bg: var(--diff-added-bg);
   --diff-add-accent: var(--diff-added-accent);
@@ -943,6 +954,10 @@ h3,
    ============================================ */
 
 @theme inline {
+  /* Typography */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
   /* Radius - using var() for calc expressions */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -1500,7 +1515,7 @@ h3,
   border-radius: var(--radius-xs, 6px);
   cursor: pointer;
   transition: all 0.15s;
-  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+  font-family: var(--font-geist-sans, "Geist"), system-ui, sans-serif;
 }
 .res-btn:hover {
   border-color: var(--accent-commit);
@@ -2257,4 +2272,57 @@ h3,
   transition:
     transform 400ms ease-in-out,
     opacity 300ms ease;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  html:has([data-state-export-document]),
+  body:has([data-state-export-document]) {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body:has([data-state-export-document]) * {
+    visibility: hidden !important;
+  }
+
+  body:has([data-state-export-document]) *:has([data-state-export-document]) {
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has([data-state-export-document]) [data-state-export-document],
+  body:has([data-state-export-document]) [data-state-export-document] * {
+    visibility: visible !important;
+  }
+
+  body:has([data-state-export-document]) [data-state-export-document] {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #1a1a1a !important;
+    print-color-adjust: exact;
+  }
+
+  body:has([data-state-export-document]) [data-slot="state-scroll-area-scrollbar"] {
+    display: none !important;
+  }
+
+  body:has([data-state-export-document]) [data-generic-node],
+  body:has([data-state-export-document]) [data-prd-node] {
+    break-inside: avoid-page;
+  }
 }

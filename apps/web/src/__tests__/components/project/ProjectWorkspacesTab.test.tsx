@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
-import { extractWorkspaceCandidate } from '@/infrastructure/workspaceFlow';
+import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
@@ -28,6 +28,7 @@ vi.mock('@/infrastructure/workspaceFlow', () => ({
 }));
 
 const extractWorkspaceCandidateMock = vi.mocked(extractWorkspaceCandidate);
+const sendWorkspaceYOpsDraftMock = vi.mocked(sendWorkspaceYOpsDraft);
 
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
@@ -64,6 +65,12 @@ describe('ProjectWorkspacesTab', () => {
       candidate_id: `candidate:${candidate.id}`,
       workspace: candidate,
     }));
+    sendWorkspaceYOpsDraftMock.mockReset();
+    sendWorkspaceYOpsDraftMock.mockImplementation(async (candidate) => ({
+      candidate_id: `candidate:${candidate.id}`,
+      workspace: candidate,
+      yops_draft_id: candidate.yopsDraft.id,
+    }));
     searchParamsValue = new URLSearchParams('tab=workspaces');
     branchHeadsValue = {
       main: null,
@@ -79,7 +86,8 @@ describe('ProjectWorkspacesTab', () => {
 
     expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Review' })).toBeInTheDocument();
   });
 
   it('rebuilds a leaked preview workspace on main without keeping its fake baseline', async () => {
@@ -92,11 +100,7 @@ describe('ProjectWorkspacesTab', () => {
     expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
-
-    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
     expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'feature/prd-audience' })).toBeInTheDocument();
   });
 
   it('starts the next main workspace when a merge advances the branch head', async () => {
@@ -123,9 +127,9 @@ describe('ProjectWorkspacesTab', () => {
 
     expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('No workspaces yet.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Generate candidate proposal' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Proceed to Review' })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed to Review' }));
 
     await waitFor(() => expect(extractWorkspaceCandidateMock).toHaveBeenCalledOnce());
     const continuedWorkspace = extractWorkspaceCandidateMock.mock.calls[0]?.[0];
@@ -139,12 +143,6 @@ describe('ProjectWorkspacesTab', () => {
     });
     expect(continuedWorkspace?.lastCommitHash).toBeUndefined();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
-
-    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
-    expect(
-      screen.getByRole('option', { name: 'feature/checkout-retry-hardening' })
-    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View in State' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
   });
@@ -159,29 +157,17 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(await screen.findByText('Release note cleanup')).toBeInTheDocument();
+    expect((await screen.findAllByText('Release note cleanup')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Audience chat')).not.toBeInTheDocument();
     expect(screen.queryByText('PRD import')).not.toBeInTheDocument();
     expect(screen.queryByText('Release note outline')).not.toBeInTheDocument();
 
-    const sourceChatTab = screen.getByRole('tab', { name: 'Chat' });
-    fireEvent.mouseDown(sourceChatTab, { button: 0, ctrlKey: false });
-    fireEvent.click(sourceChatTab);
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
-    expect(screen.getByText('No source chat turns yet.')).toBeInTheDocument();
     expect(
-      screen.queryByText(
-        'Start by importing a document, pasting source text, or adding a manual note.'
-      )
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        'I will keep analysis separate until you mark a turn or material as source evidence.'
-      )
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
-
+      screen.getByRole('heading', { name: /Review \d+ semantic changes/ })
+    ).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Release note cleanup/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /PRD audience handoff/ })).not.toBeInTheDocument();
@@ -204,11 +190,11 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
-    });
+    await screen.findByRole('tab', { name: 'Review' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    await waitFor(() => expect(screen.getByText('Restored backend draft')).toBeInTheDocument());
 
-    expect(screen.queryByRole('heading', { name: 'PRD audience handoff' })).not.toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
   });
 
   it('keeps uploaded material sources when restoring a persisted workspace draft', async () => {
@@ -240,12 +226,10 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
-    });
-
-    expect(screen.getAllByText('uploaded-brief.docx').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('1 doc').length).toBeGreaterThan(0);
+    await screen.findByRole('button', { name: 'Add source' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect((await screen.findAllByText('uploaded-brief.docx')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Include')).toBeInTheDocument();
   });
 
   it('shows pasted text materials as manageable text sources', async () => {
@@ -269,13 +253,10 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    await waitFor(() => {
-      expect(screen.getAllByText('audience-note.txt').length).toBeGreaterThan(0);
-    });
-
-    expect(screen.getAllByText('1 text').length).toBeGreaterThan(0);
-    expect(screen.getByText('text')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete audience-note.txt' })).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Add source' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect((await screen.findAllByText('audience-note.txt')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Include')).toBeInTheDocument();
   });
 
   it('keeps fixture bindings when a legacy workspace draft is missing array fields', async () => {
@@ -290,13 +271,11 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Legacy backend draft' })).toBeInTheDocument();
-    });
+    await screen.findByRole('tab', { name: 'Review' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
-    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
-
-    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(screen.getByText('Legacy backend draft')).toBeInTheDocument();
+    expect(screen.getByText(/No structured changes are prepared yet/)).toBeInTheDocument();
   });
 
   it('routes View in State to Canvas with the committed branch and commit selected', async () => {
@@ -309,10 +288,15 @@ describe('ProjectWorkspacesTab', () => {
         targetBranch: 'feature/prd-audience',
       },
     ]);
+    branchHeadsValue = {
+      ...branchHeadsValue,
+      'feature/prd-audience': 'sha256:workspace-commit',
+    };
+    searchParamsValue = new URLSearchParams('branch=feature%2Fprd-audience');
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /Commit/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Review' }));
     fireEvent.click(await screen.findByRole('button', { name: 'View in State' }));
 
     expect(pushMock).toHaveBeenCalledWith(

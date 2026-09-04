@@ -11,6 +11,7 @@ import {
   ReviewSnapshotPolicyRequiredError,
   ReviewSnapshotStaleError,
   type ReviewSnapshotV1,
+  withChangeProjectionCurrentness,
 } from '../change';
 import type { TransitionInspectionView } from '../transition';
 import { graph } from './support/transitionGraph';
@@ -253,6 +254,28 @@ describe('ChangeProjection foundation', () => {
     });
     expect(projection.objects.effect).toEqual(built.objects.effect);
     expect(projection.actions.commit.disposition).toBe('not_applicable');
+    expect(projection.currentness).toEqual({ state: 'ready', reasons: [] });
+    expect(projection.revisionComparison.operationCount).toBe(
+      built.transition.change.operations.length
+    );
+    expect(projection.revisionComparison.base).toEqual(built.objects.base);
+    expect(projection.revisionComparison.result).toEqual(built.objects.result);
+    expect(projection.explanations.map((explanation) => explanation.id)).toEqual([
+      'change_scope',
+      'currentness',
+      'next_action',
+    ]);
+    expect(projection.stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'draft', status: 'done' }),
+        expect.objectContaining({ id: 'decision', status: 'blocked' }),
+        expect.objectContaining({ id: 'commit', status: 'pending' }),
+      ])
+    );
+    expect(projection.nextAction).toMatchObject({
+      id: 'review.retry',
+      label: 'Review again',
+    });
   });
 
   it('projects decision and commit status without creating mutable permission flags', () => {
@@ -271,5 +294,25 @@ describe('ChangeProjection foundation', () => {
     const committed = projectChangeFromReviewSnapshot(snapshot({ view: withCommit(inspection()) }));
     expect(committed.status).toBe('committed');
     expect(committed.objects.commit?.digest).toBe(`sha256:${'d'.repeat(64)}`);
+    expect(committed.stages.at(-1)).toMatchObject({ id: 'commit', status: 'done' });
+    expect(committed.nextAction).toMatchObject({ id: 'receipt.copy' });
+  });
+
+  it('keeps dynamic currentness as an overlay on the stored projection', () => {
+    const projection = projectChangeFromReviewSnapshot(snapshot());
+    const stale = withChangeProjectionCurrentness(projection, {
+      state: 'stale',
+      reasons: ['ref_head_changed'],
+    });
+
+    expect(stale).toMatchObject({
+      source: projection.source,
+      status: projection.status,
+      currentness: { state: 'stale', reasons: ['ref_head_changed'] },
+    });
+    expect(stale.explanations.find((explanation) => explanation.id === 'currentness')?.body).toBe(
+      'This projection is stale: ref_head_changed.'
+    );
+    expect(projection.currentness).toEqual({ state: 'ready', reasons: [] });
   });
 });

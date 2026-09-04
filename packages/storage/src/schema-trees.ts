@@ -823,13 +823,79 @@ export const drafts = pgTable(
     openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
       .on(table.projectId, table.targetBranch)
       .where(
-        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed' AND ${table.workspaceStateJson}->>'scenario' IS NULL`
       ),
   })
 );
 
 export type DraftRecord = typeof drafts.$inferSelect;
 export type DraftInsert = typeof drafts.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// workspace_draft_command_receipts: CAS Draft command idempotency
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Durable receipts for application-level Workspace draft commands.
+ *
+ * These receipts make WebUI/MCP draft actions replay-safe without turning the
+ * selected UI screen into a universal workflow-state machine.
+ */
+export const workspaceDraftCommandReceipts = pgTable(
+  'workspace_draft_command_receipts',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull(),
+    command: text('command').notNull(),
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    resultRevision: integer('result_revision').notNull(),
+    resultDigest: text('result_digest').notNull(),
+    resultWorkspaceStateJson: jsonb('result_workspace_state_json')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: 'workspace_draft_command_receipts_pkey',
+      columns: [
+        table.projectId,
+        table.workspaceId,
+        table.actorKind,
+        table.actorId,
+        table.requestId,
+      ],
+    }),
+    resultIdx: index('idx_workspace_draft_command_receipts_result').on(
+      table.projectId,
+      table.workspaceId,
+      table.resultRevision
+    ),
+    actorKindCheck: check(
+      'workspace_draft_command_receipts_actor_kind_check',
+      sql`${table.actorKind} IN ('human', 'agent', 'service')`
+    ),
+    resultRevisionCheck: check(
+      'workspace_draft_command_receipts_revision_check',
+      sql`${table.resultRevision} > 0`
+    ),
+    requestDigestCheck: check(
+      'workspace_draft_command_receipts_request_digest_check',
+      sql`${table.requestDigest} ~ '^sha256:[0-9a-f]{64}$'`
+    ),
+    resultDigestCheck: check(
+      'workspace_draft_command_receipts_result_digest_check',
+      sql`${table.resultDigest} ~ '^sha256:[0-9a-f]{64}$'`
+    ),
+  })
+);
+
+export type WorkspaceDraftCommandReceiptRecord = typeof workspaceDraftCommandReceipts.$inferSelect;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // recipes: Workflow Recipes

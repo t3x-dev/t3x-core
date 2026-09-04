@@ -182,7 +182,9 @@ describe('useWorkspaceTransition', () => {
       await result.current.review(content, '  Keep the audience current.  ');
     });
 
-    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', candidate);
+    expect(saveWorkspaceDraft).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', candidate, {
+      command: 'review.prepare',
+    });
     expect(reviewWorkspaceTransition).toHaveBeenCalledWith(
       'proj_1',
       'workspace_prd_handoff',
@@ -308,6 +310,7 @@ describe('useWorkspaceTransition', () => {
 
     expect(result.current.state).toEqual({
       changeProjection: null,
+      commands: null,
       error: null,
       errorCode: null,
       phase: 'idle',

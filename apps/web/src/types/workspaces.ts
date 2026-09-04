@@ -95,6 +95,15 @@ export interface WorkspaceCandidate {
   commitOverride?: WorkspaceValidationOverride & { confirmedAt?: string };
   backendCandidateId?: string;
   extractionProposal?: WorkspaceExtractionProposal;
+  scenario?: WorkspaceScenarioMetadata;
+}
+
+export interface WorkspaceScenarioMetadata {
+  id: string;
+  name: string;
+  createdAt: string;
+  sourceWorkspaceId?: string;
+  archivedAt?: string;
 }
 
 export interface WorkspaceExtractionProposal {

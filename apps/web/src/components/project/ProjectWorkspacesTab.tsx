@@ -58,11 +58,17 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
+  const requestedCandidate = candidates.find(
+    (candidate) =>
+      candidate.id === requestedWorkspaceId && (!branch || candidate.targetBranch === branch)
+  );
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
   const selectedCandidate = branch
-    ? branchWorkspace
-    : (candidates.find((candidate) => candidate.id === requestedWorkspaceId) ?? null);
-  const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
+    ? (requestedCandidate ?? branchWorkspace)
+    : (requestedCandidate ?? null);
+  const visibleCandidates = branch
+    ? candidates.filter((candidate) => candidate.targetBranch === branch)
+    : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
   const navigationError = projectWorkspaces.error;
 
@@ -116,7 +122,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
             ? 'error'
             : 'ready'
       }
-      onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
+      onSelectedWorkspaceChange={handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
       onWorkspacesRefresh={projectWorkspaces.refresh}

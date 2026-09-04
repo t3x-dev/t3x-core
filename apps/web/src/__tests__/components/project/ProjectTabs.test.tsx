@@ -18,8 +18,15 @@ describe('ProjectTabs', () => {
     render(<ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />);
 
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation).toHaveClass('min-h-8', 'items-stretch');
-    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs1');
+    expect(projectNavigation).toHaveClass(
+      'ml-4',
+      'items-center',
+      'min-[900px]:absolute',
+      'min-[900px]:left-1/2',
+      'min-[900px]:-translate-x-1/2'
+    );
+    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs');
+    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveAttribute('data-output-count', '1');
 
     for (const tab of PROJECT_TABS) {
       const href =
@@ -31,9 +38,14 @@ describe('ProjectTabs', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'State' })).toHaveClass(
-      'border-[var(--accent-commit)]'
+      'bg-[var(--accent-commit-soft)]',
+      'rounded-[var(--radius-md)]',
+      '!text-[var(--accent-commit)]'
     );
     expect(screen.getByRole('link', { name: 'Workspaces' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Pull requests' })).toHaveTextContent('PRs');
+    expect(screen.getByRole('link', { name: 'Community' })).toHaveTextContent('Community');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveTextContent('Settings');
     expect(screen.queryByRole('link', { name: 'YSchema' })).not.toBeInTheDocument();
   });
 
@@ -46,9 +58,13 @@ describe('ProjectTabs', () => {
       <ProjectTabs activeTab="schemas" outputCount={1} repoPath="/t3x-dev/test-project" />
     );
 
-    expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-8');
+    expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('items-center');
     for (const tab of PROJECT_TABS) {
-      expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-xs');
+      expect(screen.getByRole('link', { name: tab.label })).toHaveClass(
+        'h-8',
+        'px-3.5',
+        'text-[14px]'
+      );
     }
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
   });

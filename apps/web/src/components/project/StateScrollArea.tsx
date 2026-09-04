@@ -35,7 +35,7 @@ export const StateScrollArea = forwardRef<
       <ScrollAreaPrimitive.Viewport
         aria-label={label}
         className={cn(
-          'size-full overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)]/60',
+          'size-full overscroll-contain rounded-[inherit] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--ring)]/35',
           !horizontal && '[&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full',
           viewportClassName
         )}

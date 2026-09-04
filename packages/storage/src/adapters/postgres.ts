@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 67;
+const SCHEMA_VERSION = 69;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -2051,6 +2051,43 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       ON transition_review_snapshots(project_id, workspace_id, created_at, snapshot_id);
     CREATE INDEX IF NOT EXISTS idx_transition_review_snapshots_transition_created
       ON transition_review_snapshots(project_id, transition_id, created_at, snapshot_id);
+  `);
+
+  // ── Schema v68: Workspace CAS Draft command idempotency receipts ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS workspace_draft_command_receipts (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      command TEXT NOT NULL,
+      actor_kind TEXT NOT NULL
+        CHECK (actor_kind IN ('human', 'agent', 'service')),
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL
+        CHECK (request_digest ~ '^sha256:[0-9a-f]{64}$'),
+      result_revision INTEGER NOT NULL
+        CHECK (result_revision > 0),
+      result_digest TEXT NOT NULL
+        CHECK (result_digest ~ '^sha256:[0-9a-f]{64}$'),
+      result_workspace_state_json JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, workspace_id, actor_kind, actor_id, request_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_workspace_draft_command_receipts_result
+      ON workspace_draft_command_receipts(project_id, workspace_id, result_revision);
+  `);
+
+  // ── Schema v69: parallel Workspace scenarios per branch ──
+  // The single-open-workspace rule still protects the ordinary branch draft.
+  // Scenario records are explicit alternatives and therefore may coexist.
+  await sql.unsafe(`
+    DROP INDEX IF EXISTS idx_drafts_open_workspace_branch;
+    CREATE UNIQUE INDEX idx_drafts_open_workspace_branch
+      ON drafts(project_id, target_branch)
+      WHERE workspace_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed'
+        AND workspace_state_json->>'scenario' IS NULL;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

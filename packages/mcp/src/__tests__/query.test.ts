@@ -13,7 +13,10 @@ const mockApiClient = {
   },
   workspaces: {
     get: vi.fn(),
+    getLatestReviewSnapshot: vi.fn(),
+    getReviewSnapshot: vi.fn(),
     list: vi.fn(),
+    listReviewSnapshots: vi.fn(),
   },
 };
 
@@ -354,9 +357,73 @@ describe('t3x_query handler', () => {
     expect(JSON.parse(result.content[0].text)).toHaveLength(1);
   });
 
+  it('reads the latest Workspace ChangeProjection through the authenticated API capability', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.getLatestReviewSnapshot.mockResolvedValueOnce({
+      snapshot_id: 'rvs_latest',
+      change_projection: {
+        currentness: { state: 'stale', reasons: ['ref_head_changed'] },
+        nextAction: { id: 'review.retry', label: 'Review again' },
+      },
+    });
+
+    const result = await queryHandler({
+      target: 'workspace_change',
+      id: 'workspace_1',
+      project_id: 'proj_api1',
+      transition_id: 'trn_1',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.getLatestReviewSnapshot).toHaveBeenCalledWith(
+      'proj_api1',
+      'workspace_1',
+      { transition_id: 'trn_1' }
+    );
+    expect(JSON.parse(result.content[0].text).change_projection.currentness.state).toBe('stale');
+  });
+
+  it('lists Workspace ChangeProjections through the authenticated API capability', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.listReviewSnapshots.mockResolvedValueOnce({
+      snapshots: [
+        {
+          snapshot_id: 'rvs_1',
+          change_projection: { nextAction: { id: 'review.accept', label: 'Approve and save' } },
+        },
+      ],
+    });
+
+    const result = await queryHandler({
+      target: 'workspace_changes',
+      project_id: 'proj_api1',
+      workspace_id: 'workspace_1',
+      limit: 5,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.listReviewSnapshots).toHaveBeenCalledWith(
+      'proj_api1',
+      'workspace_1',
+      { limit: 5 }
+    );
+    expect(JSON.parse(result.content[0].text)[0].snapshot_id).toBe('rvs_1');
+  });
+
   it('refuses direct-storage Workspace reads', async () => {
     const result = await queryHandler({
       target: 'workspace',
+      id: 'workspace_1',
+      project_id: 'proj_test1',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
+  });
+
+  it('refuses direct-storage Workspace ChangeProjection reads', async () => {
+    const result = await queryHandler({
+      target: 'workspace_change',
       id: 'workspace_1',
       project_id: 'proj_test1',
     });

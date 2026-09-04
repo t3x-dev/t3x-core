@@ -4,6 +4,7 @@ import { GenerationModelSelector } from '@/components/generation/GenerationModel
 
 interface ChatModelSelectorProps {
   conversationId: string | null;
+  selectedProvider?: string;
   selectedModel: string;
   onModelChange: (provider: string, model: string) => void;
 }

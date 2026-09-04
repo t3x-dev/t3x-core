@@ -19,6 +19,7 @@ import { usePinsStore } from '@/store/pinsStore';
 // Survives hook remounts so two concurrent effect firings don't both slip past
 // the loading guard.
 let fetchInProgressFor: string | null = null;
+let pinMutationRevision = 0;
 
 export function usePinsCrud() {
   const fetch = useCallback(async (projectId: string): Promise<void> => {
@@ -27,11 +28,15 @@ export function usePinsCrud() {
     if (store.initialized && store.currentProjectId === projectId) return;
 
     fetchInProgressFor = projectId;
+    const fetchStartedAtRevision = pinMutationRevision;
     store.setLoading(true);
     store.setError(null);
     try {
       const pins = await fetchPins(projectId);
-      store.setPins(pins);
+      const latestStore = usePinsStore.getState();
+      if (fetchStartedAtRevision === pinMutationRevision) {
+        latestStore.setPins(pins);
+      }
       store.setLoading(false);
       store.setInitialized(true);
       store.setCurrentProjectId(projectId);
@@ -59,7 +64,10 @@ export function usePinsCrud() {
 
       try {
         const pin = await createPin(projectId, type, refId);
+        pinMutationRevision += 1;
         store.addToPins(pin);
+        store.setInitialized(true);
+        store.setCurrentProjectId(projectId);
         notify?.('Item pinned', 'success');
         return pin;
       } catch (err) {
@@ -80,6 +88,7 @@ export function usePinsCrud() {
     const notify = store.notifyCallback;
 
     // Optimistically remove from UI, capturing the evicted entry for rollback.
+    pinMutationRevision += 1;
     const removed = store.removePinById(pinId);
 
     try {
@@ -87,6 +96,7 @@ export function usePinsCrud() {
       notify?.('Pin removed', 'success');
     } catch (err) {
       if (removed) {
+        pinMutationRevision += 1;
         store.addToPins(removed);
       }
       const error = err instanceof Error ? err : new Error(String(err));
@@ -105,6 +115,7 @@ export function usePinsCrud() {
 
       try {
         const updated = await updatePinAssertions(pinId, assertionIds);
+        pinMutationRevision += 1;
         store.replacePin(pinId, updated);
         notify?.('Pin assertions updated', 'success');
         return updated;

@@ -204,8 +204,18 @@ export interface DecideWorkspaceTransitionInput {
   };
 }
 
+export interface WorkspaceTransitionCommandResult {
+  action: 'decide' | 'commit';
+  requestId: string;
+  resultKind: 'decision' | 'commit';
+  resultDigest: string;
+  reused: boolean;
+}
+
 export interface DecideWorkspaceTransitionResult extends ReviewWorkspaceTransitionResult {
   decisionDigest: string;
+  decisionCommand?: WorkspaceTransitionCommandResult;
+  commitCommand?: WorkspaceTransitionCommandResult;
   commit?: CommitV2;
   workspace?: Record<string, unknown>;
 }
@@ -840,12 +850,13 @@ export async function decideWorkspaceTransition(
         policy_digest: precondition.policyDigest,
       },
     };
+    const decisionRequestId = compatibilityRequestId('decide', decisionFacts);
     const decided = await decideTransition({
       db,
       projectId: input.projectId,
       transitionId,
       actor: input.actor,
-      requestId: compatibilityRequestId('decide', decisionFacts),
+      requestId: decisionRequestId,
       outcome: input.outcome,
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
@@ -867,6 +878,13 @@ export async function decideWorkspaceTransition(
         },
       },
     });
+    const decisionCommand: WorkspaceTransitionCommandResult = {
+      action: 'decide',
+      requestId: decisionRequestId,
+      resultKind: 'decision',
+      resultDigest: decided.decisionDigest,
+      reused: decided.reused,
+    };
     const decidedInspection = inspectionWithWorkspacePrecondition(decided.view, precondition);
     if (input.outcome === 'rejected') {
       const artifacts = buildWorkspaceReviewArtifacts({
@@ -879,6 +897,7 @@ export async function decideWorkspaceTransition(
         transition: decidedInspection.transition,
         precondition: input.precondition,
         decisionDigest: decided.decisionDigest,
+        decisionCommand,
         ...artifacts,
       };
     }
@@ -905,12 +924,13 @@ export async function decideWorkspaceTransition(
       expected_head: input.precondition.refHead,
       workspace_projection: projectionFacts,
     };
+    const commitRequestId = compatibilityRequestId('commit', commitFacts);
     const committed = await commitTransition({
       db,
       projectId: input.projectId,
       transitionId,
       actor: input.actor,
-      requestId: compatibilityRequestId('commit', commitFacts),
+      requestId: commitRequestId,
       decisionDigest: decided.decisionDigest,
       expectedHead: input.precondition.refHead,
       workspaceProjection: {
@@ -941,11 +961,20 @@ export async function decideWorkspaceTransition(
       createdAt: reviewSnapshotCreatedAt(committedInspection),
     });
     await persistWorkspaceReviewArtifacts(db, artifacts);
+    const commitCommand: WorkspaceTransitionCommandResult = {
+      action: 'commit',
+      requestId: commitRequestId,
+      resultKind: 'commit',
+      resultDigest: committed.commitDigest,
+      reused: committed.reused,
+    };
     return {
       transitionId,
       transition: committed.view,
       precondition: input.precondition,
       decisionDigest: decided.decisionDigest,
+      decisionCommand,
+      commitCommand,
       commit: committed.commit,
       workspace: committed.workspace,
       ...artifacts,

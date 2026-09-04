@@ -209,6 +209,7 @@ export {
   findMaterialsByProject,
   type ListMaterialsOptions,
   restoreArchivedMaterial,
+  updateMaterialContent,
 } from './materials';
 // Merge Drafts (Pending merge operations)
 export {
@@ -581,6 +582,8 @@ export {
   updateWebhook,
   type WebhookOutput,
 } from './webhooks';
+// Workspace CAS Draft command idempotency receipts
+export * from './workspace-draft-command-receipts';
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
   acquireProjectSupersedeLock,

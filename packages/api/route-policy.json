@@ -849,6 +849,20 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "materials.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/materials/url",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "materials.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/materials/{materialId}/reparse",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
       "source": "merge.openapi.ts",
       "method": "POST",
       "path": "/v1/merge/drafts",
@@ -1776,6 +1790,13 @@
       "source": "workspaces.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/commit",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/draft-commands",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },

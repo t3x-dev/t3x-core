@@ -69,7 +69,9 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
       setState({ ...INITIAL_STATE, phase: 'reviewing' });
 
       try {
-        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
+        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate, {
+          command: 'review.prepare',
+        });
         const revision = saved.workspace.revision;
         if (revision === undefined) {
           throw new Error('Saved Workspace did not return a review revision.');
@@ -112,7 +114,9 @@ export function useWorkspaceSourceTransition(candidate: WorkspaceCandidate) {
       setState({ ...INITIAL_STATE, phase: 'reviewing', task: 'revert' });
 
       try {
-        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
+        const saved = await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate, {
+          command: 'review.prepare',
+        });
         const revision = saved.workspace.revision;
         if (revision === undefined) {
           throw new Error('Saved Workspace did not return a review revision.');

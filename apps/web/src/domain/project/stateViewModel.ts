@@ -375,6 +375,28 @@ export function buildStatePointRows(
   return rows;
 }
 
+/** Resolve the same normalized path used by State rows, without comparing display summaries. */
+export function readStatePointValue(
+  content: SemanticContent,
+  path: string
+): { exists: boolean; value?: unknown } {
+  const target = normalizePath(path);
+  const matches: unknown[] = [];
+  function visit(value: unknown, currentPath: string) {
+    const normalized = normalizePath(currentPath);
+    if (normalized === target) {
+      matches.push(value);
+      return;
+    }
+    if (!target.startsWith(`${normalized}/`) || value === null || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) visit(child, `${currentPath}/${key}`);
+  }
+  for (const [key, value] of Object.entries(semanticContentToPlain(content))) visit(value, key);
+  if (matches.length > 1)
+    throw new Error('This path matches multiple state nodes. History is ambiguous.');
+  return matches.length ? { exists: true, value: matches[0] } : { exists: false };
+}
+
 export function buildCanonicalStateYaml(content: SemanticContent): string {
   return yaml
     .dump(semanticContentToPlain(content), {
@@ -419,6 +441,7 @@ export function selectPrdRenderModel(
   const gapPaths = buildGapPathSet(options.gaps ?? [], rootKey ? [rootKey] : []);
   const audience = valueToStringList(isPrdRoot ? summary.audience : root.audience).join(' · ');
   const { changes, evidence } = buildPrdRenderTrace(options.operations ?? []);
+  const requirements = requirementsToRenderModel(root.requirements);
   const excludedSectionKeys = new Set([
     'description',
     'id',
@@ -453,11 +476,14 @@ export function selectPrdRenderModel(
     owner: scalarToString(root.owner) || scalarToString(metadata.owner),
     outcome: scalarToString(summary.outcome),
     problem: scalarToString(summary.problem),
-    requirements: requirementsToRenderModel(root.requirements),
+    requirements,
     rootKey,
     schemaVersion:
       firstScalar(root.schema, metadata.schema, metadata.schema_version, metadata.version) || '',
-    sections: buildPrdSections(root, excludedSectionKeys),
+    sections: buildPrdSections(root, excludedSectionKeys, {
+      requirementsRendered: requirements.length > 0,
+      summary,
+    }),
     target: scalarToString(root.target) || scalarToString(metadata.target),
     title:
       scalarToString(root.title) ||
@@ -863,12 +889,26 @@ function normalizeSkillEndpoint(value: string): string {
 
 function buildPrdSections(
   root: Record<string, unknown>,
-  excludedSectionKeys: Set<string>
+  excludedSectionKeys: Set<string>,
+  options: {
+    requirementsRendered?: boolean;
+    summary?: Record<string, unknown>;
+  } = {}
 ): PrdRenderSection[] {
   const contractFlags: Record<string, unknown> = {};
   const sections: PrdRenderSection[] = [];
+  const summaryExtras = omitRecordKeys(options.summary ?? {}, [
+    'audience',
+    'description',
+    'outcome',
+    'problem',
+  ]);
 
   for (const [key, value] of Object.entries(root)) {
+    if (key === 'requirements' && !options.requirementsRendered && hasRenderableValue(value)) {
+      sections.push({ key, title: humanizeKey(key), value });
+      continue;
+    }
     if (excludedSectionKeys.has(key) || key === 'root_metadata') continue;
     if (typeof value === 'boolean') {
       contractFlags[key] = value;
@@ -880,8 +920,37 @@ function buildPrdSections(
   if (Object.keys(contractFlags).length > 0) {
     sections.unshift({ key: 'contract_flags', title: 'Contract flags', value: contractFlags });
   }
+  if (Object.keys(summaryExtras).length > 0) {
+    sections.unshift({
+      key: 'summary_details',
+      title: 'Additional summary fields',
+      value: summaryExtras,
+    });
+  }
 
   return sections;
+}
+
+function omitRecordKeys(
+  record: Record<string, unknown>,
+  omittedKeys: string[]
+): Record<string, unknown> {
+  const omitted = new Set(omittedKeys);
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(record)) {
+    if (!omitted.has(key) && hasRenderableValue(value)) result[key] = value;
+  }
+
+  return result;
+}
+
+function hasRenderableValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') return false;
+  if (Array.isArray(value)) return value.length > 0;
+  const record = toRecordOrNull(value);
+  if (record) return Object.keys(record).length > 0;
+  return true;
 }
 
 function buildPrdRenderTrace(operations: StateOperationEntry[]): {
