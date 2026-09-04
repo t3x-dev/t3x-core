@@ -43,6 +43,7 @@ import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcce
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
   buildStructuredStateDiff,
@@ -57,10 +58,7 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
-import type {
-  WorkspaceComposeReviewController,
-  WorkspaceComposeReviewMessage,
-} from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -320,14 +318,7 @@ function ComposeSurface({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)] lg:flex-row">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface-app)]">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:px-8">
-          <div className="mx-auto flex max-w-[780px] flex-col gap-9">
-            {controller.chat.messages.map((message) => (
-              <ComposeMessage key={message.id} message={message} />
-            ))}
-          </div>
-        </div>
-
+        <WorkspaceComposeChat chat={controller.chat} />
         <ComposerBar controller={controller} />
       </section>
 
@@ -354,28 +345,6 @@ function ComposeSurface({
           />
         )}
       </aside>
-    </div>
-  );
-}
-
-function ComposeMessage({ message }: { message: WorkspaceComposeReviewMessage }) {
-  if (message.role === 'user') {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[72%] rounded-[var(--radius-workbench)] bg-[var(--hover-bg)] px-5 py-3">
-          <p className="break-words whitespace-pre-wrap text-[15px] leading-relaxed text-[var(--text-primary)]">
-            {message.content}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex justify-start">
-      <p className="max-w-[720px] break-words whitespace-pre-wrap text-[15px] leading-7 text-[var(--text-primary)]">
-        {message.content}
-      </p>
     </div>
   );
 }
@@ -661,6 +630,10 @@ function ProposedDraftPanel({
     attentionItems.length,
     operations.length
   );
+  const primaryReviewPath = normalizeWorkspaceReviewStructurePath(operations[0]?.path ?? '');
+  const primaryReviewLabel = primaryReviewPath
+    ? `Review change ${primaryReviewPath}`
+    : 'Proceed to Review';
 
   return (
     <div className="flex h-full bg-white">
@@ -786,6 +759,7 @@ function ProposedDraftPanel({
 
         <footer className="sticky bottom-0 mt-auto shrink-0 border-t border-slate-100 bg-white p-6">
           <button
+            aria-label={primaryReviewLabel}
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={controller.isBusy}
             onClick={() => void prepareAndOpenReview(controller, onModeChange)}

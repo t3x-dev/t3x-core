@@ -54,6 +54,38 @@ export interface ChatStreamEvent {
   citations?: Citation[];
 }
 
+function splitSseFrames(buffer: string, final = false): { frames: string[]; remaining: string } {
+  const frames: string[] = [];
+  const delimiter = /\r?\n\r?\n/g;
+  let frameStart = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = delimiter.exec(buffer)) !== null) {
+    frames.push(buffer.slice(frameStart, match.index));
+    frameStart = delimiter.lastIndex;
+  }
+
+  const remaining = buffer.slice(frameStart);
+  if (final && remaining.trim()) {
+    frames.push(remaining);
+    return { frames, remaining: '' };
+  }
+
+  return { frames, remaining };
+}
+
+function frameData(frame: string): string | null {
+  const data = frame
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .join('\n')
+    .trim();
+
+  return data || null;
+}
+
 /**
  * Non-streaming chat
  */
@@ -113,15 +145,12 @@ export async function* chatStream(
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Parse SSE events: data: {...}\n\n
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || '';
+      const { frames, remaining } = splitSseFrames(buffer);
+      buffer = remaining;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-
-        const dataStr = trimmed.slice(5).trim();
+      for (const frame of frames) {
+        const dataStr = frameData(frame);
+        if (!dataStr) continue;
         if (dataStr === '[DONE]') continue;
 
         try {
@@ -131,6 +160,23 @@ export async function* chatStream(
           if (process.env.NODE_ENV !== 'production') {
             console.warn('Failed to parse SSE event:', dataStr.slice(0, 120));
           }
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    const { frames } = splitSseFrames(buffer, true);
+    for (const frame of frames) {
+      const dataStr = frameData(frame);
+      if (!dataStr) continue;
+      if (dataStr === '[DONE]') continue;
+
+      try {
+        const event = JSON.parse(dataStr) as ChatStreamEvent;
+        yield event;
+      } catch {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to parse SSE event:', dataStr.slice(0, 120));
         }
       }
     }

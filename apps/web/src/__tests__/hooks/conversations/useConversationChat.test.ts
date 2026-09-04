@@ -114,6 +114,10 @@ async function* abortedChatStream() {
   throw new DOMException('The operation was aborted.', 'AbortError');
 }
 
+async function* unfinishedChatStream() {
+  yield { type: 'token', content: 'partial assistant response' };
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -670,5 +674,47 @@ describe('useConversationChat', () => {
       });
     });
     expect(createTurnMock.mock.calls.map((call) => call[2])).toEqual(['user', 'assistant']);
+  });
+
+  it('marks a stream that ends without done as a partial assistant reply', async () => {
+    chatStreamMock.mockReturnValue(unfinishedChatStream());
+    createTurnMock
+      .mockResolvedValueOnce({ turn_hash: 'sha256:user_turn' })
+      .mockResolvedValueOnce({ turn_hash: 'sha256:assistant_partial_turn' });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(showWarningMock).toHaveBeenCalledWith(
+        'Assistant stream ended before completion — partial response preserved.'
+      );
+    });
+    expect(createTurnMock).toHaveBeenCalledWith(
+      'proj_1',
+      'conv_existing',
+      'assistant',
+      'partial assistant response',
+      undefined,
+      {
+        rings: {
+          assistant_stream_status: {
+            schema: 't3x/assistant-stream-status-v1',
+            version: 1,
+            status: 'partial',
+            reason: 'stream_eof',
+          },
+        },
+      }
+    );
   });
 });
