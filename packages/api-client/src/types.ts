@@ -51,6 +51,8 @@ export interface ProjectWithStats extends Project {
 }
 
 export interface CreateProjectInput {
+  /** Initialize a private repository with a deterministic, editable PRD; no AI call. */
+  starter?: 'prd-v1';
   name: string;
   metadata?: Record<string, unknown>;
 }
