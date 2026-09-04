@@ -3,6 +3,7 @@
 import { LayoutGrid, Loader2, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog';
+import { PrdStarterCard } from '@/components/templates/PrdStarterCard';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { TemplatePreviewDialog } from '@/components/templates/TemplatePreviewDialog';
 import { UseTemplateDialog } from '@/components/templates/UseTemplateDialog';
@@ -98,7 +99,7 @@ export default function TemplatesPage() {
           <div>
             <h1 className="text-xl font-semibold text-[var(--text-primary)]">Template Gallery</h1>
             <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-              Browse and use prompt templates for leaf generation
+              Start a structured project or browse prompt templates for generation
             </p>
           </div>
           <Button className="gap-1.5" onClick={() => setCreateOpen(true)}>
@@ -158,6 +159,8 @@ export default function TemplatesPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
+        <PrdStarterCard />
+        <h2 className="mb-4 text-sm font-semibold">Prompt templates</h2>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />

@@ -6,6 +6,7 @@
  * `err.cause instanceof TypeError` (network failure → offline fallback).
  */
 
+import type { CreateProjectInput } from '@t3x-dev/api-client';
 import { createProject as createProjectInfra } from '@/infrastructure/projects';
 import type { Project } from '@/types/api';
 import { ProjectPersistenceError } from './errors';
@@ -13,10 +14,11 @@ import { ProjectPersistenceError } from './errors';
 export async function createProject(
   name: string,
   metadata?: Record<string, unknown>,
-  namespace?: string
+  namespace?: string,
+  starter?: CreateProjectInput['starter']
 ): Promise<Project> {
   try {
-    return await createProjectInfra(name, metadata, namespace);
+    return await createProjectInfra(name, metadata, namespace, starter);
   } catch (cause) {
     throw new ProjectPersistenceError(
       cause instanceof Error ? cause.message : 'createProject failed',
