@@ -19,6 +19,7 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
+import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -59,7 +60,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
-export type ProjectSnapshotView = 'structure' | 'render' | 'code';
+export type ProjectSnapshotView = 'overview' | 'structure' | 'render' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
 type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
@@ -90,6 +91,7 @@ const SNAPSHOT_VIEWS: Array<{
   subtitle: string;
   icon: typeof TableProperties;
 }> = [
+  { id: 'overview', label: 'Overview', subtitle: 'introduction and state', icon: FileText },
   { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
   { id: 'render', label: 'Render', subtitle: 'schema reader', icon: FileText },
   { id: 'code', label: 'Code', subtitle: 'canonical YAML', icon: Code2 },
@@ -188,6 +190,7 @@ export function ProjectStateTab({
   const updateBranchFocus = useCallback(
     (focus: BranchFocus) => {
       const params = new URLSearchParams(routeQueryRef.current);
+      params.delete('commit');
       if (focus === 'main') params.delete('branch');
       else params.set('branch', focus);
       const query = params.toString();
@@ -214,7 +217,9 @@ export function ProjectStateTab({
         const requestedBranch = branchFocus || 'main';
         const registeredBranchHeadHash = branchHeads[requestedBranch];
         const branchHeadHash =
-          inspectedHeadByBranchRef.current[requestedBranch] ?? registeredBranchHeadHash;
+          focusedCommitHash ??
+          inspectedHeadByBranchRef.current[requestedBranch] ??
+          registeredBranchHeadHash;
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
@@ -260,7 +265,11 @@ export function ProjectStateTab({
         }
 
         if (!cancelled) {
-          if (headCommit && !inspectedHeadByBranchRef.current[requestedBranch]) {
+          if (
+            headCommit &&
+            !focusedCommitHash &&
+            !inspectedHeadByBranchRef.current[requestedBranch]
+          ) {
             inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
           }
           setSnapshot({
@@ -295,6 +304,7 @@ export function ProjectStateTab({
   }, [
     branchFocus,
     branchHeads,
+    focusedCommitHash,
     loadCommit,
     loadCommits,
     loadOperations,
@@ -504,10 +514,16 @@ export function ProjectStateTab({
     if (!availableHeadHash) return;
     inspectedHeadByBranchRef.current[branchFocus] = availableHeadHash;
     setDismissedHeadHash(null);
+    if (focusedCommitHash) {
+      const params = new URLSearchParams(routeQueryRef.current);
+      params.delete('commit');
+      const query = params.toString();
+      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    }
     setSnapshotRefreshVersion((version) => version + 1);
-  }, [availableHeadHash, branchFocus]);
+  }, [availableHeadHash, branchFocus, focusedCommitHash, pathname, replaceRoute]);
 
-  const contextRailVisible = activeView !== 'canvas';
+  const contextRailVisible = activeView !== 'canvas' && activeView !== 'overview';
   const readinessLabel = stateReadinessLabel(validationReady);
   const lastCheckedLabel = freshnessChecking
     ? 'Checking…'
@@ -595,6 +611,14 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && headCommit ? (
                 <>
+                  {activeView === 'overview' ? (
+                    <StateOverviewView
+                      key={headCommit.hash}
+                      projectId={projectId}
+                      commitDigest={headCommit.hash}
+                      projectName={projectName}
+                    />
+                  ) : null}
                   {activeView === 'structure' ? (
                     <StateStructureView
                       onPathQueryChange={setPathQuery}
@@ -1021,16 +1045,18 @@ function StateViewTabs({
           );
         })}
       </div>
-      <Button
-        aria-expanded={detailsOpen}
-        className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
-        onClick={onDetailsToggle}
-        size="sm"
-        type="button"
-        variant="canvas-outline"
-      >
-        State details
-      </Button>
+      {activeView !== 'overview' && (
+        <Button
+          aria-expanded={detailsOpen}
+          className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
+          onClick={onDetailsToggle}
+          size="sm"
+          type="button"
+          variant="canvas-outline"
+        >
+          State details
+        </Button>
+      )}
     </div>
   );
 }

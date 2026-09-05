@@ -490,6 +490,19 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
 }
 
 describe('ProjectStateTab', () => {
+  it('honors an explicit historical commit instead of the registered branch HEAD', async () => {
+    navigationMocks.search = `commit=${encodeURIComponent(PARENT_COMMIT.hash)}`;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PARENT_COMMIT.hash ? PARENT_COMMIT : PRD_COMMIT
+    );
+    renderStateTab();
+    await waitFor(() =>
+      expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test')
+    );
+    expect(await screen.findByRole('heading', { name: PARENT_COMMIT.message })).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     navigationMocks.pathname = '/t3x-dev/test-project';
