@@ -60,7 +60,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
-export type ProjectSnapshotView = 'overview' | 'structure' | 'render' | 'code';
+export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
 type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
@@ -93,12 +93,12 @@ const SNAPSHOT_VIEWS: Array<{
 }> = [
   { id: 'overview', label: 'Overview', subtitle: 'introduction and state', icon: FileText },
   { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
-  { id: 'render', label: 'Render', subtitle: 'schema reader', icon: FileText },
   { id: 'code', label: 'Code', subtitle: 'canonical YAML', icon: Code2 },
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
+  if (value === 'render') return 'overview';
   if (value === 'canvas') return 'canvas';
   if (value === 'points') return 'structure';
   return SNAPSHOT_VIEWS.some((view) => view.id === value)
@@ -358,7 +358,7 @@ export function ProjectStateTab({
   const readerKind = resolveStateReaderKind(schemaName);
   const prdRenderModel = useMemo(
     () =>
-      headCommit && (readerKind === 'prd' || readerKind === 'generic')
+      headCommit && readerKind === 'prd'
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
@@ -599,7 +599,7 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 <StateEmpty
-                  message="Create or select a committed branch to inspect state as Structure, Render, or Code."
+                  message="Create or select a committed branch to inspect state as Overview, Structure, or Code."
                   title="No commit on this branch"
                 />
               ) : null}
@@ -617,6 +617,56 @@ export function ProjectStateTab({
                       projectId={projectId}
                       commitDigest={headCommit.hash}
                       projectName={projectName}
+                      reader={
+                        skillRenderModel || prdRenderModel || promptRenderModel
+                          ? (expanded, expand) => (
+                              <>
+                                {skillRenderModel ? (
+                                  <StateSkillReader
+                                    artifact={skillArtifact.artifact}
+                                    artifactError={skillArtifact.error?.message ?? null}
+                                    artifactLoading={skillArtifact.loading}
+                                    model={skillRenderModel}
+                                    schemaName={schemaName}
+                                    validationGapCount={validationGapCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                                {prdRenderModel ? (
+                                  <StatePrdReader
+                                    compact={!expanded}
+                                    onRequestExpand={expand}
+                                    model={prdRenderModel}
+                                    schemaArtifacts={prdSchemaRegistry.artifacts}
+                                    schemaComposition={
+                                      schemaCompositionWorkspace?.schemaComposition
+                                    }
+                                    schemaCompositionSource={
+                                      schemaCompositionWorkspace === committedWorkspace
+                                        ? 'committed'
+                                        : 'workspace'
+                                    }
+                                    schemaName={schemaName}
+                                    schemaRegistryHref={`${repositoryPath}/schemas`}
+                                    validationGapCount={validationGapCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                                {promptRenderModel ? (
+                                  <StatePromptReader
+                                    model={promptRenderModel}
+                                    schemaName={schemaName}
+                                    validationGapCount={validationIssueCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                              </>
+                            )
+                          : undefined
+                      }
                     />
                   ) : null}
                   {activeView === 'structure' ? (
@@ -624,44 +674,6 @@ export function ProjectStateTab({
                       onPathQueryChange={setPathQuery}
                       pathQuery={pathQuery}
                       rows={pointRows}
-                    />
-                  ) : null}
-                  {activeView === 'render' && skillRenderModel ? (
-                    <StateSkillReader
-                      artifact={skillArtifact.artifact}
-                      artifactError={skillArtifact.error?.message ?? null}
-                      artifactLoading={skillArtifact.loading}
-                      model={skillRenderModel}
-                      schemaName={schemaName}
-                      validationGapCount={validationGapCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
-                  {activeView === 'render' && prdRenderModel ? (
-                    <StatePrdReader
-                      model={prdRenderModel}
-                      schemaArtifacts={prdSchemaRegistry.artifacts}
-                      schemaComposition={schemaCompositionWorkspace?.schemaComposition}
-                      schemaCompositionSource={
-                        schemaCompositionWorkspace === committedWorkspace
-                          ? 'committed'
-                          : 'workspace'
-                      }
-                      schemaName={schemaName}
-                      schemaRegistryHref={`${repositoryPath}/schemas`}
-                      validationGapCount={validationGapCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
-                  {activeView === 'render' && promptRenderModel ? (
-                    <StatePromptReader
-                      model={promptRenderModel}
-                      schemaName={schemaName}
-                      validationGapCount={validationIssueCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
                     />
                   ) : null}
                   {activeView === 'code' ? (

@@ -26,6 +26,16 @@ const hookMocks = vi.hoisted(() => ({
   skillArtifact: null as SkillArtifact | null,
 }));
 
+vi.mock('@/components/project/StateOverviewView', () => ({
+  StateOverviewView: ({
+    reader,
+  }: {
+    reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
+  }) => (
+    <section aria-label="Overview">{reader ? reader(true, () => {}) : 'Structured reader'}</section>
+  ),
+}));
+
 vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({
     embedded,
@@ -793,7 +803,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('Path / Key');
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
     expect(screen.getByText('Executive summary')).toBeInTheDocument();
@@ -933,7 +943,7 @@ describe('ProjectStateTab', () => {
 
     renderStateTab();
     await screen.findByText('Path / Key');
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'modules' })).toHaveAttribute('aria-selected', 'true');
@@ -1030,7 +1040,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('skill-state.yaml')).toBeInTheDocument();
     expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
     expect(screen.queryByText('adapter skill.document')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
     expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
   });
@@ -1062,7 +1072,7 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('Add extract requirements Prompt');
     expect(screen.getByText('prompt-state.yaml')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
     expect(screen.getByRole('region', { name: 'Prompt schema render' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByText('messages/system_policy/template')).not.toHaveLength(0);
@@ -1099,14 +1109,9 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     await screen.findByText('Add device state');
-    fireEvent.click(screen.getByRole('tab', { name: /Render/ }));
-    expect(screen.getByRole('region', { name: 'Schema render' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Device' })).toBeInTheDocument();
-    expect(screen.getAllByText('Platform')).not.toHaveLength(0);
-    expect(screen.getByText('esphome')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('region', { name: 'Generic structured state render' })
-    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    expect(screen.getByText('Structured reader')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Render/ })).toBeNull();
   });
 
   it('initializes a new branch from main without inventing a schema binding', async () => {

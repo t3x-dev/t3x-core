@@ -22,7 +22,7 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
-    await expect(page.getByText('Schema not resolved · Validation not run')).toBeVisible();
+    await expect(page.getByText('Validation not run')).toBeVisible();
     expect(await page.evaluate(() => 'unsafeReadme' in window)).toBe(false);
     expect(await page.locator('img[src*="example.invalid"]').count()).toBe(0);
     await page.screenshot({ path: testInfo.outputPath('overview-desktop.png'), animations: 'disabled' });
