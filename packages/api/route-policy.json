@@ -1932,6 +1932,20 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
       "policy": "project",
       "rationale": "Project edit authority for receipt creation and project-bound workspace/verified commit membership; only local download preparation."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",
+      "policy": "project",
+      "rationale": "Exact project-bound commit; project read authority for author sidecar."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",
+      "policy": "project",
+      "rationale": "Exact project-bound commit; project edit authority for author sidecar."
     }
   ]
 }

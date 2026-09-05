@@ -17,6 +17,32 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v73 for immutable presentation retention without changing projects', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      "INSERT INTO projects (project_id, name, created_at) VALUES ('presentation-project', 'Keep me', NOW())"
+    );
+    await setup.sql.unsafe(
+      'DROP TABLE state_presentations; UPDATE _schema_version SET version = 73'
+    );
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version'
+    );
+    expect(version.version).toBe(POSTGRES_SCHEMA_VERSION);
+    await setup.sql.unsafe(`INSERT INTO state_presentations (project_id, commit_digest, presentation_digest, document, created_by)
+      VALUES ('presentation-project', 'commit', 'digest', '{"description":"Retained"}', 'local')`);
+    await expect(
+      setup.sql.unsafe("DELETE FROM projects WHERE project_id = 'presentation-project'")
+    ).rejects.toThrow();
+    const [saved] = await setup.sql.unsafe<{ document: { description: string } }[]>(
+      "SELECT document FROM state_presentations WHERE project_id = 'presentation-project'"
+    );
+    expect(saved.document.description).toBe('Retained');
+  });
+
   it('upgrades v72 with delivery evidence and preserves existing projects', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

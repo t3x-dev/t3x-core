@@ -55,9 +55,12 @@ import {
   SuccessResponseSchema,
 } from '../schemas/common';
 
+import { statePresentationRoutes } from './state-presentations.openapi';
+
 export const commitRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+commitRoutes.route('/', statePresentationRoutes);
 
 const exportStateRoute = createRoute({
   method: 'get',

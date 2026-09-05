@@ -1735,3 +1735,31 @@ it('validates the delivery receipt response and sends the explicit idempotent re
   );
   await expect(badClient.prepareWorkspaceDelivery('p', 'w', request)).rejects.toThrow();
 });
+
+it('publishes and reads exact author content using the presentation runtime contract', async () => {
+  const result = {
+    commitDigest: digest('a'),
+    stateDigest: digest('b'),
+    presentation: null,
+    createdBy: null,
+    createdAt: null,
+  };
+  const fetchFn = mockFetch(successResponse(result));
+  const client = createTestClient(fetchFn);
+  await client.getStatePresentation('p', digest('a'), digest('c'));
+  expect(fetchFn).toHaveBeenCalledWith(
+    expect.stringContaining(
+      `/v1/projects/p/commits/${encodeURIComponent(digest('a'))}/presentation?presentation_digest=${encodeURIComponent(digest('c'))}`
+    ),
+    expect.objectContaining({ method: 'GET' })
+  );
+  await client.publishStatePresentation('p', digest('a'), { description: 'Authored' });
+  expect(fetchFn).toHaveBeenLastCalledWith(
+    expect.stringContaining('/presentation'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ description: 'Authored' }) })
+  );
+  const bad = createTestClient(
+    mockFetch(successResponse({ ...result, presentation: { digest: 'invalid', document: {} } }))
+  );
+  await expect(bad.getStatePresentation('p', digest('a'))).rejects.toThrow();
+});

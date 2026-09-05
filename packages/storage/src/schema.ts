@@ -1034,3 +1034,4 @@ export type NewGlobalSetting = typeof globalSettings.$inferInsert;
 export * from './schema-deliveries';
 // Events outbox for realtime sync (see schema-events.ts)
 export { type EventRow, events, type NewEventRow } from './schema-events';
+export * from './schema-presentations';
