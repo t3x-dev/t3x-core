@@ -1,3 +1,4 @@
+import { stateOverviewRoutes } from './state-overview.openapi';
 /**
  * CommitV2 repository routes with OpenAPI.
  *
@@ -61,6 +62,7 @@ export const commitRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 commitRoutes.route('/', statePresentationRoutes);
+commitRoutes.route('/', stateOverviewRoutes);
 
 const exportStateRoute = createRoute({
   method: 'get',

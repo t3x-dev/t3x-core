@@ -19,6 +19,7 @@ export {
   UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
 } from './deployment-capabilities.js';
 export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
+export * from './state-overview';
 export * from './state-presentation.js';
 export type * from './types.js';
 export * from './workspace-delivery.js';

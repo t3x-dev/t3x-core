@@ -106,7 +106,7 @@ export function createStateRendererRegistry(registrations: StateRendererRegistra
       state: State;
       expectedStateDigest?: string;
       binding?: ResolvedRenderBinding;
-      schemaResolution?: 'unbound' | 'unavailable';
+      schemaResolution?: 'unbound' | 'unavailable' | 'not-requested';
       validation?: { stateDigest: string; schemaHash?: string; verdict: 'passed' | 'failed' };
     }) {
       // Export is the shared integrity gate and canonical serialization contract.
