@@ -22,6 +22,7 @@ import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
+import { StateExportButton } from '@/components/shared/StateExportButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
@@ -819,6 +820,14 @@ function StateUnifiedToolbar({
             {validationRunning ? 'Running…' : 'Run validation'}
           </Button>
         ) : null}
+
+        {headCommit && (
+          <StateExportButton
+            key={headCommit.hash}
+            projectId={headCommit.project_id}
+            commitDigest={headCommit.hash}
+          />
+        )}
 
         <Button
           asChild

@@ -1911,6 +1911,13 @@
       "path": "/v1/yschema-validation-runs/{runId}",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/export",
+      "policy": "project",
+      "rationale": "Exact commit graph export requires project read access and project-bound graph membership."
     }
   ]
 }

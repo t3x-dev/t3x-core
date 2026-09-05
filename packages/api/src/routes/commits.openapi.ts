@@ -9,6 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { exportCommittedState, StateExportIntegrityError } from '@t3x-dev/application';
 import type { SemanticContent } from '@t3x-dev/core';
 import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
@@ -56,6 +57,107 @@ import {
 
 export const commitRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+const exportStateRoute = createRoute({
+  method: 'get',
+  path: '/v1/commits/{hash}/export',
+  tags: ['Commits'],
+  summary: 'Export the complete value of an exact committed State',
+  request: {
+    params: z.object({ hash: z.string().regex(/^sha256:[0-9a-f]{64}$/) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      format: z.enum(['json', 'yaml']),
+      state_digest: z
+        .string()
+        .regex(/^sha256:[0-9a-f]{64}$/)
+        .optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'UTF-8 artifact and exact source descriptors; no presentation sidecars',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              format: z.enum(['json', 'yaml']),
+              scope: z.literal('full-state-value'),
+              mimeType: z.string(),
+              filename: z.string(),
+              content: z.string(),
+              byteLength: z.number().int().nonnegative(),
+              byteDigest: z.string(),
+              sourceCommit: z.object({
+                kind: z.literal('commit'),
+                schema: z.literal('t3x/commit/v2'),
+                digest: z.string(),
+              }),
+              sourceState: z.object({
+                kind: z.literal('state'),
+                schema: z.literal('t3x/state/v1'),
+                digest: z.string(),
+              }),
+              codec: z.object({ mediaType: z.string(), version: z.string() }),
+              serialization: z.string(),
+            })
+          ),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid format or descriptor',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Commit not found in project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'State digest mismatch',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Graph integrity or export failure',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(exportStateRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const { project_id: projectId, format, state_digest } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
+    if (!graph) return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found in project');
+    return c.json(
+      {
+        success: true as const,
+        data: exportCommittedState({
+          commitDigest: hash,
+          commit: graph.commit,
+          state: graph.state,
+          format,
+          expectedStateDigest: state_digest,
+        }),
+      },
+      200
+    );
+  } catch (error) {
+    if (error instanceof StateExportIntegrityError) {
+      return errorResponse(c, 'HASH_CONFLICT', error.message);
+    }
+    return errorResponse(c, 'INTERNAL_ERROR', 'Unable to verify and export the requested State');
+  }
 });
 
 // ============================================================

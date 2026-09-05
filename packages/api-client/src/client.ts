@@ -38,6 +38,7 @@ import {
   type DeploymentCapabilities,
   DeploymentCapabilitiesSchema,
 } from './deployment-capabilities.js';
+import { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
   ApiErrorResponse,
@@ -782,6 +783,23 @@ export class T3xClient {
       `/v1/commits/${encodeURIComponent(digest)}`,
       undefined,
       { project_id: projectId }
+    );
+  }
+
+  async exportCommitState(
+    projectId: string,
+    digest: string,
+    format: 'json' | 'yaml',
+    expectedStateDigest?: string,
+    options?: T3xRequestOptions
+  ): Promise<StateExportArtifact> {
+    return this.request<StateExportArtifact>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}/export`,
+      undefined,
+      { project_id: projectId, format, state_digest: expectedStateDigest },
+      options,
+      StateExportArtifactSchema
     );
   }
 
