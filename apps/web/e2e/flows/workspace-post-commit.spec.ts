@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
@@ -438,4 +439,35 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
   } finally {
     await cleanupProject(request, fixture.projectId).catch(() => {});
   }
+});
+
+
+test('post-commit: delivery downloads exact State and keeps one receipt on repeat', async ({ page, request }, testInfo) => {
+  test.setTimeout(90_000);
+  const fixture = await createCommittedWorkspaceFixture(request, 'delivery');
+  const browserErrors = watchRelevantBrowserErrors(page);
+  try {
+    await openCommittedWorkspace(page, fixture);
+    await page.getByRole('button', { name: 'Delivery', exact: true }).click();
+    const panel = page.getByRole('dialog');
+    await expect(panel.getByRole('button', { name: 'Download State' })).toBeEnabled();
+    await expect(panel).toContainText(fixture.commitHash);
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('workspace-delivery-desktop.png') });
+    const event = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Download State' }).click();
+    const download = await event;
+    expect(download.suggestedFilename()).toMatch(/\.yaml$/);
+    const bytes = await readFile((await download.path())!, 'utf8');
+    const expected = await request.get(`${API_BASE}/commits/${encodeURIComponent(fixture.commitHash)}/export?project_id=${fixture.projectId}&format=yaml`);
+    expect(bytes).toBe((await expected.json()).data.content);
+    await expect(panel.getByText('File prepared', { exact: true })).toBeVisible();
+    const repeat = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Download State' }).click();
+    await repeat;
+    const receipts = await request.get(`${API_BASE}/projects/${fixture.projectId}/workspaces/${fixture.workspaceId}/deliveries`);
+    expect((await receipts.json()).data.receipts).toHaveLength(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('workspace-delivery-mobile.png') });
+    expect(browserErrors).toEqual([]);
+  } finally { await cleanupProject(request, fixture.projectId); }
 });

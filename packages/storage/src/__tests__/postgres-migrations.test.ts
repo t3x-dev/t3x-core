@@ -17,6 +17,40 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v72 with delivery evidence and preserves existing projects', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
+    );
+    await setup.sql.unsafe(
+      'DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
+    );
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version'
+    );
+    expect(version.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT project_id FROM projects WHERE project_id = 'migration-delivery'"
+      )
+    ).toHaveLength(1);
+    await setup.sql.unsafe(`INSERT INTO workspace_deliveries
+      (id, project_id, workspace_id, target_id, commit_digest, idempotency_key, request_digest, adapter, format, artifact_digest, status, attempt)
+      VALUES ('receipt', 'migration-delivery', 'ws', 'state', 'commit', 'key', 'request', 't3x.download/v1', 'yaml', 'bytes', 'prepared', 1)`);
+    await expect(
+      setup.sql.unsafe("UPDATE workspace_deliveries SET status = 'failed' WHERE id = 'receipt'")
+    ).rejects.toThrow();
+    await expect(
+      setup.sql.unsafe("UPDATE workspace_deliveries SET adapter = 'deploy' WHERE id = 'receipt'")
+    ).rejects.toThrow();
+    expect(
+      await setup.sql.unsafe("SELECT id FROM workspace_deliveries WHERE id = 'receipt'")
+    ).toHaveLength(1);
+  });
+
   it('serializes concurrent first-run schema initialization', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

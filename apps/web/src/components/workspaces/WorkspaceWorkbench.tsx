@@ -1,6 +1,13 @@
-import { Braces } from 'lucide-react';
+import { Braces, Download } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { isPromptWorkspace } from '@/domain/workspaces/promptCompile';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
@@ -14,6 +21,7 @@ import type {
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { OutputTargetsTab } from './OutputTargetsTab';
 import { PromptCompilePreviewDrawer } from './PromptCompilePreviewDrawer';
 import type {
   ProposalGenerationAction,
@@ -68,6 +76,7 @@ export function WorkspaceWorkbench({
   sourceConversationId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
   const [flowByWorkspaceId, setFlowByWorkspaceId] = useState<Record<string, WorkspaceFlowState>>(
     {}
@@ -429,6 +438,7 @@ export function WorkspaceWorkbench({
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
         <WorkspacesHeader
           onCompilePreview={() => setCompilePreviewOpen(true)}
+          onDelivery={selectedWorkspaceWithFlow ? () => setDeliveryOpen(true) : undefined}
           promptWorkspace={isPromptWorkspace(selectedWorkspaceWithFlow)}
         />
 
@@ -466,6 +476,21 @@ export function WorkspaceWorkbench({
           />
         )}
       </div>
+      <Sheet open={deliveryOpen} onOpenChange={setDeliveryOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
+          <SheetHeader>
+            <SheetTitle>Workspace delivery</SheetTitle>
+            <SheetDescription>
+              Download an exact committed State and keep its delivery receipt.
+            </SheetDescription>
+          </SheetHeader>
+          {deliveryOpen && selectedWorkspaceWithFlow && (
+            <div className="p-6">
+              <OutputTargetsTab candidate={selectedWorkspaceWithFlow} />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
       {selectedWorkspaceWithFlow && isPromptWorkspace(selectedWorkspaceWithFlow) ? (
         <PromptCompilePreviewDrawer
           candidate={selectedWorkspaceWithFlow}
@@ -478,9 +503,11 @@ export function WorkspaceWorkbench({
 }
 
 function WorkspacesHeader({
+  onDelivery,
   onCompilePreview,
   promptWorkspace,
 }: {
+  onDelivery?: () => void;
   onCompilePreview: () => void;
   promptWorkspace: boolean;
 }) {
@@ -489,12 +516,20 @@ function WorkspacesHeader({
       <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
         T3X Workspace
       </h2>
-      {promptWorkspace ? (
-        <Button onClick={onCompilePreview} size="sm" type="button" variant="outline">
-          <Braces aria-hidden="true" className="size-4" />
-          Compile preview
-        </Button>
-      ) : null}
+      <div className="flex items-center gap-2">
+        {onDelivery && (
+          <Button onClick={onDelivery} size="sm" type="button" variant="outline">
+            <Download aria-hidden="true" className="size-4" />
+            Delivery
+          </Button>
+        )}
+        {promptWorkspace ? (
+          <Button onClick={onCompilePreview} size="sm" type="button" variant="outline">
+            <Braces aria-hidden="true" className="size-4" />
+            Compile preview
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

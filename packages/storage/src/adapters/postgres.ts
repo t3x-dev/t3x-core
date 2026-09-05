@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 72;
+export const POSTGRES_SCHEMA_VERSION = 73;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2546,6 +2546,33 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
 
   await ensureSourceTextRevisionsSchema(sql);
   await ensurePullRequestsSchema(sql);
+
+  // Schema v73: immutable application receipts for exact workspace downloads.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS workspace_deliveries (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      adapter TEXT NOT NULL CHECK (adapter = 't3x.download/v1'),
+      format TEXT NOT NULL CHECK (format IN ('json', 'yaml')),
+      artifact_digest TEXT,
+      status TEXT NOT NULL CHECK (status IN ('prepared', 'failed')),
+      error_code TEXT,
+      retry_of TEXT REFERENCES workspace_deliveries(id),
+      attempt INTEGER NOT NULL CHECK (attempt >= 1),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK ((status = 'prepared' AND artifact_digest IS NOT NULL AND error_code IS NULL)
+        OR (status = 'failed' AND artifact_digest IS NULL AND error_code IS NOT NULL))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS workspace_deliveries_idempotency
+      ON workspace_deliveries(project_id, workspace_id, idempotency_key);
+    CREATE INDEX IF NOT EXISTS workspace_deliveries_history
+      ON workspace_deliveries(project_id, workspace_id, created_at);
+  `);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`

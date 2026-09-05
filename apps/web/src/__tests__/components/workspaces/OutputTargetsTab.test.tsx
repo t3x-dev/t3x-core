@@ -1,97 +1,94 @@
 // @vitest-environment jsdom
-
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
-const mocks = vi.hoisted(() => ({
-  createLeaf: vi.fn(),
+const mocks = vi.hoisted(() => ({ get: vi.fn(), prepare: vi.fn() }));
+vi.mock('@/infrastructure/workspaceDelivery', () => ({
+  getWorkspaceDeliveries: mocks.get,
+  prepareWorkspaceDelivery: mocks.prepare,
 }));
-
-vi.mock('@/hooks/leaves/useCreateLeaf', () => ({
-  useCreateLeaf: () => ({ create: mocks.createLeaf }),
-}));
-
-const candidate: WorkspaceCandidate = {
-  id: 'workspace_prd_handoff',
-  projectId: 'proj_1',
-  title: 'PRD audience handoff',
-  summary: 'Committed PRD workspace.',
-  status: 'committed',
-  updatedAt: '2026-07-13T08:00:00.000Z',
-  baseCommitHash: 'sha256:base',
-  lastCommitHash: 'sha256:committed',
-  targetBranch: 'feature/prd-audience',
-  sourceBundle: [],
-  schemaBindings: [],
-  schemaCandidate: { summary: 'Ready.', fields: [] },
-  schemaReview: { verdict: 'ready', summary: 'Ready.', gaps: [] },
-  yopsDraft: { id: 'draft_prd', operations: [] },
-  outputTargets: [
+const digest = `sha256:${'a'.repeat(64)}`;
+const candidate = { id: 'ws', projectId: 'project', revision: 1 } as WorkspaceCandidate;
+const listing = {
+  workspaceRevision: 1,
+  commitDigest: digest,
+  receipts: [],
+  targets: [
     {
-      id: 'target_prd_markdown',
-      title: 'PRD review brief',
-      type: 'document',
+      id: 't3x:committed-state',
+      title: 'Committed State',
+      mode: 'download',
+      format: 'yaml',
+      configurable: true,
+      reason: null,
+    },
+    {
+      id: 'legacy',
+      title: 'Review brief',
+      mode: 'legacy',
       format: 'markdown',
-      status: 'draft_target',
-      leafType: 'document',
-      instruction: 'Generate a concise PRD review brief.',
-      constraints: ['Use committed state only.'],
-      sourceScope: 'Committed PRD candidate and source evidence.',
+      configurable: false,
+      reason: 'Generation is unavailable.',
     },
   ],
 };
-
-describe('OutputTargetsTab', () => {
-  beforeEach(() => {
-    mocks.createLeaf.mockReset();
-    mocks.createLeaf.mockResolvedValue({
-      id: 'leaf_1',
-      commit_hash: 'sha256:committed',
-      type: 'article',
-      title: 'PRD review brief',
-      constraints: [],
-      config: {},
-      output: null,
-      generated_at: null,
-      assertions: null,
-      runner_assertions: null,
-      project_id: 'proj_1',
-      created_at: '2026-07-13T08:01:00.000Z',
-      created_by: null,
-    });
-  });
-
-  it('creates a Leaf with output-target lineage and canonical generation config', async () => {
-    render(<OutputTargetsTab candidate={candidate} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf' }));
-
-    await waitFor(() => expect(mocks.createLeaf).toHaveBeenCalledTimes(1));
-    expect(mocks.createLeaf).toHaveBeenCalledWith({
-      commit_hash: 'sha256:committed',
-      config: {
-        format: 'markdown',
-        output_target_id: 'target_prd_markdown',
-        source_scope: 'Committed PRD candidate and source evidence.',
-        user_instruction: 'Generate a concise PRD review brief.',
-        workspace_id: 'workspace_prd_handoff',
-      },
-      constraints: [
-        {
-          id: 'constraint_target_prd_markdown_1',
-          match_mode: 'semantic',
-          type: 'require',
-          value: 'Use committed state only.',
-        },
-      ],
-      project_id: 'proj_1',
-      source: { type: 'user' },
-      title: 'PRD review brief',
-      type: 'article',
-    });
-    expect(mocks.createLeaf.mock.calls[0]?.[0].config).not.toHaveProperty('instruction');
-  });
+const receipt = {
+  id: 'receipt',
+  commitDigest: digest,
+  format: 'yaml',
+  artifactDigest: digest,
+  attempt: 1,
+  status: 'prepared',
+};
+beforeEach(() => {
+  mocks.get.mockReset().mockResolvedValue(listing);
+  mocks.prepare.mockReset().mockResolvedValue(receipt);
+});
+it('loads without executing; legacy selection cannot generate a Leaf', async () => {
+  render(<OutputTargetsTab candidate={candidate} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Review brief/ }));
+  expect(screen.getByText(/Generation is unavailable/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Download State' })).not.toBeInTheDocument();
+  expect(mocks.prepare).not.toHaveBeenCalled();
+  expect(screen.queryByText('Create Leaf')).not.toBeInTheDocument();
+});
+it('downloads the explicit exact commit and shows honest receipt status', async () => {
+  render(<OutputTargetsTab candidate={candidate} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Download State' }));
+  await screen.findByText('File prepared');
+  expect(mocks.prepare).toHaveBeenCalledWith(
+    'project',
+    'ws',
+    expect.objectContaining({
+      commitDigest: digest,
+      targetId: 't3x:committed-state',
+      workspaceRevision: 1,
+      format: 'yaml',
+    })
+  );
+  expect(screen.getByText(/Browser save completion is not observable/)).toBeVisible();
+});
+it('reuses idempotency after unknown transport outcome and prevents duplicate clicks', async () => {
+  mocks.prepare.mockRejectedValueOnce(new Error('Network interrupted'));
+  render(<OutputTargetsTab candidate={candidate} />);
+  const button = await screen.findByRole('button', { name: 'Download State' });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await screen.findByRole('alert');
+  expect(mocks.prepare).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Download State' }));
+  await screen.findByText('File prepared');
+  expect(mocks.prepare.mock.calls[0][2].idempotencyKey).toBe(
+    mocks.prepare.mock.calls[1][2].idempotencyKey
+  );
+});
+it('refresh recovers a failed target load', async () => {
+  mocks.get.mockRejectedValueOnce(new Error('Offline'));
+  render(<OutputTargetsTab candidate={candidate} />);
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Download State' })).toBeEnabled());
 });
