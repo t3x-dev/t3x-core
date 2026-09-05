@@ -86,3 +86,24 @@ it('rejects changed State and remains deterministic for a fixed selection', () =
     buildCommittedStateOverview({ ...input, state: createYOpsState({ newHead: true }) })
   ).toThrow();
 });
+
+it('recognizes only valid repository content and keeps recovery exact', () => {
+  const content = {
+    trees: [{ key: 'evaluation', slots: { title: 'Suite' }, children: [] }],
+    relations: [],
+  };
+  const input = fixture({ domain: 't3x.dev/semantic-content', version: 1, content });
+  const result = buildCommittedStateOverview(input);
+  expect(result.reading).toEqual({ kind: 'semantic-content', value: content });
+  expect(JSON.parse(result.render.recovery.json)).toEqual(input.state.value);
+  expect(
+    buildCommittedStateOverview(
+      fixture({ domain: 't3x.dev/semantic-content', version: 1, content: { trees: 'bad' } })
+    ).reading
+  ).toBeNull();
+  expect(
+    buildCommittedStateOverview(
+      fixture({ domain: 't3x.dev/semantic-content', version: 2, content })
+    ).reading
+  ).toBeNull();
+});
