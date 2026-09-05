@@ -43,7 +43,7 @@ const PRD_TREE = [
 test('State page smoke: repository controls, snapshot views, and Canvas remain operational', async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   test.setTimeout(90_000);
   const { projectId } = await createTestProject(request, 'State page smoke PRD');
 
@@ -169,6 +169,9 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await expect(page.getByText('02 SET').first()).toBeVisible();
     await expect(page.getByText('03 SET').first()).toBeVisible();
 
+    const rootRow = page.getByRole('region', { name: 'Structured state tree' }).getByText('prd', { exact: true }).locator('xpath=ancestor::tr');
+    expect((await rootRow.boundingBox())!.height).toBeLessThanOrEqual(38);
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-structure-desktop.png') });
     await page.getByRole('button', { name: 'New branch' }).click();
     await expect(page.getByRole('dialog')).toContainText('Create a new branch');
     await page.getByRole('button', { name: 'Cancel' }).click();
@@ -189,12 +192,26 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     ).toBeVisible();
     await expect(page.getByText('Office workers').first()).toBeVisible();
 
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-render-desktop.png') });
     await page.getByRole('tab', { name: /Code/ }).click();
     const codeView = page.getByRole('region', { name: 'YAML code view' });
     await expect(codeView).toContainText('prd:');
     await expect(codeView).toContainText('summary:');
     await expect(codeView).not.toContainText('trees:');
     await expect(codeView).not.toContainText('slots:');
+    await codeView.getByRole('button', { name: 'JSON', exact: true }).click();
+    await expect(codeView).toContainText('PARSED JSON');
+    await codeView.getByRole('button', { name: 'Find in code' }).click();
+    await codeView.getByRole('textbox', { name: 'Find in code' }).fill('Office workers');
+    await expect(codeView).toContainText('2 matching lines');
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-code-desktop.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(codeView.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
+    await codeView.getByRole('button', { name: 'Raw', exact: true }).click();
+    await expect(codeView).toContainText('RAW YAML');
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-code-mobile.png') });
+    await page.setViewportSize({ width: 1280, height: 720 });
+
 
     await page.getByRole('tab', { name: /Canvas/ }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');

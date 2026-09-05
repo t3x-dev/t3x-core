@@ -590,7 +590,7 @@ describe('ProjectStateTab', () => {
       'sticky',
       'left-0'
     );
-    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-9');
+    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-[34px]');
     expect(screen.getByRole('heading', { name: 'State details' })).toHaveClass('text-base');
 
     expect(
@@ -1148,9 +1148,7 @@ describe('ProjectStateTab', () => {
     expect(codeScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(codeView.querySelector('code')).toHaveClass('min-w-max');
-    expect(within(codeView).getByText('problem: "You: i need food and drink"')).toHaveClass(
-      'whitespace-pre'
-    );
+    expect(within(codeView).getByText('problem:').parentElement).toHaveClass('whitespace-pre');
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
