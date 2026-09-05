@@ -18,6 +18,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { StateCodeView } from '@/components/project/StateCodeView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -639,7 +640,14 @@ export function ProjectStateTab({
                       yamlText={yamlText}
                     />
                   ) : null}
-                  {activeView === 'code' ? <StateCodeView yamlText={yamlText} /> : null}
+                  {activeView === 'code' ? (
+                    <StateCodeView
+                      yamlText={yamlText}
+                      branch={branchFocus}
+                      rootKey={rootKey}
+                      commitHash={headCommit.hash}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </>
@@ -1209,7 +1217,8 @@ function StatePointTableRow({
   return (
     <tr
       className={cn(
-        'group h-9 border-b border-[var(--stroke-divider)] text-[var(--text-primary)] transition-colors',
+        'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)] transition-colors',
+        row.expandable ? 'h-9' : 'h-[34px]',
         row.expandable && 'cursor-pointer hover:bg-[var(--surface-hover)]',
         row.status === 'missing' && 'bg-[var(--status-warning-muted)]/15'
       )}
@@ -1217,12 +1226,12 @@ function StatePointTableRow({
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1.5 font-medium transition-colors text-xs',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1 font-medium transition-colors text-[13px] leading-5',
           row.expandable && 'group-hover:bg-[var(--surface-hover)]',
           row.status === 'missing' && 'bg-[var(--status-warning-muted)]/35'
         )}
       >
-        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: row.depth * 18 }}>
+        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: row.depth * 16 }}>
           {row.expandable ? (
             <button
               aria-expanded={expanded}
@@ -1244,7 +1253,11 @@ function StatePointTableRow({
             <span className="w-3.5 shrink-0" />
           )}
           <span
-            className="min-w-0 flex-1 truncate font-medium text-[var(--text-primary)]"
+            className={cn(
+              'min-w-0 flex-1 truncate text-[var(--text-primary)]',
+              row.expandable ? 'font-semibold' : 'font-medium',
+              row.depth < 2 && row.expandable && 'text-[14px]'
+            )}
             title={row.path}
           >
             {row.key}
@@ -1256,14 +1269,14 @@ function StatePointTableRow({
             />
           ) : null}
           {row.childCount ? (
-            <Badge className="shrink-0 px-1.5 py-0 text-[10px] font-normal" variant="outline">
+            <Badge className="shrink-0 px-1.5 py-0 text-[12px] font-normal" variant="outline">
               {row.childCount}
             </Badge>
           ) : null}
         </span>
       </td>
       <td
-        className="truncate px-3 py-1.5 text-xs font-normal text-[var(--text-secondary)]"
+        className="truncate px-3 py-1 text-[13px] leading-5 font-normal text-[var(--text-secondary)]"
         title={row.value}
       >
         {row.value}
@@ -1277,7 +1290,7 @@ function StatePointTableRow({
       </td>
       <td className="px-3 py-1.5 text-center">
         {row.issueCount > 0 ? (
-          <span className="inline-flex size-4.5 min-w-4.5 px-1 items-center justify-center rounded-full bg-[var(--status-danger)] text-[10px] font-bold text-[var(--on-status)]">
+          <span className="inline-flex size-5 min-w-5 px-1 items-center justify-center rounded-full bg-[var(--status-danger)] text-[12px] font-bold text-[var(--on-status)]">
             {row.issueCount}
           </span>
         ) : (
@@ -1307,38 +1320,13 @@ function StatusPill({ row }: { row: StatePointRow }) {
           : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]';
   return (
     <span
-      className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', tone)}
+      className={cn(
+        'inline-flex h-5 items-center whitespace-nowrap rounded-full border px-2 text-[12px] font-medium leading-4',
+        tone
+      )}
     >
       {row.statusLabel}
     </span>
-  );
-}
-
-function StateCodeView({ yamlText }: { yamlText: string }) {
-  const lines = yamlText.split('\n');
-  return (
-    <section
-      aria-label="YAML code view"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] px-6 py-5"
-    >
-      <StateScrollArea
-        className="min-h-0 flex-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
-        horizontal
-        label="Canonical YAML content"
-        viewportClassName="font-mono text-sm leading-6 text-[var(--text-primary)]"
-      >
-        <code className="block min-w-max py-4 pr-4">
-          {lines.map((line, index) => (
-            <span className="grid grid-cols-[44px_max-content]" key={String(index)}>
-              <span className="sticky left-0 z-10 select-none border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-right text-[var(--text-tertiary)]">
-                {index + 1}
-              </span>
-              <span className="whitespace-pre pl-4">{line}</span>
-            </span>
-          ))}
-        </code>
-      </StateScrollArea>
-    </section>
   );
 }
 
