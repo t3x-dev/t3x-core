@@ -152,7 +152,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     });
 
     const response = await page.goto(
-      `/project/${projectId}?branch=${encodeURIComponent('feature/prd-audience')}`,
+      `/project/${projectId}?view=structure&branch=${encodeURIComponent('feature/prd-audience')}`,
       { waitUntil: 'networkidle' }
     );
     expect(response?.status() ?? 200).toBeLessThan(400);

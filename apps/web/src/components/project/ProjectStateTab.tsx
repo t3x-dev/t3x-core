@@ -52,6 +52,7 @@ import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
+import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -107,7 +108,7 @@ function parseStateView(value: string | null, fallback: ProjectStateView): Proje
 }
 
 export function ProjectStateTab({
-  initialView = 'structure',
+  initialView,
   onRunValidation,
   projectId,
   projectName,
@@ -121,11 +122,16 @@ export function ProjectStateTab({
   const routeQuery = searchParams.toString();
   const routeQueryRef = useRef(routeQuery);
   routeQueryRef.current = routeQuery;
-  const routeView = parseStateView(searchParams.get('view'), initialView);
+  const { preferredView, remember } = useStateViewPreference(projectId);
+  const routeView = parseStateView(searchParams.get('view'), initialView ?? preferredView);
   const [activeView, setActiveView] = useState<ProjectStateView>(routeView);
   const snapshotEnabled = activeView !== 'canvas';
   const [lastSnapshotView, setLastSnapshotView] = useState<ProjectSnapshotView>(
-    routeView === 'canvas' ? 'structure' : routeView
+    routeView === 'canvas'
+      ? initialView === 'canvas'
+        ? preferredView
+        : (initialView ?? preferredView)
+      : routeView
   );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const focusedCommitHash = searchParams.get('commit')?.trim() || undefined;
@@ -168,12 +174,12 @@ export function ProjectStateTab({
       setActiveView(view);
       if (view !== 'canvas') setLastSnapshotView(view);
       const params = new URLSearchParams(routeQueryRef.current);
-      if (view === 'structure') params.delete('view');
-      else params.set('view', view);
+      params.set('view', view);
+      if (view !== 'canvas') remember(view);
       const query = params.toString();
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [pathname, replaceRoute]
+    [pathname, replaceRoute, remember]
   );
 
   const branchOptions = useMemo(
