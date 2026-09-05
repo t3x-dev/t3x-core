@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 73;
+export const POSTGRES_SCHEMA_VERSION = 74;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2572,6 +2572,19 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       ON workspace_deliveries(project_id, workspace_id, idempotency_key);
     CREATE INDEX IF NOT EXISTS workspace_deliveries_history
       ON workspace_deliveries(project_id, workspace_id, created_at);
+  `);
+
+  // Versioned author sidecars: payload stays separate from protocol State.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS state_presentations (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE RESTRICT,
+      commit_digest TEXT NOT NULL,
+      presentation_digest TEXT NOT NULL,
+      document JSONB NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, commit_digest)
+    );
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

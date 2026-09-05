@@ -477,6 +477,7 @@ export {
   type UpdateSourceTextRevisionInput,
   updateSourceTextRevision,
 } from './source-text-revisions';
+export * from './state-presentations';
 // Templates (reusable prompt templates)
 export {
   type CreateTemplateInput,

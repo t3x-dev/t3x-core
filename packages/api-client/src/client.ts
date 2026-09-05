@@ -1,4 +1,9 @@
 import {
+  type StatePresentationInput,
+  type StatePresentationResult,
+  StatePresentationResultSchema,
+} from './state-presentation.js';
+import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
   WorkspaceDeliveryResultSchema,
@@ -788,6 +793,38 @@ export class T3xClient {
       `/v1/commits/${encodeURIComponent(digest)}`,
       undefined,
       { project_id: projectId }
+    );
+  }
+
+  async getStatePresentation(
+    projectId: string,
+    commitDigest: string,
+    presentationDigest?: string
+  ): Promise<StatePresentationResult> {
+    const suffix = presentationDigest
+      ? `?presentation_digest=${encodeURIComponent(presentationDigest)}`
+      : '';
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/presentation${suffix}`,
+      undefined,
+      undefined,
+      undefined,
+      StatePresentationResultSchema
+    );
+  }
+  async publishStatePresentation(
+    projectId: string,
+    commitDigest: string,
+    input: StatePresentationInput
+  ): Promise<StatePresentationResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/presentation`,
+      input,
+      undefined,
+      undefined,
+      StatePresentationResultSchema
     );
   }
 
