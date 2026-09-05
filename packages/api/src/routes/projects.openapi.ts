@@ -52,6 +52,15 @@ import {
   ProjectLifecyclePolicyDeniedError,
   resolveProjectLifecycleActor,
 } from '../lib/project-lifecycle-policy';
+import { createPrdStarterContent } from '../lib/project-starter';
+import {
+  commitRepositoryYOpsState,
+  createRepositoryYOpsStateFromSemanticContent,
+} from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -633,6 +642,29 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
           // Bootstrap the default 'main' branch in the same transaction so a
           // host never commits capacity for a partially-created repository.
           await ensureMainBranch(transaction, created.projectId);
+          if (body.starter === 'prd-v1') {
+            const authority = await resolveCompatibilityTransitionWriteAuthority({
+              db: transaction,
+              apiKey: transitionApiKey(c),
+              projectId: created.projectId,
+              refName: 'main',
+            });
+            await commitRepositoryYOpsState({
+              db: transaction,
+              projectId: created.projectId,
+              refName: 'main',
+              expectedHead: null,
+              target: createRepositoryYOpsStateFromSemanticContent(
+                createPrdStarterContent(body.name)
+              ),
+              actor: authority.principal.actor,
+              policyBindingSource: 'server-selected',
+              ...(authority.policyBinding === null
+                ? {}
+                : { policyBinding: authority.policyBinding }),
+              intent: 'Initialize PRD starter v1 (no AI generation)',
+            });
+          }
           return created;
         })
     );

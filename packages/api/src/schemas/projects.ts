@@ -52,6 +52,8 @@ export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(255),
   metadata: z.record(z.string(), z.any()).optional(),
   namespace: z.string().min(2).max(39).optional(),
+  // Omitted preserves the existing empty-project workflow.
+  starter: z.literal('prd-v1').optional(),
 });
 
 // Update project request
