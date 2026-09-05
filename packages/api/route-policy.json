@@ -1946,6 +1946,13 @@
       "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",
       "policy": "project",
       "rationale": "Exact project-bound commit; project edit authority for author sidecar."
+    },
+    {
+      "source": "state-overview.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/overview",
+      "policy": "project",
+      "rationale": "Project read authority and verified project-bound commit; exact State and author sidecar only."
     }
   ]
 }

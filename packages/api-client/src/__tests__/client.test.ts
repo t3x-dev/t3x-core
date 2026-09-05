@@ -1763,3 +1763,50 @@ it('publishes and reads exact author content using the presentation runtime cont
   );
   await expect(bad.getStatePresentation('p', digest('a'))).rejects.toThrow();
 });
+
+it('reads a pinned generic Overview and rejects incompatible status claims', async () => {
+  const result = {
+    revision: { commitDigest: digest('a'), stateDigest: digest('b'), presentationDigest: null },
+    author: null,
+    summary: { kind: 'sections', rootType: 'null', total: 0, truncated: false, items: [] },
+    render: {
+      context: {
+        sourceCommit: descriptor('commit', 'a'),
+        sourceState: descriptor('state', 'b'),
+        value: null,
+        binding: null,
+        validation: 'not-run',
+      },
+      status: {
+        state: 'loaded',
+        schema: 'not-requested',
+        renderer: 'fallback',
+        validation: 'not-run',
+      },
+      renderer: { key: 't3x.generic', version: 1, modelSchema: 't3x.render/generic-state/v1' },
+      model: { value: null },
+      recovery: { json: 'null', yaml: 'null' },
+    },
+  };
+  const fetchFn = mockFetch(successResponse(result));
+  const client = createTestClient(fetchFn);
+  expect(
+    await client.getStateOverview('team/project', digest('a'), {
+      stateDigest: digest('b'),
+      presentationDigest: digest('c'),
+    })
+  ).toEqual(result);
+  const url = new URL(vi.mocked(fetchFn).mock.calls[0]![0] as string);
+  expect(url.pathname).toContain('/projects/team%2Fproject/');
+  expect(url.searchParams.get('state_digest')).toBe(digest('b'));
+  expect(url.searchParams.get('presentation_digest')).toBe(digest('c'));
+  const bad = createTestClient(
+    mockFetch(
+      successResponse({
+        ...result,
+        render: { ...result.render, status: { ...result.render.status, validation: 'passed' } },
+      })
+    )
+  );
+  await expect(bad.getStateOverview('p', digest('a'))).rejects.toThrow();
+});

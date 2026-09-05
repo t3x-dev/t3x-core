@@ -1,3 +1,4 @@
+import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
   type StatePresentationInput,
   type StatePresentationResult,
@@ -793,6 +794,21 @@ export class T3xClient {
       `/v1/commits/${encodeURIComponent(digest)}`,
       undefined,
       { project_id: projectId }
+    );
+  }
+
+  async getStateOverview(
+    projectId: string,
+    commitDigest: string,
+    options: { stateDigest?: string; presentationDigest?: string } = {}
+  ): Promise<StateOverview> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/overview`,
+      undefined,
+      { state_digest: options.stateDigest, presentation_digest: options.presentationDigest },
+      undefined,
+      StateOverviewSchema
     );
   }
 
