@@ -1700,3 +1700,38 @@ describe('exact State export', () => {
     });
   });
 });
+
+it('validates the delivery receipt response and sends the explicit idempotent request', async () => {
+  const request = {
+    targetId: 't3x:committed-state',
+    commitDigest: digest('a'),
+    format: 'yaml' as const,
+    workspaceRevision: 1,
+    idempotencyKey: 'a1234567-1234-4123-8123-123456789012',
+  };
+  const receipt = {
+    ...request,
+    id: 'b1234567-1234-4123-8123-123456789012',
+    projectId: 'p',
+    workspaceId: 'w',
+    adapter: 't3x.download/v1',
+    artifactDigest: null,
+    status: 'failed',
+    errorCode: 'ARTIFACT_PREPARATION_FAILED',
+    requestDigest: 'c'.repeat(64),
+    retryOf: null,
+    attempt: 1,
+    createdAt: new Date().toISOString(),
+  };
+  const fetchFn = mockFetch(successResponse({ receipt, artifact: null }));
+  const client = createTestClient(fetchFn);
+  expect((await client.prepareWorkspaceDelivery('p', 'w', request)).receipt.status).toBe('failed');
+  expect(fetchFn).toHaveBeenCalledWith(
+    expect.stringContaining('/projects/p/workspaces/w/deliveries'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify(request) })
+  );
+  const badClient = createTestClient(
+    mockFetch(successResponse({ receipt: { ...receipt, status: 'deployed' }, artifact: null }))
+  );
+  await expect(badClient.prepareWorkspaceDelivery('p', 'w', request)).rejects.toThrow();
+});

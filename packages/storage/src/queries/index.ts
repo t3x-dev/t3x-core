@@ -638,6 +638,7 @@ export {
   updateWebhook,
   type WebhookOutput,
 } from './webhooks';
+export * from './workspace-deliveries';
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
   acquireProjectSupersedeLock,

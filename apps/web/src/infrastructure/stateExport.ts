@@ -7,6 +7,14 @@ export async function fetchStateExport(projectId: string, digest: string, format
     `${API_V1}/commits/${encodeURIComponent(digest)}/export?${query}`
   );
   const artifact = StateExportArtifactSchema.parse(await handleResponse(response));
+  return verifyStateExport(artifact, digest, format);
+}
+
+export async function verifyStateExport(
+  artifact: import('@t3x-dev/api-client').StateExportArtifact,
+  digest: string,
+  format: 'json' | 'yaml'
+) {
   if (artifact.sourceCommit.digest !== digest || artifact.format !== format) {
     throw new Error('Export does not match the selected revision');
   }

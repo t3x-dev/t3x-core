@@ -20,3 +20,4 @@ export {
 } from './deployment-capabilities.js';
 export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 export type * from './types.js';
+export * from './workspace-delivery.js';

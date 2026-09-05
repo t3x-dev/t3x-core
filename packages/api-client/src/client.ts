@@ -1,3 +1,8 @@
+import {
+  type WorkspaceDeliveryInput,
+  type WorkspaceDeliveryResult,
+  WorkspaceDeliveryResultSchema,
+} from './workspace-delivery.js';
 /**
  * T3X API Client
  *
@@ -783,6 +788,21 @@ export class T3xClient {
       `/v1/commits/${encodeURIComponent(digest)}`,
       undefined,
       { project_id: projectId }
+    );
+  }
+
+  async prepareWorkspaceDelivery(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceDeliveryInput
+  ): Promise<WorkspaceDeliveryResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeliveryResultSchema
     );
   }
 

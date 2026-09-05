@@ -1918,6 +1918,20 @@
       "path": "/v1/commits/{hash}/export",
       "policy": "project",
       "rationale": "Exact commit graph export requires project read access and project-bound graph membership."
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
+      "policy": "project",
+      "rationale": "Project read authority and project-bound workspace/verified commit membership; only local download preparation."
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
+      "policy": "project",
+      "rationale": "Project edit authority for receipt creation and project-bound workspace/verified commit membership; only local download preparation."
     }
   ]
 }
