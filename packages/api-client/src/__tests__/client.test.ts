@@ -1667,3 +1667,36 @@ describe('T3xClient', () => {
     });
   });
 });
+
+describe('exact State export', () => {
+  it('sends an exact commit, format and optional State expectation', async () => {
+    const artifact = {
+      format: 'json',
+      scope: 'full-state-value',
+      mimeType: 'application/json',
+      filename: 'state.json',
+      content: '{}\n',
+      byteLength: 3,
+      byteDigest: digest('a'),
+      sourceCommit: descriptor('commit', 'b'),
+      sourceState: descriptor('state', 'c'),
+      codec: { mediaType: 'application/json', version: '1' },
+      serialization: 't3x.json-value/v1',
+    };
+    const fetchFn = mockFetch(successResponse(artifact));
+    const client = createTestClient(fetchFn);
+    await expect(
+      client.exportCommitState('project', digest('b'), 'json', digest('c'))
+    ).resolves.toEqual(artifact);
+    const url = new URL(vi.mocked(fetchFn).mock.calls[0][0] as string);
+    expect(decodeURIComponent(url.pathname)).toBe(`/v1/commits/${digest('b')}/export`);
+    expect(url.searchParams.get('project_id')).toBe('project');
+    expect(url.searchParams.get('state_digest')).toBe(digest('c'));
+  });
+  it('rejects a legacy Leaf-shaped successful response', async () => {
+    const client = createTestClient(mockFetch(successResponse({ output: 'generated content' })));
+    await expect(client.exportCommitState('project', digest('b'), 'yaml')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    });
+  });
+});

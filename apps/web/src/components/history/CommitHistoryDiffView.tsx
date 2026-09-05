@@ -2,6 +2,7 @@
 
 import { ArrowLeft, GitCommit } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { StateExportButton } from '@/components/shared/StateExportButton';
 import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
@@ -62,6 +63,11 @@ export function CommitHistoryDiffView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <StateExportButton
+            key={commit.hash}
+            projectId={commit.project_id}
+            commitDigest={commit.hash}
+          />
           <Badge variant="branch">{commit.branch || 'detached'}</Badge>
           <Badge className="font-mono" variant="commit">
             <GitCommit className="mr-1 size-3" />
