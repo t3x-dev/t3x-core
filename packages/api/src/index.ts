@@ -38,6 +38,7 @@ export {
   issueCollaborationInvitationToken,
   verifyCollaborationInvitationToken,
 } from './lib/collaboration-invitation-token';
+export { buildCommittedCompositionOverview } from './lib/committed-composition-overview';
 // Database
 export { closeDB, getDB, getRuntimePostgresClient } from './lib/db';
 export {
@@ -185,7 +186,6 @@ export {
   type RateLimitStore,
   resolveIpRateLimitPolicy,
 } from './middleware/rate-limit';
-
 // Common OpenAPI schemas
 export { ErrorResponseSchema, SuccessResponseSchema } from './schemas/common';
 // Type definitions
