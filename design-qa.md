@@ -37,3 +37,11 @@ is retained, with PRD compact mode added. Author editing remains #1512 work.
 Structure still defaults on existing unqualified routes in this PR; changing the
 landing route is the next separately reviewable step. Outputs retirement remains
 gated by the existing retention work; it is not hidden as part of this UI change.
+
+## Navigation follow-up (#1512)
+
+Default Overview and per-project snapshot-view memory verified with 32 focused
+tests plus both production browser journeys (2 passed, clean exit). Explicit
+legacy Render links override a saved Code preference; commit pins survive view
+switches. Desktop capture re-inspected with no layout regression. Author editing
+and shared README controls remain outside this navigation slice.

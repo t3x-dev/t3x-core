@@ -19,8 +19,16 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     } });
     expect(published.ok()).toBeTruthy();
     await page.setViewportSize({ width: 1480, height: 1060 });
-    await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
+    await page.goto(`/project/${projectId}?commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('state-overview')).toBeVisible();
+    await page.getByRole('tab', { name: /Code/ }).click();
+    await expect(page).toHaveURL(/view=code/);
+    await page.goto(`/project/${projectId}?commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('tab', { name: /Code/ })).toHaveAttribute('aria-selected', 'true');
+    await page.goto(`/project/${projectId}?view=render&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /^Render/ })).toHaveCount(0);
+
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
     await expect(page.getByText('Validation not run')).toBeVisible();
     expect(await page.evaluate(() => 'unsafeReadme' in window)).toBe(false);
