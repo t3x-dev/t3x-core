@@ -12,6 +12,7 @@ export interface ListYSchemaCatalogOptions {
   /** Must be authorized by the caller before including private/team releases. */
   project_id?: string;
   q?: string;
+  canonical_name?: string;
   tags?: string[];
   any_tags?: string[];
   ecosystem?: string;
@@ -76,6 +77,7 @@ export async function listYSchemaCatalogReleases(
     and length(${v.manifestJson}->>'description') <= 4096 then ${v.manifestJson}->>'description' else null end)`;
 
   const conditions = [
+    options.canonical_name ? eq(a.canonicalName, options.canonical_name) : undefined,
     eq(a.lifecycleStatus, 'active'),
     isNull(a.archivedAt),
     inArray(a.kind, ['core', 'module', 'schema']),

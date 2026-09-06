@@ -187,7 +187,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 74;
+export const POSTGRES_SCHEMA_VERSION = 75;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2585,6 +2585,23 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (project_id, commit_digest)
     );
+  `);
+
+  // Studio candidates retain exact references, never private manifest/resource copies.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS schema_studio_candidates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_project_id TEXT,
+      canonical_name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      artifact_version_id TEXT NOT NULL,
+      artifact_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (project_id, artifact_version_id, artifact_hash)
+    );
+    CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
+      ON schema_studio_candidates(project_id, created_at, id);
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

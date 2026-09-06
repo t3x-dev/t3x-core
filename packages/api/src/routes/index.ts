@@ -48,6 +48,7 @@ export { recipesRoutes } from './recipes.openapi';
 export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner.openapi';
 export { runsRoutes } from './runs.openapi';
+export { schemaStudioRoutes } from './schema-studio.openapi';
 export { searchRoutes } from './search.openapi';
 export { shareRoutes } from './share.openapi';
 export { skillArtifactRoutes } from './skill-artifacts.openapi';
