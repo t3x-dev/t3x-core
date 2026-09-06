@@ -660,6 +660,11 @@ export {
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
 export {
+  type ListYSchemaCatalogOptions,
+  listYSchemaCatalogReleases,
+  type YSchemaCatalogRelease,
+} from './yschema-catalog';
+export {
   type FindYSchemaArtifactVersionInput,
   findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,

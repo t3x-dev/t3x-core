@@ -1953,6 +1953,27 @@
       "path": "/v1/projects/{projectId}/commits/{commitDigest}/overview",
       "policy": "project",
       "rationale": "Project read authority and verified project-bound commit; exact State and author sidecar only."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema/catalog",
+      "policy": "authenticated",
+      "rationale": "Authenticated registry discovery projects only public releases; no private manifests."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema/catalog/collections",
+      "policy": "authenticated",
+      "rationale": "Static editorial labels; no project data or runtime authority."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/yschema/catalog",
+      "policy": "project",
+      "rationale": "Project read authority precedes private/team catalog projection."
     }
   ]
 }

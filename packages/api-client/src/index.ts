@@ -18,6 +18,7 @@ export {
   SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
   UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
 } from './deployment-capabilities.js';
+export * from './schema-catalog.js';
 export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 export * from './state-overview';
 export * from './state-presentation.js';
