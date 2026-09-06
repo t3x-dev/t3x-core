@@ -32,3 +32,62 @@ export const StudioCandidateSchema = z.object({
 export const StudioCandidateListSchema = z.object({ items: z.array(StudioCandidateSchema) });
 export type StudioCandidate = z.infer<typeof StudioCandidateSchema>;
 export type AddStudioCandidate = z.infer<typeof AddStudioCandidateSchema>;
+
+const ids = z
+  .array(z.string().min(1))
+  .min(1)
+  .max(32)
+  .refine((values) => new Set(values).size === values.length, 'Duplicate candidates');
+export const StudioPreviewInputSchema = z
+  .object({
+    candidateIds: ids,
+    workspaceId: z.string().min(1).optional(),
+    compareToCandidateIds: ids.optional(),
+  })
+  .strict();
+export const StudioApplyInputSchema = z
+  .object({
+    candidateIds: ids,
+    workspaceId: z.string().min(1),
+    ifRevision: z.number().int().nonnegative(),
+    reviewHash: digest,
+  })
+  .strict();
+const change = z.object({
+  kind: z.enum(['ADD', 'CHANGE', 'REMOVE']),
+  path: z.string(),
+  summary: z.string(),
+});
+export const StudioPreviewSchema = z.object({
+  selectionHash: digest,
+  schemaHash: digest,
+  reviewHash: digest,
+  schema: z.record(z.string(), z.unknown()),
+  report: z.object({
+    valid: z.boolean(),
+    issues: z.array(
+      z.object({
+        code: z.string(),
+        message: z.string(),
+        blocking: z.boolean(),
+        path: z.string().optional(),
+      })
+    ),
+  }),
+  renderPlan: z.array(z.record(z.string(), z.unknown())),
+  origins: z.record(z.string(), z.unknown()),
+  sources: z.array(StudioSourceSchema),
+  adoption: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+  workspace: z
+    .object({
+      id: z.string(),
+      revision: z.number(),
+      binding: z.record(z.string(), z.unknown()).nullable(),
+      changes: z.array(change),
+    })
+    .nullable(),
+  comparison: z.object({ schemaHash: digest, changes: z.array(change) }).nullable(),
+});
+export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
+export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
+export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
