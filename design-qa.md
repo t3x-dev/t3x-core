@@ -100,3 +100,8 @@ Four component tests passed. Chromium verified navigation geometry at 1480/1200/
 Removed New Leaf from shared commit actions and expanded node Leaf lists; removed inline delete and write context-menu dispatch. Existing Leaf links remain. Empty floating action panels no longer render. Selection copy directs delivery to State/Commit Export.
 
 111 Canvas component tests passed, including retained Open Leaf panel reanchoring. Four Chromium Canvas workflows passed (load, select/no-create-controls, fit, console); teardown exited 0. Inspected the selection screenshot before commit. This continues #1506; template/onboarding creation and backend writer retirement are not claimed complete.
+## Legacy Leaf reader — 2026-09-06
+
+Replaced generation/editor pages with a read-only archive and removed Outputs create/delete controls. Retains source commit links, saved output, paged generation history, current saved evidence and text/JSON export. History exports carry record identity and source commit; current evidence is explicitly separate from historical generation. No backend writers or stored records are removed. Canvas/template creation affordances remain follow-up work.
+
+Full WebUI: 253 files / 1,583 tests passed before adding one additional export-provenance regression; final focused hook/reader tests: 5 passed. Chromium verified retained author-edited output, downloaded record content, source revision, missing bookmark, no Leaf write requests, and desktop/mobile layouts; final run and shutdown exited 0. Inspected screenshots before commit. Existing raw output is rendered as inert text. Output-edit ledger storage is retained but its timeline UI is not added here.

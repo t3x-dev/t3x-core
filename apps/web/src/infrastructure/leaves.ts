@@ -502,3 +502,23 @@ export async function curatePreview(
   );
   return handleResponse<CuratePreviewResponse>(res);
 }
+
+export interface LegacyLeafHistory {
+  id: string;
+  leaf_id: string;
+  output: string;
+  config: LeafConfig;
+  model: string;
+  generated_at: string;
+  created_by: string | null;
+}
+
+export async function listLegacyLeafHistory(
+  leafId: string,
+  offset = 0
+): Promise<LegacyLeafHistory[]> {
+  const response = await fetchWithTimeout(
+    `${API_V1}/leaves/${encodeURIComponent(leafId)}/history?limit=100&offset=${offset}`
+  );
+  return handleResponse<LegacyLeafHistory[]>(response);
+}
