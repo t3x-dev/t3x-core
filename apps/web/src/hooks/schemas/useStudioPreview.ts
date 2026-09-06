@@ -49,3 +49,11 @@ export function useApplyStudioSelection(projectId: string) {
     [projectId]
   );
 }
+
+/** Read-only native sample check; uses the same exact-source resolver as Studio. */
+export function useValidateStudioSample(projectId: string) {
+  return useCallback(
+    (input: StudioPreviewInput) => previewStudioSelection(projectId, input),
+    [projectId]
+  );
+}

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getProjectRepoPath } from '../../src/domain/project/repoPath';
+import { getProjectIdRepoPath } from '../../src/domain/project/repoPath';
 import { expect, test } from '../fixtures/test';
 import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestProject } from '../fixtures/api-helpers';
 
@@ -16,7 +16,7 @@ test('author revision preserves State and history, renders uploaded content, and
     await assetPage.close();
     const owned = (await (await request.get(`${API_BASE}/projects/${projectId}`)).json()).data;
     expect(owned.project_id).toBe(projectId);
-    const projectPath = getProjectRepoPath({ id: owned.project_id, name: owned.name });
+    const projectPath = getProjectIdRepoPath(owned.project_id);
     const first = await createTestCommitFromTrees(request, projectId, [{ key: 'services', slots: {}, children: [{ key: 'web', slots: { image: 'nginx:1.28-alpine', ports: ['127.0.0.1:8080:80'], restart: 'unless-stopped' }, children: [] }, { key: 'cache', slots: { image: 'redis:7-alpine', restart: 'unless-stopped' }, children: [] }] }]);
     const before = (await (await request.get(`${API_BASE}/commits/${encodeURIComponent(first)}/export?project_id=${projectId}&format=json`)).json()).data.content;
     await page.setViewportSize({ width: 1480, height: 900 });

@@ -19,7 +19,9 @@ export async function createTestProject(
 ): Promise<{ projectId: string; name: string }> {
   const projectName = name || `E2E Test ${Date.now()}`;
   const response = await request.post(`${API_BASE}/projects`, {
-    data: { name: projectName },
+    // Hosted qualification can select a provisioned personal namespace without
+    // bypassing its real account/capacity policy. Standalone behavior is unchanged.
+    data: { name: projectName, ...(process.env.T3X_E2E_NAMESPACE ? { namespace: process.env.T3X_E2E_NAMESPACE } : {}) },
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create project: ${data.error?.message}`);

@@ -24,7 +24,7 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
     await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Definition preview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sample preview' })).toBeVisible();
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await page.getByRole('button', { name: 'Review & apply', exact: true }).click();
     await page.getByRole('dialog', { name: 'Apply exact definition' }).getByRole('button', { name: 'Confirm & apply' }).click();

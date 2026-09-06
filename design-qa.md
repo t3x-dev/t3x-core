@@ -20,8 +20,20 @@ Critique and iteration: removed large empty fallback icons, shortened capability
 
 Wave 2 result: passed for implemented release reading and visual fallback. Editorial imagery/curation is a content gap, not a claim of an existing collection.
 
-## Remaining wave gates
+## Wave 3: Studio samples
 
-Studio sample preview and Cloud compatibility are still in progress. No overall completion is claimed.
+Reference `05-studio.png` and actual Studio screenshot were compared together before and after refinement. Evidence: `docs/plans/state-schema-delivery-2026-09-05/verification/studio-samples/`. Replaced excessive recursive rows with declared repeated-node tables; preserved names, actual fields, missing values, local edit provenance and true native check status. Source/code/structure and existing apply controls retain their jobs.
 
-Overall result: blocked (remaining wave implementation and qualification pending).
+Real author sample, native missing-field failure, browser repair, mobile layout, late response invalidation and no-AI Workspace commit/export are verified. No preview data is adopted implicitly.
+
+Wave 3 result: passed.
+
+## Wave 4: Cloud compatibility
+
+Actual local Cloud API/Web/PostgreSQL, Cloud migrations and Free account capacity policy: three browser journeys passed. Full Cloud API 666 and Web 1685 tests passed. Protected overlays, package integrity and database/recovery contracts verified. Evidence and environment limits: `docs/plans/state-schema-delivery-2026-09-05/verification/cloud-compatibility/README.md`.
+
+Final screenshot critique removed misleading empty-container text and corrected cross-namespace authoring qualification. Development-only React/Next warning is recorded. Hosted OAuth and production deployment are outside this qualification.
+
+Wave 4 result: passed for local compatibility.
+
+Overall result: passed for the four requested delivery waves. Editorial content, original epic stretch criteria and commercial Team entitlement approval are not silently marked complete.

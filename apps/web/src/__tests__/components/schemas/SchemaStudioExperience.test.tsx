@@ -32,6 +32,7 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
 beforeEach(() => {
   mocks.apply.mockReset();
   mocks.data = {
+    samples: [],
     schema: { nodes: {} },
     schemaHash: 'definition-hash',
     reviewHash: 'review',

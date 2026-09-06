@@ -315,3 +315,50 @@ it('rejects a published schema with an incorrect or missing published-schema dig
     expect((await request('preview', { candidateIds: [id] })).status).toBe(409);
   }
 });
+
+it('validates exact author and local samples against the selection without writing the Workspace', async () => {
+  const response = await request('candidates', {
+    canonicalName: 't3x/care-checklist',
+    version: '1.0.0',
+  });
+  expect(response.status).toBe(200);
+  const id = (await response.json()).data.id;
+  const before = await findWorkspaceDraft(db, target, 'work');
+  const input = { candidateIds: [id], workspaceId: 'work' };
+  const author = (await (await request('preview', input)).json()).data;
+  expect(author.samples).toHaveLength(1);
+  expect(author.samples[0]).toMatchObject({
+    ready: true,
+    valid: true,
+    source: { canonicalName: 't3x/care-checklist', version: '1.0.0' },
+  });
+  expect(author.samples[0].source.hash).toBe(author.sources[0].hash);
+  expect(author.samples[0].value.checklist.title).toBe('Daily dog care');
+  const broken = { checklist: { title: 'Local routine' }, items: { water: { done: false } } };
+  const local = (await (await request('preview', { ...input, sample: broken })).json()).data;
+  expect(local.localSample.ready).toBe(false);
+  expect(
+    local.localSample.issues.some((issue: { path: string }) => issue.path.includes('task'))
+  ).toBe(true);
+  expect(local.reviewHash).toBe(author.reviewHash);
+  expect(local.samples).toEqual(author.samples);
+  const fixed = (
+    await (
+      await request('preview', {
+        ...input,
+        sample: { ...broken, items: { water: { task: 'Refresh water', done: false } } },
+      })
+    ).json()
+  ).data;
+  expect(fixed.localSample.ready).toBe(true);
+  const combined = (await (await request('preview', { candidateIds: [id, coreId] })).json()).data;
+  expect(combined.samples[0].ready).toBe(false);
+  expect(combined.selectionHash).not.toBe(author.selectionHash);
+  expect(await findWorkspaceDraft(db, target, 'work')).toEqual(before);
+  expect(
+    (await request('preview', { ...input, sample: { content: 'x'.repeat(65537) } })).status
+  ).toBe(400);
+  let nested: Record<string, unknown> = {};
+  for (let i = 0; i < 30; i++) nested = { child: nested };
+  expect((await request('preview', { ...input, sample: nested })).status).toBe(400);
+});
