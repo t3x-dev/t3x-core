@@ -495,11 +495,33 @@ function setupHookMocks() {
 
 function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION) {
   return render(
-    <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={validation} />
+    <ProjectStateTab
+      initialView="structure"
+      projectId="proj_test"
+      projectName="Test Project"
+      validation={validation}
+    />
   );
 }
 
 describe('ProjectStateTab', () => {
+  it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
+    navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+    render(<ProjectStateTab projectId="fresh-project" projectName="Fresh" />);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
+    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
+      expect.stringContaining(`commit=${encodeURIComponent(PRD_COMMIT.hash)}`),
+      { scroll: false }
+    );
+    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
+      expect.stringContaining('view=code'),
+      { scroll: false }
+    );
+  });
+
   it('honors an explicit historical commit instead of the registered branch HEAD', async () => {
     navigationMocks.search = `commit=${encodeURIComponent(PARENT_COMMIT.hash)}`;
     hookMocks.branchHeads = { main: PRD_COMMIT.hash };
@@ -768,7 +790,12 @@ describe('ProjectStateTab', () => {
     hookMocks.branchHeads = { main: newerHead.hash };
     hookMocks.loadCommits.mockResolvedValue([newerHead, PRD_COMMIT]);
     view.rerender(
-      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+      <ProjectStateTab
+        initialView="structure"
+        projectId="proj_test"
+        projectName="Test Project"
+        validation={VALIDATION}
+      />
     );
 
     const update = await screen.findByRole('status');
@@ -1194,9 +1221,12 @@ describe('ProjectStateTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Snapshot/ }));
 
-    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith('/t3x-dev/test-project', {
-      scroll: false,
-    });
+    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
+      '/t3x-dev/test-project?view=structure',
+      {
+        scroll: false,
+      }
+    );
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -1447,7 +1477,12 @@ describe('ProjectStateTab', () => {
       { scroll: false }
     );
     view.rerender(
-      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+      <ProjectStateTab
+        initialView="structure"
+        projectId="proj_test"
+        projectName="Test Project"
+        validation={VALIDATION}
+      />
     );
 
     await waitFor(() => {
@@ -1472,7 +1507,12 @@ describe('ProjectStateTab', () => {
       target: { value: 'feature/prd-audience' },
     });
     view.rerender(
-      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+      <ProjectStateTab
+        initialView="structure"
+        projectId="proj_test"
+        projectName="Test Project"
+        validation={VALIDATION}
+      />
     );
 
     await waitFor(() => {
