@@ -25,6 +25,6 @@ test('shared project shell keeps navigation separate from long project names', a
     }
     await page.goto(`/project/${projectId}?tab=outputs`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('navigation', { name: 'Project views' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'No committed Leaves yet' })).toBeVisible();
+    await expect(page.getByText('No legacy Leaves saved.', { exact: true })).toBeVisible();
   } finally { await cleanupProject(request, projectId); }
 });
