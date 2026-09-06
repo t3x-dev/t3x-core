@@ -20,8 +20,16 @@ Critique and iteration: removed large empty fallback icons, shortened capability
 
 Wave 2 result: passed for implemented release reading and visual fallback. Editorial imagery/curation is a content gap, not a claim of an existing collection.
 
+## Wave 3: Studio samples
+
+Reference `05-studio.png` and actual Studio screenshot were compared together before and after refinement. Evidence: `docs/plans/state-schema-delivery-2026-09-05/verification/studio-samples/`. Replaced excessive recursive rows with declared repeated-node tables; preserved names, actual fields, missing values, local edit provenance and true native check status. Source/code/structure and existing apply controls retain their jobs.
+
+Real author sample, native missing-field failure, browser repair, mobile layout, late response invalidation and no-AI Workspace commit/export are verified. No preview data is adopted implicitly.
+
+Wave 3 result: passed.
+
 ## Remaining wave gates
 
-Studio sample preview and Cloud compatibility are still in progress. No overall completion is claimed.
+Cloud compatibility remains in progress. No overall completion is claimed.
 
 Overall result: blocked (remaining wave implementation and qualification pending).

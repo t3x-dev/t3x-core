@@ -1,4 +1,8 @@
-import type { StudioPreviewInput } from '@t3x-dev/api-client';
+import {
+  type StudioPreviewInput,
+  type StudioSample,
+  StudioSampleValueSchema,
+} from '@t3x-dev/api-client';
 import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
 import {
   builtInYSchemaCores,
@@ -7,6 +11,8 @@ import {
   diffYSchemas,
   normalizeYSchemaObject,
   sha256CompositionValue,
+  validateTree,
+  type YSchema,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { assertProjectAccess } from './project-access';
@@ -22,6 +28,54 @@ export class StudioError extends Error {
   }
 }
 const licenses = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0']);
+function samplePreview(
+  value: unknown,
+  schema: YSchema,
+  compiled: boolean,
+  id: string,
+  source: StudioSample['source']
+): StudioSample {
+  const parsed = StudioSampleValueSchema.safeParse(value);
+  if (!parsed.success)
+    return {
+      id,
+      source,
+      value: null,
+      valid: false,
+      ready: false,
+      issues: [
+        {
+          code: 'INVALID_SAMPLE',
+          path: '$',
+          message: 'Author sample exceeds the supported JSON preview limits.',
+        },
+      ],
+    };
+  const result = validateTree({
+    schema,
+    tree: parsed.data as Parameters<typeof validateTree>[0]['tree'],
+  });
+  return {
+    id,
+    source,
+    value: parsed.data,
+    valid: compiled && result.valid,
+    ready: compiled && result.valid && result.ready,
+    issues: [
+      ...result.errors,
+      ...result.gaps,
+      ...(!compiled
+        ? [
+            {
+              code: 'INVALID_SELECTION',
+              path: '$',
+              message: 'Resolve the selected definition before validating a sample.',
+            },
+          ]
+        : []),
+    ].map(({ code, path, message }) => ({ code, path, message })),
+  };
+}
 export async function compileStudioSelection(
   c: Context,
   db: AnyDB,
@@ -47,6 +101,12 @@ export async function compileStudioSelection(
     hash: row.artifactHash,
     artifactVersionId: row.artifactVersionId,
   }));
+  const samplesFor = (schema: YSchema, valid: boolean) =>
+    entries.flatMap(({ row, view }, index) =>
+      Object.hasOwn(view.manifest, 'starter')
+        ? [samplePreview(view.manifest.starter, schema, valid, row.id, sources[index]!)]
+        : []
+    );
   const selectionHash = await sha256CompositionValue({
     apiVersion: 't3x.dev/studio-selection/v1',
     projectId,
@@ -99,6 +159,7 @@ export async function compileStudioSelection(
       );
     return {
       schema,
+      samples: samplesFor(schema, true),
       schemaHash,
       selectionHash,
       sources,
@@ -125,6 +186,7 @@ export async function compileStudioSelection(
     modules,
   });
   return {
+    samples: samplesFor(compiled.schema, compiled.report.valid),
     schema: compiled.schema,
     schemaHash: compiled.compiledSchemaHash,
     selectionHash,
@@ -219,6 +281,10 @@ export async function previewStudio(
   });
   return {
     ...selected,
+    localSample:
+      input.sample === undefined
+        ? null
+        : samplePreview(input.sample, selected.schema, selected.report.valid, 'local', null),
     schema: selected.schema as unknown as Record<string, unknown>,
     renderPlan: selected.renderPlan as unknown as Record<string, unknown>[],
     origins: selected.origins as unknown as Record<string, unknown>,

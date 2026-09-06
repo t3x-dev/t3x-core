@@ -38,11 +38,39 @@ const ids = z
   .min(1)
   .max(32)
   .refine((values) => new Set(values).size === values.length, 'Duplicate candidates');
+/** Bounded JSON only: samples are preview input, never effects or execution requests. */
+export const StudioSampleValueSchema = z
+  .record(z.string(), z.unknown())
+  .superRefine((value, ctx) => {
+    const pending: Array<[unknown, number]> = [[value, 0]];
+    let count = 0;
+    while (pending.length) {
+      const [item, depth] = pending.pop()!;
+      if (++count > 10000 || depth > 24) {
+        ctx.addIssue({ code: 'custom', message: 'Sample exceeds the preview structure limit.' });
+        return;
+      }
+      if (item && typeof item === 'object')
+        for (const child of Object.values(item)) pending.push([child, depth + 1]);
+    }
+    if (new TextEncoder().encode(JSON.stringify(value)).length > 65536)
+      ctx.addIssue({ code: 'custom', message: 'Sample must be at most 64 KiB.' });
+  });
+export const StudioSampleSchema = z.object({
+  id: z.string(),
+  source: StudioSourceSchema.nullable(),
+  value: z.record(z.string(), z.unknown()).nullable(),
+  valid: z.boolean(),
+  ready: z.boolean(),
+  issues: z.array(z.object({ code: z.string(), path: z.string(), message: z.string() })),
+});
+export type StudioSample = z.infer<typeof StudioSampleSchema>;
 export const StudioPreviewInputSchema = z
   .object({
     candidateIds: ids,
     workspaceId: z.string().min(1).optional(),
     compareToCandidateIds: ids.optional(),
+    sample: StudioSampleValueSchema.optional(),
   })
   .strict();
 export const StudioApplyInputSchema = z
@@ -59,6 +87,8 @@ const change = z.object({
   summary: z.string(),
 });
 export const StudioPreviewSchema = z.object({
+  samples: z.array(StudioSampleSchema).default([]),
+  localSample: StudioSampleSchema.nullable().default(null),
   selectionHash: digest,
   schemaHash: digest,
   reviewHash: digest,

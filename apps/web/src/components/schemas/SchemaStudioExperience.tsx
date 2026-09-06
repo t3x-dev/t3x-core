@@ -28,7 +28,8 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
-import { StudioChanges, StudioDefinitionPreview } from './StudioDefinitionPreview';
+import { StudioChanges } from './StudioDefinitionPreview';
+import { StudioSamplePreview } from './StudioSamplePreview';
 
 const selectClass =
   'mt-2 w-full min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2 text-sm';
@@ -346,7 +347,13 @@ export function SchemaStudioExperience({
             ) : null}
             {data ? (
               tab === 'preview' ? (
-                <StudioDefinitionPreview preview={data} xray={xray} />
+                <StudioSamplePreview
+                  key={`${data.selectionHash}:${data.schemaHash}`}
+                  projectId={projectId}
+                  candidateIds={selection}
+                  preview={data}
+                  xray={xray}
+                />
               ) : tab === 'structure' ? (
                 <StateValueReader value={data.schema} />
               ) : (
