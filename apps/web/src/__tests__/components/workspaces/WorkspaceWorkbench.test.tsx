@@ -548,12 +548,28 @@ afterEach(() => {
 });
 
 function activateTab(name: string | RegExp) {
+  if (!screen.queryByRole('tab', { name }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
   const tab = screen.getByRole('tab', { name });
   fireEvent.pointerDown(tab, { button: 0, ctrlKey: false });
   fireEvent.click(tab);
 }
 
 describe('WorkspaceWorkbench', () => {
+  it('returns from Compose to the last review step', () => {
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    expect(screen.queryByRole('tab', { name: /Validation/ })).toBeNull();
+    activateTab('Review');
+    activateTab(/Validation/);
+    activateTab('Compose');
+    expect(screen.queryByRole('tab', { name: /Validation/ })).toBeNull();
+    activateTab('Review');
+    expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+  });
+
   it('hands governed proposals to Validation and Changes without direct Commit', async () => {
     const view = governedProposalView();
     proposalGenerationMocks.generate.mockResolvedValue({
@@ -596,7 +612,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('button', { name: 'Draft 1' })).not.toBeInTheDocument();
     expect(screen.queryByRole('searchbox', { name: 'Search workspaces' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Sort workspaces')).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -677,7 +693,8 @@ describe('WorkspaceWorkbench', () => {
   it('uses Source, Proposal, Validation, Preview, and Commit as the workspace workflow tabs', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    activateTab('Review');
     expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
@@ -803,7 +820,8 @@ describe('WorkspaceWorkbench', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     let detail = screen.getByRole('region', { name: 'Workspace detail' });
-    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    activateTab('Review');
     expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
@@ -817,7 +835,7 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByText('PRD audience handoff')).toBeInTheDocument();
     expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
 
-    activateTab('Source');
+    activateTab('Compose');
     detail = screen.getByRole('region', { name: 'Workspace detail' });
 
     expect(
@@ -1281,7 +1299,7 @@ describe('WorkspaceWorkbench', () => {
     ];
 
     rerender(<WorkspaceWorkbench candidates={refreshedCandidates} projectId="proj_1" />);
-    activateTab(/Source/);
+    activateTab(/Compose/);
 
     expect(screen.getAllByText('Fresh upload.txt')).toHaveLength(2);
   });
@@ -1406,7 +1424,7 @@ describe('WorkspaceWorkbench', () => {
       'audience: Product and engineering reviewers'
     );
 
-    activateTab(/Source/);
+    activateTab(/Compose/);
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
       'Product and engineering reviewers'
@@ -1801,7 +1819,9 @@ describe('WorkspaceWorkbench', () => {
     ).not.toBeInTheDocument();
     expect(countFetchCalls(fetchMock.mock.calls, conversationUrl)).toBeGreaterThanOrEqual(1);
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Review', exact: true })).toBeInTheDocument()
+    );
     activateTab(/Proposal/);
     expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
   });
@@ -2106,7 +2126,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue on feature/prd-audience' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true')
     );
     const [, saveInit] = findFetchCall(fetchMock.mock.calls, workspaceUrl);
     expect(JSON.parse(String(saveInit?.body))).toMatchObject({
@@ -2224,7 +2244,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start on new branch' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true')
     );
     const [, branchInit] = findFetchCall(fetchMock.mock.calls, branchesUrl);
     expect(JSON.parse(String(branchInit?.body))).toMatchObject({
@@ -2304,7 +2324,7 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/Commit/);
     fireEvent.click(screen.getByRole('button', { name: 'Continue on feature/prd-audience' }));
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true')
     );
 
     const refreshedCandidate: WorkspaceCandidate = {

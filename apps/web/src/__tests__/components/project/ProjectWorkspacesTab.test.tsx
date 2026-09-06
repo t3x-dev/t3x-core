@@ -79,6 +79,7 @@ describe('ProjectWorkspacesTab', () => {
 
     expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument();
   });
 
@@ -92,6 +93,7 @@ describe('ProjectWorkspacesTab', () => {
     expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
 
     expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
@@ -139,6 +141,7 @@ describe('ProjectWorkspacesTab', () => {
     });
     expect(continuedWorkspace?.lastCommitHash).toBeUndefined();
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
 
     expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
@@ -180,6 +183,7 @@ describe('ProjectWorkspacesTab', () => {
       )
     ).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
@@ -294,6 +298,7 @@ describe('ProjectWorkspacesTab', () => {
       expect(screen.getByRole('heading', { name: 'Legacy backend draft' })).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
@@ -312,6 +317,7 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(await screen.findByRole('tab', { name: /Commit/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'View in State' }));
 

@@ -252,6 +252,7 @@ async function openCommittedWorkspace(page: Page, fixture: CommittedWorkspaceFix
   await expect(page.getByRole('heading', { exact: true, name: 'T3X Workspace' })).toBeVisible({
     timeout: 15_000,
   });
+  await page.getByRole('tab', { exact: true, name: 'Review' }).click();
   await page.getByRole('tab', { exact: true, name: 'Commit' }).click();
   await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toBeVisible();
 }
@@ -325,7 +326,7 @@ test('post-commit: View in State focuses the commit, then Continue starts a main
     expect(workspaceSaveResponse.status()).toBe(200);
     expect(conversationCreateResponse.status()).toBe(201);
 
-    await expect(page.getByRole('tab', { exact: true, name: 'Source' })).toHaveAttribute(
+    await expect(page.getByRole('tab', { exact: true, name: 'Compose' })).toHaveAttribute(
       'aria-selected',
       'true'
     );
@@ -404,7 +405,7 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     const nextWorkspaceId = workspaceSavePayload.data.workspace.id as string;
     const nextFixture = { ...fixture, workspaceId: nextWorkspaceId };
 
-    await expect(page.getByRole('tab', { exact: true, name: 'Source' })).toHaveAttribute(
+    await expect(page.getByRole('tab', { exact: true, name: 'Compose' })).toHaveAttribute(
       'aria-selected',
       'true'
     );

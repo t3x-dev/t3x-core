@@ -30,7 +30,7 @@ describe('project foundation previews', () => {
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders the Schemas preview for any project id during A0', () => {

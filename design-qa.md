@@ -59,3 +59,18 @@ exit. The initial new test incorrectly looked for a banner landmark inside the
 app's main landmark; its title locator was corrected before the passing run.
 Captures: plan verification/project-shell/{overview,mobile}.png.
 Workspace internal Review/Compose migration is not included in this slice.
+
+## Workspace Compose / Review navigation
+
+The newer design's two top-level modes now group existing workflow surfaces.
+Review restores its last mounted step; existing generation, validation, preview
+and commit gates are preserved. This does not claim the three-column Review or
+new Compose controller is ported. Actual seeded Compose and populated Validation
+captures inspected before commit (verification/workspace-modes).
+
+Final full WebUI suite: 251 files / 1590 tests passed. Final production multi-source
+proposal-to-audited-commit browser journey: 1 passed (5.9s); harness then failed PG
+cleanup with ENOTEMPTY. Earlier runs found obsolete direct Commit navigation after
+reload and a stale build after switching parent branches; final run rebuilt the
+branch and used Review explicitly. Cross-page legacy navigation tests were updated
+and their State/header portions pushed back to the owning parent PRs.
