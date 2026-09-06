@@ -18,15 +18,19 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
-  { id: 'outputs', label: 'Outputs' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },
 ];
 
-const PROJECT_TAB_BY_ID = new Map(PROJECT_TABS.map((tab) => [tab.id, tab]));
-const PROJECT_TAB_SEGMENTS = new Set(PROJECT_TABS.map((tab) => tab.segment ?? tab.id));
+// Retained for bookmarks and historical artifacts, not primary navigation.
+const ROUTABLE_PROJECT_TABS: ProjectTabDefinition[] = [
+  ...PROJECT_TABS,
+  { id: 'outputs', label: 'Legacy outputs' },
+];
+const PROJECT_TAB_BY_ID = new Map(ROUTABLE_PROJECT_TABS.map((tab) => [tab.id, tab]));
+const PROJECT_TAB_SEGMENTS = new Set(ROUTABLE_PROJECT_TABS.map((tab) => tab.segment ?? tab.id));
 const PROJECT_TAB_ID_BY_SEGMENT = new Map<string, ProjectTabId>(
-  PROJECT_TABS.map((tab) => [tab.segment ?? tab.id, tab.id])
+  ROUTABLE_PROJECT_TABS.map((tab) => [tab.segment ?? tab.id, tab.id])
 );
 
 export function getProjectTabSegment(tabId: ProjectTabId): string {

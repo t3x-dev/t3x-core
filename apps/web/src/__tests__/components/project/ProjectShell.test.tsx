@@ -34,10 +34,7 @@ describe('ProjectShell', () => {
       );
       expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-10');
       expect(screen.getByText('active')).toHaveClass('text-xs');
-      expect(screen.getByRole('link', { name: 'Outputs' })).toHaveAttribute(
-        'data-output-count',
-        '1'
-      );
+      expect(screen.queryByRole('link', { name: 'Outputs' })).not.toBeInTheDocument();
     }
   });
 });
