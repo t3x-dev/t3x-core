@@ -18,11 +18,13 @@ export function AddToStudio({
   title,
   defaultProjectId,
   defaultWorkspaceId,
+  onAdded,
 }: {
   source: AddStudioCandidate;
   title: string;
   defaultProjectId: string;
   defaultWorkspaceId?: string;
+  onAdded?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -43,7 +45,10 @@ export function AddToStudio({
               source={source}
               defaultProjectId={defaultProjectId}
               defaultWorkspaceId={defaultWorkspaceId}
-              onDone={() => setOpen(false)}
+              onDone={() => {
+                setOpen(false);
+                onAdded?.();
+              }}
             />
           ) : null}
         </SheetContent>

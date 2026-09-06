@@ -11,6 +11,7 @@ import {
   type YSchemaModuleArtifactV2,
   type YSchemaModuleManifest,
 } from '@t3x-dev/yschema';
+import { schemaEcosystemStarters } from './schema-ecosystem-starters';
 
 export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
   const artifacts: Array<YSchemaCoreArtifact | YSchemaModuleManifest> = [
@@ -38,6 +39,27 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       created_by: 't3x:built-in-seed',
       provides: artifact.provides,
       requires: artifact.apiVersion === 't3x.dev/yschema-module/v1' ? artifact.requires : [],
+    });
+  }
+  for (const artifact of schemaEcosystemStarters) {
+    await upsertYSchemaArtifactVersion(db, {
+      artifact_id: artifactId(artifact.canonicalName),
+      artifact_version_id: artifactVersionId(artifact.canonicalName, artifact.version),
+      canonical_name: artifact.canonicalName,
+      family: 'general',
+      kind: 'module',
+      display_name: artifact.title,
+      description: artifact.description,
+      tags: artifact.tags,
+      visibility: 'official',
+      version: artifact.version,
+      status: artifact.status,
+      manifest_json: artifact as unknown as Record<string, unknown>,
+      artifact_hash: await sha256CompositionValue(artifact),
+      path_count: countNodePaths(artifact.contribution.nodes ?? {}),
+      created_by: 't3x:built-in-seed',
+      provides: artifact.provides.map((item) => item.capability),
+      requires: [],
     });
   }
 }

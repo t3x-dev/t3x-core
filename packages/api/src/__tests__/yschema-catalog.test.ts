@@ -270,3 +270,31 @@ it('filters exact canonical names without broadening private release visibility'
   expect(hidden.status).toBe(200);
   expect((await hidden.json()).data.items).toEqual([]);
 });
+
+it('publishes original cross-domain starters with tags, license and reproducible manifest hashes', async () => {
+  const { schemaEcosystemStarters } = await import('../lib/schema-ecosystem-starters');
+  const { sha256CompositionValue } = await import('@t3x-dev/yschema');
+  for (const module of schemaEcosystemStarters) {
+    const response = await app.request(
+      `/v1/yschema/catalog?canonical_name=${module.canonicalName}`
+    );
+    expect(response.status).toBe(200);
+    const data = SchemaCatalogPageSchema.parse((await response.json()).data);
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0]).toMatchObject({
+      identity: { displayName: module.title, tags: module.tags, family: 'general' },
+      release: { version: '1.0.0', hash: await sha256CompositionValue(module) },
+      validation: 'not-run',
+      license: 'Apache-2.0',
+    });
+    expect(JSON.stringify(data)).not.toContain(module.readme);
+  }
+  const response = await app.request(
+    '/v1/yschema/catalog?collection=infrastructure&ecosystem=docker-compose'
+  );
+  expect(
+    (await response.json()).data.items.map(
+      (item: { identity: { canonicalName: string } }) => item.identity.canonicalName
+    )
+  ).toContain('t3x/compose-services');
+});
