@@ -89,3 +89,8 @@ and their State/header portions pushed back to the owning parent PRs.
 Structure and Code expose a collapsed-by-default author README. Opening it loads the exact selected commit through the existing Overview hook. Content is bounded to 40vh and scrollable, preserving the node/code workspace. The shared Markdown renderer retains inert HTML and bundled-image-only handling. Editing remains separate work under #1512.
 
 Validation: 33 focused tests and all 1,590 WebUI tests passed. Final Chromium verified both views, exact historical revision changes, empty README revisions, unsafe content handling and mobile width; exit 0 including PostgreSQL cleanup. Inspected settled Structure and mobile screenshots before commit. Full check passes with the two existing native-image warnings, one now in the shared renderer. Screenshots are under `verification/shared-readme/`; this independent branch predates the navigation-only PR #1536.
+## Outputs navigation retirement — 2026-09-06
+
+Primary project navigation and its output count are removed. Legacy `/outputs` and `tab=outputs` parsing remains. This is the navigation slice of #1506; creation controls and historical read-only conversion remain pending.
+
+Four component tests passed. Chromium verified navigation geometry at 1480/1200/1000/390 widths and the legacy empty Outputs route; shutdown exited 0. Inspected desktop screenshot before commit (`verification/outputs-navigation/desktop.png`).

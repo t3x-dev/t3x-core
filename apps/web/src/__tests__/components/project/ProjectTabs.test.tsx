@@ -15,11 +15,11 @@ describe('ProjectTabs', () => {
   it('renders stable route links and marks the active project view', () => {
     expect(typeof ProjectTabs).toBe('function');
 
-    render(<ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />);
+    render(<ProjectTabs activeTab="state" repoPath="/t3x-dev/test-project" />);
 
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
     expect(projectNavigation).toHaveClass('min-h-10', 'items-center');
-    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveAttribute('data-output-count', '1');
+    expect(screen.queryByRole('link', { name: 'Outputs' })).not.toBeInTheDocument();
 
     for (const tab of PROJECT_TABS) {
       const href =
@@ -38,13 +38,9 @@ describe('ProjectTabs', () => {
   });
 
   it('keeps the compact navigation geometry when the active tab changes', () => {
-    const view = render(
-      <ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />
-    );
+    const view = render(<ProjectTabs activeTab="state" repoPath="/t3x-dev/test-project" />);
 
-    view.rerender(
-      <ProjectTabs activeTab="schemas" outputCount={1} repoPath="/t3x-dev/test-project" />
-    );
+    view.rerender(<ProjectTabs activeTab="schemas" repoPath="/t3x-dev/test-project" />);
 
     expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-10');
     for (const tab of PROJECT_TABS) {
@@ -59,7 +55,6 @@ describe('ProjectTabs', () => {
       'schemas',
       'workspaces',
       'reviews',
-      'outputs',
       'community',
       'settings',
     ]);
@@ -69,5 +64,8 @@ describe('ProjectTabs', () => {
     expect(isProjectTabSegment('reviews')).toBe(false);
     expect(parseProjectTab('pull-requests')).toBe('reviews');
     expect(parseProjectTab('reviews')).toBe('state');
+    expect(parseProjectTab('outputs')).toBe('outputs');
+    expect(isProjectTabSegment('outputs')).toBe(true);
+    expect(getProjectTabSegment('outputs')).toBe('outputs');
   });
 });

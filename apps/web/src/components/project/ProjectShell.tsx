@@ -26,7 +26,6 @@ export interface ProjectShellProps {
 
 export function ProjectShell({ activeTab, children, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
-  const outputCount = Math.max(0, project.outputsCount ?? 0);
   const repoPath = getProjectRepoPath(project);
 
   return (
@@ -80,7 +79,7 @@ export function ProjectShell({ activeTab, children, project }: ProjectShellProps
             {status}
           </span>
         </div>
-        <ProjectTabs activeTab={activeTab} outputCount={outputCount} repoPath={repoPath} />
+        <ProjectTabs activeTab={activeTab} repoPath={repoPath} />
       </header>
       <main
         className={
