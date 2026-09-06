@@ -24,6 +24,7 @@ import { assertProjectAccess } from '../lib/project-access';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
 import { previewStudio, StudioError } from '../lib/schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
+import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const params = z.object({ projectId: z.string().min(1) });
@@ -226,7 +227,12 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
     if (!draft?.workspace_state || draft.revision !== input.ifRevision)
       throw new StudioError('CONFLICT', 'The target Workspace changed.');
     const compositionId = `studio:${preview.selectionHash}`;
+    const previousBindings = Array.isArray(draft.workspace_state.schemaBindings)
+      ? draft.workspace_state.schemaBindings
+      : [];
+    const previousRootKey = schemaRootKeyFromBinding(previousBindings[0]);
     const binding = {
+      rootKey: /^[a-z][a-z0-9_]*$/.test(previousRootKey) ? previousRootKey : 'candidate',
       canonicalName: compositionId,
       schemaName:
         preview.sources.length === 1 ? preview.sources[0]!.canonicalName : 'Studio selection',

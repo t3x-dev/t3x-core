@@ -224,6 +224,7 @@ it('applies once with CAS, invalidates stale diagnostics and retains exact adopt
   const saved = (await findWorkspaceDraft(db, target, 'work'))!;
   expect(saved.workspace_state.schemaBindings[0]).toMatchObject({
     mode: 'pinned',
+    rootKey: 'candidate',
     schemaHash: preview.schemaHash,
   });
   expect(saved.workspace_state.schemaReview.verdict).toBe('needs_review');
