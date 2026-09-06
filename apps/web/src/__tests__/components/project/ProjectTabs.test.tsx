@@ -18,8 +18,8 @@ describe('ProjectTabs', () => {
     render(<ProjectTabs activeTab="state" outputCount={1} repoPath="/t3x-dev/test-project" />);
 
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation).toHaveClass('min-h-8', 'items-stretch');
-    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs1');
+    expect(projectNavigation).toHaveClass('min-h-10', 'items-center');
+    expect(screen.getByRole('link', { name: 'Outputs' })).toHaveAttribute('data-output-count', '1');
 
     for (const tab of PROJECT_TABS) {
       const href =
@@ -31,7 +31,7 @@ describe('ProjectTabs', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'State' })).toHaveClass(
-      'border-[var(--accent-commit)]'
+      'bg-[var(--accent-commit-soft)]'
     );
     expect(screen.getByRole('link', { name: 'Workspaces' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByRole('link', { name: 'YSchema' })).not.toBeInTheDocument();
@@ -46,9 +46,9 @@ describe('ProjectTabs', () => {
       <ProjectTabs activeTab="schemas" outputCount={1} repoPath="/t3x-dev/test-project" />
     );
 
-    expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-8');
+    expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-10');
     for (const tab of PROJECT_TABS) {
-      expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-xs');
+      expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-[14px]');
     }
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
   });

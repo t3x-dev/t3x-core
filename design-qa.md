@@ -45,3 +45,17 @@ tests plus both production browser journeys (2 passed, clean exit). Explicit
 legacy Render links override a saved Code preference; commit pins survive view
 switches. Desktop capture re-inspected with no layout regression. Author editing
 and shared README controls remain outside this navigation slice.
+
+## Newer shared shell reconciliation (#1508)
+
+Adopted the source branch's T3X header, project identity and selected-tab design.
+Changed absolute centering to normal responsive flow. Inspected actual desktop
+Overview plus long-name 1200px and 390px captures; project identity and navigation
+remain separate. Browser geometry checks cover 1480/1200/1000/390px and Workspace
+routing. Eight focused shell/token tests passed. All three production browser
+journeys passed (14.4s); the harness then failed removing a PostgreSQL temporary
+`pg_stat` directory (ENOTEMPTY). This is a teardown failure, not a clean test-run
+exit. The initial new test incorrectly looked for a banner landmark inside the
+app's main landmark; its title locator was corrected before the passing run.
+Captures: plan verification/project-shell/{overview,mobile}.png.
+Workspace internal Review/Compose migration is not included in this slice.

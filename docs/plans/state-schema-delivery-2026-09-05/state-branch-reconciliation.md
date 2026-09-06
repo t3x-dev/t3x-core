@@ -55,3 +55,25 @@ is synthesized by this change.
 ![Existing Render](verification/state-code/state-render-desktop.png)
 ![Code](verification/state-code/state-code-desktop.png)
 ![Mobile Raw](verification/state-code/state-code-mobile.png)
+
+## Follow-up: adopt the newer project shell (2026-09-06)
+
+The user selected the source branch's newer visual design as the baseline after
+comparing an intern's Workspace Review capture with the Overview implementation.
+This supersedes the first-slice decision to retain the old ProjectShell/ProjectTabs
+appearance; it does not supersede the current application/Transition contracts.
+
+Adopted: T3X wordmark, compact owner/project identity, single-row desktop navigation,
+text tabs with a semantic-blue selected background, and shared shell typography.
+Adapted: navigation stays in normal layout flow rather than absolute centering;
+medium/mobile widths use a second, horizontally scrollable navigation row. Long
+project names truncate with their full title available and cannot overlap tabs.
+Preserved: current route identifiers, link accessible names, selected-page state,
+Outputs compatibility routes and counts, and existing page contents.
+
+The Workspace Review/Compose implementation remains a separate integration slice:
+its new visual sections must consume current workflow projections and decision
+controls, not restore the older branch's API/storage write paths. In particular,
+global readiness and per-node review findings must name their scope before showing
+an all-passed banner. This shell PR does not claim to migrate the three-column
+Review surface or the source branch's chat controller.
