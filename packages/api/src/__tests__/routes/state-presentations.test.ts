@@ -5,6 +5,7 @@ import {
   ensureMainBranch,
   findProjectById,
   findStatePresentation,
+  getTransitionRefHead,
   insertProject,
   restoreProject,
 } from '@t3x-dev/storage';
@@ -169,6 +170,22 @@ it('denies foreign commit membership and viewers writing author content', async 
         })
       ).status
     ).toBe(403);
+    expect(
+      (
+        await (
+          await viewer.request(`/v1/projects/${projectId}/refs/main/presentation-authoring`)
+        ).json()
+      ).data.canEdit
+    ).toBe(false);
+    expect(
+      (
+        await viewer.request(`/v1/projects/${projectId}/refs/main/presentation-revisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedHead: second, presentation: input }),
+        })
+      ).status
+    ).toBe(403);
     expect((await app.request(path())).status).toBe(403);
   } finally {
     if (prior === undefined) delete process.env.AUTH_DISABLED;
@@ -224,4 +241,48 @@ it('allows a new author publication on a new commit without changing business co
     `/v1/commits/${next.commitDigest}/export?project_id=${projectId}&format=json`
   );
   expect(JSON.parse((await exported.json()).data.content)).toEqual({ service: 'app:v2' });
+});
+
+const revisionPath = () => `/v1/projects/${projectId}/refs/main/presentation-revisions`;
+it('creates an atomic author revision and rejects a stale editor without changing business state', async () => {
+  const before = await getTransitionRefHead(mockDB, { projectId, refName: 'main' });
+  const target = await app.request(`/v1/projects/${projectId}/refs/main/presentation-authoring`);
+  expect((await target.json()).data).toEqual({ head: before.head, canEdit: true });
+  const submit = () =>
+    app.request(revisionPath(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedHead: before.head,
+        presentation: {
+          description: 'Revised by author',
+          readme: '# My project',
+          tags: ['my-tag'],
+        },
+      }),
+    });
+  const replies = await Promise.all([submit(), submit()]);
+  expect(replies.map((r) => r.status).sort()).toEqual([200, 409]);
+  const result = (await replies.find((r) => r.status === 200)!.json()).data;
+  const after = await getTransitionRefHead(mockDB, { projectId, refName: 'main' });
+  expect(after.head).toBe(result.commitDigest);
+  expect(after.state).toEqual(before.state);
+  const saved = (await (await app.request(path(result.commitDigest))).json()).data;
+  expect(saved.presentation.document.description).toBe('Revised by author');
+  expect(saved.presentation.digest).toBe(result.presentationDigest);
+  expect((await findStatePresentation(mockDB, projectId, before.head!))!.document.description).toBe(
+    'Documentation update'
+  );
+  const invalid = await app.request(revisionPath(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      expectedHead: after.head,
+      presentation: { ...input, avatarPath: '../bad.png' },
+    }),
+  });
+  expect(invalid.status).toBe(400);
+  expect((await getTransitionRefHead(mockDB, { projectId, refName: 'main' })).head).toBe(
+    after.head
+  );
 });

@@ -1,6 +1,7 @@
 'use client';
 import { Box, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { StateAuthorEditor } from '@/components/project/StateAuthorEditor';
 import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
@@ -12,10 +13,14 @@ export function StateOverviewView({
   commitDigest,
   projectName,
   reader,
+  refName,
+  onAuthorRevision,
 }: {
   projectId: string;
   commitDigest: string;
   projectName: string;
+  refName?: string;
+  onAuthorRevision?: (digest: string) => void;
   reader?: (expanded: boolean, expand: () => void) => ReactNode;
 }) {
   const { data, error, loading, retry } = useStateOverview(projectId, commitDigest);
@@ -57,6 +62,29 @@ export function StateOverviewView({
           aria-label="Project introduction"
           className="min-w-0 p-5 lg:overflow-y-auto lg:p-6"
         >
+          {refName && onAuthorRevision ? (
+            <div className="mb-3 flex justify-end">
+              <StateAuthorEditor
+                key={`${projectId}:${refName}:${commitDigest}`}
+                projectId={projectId}
+                refName={refName}
+                commitDigest={commitDigest}
+                onSaved={onAuthorRevision}
+                initial={{
+                  description: author?.description ?? '',
+                  readme: author?.readme ?? '',
+                  tags: author?.tags ?? [],
+                  avatarPath: author?.avatarPath ?? undefined,
+                  resources: resources.map(({ path, mediaType, alt, base64 }) => ({
+                    path,
+                    mediaType,
+                    alt,
+                    base64,
+                  })),
+                }}
+              />
+            </div>
+          ) : null}
           <header className="mb-5 flex items-start gap-3">
             {avatar ? (
               <img

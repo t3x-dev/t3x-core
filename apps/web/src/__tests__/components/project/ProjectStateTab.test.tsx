@@ -557,6 +557,28 @@ describe('ProjectStateTab', () => {
     } as never);
   });
 
+  it('keeps the same pinned snapshot mounted when branch refresh returns a new map', async () => {
+    navigationMocks.search = `?commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    const view = renderStateTab();
+    expect(await screen.findByText(PRD_COMMIT.message)).toBeInTheDocument();
+    const calls = hookMocks.loadCommits.mock.calls.length;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    view.rerender(
+      <ProjectStateTab
+        initialView="structure"
+        projectId="proj_test"
+        projectName="Test Project"
+        validation={VALIDATION}
+      />
+    );
+    expect(screen.getByText(PRD_COMMIT.message)).toBeInTheDocument();
+    expect(hookMocks.loadCommits).toHaveBeenCalledTimes(calls);
+  });
+
   it('loads the branch HEAD and renders the structured state tree by default', async () => {
     renderStateTab();
 
