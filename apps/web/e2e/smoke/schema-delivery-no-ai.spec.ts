@@ -5,6 +5,7 @@ import { expect, test } from '../fixtures/test';
 
 test('no-AI definition adoption, native repair, reviewed decision and exact Commit export', async ({ page, request }, testInfo) => {
   test.setTimeout(120000);
+  page.setDefaultTimeout(10000);
   const { projectId } = await createTestProject(request, `No AI delivery ${randomUUID().slice(0, 8)}`);
   const workspaceId = 'care-delivery';
   const path = `/project/${projectId}`;
@@ -34,26 +35,52 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await page.screenshot({ path: testInfo.outputPath('delivery-workspace.png'), animations: 'disabled' });
 
-    // A human-authored structured input uses the real Workspace review API. No model, mocked
-    // response, inserted Commit, synthetic validation verdict or validation override is used.
+    // Browser authoring below uses the real native review. This content helper is only
+    // for the separate adversarial API override qualification at the end.
     const content = (withTask: boolean) => ({ trees: [{ key: 'candidate', slots: {}, children: [
       { key: 'checklist', slots: { title: 'Daily dog care' }, children: [] },
       { key: 'items', slots: {}, children: [{ key: 'water', slots: { done: false, ...(withTask ? { task: 'Refresh the water bowl' } : {}) }, children: [] }] },
     ] }], relations: [] });
-    const review = async (withTask: boolean) => {
-      const current = (await (await request.get(endpoint)).json()).data.workspace;
-      const result = await request.post(`${endpoint}/transition/review`, { data: { content: content(withTask), if_revision: current.revision, why: withTask ? 'Supply the missing task before committing.' : 'Review the incomplete checklist.' } });
+    await page.getByRole('button', { name: 'Edit content', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'Edit Workspace content' });
+    const addNode = async (parent: string, name: string) => {
+      await editor.getByLabel(`Show Child node in ${parent}`, { exact: true }).click();
+      await editor.getByRole('textbox', { name: `Child node in ${parent}`, exact: true }).fill(name);
+      await editor.getByRole('button', { name: `Add Child node in ${parent}`, exact: true }).click();
+    };
+    const addField = async (parent: string, name: string, value: string, type = 'string') => {
+      await editor.getByLabel(`Show Field in ${parent}`, { exact: true }).click();
+      await editor.getByRole('textbox', { name: `Field in ${parent}`, exact: true }).fill(name);
+      await editor.getByLabel(`Field in ${parent} type`, { exact: true }).selectOption(type);
+      await editor.getByRole('button', { name: `Add Field in ${parent}`, exact: true }).click();
+      if (type === 'string') await editor.getByRole('textbox', { name: `${parent}/${name}`, exact: true }).fill(value);
+    };
+    await addNode('candidate', 'checklist');
+    await addField('candidate/checklist', 'title', 'Daily dog care');
+    await addNode('candidate', 'items');
+    await addNode('candidate/items', 'water');
+    await addField('candidate/items/water', 'done', '', 'boolean');
+    const browserReview = async () => {
+      const response = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/review`) && response.request().method() === 'POST');
+      await editor.getByRole('button', { name: 'Review structured change', exact: true }).click();
+      const result = await response;
       expect(result.ok(), await result.text()).toBe(true);
+      await expect(editor.getByRole('link', { name: 'Open Changes', exact: true })).toBeVisible();
       return (await result.json()).data;
     };
-    const incomplete = await review(false);
-    await page.goto(`${path}/changes/${workspaceId}/${incomplete.review_snapshot.snapshotId}`);
-    await expect(page.getByRole('button', { name: 'Approve and save', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Continue anyway and save', exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('delivery-blocked.png'), fullPage: true, animations: 'disabled' });
-    const repaired = await review(true);
+    const incomplete = await browserReview();
+    await page.screenshot({ path: testInfo.outputPath('delivery-blocked.png'), animations: 'disabled' });
+    await addField('candidate/items/water', 'task', 'Refresh the water bowl');
+    // Editing invalidates the old review link; only a newly verified snapshot can be decided.
+    await expect(editor.getByRole('link', { name: 'Open Changes', exact: true })).toHaveCount(0);
+    const repaired = await browserReview();
     expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
-    await page.goto(`${path}/changes/${workspaceId}/${repaired.review_snapshot.snapshotId}`);
+    await editor.getByRole('region', { name: 'Edit structured content' }).evaluate((element) => { element.scrollTop = 0; });
+    await page.screenshot({ path: testInfo.outputPath('delivery-editor.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath('delivery-editor-mobile.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 1480, height: 960 });
+    await editor.getByRole('link', { name: 'Open Changes', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Approve and save', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('delivery-review.png'), fullPage: true, animations: 'disabled' });
     const decisionResponse = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');

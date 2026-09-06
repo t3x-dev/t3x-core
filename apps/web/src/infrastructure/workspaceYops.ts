@@ -82,7 +82,7 @@ export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): str
   return toSnakeKey(primaryName);
 }
 
-function buildWorkspaceBaselineTrees(
+export function buildWorkspaceBaselineTrees(
   candidate: WorkspaceCandidate,
   rootKey: string,
   inheritedTrees: WorkspaceYOpsTreeNode[]
