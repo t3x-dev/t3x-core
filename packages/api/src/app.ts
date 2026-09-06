@@ -100,6 +100,7 @@ import {
   relationsRoutes,
   runnerRoutes,
   runsRoutes,
+  schemaStudioRoutes,
   searchRoutes,
   shareRoutes,
   skillArtifactRoutes,
@@ -264,6 +265,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', schemaStudioRoutes);
   api.route('/', yschemaCompositionRoutes); // /v1/yschema/artifacts and /v1/yschema/compositions/preview
   api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill

@@ -1,0 +1,142 @@
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import {
+  AddStudioCandidateSchema,
+  StudioCandidateListSchema,
+  StudioCandidateSchema,
+} from '@t3x-dev/api-client';
+import {
+  addSchemaStudioCandidate,
+  listSchemaStudioCandidates,
+  listYSchemaCatalogReleases,
+  removeSchemaStudioCandidate,
+} from '@t3x-dev/storage';
+import { sha256CompositionValue } from '@t3x-dev/yschema';
+import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
+import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
+import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+
+const params = z.object({ projectId: z.string().min(1) });
+const errors = {
+  403: {
+    description: 'Access denied',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  404: {
+    description: 'Unavailable source',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  409: {
+    description: 'Version changed',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+};
+const listRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/schema-studio/candidates',
+  tags: ['YSchema'],
+  request: { params },
+  responses: {
+    200: {
+      description: 'Authorized candidate projections',
+      content: { 'application/json': { schema: SuccessResponseSchema(StudioCandidateListSchema) } },
+    },
+    ...errors,
+  },
+});
+const addRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/schema-studio/candidates',
+  tags: ['YSchema'],
+  request: {
+    params,
+    body: { content: { 'application/json': { schema: AddStudioCandidateSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Exact candidate, including idempotent retries',
+      content: { 'application/json': { schema: SuccessResponseSchema(StudioCandidateSchema) } },
+    },
+    ...errors,
+  },
+});
+const removeRoute = createRoute({
+  method: 'delete',
+  path: '/v1/projects/{projectId}/schema-studio/candidates/{candidateId}',
+  tags: ['YSchema'],
+  request: { params: params.extend({ candidateId: z.string().min(1) }) },
+  responses: {
+    200: {
+      description: 'Candidate removed; source unchanged',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ removed: z.literal(true) })),
+        },
+      },
+    },
+    ...errors,
+  },
+});
+export const schemaStudioRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+schemaStudioRoutes.openapi(listRoute, async (c) => {
+  const db = await getDB();
+  const { projectId } = c.req.valid('param');
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const rows = await listSchemaStudioCandidates(db, projectId);
+  const items = await Promise.all(rows.map((row) => projectStudioCandidate(c, db, row)));
+  return c.json({ success: true as const, data: { items } }, 200);
+});
+schemaStudioRoutes.openapi(addRoute, async (c) => {
+  const db = await getDB();
+  const { projectId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  await ensureBuiltInYSchemaArtifacts(db);
+  if (input.sourceProjectId) {
+    const sourceAccess = await assertProjectAccess(c, db, input.sourceProjectId);
+    if (sourceAccess instanceof Response)
+      return errorResponse(c, 'NOT_FOUND', 'Source release is unavailable or not authorized.');
+  }
+  let version = input.version;
+  if (version === 'latest') {
+    const latest = await listYSchemaCatalogReleases(db, {
+      project_id: input.sourceProjectId,
+      canonical_name: input.canonicalName,
+      limit: 1,
+    });
+    if (!latest.items[0])
+      return errorResponse(c, 'NOT_FOUND', 'No published release is available.');
+    version = latest.items[0].release.version;
+  }
+  const source = {
+    sourceProjectId: input.sourceProjectId ?? null,
+    canonicalName: input.canonicalName,
+    version,
+  };
+  const view = await resolveStudioSource(c, db, source);
+  if (!view)
+    return errorResponse(c, 'NOT_FOUND', 'Source release is unavailable or not authorized.');
+  if (input.expectedHash && input.expectedHash !== view.artifactHash)
+    return errorResponse(c, 'CONFLICT', 'Source release does not match the selected hash.');
+  const id = `sc_${(await sha256CompositionValue({ projectId, artifactVersionId: view.artifactVersionId, hash: view.artifactHash })).slice(7)}`;
+  const row = await addSchemaStudioCandidate(db, {
+    id,
+    projectId,
+    ...source,
+    artifactVersionId: view.artifactVersionId,
+    artifactHash: view.artifactHash,
+  });
+  return c.json({ success: true as const, data: await projectStudioCandidate(c, db, row) }, 200);
+});
+schemaStudioRoutes.openapi(removeRoute, async (c) => {
+  const db = await getDB();
+  const { projectId, candidateId } = c.req.valid('param');
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  await removeSchemaStudioCandidate(db, projectId, candidateId);
+  return c.json({ success: true as const, data: { removed: true as const } }, 200);
+});

@@ -417,6 +417,7 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
+export * from './schema-studio';
 // Demo workspace seed (fresh-install no-key replay)
 export {
   type DemoWorkspaceSeedMarker,

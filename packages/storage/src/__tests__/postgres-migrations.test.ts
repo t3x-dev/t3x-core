@@ -17,6 +17,32 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v74 with reference-only Studio candidates', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      "INSERT INTO projects (project_id, name, created_at) VALUES ('studio-target', 'Keep me', NOW())"
+    );
+    await setup.sql.unsafe(
+      'DROP TABLE schema_studio_candidates; UPDATE _schema_version SET version = 74'
+    );
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    await setup.sql.unsafe(
+      "INSERT INTO schema_studio_candidates (id, project_id, canonical_name, version, artifact_version_id, artifact_hash) VALUES ('candidate', 'studio-target', 't3x/core', '1', 'v1', 'hash')"
+    );
+    expect(
+      await setup.sql.unsafe(
+        "SELECT id FROM schema_studio_candidates WHERE project_id = 'studio-target'"
+      )
+    ).toHaveLength(1);
+    await expect(
+      setup.sql.unsafe(
+        "INSERT INTO schema_studio_candidates (id, project_id, canonical_name, version, artifact_version_id, artifact_hash) VALUES ('duplicate', 'studio-target', 't3x/core', '1', 'v1', 'hash')"
+      )
+    ).rejects.toThrow();
+  });
+
   it('upgrades v73 for immutable presentation retention without changing projects', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
