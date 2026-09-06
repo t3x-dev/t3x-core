@@ -66,3 +66,5 @@ The publication, identity update/archive, and composition save/apply routes now 
 Verification: 28 targeted tests passed across release introduction, catalog, and composition persistence. Includes corrupted content, foreign commits, wrong digests, unbundled covers, immutable repinning, HEAD advancement, backward-compatible publication, viewer rejection on all five write actions, and public/foreign catalog isolation.
 
 Full regression: `pnpm test --concurrency=1` passed all 31 tasks (API 1,311 passed/1 skipped; WebUI 1,586 passed). The initial parallel run stopped during PostgreSQL shared-memory allocation, not an assertion; the serial run passed without system changes or skipped checks. A final focused publication suite also covers the v2 Blueprint pin.
+
+Final v1/v2 publication suite: 7 passed. Its first v2 fixture collided with the one-open-workspace-per-branch index; assigning the fixture a distinct branch in both its storage metadata and workspace state corrected that setup error.

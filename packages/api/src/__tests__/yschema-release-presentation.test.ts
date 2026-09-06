@@ -326,8 +326,9 @@ it('also pins the introduction in an open v2 Blueprint release', async () => {
   await upsertWorkspaceDraft(db, {
     project_id: projectId,
     workspace_id: 'studio-v2',
+    target_branch: 'studio-v2',
     title: 'Open Studio',
-    workspace_state: {},
+    workspace_state: { targetBranch: 'studio-v2', title: 'Open Studio' },
   });
   const base = `/v1/projects/${projectId}/workspaces/studio-v2/schema-composition`;
   const saved = await app.request(base, {
