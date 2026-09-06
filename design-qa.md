@@ -83,3 +83,9 @@ and their State/header portions pushed back to the owning parent PRs.
 - Complete browser flow passed through proposal, validation, preview and audited commit; shutdown and temporary PostgreSQL cleanup exited 0.
 - Full WebUI run: 1589 passed, one legacy text assertion failed; updated that assertion and reran its owning test successfully. Focused WorkspaceWorkbench: 32 passed.
 - Scope: backend validation, schema finding resolution and commit policy are unchanged. The view does not claim an external schema validator ran.
+
+## Shared State README — 2026-09-06
+
+Structure and Code expose a collapsed-by-default author README. Opening it loads the exact selected commit through the existing Overview hook. Content is bounded to 40vh and scrollable, preserving the node/code workspace. The shared Markdown renderer retains inert HTML and bundled-image-only handling. Editing remains separate work under #1512.
+
+Validation: 33 focused tests and all 1,590 WebUI tests passed. Final Chromium verified both views, exact historical revision changes, empty README revisions, unsafe content handling and mobile width; exit 0 including PostgreSQL cleanup. Inspected settled Structure and mobile screenshots before commit. Full check passes with the two existing native-image warnings, one now in the shared renderer. Screenshots are under `verification/shared-readme/`; this independent branch predates the navigation-only PR #1536.

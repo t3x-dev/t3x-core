@@ -22,6 +22,7 @@ import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
+import { StateReadmeDisclosure } from '@/components/project/StateReadmeDisclosure';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { StateExportButton } from '@/components/shared/StateExportButton';
@@ -673,6 +674,13 @@ export function ProjectStateTab({
                             )
                           : undefined
                       }
+                    />
+                  ) : null}
+                  {activeView === 'structure' || activeView === 'code' ? (
+                    <StateReadmeDisclosure
+                      key={headCommit.hash}
+                      projectId={projectId}
+                      commitDigest={headCommit.hash}
                     />
                   ) : null}
                   {activeView === 'structure' ? (
