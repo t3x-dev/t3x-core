@@ -1,3 +1,4 @@
+import { decodeRepositorySemanticState } from '@t3x-dev/core';
 import type { ProtocolValue } from '@t3x-dev/transition';
 import {
   type createStatePresentation,
@@ -48,6 +49,12 @@ export function buildCommittedStateOverview(
     throw new StateRenderError('Requested author presentation is unavailable');
   }
   const value = render.context.value;
+  let reading: { kind: 'semantic-content'; value: unknown } | null = null;
+  try {
+    reading = { kind: 'semantic-content', value: decodeRepositorySemanticState(input.state) };
+  } catch {
+    // Unknown or invalid codecs keep the complete generic State representation.
+  }
   const entries: Array<[string, ProtocolValue]> =
     value !== null && typeof value === 'object' ? Object.entries(value) : [];
   return {
@@ -57,6 +64,7 @@ export function buildCommittedStateOverview(
       presentationDigest: author?.digest ?? null,
     },
     author,
+    reading,
     summary: {
       kind: 'sections' as const,
       rootType: valueType(value),

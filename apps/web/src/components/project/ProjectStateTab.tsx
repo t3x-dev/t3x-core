@@ -19,6 +19,7 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
+import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -59,7 +60,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
-export type ProjectSnapshotView = 'structure' | 'render' | 'code';
+export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
 type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
@@ -90,13 +91,14 @@ const SNAPSHOT_VIEWS: Array<{
   subtitle: string;
   icon: typeof TableProperties;
 }> = [
+  { id: 'overview', label: 'Overview', subtitle: 'introduction and state', icon: FileText },
   { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
-  { id: 'render', label: 'Render', subtitle: 'schema reader', icon: FileText },
   { id: 'code', label: 'Code', subtitle: 'canonical YAML', icon: Code2 },
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
+  if (value === 'render') return 'overview';
   if (value === 'canvas') return 'canvas';
   if (value === 'points') return 'structure';
   return SNAPSHOT_VIEWS.some((view) => view.id === value)
@@ -188,6 +190,7 @@ export function ProjectStateTab({
   const updateBranchFocus = useCallback(
     (focus: BranchFocus) => {
       const params = new URLSearchParams(routeQueryRef.current);
+      params.delete('commit');
       if (focus === 'main') params.delete('branch');
       else params.set('branch', focus);
       const query = params.toString();
@@ -214,7 +217,9 @@ export function ProjectStateTab({
         const requestedBranch = branchFocus || 'main';
         const registeredBranchHeadHash = branchHeads[requestedBranch];
         const branchHeadHash =
-          inspectedHeadByBranchRef.current[requestedBranch] ?? registeredBranchHeadHash;
+          focusedCommitHash ??
+          inspectedHeadByBranchRef.current[requestedBranch] ??
+          registeredBranchHeadHash;
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
@@ -260,7 +265,11 @@ export function ProjectStateTab({
         }
 
         if (!cancelled) {
-          if (headCommit && !inspectedHeadByBranchRef.current[requestedBranch]) {
+          if (
+            headCommit &&
+            !focusedCommitHash &&
+            !inspectedHeadByBranchRef.current[requestedBranch]
+          ) {
             inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
           }
           setSnapshot({
@@ -295,6 +304,7 @@ export function ProjectStateTab({
   }, [
     branchFocus,
     branchHeads,
+    focusedCommitHash,
     loadCommit,
     loadCommits,
     loadOperations,
@@ -348,7 +358,7 @@ export function ProjectStateTab({
   const readerKind = resolveStateReaderKind(schemaName);
   const prdRenderModel = useMemo(
     () =>
-      headCommit && (readerKind === 'prd' || readerKind === 'generic')
+      headCommit && readerKind === 'prd'
         ? selectPrdRenderModel(headCommit.content, {
             gaps: validationGaps,
             operations: effectiveOperations,
@@ -504,10 +514,16 @@ export function ProjectStateTab({
     if (!availableHeadHash) return;
     inspectedHeadByBranchRef.current[branchFocus] = availableHeadHash;
     setDismissedHeadHash(null);
+    if (focusedCommitHash) {
+      const params = new URLSearchParams(routeQueryRef.current);
+      params.delete('commit');
+      const query = params.toString();
+      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    }
     setSnapshotRefreshVersion((version) => version + 1);
-  }, [availableHeadHash, branchFocus]);
+  }, [availableHeadHash, branchFocus, focusedCommitHash, pathname, replaceRoute]);
 
-  const contextRailVisible = activeView !== 'canvas';
+  const contextRailVisible = activeView !== 'canvas' && activeView !== 'overview';
   const readinessLabel = stateReadinessLabel(validationReady);
   const lastCheckedLabel = freshnessChecking
     ? 'Checking…'
@@ -583,7 +599,7 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 <StateEmpty
-                  message="Create or select a committed branch to inspect state as Structure, Render, or Code."
+                  message="Create or select a committed branch to inspect state as Overview, Structure, or Code."
                   title="No commit on this branch"
                 />
               ) : null}
@@ -595,49 +611,69 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && headCommit ? (
                 <>
+                  {activeView === 'overview' ? (
+                    <StateOverviewView
+                      key={headCommit.hash}
+                      projectId={projectId}
+                      commitDigest={headCommit.hash}
+                      projectName={projectName}
+                      reader={
+                        skillRenderModel || prdRenderModel || promptRenderModel
+                          ? (expanded, expand) => (
+                              <>
+                                {skillRenderModel ? (
+                                  <StateSkillReader
+                                    artifact={skillArtifact.artifact}
+                                    artifactError={skillArtifact.error?.message ?? null}
+                                    artifactLoading={skillArtifact.loading}
+                                    model={skillRenderModel}
+                                    schemaName={schemaName}
+                                    validationGapCount={validationGapCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                                {prdRenderModel ? (
+                                  <StatePrdReader
+                                    compact={!expanded}
+                                    onRequestExpand={expand}
+                                    model={prdRenderModel}
+                                    schemaArtifacts={prdSchemaRegistry.artifacts}
+                                    schemaComposition={
+                                      schemaCompositionWorkspace?.schemaComposition
+                                    }
+                                    schemaCompositionSource={
+                                      schemaCompositionWorkspace === committedWorkspace
+                                        ? 'committed'
+                                        : 'workspace'
+                                    }
+                                    schemaName={schemaName}
+                                    schemaRegistryHref={`${repositoryPath}/schemas`}
+                                    validationGapCount={validationGapCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                                {promptRenderModel ? (
+                                  <StatePromptReader
+                                    model={promptRenderModel}
+                                    schemaName={schemaName}
+                                    validationGapCount={validationIssueCount}
+                                    validationReady={validationReady}
+                                    yamlText={yamlText}
+                                  />
+                                ) : null}
+                              </>
+                            )
+                          : undefined
+                      }
+                    />
+                  ) : null}
                   {activeView === 'structure' ? (
                     <StateStructureView
                       onPathQueryChange={setPathQuery}
                       pathQuery={pathQuery}
                       rows={pointRows}
-                    />
-                  ) : null}
-                  {activeView === 'render' && skillRenderModel ? (
-                    <StateSkillReader
-                      artifact={skillArtifact.artifact}
-                      artifactError={skillArtifact.error?.message ?? null}
-                      artifactLoading={skillArtifact.loading}
-                      model={skillRenderModel}
-                      schemaName={schemaName}
-                      validationGapCount={validationGapCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
-                  {activeView === 'render' && prdRenderModel ? (
-                    <StatePrdReader
-                      model={prdRenderModel}
-                      schemaArtifacts={prdSchemaRegistry.artifacts}
-                      schemaComposition={schemaCompositionWorkspace?.schemaComposition}
-                      schemaCompositionSource={
-                        schemaCompositionWorkspace === committedWorkspace
-                          ? 'committed'
-                          : 'workspace'
-                      }
-                      schemaName={schemaName}
-                      schemaRegistryHref={`${repositoryPath}/schemas`}
-                      validationGapCount={validationGapCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
-                    />
-                  ) : null}
-                  {activeView === 'render' && promptRenderModel ? (
-                    <StatePromptReader
-                      model={promptRenderModel}
-                      schemaName={schemaName}
-                      validationGapCount={validationIssueCount}
-                      validationReady={validationReady}
-                      yamlText={yamlText}
                     />
                   ) : null}
                   {activeView === 'code' ? (
@@ -1021,16 +1057,18 @@ function StateViewTabs({
           );
         })}
       </div>
-      <Button
-        aria-expanded={detailsOpen}
-        className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
-        onClick={onDetailsToggle}
-        size="sm"
-        type="button"
-        variant="canvas-outline"
-      >
-        State details
-      </Button>
+      {activeView !== 'overview' && (
+        <Button
+          aria-expanded={detailsOpen}
+          className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
+          onClick={onDetailsToggle}
+          size="sm"
+          type="button"
+          variant="canvas-outline"
+        >
+          State details
+        </Button>
+      )}
     </div>
   );
 }

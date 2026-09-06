@@ -186,7 +186,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     expect((await validationResponsePromise).status()).toBe(201);
     await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
 
-    await page.getByRole('tab', { name: /Render/ }).click();
+    await page.getByRole('tab', { name: /Overview/ }).click();
     await expect(
       page.getByRole('heading', { exact: true, name: 'PRD audience handoff' })
     ).toBeVisible();

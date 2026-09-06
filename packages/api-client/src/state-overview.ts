@@ -4,6 +4,14 @@ import { StatePresentationSchema } from './state-presentation';
 
 const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const valueType = z.enum(['object', 'array', 'null', 'string', 'number', 'boolean']);
+type OverviewTree = { key: string; slots: Record<string, unknown>; children: OverviewTree[] };
+const overviewTree: z.ZodType<OverviewTree> = z.lazy(() =>
+  z.object({
+    key: z.string(),
+    slots: z.record(z.string(), z.unknown()),
+    children: z.array(overviewTree),
+  })
+);
 export const StateOverviewSchema = z.object({
   revision: z.object({
     commitDigest: digest,
@@ -11,6 +19,13 @@ export const StateOverviewSchema = z.object({
     presentationDigest: digest.nullable(),
   }),
   author: StatePresentationSchema.nullable(),
+  reading: z
+    .object({
+      kind: z.literal('semantic-content'),
+      value: z.object({ trees: z.array(overviewTree), relations: z.array(z.unknown()) }),
+    })
+    .nullable()
+    .optional(),
   summary: z.object({
     kind: z.literal('sections'),
     rootType: valueType,
