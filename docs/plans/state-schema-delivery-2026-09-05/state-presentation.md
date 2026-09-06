@@ -92,3 +92,24 @@ Explicit permanent-purge policy remains a separate lifecycle decision.
 Archive manifest extension and full archive restore remain owned by #1418; the
 new sidecar GET makes the author bundle exportable, but this PR does not claim
 that the generic project archive pipeline already includes it.
+
+## Author revision editor
+
+The State Overview editor reads `/v1/projects/{projectId}/refs/{refName}/presentation-authoring`.
+It is shown only for a writable current CommitV2 on that ref; historical snapshots
+remain read-only. Author fields and image resources are prefilled from that exact
+presentation, not from another branch or a mutable project profile.
+
+`POST /v1/projects/{projectId}/refs/{refName}/presentation-revisions` accepts
+`expectedHead` and a complete `presentation` bundle. The server resolves project
+edit authority and the existing server-selected Transition policy, verifies commit
+membership, then commits the same State and inserts the sidecar in one database
+transaction. HEAD compare-and-swap rejects stale editors. Publication failure
+rolls back the new commit and ref advance. The UI retains input after a conflict.
+The response includes the new commit, unchanged State digest, and presentation
+digest. Business State and the four protocol object contracts are unchanged.
+
+Images remain optional PNG/JPEG/WebP uploads with explicit bundled paths and alt
+text. Additional images are referenced in authored Markdown. Removing an image
+from the new bundle never deletes a historical bundle. Tags remain author text.
+No AI generation, category-specific fields, or automatic image fetching is added.

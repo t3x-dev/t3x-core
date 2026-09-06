@@ -206,9 +206,16 @@ export function ProjectStateTab({
     [pathname, replaceRoute]
   );
 
+  const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
+  const loadedSnapshotScope = useRef('');
+
   useEffect(() => {
     if (!snapshotEnabled) return;
 
+    const selectedHead =
+      focusedCommitHash ?? inspectedHeadByBranchRef.current[branchFocus] ?? snapshotTargetHead;
+    const scopePrefix = `${projectId}:${branchFocus}:${snapshotRefreshVersion}:`;
+    if (selectedHead && loadedSnapshotScope.current === `${scopePrefix}${selectedHead}`) return;
     let cancelled = false;
     const load = async () => {
       setSnapshot({
@@ -222,11 +229,7 @@ export function ProjectStateTab({
       });
       try {
         const requestedBranch = branchFocus || 'main';
-        const registeredBranchHeadHash = branchHeads[requestedBranch];
-        const branchHeadHash =
-          focusedCommitHash ??
-          inspectedHeadByBranchRef.current[requestedBranch] ??
-          registeredBranchHeadHash;
+        const branchHeadHash = selectedHead;
         let commits = await loadCommits(projectId, requestedBranch, 100);
         let headCommit = selectVisibleBranchHead(commits);
         if (branchHeadHash) {
@@ -279,6 +282,7 @@ export function ProjectStateTab({
           ) {
             inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
           }
+          loadedSnapshotScope.current = `${scopePrefix}${headCommit?.hash ?? ''}`;
           setSnapshot({
             auxiliaryError: auxiliaryErrors.join(' ') || null,
             commits,
@@ -310,7 +314,7 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
-    branchHeads,
+    snapshotTargetHead,
     focusedCommitHash,
     loadCommit,
     loadCommits,
@@ -624,6 +628,14 @@ export function ProjectStateTab({
                       projectId={projectId}
                       commitDigest={headCommit.hash}
                       projectName={projectName}
+                      refName={branchFocus}
+                      onAuthorRevision={(digest) => {
+                        void refresh();
+                        const params = new URLSearchParams(routeQueryRef.current);
+                        params.set('commit', digest);
+                        params.set('view', 'overview');
+                        replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
+                      }}
                       reader={
                         skillRenderModel || prdRenderModel || promptRenderModel
                           ? (expanded, expand) => (
