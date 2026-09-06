@@ -48,7 +48,7 @@ test.describe('Canvas Workflow', () => {
   });
 
   // CW-02: Clicking a commit selects it without reviving the retired details modal.
-  test('CW-02: Node click selects the version on Canvas', async ({ page }) => {
+  test('CW-02: Node click selects the version on Canvas', async ({ page }, testInfo) => {
     const canvas = new CanvasPage(page);
     await canvas.goto(projectId);
     await canvas.waitForLoad();
@@ -61,6 +61,8 @@ test.describe('Canvas Workflow', () => {
     await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
     await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /New Leaf|Create Leaf|Remove leaf/i })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('canvas-retired-actions.png'), animations: 'disabled' });
   });
 
   // CW-03: Current canvas toolbar remains interactive after fitting the graph.

@@ -69,8 +69,8 @@ describe('CanvasSelectionPanel', () => {
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View Diff' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Create Leaf From This Version' })
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Create Leaf From This Version' })
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Merge Into Main' })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Version context stays on the canvas/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Action Logic')).toBeInTheDocument();
@@ -101,8 +101,8 @@ describe('CanvasSelectionPanel', () => {
     expect(screen.getByText('branch 1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start Merge Into Main' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Create Leaf From This Version' })
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Create Leaf From This Version' })
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/Version context stays on the canvas/i)).toBeInTheDocument();
   });
 });
