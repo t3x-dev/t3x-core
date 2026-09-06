@@ -1828,7 +1828,7 @@ describe('WorkspaceWorkbench', () => {
       expect(screen.getByRole('tab', { name: 'Review', exact: true })).toBeInTheDocument()
     );
     activateTab(/Proposal/);
-    expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No proposed YOps operations yet.')).toBeInTheDocument();
   });
 
   it('shows an honest empty state when no YOps operations are available', () => {
