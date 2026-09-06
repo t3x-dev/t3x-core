@@ -33,6 +33,8 @@ import {
   useSchemaIntroduction,
 } from '@/hooks/schemas/useSchemaCatalog';
 import { cn } from '@/utils/cn';
+import { AddToStudio } from './AddToStudio';
+import { StudioCandidateList } from './StudioCandidateList';
 
 const filterKeys = [
   'q',
@@ -175,7 +177,10 @@ export function SchemaCatalogExperience({
         ))}
       </nav>
       {view === 'studio' ? (
-        children
+        <>
+          <StudioCandidateList key={projectId} projectId={projectId} />
+          {children}
+        </>
       ) : (
         <div className="p-4 sm:p-6">
           {view === 'discover' ? (
@@ -614,6 +619,18 @@ function ReleaseDetail({
         ) : null}
         {intro.data ? <StateAuthorReadme author={intro.data.document} /> : null}
         <div className="flex flex-wrap gap-3">
+          <AddToStudio
+            defaultProjectId={projectId}
+            title={item.identity.displayName ?? item.identity.canonicalName}
+            source={{
+              ...(item.identity.ownerProjectId
+                ? { sourceProjectId: item.identity.ownerProjectId }
+                : {}),
+              canonicalName: item.identity.canonicalName,
+              version: item.release.version,
+              expectedHash: item.release.hash,
+            }}
+          />
           {canOpenStudio ? (
             <Button variant="default" onClick={onStudio}>
               Open in Studio <ArrowRight className="size-4" />
@@ -622,7 +639,7 @@ function ReleaseDetail({
           {reference ? (
             <Button variant="canvas-outline" asChild>
               <Link
-                href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo }).toString()}`}
+                href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId }).toString()}`}
               >
                 Project introduction
               </Link>

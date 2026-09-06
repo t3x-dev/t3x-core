@@ -5,6 +5,7 @@ import { StateAuthorEditor } from '@/components/project/StateAuthorEditor';
 import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
+import { StateSchemaAdoption } from '@/components/schemas/StateSchemaAdoption';
 import { Button } from '@/components/ui/button';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 
@@ -62,6 +63,7 @@ export function StateOverviewView({
           aria-label="Project introduction"
           className="min-w-0 p-5 lg:overflow-y-auto lg:p-6"
         >
+          <StateSchemaAdoption projectId={projectId} commitDigest={commitDigest} />
           {refName && onAuthorRevision ? (
             <div className="mb-3 flex justify-end">
               <StateAuthorEditor
