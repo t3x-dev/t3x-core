@@ -409,7 +409,7 @@ export function WorkspaceDiff({
   onSelectOperation,
   open,
   phase,
-  schemaPassed = false,
+  replayValidated = false,
   selectedOperation,
 }: {
   candidate: WorkspaceCandidate;
@@ -417,7 +417,7 @@ export function WorkspaceDiff({
   onSelectOperation: (operationId: string) => void;
   open: boolean;
   phase: 'proposal' | 'validation';
-  schemaPassed?: boolean;
+  replayValidated?: boolean;
   selectedOperation: WorkspaceYOpsDraftOperation;
 }) {
   const operations = candidate.yopsDraft.operations;
@@ -431,7 +431,7 @@ export function WorkspaceDiff({
       changes={changes}
       headerSubtitle={
         phase === 'validation'
-          ? 'Validated projection · Baseline → Projected'
+          ? `${replayValidated ? 'YOps validated' : 'Unvalidated'} projection · Baseline → Projected`
           : 'Proposal · Baseline → Projected'
       }
       onOpenChange={onOpenChange}
@@ -441,8 +441,8 @@ export function WorkspaceDiff({
       projectedLabel="Projected"
       secondaryStat={
         phase === 'validation' ? (
-          <Badge variant={schemaPassed ? 'success' : 'pending-subtle'}>
-            YSchema {schemaPassed ? 'pass' : 'pending'}
+          <Badge variant={replayValidated ? 'success' : 'pending-subtle'}>
+            YOps {replayValidated ? 'validated' : 'not run'}
           </Badge>
         ) : undefined
       }
