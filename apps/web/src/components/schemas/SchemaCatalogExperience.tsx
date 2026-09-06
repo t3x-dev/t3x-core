@@ -528,9 +528,9 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
           className={cn(
             'relative shrink-0 items-center justify-center bg-[var(--status-info-muted)] text-[var(--status-info)] sm:flex sm:w-2/5',
             item.identity.tags.includes('care')
-              ? 'bg-emerald-50 text-emerald-700'
+              ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
               : item.identity.tags.includes('planning')
-                ? 'bg-violet-50 text-violet-700'
+                ? 'bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]'
                 : '',
             cover ? 'flex h-36 sm:h-auto' : 'hidden'
           )}
