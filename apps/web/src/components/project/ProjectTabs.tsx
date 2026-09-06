@@ -9,9 +9,14 @@ import { cn } from '@/utils/cn';
 export interface ProjectTabsProps {
   activeTab: ProjectTabId;
   repoPath: string;
+  projectIdNavigation?: boolean;
 }
 
-export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
+export function ProjectTabs({
+  activeTab,
+  repoPath,
+  projectIdNavigation = false,
+}: ProjectTabsProps) {
   return (
     <nav
       aria-label="Project views"
@@ -32,7 +37,13 @@ export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
                 ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
-            href={tab.id === 'state' ? repoPath : `${repoPath}/${getProjectTabSegment(tab.id)}`}
+            href={
+              tab.id === 'state'
+                ? repoPath
+                : projectIdNavigation
+                  ? `${repoPath}?tab=${tab.id}`
+                  : `${repoPath}/${getProjectTabSegment(tab.id)}`
+            }
             key={tab.id}
             scroll={false}
           >

@@ -23,7 +23,12 @@ let source: string;
 const denied = new Set<string>();
 vi.mock('../lib/db', () => ({ getDB: () => Promise.resolve(db) }));
 vi.mock('../lib/project-access', () => ({
-  assertProjectAccess: async (_c: unknown, _db: unknown, id: string, action = 'project:read') =>
+  assertProjectAccess: async (
+    c: { req: { method: string } },
+    _db: unknown,
+    id: string,
+    action = c.req.method === 'GET' ? 'project:read' : 'project:edit'
+  ) =>
     denied.has(`${id}:${action}`) ? new Response('denied', { status: 403 }) : { projectId: id },
 }));
 
@@ -103,7 +108,8 @@ beforeAll(async () => {
       apiVersion: 't3x.dev/yschema-blueprint/v1',
       schema,
       registry: {
-        compiledSchemaHash: await sha256CompositionValue(schema),
+        compiledSchemaHash: await sha256CompositionValue({ ...schema, name: 'compiler-input' }),
+        schemaHash: await sha256CompositionValue(schema),
         renderPlan: [],
         originsByPath: {},
       },
@@ -288,4 +294,23 @@ it('projects locks only for declared required imports, not legacy suggestions', 
   const open = (await (await request('preview', { candidateIds: [legacyId] })).json()).data;
   expect(open.report.valid).toBe(true);
   expect(open.modules).toEqual([{ candidateId: legacyId, requiredBy: [] }]);
+});
+
+it('rejects a published schema with an incorrect or missing published-schema digest', async () => {
+  const schema = normalizeYSchemaObject(builtInPrdCoreArtifact.schema);
+  for (const [name, registry] of [
+    ['wrong-digest', { schemaHash: `sha256:${'0'.repeat(64)}` }],
+    ['missing-digest', {}],
+  ] as const) {
+    const id = await candidate(
+      name,
+      {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        schema,
+        registry: { ...registry, compiledSchemaHash: await sha256CompositionValue(schema) },
+      },
+      'schema'
+    );
+    expect((await request('preview', { candidateIds: [id] })).status).toBe(409);
+  }
 });

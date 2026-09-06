@@ -89,7 +89,10 @@ export async function compileStudioSelection(
     const schema = normalizeYSchemaObject(view.manifest.schema);
     const schemaHash = await sha256CompositionValue(schema);
     const registry = view.manifest.registry as Record<string, unknown> | undefined;
-    if (registry?.compiledSchemaHash !== schemaHash)
+    // Publication assigns release name/version before recording registry.schemaHash.
+    // compiledSchemaHash identifies the earlier compiler output (see publish route).
+    // resolveStudioSource independently verifies the entire pinned manifest hash.
+    if (registry?.schemaHash !== schemaHash)
       throw new StudioError(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'

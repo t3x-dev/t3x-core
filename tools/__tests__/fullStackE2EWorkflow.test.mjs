@@ -41,7 +41,7 @@ test('authenticated browser qualification uses a fail-closed isolated profile', 
 
   assert.equal(
     packageJson.scripts['e2e:auth'],
-    'node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts'
+    'node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts e2e/security/schema-studio-auth.spec.ts'
   );
   assert.match(runner, /const authEnabled = runnerArgs\.includes\('--auth-enabled'\)/);
   assert.match(runner, /AUTH_DISABLED: authEnabled \? 'false' : 'true'/);

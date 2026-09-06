@@ -18,7 +18,12 @@ let source: string;
 const denied = new Set<string>();
 vi.mock('../lib/db', () => ({ getDB: () => Promise.resolve(db) }));
 vi.mock('../lib/project-access', () => ({
-  assertProjectAccess: async (_c: unknown, _db: unknown, id: string, action = 'project:read') =>
+  assertProjectAccess: async (
+    c: { req: { method: string } },
+    _db: unknown,
+    id: string,
+    action = c.req.method === 'GET' ? 'project:read' : 'project:edit'
+  ) =>
     denied.has(`${id}:${action}`) ? new Response('denied', { status: 403 }) : { projectId: id },
 }));
 
@@ -97,6 +102,12 @@ it('checks target write and source read authority; revoked source is redacted on
     (await add({ sourceProjectId: source, canonicalName: 'team/candidate', version: '1.0.0' }))
       .status
   ).toBe(403);
+  denied.clear();
+  denied.add(`${source}:project:edit`);
+  expect(
+    (await add({ sourceProjectId: source, canonicalName: 'team/candidate', version: '1.0.0' }))
+      .status
+  ).toBe(200);
   denied.clear();
   denied.add(`${source}:project:read`);
   expect(
