@@ -23,6 +23,21 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await page.getByRole('tab', { name: /Code/ }).click();
     await expect(page).toHaveURL(/view=code/);
+    await page.getByText('README · Author', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
+    await expect(page.getByLabel('Revision README')).toContainText(hash);
+    await page.screenshot({ path: testInfo.outputPath('code-readme.png') });
+    await page.getByRole('tab', { name: /Structure/ }).click();
+    await expect(page.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(encodeURIComponent(hash)));
+    await page.screenshot({ path: testInfo.outputPath('structure-readme.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath('readme-mobile.png'), animations: 'disabled' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1480, height: 1060 });
+    await page.getByRole('tab', { name: /Code/ }).click();
+
     await page.goto(`/project/${projectId}?commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('tab', { name: /Code/ })).toHaveAttribute('aria-selected', 'true');
     await page.goto(`/project/${projectId}?view=render&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
@@ -56,6 +71,11 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(later)}`, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await expect(page.getByText('No README published for this revision.')).toBeVisible();
+    await page.getByRole('tab', { name: /Code/ }).click();
+    await page.getByText('README · Author', { exact: true }).click();
+    await expect(page.getByText('No README published for this revision.')).toBeVisible();
+    await expect(page.getByLabel('Revision README')).toContainText(later);
+
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toHaveCount(0);
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
