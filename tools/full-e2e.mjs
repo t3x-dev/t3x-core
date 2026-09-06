@@ -7,6 +7,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stopProcessGroups } from './lib/stopProcessGroups.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rawArgs = process.argv.slice(2);
@@ -48,6 +49,8 @@ const dataDir =
 const ownsDataDir = configuredDataDir === undefined;
 const startedAt = new Date().toISOString();
 const children = [];
+let stopping;
+let dataRetained = true;
 
 await fsp.mkdir(artifactDir, { recursive: true });
 
@@ -89,9 +92,11 @@ let status = 'failed';
 let caughtError = null;
 
 const interrupt = (signal) => {
-  void stopChildren().finally(() => {
-    process.exitCode = signal === 'SIGINT' ? 130 : 143;
-  });
+  void stopChildren()
+    .catch((error) => console.error(`[full-e2e] Shutdown failed: ${error.message}`))
+    .finally(() => {
+      process.exitCode = signal === 'SIGINT' ? 130 : 143;
+    });
 };
 process.once('SIGINT', () => interrupt('SIGINT'));
 process.once('SIGTERM', () => interrupt('SIGTERM'));
@@ -147,7 +152,22 @@ try {
   caughtError = error instanceof Error ? error : new Error(String(error));
   console.error(`[full-e2e] ${caughtError.message}`);
 } finally {
-  await stopChildren();
+  try {
+    await stopChildren();
+    if (ownsDataDir && !keepData) {
+      await fsp.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      dataRetained = false;
+    } else if (keepData) {
+      console.log(`[full-e2e] Kept data directory: ${dataDir}`);
+    }
+  } catch (error) {
+    const cleanupError = error instanceof Error ? error : new Error(String(error));
+    caughtError = caughtError
+      ? new Error(`${caughtError.message}; cleanup: ${cleanupError.message}`)
+      : cleanupError;
+    status = 'failed';
+    console.error(`[full-e2e] Cleanup failed: ${cleanupError.message}`);
+  }
 
   const summary = {
     schema_version: 1,
@@ -159,7 +179,7 @@ try {
     api_url: apiUrl,
     webui_url: webUrl,
     runner_url: runnerUrl,
-    data_dir: keepData ? dataDir : null,
+    data_dir: dataRetained ? dataDir : null,
     error: caughtError?.message ?? null,
     artifacts: {
       api_log: path.join(artifactDir, 'api.log'),
@@ -174,12 +194,6 @@ try {
     path.join(artifactDir, 'run-summary.json'),
     `${JSON.stringify(summary, null, 2)}\n`
   );
-
-  if (ownsDataDir && !keepData) {
-    await fsp.rm(dataDir, { recursive: true, force: true });
-  } else if (keepData) {
-    console.log(`[full-e2e] Kept data directory: ${dataDir}`);
-  }
 }
 
 if (caughtError) {
@@ -292,37 +306,7 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
   return code;
 }
 
-async function stopChildren() {
-  const active = children.filter((child) => child.exitCode === null && child.signalCode === null);
-  for (const child of active) {
-    signalChild(child, 'SIGTERM');
-  }
-
-  const deadline = Date.now() + 5000;
-  while (
-    Date.now() < deadline &&
-    active.some((child) => child.exitCode === null && child.signalCode === null)
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  for (const child of active) {
-    if (child.exitCode === null && child.signalCode === null) {
-      signalChild(child, 'SIGKILL');
-    }
-  }
-}
-
-function signalChild(child, signal) {
-  try {
-    if (process.platform !== 'win32' && child.pid) {
-      process.kill(-child.pid, signal);
-    } else {
-      child.kill(signal);
-    }
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes('ESRCH')) {
-      console.warn(`[full-e2e] Failed to stop ${child.label}: ${String(error)}`);
-    }
-  }
+function stopChildren() {
+  stopping ??= stopProcessGroups(children);
+  return stopping;
 }
