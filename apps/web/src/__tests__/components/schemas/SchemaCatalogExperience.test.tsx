@@ -4,6 +4,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
+vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
+  useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn(), error: null }),
+}));
+vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
+  useStudioCandidates: () => ({ items: [], loading: false }),
+}));
+
 const mocks = vi.hoisted(() => ({ push: vi.fn(), query: '', catalog: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
@@ -74,7 +81,7 @@ describe('Schema catalog journey', () => {
       { scroll: false }
     );
   });
-  it('restores Browse filters from the URL and leaves Studio to the existing workbench', () => {
+  it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';
     const { unmount } = mount();
     expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'tags=infra&format=yaml&limit=24', true);
@@ -82,6 +89,8 @@ describe('Schema catalog journey', () => {
     unmount();
     mocks.query = 'schemaView=studio';
     mount();
+    expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
     expect(screen.getByText('Detailed Studio')).toBeVisible();
     expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=24', false);
   });

@@ -19,3 +19,13 @@ Candidate verification: PostgreSQL migration suite passed (including upgrade fro
 `POST schema-studio/apply` re-resolves everything and requires target edit authority, an allowed source import, the review hash and target revision. Snapshot creation and Workspace CAS happen in one database transaction. The resulting exact binding uses the existing Workspace schema resolver. Old candidate fields, operations, validation override and extraction proposal are invalidated. No content Commit or AI execution is created by binding adoption.
 
 Tests exercise repeatable hashes/diffs, missing candidates, module dependency failures, whole-Schema boundaries, source/target authority, stale review rejection, concurrent apply (one success / one conflict), old diagnostic invalidation and exact snapshot resolution after source withdrawal. Initial tests found incomplete metadata in the synthetic unbound comparison baseline; it now uses a valid empty YSchema contract. One test expected 400 for review-required, corrected to the existing 409 contract. No checks were disabled.
+
+## Studio experience — #1519
+
+The default Studio surface now uses persistent candidates and real backend previews. Selection, source versions, definition reading, X-ray/code, comparison, checks, and explicit review/apply share the pinned API contract. The old detailed definition workbench remains available behind an explicit advanced action.
+
+Required V2 imports project their last matching provider as included/locked. Legacy V1 `requires` remain suggestions under the existing open V2 adapter; no core is mandatory merely because it is tagged as core. Published whole Schemas are adopted atomically. Missing declared dependencies block apply through the native compiler. Definition checks and execution results are separate.
+
+Schemas defaults to Active when Workspaces have bindings. Active reads current Workspace revisions and diagnostics, shows exact source versions/hashes, and links back to Workspace review/history. Other visible releases link to Browse and must enter a new review before replacing a binding. Existing releases never silently move to latest. Release discovery is paginated; absence of an alternative in the displayed catalog page is not a claim that a source is up to date.
+
+[Real browser screenshots and failure classification](verification/studio-experience/README.md).

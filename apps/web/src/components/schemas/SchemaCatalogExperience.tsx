@@ -32,9 +32,11 @@ import {
   useSchemaCollections,
   useSchemaIntroduction,
 } from '@/hooks/schemas/useSchemaCatalog';
+import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
+import { ActiveSchemaBindings } from './ActiveSchemaBindings';
 import { AddToStudio } from './AddToStudio';
-import { StudioCandidateList } from './StudioCandidateList';
+import { SchemaStudioExperience } from './SchemaStudioExperience';
 
 const filterKeys = [
   'q',
@@ -56,7 +58,7 @@ const icons = {
   data: Box,
   'work-life': BookOpen,
 };
-type View = 'discover' | 'browse' | 'studio';
+type View = 'discover' | 'browse' | 'studio' | 'active';
 export function SchemaCatalogExperience({
   projectId,
   children,
@@ -69,12 +71,19 @@ export function SchemaCatalogExperience({
   const router = useRouter();
   const params = new URLSearchParams(search?.toString() ?? '');
   const requestedView = params.get('schemaView');
+  const workspaces = useProjectWorkspaces(projectId);
+  const hasBinding = workspaces.workspaces.some((item) => item.schemaBindings.length > 0);
   const view: View =
-    requestedView === 'browse' || requestedView === 'studio' || requestedView === 'discover'
+    requestedView === 'browse' ||
+    requestedView === 'studio' ||
+    requestedView === 'discover' ||
+    requestedView === 'active'
       ? requestedView
       : params.get('mode') === 'compose'
         ? 'studio'
-        : 'discover';
+        : hasBinding
+          ? 'active'
+          : 'discover';
   const filters = new URLSearchParams();
   if (view === 'browse')
     for (const key of filterKeys) {
@@ -82,7 +91,11 @@ export function SchemaCatalogExperience({
       if (value) filters.set(key, value);
     }
   filters.set('limit', view === 'discover' ? '12' : '24');
-  const catalog = useSchemaCatalog(projectId, filters.toString(), view !== 'studio');
+  const catalog = useSchemaCatalog(
+    projectId,
+    filters.toString(),
+    view === 'discover' || view === 'browse'
+  );
   const collections = useSchemaCollections();
   const [selected, setSelected] = useState<SchemaCatalogItem>();
   const [showFilters, setShowFilters] = useState(false);
@@ -154,6 +167,7 @@ export function SchemaCatalogExperience({
       >
         {(
           [
+            ...(hasBinding ? [['active', Box, 'Active'] as const] : []),
             ['discover', Search, 'Discover'],
             ['browse', BookOpen, 'Browse'],
             ['studio', Code2, 'Studio'],
@@ -176,11 +190,17 @@ export function SchemaCatalogExperience({
           </button>
         ))}
       </nav>
-      {view === 'studio' ? (
-        <>
-          <StudioCandidateList key={projectId} projectId={projectId} />
+      {view === 'active' ? (
+        <ActiveSchemaBindings
+          projectId={projectId}
+          workspaces={workspaces.workspaces}
+          refresh={workspaces.refresh}
+          error={workspaces.error}
+        />
+      ) : view === 'studio' ? (
+        <SchemaStudioExperience key={projectId} projectId={projectId}>
           {children}
-        </>
+        </SchemaStudioExperience>
       ) : (
         <div className="p-4 sm:p-6">
           {view === 'discover' ? (
