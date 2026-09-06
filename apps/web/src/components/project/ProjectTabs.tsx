@@ -8,11 +8,10 @@ import { cn } from '@/utils/cn';
 
 export interface ProjectTabsProps {
   activeTab: ProjectTabId;
-  outputCount?: number;
   repoPath: string;
 }
 
-export function ProjectTabs({ activeTab, outputCount = 0, repoPath }: ProjectTabsProps) {
+export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
   return (
     <nav
       aria-label="Project views"
@@ -33,7 +32,6 @@ export function ProjectTabs({ activeTab, outputCount = 0, repoPath }: ProjectTab
                 ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
-            data-output-count={tab.id === 'outputs' ? outputCount : undefined}
             href={tab.id === 'state' ? repoPath : `${repoPath}/${getProjectTabSegment(tab.id)}`}
             key={tab.id}
             scroll={false}

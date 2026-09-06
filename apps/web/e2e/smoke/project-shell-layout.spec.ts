@@ -11,6 +11,7 @@ test('shared project shell keeps navigation separate from long project names', a
       const nav = page.getByRole('navigation', { name: 'Project views' });
       const title = page.getByRole('heading', { name: 'Long project name for infrastructure and evaluation configuration', exact: true });
       await expect(nav).toBeVisible();
+      await expect(nav.getByRole('link', { name: 'Outputs' })).toHaveCount(0);
       const titleBox = await title.boundingBox();
       const navBox = await nav.boundingBox();
       expect(titleBox).not.toBeNull();
@@ -22,5 +23,8 @@ test('shared project shell keeps navigation separate from long project names', a
       await expect(page.getByRole('link', { name: 'Workspaces', exact: true })).toHaveAttribute('aria-current', 'page');
       if (width === 1480) await page.screenshot({ path: testInfo.outputPath('workspace-shell.png') });
     }
+    await page.goto(`/project/${projectId}?tab=outputs`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('navigation', { name: 'Project views' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No committed Leaves yet' })).toBeVisible();
   } finally { await cleanupProject(request, projectId); }
 });

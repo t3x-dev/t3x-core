@@ -83,3 +83,9 @@ and their State/header portions pushed back to the owning parent PRs.
 - Complete browser flow passed through proposal, validation, preview and audited commit; shutdown and temporary PostgreSQL cleanup exited 0.
 - Full WebUI run: 1589 passed, one legacy text assertion failed; updated that assertion and reran its owning test successfully. Focused WorkspaceWorkbench: 32 passed.
 - Scope: backend validation, schema finding resolution and commit policy are unchanged. The view does not claim an external schema validator ran.
+
+## Outputs navigation retirement — 2026-09-06
+
+Primary project navigation and its output count are removed. Legacy `/outputs` and `tab=outputs` parsing remains. This is the navigation slice of #1506; creation controls and historical read-only conversion remain pending.
+
+Four component tests passed. Chromium verified navigation geometry at 1480/1200/1000/390 widths and the legacy empty Outputs route; shutdown exited 0. Inspected desktop screenshot before commit (`verification/outputs-navigation/desktop.png`).
