@@ -21,6 +21,7 @@ import {
   type ProposalDraft,
   type ProposalStatement,
   parseAcceptancePolicy,
+  parseYSchemaValidationStatement,
   projectTransitionView,
   repositorySemanticYSchemaTree,
   runRepositorySemanticYSchemaStatementProvider,
@@ -29,6 +30,7 @@ import {
   type StatementObservation,
   type TransitionViewV1,
   type TrustedDecisionFacts,
+  YSCHEMA_VALIDATION_PREDICATE_TYPE,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -899,6 +901,37 @@ export async function decideWorkspaceTransition(
       };
     }
 
+    // Project only the native evidence used by this exact, successfully decided review.
+    const nativeChecks = graph.observations
+      .filter(
+        ({ statement, issuerContext }) =>
+          statement.predicateType === YSCHEMA_VALIDATION_PREDICATE_TYPE &&
+          issuerContext.actor.kind === VALIDATION_ACTOR.kind &&
+          issuerContext.actor.id === VALIDATION_ACTOR.id
+      )
+      .map(({ statement }) => parseYSchemaValidationStatement(statement));
+    const nativeCheck = nativeChecks.length === 1 ? nativeChecks[0]!.predicate : null;
+    const committedSchemaReview =
+      nativeCheck?.outcome === 'passed'
+        ? {
+            verdict: 'ready',
+            summary:
+              'Native YSchema validation passed for this committed result. Execution was not run.',
+            gaps: [],
+          }
+        : {
+            verdict: 'needs_review',
+            summary: 'This commit does not have a passing native YSchema check.',
+            gaps:
+              nativeCheck?.outcome === 'failed'
+                ? [
+                    ...new Set(
+                      [...nativeCheck.errors, ...nativeCheck.gaps].map((finding) => finding.path)
+                    ),
+                  ]
+                : ['Native YSchema validation is unavailable.'],
+          };
+
     const projectionFacts: ProtocolValue = {
       adapter: 'workspace_transition',
       workspace_id: input.workspaceId,
@@ -935,6 +968,7 @@ export async function decideWorkspaceTransition(
         apply({ workspace, committedAt }) {
           return {
             ...workspace,
+            schemaReview: committedSchemaReview,
             ...(input.workspaceCommitOverride === undefined
               ? {}
               : {

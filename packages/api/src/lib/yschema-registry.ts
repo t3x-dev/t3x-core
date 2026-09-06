@@ -39,7 +39,12 @@ export function schemaVersionFromBinding(binding: unknown): string | undefined {
 }
 
 export function schemaRootKeyFromBinding(binding: unknown): string {
+  if (binding && typeof binding === 'object' && !Array.isArray(binding)) {
+    const rootKey = (binding as Record<string, unknown>).rootKey;
+    if (typeof rootKey === 'string' && /^[a-z][a-z0-9_]*$/.test(rootKey)) return rootKey;
+  }
   const canonicalName = canonicalSchemaNameFromBinding(binding);
+  if (canonicalName?.startsWith('studio:')) return 'candidate';
   if (canonicalName === 't3x/esphome-device') return 'device';
   if (canonicalName) return canonicalName.split('/').at(-1) ?? 'candidate';
 

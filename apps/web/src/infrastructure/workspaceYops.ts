@@ -71,7 +71,9 @@ export async function validateWorkspaceYOps(
 
 export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): string {
   const primary = bindings[0];
+  if (primary?.rootKey && /^[a-z][a-z0-9_]*$/.test(primary.rootKey)) return primary.rootKey;
   const canonicalName = primary?.canonicalName?.trim().toLowerCase();
+  if (canonicalName?.startsWith('studio:')) return 'candidate';
   if (canonicalName === 't3x/esphome-device') return 'device';
   if (canonicalName) return toSnakeKey(canonicalName.split('/').at(-1) ?? 'candidate');
 
