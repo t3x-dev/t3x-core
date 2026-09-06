@@ -1,9 +1,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { SchemaCatalogCollectionsSchema, SchemaCatalogPageSchema } from '@t3x-dev/api-client';
 import {
   ConflictError,
+  decodeCursor,
   findWorkspaceDraft,
   listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
+  listYSchemaCatalogReleases,
   publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
   updateYSchemaArtifactIdentity,
@@ -234,6 +237,106 @@ const ArtifactRegistryResponseSchema = z
 const ProjectYSchemaVersionHistoryResponseSchema = z
   .object({ items: z.array(z.any()) })
   .openapi('ProjectYSchemaVersionHistoryResponse');
+
+// Editorial collections are loose discovery aliases, never schema types or runtime authority.
+const catalogCollections = [
+  { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure', 'devops', 'homelab'] },
+  { id: 'ai-agents', title: 'AI & Agents', tags: ['ai', 'agents', 'evaluation'] },
+  { id: 'science', title: 'Science & Research', tags: ['science', 'research'] },
+  { id: 'security', title: 'Security', tags: ['security', 'detection'] },
+  { id: 'devices', title: 'Devices & Automation', tags: ['devices', 'iot', 'automation'] },
+  { id: 'data', title: 'Data & Visualization', tags: ['data', 'visualization'] },
+  { id: 'work-life', title: 'Work & Life', tags: ['planning', 'work', 'care'] },
+];
+const CatalogQuerySchema = z
+  .object({
+    q: z.string().trim().max(200).optional(),
+    tags: z
+      .string()
+      .max(1600)
+      .transform((value) =>
+        value
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      )
+      .pipe(z.array(z.string().max(80)).max(16))
+      .optional(),
+    ecosystem: z.string().trim().min(1).max(80).optional(),
+    publisher: z.string().trim().min(1).max(120).optional(),
+    family: z.string().trim().min(1).max(80).optional(),
+    kind: z.enum(['core', 'module', 'schema']).optional(),
+    format: z.enum(['json', 'yaml']).optional(),
+    capability: z.string().trim().min(1).max(160).optional(),
+    collection: z
+      .string()
+      .refine((value) => catalogCollections.some((item) => item.id === value), 'Unknown collection')
+      .optional(),
+    cursor: z
+      .string()
+      .max(2048)
+      .refine((value) => {
+        try {
+          decodeCursor(value);
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Invalid cursor')
+      .optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(24),
+  })
+  .strict();
+const catalogResponses = {
+  200: {
+    description: 'Visible published definitions, with immutable release references',
+    content: {
+      'application/json': { schema: SuccessResponseSchema(SchemaCatalogPageSchema) },
+    },
+  },
+  400: {
+    description: 'Invalid query or cursor',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  403: {
+    description: 'Project access denied',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  404: {
+    description: 'Project not found',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+};
+const catalogRoute = createRoute({
+  method: 'get',
+  path: '/v1/yschema/catalog',
+  tags: ['YSchema'],
+  summary: 'Search public published definitions without exposing manifests or draft versions',
+  request: { query: CatalogQuerySchema },
+  responses: catalogResponses,
+});
+const projectCatalogRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/yschema/catalog',
+  tags: ['YSchema'],
+  summary: 'Search public and authorized project-owned published definitions',
+  request: { params: z.object({ projectId: z.string().min(1) }), query: CatalogQuerySchema },
+  responses: catalogResponses,
+});
+const catalogCollectionsRoute = createRoute({
+  method: 'get',
+  path: '/v1/yschema/catalog/collections',
+  tags: ['YSchema'],
+  summary: 'List official editorial tag collections; not compatibility declarations',
+  responses: {
+    200: {
+      description: 'Editorial discovery filters',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(SchemaCatalogCollectionsSchema) },
+      },
+    },
+  },
+});
 
 const listArtifactsRoute = createRoute({
   method: 'get',
@@ -543,6 +646,36 @@ const publishWorkspaceCompositionRoute = createRoute({
 });
 
 export const yschemaCompositionRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+yschemaCompositionRoutes.openapi(catalogCollectionsRoute, async (c) => {
+  return c.json({ success: true as const, data: { items: catalogCollections } }, 200);
+});
+yschemaCompositionRoutes.openapi(catalogRoute, async (c) => {
+  const query = c.req.valid('query');
+  const db = await getDB();
+  await ensureBuiltInYSchemaArtifacts(db);
+  const page = await listYSchemaCatalogReleases(db, {
+    ...query,
+    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
+  });
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
+});
+yschemaCompositionRoutes.openapi(projectCatalogRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const query = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  await ensureBuiltInYSchemaArtifacts(db);
+  const page = await listYSchemaCatalogReleases(db, {
+    ...query,
+    project_id: projectId,
+    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
+  });
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
+});
 
 yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
   const query = c.req.valid('query');
