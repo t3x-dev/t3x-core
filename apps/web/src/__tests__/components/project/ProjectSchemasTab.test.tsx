@@ -8,6 +8,10 @@ import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspace
 import type { PublishedSchemaVersionManifest } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
+vi.mock('@/components/schemas/SchemaCatalogExperience', () => ({
+  SchemaCatalogExperience: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 const refreshWorkspaces = vi.fn();
 const saveDraft = vi.fn();
 const extractCandidate = vi.fn();

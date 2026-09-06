@@ -142,6 +142,17 @@ export async function publishWorkspaceYSchemaComposition(
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.presentationRef
+          ? {
+              presentation_ref: {
+                commitDigest: input.presentationRef.commitDigest,
+                presentationDigest: input.presentationRef.presentationDigest,
+                ...(input.presentationRef.coverPath
+                  ? { coverPath: input.presentationRef.coverPath }
+                  : {}),
+              },
+            }
+          : {}),
         ...(input.tags?.length ? { tags: input.tags } : {}),
       }),
     }
