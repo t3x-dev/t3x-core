@@ -110,7 +110,9 @@ export function StateSemanticReader({
           className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
         >
           <h4 className="mb-2 text-base font-semibold">{tree.key}</h4>
-          <StateValueReader value={tree.slots} />
+          {Object.keys(tree.slots).length || tree.children.length === 0 ? (
+            <StateValueReader value={tree.slots} />
+          ) : null}
           {tree.children.length > 0 ? (
             <div className="mt-3 border-t border-[var(--stroke-divider)] pt-3">
               <StateSemanticReader trees={tree.children as typeof trees} />

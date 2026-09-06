@@ -28,8 +28,12 @@ Real author sample, native missing-field failure, browser repair, mobile layout,
 
 Wave 3 result: passed.
 
-## Remaining wave gates
+## Wave 4: Cloud compatibility
 
-Cloud compatibility remains in progress. No overall completion is claimed.
+Actual local Cloud API/Web/PostgreSQL, Cloud migrations and Free account capacity policy: three browser journeys passed. Full Cloud API 666 and Web 1685 tests passed. Protected overlays, package integrity and database/recovery contracts verified. Evidence and environment limits: `docs/plans/state-schema-delivery-2026-09-05/verification/cloud-compatibility/README.md`.
 
-Overall result: blocked (remaining wave implementation and qualification pending).
+Final screenshot critique removed misleading empty-container text and corrected cross-namespace authoring qualification. Development-only React/Next warning is recorded. Hosted OAuth and production deployment are outside this qualification.
+
+Wave 4 result: passed for local compatibility.
+
+Overall result: passed for the four requested delivery waves. Editorial content, original epic stretch criteria and commercial Team entitlement approval are not silently marked complete.
