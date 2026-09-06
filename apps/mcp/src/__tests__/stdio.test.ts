@@ -137,7 +137,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
   );
 
   it(
-    'routes generate boundary errors through the real stdio subprocess',
+    'routes generate retirement through the real stdio subprocess',
     async () => {
       const { client } = await connectConfiguredClient();
       openClients.push(client);
@@ -150,13 +150,13 @@ describe('apps/mcp stdio subprocess smoke', () => {
       });
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('"leaf_id" is required');
+      expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
     },
     stdioSmokeTimeoutMs
   );
 
   it(
-    'routes create_leaf validation through the real stdio subprocess',
+    'routes create_leaf retirement through the real stdio subprocess',
     async () => {
       const { client } = await connectConfiguredClient();
       openClients.push(client);
@@ -171,7 +171,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
       });
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('"project_id" is required');
+      expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
     },
     stdioSmokeTimeoutMs
   );
