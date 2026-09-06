@@ -214,15 +214,20 @@ describe('ProjectDetailPage — project-first shell states', () => {
   const renderProjectContent = () =>
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-  it('canonicalizes project id routes to owner/repo routes', async () => {
+  it('keeps project ID routes independent of namespace directory access', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces&zoom=1.00&x=10&y=20');
     pathnameValue = '/project/proj_test';
 
     render(<ProjectDetailPage />);
 
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces');
-    });
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument()
+    );
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?tab=schemas'
+    );
   });
 
   it('renders project detail from an owner/repo route override', () => {
@@ -469,9 +474,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByText('t3x-dev')).toBeInTheDocument();
+    expect(screen.getByRole('banner')).toHaveTextContent('Project');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
@@ -487,7 +492,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces'
+      '/project/proj_test?tab=workspaces'
     );
   });
 
@@ -521,11 +526,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', {
-        scroll: false,
-      });
-    });
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it('opens Schema discovery from the project tab query string', () => {

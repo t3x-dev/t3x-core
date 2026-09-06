@@ -19,7 +19,7 @@ import {
   parseProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -42,7 +42,7 @@ import { recordRecentProjectOpen } from '@/utils/recentProjects';
 export default function ProjectDetailPage() {
   return (
     <Suspense>
-      <ProjectIdCanonicalRedirect />
+      <ProjectDetailPageContent />
     </Suspense>
   );
 }
@@ -90,60 +90,6 @@ function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
     searchParams.has('zoom') ||
     searchParams.has('x') ||
     searchParams.has('y')
-  );
-}
-
-function ProjectIdCanonicalRedirect() {
-  const params = useParams<{ projectId?: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const projectId = typeof params.projectId === 'string' ? params.projectId : '';
-  const projectFromStore = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId)
-  );
-  const [lookupError, setLookupError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    if (!projectId) return;
-
-    const replaceWithProject = (project: ProjectSummary) => {
-      router.replace(
-        getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
-      );
-    };
-
-    if (projectFromStore) {
-      replaceWithProject(projectFromStore);
-      return;
-    }
-
-    let cancelled = false;
-    setLookupError(null);
-    fetchProject(projectId)
-      .then((detail) => {
-        if (!cancelled) replaceWithProject(apiProjectToSummary(detail));
-      })
-      .catch((err) => {
-        if (!cancelled) setLookupError(err instanceof Error ? err : new Error(String(err)));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectFromStore, projectId, router, searchParams]);
-
-  if (lookupError) {
-    return (
-      <div className="flex h-full flex-col">
-        <ErrorMessage error={lookupError} onRetry={() => setLookupError(null)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full flex-col">
-      <LoadingSpinner message="Opening repository..." />
-    </div>
   );
 }
 
@@ -233,7 +179,7 @@ export function ProjectDetailPageContent({
   }, [closeNodeModal, isCanvasActive, showIntroDemo]);
 
   useEffect(() => {
-    if (isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
+    if (routeProjectId || isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
     if (searchParams.has('tab') && !project) return;
 
     const nextPath =
@@ -241,7 +187,7 @@ export function ProjectDetailPageContent({
         ? getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
-  }, [isCanvasSurface, pathname, project, router, searchParams]);
+  }, [isCanvasSurface, pathname, project, routeProjectId, router, searchParams]);
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -487,7 +433,7 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          stateHref={getProjectRepoPath(project)}
+          stateHref={routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />
@@ -538,7 +484,7 @@ export function ProjectDetailPageContent({
 
   return (
     <>
-      <ProjectShell activeTab={activeTab} project={project}>
+      <ProjectShell activeTab={activeTab} project={project} projectIdNavigation={!!routeProjectId}>
         {activeContent}
       </ProjectShell>
       {isEmbeddedCanvasSurface ? (

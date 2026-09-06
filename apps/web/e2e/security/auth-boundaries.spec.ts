@@ -53,7 +53,8 @@ test.describe('authenticated browser boundaries', () => {
     await page.getByLabel(/Display Name/).fill(alice.name);
 
     const registration = page.waitForResponse(
-      (response) => response.url() === `${API_BASE}/auth/register` && response.request().method() === 'POST'
+      (response) =>
+        response.url() === `${API_BASE}/auth/register` && response.request().method() === 'POST'
     );
     await page.getByRole('button', { name: 'Create Account' }).click();
 
@@ -74,6 +75,9 @@ test.describe('authenticated browser boundaries', () => {
     request,
   }) => {
     const aliceKey = await loginThroughBrowser(page, alice);
+    expect(
+      (await browserApi(page, aliceKey, 'POST', '/namespaces', { slug: `alice-${runId}` })).status
+    ).toBe(201);
     const aliceProjectName = `Alice Private ${runId}`;
     const aliceProject = await browserApi<{ project_id: string }>(
       page,
@@ -93,6 +97,9 @@ test.describe('authenticated browser boundaries', () => {
 
     try {
       const bobKey = await loginThroughBrowser(bobPage, bob);
+      expect(
+        (await browserApi(bobPage, bobKey, 'POST', '/namespaces', { slug: `bob-${runId}` })).status
+      ).toBe(201);
       const bobProjectName = `Bob Visible ${runId}`;
       const bobProject = await browserApi<{ project_id: string }>(
         bobPage,
@@ -106,8 +113,8 @@ test.describe('authenticated browser boundaries', () => {
       );
       expect(bobProject.status).toBe(201);
 
-      await bobPage.goto('/');
-      await expect(bobPage.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+      await bobPage.goto(`/bob-${runId}`);
+      await expect(bobPage.getByRole('heading', { name: `bob-${runId}` })).toBeVisible();
       await expect(
         bobPage.locator('article').filter({ hasText: bobProjectName }).first()
       ).toBeVisible();
@@ -121,11 +128,7 @@ test.describe('authenticated browser boundaries', () => {
       );
       expect([403, 404]).toContain(concealed.status);
 
-      const ownSocket = await openProjectSocket(
-        page,
-        aliceKey,
-        aliceProjectId as string
-      );
+      const ownSocket = await openProjectSocket(page, aliceKey, aliceProjectId as string);
       expect(ownSocket.kind).toBe('connected');
       expect(ownSocket.projectId).toBe(aliceProjectId);
 
@@ -137,11 +140,7 @@ test.describe('authenticated browser boundaries', () => {
       );
       expect(deniedHandshakeStatus).toBe(403);
 
-      const deniedSocket = await openProjectSocket(
-        bobPage,
-        bobKey,
-        aliceProjectId as string
-      );
+      const deniedSocket = await openProjectSocket(bobPage, bobKey, aliceProjectId as string);
       expect(deniedSocket.kind).toBe('denied');
     } finally {
       await bobContext.close();

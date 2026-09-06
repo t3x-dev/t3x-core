@@ -17,7 +17,7 @@ export async function resolveStudioSource(
   }
 ) {
   if (source.sourceProjectId) {
-    const access = await assertProjectAccess(c, db, source.sourceProjectId);
+    const access = await assertProjectAccess(c, db, source.sourceProjectId, 'project:read');
     if (access instanceof Response) return null;
   }
   const view = await findYSchemaArtifactVersion(db, {

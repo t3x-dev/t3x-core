@@ -91,7 +91,7 @@ export const schemaStudioRoutes = new OpenAPIHono({ defaultHook: zodErrorHook })
 schemaStudioRoutes.openapi(listRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
   const rows = await listSchemaStudioCandidates(db, projectId);
   const items = await Promise.all(rows.map((row) => projectStudioCandidate(c, db, row)));
@@ -105,7 +105,7 @@ schemaStudioRoutes.openapi(addRoute, async (c) => {
   if (access instanceof Response) return access;
   await ensureBuiltInYSchemaArtifacts(db);
   if (input.sourceProjectId) {
-    const sourceAccess = await assertProjectAccess(c, db, input.sourceProjectId);
+    const sourceAccess = await assertProjectAccess(c, db, input.sourceProjectId, 'project:read');
     if (sourceAccess instanceof Response)
       return errorResponse(c, 'NOT_FOUND', 'Source release is unavailable or not authorized.');
   }
@@ -190,7 +190,7 @@ const applyRoute = createRoute({
 schemaStudioRoutes.openapi(previewRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
   try {
     return c.json(
