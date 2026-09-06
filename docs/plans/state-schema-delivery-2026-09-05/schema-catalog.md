@@ -50,3 +50,5 @@ Collections are optional editorial labels rather than a type hierarchy. An empty
 Focused API + composition persistence suites: 22 passed. Includes real PostgreSQL queries, equal-timestamp multi-version pagination, permission isolation with authentication enabled, cursor reuse, soft-deleted owners, drafts/archives, literal wildcard search, loose tags vs capabilities, immutable hashes across metadata edits and legacy built-in title fallback.
 
 Initial local run used dependency output overwritten by the author-PR pre-push build; rebuilding dependencies resolved the missing runtime exports. A permission fixture passed `ownerId` through a helper that discards that field; the corrected fixture creates real namespace authority. Final results above follow both corrections.
+
+After integrating #1542 from `dev` (`d68de453c1f76a5c281fcff073e09a51eeadb76e`), full `pnpm test` passed: 31 successful tasks, API 1,305 passed / 1 skipped, WebUI 1,586 passed. The route-policy merge retained all 284 entries and its inventory check passed.
