@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -22,7 +23,7 @@ export const WORKSPACE_TABS: {
   label: string;
   count?: (candidate: WorkspaceCandidate) => number;
 }[] = [
-  { id: 'chat', keyLabel: '', label: 'Source' },
+  { id: 'chat', keyLabel: '', label: 'Compose' },
   {
     id: 'ops',
     keyLabel: '',
@@ -58,47 +59,83 @@ export function WorkspaceWorkflowTabs({
   onTabChange: (tab: WorkspaceTabId) => void;
   validationGapCount?: number;
 }) {
+  const lastReviewTab = useRef<WorkspaceTabId>('ops');
+  if (activeTab !== 'chat') lastReviewTab.current = activeTab;
   return (
-    <div
-      aria-label="Workspace workflow tabs"
-      className="flex min-h-[52px] items-stretch overflow-x-auto"
-      role="tablist"
-    >
-      {WORKSPACE_TABS.map((tab) => {
-        const selected = activeTab === tab.id;
-        const count =
-          tab.id === 'validation' && validationGapCount !== undefined
-            ? validationGapCount
-            : candidate
-              ? tab.count?.(candidate)
-              : undefined;
+    <div>
+      <div
+        role="tablist"
+        aria-label="Workspace modes"
+        className="flex min-h-10 items-center gap-1 px-2"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'chat'}
+          onClick={() => onTabChange('chat')}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-sm font-medium',
+            activeTab === 'chat' && 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
+          )}
+        >
+          Compose
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab !== 'chat'}
+          onClick={() => onTabChange(lastReviewTab.current)}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-sm font-medium',
+            activeTab !== 'chat' && 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
+          )}
+        >
+          Review
+        </button>
+      </div>
+      {activeTab !== 'chat' && (
+        <div
+          aria-label="Workspace workflow tabs"
+          className="flex min-h-10 items-stretch overflow-x-auto border-t border-[var(--stroke-divider)]"
+          role="tablist"
+        >
+          {WORKSPACE_TABS.filter((tab) => tab.id !== 'chat').map((tab) => {
+            const selected = activeTab === tab.id;
+            const count =
+              tab.id === 'validation' && validationGapCount !== undefined
+                ? validationGapCount
+                : candidate
+                  ? tab.count?.(candidate)
+                  : undefined;
 
-        return (
-          <button
-            aria-selected={selected}
-            className={cn(
-              'relative inline-flex min-w-[124px] shrink-0 items-center justify-center gap-1.5 border-b-2 px-4 text-sm font-semibold transition-colors',
-              selected
-                ? 'border-[var(--source)] bg-[var(--surface-card)] text-[var(--text-primary)]'
-                : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-            )}
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            role="tab"
-            type="button"
-          >
-            {tab.keyLabel ? (
-              <span className="font-mono text-xs font-bold">{tab.keyLabel}</span>
-            ) : null}
-            <span>{tab.label}</span>
-            {count ? (
-              <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-[var(--surface-elevated)] text-xs font-bold text-[var(--text-secondary)]">
-                {count}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
+            return (
+              <button
+                aria-selected={selected}
+                className={cn(
+                  'relative inline-flex min-w-[96px] shrink-0 items-center justify-center gap-1.5 border-b-2 px-4 text-sm font-semibold transition-colors',
+                  selected
+                    ? 'border-[var(--accent-commit)] bg-[var(--surface-card)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                )}
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                role="tab"
+                type="button"
+              >
+                {tab.keyLabel ? (
+                  <span className="font-mono text-xs font-bold">{tab.keyLabel}</span>
+                ) : null}
+                <span>{tab.label}</span>
+                {count ? (
+                  <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-[var(--surface-elevated)] text-xs font-bold text-[var(--text-secondary)]">
+                    {count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
