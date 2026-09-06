@@ -2009,6 +2009,20 @@
       "path": "/v1/projects/{projectId}/schema-studio/candidates/{candidateId}",
       "policy": "project",
       "rationale": "Requires target project:edit; removes only the scoped candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preview",
+      "policy": "project",
+      "rationale": "Checks target read and each exact source; read-only compiler/diff with workspace review preconditions."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/apply",
+      "policy": "project",
+      "rationale": "Requires target edit, source redistribution authority, exact review hash and Workspace revision CAS."
     }
   ]
 }
