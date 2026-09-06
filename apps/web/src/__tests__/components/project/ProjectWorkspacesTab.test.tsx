@@ -152,13 +152,27 @@ describe('ProjectWorkspacesTab', () => {
     expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
   });
 
+  it('keeps an explicitly requested Workspace when multiple drafts share one branch', async () => {
+    const [first, second] = getWorkspacePreviewCandidates('proj_other');
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([
+      { ...first, id: 'first', title: 'Other draft', targetBranch: 'main' },
+      { ...second, id: 'selected', title: 'Upgrade target', targetBranch: 'main' },
+    ]);
+    searchParamsValue = new URLSearchParams('branch=main&workspace=selected');
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+    expect(await screen.findByRole('heading', { name: 'Upgrade target' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Other draft' })).not.toBeInTheDocument();
+  });
+
   it('selects the workspace from the URL without showing an internal workspace selector', async () => {
     const [mainWorkspace, releaseWorkspace] = getWorkspacePreviewCandidates('proj_other');
     fetchProjectWorkspacesMock.mockResolvedValueOnce([
       { ...mainWorkspace, id: 'workspace_main', targetBranch: 'main' },
       releaseWorkspace,
     ]);
-    searchParamsValue = new URLSearchParams('branch=release%2Fnotes&workspace=workspace_main');
+    searchParamsValue = new URLSearchParams(
+      `branch=release%2Fnotes&workspace=${releaseWorkspace.id}`
+    );
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 

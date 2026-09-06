@@ -1,10 +1,12 @@
 'use client';
 import { ArrowRight, LockKeyhole, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { useSchemaCatalog } from '@/hooks/schemas/useSchemaCatalog';
 import type { WorkspaceCandidate, WorkspaceSchemaBinding } from '@/types/workspaces';
+import { AddToStudio } from './AddToStudio';
 
 export function ActiveSchemaBindings({
   projectId,
@@ -67,7 +69,11 @@ export function ActiveSchemaBindings({
                           className="text-xs text-[var(--text-secondary)]"
                         >
                           {source.canonicalName} · {source.version}
-                          <OtherReleases projectId={projectId} source={source} />
+                          <OtherReleases
+                            projectId={projectId}
+                            workspaceId={workspace.id}
+                            source={source}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -106,13 +112,16 @@ export function ActiveSchemaBindings({
 }
 function OtherReleases({
   projectId,
+  workspaceId,
   source,
 }: {
   projectId: string;
+  workspaceId: string;
   source: NonNullable<WorkspaceSchemaBinding['studioSources']>[number];
 }) {
-  const query = new URLSearchParams({ q: source.canonicalName, limit: '24' });
-  const catalog = useSchemaCatalog(projectId, query.toString());
+  const query = new URLSearchParams({ canonical_name: source.canonicalName, limit: '24' });
+  const [selectedId, setSelectedId] = useState('');
+  const catalog = useSchemaCatalog(source.projectId ?? projectId, query.toString());
   const others =
     catalog.data?.items.filter(
       (item) =>
@@ -120,14 +129,52 @@ function OtherReleases({
         item.identity.ownerProjectId === source.projectId &&
         item.release.hash !== source.hash
     ) ?? [];
-  return catalog.error ? (
-    <span className="ml-2 text-[var(--text-tertiary)]">Release lookup unavailable</span>
-  ) : others.length ? (
-    <Link
-      className="ml-2 text-[var(--status-info)]"
-      href={`${getProjectIdRepoPath(projectId)}?tab=schemas&schemaView=browse&q=${encodeURIComponent(source.canonicalName)}`}
-    >
-      Other published releases · review before upgrading
-    </Link>
-  ) : null;
+  const selected =
+    others.find((item) => item.release.artifactVersionId === selectedId) ?? others[0];
+  return (
+    <div className="mt-2 space-y-2">
+      {catalog.error ? <output>Release lookup unavailable</output> : null}
+      {selected ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <label>
+            <span className="sr-only">Published release for {source.canonicalName}</span>
+            <select
+              className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2"
+              value={selected.release.artifactVersionId}
+              onChange={(event) => setSelectedId(event.target.value)}
+            >
+              {others.map((item) => (
+                <option key={item.release.artifactVersionId} value={item.release.artifactVersionId}>
+                  {item.release.version}
+                </option>
+              ))}
+            </select>
+          </label>
+          <AddToStudio
+            key={selected.release.artifactVersionId}
+            defaultProjectId={projectId}
+            defaultWorkspaceId={workspaceId}
+            title={selected.identity.displayName ?? source.canonicalName}
+            source={{
+              sourceProjectId: source.projectId ?? undefined,
+              canonicalName: source.canonicalName,
+              version: selected.release.version,
+              expectedHash: selected.release.hash,
+            }}
+          />
+          <span>Review another release before replacing this binding.</span>
+        </div>
+      ) : null}
+      {catalog.data?.next_cursor ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={catalog.morePending}
+          onClick={() => void catalog.loadMore()}
+        >
+          More releases
+        </Button>
+      ) : null}
+    </div>
+  );
 }

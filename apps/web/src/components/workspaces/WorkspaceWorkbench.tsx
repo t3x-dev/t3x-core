@@ -1,4 +1,5 @@
 import { Braces, Download } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,6 +9,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { isPromptWorkspace } from '@/domain/workspaces/promptCompile';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
@@ -437,6 +439,11 @@ export function WorkspaceWorkbench({
     <section className="h-full overflow-auto p-3 sm:p-4" data-project-id={projectId}>
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
         <WorkspacesHeader
+          definitionHref={
+            selectedWorkspaceWithFlow?.schemaBindings.length
+              ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'active', workspace: selectedWorkspaceWithFlow.id })}`
+              : undefined
+          }
           onCompilePreview={() => setCompilePreviewOpen(true)}
           onDelivery={selectedWorkspaceWithFlow ? () => setDeliveryOpen(true) : undefined}
           promptWorkspace={isPromptWorkspace(selectedWorkspaceWithFlow)}
@@ -503,10 +510,12 @@ export function WorkspaceWorkbench({
 }
 
 function WorkspacesHeader({
+  definitionHref,
   onDelivery,
   onCompilePreview,
   promptWorkspace,
 }: {
+  definitionHref?: string;
   onDelivery?: () => void;
   onCompilePreview: () => void;
   promptWorkspace: boolean;
@@ -517,6 +526,11 @@ function WorkspacesHeader({
         T3X Workspace
       </h2>
       <div className="flex items-center gap-2">
+        {definitionHref ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href={definitionHref}>View definition</Link>
+          </Button>
+        ) : null}
         {onDelivery && (
           <Button onClick={onDelivery} size="sm" type="button" variant="outline">
             <Download aria-hidden="true" className="size-4" />
