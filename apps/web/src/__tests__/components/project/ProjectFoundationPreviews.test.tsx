@@ -6,6 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 
+vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
+  useSchemaCatalog: () => ({ data: { items: [], has_more: false }, loading: false }),
+  useSchemaCollections: () => [],
+  useSchemaIntroduction: () => ({ loading: false }),
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/t3x-dev/test-project/workspaces',
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -33,12 +39,11 @@ describe('project foundation previews', () => {
     expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('renders the Schemas preview for any project id during A0', () => {
+  it('opens Schema discovery without preselecting or applying a definition', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('reflects schema bindings from the schema tab in the workspace preview', async () => {

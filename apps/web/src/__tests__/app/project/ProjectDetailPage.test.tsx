@@ -31,6 +31,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
 
+vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
+  useSchemaCatalog: () => ({ data: { items: [], has_more: false }, loading: false }),
+  useSchemaCollections: () => [],
+  useSchemaIntroduction: () => ({ loading: false }),
+}));
+
 vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({
     embedded,
@@ -237,7 +243,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
@@ -522,19 +528,16 @@ describe('ProjectDetailPage — project-first shell states', () => {
     });
   });
 
-  it('renders the fixture-backed Schemas tab preview from the query string', () => {
+  it('opens Schema discovery from the project tab query string', () => {
     searchParamsValue = new URLSearchParams('tab=schemas');
 
     renderProjectContent();
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Schema versions' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('region', { name: 'Selected schema version' })
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search definitions' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('keeps repository State visible while Canvas is loading', async () => {

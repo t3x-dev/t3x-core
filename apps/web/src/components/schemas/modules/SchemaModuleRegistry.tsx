@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { SchemaReleasePresentationReference } from '@t3x-dev/api-client';
 import {
   ArrowDown,
   ArrowUp,
@@ -55,6 +56,7 @@ import type {
   SchemaCompositionWorkspaceContext,
   YSchemaArtifactFamily,
 } from '@/types/schemaModules';
+import { SchemaPublishIntroduction } from '../SchemaPublishIntroduction';
 import { SchemaArtifactDetail } from './SchemaArtifactDetail';
 import { SchemaArtifactIcon } from './SchemaArtifactIcon';
 
@@ -114,6 +116,7 @@ export function SchemaModuleRegistry({
   const [compositionRevision, setCompositionRevision] = useState(
     workspace?.composition?.revision ?? 0
   );
+  const [savedComposition, setSavedComposition] = useState(workspace?.composition);
   const [workspaceRevision, setWorkspaceRevision] = useState(workspace?.workspaceRevision);
   const [savedSignature, setSavedSignature] = useState<string>();
   const [autoSavePending, setAutoSavePending] = useState(false);
@@ -121,6 +124,8 @@ export function SchemaModuleRegistry({
   const [failedAutoSaveSignature, setFailedAutoSaveSignature] = useState<string>();
   const [feedback, setFeedback] = useState<string>();
   const [publishOpen, setPublishOpen] = useState(false);
+  const [publishPresentationRef, setPublishPresentationRef] =
+    useState<SchemaReleasePresentationReference>();
   const [publishPending, setPublishPending] = useState(false);
   const [publishTitle, setPublishTitle] = useState(
     `${workspace?.workspaceTitle ?? 'Composed'} Schema`
@@ -147,9 +152,15 @@ export function SchemaModuleRegistry({
     : undefined;
 
   useEffect(() => {
+    setPublishPresentationRef(undefined);
+    setPublishOpen(false);
+  }, [workspace?.projectId, workspace?.workspaceId]);
+
+  useEffect(() => {
     const persisted = artifactsFromComposition(workspace?.composition, artifacts);
     setCompositionModules(persisted);
     setCompositionRevision(workspace?.composition?.revision ?? 0);
+    setSavedComposition(workspace?.composition);
     setWorkspaceRevision(workspace?.workspaceRevision);
     setSavedSignature(persistedSignature);
     setSelectedArtifactName((current) =>
@@ -239,6 +250,7 @@ export function SchemaModuleRegistry({
           const normalized = artifactsFromComposition(saved.composition, artifacts);
           const normalizedSignature = compositionSignature(normalized);
           setCompositionRevision(saved.composition.revision);
+          setSavedComposition(saved.composition);
           setWorkspaceRevision(saved.workspaceRevision);
           setSavedSignature(normalizedSignature);
           if (latestSignatureRef.current === signatureToSave) {
@@ -315,7 +327,12 @@ export function SchemaModuleRegistry({
   }
 
   async function compileComposition() {
-    const preview = await previewState.compile(draft, workspace?.projectId);
+    // Verify the exact persisted definition: reconstructing it can change its ID,
+    // ordering metadata or options while the visible module list stays the same.
+    const preview = await previewState.compile(
+      !dirty && savedComposition ? savedComposition : draft,
+      workspace?.projectId
+    );
     if (preview)
       setFeedback(preview.report.valid ? 'Composition is valid.' : 'Review blocking issues.');
     return preview;
@@ -328,6 +345,7 @@ export function SchemaModuleRegistry({
     setFeedback(undefined);
     try {
       const published = await publish(workspace.projectId, workspace.workspaceId, {
+        ...(publishPresentationRef ? { presentationRef: publishPresentationRef } : {}),
         compositionRevision,
         compositionHash: previewState.result.compositionHash,
         canonicalName: publishCanonicalName.trim(),
@@ -341,6 +359,7 @@ export function SchemaModuleRegistry({
           .filter(Boolean),
       });
       setPublishOpen(false);
+      setPublishPresentationRef(undefined);
       setFeedback(`Published ${published.title} ${published.version} as an immutable Schema.`);
       await workspace.onPublished?.(published);
     } catch (cause) {
@@ -717,16 +736,22 @@ export function SchemaModuleRegistry({
           </div>
         </div>
       </aside>
-      <Dialog onOpenChange={setPublishOpen} open={publishOpen}>
-        <DialogContent className="sm:max-w-[540px]">
-          <DialogHeader>
+      <Dialog
+        onOpenChange={(open) => {
+          setPublishOpen(open);
+          if (!open) setPublishPresentationRef(undefined);
+        }}
+        open={publishOpen}
+      >
+        <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[540px]">
+          <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] p-5 pr-10 text-left">
             <DialogTitle>Publish Schema version</DialogTitle>
             <DialogDescription>
               Freeze Composition r{compositionRevision} and its exact Module versions as an
               immutable Schema. This does not create a Module or Commit.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div className="grid min-h-0 gap-4 overflow-y-auto p-5">
             <PublishField id="schema-version-title" label="Schema title">
               <Input
                 id="schema-version-title"
@@ -776,9 +801,24 @@ export function SchemaModuleRegistry({
                 value={releaseNotes}
               />
             </PublishField>
+            {workspace ? (
+              <SchemaPublishIntroduction
+                key={workspace.projectId}
+                projectId={workspace.projectId}
+                value={publishPresentationRef}
+                onChange={setPublishPresentationRef}
+              />
+            ) : null}
           </div>
-          <DialogFooter>
-            <Button onClick={() => setPublishOpen(false)} type="button" variant="canvas-outline">
+          <DialogFooter className="shrink-0 border-t border-[var(--stroke-divider)] p-4">
+            <Button
+              onClick={() => {
+                setPublishOpen(false);
+                setPublishPresentationRef(undefined);
+              }}
+              type="button"
+              variant="canvas-outline"
+            >
               Cancel
             </Button>
             <Button
