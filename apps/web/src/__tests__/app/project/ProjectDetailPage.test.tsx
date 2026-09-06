@@ -20,7 +20,7 @@ const canvasSurfaceMocks = vi.hoisted(() => ({
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
-let searchParamsValue = new URLSearchParams();
+let searchParamsValue = new URLSearchParams('view=structure');
 let routeParamsValue: Record<string, string> = { projectId: 'proj_test' };
 let pathnameValue = '/t3x-dev/test-project';
 
@@ -158,7 +158,7 @@ beforeEach(() => {
   });
   stateHookMocks.refreshBranches.mockResolvedValue(undefined);
   stateHookMocks.refreshWorkspaces.mockResolvedValue(undefined);
-  searchParamsValue = new URLSearchParams();
+  searchParamsValue = new URLSearchParams('view=structure');
   pathnameValue = '/t3x-dev/test-project';
   routeParamsValue = { projectId: 'proj_test' };
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
@@ -382,7 +382,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('shows failed YSchema gaps and can rerun validation from State', async () => {
-    searchParamsValue = new URLSearchParams('tab=state');
+    searchParamsValue = new URLSearchParams('tab=state&view=structure');
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: STATE_COMMIT.hash,
@@ -573,7 +573,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('ignores selected-node deep links while the intro demo opens committed State', async () => {
-    searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
+    searchParamsValue = new URLSearchParams('view=structure&introDemo=1&selected=sha256%3Aabc123');
     useCanvasStore.setState({
       nodes: [
         { id: 'sha256:abc123', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
