@@ -497,6 +497,7 @@ export function SchemaCatalogExperience({
               projectId={projectId}
               returnTo={`${pathname}?${params.toString()}`}
               onStudio={() => openStudio(selected)}
+              onAdded={() => setSelected(undefined)}
             />
           ) : null}
         </SheetContent>
@@ -576,11 +577,13 @@ function ReleaseDetail({
   projectId,
   returnTo,
   onStudio,
+  onAdded,
 }: {
   item: SchemaCatalogItem;
   projectId: string;
   returnTo: string;
   onStudio: () => void;
+  onAdded: () => void;
 }) {
   const intro = useSchemaIntroduction(item.presentationRef);
   const reference = item.presentationRef;
@@ -640,6 +643,7 @@ function ReleaseDetail({
         {intro.data ? <StateAuthorReadme author={intro.data.document} /> : null}
         <div className="flex flex-wrap gap-3">
           <AddToStudio
+            onAdded={onAdded}
             defaultProjectId={projectId}
             title={item.identity.displayName ?? item.identity.canonicalName}
             source={{
