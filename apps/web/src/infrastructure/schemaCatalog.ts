@@ -43,3 +43,27 @@ export async function fetchSchemaIntroduction(
   }
   return result.presentation;
 }
+
+/** Resolve release reading lazily; discovery lists never download entire manifests. */
+export async function fetchSchemaReleaseReading(
+  projectId: string,
+  canonicalName: string,
+  version: string,
+  hash: string,
+  sourceProjectId?: string
+) {
+  const query = new URLSearchParams({
+    canonicalName,
+    version,
+    expectedHash: hash,
+    ...(sourceProjectId ? { sourceProjectId } : {}),
+  });
+  const result = await handleResponse<{ artifactHash: string; readme: string | null }>(
+    await fetchWithTimeout(
+      `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/source?${query}`
+    )
+  );
+  if (result.artifactHash !== hash)
+    throw new Error('Release reading does not match the selected hash.');
+  return result;
+}

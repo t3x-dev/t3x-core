@@ -5,6 +5,7 @@ import {
   fetchSchemaCatalog,
   fetchSchemaCollections,
   fetchSchemaIntroduction,
+  fetchSchemaReleaseReading,
 } from '@/infrastructure/schemaCatalog';
 import { fetchAuthoringTarget } from '@/infrastructure/stateAuthoring';
 
@@ -168,4 +169,53 @@ export function usePublishIntroduction(projectId: string | undefined, enabled: b
     };
   }, [projectId, enabled, key]);
   return result?.key === key ? result : undefined;
+}
+
+export function useSchemaReleaseReading(
+  projectId: string,
+  source: { canonicalName: string; version: string; hash: string; sourceProjectId?: string },
+  enabled: boolean
+) {
+  const key = JSON.stringify([
+    projectId,
+    source.canonicalName,
+    source.version,
+    source.hash,
+    enabled,
+    source.sourceProjectId,
+  ]);
+  const [result, setResult] = useState<{
+    key: string;
+    data?: Record<string, unknown>;
+    error?: string;
+  }>();
+  useEffect(() => {
+    let active = true;
+    const [project, name, version, hash, shouldLoad, sourceProject] = JSON.parse(key) as [
+      string,
+      string,
+      string,
+      string,
+      boolean,
+      string | undefined,
+    ];
+    if (!shouldLoad) return;
+    void fetchSchemaReleaseReading(project, name, version, hash, sourceProject).then(
+      (data) => {
+        if (active) setResult({ key, data });
+      },
+      (error: unknown) => {
+        if (active)
+          setResult({
+            key,
+            error: error instanceof Error ? error.message : 'Release reading unavailable',
+          });
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [key]);
+  const current = result?.key === key ? result : undefined;
+  return { data: current?.data, error: current?.error, loading: enabled && !current };
 }

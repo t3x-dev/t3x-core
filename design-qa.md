@@ -12,8 +12,16 @@ Remaining P3: deeply nested generic structures still have more nesting chrome th
 
 Wave 1 result: passed.
 
+## Wave 2: Discover and author introduction
+
+Reference and production screenshots were opened together for both Discover and Overview. Evidence: `docs/plans/state-schema-delivery-2026-09-05/verification/discovery-reading/`. Actual browser tests cover author uploads, versioned description/Markdown, stale edits and catalog-to-release-to-Studio navigation. API tests cover exact-source hash, authorization and bounded catalog projection.
+
+Critique and iteration: removed large empty fallback icons, shortened capability text, tightened the editorial cards, moved author editing onto the title row, and used real service configuration instead of one-pixel/empty presentation fixtures. Preserve author provenance and native rendering. No fake editor endorsement or runtime result.
+
+Wave 2 result: passed for implemented release reading and visual fallback. Editorial imagery/curation is a content gap, not a claim of an existing collection.
+
 ## Remaining wave gates
 
-Discover/project introduction, Studio sample preview and Cloud compatibility are still in progress. No overall completion is claimed.
+Studio sample preview and Cloud compatibility are still in progress. No overall completion is claimed.
 
 Overall result: blocked (remaining wave implementation and qualification pending).

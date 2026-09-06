@@ -20,6 +20,8 @@ test('original ecosystem starters are discoverable, filterable and importable at
     await page.screenshot({ path: testInfo.outputPath('starters-browse.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
     await expect(page.getByRole('dialog')).toContainText('Apache-2.0');
+    await expect(page.getByRole('region', { name: 'Author README' })).toContainText('Rename the routine');
+    await page.screenshot({ path: testInfo.outputPath('starters-introduction.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Definition preview', exact: true })).toBeVisible();

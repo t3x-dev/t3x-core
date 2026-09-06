@@ -64,30 +64,7 @@ export function StateOverviewView({
           className="min-w-0 p-5 lg:overflow-y-auto lg:p-6"
         >
           <StateSchemaAdoption projectId={projectId} commitDigest={commitDigest} />
-          {refName && onAuthorRevision ? (
-            <div className="mb-3 flex justify-end">
-              <StateAuthorEditor
-                key={`${projectId}:${refName}:${commitDigest}`}
-                projectId={projectId}
-                refName={refName}
-                commitDigest={commitDigest}
-                onSaved={onAuthorRevision}
-                initial={{
-                  description: author?.description ?? '',
-                  readme: author?.readme ?? '',
-                  tags: author?.tags ?? [],
-                  avatarPath: author?.avatarPath ?? undefined,
-                  resources: resources.map(({ path, mediaType, alt, base64 }) => ({
-                    path,
-                    mediaType,
-                    alt,
-                    base64,
-                  })),
-                }}
-              />
-            </div>
-          ) : null}
-          <header className="mb-5 flex items-start gap-3">
+          <header className="mb-5 flex flex-wrap items-start gap-3">
             {avatar ? (
               <img
                 src={resourceUrl(avatar)}
@@ -113,6 +90,29 @@ export function StateOverviewView({
                 {author ? 'Introduction · Author' : 'No author introduction published'}
               </span>
             </div>
+            {refName && onAuthorRevision ? (
+              <div className="ml-auto shrink-0">
+                <StateAuthorEditor
+                  key={`${projectId}:${refName}:${commitDigest}`}
+                  projectId={projectId}
+                  refName={refName}
+                  commitDigest={commitDigest}
+                  onSaved={onAuthorRevision}
+                  initial={{
+                    description: author?.description ?? '',
+                    readme: author?.readme ?? '',
+                    tags: author?.tags ?? [],
+                    avatarPath: author?.avatarPath ?? undefined,
+                    resources: resources.map(({ path, mediaType, alt, base64 }) => ({
+                      path,
+                      mediaType,
+                      alt,
+                      base64,
+                    })),
+                  }}
+                />
+              </div>
+            ) : null}
           </header>
           <section
             aria-label="T3X definition summary"

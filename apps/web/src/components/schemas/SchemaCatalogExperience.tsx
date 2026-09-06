@@ -31,6 +31,7 @@ import {
   useSchemaCatalog,
   useSchemaCollections,
   useSchemaIntroduction,
+  useSchemaReleaseReading,
 } from '@/hooks/schemas/useSchemaCatalog';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
@@ -114,6 +115,11 @@ export function SchemaCatalogExperience({
   function searchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     navigate('browse', { q: String(new FormData(event.currentTarget).get('q') ?? '').trim() });
+  }
+  function openRelease(item: SchemaCatalogItem) {
+    const href = introductionHref(item, projectId, `${pathname}?${params.toString()}`);
+    if (href) router.push(href);
+    else setSelected(item);
   }
   function openStudio(item: SchemaCatalogItem) {
     navigate(
@@ -434,13 +440,13 @@ export function SchemaCatalogExperience({
                     <DiscoveryCard
                       key={item.release.artifactVersionId}
                       item={item}
-                      onOpen={() => setSelected(item)}
+                      onOpen={() => openRelease(item)}
                     />
                   ) : (
                     <button
                       key={item.release.artifactVersionId}
                       type="button"
-                      onClick={() => setSelected(item)}
+                      onClick={() => openRelease(item)}
                       className="flex w-full min-w-0 items-center gap-3 bg-[var(--surface-card)] px-3 py-3 text-left hover:bg-[var(--hover-bg)]"
                       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
                     >
@@ -517,10 +523,15 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
       className="overflow-hidden rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-colors hover:border-[var(--status-info)]"
     >
-      <div className="flex min-h-52 flex-col sm:flex-row">
+      <div className="flex min-h-44 flex-col sm:flex-row">
         <div
           className={cn(
             'relative shrink-0 items-center justify-center bg-[var(--status-info-muted)] text-[var(--status-info)] sm:flex sm:w-2/5',
+            item.identity.tags.includes('care')
+              ? 'bg-emerald-50 text-emerald-700'
+              : item.identity.tags.includes('planning')
+                ? 'bg-violet-50 text-violet-700'
+                : '',
             cover ? 'flex h-36 sm:h-auto' : 'hidden'
           )}
         >
@@ -533,31 +544,45 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
               className="object-cover"
             />
           ) : (
-            <Box className="size-16 stroke-1" />
+            <div className="w-full space-y-3 p-5">
+              <div className="mb-5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest">
+                <Layers3 className="size-3.5" /> Definition
+              </div>
+              {(item.definition.nodes ?? []).length ? (
+                item.definition.nodes.map((node) => (
+                  <div key={node.path} className="relative border-l border-current/20 pl-3">
+                    <div className="absolute -left-1 top-2 size-2 rounded-full bg-current" />
+                    <div className="rounded-md border border-current/10 bg-[var(--surface-card)]/80 p-3 shadow-sm">
+                      <p className="truncate font-mono text-xs font-semibold">{node.path}</p>
+                      <p className="mt-1 truncate text-[10px] text-[var(--text-secondary)]">
+                        {node.slots.join(' · ') || 'Nested structure'}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Box className="size-8 stroke-1" />
+                  <span className="text-sm">{item.definition.pathCount} declared paths</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
         <div className="min-w-0 flex-1 p-5">
           <p className="mb-3 text-xs font-medium text-[var(--status-info)]">
             {item.identity.tags[0] || item.release.kind}
           </p>
-          <h3 className="text-lg font-semibold leading-tight">
+          <h3 className="text-xl font-semibold leading-tight">
             {item.identity.displayName || item.identity.canonicalName}
           </h3>
           <p className="mt-2 line-clamp-2 text-sm text-[var(--text-secondary)]">
             {item.identity.description}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
-            <span className="rounded-md border border-[var(--stroke-divider)] px-2 py-1">
-              {item.definition.pathCount} declared paths
-            </span>
-            {item.definition.provides.slice(0, 2).map((capability) => (
-              <span
-                key={capability}
-                className="max-w-full truncate rounded-md border border-[var(--stroke-divider)] px-2 py-1"
-              >
-                {capability}
-              </span>
-            ))}
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+            <span>{item.definition.pathCount} paths</span>
+            <span aria-hidden="true">·</span>
+            <span>{item.formats.join(' / ').toUpperCase()}</span>
           </div>
         </div>
       </div>
@@ -587,6 +612,18 @@ function ReleaseDetail({
 }) {
   const intro = useSchemaIntroduction(item.presentationRef);
   const reference = item.presentationRef;
+  const releaseReading = useSchemaReleaseReading(
+    projectId,
+    {
+      canonicalName: item.identity.canonicalName,
+      version: item.release.version,
+      hash: item.release.hash,
+      sourceProjectId: item.identity.ownerProjectId ?? undefined,
+    },
+    item.release.kind !== 'schema' && !reference
+  );
+  const readme =
+    typeof releaseReading.data?.readme === 'string' ? releaseReading.data.readme : undefined;
   const cover = intro.data?.document.resources.find(
     (resource) => resource.path === reference?.coverPath
   );
@@ -640,7 +677,19 @@ function ReleaseDetail({
             {intro.error}
           </p>
         ) : null}
-        {intro.data ? <StateAuthorReadme author={intro.data.document} /> : null}
+        {intro.data ? (
+          <StateAuthorReadme author={intro.data.document} />
+        ) : readme ? (
+          <StateAuthorReadme author={{ readme, resources: [] }} />
+        ) : null}
+        {releaseReading.loading ? (
+          <output className="block text-sm">Loading release introduction…</output>
+        ) : null}
+        {releaseReading.error ? (
+          <p role="alert" className="text-sm text-[var(--status-error)]">
+            {releaseReading.error}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-3">
           <AddToStudio
             onAdded={onAdded}
@@ -673,4 +722,10 @@ function ReleaseDetail({
       </div>
     </>
   );
+}
+
+function introductionHref(item: SchemaCatalogItem, projectId: string, returnTo: string) {
+  const reference = item.presentationRef;
+  if (!reference) return null;
+  return `/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId })}`;
 }

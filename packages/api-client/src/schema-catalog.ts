@@ -38,6 +38,7 @@ export const SchemaCatalogItemSchema = z.object({
   contentKind: z.literal('definition'),
   definition: z.object({
     pathCount: z.number().int(),
+    nodes: z.array(z.object({ path: z.string(), slots: z.array(z.string()) })).default([]),
     provides: z.array(z.string()),
     requires: z.array(z.string()),
   }),

@@ -88,7 +88,59 @@ const removeRoute = createRoute({
     ...errors,
   },
 });
+const readSourceRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/schema-studio/source',
+  tags: ['YSchema'],
+  summary: 'Read the author introduction of an exact authorized release without adding a candidate',
+  request: { params, query: AddStudioCandidateSchema },
+  responses: {
+    200: {
+      description: 'Verified release reading',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({ artifactHash: z.string(), readme: z.string().nullable() })
+          ),
+        },
+      },
+    },
+    ...errors,
+  },
+});
 export const schemaStudioRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
+  const db = await getDB();
+  const { projectId } = c.req.valid('param');
+  const input = c.req.valid('query');
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
+  if (access instanceof Response) return access;
+  await ensureBuiltInYSchemaArtifacts(db);
+  const view = await resolveStudioSource(c, db, {
+    sourceProjectId: input.sourceProjectId ?? null,
+    canonicalName: input.canonicalName,
+    version: input.version,
+    artifactHash: input.expectedHash,
+  });
+  if (!view)
+    return errorResponse(
+      c,
+      'NOT_FOUND',
+      'The selected release is unavailable or no longer authorized.'
+    );
+  c.header('Cache-Control', 'private, no-store');
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        artifactHash: view.artifactHash,
+        readme: typeof view.manifest.readme === 'string' ? view.manifest.readme : null,
+      },
+    },
+    200
+  );
+});
+
 schemaStudioRoutes.openapi(listRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');
