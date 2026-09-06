@@ -4,7 +4,6 @@ import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { getProjectOutputsPath } from '@/domain/project/repoPath';
-import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import {
@@ -20,7 +19,7 @@ import {
  * Consumers (CanvasNodes) read from this ref instead of from the Zustand store.
  */
 export const leafContextMenuHandlerRef: {
-  current: ((event: React.MouseEvent, leafId: string, nodeId: string) => void) | null;
+  current: ((event: React.MouseEvent, leafId: string, _nodeId: string) => void) | null;
 } = { current: null };
 
 export interface ContextMenuState {
@@ -51,7 +50,6 @@ export function useContextMenu({
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
-  const { remove: removeLeafFromNode } = useCanvasLeafActions();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -113,7 +111,7 @@ export function useContextMenu({
 
   // Leaf context menu handler — called from CanvasNodes when right-clicking a leaf inside a unit node
   const handleLeafContextMenu = useCallback(
-    (event: React.MouseEvent, leafId: string, nodeId: string) => {
+    (event: React.MouseEvent, leafId: string, _nodeId: string) => {
       event.preventDefault();
       event.stopPropagation();
       const leafHref = projectId
@@ -129,9 +127,6 @@ export function useContextMenu({
             }
           }
         },
-        onGenerate: () => {
-          useCanvasStore.getState().openLeafPanel(nodeId);
-        },
         onShare: () => {
           if (leafHref) {
             const url = `${window.location.origin}${leafHref}`;
@@ -144,13 +139,10 @@ export function useContextMenu({
             window.open(leafHref, '_blank');
           }
         },
-        onDelete: () => {
-          void removeLeafFromNode(nodeId, leafId);
-        },
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [projectId, projectName, notify, onNavigate, removeLeafFromNode]
+    [projectId, projectName, notify, onNavigate]
   );
 
   // Keep the module-level ref up to date so CanvasNodes can call the handler

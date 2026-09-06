@@ -14,7 +14,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 33,
+  "totalObservedCalls": 29,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -41,28 +41,12 @@
       "note": "Structured Source Chat drafts use the shared admission and terminal receipt lifecycle."
     },
     {
-      "file": "packages/api/src/ops/leaf-gen.ts",
-      "feature": "leaf-generation-operation",
-      "status": "migrated",
-      "coveredCount": 1,
-      "observedCount": 1,
-      "note": "The hosted operation binds its resolved provider to the shared lifecycle and no longer writes duplicate fire-and-forget usage records."
-    },
-    {
       "file": "packages/api/src/routes/chat.openapi.ts",
       "feature": "generation-chat",
       "status": "migrated",
       "coveredCount": 7,
       "observedCount": 7,
       "note": "Non-streaming and provider-specific streaming transports share the execution lifecycle."
-    },
-    {
-      "file": "packages/api/src/routes/leaves-ml.openapi.ts",
-      "feature": "leaf-ml-routes",
-      "status": "migrated",
-      "coveredCount": 2,
-      "observedCount": 2,
-      "note": "Edit learning and per-model comparison calls use server-derived scopes and normalized receipts; shared constraint generation remains tracked at its Core call site."
     },
     {
       "file": "packages/core/src/extractors/v2/compress.ts",
@@ -139,13 +123,6 @@
       "coveredCount": 2,
       "observedCount": 2,
       "note": "Hosted semantic review uses a dedicated application binding; the dormant coverage method inherits the same bound provider when invoked."
-    },
-    {
-      "file": "packages/mcp/src/tools/core/generate.ts",
-      "feature": "external-mcp-local-generation",
-      "status": "external-client",
-      "observedCount": 1,
-      "note": "Runs in the external MCP process with its configured provider; it is not a hosted server call."
     }
   ]
 }

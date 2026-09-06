@@ -104,38 +104,19 @@ export function registerShowLeaf(parent: Command): void {
 export function registerCreateLeaf(parent: Command): void {
   parent
     .command('leaf')
-    .description('Create a new leaf')
-    .requiredOption('-p, --project <id>', 'Project ID')
-    .requiredOption('-c, --commit <hash>', 'Commit hash')
-    .requiredOption('-t, --type <type>', 'Leaf type (deploy_agent, tweet, email, etc.)')
-    .option('--title <title>', 'Leaf title')
-    .option('--json', 'Output as JSON')
-    .action(async (options) => {
-      const spinner = options.json ? null : createSpinner('Creating leaf...');
-      spinner?.start();
-
-      try {
-        const client = getClientWithAuth();
-        const leaf = await client.createLeaf({
-          project_id: options.project,
-          commit_hash: options.commit,
-          type: options.type,
-          title: options.title,
-        });
-
-        spinner?.stop();
-
-        if (options.json) {
-          console.log(JSON.stringify(leaf, null, 2));
-          return;
-        }
-
-        success(`Leaf created: ${leaf.id}`);
-      } catch (err) {
-        spinner?.stop();
-        error(`Failed to create leaf: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
-      }
+    .description('Retired Leaf writer; use State/Commit export')
+    .option('-p, --project <id>')
+    .option('-c, --commit <hash>')
+    .option('-t, --type <type>')
+    .option('--title <title>')
+    .option('--model <model>')
+    .option('--provider <provider>')
+    .option('--json')
+    .action(() => {
+      error(
+        'LEAF_WRITER_RETIRED: Export exact YAML/JSON or its render from State or Commit; use Workspace Delivery. Historical Leaf reads remain available.'
+      );
+      process.exit(1);
     });
 }
 
@@ -143,38 +124,19 @@ export function registerCreateLeaf(parent: Command): void {
 export function registerGenerateLeaf(parent: Command): void {
   parent
     .command('leaf <id>')
-    .description('Generate output for a leaf')
-    .option('--model <model>', 'Model to use')
-    .option('--provider <provider>', 'Provider to use')
-    .option('--json', 'Output as JSON')
-    .action(async (id: string, options) => {
-      const spinner = options.json ? null : createSpinner('Generating leaf output...');
-      spinner?.start();
-
-      try {
-        const client = getClientWithAuth();
-        const leaf = await client.generateLeaf(id, {
-          model: options.model,
-          provider: options.provider,
-        });
-
-        spinner?.stop();
-
-        if (options.json) {
-          console.log(JSON.stringify(leaf, null, 2));
-          return;
-        }
-
-        success(`Output generated for leaf ${leaf.id}`);
-        if (leaf.output) {
-          console.log();
-          console.log(truncate(leaf.output, 500));
-        }
-      } catch (err) {
-        spinner?.stop();
-        error(`Failed to generate leaf: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
-      }
+    .description('Retired Leaf writer; use State/Commit export')
+    .option('-p, --project <id>')
+    .option('-c, --commit <hash>')
+    .option('-t, --type <type>')
+    .option('--title <title>')
+    .option('--model <model>')
+    .option('--provider <provider>')
+    .option('--json')
+    .action(() => {
+      error(
+        'LEAF_WRITER_RETIRED: Export exact YAML/JSON or its render from State or Commit; use Workspace Delivery. Historical Leaf reads remain available.'
+      );
+      process.exit(1);
     });
 }
 

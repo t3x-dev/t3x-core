@@ -18,7 +18,6 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  createLeafHistory,
   deleteRun,
   findLeafById,
   getConfigurationStats,
@@ -27,7 +26,6 @@ import {
   getRunFilterOptions,
   insertRun,
   listRuns,
-  updateLeafRunnerAssertions,
   updateRun,
 } from '@t3x-dev/storage';
 import { randomUUID } from 'crypto';
@@ -37,7 +35,6 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, assertResourceProjectAccess } from '../lib/project-access';
 import { runnerServiceAuthenticationError, runnerServiceToken } from '../lib/runner-service-auth';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
-import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CompareRunsRequest,
@@ -301,56 +298,7 @@ runsRoutes.openapi(ingestRunRoute, async (c) => {
       status: data.status,
     });
 
-    // Write back assertions to Leaf + create history snapshot
-    const run = await getRun(db, data.run_id);
-    const leafId = run?.leafId as string | null;
-
-    if (leafId && data.assertions && data.assertions.length > 0) {
-      try {
-        const mappedAssertions = data.assertions.map((a: unknown, idx: number) => {
-          const raw = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
-          return {
-            id: typeof raw.id === 'string' ? raw.id : `assert_${String(idx).padStart(3, '0')}`,
-            constraint_id:
-              typeof raw.constraint_id === 'string' && raw.constraint_id !== ''
-                ? raw.constraint_id
-                : `eval_${idx}`,
-            passed: typeof raw.passed === 'boolean' ? raw.passed : raw.type === 'pass', // fallback: old format 'type' field
-            details:
-              typeof raw.details === 'string' && raw.details !== ''
-                ? raw.details
-                : typeof raw.message === 'string'
-                  ? raw.message
-                  : '', // fallback: old 'message'
-            lesson:
-              typeof raw.lesson === 'string'
-                ? raw.lesson
-                : typeof raw.patch_suggestion === 'string'
-                  ? raw.patch_suggestion
-                  : undefined,
-          };
-        });
-
-        await updateLeafRunnerAssertions(db, leafId, mappedAssertions);
-
-        const leaf = await findLeafById(db, leafId);
-        if (leaf?.output) {
-          await createLeafHistory(db, {
-            leaf_id: leafId,
-            output: leaf.output,
-            config: leaf.config ?? {},
-            model: ((leaf.config as Record<string, unknown>)?.model as string) ?? 'unknown',
-            created_by: 'runner-ingest',
-          });
-        }
-      } catch (writeBackErr) {
-        // Non-fatal: log but don't fail the ingest
-        pinoLogger.warn(
-          { err: writeBackErr, run_id: data.run_id, leaf_id: leafId },
-          'Failed to write back assertions to leaf'
-        );
-      }
-    }
+    // Run evidence is retained above; retired Leaf snapshots remain immutable.
 
     return c.json({ success: true as const, data: { ok: true } });
   } catch (error) {

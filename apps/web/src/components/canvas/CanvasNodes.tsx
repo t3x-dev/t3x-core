@@ -18,7 +18,6 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { commitHashLabel } from '@/domain/format/formatters';
-import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
 import { leafContextMenuHandlerRef } from '@/hooks/shared/useContextMenu';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -140,8 +139,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
-  const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
-  const { remove: removeLeafFromNode } = useCanvasLeafActions();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
@@ -230,7 +227,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
     actions: {
       navigateToConversation: () => openNodeModal(id, 'commit'),
       openNodeModal,
-      openLeafPanel,
     },
   });
   const nextStepToneClass = isCommitted
@@ -529,9 +525,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             projectId={projectId}
             projectName={projectName}
             nodeId={id}
-            onCreateLeaf={() => openLeafPanel(id)}
             leafContextMenuHandler={leafContextMenuHandler}
-            removeLeafFromNode={removeLeafFromNode}
           />
         )}
         {isCommitted && (!data.leaves || data.leaves.length === 0) && (

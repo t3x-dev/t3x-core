@@ -3,7 +3,6 @@
 export { type ApiPipelineContext, buildPipelineContext } from './context';
 export { type DiffInput, type DiffOutput, diffOp } from './diff';
 export { type ExtractInput, type ExtractOutput, extractOp } from './extract';
-export { type LeafGenInput, type LeafGenOutput, leafGenerateOp } from './leaf-gen';
 export {
   type MergeExecuteInput,
   type MergeExecuteOutput,

@@ -24,10 +24,9 @@ export function getNextStep(opts: {
   actions: {
     navigateToConversation: (conversationId: string) => void;
     openNodeModal: (nodeId: string, mode: 'commit' | 'conversation') => void;
-    openLeafPanel: (nodeId: string) => void;
   };
 }): NextStepResult | null {
-  const { isStaging, isCommitted, conversationId, nodeId, t, icons, actions } = opts;
+  const { isStaging, conversationId, nodeId, t, icons, actions } = opts;
 
   if (isStaging && !conversationId) {
     return {
@@ -41,13 +40,6 @@ export function getNextStep(opts: {
       label: t('create_commit'),
       icon: icons.GitCommit,
       action: () => actions.navigateToConversation(conversationId),
-    };
-  }
-  if (isCommitted) {
-    return {
-      label: 'Create Output',
-      icon: icons.Plus,
-      action: () => actions.openLeafPanel(nodeId),
     };
   }
   return null;

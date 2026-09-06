@@ -248,7 +248,7 @@ describe('project ownership on child-resource routes', () => {
     expect(response.status).toBe(403);
   });
 
-  it('blocks cross-project leaf history and ML routes before provider work', async () => {
+  it('keeps private history unreadable while retired writers return no resource content', async () => {
     const leaf = await createLeaf(mockDB, {
       commit_hash: 'sha256:private_leaf_access_test',
       project_id: otherProjectId,
@@ -266,7 +266,7 @@ describe('project ownership on child-resource routes', () => {
 
     expect((await app.request(`/v1/leaves/${leaf.id}/history`)).status).toBe(403);
     expect((await app.request(`/v1/leaf-history/${history.id}`, { method: 'DELETE' })).status).toBe(
-      403
+      410
     );
     expect(
       (
@@ -276,6 +276,6 @@ describe('project ownership on child-resource routes', () => {
           body: JSON.stringify({}),
         })
       ).status
-    ).toBe(403);
+    ).toBe(410);
   });
 });

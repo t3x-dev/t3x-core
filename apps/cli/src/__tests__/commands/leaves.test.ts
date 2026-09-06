@@ -64,34 +64,21 @@ describe('register leaf commands', () => {
     else process.env.T3X_API_KEY = originalApiKey;
   });
 
-  it('creates a leaf with bearer auth headers', async () => {
-    process.env.T3X_API_KEY = 't3xk_test';
-    mockClient.createLeaf.mockResolvedValue({ id: 'leaf_1' });
-
-    const program = createProgram();
-    await program.parseAsync([
-      'node',
-      'test',
-      'create',
-      'leaf',
-      '-p',
-      'proj_1',
-      '-c',
-      'sha256:abc',
-      '-t',
-      'tweet',
-    ]);
-
-    expect(createClientMock).toHaveBeenCalledWith({
-      baseUrl: 'http://localhost:8000/api',
-      headers: { Authorization: 'Bearer t3xk_test' },
-    });
-    expect(mockClient.createLeaf).toHaveBeenCalledWith({
-      project_id: 'proj_1',
-      commit_hash: 'sha256:abc',
-      type: 'tweet',
-      title: undefined,
-    });
+  it('retires create and generate without opening an API client or requiring auth', async () => {
+    for (const args of [
+      ['create', 'leaf'],
+      ['generate', 'leaf', 'historic'],
+    ]) {
+      await createProgram().parseAsync(['node', 'test', ...args]);
+    }
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(mockClient.createLeaf).not.toHaveBeenCalled();
+    expect(mockClient.generateLeaf).not.toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('LEAF_WRITER_RETIRED')
+    );
   });
 
   it('shows a leaf when assertions are null', async () => {
@@ -111,51 +98,5 @@ describe('register leaf commands', () => {
 
     expect(mockClient.getLeaf).toHaveBeenCalledWith('leaf_1');
     expect(mockExit).not.toHaveBeenCalled();
-  });
-
-  it('generates a leaf with bearer auth headers', async () => {
-    process.env.T3X_API_KEY = 't3xk_test';
-    mockClient.generateLeaf.mockResolvedValue({ id: 'leaf_1', output: 'ok' });
-
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'generate', 'leaf', 'leaf_1']);
-
-    expect(createClientMock).toHaveBeenCalledWith({
-      baseUrl: 'http://localhost:8000/api',
-      headers: { Authorization: 'Bearer t3xk_test' },
-    });
-    expect(mockClient.generateLeaf).toHaveBeenCalledWith('leaf_1', {
-      model: undefined,
-      provider: undefined,
-    });
-  });
-
-  it('does not start a spinner for json leaf generation output', async () => {
-    mockClient.generateLeaf.mockResolvedValue({ id: 'leaf_1', output: 'ok' });
-
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'generate', 'leaf', 'leaf_1', '--json']);
-
-    expect(mockSpinner.start).not.toHaveBeenCalled();
-  });
-
-  it('handles create errors', async () => {
-    mockClient.createLeaf.mockRejectedValue(new Error('Forbidden'));
-
-    const program = createProgram();
-    await program.parseAsync([
-      'node',
-      'test',
-      'create',
-      'leaf',
-      '-p',
-      'proj_1',
-      '-c',
-      'sha256:abc',
-      '-t',
-      'tweet',
-    ]);
-
-    expect(mockExit).toHaveBeenCalledWith(1);
   });
 });

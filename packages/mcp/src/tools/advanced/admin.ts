@@ -4,26 +4,13 @@
  * Actions:
  *   create_project  -- create a new project
  *   create_branch   -- create a branch in a project
- *   create_leaf     -- create a leaf from an existing commit
+ *   create_leaf     -- retired compatibility action
  *   create_pin      -- pin an item (conversation or leaf)
  *   delete_pin      -- remove a pin
  */
 
-import {
-  ALL_LEAF_TYPES,
-  type AnyLeafType,
-  type Constraint,
-  type LeafConfig,
-  type PinType,
-} from '@t3x-dev/core';
-import {
-  createLeaf,
-  createPin,
-  deletePin,
-  getVerifiedTransitionCommitGraph,
-  insertBranch,
-  insertProject,
-} from '@t3x-dev/storage';
+import { ALL_LEAF_TYPES, type PinType } from '@t3x-dev/core';
+import { createPin, deletePin, insertBranch, insertProject } from '@t3x-dev/storage';
 
 import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
@@ -48,14 +35,13 @@ export const adminDef: ToolDef = {
     'Actions:',
     '  create_project  -- Create a new project.',
     '  create_branch   -- Create a branch in a project.',
-    '  create_leaf     -- Create a leaf from an existing commit.',
+    '  create_leaf     -- Retired; export State or Commit instead.',
     '  create_pin      -- Pin a conversation, leaf, or import material for context.',
     '  delete_pin      -- Remove a pin by ID.',
     '',
     'Examples:',
     '  { "action": "create_project", "name": "My Project" }',
     '  { "action": "create_branch", "project_id": "proj_abc", "name": "feature-x" }',
-    '  { "action": "create_leaf", "project_id": "proj_abc", "commit_hash": "sha256:...", "leaf_type": "tweet" }',
     '  { "action": "create_pin", "project_id": "proj_abc", "type": "conversation", "ref_id": "conv_xyz" }',
     '  { "action": "delete_pin", "pin_id": "pin_abc" }',
   ].join('\n'),
@@ -208,79 +194,10 @@ async function handleCreateBranch(args: Record<string, unknown>) {
   });
 }
 
-async function handleCreateLeaf(args: Record<string, unknown>) {
-  const projectId = args.project_id as string | undefined;
-  const commitHash = args.commit_hash as string | undefined;
-  const leafType = args.leaf_type as string | undefined;
-  const title = args.title as string | undefined;
-  const constraints = args.constraints as Constraint[] | undefined;
-  const config = args.config as LeafConfig | undefined;
-
-  if (!projectId) return fail('"project_id" is required for create_leaf.');
-  if (!commitHash) return fail('"commit_hash" is required for create_leaf.');
-  if (!leafType) return fail('"leaf_type" is required for create_leaf.');
-
-  if (!(ALL_LEAF_TYPES as readonly string[]).includes(leafType)) {
-    return fail(`Invalid leaf type "${leafType}". Must be one of: ${ALL_LEAF_TYPES.join(', ')}.`);
-  }
-
-  if (title !== undefined && typeof title !== 'string') {
-    return fail('"title" must be a string for create_leaf.');
-  }
-  if (constraints !== undefined && !Array.isArray(constraints)) {
-    return fail('"constraints" must be an array for create_leaf.');
-  }
-  if (
-    config !== undefined &&
-    (typeof config !== 'object' || config === null || Array.isArray(config))
-  ) {
-    return fail('"config" must be an object for create_leaf.');
-  }
-
-  if (isApiBackend()) {
-    const client = getApiClient();
-    return ok(
-      await client.createLeaf({
-        commit_hash: commitHash,
-        type: leafType,
-        title,
-        constraints: constraints ?? [],
-        config: (config as Record<string, unknown> | undefined) ?? {},
-        project_id: projectId,
-      })
-    );
-  }
-
-  const db = await getDB();
-  const commit = await getVerifiedTransitionCommitGraph(db, projectId, commitHash);
-  if (!commit) {
-    return fail(`Commit not found: ${commitHash}`);
-  }
-  const leaf = await createLeaf(db, {
-    commit_hash: commitHash,
-    type: leafType as AnyLeafType,
-    title,
-    constraints: constraints ?? [],
-    config: config ?? {},
-    project_id: projectId,
-  });
-
-  return ok({
-    leaf_id: leaf.id,
-    commit_hash: leaf.commit_hash,
-    type: leaf.type,
-    title: leaf.title ?? null,
-    constraints: leaf.constraints ?? [],
-    config: leaf.config ?? {},
-    output: leaf.output ?? null,
-    assertions: leaf.assertions ?? [],
-    project_id: leaf.project_id,
-    created_at: leaf.created_at,
-    next_steps: [
-      `Use t3x_query { "target": "leaf", "id": "${leaf.id}" } to inspect the leaf.`,
-      `Use t3x_generate { "leaf_id": "${leaf.id}" } to generate output.`,
-    ],
-  });
+async function handleCreateLeaf(_args: Record<string, unknown>) {
+  return fail(
+    'LEAF_WRITER_RETIRED: Leaf creation is retired. Export exact YAML/JSON or its render from State or Commit; use Workspace Delivery. Historical Leaf reads remain available.'
+  );
 }
 
 async function handleCreatePin(args: Record<string, unknown>) {

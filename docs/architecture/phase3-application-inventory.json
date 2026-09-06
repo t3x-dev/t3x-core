@@ -26,8 +26,8 @@
   ],
   "apiRouteAuthorization": {
     "routeFiles": 73,
-    "filesUsingGetDB": 65,
-    "filesUsingAssertProjectAccess": 51,
+    "filesUsingGetDB": 63,
+    "filesUsingAssertProjectAccess": 49,
     "filesUsingRequireTransitionAuthority": 2,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
@@ -167,7 +167,6 @@
         "packages/mcp/src/resources/index.ts",
         "packages/mcp/src/tools/advanced/admin.ts",
         "packages/mcp/src/tools/advanced/merge.ts",
-        "packages/mcp/src/tools/core/generate.ts",
         "packages/mcp/src/tools/core/query.ts"
       ]
     }

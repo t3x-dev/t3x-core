@@ -34,12 +34,10 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   projectId?: string;
   projectName?: string;
   nodeId: string;
-  onCreateLeaf: () => void;
   leafContextMenuHandler:
     | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
     | null
     | undefined;
-  removeLeafFromNode: (nodeId: string, leafId: string) => void;
 }) {
   const firstLeaf = leaves[0];
   const firstLeafLabel = firstLeaf?.title || firstLeaf?.id || 'leaf';

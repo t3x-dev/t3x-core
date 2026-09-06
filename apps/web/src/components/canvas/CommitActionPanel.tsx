@@ -114,7 +114,6 @@ function introTargetForAction(action: CommitAction): string | undefined {
 export function buildCommitActions(opts: {
   onViewDiff?: () => void;
   onOpenLeaf?: () => void;
-  onCreateLeaf: () => void;
   /** Optional: surfaces a "Merge" action when the commit is the latest tip of a non-main branch. */
   onMerge?: () => void;
 }): CommitAction[] {
