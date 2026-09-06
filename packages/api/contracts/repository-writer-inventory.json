@@ -172,6 +172,16 @@
       "anchors": ["commitHandler: ToolHandler = commitTransitionHandler"],
       "replacement": null,
       "removal_gate": "The t3x_commit spelling may remain only as a canonical commit alias."
+    },
+    {
+      "id": "rest-state-author-revisions",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/state-presentations.openapi.ts",
+      "anchors": ["revisePresentationRoute", "commitRepositoryYOpsState("],
+      "replacement": null,
+      "removal_gate": "Retain while author content is published with documentation-only CommitV2 revisions through server-selected authority and exact-head CAS."
     }
   ],
   "legacy_caller_guards": [

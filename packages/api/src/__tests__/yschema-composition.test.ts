@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route assertions inspect JSON response envelopes */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   builtInPrdCoreArtifact,
   builtInYSchemaCores,
@@ -7,7 +8,19 @@ import {
   defaultPrdCompositionModuleOrder,
 } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { setupTestDB } from './setup';
+
+let mockDB: AnyDB;
+let cleanup: () => Promise<void>;
+vi.mock('../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve(mockDB)) }));
+beforeAll(async () => {
+  const setup = await setupTestDB();
+  mockDB = setup.db;
+  cleanup = setup.cleanup;
+});
+afterAll(async () => cleanup?.());
+
 import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi';
 
 function compositionRequest(moduleOrder = [...defaultPrdCompositionModuleOrder]) {

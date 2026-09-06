@@ -1953,6 +1953,20 @@
       "path": "/v1/projects/{projectId}/commits/{commitDigest}/overview",
       "policy": "project",
       "rationale": "Project read authority and verified project-bound commit; exact State and author sidecar only."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/refs/{refName}/presentation-authoring",
+      "policy": "project",
+      "rationale": "Project read authority reports exact-ref authoring eligibility; no writes."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/refs/{refName}/presentation-revisions",
+      "policy": "project",
+      "rationale": "Project edit authority and server-selected Transition policy with exact-head CAS."
     }
   ]
 }

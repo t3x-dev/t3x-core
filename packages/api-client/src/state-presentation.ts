@@ -45,3 +45,13 @@ export const StatePresentationResultSchema = z.object({
 });
 export type StatePresentationInput = z.infer<typeof StatePresentationInputSchema>;
 export type StatePresentationResult = z.infer<typeof StatePresentationResultSchema>;
+
+export const StateAuthoringTargetSchema = z.object({
+  head: digest.nullable(),
+  canEdit: z.boolean(),
+});
+export const StateAuthorRevisionSchema = z.object({
+  commitDigest: digest,
+  stateDigest: digest,
+  presentationDigest: digest,
+});
