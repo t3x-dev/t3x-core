@@ -264,6 +264,7 @@ const catalogCollections = [
 const CatalogQuerySchema = z
   .object({
     q: z.string().trim().max(200).optional(),
+    canonical_name: z.string().trim().min(1).max(200).optional(),
     tags: z
       .string()
       .max(1600)

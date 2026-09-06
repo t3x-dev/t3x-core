@@ -66,7 +66,7 @@ export function SchemaStudioExperience({
   useEffect(() => {
     if (requested) setSelection([requested]);
   }, [requested]);
-  const selected = candidates.items.filter((item) => selection.includes(item.id));
+  const selected = selection.flatMap((id) => candidates.items.filter((item) => item.id === id));
   const target = workspaces.workspaces.find((item) => item.id === workspaceId);
   const preview = useStudioPreview(
     projectId,

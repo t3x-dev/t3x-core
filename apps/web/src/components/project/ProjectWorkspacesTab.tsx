@@ -60,9 +60,12 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
   const sourceConversationId = searchParams.get('sourceConversation')?.trim() || undefined;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
-  const selectedCandidate = branch
-    ? branchWorkspace
-    : (candidates.find((candidate) => candidate.id === requestedWorkspaceId) ?? null);
+  const requestedCandidate = candidates.find((candidate) => candidate.id === requestedWorkspaceId);
+  const selectedCandidate = requestedWorkspaceId
+    ? requestedCandidate && (!branch || requestedCandidate.targetBranch === branch)
+      ? requestedCandidate
+      : null
+    : branchWorkspace;
   const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
   const navigationError = projectWorkspaces.error;

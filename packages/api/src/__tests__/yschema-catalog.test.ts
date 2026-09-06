@@ -252,3 +252,21 @@ it('uses declared release titles for legacy built-ins whose registry metadata is
   expect(result.items.some((item) => item.identity.displayName === 'PRD Core')).toBe(true);
   expect(result.items.every((item) => item.release.hash.startsWith('sha256:'))).toBe(true);
 });
+
+it('filters exact canonical names without broadening private release visibility', async () => {
+  await publish('exact-name');
+  await publish('exact-name-extra');
+  await publish('private-exact', { owner: otherProjectId, visibility: 'private' });
+  const response = await app.request('/v1/yschema/catalog?canonical_name=catalog%2Fexact-name');
+  expect(response.status).toBe(200);
+  expect(
+    (await response.json()).data.items.map(
+      (item: { identity: { canonicalName: string } }) => item.identity.canonicalName
+    )
+  ).toEqual(['catalog/exact-name']);
+  const hidden = await app.request(
+    `/v1/projects/${projectId}/yschema/catalog?canonical_name=catalog%2Fprivate-exact`
+  );
+  expect(hidden.status).toBe(200);
+  expect((await hidden.json()).data.items).toEqual([]);
+});

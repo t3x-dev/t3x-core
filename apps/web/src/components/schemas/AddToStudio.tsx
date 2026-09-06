@@ -17,10 +17,12 @@ export function AddToStudio({
   source,
   title,
   defaultProjectId,
+  defaultWorkspaceId,
 }: {
   source: AddStudioCandidate;
   title: string;
   defaultProjectId: string;
+  defaultWorkspaceId?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -40,6 +42,7 @@ export function AddToStudio({
             <Destination
               source={source}
               defaultProjectId={defaultProjectId}
+              defaultWorkspaceId={defaultWorkspaceId}
               onDone={() => setOpen(false)}
             />
           ) : null}
@@ -51,10 +54,12 @@ export function AddToStudio({
 function Destination({
   source,
   defaultProjectId,
+  defaultWorkspaceId,
   onDone,
 }: {
   source: AddStudioCandidate;
   defaultProjectId: string;
+  defaultWorkspaceId?: string;
   onDone: () => void;
 }) {
   const { projects, error } = useProjects(100);
@@ -87,6 +92,7 @@ function Destination({
       <CandidateConfirmation
         key={projectId}
         projectId={projectId}
+        workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
         source={source}
         onDone={onDone}
       />
@@ -95,10 +101,12 @@ function Destination({
 }
 function CandidateConfirmation({
   projectId,
+  workspaceId,
   source,
   onDone,
 }: {
   projectId: string;
+  workspaceId?: string;
   source: AddStudioCandidate;
   onDone: () => void;
 }) {
@@ -108,6 +116,7 @@ function CandidateConfirmation({
   const [added, setAdded] = useState(false);
   const existing = studio.items.find(
     (item) =>
+      item.source?.projectId === (source.sourceProjectId ?? null) &&
       item.source?.canonicalName === source.canonicalName &&
       item.source.version === source.version &&
       (!source.expectedHash || item.source.hash === source.expectedHash)
@@ -121,7 +130,7 @@ function CandidateConfirmation({
       onDone();
       if (open) {
         router.push(
-          `/project/${encodeURIComponent(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', candidate: candidate.id })}`
+          `/project/${encodeURIComponent(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', candidate: candidate.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`
         );
       }
     } catch (cause) {
