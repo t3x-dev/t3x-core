@@ -29,6 +29,7 @@ import type {
   ProposalGenerationAction,
   ProposalGenerationReviewState,
 } from './ProposalGenerationReviewView';
+import { WorkspaceContentEditor } from './WorkspaceContentEditor';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -79,6 +80,7 @@ export function WorkspaceWorkbench({
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
   const [flowByWorkspaceId, setFlowByWorkspaceId] = useState<Record<string, WorkspaceFlowState>>(
     {}
@@ -439,6 +441,11 @@ export function WorkspaceWorkbench({
     <section className="h-full overflow-auto p-3 sm:p-4" data-project-id={projectId}>
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
         <WorkspacesHeader
+          onEdit={
+            selectedWorkspaceWithFlow && !selectedWorkspaceWithFlow.lastCommitHash
+              ? () => setEditorOpen(true)
+              : undefined
+          }
           definitionHref={
             selectedWorkspaceWithFlow?.schemaBindings.length
               ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'active', workspace: selectedWorkspaceWithFlow.id })}`
@@ -483,6 +490,20 @@ export function WorkspaceWorkbench({
           />
         )}
       </div>
+      <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
+        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[1200px]">
+          <SheetHeader className="border-b border-[var(--stroke-divider)] p-5">
+            <SheetTitle>Edit Workspace content</SheetTitle>
+            <SheetDescription>Human-authored content · review before committing</SheetDescription>
+          </SheetHeader>
+          {selectedWorkspaceWithFlow ? (
+            <WorkspaceContentEditor
+              key={selectedWorkspaceWithFlow.id}
+              candidate={selectedWorkspaceWithFlow}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
       <Sheet open={deliveryOpen} onOpenChange={setDeliveryOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
           <SheetHeader>
@@ -510,11 +531,13 @@ export function WorkspaceWorkbench({
 }
 
 function WorkspacesHeader({
+  onEdit,
   definitionHref,
   onDelivery,
   onCompilePreview,
   promptWorkspace,
 }: {
+  onEdit?: () => void;
   definitionHref?: string;
   onDelivery?: () => void;
   onCompilePreview: () => void;
@@ -526,6 +549,11 @@ function WorkspacesHeader({
         T3X Workspace
       </h2>
       <div className="flex items-center gap-2">
+        {onEdit ? (
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            Edit content
+          </Button>
+        ) : null}
         {definitionHref ? (
           <Button asChild size="sm" variant="outline">
             <Link href={definitionHref}>View definition</Link>
