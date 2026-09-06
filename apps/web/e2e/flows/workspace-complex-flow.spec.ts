@@ -177,6 +177,8 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       'true'
     );
     await expect(page.getByText('Proposal ready', { exact: true })).toBeVisible();
+    await expect(page.getByText('YOps validation not run', { exact: true })).toBeVisible();
+    await expect(page.getByText(/changes passed/)).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('workspace-review.png') });
 
     const yopsResponse = await request.get(
@@ -195,8 +197,10 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     );
 
     await page.getByRole('button', { name: /Validate proposal/ }).click();
-    await expect(page.getByText('Proposal validated', { exact: true })).toBeVisible();
+    await expect(page.getByText('YOps validation passed', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    await expect(page.getByText('YSchema pass', { exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('workspace-review-validated.png') });
 
     await page.getByRole('button', { name: /Apply YOps/ }).click();
     await expect(page.getByRole('tab', { name: /Preview/ })).toHaveAttribute(

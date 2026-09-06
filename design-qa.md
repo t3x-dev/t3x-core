@@ -74,3 +74,12 @@ cleanup with ENOTEMPTY. Earlier runs found obsolete direct Commit navigation aft
 reload and a stale build after switching parent branches; final run rebuilt the
 branch and used Review explicitly. Cross-page legacy navigation tests were updated
 and their State/header portions pushed back to the owning parent PRs.
+
+## Workspace validation evidence — 2026-09-06
+
+- Preserves the selected Compose/Review shell. Validation uses the existing YOps result, not operation count or a loaded historical commit.
+- YOps replayability and schema review findings are separate; no inferred per-field PASS or YSchema pass in the diff.
+- Inspected actual Chromium captures under `docs/plans/state-schema-delivery-2026-09-05/verification/validation-evidence/`: neutral not-run/included badges; green aggregate only after validation.
+- Complete browser flow passed through proposal, validation, preview and audited commit; shutdown and temporary PostgreSQL cleanup exited 0.
+- Full WebUI run: 1589 passed, one legacy text assertion failed; updated that assertion and reran its owning test successfully. Focused WorkspaceWorkbench: 32 passed.
+- Scope: backend validation, schema finding resolution and commit policy are unchanged. The view does not claim an external schema validator ran.

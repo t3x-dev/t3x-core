@@ -949,7 +949,10 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/Validation/);
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
     const validationDiff = screen.getByRole('region', { name: 'T3X Diff' });
-    expect(validationDiff).toHaveTextContent('Validated projection · Baseline → Projected');
+    expect(validationDiff).toHaveTextContent('Unvalidated projection · Baseline → Projected');
+    expect(screen.getByText('YOps validation not run', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/changes passed/)).not.toBeInTheDocument();
+    expect(screen.queryByText('YSchema pass')).not.toBeInTheDocument();
     expect(within(validationDiff).getByRole('button', { name: 'Show Diff' })).toHaveAttribute(
       'aria-expanded',
       'false'
@@ -1372,7 +1375,7 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled(), {
       timeout: 5_000,
     });
-    expect(screen.getByText('Proposal validated')).toBeInTheDocument();
+    expect(screen.getByText('YOps validation passed', { exact: true })).toBeInTheDocument();
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
@@ -1525,7 +1528,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
 
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(1));
-    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
+    expect(await screen.findByText('YOps validation passed', { exact: true })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
 
@@ -2818,7 +2821,7 @@ describe('WorkspaceWorkbench', () => {
         },
       ],
     });
-    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
+    expect(await screen.findByText('YOps validation passed', { exact: true })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));

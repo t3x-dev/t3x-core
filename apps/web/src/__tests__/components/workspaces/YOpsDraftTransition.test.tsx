@@ -115,7 +115,7 @@ describe('YOpsDraftTab Transition write path', () => {
 
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
-    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
+    expect(await screen.findByText('YOps validation passed', { exact: true })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
     expect(await screen.findByRole('button', { name: 'Review change' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Review change' }));
