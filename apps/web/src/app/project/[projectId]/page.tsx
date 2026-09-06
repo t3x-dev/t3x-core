@@ -166,7 +166,9 @@ export function ProjectDetailPageContent({
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
-  const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
+  // Old Leaf-tour bookmarks now lead to State delivery.
+  const projectTourStage =
+    introDemoStage === 'leaf' || introDemoStage === 'delivery' ? 'delivery' : 'details';
   const [projectTourOpen, setProjectTourOpen] = useState(showIntroDemo);
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 

@@ -1,21 +1,12 @@
 'use client';
 
-import {
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Map as MapIcon,
-  Play,
-  Plus,
-  Send,
-  X,
-} from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Map as MapIcon, Play, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
-type ProjectTourStage = 'details' | 'leaf';
+type ProjectTourStepId = 'selectCommit' | 'openState';
+type ProjectTourStage = 'details' | 'delivery';
 type ProjectTourTarget = string | string[] | null;
 
 interface TargetRect {
@@ -32,7 +23,7 @@ interface ProjectTourStep {
   description: string;
   target: ProjectTourTarget;
   icon: typeof Play;
-  tone: 'conversation' | 'commit' | 'leaf' | 'success';
+  tone: 'conversation' | 'commit' | 'success';
   advanceOnTargetClick?: boolean;
   advanceClickSelector?: string;
 }
@@ -50,7 +41,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       advanceOnTargetClick: true,
     },
   ],
-  leaf: [
+  delivery: [
     {
       id: 'selectCommit',
       label: 'Commit card',
@@ -62,25 +53,15 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       advanceOnTargetClick: true,
     },
     {
-      id: 'createLeaf',
-      label: 'Create Leaf',
-      title: 'Create a Leaf from this version',
-      description: 'Create from the selected commit.',
-      target: ['canvas-action-new-leaf', 'canvas-floating-action-new-leaf'],
-      icon: Plus,
-      tone: 'leaf',
+      id: 'openState',
+      label: 'State export',
+      title: 'Open State for delivery',
+      description: 'In State, choose the revision and export YAML, JSON, or a supported render.',
+      target: ['state-snapshot-mode', 'canvas-back-to-state'],
+      icon: MapIcon,
+      tone: 'commit',
       advanceOnTargetClick: true,
-    },
-    {
-      id: 'chooseLeafType',
-      label: 'Leaf type',
-      title: 'Choose the Leaf destination',
-      description: 'Pick X / Twitter, LinkedIn, Reddit, or Threads.',
-      target: 'canvas-leaf-type-options',
-      icon: Send,
-      tone: 'leaf',
-      advanceOnTargetClick: true,
-      advanceClickSelector: 'button:not(:disabled)',
+      advanceClickSelector: 'a, button:not(:disabled)',
     },
   ],
 };
@@ -90,7 +71,6 @@ const TONE_CLASSES: Record<ProjectTourStep['tone'], string> = {
     'border-[var(--accent-conversation)]/25 bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]',
   commit:
     'border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]',
-  leaf: 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]',
   success:
     'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]',
 };
@@ -254,13 +234,23 @@ export function ProjectDemoTourOverlay({
     const gap = 16;
     const rightCandidate = targetRect.left + targetRect.width + gap;
     const leftCandidate = targetRect.left - width - gap;
-    const left =
-      rightCandidate + width <= window.innerWidth - 16
-        ? rightCandidate
-        : leftCandidate >= 16
-          ? leftCandidate
-          : clamp(targetRect.left, 16, window.innerWidth - width - 16);
-    const top = clamp(targetRect.top, 16, maxTop);
+    const fitsRight = rightCandidate + width <= window.innerWidth - 16;
+    const fitsLeft = leftCandidate >= 16;
+    const left = fitsRight
+      ? rightCandidate
+      : fitsLeft
+        ? leftCandidate
+        : clamp(targetRect.left, 16, window.innerWidth - width - 16);
+    const below = targetRect.top + targetRect.height + gap;
+    const above = targetRect.top - height - gap;
+    const top =
+      fitsRight || fitsLeft
+        ? clamp(targetRect.top, 16, maxTop)
+        : below <= maxTop
+          ? below
+          : above >= 16
+            ? above
+            : clamp(below, 16, maxTop);
     return { width, top, left };
   }, [coachHeight, guided, targetRect]);
 
@@ -405,12 +395,14 @@ export function ProjectDemoTourOverlay({
             width: targetRect.width + 16,
             height: targetRect.height + 16,
           }}
+          data-testid="project-tour-spotlight"
           aria-hidden="true"
         />
       ) : null}
 
       <div
         ref={coachRef}
+        data-testid="project-tour-coach"
         className="pointer-events-auto absolute max-h-[calc(100vh-32px)] overflow-auto rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-lg)]"
         style={{
           top: coachPosition.top,
