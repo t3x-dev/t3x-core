@@ -8,6 +8,26 @@ import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+// OpenAPI represents recursive children with a component reference. The client
+// retains its recursive Zod validator; zod-to-openapi cannot traverse ZodLazy.
+const treeDocumentSchema = z
+  .object({
+    key: z.string(),
+    slots: z.record(z.string(), z.unknown()),
+    children: z
+      .array(z.unknown())
+      .openapi({ type: 'array', items: { $ref: '#/components/schemas/StateOverviewTree' } }),
+  })
+  .openapi('StateOverviewTree');
+const overviewDocumentSchema = StateOverviewSchema.omit({ reading: true }).extend({
+  reading: z
+    .object({
+      kind: z.literal('semantic-content'),
+      value: z.object({ trees: z.array(treeDocumentSchema), relations: z.array(z.unknown()) }),
+    })
+    .nullable()
+    .optional(),
+});
 export const stateOverviewRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 const getOverviewRoute = createRoute({
   method: 'get',
@@ -21,7 +41,7 @@ const getOverviewRoute = createRoute({
   responses: {
     200: {
       description: 'Generic Overview; schema resolution and validation not executed',
-      content: { 'application/json': { schema: SuccessResponseSchema(StateOverviewSchema) } },
+      content: { 'application/json': { schema: SuccessResponseSchema(overviewDocumentSchema) } },
     },
     400: {
       description: 'Invalid revision',
