@@ -9,8 +9,6 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
-  Play,
-  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,11 +38,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface TemplateCardProps {
   template: Template;
   onPreview: (template: Template) => void;
-  onUse: (template: Template) => void;
-  onDelete?: (template: Template) => void;
 }
 
-export function TemplateCard({ template, onPreview, onUse, onDelete }: TemplateCardProps) {
+export function TemplateCard({ template, onPreview }: TemplateCardProps) {
   const Icon = LEAF_TYPE_ICONS[template.leaf_type] ?? FileText;
 
   return (
@@ -102,25 +98,6 @@ export function TemplateCard({ template, onPreview, onUse, onDelete }: TemplateC
             <Eye className="h-3 w-3" />
             Preview
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 flex-1 gap-1 border-[var(--accent-conversation)]/25 bg-[var(--accent-conversation-soft)] text-xs text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/15 hover:text-[var(--accent-conversation)]"
-            onClick={() => onUse(template)}
-          >
-            <Play className="h-3 w-3" />
-            Use
-          </Button>
-          {onDelete && !template.is_builtin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-[var(--text-tertiary)] hover:text-[var(--status-error)]"
-              onClick={() => onDelete(template)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>

@@ -100,3 +100,11 @@ Four component tests passed. Chromium verified navigation geometry at 1480/1200/
 Replaced generation/editor pages with a read-only archive and removed Outputs create/delete controls. Retains source commit links, saved output, paged generation history, current saved evidence and text/JSON export. History exports carry record identity and source commit; current evidence is explicitly separate from historical generation. No backend writers or stored records are removed. Canvas/template creation affordances remain follow-up work.
 
 Full WebUI: 253 files / 1,583 tests passed before adding one additional export-provenance regression; final focused hook/reader tests: 5 passed. Chromium verified retained author-edited output, downloaded record content, source revision, missing bookmark, no Leaf write requests, and desktop/mobile layouts; final run and shutdown exited 0. Inspected screenshots before commit. Existing raw output is rendered as inert text. Output-edit ledger storage is retained but its timeline UI is not added here.
+
+## Legacy template archive — 2026-09-06
+
+- `/templates` retains the structured PRD starter and searchable legacy prompts. Removed template creation/deletion and Use → Create Leaf; prompt templates are not represented as YSchema definitions.
+- Retained system/user prompts, variables, and Markdown/JSON/clipboard export. Backend APIs and saved data remain intact pending retirement audit.
+- Chromium: seeded a real template, searched, previewed, downloaded JSON, verified original ID and prompts, and observed no template/Leaf writes from the browser. Mobile width checked at 390px.
+- First browser attempt hit ambiguous Preview buttons before debounced search completed; waiting for the filtered result fixed the test. Final run passed with clean teardown. Twenty starter/export unit tests passed.
+- Inspected desktop, mobile and settled dialog captures in `docs/plans/state-schema-delivery-2026-09-05/verification/template-archive/`. Applied the React review checklist; no direct infrastructure imports were introduced in components.
