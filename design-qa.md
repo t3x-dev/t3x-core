@@ -94,3 +94,9 @@ Validation: 33 focused tests and all 1,590 WebUI tests passed. Final Chromium ve
 Primary project navigation and its output count are removed. Legacy `/outputs` and `tab=outputs` parsing remains. This is the navigation slice of #1506; creation controls and historical read-only conversion remain pending.
 
 Four component tests passed. Chromium verified navigation geometry at 1480/1200/1000/390 widths and the legacy empty Outputs route; shutdown exited 0. Inspected desktop screenshot before commit (`verification/outputs-navigation/desktop.png`).
+
+## Canvas Leaf affordance retirement — 2026-09-06
+
+Removed New Leaf from shared commit actions and expanded node Leaf lists; removed inline delete and write context-menu dispatch. Existing Leaf links remain. Empty floating action panels no longer render. Selection copy directs delivery to State/Commit Export.
+
+111 Canvas component tests passed, including retained Open Leaf panel reanchoring. Four Chromium Canvas workflows passed (load, select/no-create-controls, fit, console); teardown exited 0. Inspected the selection screenshot before commit. This continues #1506; template/onboarding creation and backend writer retirement are not claimed complete.
