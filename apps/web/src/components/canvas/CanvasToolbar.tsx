@@ -143,7 +143,7 @@ export function CanvasToolbar({
         <span>Canvas view · not a navigation hub</span>
         {stateHref ? (
           <Button asChild size="sm" variant="canvas-outline">
-            <Link href={stateHref}>
+            <Link data-intro-target="canvas-back-to-state" href={stateHref}>
               <ArrowLeft className="size-4" />
               State
             </Link>
@@ -164,7 +164,11 @@ export function CanvasToolbar({
       </div>
       {stateHref ? (
         <Button asChild className="lg:hidden" size="icon-sm" variant="canvas-outline">
-          <Link aria-label="Back to State" href={stateHref}>
+          <Link
+            aria-label="Back to State"
+            data-intro-target="canvas-back-to-state"
+            href={stateHref}
+          >
             <ArrowLeft className="size-4" />
           </Link>
         </Button>

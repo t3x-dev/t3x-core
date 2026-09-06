@@ -1003,6 +1003,7 @@ function StateModeTabs({
                 ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             )}
+            data-intro-target={mode.id === 'snapshot' ? 'state-snapshot-mode' : undefined}
             key={mode.id}
             onClick={() => onModeChange(mode.id)}
             role="tab"
