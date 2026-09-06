@@ -52,6 +52,16 @@ async function publish(
     status: options.status ?? 'published',
     manifest_json: {
       license: 'Apache-2.0',
+      contribution: {
+        nodes: {
+          service: {
+            slots: {
+              image: { type: 'string', default: 'PRIVATE_DEFAULT_NEVER_INDEX' },
+              ports: { type: 'array' },
+            },
+          },
+        },
+      },
       readme: 'PRIVATE_README_NEVER_INDEX',
       resources: [{ base64: 'PRIVATE_RESOURCE_NEVER_INDEX' }],
       starter: { secret: 'PRIVATE_STARTER_NEVER_INDEX' },
@@ -297,4 +307,13 @@ it('publishes original cross-domain starters with tags, license and reproducible
       (item: { identity: { canonicalName: string } }) => item.identity.canonicalName
     )
   ).toContain('t3x/compose-services');
+});
+
+it('projects only bounded node and field names for discovery, without field values', async () => {
+  const response = await app.request('/v1/yschema/catalog?q=catalog/public');
+  const result = SchemaCatalogPageSchema.parse((await response.json()).data);
+  expect(result.items[0]?.definition.nodes).toEqual([
+    { path: 'service', slots: ['image', 'ports'] },
+  ]);
+  expect(JSON.stringify(result)).not.toContain('PRIVATE_DEFAULT_NEVER_INDEX');
 });

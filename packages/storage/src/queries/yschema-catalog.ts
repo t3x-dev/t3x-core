@@ -53,7 +53,12 @@ export interface YSchemaCatalogRelease {
     coverPath?: string;
   } | null;
   contentKind: 'definition';
-  definition: { pathCount: number; provides: string[]; requires: string[] };
+  definition: {
+    pathCount: number;
+    nodes: Array<{ path: string; slots: string[] }>;
+    provides: string[];
+    requires: string[];
+  };
   formats: ['json', 'yaml'];
   validation: 'not-run';
   license: string | null;
@@ -158,6 +163,21 @@ export async function listYSchemaCatalogReleases(
       status: v.status,
       createdAt: v.createdAt,
       pathCount: v.pathCount,
+      // Bounded names only, never slot values, README, samples or arbitrary manifest data.
+      nodes: sql<Array<{ path: string; slots: string[] }>>`coalesce((
+        select jsonb_agg(jsonb_build_object('path', section.key, 'slots', coalesce((
+          select jsonb_agg(slot.key) from (
+            select key from jsonb_object_keys(case when jsonb_typeof(section.value->'slots') = 'object'
+              then section.value->'slots' else '{}'::jsonb end) as key order by key limit 3
+          ) slot
+        ), '[]'::jsonb))) from (
+          select key, value from jsonb_each(case
+            when jsonb_typeof(${v.manifestJson}#>'{contribution,nodes}') = 'object' then ${v.manifestJson}#>'{contribution,nodes}'
+            when jsonb_typeof(${v.manifestJson}#>'{schema,nodes}') = 'object' then ${v.manifestJson}#>'{schema,nodes}'
+            when jsonb_typeof(${v.manifestJson}->'nodes') = 'object' then ${v.manifestJson}->'nodes'
+            else '{}'::jsonb end) order by key limit 3
+        ) section
+      ), '[]'::jsonb)`,
       // A catalog request never exposes another project's introduction reference.
       presentationRef: options.project_id
         ? sql<YSchemaCatalogRelease['presentationRef']>`case
@@ -213,6 +233,7 @@ export async function listYSchemaCatalogReleases(
       contentKind: 'definition' as const,
       definition: {
         pathCount: row.pathCount,
+        nodes: row.nodes,
         provides: capabilities
           .filter(
             (c) => c.artifactVersionId === row.artifactVersionId && c.direction === 'provides'

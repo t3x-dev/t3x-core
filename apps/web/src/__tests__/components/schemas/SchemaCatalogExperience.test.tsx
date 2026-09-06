@@ -23,6 +23,7 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
     { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure'] },
   ],
   useSchemaIntroduction: () => ({ loading: false }),
+  useSchemaReleaseReading: () => ({ loading: false }),
 }));
 const item = {
   identity: {
@@ -37,6 +38,7 @@ const item = {
   release: { artifactVersionId: 'v1', version: '1.2.3', kind: 'schema', hash: 'sha256:abc' },
   definition: { pathCount: 4, provides: [], requires: [] },
   presentationRef: null,
+  formats: ['yaml', 'json'],
   license: null,
 };
 beforeEach(() => {
@@ -94,4 +96,30 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText('Detailed Studio')).toBeVisible();
     expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=24', false);
   });
+});
+
+it('opens a published project introduction at its pinned State revision', () => {
+  mocks.catalog.mockReturnValue({
+    data: {
+      items: [
+        {
+          ...item,
+          presentationRef: {
+            projectId: 'source',
+            commitDigest: 'sha256:exact',
+            presentationDigest: 'sha256:presentation',
+          },
+        },
+      ],
+    },
+    loading: false,
+  });
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
+  const href = new URL(mocks.push.mock.calls[0]![0], 'https://t3x.test');
+  expect(href.pathname).toBe('/project/source');
+  expect(href.searchParams.get('view')).toBe('overview');
+  expect(href.searchParams.get('commit')).toBe('sha256:exact');
+  expect(href.searchParams.get('studioTarget')).toBe('p');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

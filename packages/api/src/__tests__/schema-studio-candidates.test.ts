@@ -40,6 +40,7 @@ async function publish(version: string) {
     version,
     source: 'team',
     license: 'MIT',
+    readme: '# Exact author introduction',
   };
   hash = await sha256CompositionValue(manifest);
   const view = await upsertYSchemaArtifactVersion(db, {
@@ -76,6 +77,29 @@ const add = (body: unknown) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+it('reads exact published author content without candidate creation, respecting live authority', async () => {
+  const query = new URLSearchParams({
+    sourceProjectId: source,
+    canonicalName: 'team/candidate',
+    version: '1.0.0',
+    expectedHash: hash,
+  });
+  const url = `/v1/projects/${target}/schema-studio/source?${query}`;
+  const result = await app.request(url);
+  expect(result.status).toBe(200);
+  expect((await result.json()).data.readme).toBe('# Exact author introduction');
+  expect(await listSchemaStudioCandidates(db, target)).toEqual([]);
+  denied.add(`${source}:project:read`);
+  expect((await app.request(url)).status).toBe(404);
+  denied.delete(`${source}:project:read`);
+  denied.add(`${target}:project:read`);
+  expect((await app.request(url)).status).toBe(403);
+  denied.delete(`${target}:project:read`);
+  query.set('expectedHash', `sha256:${'0'.repeat(64)}`);
+  expect((await app.request(`/v1/projects/${target}/schema-studio/source?${query}`)).status).toBe(
+    404
+  );
+});
 it('pins and deduplicates exact references without mutating Workspace or copying private content', async () => {
   const body = {
     sourceProjectId: source,

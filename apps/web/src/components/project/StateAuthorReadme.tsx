@@ -24,7 +24,7 @@ function authorUrl(url: string, key: string, resources: Resource[]) {
 export function StateAuthorReadme({
   author,
 }: {
-  author?: NonNullable<StateOverview['author']>['document'];
+  author?: Pick<NonNullable<StateOverview['author']>['document'], 'readme' | 'resources'>;
 }) {
   const resources = author?.resources ?? [];
   return (

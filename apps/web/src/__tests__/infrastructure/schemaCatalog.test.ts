@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchSchemaIntroduction } from '@/infrastructure/schemaCatalog';
+import { fetchSchemaIntroduction, fetchSchemaReleaseReading } from '@/infrastructure/schemaCatalog';
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock('@/infrastructure/core', () => ({
@@ -57,4 +57,16 @@ describe('exact release introduction', () => {
       ).rejects.toThrow('Introduction does not match');
     }
   });
+});
+
+it('reads an exact source without creating a Studio candidate and rejects a changed hash', async () => {
+  const release = { artifactHash: digest, readme: '# Author' };
+  mocks.fetch.mockResolvedValue(release);
+  expect(await fetchSchemaReleaseReading('p', 'team/template', '1', digest, 'source')).toEqual(
+    release
+  );
+  expect(mocks.fetch.mock.calls[0]![0]).toContain('sourceProjectId=source');
+  await expect(fetchSchemaReleaseReading('p', 'team/template', '1', commit)).rejects.toThrow(
+    'selected hash'
+  );
 });
