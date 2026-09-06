@@ -1,9 +1,17 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { SchemaCatalogCollectionsSchema, SchemaCatalogPageSchema } from '@t3x-dev/api-client';
+import {
+  SchemaCatalogCollectionsSchema,
+  SchemaCatalogPageSchema,
+  SchemaReleasePresentationReferenceSchema,
+  StatePresentationSchema,
+} from '@t3x-dev/api-client';
+import { createStatePresentation } from '@t3x-dev/application';
 import {
   ConflictError,
   decodeCursor,
+  findStatePresentation,
   findWorkspaceDraft,
+  getVerifiedTransitionCommitGraph,
   listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
   listYSchemaCatalogReleases,
@@ -155,6 +163,10 @@ const ApplyWorkspaceCompositionRequestSchema = z
   .strict()
   .openapi('ApplyWorkspaceYSchemaCompositionRequest');
 
+const PublishPresentationReferenceSchema = SchemaReleasePresentationReferenceSchema.omit({
+  projectId: true,
+});
+
 const PublishWorkspaceCompositionRequestSchema = z
   .object({
     composition_revision: z.number().int().positive(),
@@ -168,6 +180,7 @@ const PublishWorkspaceCompositionRequestSchema = z
     title: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).optional(),
     release_notes: z.string().trim().max(1000).optional(),
+    presentation_ref: PublishPresentationReferenceSchema.optional(),
     tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
   })
   .strict()
@@ -755,7 +768,7 @@ yschemaCompositionRoutes.openapi(updateSchemaIdentityRoute, async (c) => {
   const { projectId, artifactId } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
   const updated = await updateYSchemaArtifactIdentity(db, {
     artifact_id: artifactId,
@@ -775,7 +788,7 @@ yschemaCompositionRoutes.openapi(setSchemaLifecycleRoute, async (c) => {
   const { projectId, artifactId, action } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
   const updated = await updateYSchemaArtifactIdentity(db, {
     artifact_id: artifactId,
@@ -872,7 +885,7 @@ yschemaCompositionRoutes.openapi(saveWorkspaceCompositionRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { composition, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
@@ -974,8 +987,47 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   const { projectId, workspaceId } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
+
+  let presentationRef: z.infer<typeof SchemaReleasePresentationReferenceSchema> | undefined;
+  if (input.presentation_ref) {
+    const reference = input.presentation_ref;
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, reference.commitDigest);
+    if (!graph)
+      return errorResponse(c, 'COMMIT_NOT_FOUND', 'Introduction commit not found in this project');
+    const row = await findStatePresentation(db, projectId, reference.commitDigest);
+    if (!row) return errorResponse(c, 'NOT_FOUND', 'No introduction is published for this commit');
+    try {
+      const saved = StatePresentationSchema.parse({
+        digest: row.presentationDigest,
+        document: row.document,
+      });
+      const verified = createStatePresentation({
+        ...saved.document,
+        avatarPath: saved.document.avatarPath ?? undefined,
+      });
+      if (
+        verified.digest !== row.presentationDigest ||
+        verified.digest !== reference.presentationDigest
+      ) {
+        throw new Error('Introduction digest mismatch');
+      }
+      if (
+        reference.coverPath &&
+        !verified.document.resources.some((resource) => resource.path === reference.coverPath)
+      ) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          'Cover must reference an image in this introduction'
+        );
+      }
+    } catch {
+      return errorResponse(c, 'HASH_CONFLICT', 'Introduction failed integrity verification');
+    }
+    presentationRef = { projectId, ...reference };
+  }
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   if (!draft?.workspace_state) {
@@ -1070,6 +1122,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       schema,
       registry: {
         origin: 'composition',
+        ...(presentationRef ? { presentationRef } : {}),
         compilerVersion: 'yschema-v2',
         compositionHash: preview.compositionHash,
         compiledSchemaHash: preview.compiledSchemaHash,
@@ -1179,6 +1232,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     schema,
     registry: {
       origin: 'composition',
+      ...(presentationRef ? { presentationRef } : {}),
       compositionId: persisted.composition.id,
       compositionRevision: persisted.composition.revision,
       compositionHash: preview.compositionHash,
@@ -1233,7 +1287,7 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
     composition_hash: expectedCompositionHash,
   } = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);

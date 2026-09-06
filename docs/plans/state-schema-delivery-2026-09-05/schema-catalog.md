@@ -52,3 +52,19 @@ Focused API + composition persistence suites: 22 passed. Includes real PostgreSQ
 Initial local run used dependency output overwritten by the author-PR pre-push build; rebuilding dependencies resolved the missing runtime exports. A permission fixture passed `ownerId` through a helper that discards that field; the corrected fixture creates real namespace authority. Final results above follow both corrections.
 
 After integrating #1542 from `dev` (`d68de453c1f76a5c281fcff073e09a51eeadb76e`), full `pnpm test` passed: 31 successful tasks, API 1,305 passed / 1 skipped, WebUI 1,586 passed. The route-policy merge retained all 284 entries and its inventory check passed.
+
+## Release introduction binding
+
+Schema publication accepts an optional `presentation_ref` containing exact `commitDigest`, `presentationDigest`, and an optional bundled `coverPath`. The project comes from the authorized route, never from request data. Publication verifies commit membership, normalizes and hashes the stored author introduction, and checks that the selected cover is in its bundled resources. The complete reference is saved in `manifest.registry.presentationRef` and covered by the immutable artifact hash. Existing releases cannot be repinned, and publishing without an introduction remains valid.
+
+This is an introduction provenance link, not a claim that the introduction commit is the compiled Schema definition. `schemaHash` and the artifact release identity continue to describe the definition. Updating project HEAD never changes a released introduction.
+
+Catalog returns this reference only for releases owned by the explicitly authorized project in the project-scoped endpoint. Public and foreign-project results return null, even if the release itself is public. The existing exact-commit presentation endpoint remains responsible for authorization and integrity checking when fetching README/image content. Public editorial image publication requires a separate explicit sharing workflow; this change does not create one.
+
+The publication, identity update/archive, and composition save/apply routes now require `project:edit`. Reading definitions and introductions remains available to viewers. The previous read-only authorization on these mutations was insufficient.
+
+Verification: 28 targeted tests passed across release introduction, catalog, and composition persistence. Includes corrupted content, foreign commits, wrong digests, unbundled covers, immutable repinning, HEAD advancement, backward-compatible publication, viewer rejection on all five write actions, and public/foreign catalog isolation.
+
+Full regression: `pnpm test --concurrency=1` passed all 31 tasks (API 1,311 passed/1 skipped; WebUI 1,586 passed). The initial parallel run stopped during PostgreSQL shared-memory allocation, not an assertion; the serial run passed without system changes or skipped checks. A final focused publication suite also covers the v2 Blueprint pin.
+
+Final v1/v2 publication suite: 7 passed. Its first v2 fixture collided with the one-open-workspace-per-branch index; assigning the fixture a distinct branch in both its storage metadata and workspace state corrected that setup error.

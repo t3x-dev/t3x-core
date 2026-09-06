@@ -45,6 +45,12 @@ export interface YSchemaCatalogRelease {
     status: string;
     publishedAt: string;
   };
+  presentationRef: {
+    projectId: string;
+    commitDigest: string;
+    presentationDigest: string;
+    coverPath?: string;
+  } | null;
   contentKind: 'definition';
   definition: { pathCount: number; provides: string[]; requires: string[] };
   formats: ['json', 'yaml'];
@@ -150,6 +156,22 @@ export async function listYSchemaCatalogReleases(
       status: v.status,
       createdAt: v.createdAt,
       pathCount: v.pathCount,
+      // A catalog request never exposes another project's introduction reference.
+      presentationRef: options.project_id
+        ? sql<YSchemaCatalogRelease['presentationRef']>`case
+        when ${a.ownerProjectId} = ${options.project_id}
+        and ${v.manifestJson}#>>'{registry,presentationRef,projectId}' = ${options.project_id}
+        and ${v.manifestJson}#>>'{registry,presentationRef,commitDigest}' ~ '^sha256:[0-9a-f]{64}$'
+        and ${v.manifestJson}#>>'{registry,presentationRef,presentationDigest}' ~ '^sha256:[0-9a-f]{64}$'
+        then jsonb_strip_nulls(jsonb_build_object(
+          'projectId', ${a.ownerProjectId},
+          'commitDigest', ${v.manifestJson}#>>'{registry,presentationRef,commitDigest}',
+          'presentationDigest', ${v.manifestJson}#>>'{registry,presentationRef,presentationDigest}',
+          'coverPath', case when jsonb_typeof(${v.manifestJson}#>'{registry,presentationRef,coverPath}') = 'string'
+            and length(${v.manifestJson}#>>'{registry,presentationRef,coverPath}') between 1 and 200
+            then ${v.manifestJson}#>>'{registry,presentationRef,coverPath}' else null end
+        )) else null end`
+        : sql<null>`null`,
       // Only a bounded declared license string is projected; no README/resource/starter data.
       license: sql<string | null>`case when jsonb_typeof(${v.manifestJson}->'license') = 'string'
       and length(${v.manifestJson}->>'license') <= 256 then ${v.manifestJson}->>'license' else null end`,
@@ -185,6 +207,7 @@ export async function listYSchemaCatalogReleases(
         status: row.status,
         publishedAt: row.createdAt.toISOString(),
       },
+      presentationRef: row.presentationRef,
       contentKind: 'definition' as const,
       definition: {
         pathCount: row.pathCount,

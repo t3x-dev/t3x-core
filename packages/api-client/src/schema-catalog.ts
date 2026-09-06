@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+export const SchemaReleasePresentationReferenceSchema = z
+  .object({
+    projectId: z.string().min(1),
+    commitDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    presentationDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    coverPath: z.string().min(1).max(200).optional(),
+  })
+  .strict();
+export type SchemaReleasePresentationReference = z.infer<
+  typeof SchemaReleasePresentationReferenceSchema
+>;
+
 /** Registry metadata is mutable; release identity and content hash are immutable. */
 export const SchemaCatalogItemSchema = z.object({
   identity: z.object({
@@ -22,6 +34,7 @@ export const SchemaCatalogItemSchema = z.object({
     status: z.enum(['active', 'published']),
     publishedAt: z.string(),
   }),
+  presentationRef: SchemaReleasePresentationReferenceSchema.nullable().default(null),
   contentKind: z.literal('definition'),
   definition: z.object({
     pathCount: z.number().int(),

@@ -158,6 +158,13 @@ export interface PublishedYSchemaBlueprintV1 {
   schema: YSchema;
   registry: {
     origin: 'composition';
+    /** Exact author introduction; not the schema content identity. */
+    presentationRef?: {
+      projectId: string;
+      commitDigest: string;
+      presentationDigest: string;
+      coverPath?: string;
+    };
     compilerVersion: 'yschema-v2';
     compositionHash: string;
     compiledSchemaHash: string;
