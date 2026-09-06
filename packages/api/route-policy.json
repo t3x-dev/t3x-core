@@ -1805,21 +1805,21 @@
       "method": "PUT",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/apply",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/publish",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
@@ -1847,14 +1847,14 @@
       "method": "PATCH",
       "path": "/v1/projects/{projectId}/yschemas/{artifactId}",
       "policy": "project",
-      "rationale": "Only project-owned Schema identity metadata can be updated."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/yschemas/{artifactId}/{action}",
       "policy": "project",
-      "rationale": "Only project-owned Schema identities can be archived or restored."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
