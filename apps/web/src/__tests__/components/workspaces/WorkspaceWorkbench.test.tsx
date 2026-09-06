@@ -1653,6 +1653,8 @@ describe('WorkspaceWorkbench', () => {
     expect(
       await within(detail).findByText('Persisted turn ready to include as source evidence.')
     ).toBeInTheDocument();
+    // This extraction test starts after the initial pin snapshot has loaded.
+    await waitFor(() => expect(usePinsStore.getState().initialized).toBe(true));
     fireEvent.click(within(detail).getByRole('button', { name: 'Include turn' }));
 
     await within(detail).findByText('1 selected source turns');

@@ -237,3 +237,55 @@ it('applies once with CAS, invalidates stale diagnostics and retains exact adopt
   expect((await request('preview', { candidateIds: [coreId] })).status).toBe(404);
   denied.clear();
 });
+
+it('projects locks only for declared required imports, not legacy suggestions', async () => {
+  const base = {
+    apiVersion: 't3x.dev/yschema-module/v2',
+    version: '1.0.0',
+    title: 'Lock test',
+    description: '',
+    status: 'active',
+    source: 'team',
+    tags: [],
+    compatibility: { yschema: ['0.1'] },
+    contribution: { nodes: {} },
+  };
+  const provider = await candidate(
+    'lock-provider',
+    {
+      ...base,
+      canonicalName: 'team/lock-provider',
+      provides: [{ capability: 'lock-base', version: 1 }],
+      imports: [],
+    },
+    'module'
+  );
+  const consumer = await candidate(
+    'lock-consumer',
+    {
+      ...base,
+      canonicalName: 'team/lock-consumer',
+      provides: [],
+      imports: [{ capability: 'lock-base', version: 1, mode: 'required' }],
+    },
+    'module'
+  );
+  const response = await request('preview', { candidateIds: [provider, consumer] });
+  expect(response.status).toBe(200);
+  const preview = (await response.json()).data;
+  expect(preview.report.valid).toBe(true);
+  expect(preview.modules).toEqual([
+    { candidateId: provider, requiredBy: ['team/lock-consumer'] },
+    { candidateId: consumer, requiredBy: [] },
+  ]);
+  const missing = (await (await request('preview', { candidateIds: [consumer] })).json()).data;
+  expect(missing.report.valid).toBe(false);
+  const legacy = await request('candidates', {
+    canonicalName: 't3x/prd-system-architecture',
+    version: '1.0.0',
+  });
+  const legacyId = (await legacy.json()).data.id;
+  const open = (await (await request('preview', { candidateIds: [legacyId] })).json()).data;
+  expect(open.report.valid).toBe(true);
+  expect(open.modules).toEqual([{ candidateId: legacyId, requiredBy: [] }]);
+});

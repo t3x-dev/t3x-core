@@ -76,6 +76,9 @@ export const StudioPreviewSchema = z.object({
   }),
   renderPlan: z.array(z.record(z.string(), z.unknown())),
   origins: z.record(z.string(), z.unknown()),
+  modules: z
+    .array(z.object({ candidateId: z.string(), requiredBy: z.array(z.string()) }))
+    .default([]),
   sources: z.array(StudioSourceSchema),
   adoption: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
   workspace: z

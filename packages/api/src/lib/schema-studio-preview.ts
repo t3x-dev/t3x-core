@@ -102,9 +102,11 @@ export async function compileStudioSelection(
       report: { valid: true, issues: [] },
       renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
       origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
+      modules: [],
       adoption: { allowed: !adoptionReason, reason: adoptionReason },
     };
   }
+  const modules = entries.map(({ view }) => artifactViewToOpenModule(view));
   const compiled = await compileYSchemaCompositionV2({
     composition: {
       apiVersion: 't3x.dev/yschema-composition/v2',
@@ -117,7 +119,7 @@ export async function compileStudioSelection(
         presentationOrder: index * 10,
       })),
     },
-    modules: entries.map(({ view }) => artifactViewToOpenModule(view)),
+    modules,
   });
   return {
     schema: compiled.schema,
@@ -127,6 +129,30 @@ export async function compileStudioSelection(
     report: compiled.report,
     renderPlan: compiled.renderPlan,
     origins: compiled.originsByPath,
+    // A presentation projection of declared required imports. The compiler remains
+    // the authority for validity; only the last matching provider is locked.
+    modules: modules.map((provider, index) => ({
+      candidateId: entries[index]!.row.id,
+      requiredBy: modules
+        .filter(
+          (consumer) =>
+            consumer !== provider &&
+            consumer.imports.some((imported) => {
+              if (imported.mode !== 'required') return false;
+              const matching = modules.filter(
+                (candidate) =>
+                  (!imported.provider || candidate.canonicalName === imported.provider) &&
+                  candidate.provides.some(
+                    (capability) =>
+                      capability.capability === imported.capability &&
+                      capability.version === imported.version
+                  )
+              );
+              return matching.length === 1 && matching[0] === provider;
+            })
+        )
+        .map((consumer) => consumer.canonicalName),
+    })),
     adoption: { allowed: !adoptionReason, reason: adoptionReason },
   };
 }
