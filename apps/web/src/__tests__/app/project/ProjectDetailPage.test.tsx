@@ -471,7 +471,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('draft')).toBeInTheDocument();
     expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.parentElement).toHaveClass('h-dvh', 'overflow-hidden');
+    expect(projectNavigation.closest('header')).toHaveClass('min-[1200px]:h-14');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
