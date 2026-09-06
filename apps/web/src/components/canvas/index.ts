@@ -18,7 +18,6 @@ export { default as CanvasWorkspace } from './CanvasWorkspace';
 export { DeletionConfirmDialog } from './DeletionConfirmDialog';
 
 // Panels
-export { LeafPanel } from './LeafPanel';
 export type { NodeQuickAction } from './NodeModal';
 // Modal
 export { NodeModal } from './NodeModal';

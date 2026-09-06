@@ -121,19 +121,16 @@ export async function getLeaf(leafId: string): Promise<Leaf> {
  * Update leaf (title, constraints, config)
  */
 export async function updateLeaf(
-  leafId: string,
-  updates: {
+  _leafId: string,
+  _updates: {
     title?: string;
     constraints?: Constraint[];
     config?: LeafConfig;
   }
 ): Promise<Leaf> {
-  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  });
-  return handleResponse<Leaf>(res);
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
+  );
 }
 
 /**
@@ -154,20 +151,16 @@ export interface CreateLeafInput {
   source: { type: 'user'; author?: string } | { type: 'agent'; model: string; timestamp: string };
 }
 
-export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {
-  const res = await fetchWithTimeout(`${API_V1}/leaves`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  return handleResponse<Leaf>(res);
+export async function createLeaf(_input: CreateLeafInput): Promise<Leaf> {
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
+  );
 }
 
-export async function deleteLeaf(leafId: string): Promise<void> {
-  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}`, {
-    method: 'DELETE',
-  });
-  await handleResponse(res);
+export async function deleteLeaf(_leafId: string): Promise<void> {
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
+  );
 }
 
 /**
@@ -220,23 +213,12 @@ export interface GenerateLeafOutputOptions {
  * @throws ApiError - GENERATION_FAILED
  */
 export async function generateLeafOutput(
-  leafId: string,
-  options?: GenerateLeafOutputOptions
+  _leafId: string,
+  _options?: GenerateLeafOutputOptions
 ): Promise<GenerateLeafOutputResult> {
-  const body: Record<string, unknown> = {};
-  if (options?.mode) body.mode = options.mode;
-  if (options?.style_preferences) body.style_preferences = options.style_preferences;
-
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/generate`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    180000 // 180 seconds timeout for LLM generation with auto-retry
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
   );
-  return handleResponse<GenerateLeafOutputResult>(res);
 }
 
 /**
@@ -256,19 +238,12 @@ export interface CompareModelsResult {
  * Compare multiple models for a leaf
  */
 export async function compareLeafModels(
-  leafId: string,
-  models: string[]
+  _leafId: string,
+  _models: string[]
 ): Promise<CompareModelsResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/compare`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ models }),
-    },
-    300000 // 5 minutes for parallel generation
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
   );
-  return handleResponse<CompareModelsResult>(res);
 }
 
 /**
@@ -294,15 +269,12 @@ export interface ValidateLeafOutputResult {
  * @throws ApiError - NO_CONSTRAINTS (no constraints to validate)
  */
 export async function validateLeafOutput(
-  leafId: string,
-  useSemantic = false
+  _leafId: string,
+  _useSemantic = false
 ): Promise<ValidateLeafOutputResult> {
-  const res = await fetchWithTimeout(`${API_V1}/leaves/${encodeURIComponent(leafId)}/validate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ use_semantic: useSemantic }),
-  });
-  return handleResponse<ValidateLeafOutputResult>(res);
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
+  );
 }
 
 // ============================================================================
@@ -335,19 +307,12 @@ export interface SuggestConstraintsResult {
  * Get AI-suggested constraints for a leaf.
  */
 export async function suggestLeafConstraints(
-  leafId: string,
-  options?: { max_suggestions?: number; instructions?: string }
+  _leafId: string,
+  _options?: { max_suggestions?: number; instructions?: string }
 ): Promise<SuggestConstraintsResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/suggest-constraints`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(options ?? {}),
-    },
-    60_000
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
   );
-  return handleResponse<SuggestConstraintsResult>(res);
 }
 
 // ============================================================================
@@ -361,19 +326,12 @@ export interface ReverseLearnResult {
 }
 
 export async function reverseLearnConstraints(
-  leafId: string,
-  maxSuggestions = 5
+  _leafId: string,
+  _maxSuggestions = 5
 ): Promise<ReverseLearnResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/reverse-learn`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_suggestions: maxSuggestions }),
-    },
-    30_000
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
   );
-  return handleResponse<ReverseLearnResult>(res);
 }
 
 // ============================================================================
@@ -395,19 +353,12 @@ export interface LearnFromEditsResult {
  * Analyze user output edits to discover implicit constraints.
  */
 export async function learnFromEdits(
-  leafId: string,
-  maxSuggestions = 5
+  _leafId: string,
+  _maxSuggestions = 5
 ): Promise<LearnFromEditsResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/leaves/${encodeURIComponent(leafId)}/learn-from-edits`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_suggestions: maxSuggestions }),
-    },
-    30_000
+  throw new Error(
+    'LEAF_WRITER_RETIRED: Use exact State/Commit export or Workspace Delivery. Historical Leaf reads remain available.'
   );
-  return handleResponse<LearnFromEditsResult>(res);
 }
 
 // ============================================================================

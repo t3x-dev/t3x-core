@@ -253,7 +253,7 @@ describe('createMcpServer', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"leaf_id" is required');
+    expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
   });
 
   it('returns unknown tool errors from the server call handler', async () => {

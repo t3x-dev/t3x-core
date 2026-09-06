@@ -1,17 +1,15 @@
 import { expect, test } from '../fixtures/test';
-import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestProject } from '../fixtures/api-helpers';
+import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestLeaf, createTestProject } from '../fixtures/api-helpers';
 import fs from 'node:fs/promises';
 
 test('legacy Leaf is read-only, exports saved content, and preserves its source revision', async ({ page, request }, testInfo) => {
   const { projectId } = await createTestProject(request, 'Legacy release brief');
   try {
     const hash = await createTestCommitFromTrees(request, projectId, [{ key: 'release', slots: { title: 'Archived release' }, children: [] }]);
-    const created = await request.post(`${API_BASE}/leaves`, { data: { project_id: projectId, commit_hash: hash, type: 'article', title: 'Release briefing', constraints: [], config: {}, source: { type: 'user' } } });
-    expect(created.ok(), await created.text()).toBeTruthy();
-    const leaf = (await created.json()).data;
     const output = 'Release briefing\n\nThis is the retained output, including the author’s final edits.';
-    const edited = await request.patch(`${API_BASE}/leaves/${leaf.id}`, { data: { output } });
-    expect(edited.ok(), await edited.text()).toBeTruthy();
+    const leaf = { id: await createTestLeaf(request, hash, projectId, [], { output, title: 'Release briefing' }) };
+    const retired = await request.patch(`${API_BASE}/leaves/${leaf.id}`, { data: { output: 'Must not replace history' } });
+    expect(retired.status()).toBe(410);
     const writes: string[] = [];
     page.on('request', (req) => { if (req.url().includes('/leaves') && !['GET', 'HEAD'].includes(req.method())) writes.push(req.method()); });
     await page.goto(`/project/${projectId}/leaf/${leaf.id}`, { waitUntil: 'networkidle' });

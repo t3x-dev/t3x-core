@@ -57,7 +57,6 @@ import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
-import { LeafPanel } from './LeafPanel';
 import { NodeModal } from './NodeModal';
 
 const GRID_SIZE = 16;
@@ -148,7 +147,6 @@ function CanvasWorkspaceInner({
     modalViewMode,
     openNodeModal,
     closeNodeModal,
-    openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -465,9 +463,6 @@ function CanvasWorkspaceInner({
                 );
               }
             : undefined,
-        onCreateLeaf: () => {
-          openLeafPanel(node.id);
-        },
       }),
       canMerge: false,
       parentHash,
@@ -733,7 +728,6 @@ function CanvasWorkspaceInner({
             isConversationLocked={isConversationLocked}
           />
         )}
-      <LeafPanel projectName={projectName} />
       <MergePanel />
       <DeletionConfirmDialog />
       {projectId && (
