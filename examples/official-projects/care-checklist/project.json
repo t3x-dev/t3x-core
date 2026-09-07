@@ -1,0 +1,46 @@
+{
+  "slug": "care-checklist",
+  "title": "Care checklist",
+  "description": "A reusable checklist for everyday routines.",
+  "license": "Apache-2.0",
+  "tags": ["care", "work", "checklist", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/care-checklist",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "checklist": {
+      "title": "Daily dog care"
+    },
+    "items": {
+      "water": {
+        "task": "Refresh the water bowl",
+        "done": false
+      },
+      "walk": {
+        "task": "Record today\u2019s walk",
+        "done": false,
+        "note": ""
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Record the next care check",
+    "value": {
+      "checklist": {
+        "title": "Daily dog care"
+      },
+      "items": {
+        "water": {
+          "task": "Refresh the water bowl",
+          "done": true
+        },
+        "walk": {
+          "task": "Record today\u2019s walk",
+          "done": false,
+          "note": ""
+        }
+      }
+    }
+  }
+}

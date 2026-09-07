@@ -1,0 +1,32 @@
+{
+  "slug": "compose-services",
+  "title": "Compose services",
+  "description": "Review image-based service configuration before delivery.",
+  "license": "Apache-2.0",
+  "tags": ["infrastructure", "devops", "ecosystem:docker-compose", "configuration"],
+  "companionSchema": {
+    "canonicalName": "t3x/compose-services",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "services": {
+      "web": {
+        "image": "nginx:1.28-alpine",
+        "ports": ["127.0.0.1:8080:80"],
+        "restart": "unless-stopped"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Restrict the web service to a local port",
+    "value": {
+      "services": {
+        "web": {
+          "image": "nginx:1.28-alpine",
+          "ports": ["127.0.0.1:8081:80"],
+          "restart": "unless-stopped"
+        }
+      }
+    }
+  }
+}
