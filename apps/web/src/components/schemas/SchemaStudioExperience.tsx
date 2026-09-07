@@ -10,11 +10,11 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
-import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,8 +28,9 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
+import { builtinSchemaCover } from './builtinSchemaCover';
 import { CreateStudioWorkspace } from './CreateStudioWorkspace';
-import { StudioChanges } from './StudioDefinitionPreview';
+import { StudioChanges, StudioDefinitionPreview } from './StudioDefinitionPreview';
 import { StudioSamplePreview } from './StudioSamplePreview';
 
 const selectClass =
@@ -142,12 +143,12 @@ export function SchemaStudioExperience({
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
   return (
-    <div className="min-w-0 p-4 sm:p-6">
+    <div className="min-w-0 bg-[var(--surface-card)] p-4 sm:p-6 lg:px-8">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Schema Studio</h1>
           <span className="rounded border border-[var(--stroke-divider)] px-2 py-1 text-xs text-[var(--text-secondary)]">
-            Draft selection
+            Draft
           </span>
         </div>
         <Link
@@ -157,17 +158,20 @@ export function SchemaStudioExperience({
           Browse definitions <Plus className="size-4" />
         </Link>
       </header>
-      <section aria-label="Saved Studio candidates" className="mb-5">
+      <section
+        aria-label="Saved Studio candidates"
+        className="mb-5 rounded-lg border border-[var(--stroke-divider)] p-2"
+      >
         {candidates.loading ? <output>Loading candidates…</output> : null}
         {candidates.error ? <p role="alert">{candidates.error}</p> : null}
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto">
           {candidates.items.map((item) => (
             <div
               key={item.id}
               className={cn(
-                'relative flex w-64 shrink-0 items-start gap-3 rounded-lg border bg-[var(--surface-card)] p-4',
+                'relative flex w-72 shrink-0 items-start gap-3 rounded-md border bg-[var(--surface-card)] p-3',
                 selection.includes(item.id)
-                  ? 'border-[var(--status-info)] ring-1 ring-[var(--status-info)]'
+                  ? 'border-[var(--status-info)] bg-[var(--status-info-muted)]'
                   : 'border-[var(--stroke-divider)]'
               )}
             >
@@ -180,6 +184,17 @@ export function SchemaStudioExperience({
                   onChange={() => choose(item.id, item.kind === 'schema')}
                   aria-label={`Select ${item.title ?? 'unavailable source'} ${item.source?.version ?? ''}`}
                 />
+                {item.source &&
+                builtinSchemaCover(item.source.canonicalName, item.source.projectId) ? (
+                  <Image
+                    src={builtinSchemaCover(item.source.canonicalName, item.source.projectId)!}
+                    alt=""
+                    width={44}
+                    height={44}
+                    unoptimized
+                    className="size-11 shrink-0 rounded object-cover"
+                  />
+                ) : null}
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">
                     {item.title ?? 'Unavailable source'}
@@ -187,7 +202,7 @@ export function SchemaStudioExperience({
                   <span className="mt-1 block font-mono text-xs text-[var(--status-info)]">
                     {item.source?.version ?? 'Access unavailable'}
                   </span>
-                  <span className="mt-2 block text-[10px] uppercase tracking-wide text-[var(--text-tertiary)]">
+                  <span className="mt-1 block text-[10px] text-[var(--text-tertiary)]">
                     {locked.has(item.id)
                       ? 'Required · included'
                       : item.kind === 'schema'
@@ -232,38 +247,43 @@ export function SchemaStudioExperience({
           Exact definition applied. Workspace checks need review.
         </output>
       ) : null}
-      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[210px_minmax(0,1fr)_270px]">
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_280px]">
         <aside className="min-w-0 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
           <h2 className="text-sm font-semibold">
-            Selection{' '}
+            Modules{' '}
             <span className="float-right text-xs font-normal text-[var(--text-tertiary)]">
               {selected.length}
             </span>
           </h2>
           <div className="mt-3 divide-y divide-[var(--stroke-divider)]">
             {selected.map((item) => (
-              <div key={item.id} className="py-3">
-                <p className="flex items-center gap-2 text-xs font-medium">
-                  <Box className="size-3.5 shrink-0 text-[var(--status-info)]" />
-                  {item.title}
-                </p>
-                <p className="mt-2 break-all font-mono text-[10px] text-[var(--text-secondary)]">
-                  {item.source?.canonicalName}
-                </p>
-                <p className="mt-1 text-xs text-[var(--status-info)]">{item.source?.version}</p>
-                {item.kind === 'schema' ? (
-                  <p className="mt-2 flex items-center gap-1 text-[10px] text-[var(--text-tertiary)]">
-                    <LockKeyhole className="size-3" />
-                    Published structure included
-                  </p>
+              <div key={item.id} className="flex items-center gap-2 py-3 text-sm">
+                <Check className="size-4 shrink-0 text-[var(--status-info)]" />
+                <span className="min-w-0 flex-1 break-words">{item.title}</span>
+                {locked.has(item.id) || item.kind === 'schema' ? (
+                  <LockKeyhole
+                    aria-label="Included structure"
+                    className="size-3.5 text-[var(--text-tertiary)]"
+                  />
                 ) : null}
-                <details className="mt-2 text-[10px] text-[var(--text-tertiary)]">
-                  <summary className="cursor-pointer">Exact source</summary>
-                  <p className="mt-2 break-all font-mono">{item.source?.hash}</p>
-                </details>
               </div>
             ))}
           </div>
+          {data && typeof data.schema.nodes === 'object' && data.schema.nodes ? (
+            <div className="my-4 border-t border-[var(--stroke-divider)] pt-4">
+              <h3 className="mb-3 text-xs font-semibold text-[var(--text-secondary)]">
+                Definition outline
+              </h3>
+              <ul className="space-y-2 border-l border-[var(--stroke-divider)] pl-3">
+                {Object.keys(data.schema.nodes).map((path) => (
+                  <li key={path} className="flex items-start gap-2 text-xs">
+                    <Box className="mt-0.5 size-3.5 shrink-0 text-[var(--status-info)]" />
+                    <span className="break-all font-mono">{path}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {!selection.length ? (
             <p className="mt-3 text-xs text-[var(--text-secondary)]">
               Select a definition or combine declared Modules.
@@ -300,9 +320,12 @@ export function SchemaStudioExperience({
             </select>
           </div>
         </aside>
-        <main className="min-w-0 overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)]">
+        <main className="min-w-0 overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] p-3">
-            <nav aria-label="Studio definition views" className="flex gap-1">
+            <nav
+              aria-label="Studio definition views"
+              className="flex rounded-md border border-[var(--stroke-divider)] p-0.5"
+            >
               {(['preview', 'structure', 'code'] as const).map((value) => (
                 <button
                   type="button"
@@ -310,7 +333,7 @@ export function SchemaStudioExperience({
                   onClick={() => setTab(value)}
                   aria-pressed={tab === value}
                   className={cn(
-                    'rounded px-3 py-2 text-xs capitalize',
+                    'min-w-20 rounded px-3 py-2 text-xs font-medium capitalize',
                     tab === value
                       ? 'bg-[var(--status-info-muted)] text-[var(--status-info)]  '
                       : 'text-[var(--text-secondary)]'
@@ -331,7 +354,7 @@ export function SchemaStudioExperience({
               </label>
             ) : null}
           </div>
-          <div className="max-h-[70vh] overflow-auto p-4 sm:p-5">
+          <div className="min-h-[420px] max-h-[72vh] overflow-auto p-4 sm:p-6 xl:min-h-[560px]">
             {preview.loading ? (
               <output className="text-sm text-[var(--text-secondary)]">
                 Resolving exact definitions…
@@ -360,11 +383,15 @@ export function SchemaStudioExperience({
                   key={`${data.selectionHash}:${data.schemaHash}`}
                   projectId={projectId}
                   candidateIds={selection}
+                  title={selected
+                    .map((item) => item.title)
+                    .filter(Boolean)
+                    .join(' + ')}
                   preview={data}
                   xray={xray}
                 />
               ) : tab === 'structure' ? (
-                <StateValueReader value={data.schema} />
+                <StudioDefinitionPreview preview={data} xray={xray} />
               ) : (
                 <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-6">
                   {JSON.stringify(data.schema, null, 2)}
@@ -381,8 +408,28 @@ export function SchemaStudioExperience({
             ) : null}
           </div>
         </main>
-        <aside className="min-w-0 space-y-4">
+        <aside className="min-w-0 space-y-4 lg:col-span-2 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 xl:col-span-1 xl:block xl:space-y-4">
           <section className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
+            {selected.length ? (
+              <div className="mb-4 border-b border-[var(--stroke-divider)] pb-4">
+                <h2 className="text-sm font-semibold">Selection</h2>
+                {selected.map((item) => (
+                  <div key={item.id} className="mt-3 text-xs">
+                    <p className="break-words text-[var(--text-secondary)]">
+                      {item.source?.canonicalName}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1.5 font-mono text-[var(--status-info)]">
+                      <LockKeyhole className="size-3" />
+                      {item.source?.version}
+                    </p>
+                    <details className="mt-2 text-[var(--text-tertiary)]">
+                      <summary className="cursor-pointer">Exact source</summary>
+                      <p className="mt-2 break-all font-mono text-[10px]">{item.source?.hash}</p>
+                    </details>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <label className="text-sm font-semibold" htmlFor="studio-workspace">
               Target Workspace
             </label>

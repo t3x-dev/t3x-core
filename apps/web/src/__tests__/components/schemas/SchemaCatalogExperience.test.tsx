@@ -78,6 +78,7 @@ describe('Schema catalog journey', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
     const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByText('Exact source'));
     expect(within(dialog).getByText('sha256:abc')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Add to Studio' })).toBeEnabled();
     expect(

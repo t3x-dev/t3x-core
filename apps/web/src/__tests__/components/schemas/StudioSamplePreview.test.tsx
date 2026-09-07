@@ -61,3 +61,22 @@ it('invalidates a running validation after editing and resets edits for a new ex
     'Matches selected definition'
   );
 });
+
+it('renders repeated nodes with primitive lists without dropping their values', () => {
+  const services = {
+    ...preview,
+    schema: { nodes: { services: { repeated: true } } },
+    samples: [
+      {
+        ...preview.samples[0],
+        value: { services: { web: { image: 'nginx', ports: ['8080:80', '8443:443'] } } },
+      },
+    ],
+  } as unknown as StudioPreview;
+  render(
+    <StudioSamplePreview projectId="p" candidateIds={['one']} preview={services} xray={false} />
+  );
+  expect(screen.getByRole('table')).toHaveTextContent('nginx');
+  expect(screen.getByRole('table')).toHaveTextContent('8080:80');
+  expect(screen.getByRole('table')).toHaveTextContent('8443:443');
+});
