@@ -301,7 +301,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('does not start Canvas I/O on repository surfaces', async () => {
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
     expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
@@ -506,7 +506,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -552,7 +552,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -593,7 +593,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
@@ -654,7 +654,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
     });
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();

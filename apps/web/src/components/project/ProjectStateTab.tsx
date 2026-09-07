@@ -549,7 +549,7 @@ export function ProjectStateTab({
     setSnapshotRefreshVersion((version) => version + 1);
   }, [availableHeadHash, branchFocus, focusedCommitHash, pathname, replaceRoute]);
 
-  const contextRailVisible = activeView !== 'canvas' && activeView !== 'overview';
+  const contextRailVisible = activeView === 'code';
   const readinessLabel = snapshot.loading
     ? 'Loading State'
     : !headCommit
@@ -725,6 +725,24 @@ export function ProjectStateTab({
                       projectId={projectId}
                       commitDigest={headCommit.hash}
                     />
+                  ) : null}
+                  {activeView === 'structure' ? (
+                    <details className="border-b border-[var(--stroke-divider)] px-3 py-2 text-xs">
+                      <summary className="cursor-pointer text-[var(--text-secondary)]">
+                        Revision details
+                      </summary>
+                      <StateContextRail
+                        branch={branchFocus}
+                        changedPathCount={committedDiffChanges.length}
+                        headCommit={headCommit}
+                        lastCheckedLabel={lastCheckedLabel}
+                        operations={effectiveOperations}
+                        projectName={projectName}
+                        readinessLabel={readinessLabel}
+                        schemaName={schemaName}
+                        warning={stateWarning}
+                      />
+                    </details>
                   ) : null}
                   {activeView === 'structure' ? (
                     <StateStructureView
@@ -1115,7 +1133,7 @@ function StateViewTabs({
           );
         })}
       </div>
-      {activeView !== 'overview' && (
+      {activeView === 'code' && (
         <Button
           aria-expanded={detailsOpen}
           className="my-auto mr-1 h-7 text-xs font-medium px-2.5 min-[1121px]:hidden"
@@ -1206,6 +1224,8 @@ function StateStructureView({
   pathQuery: string;
   rows: StatePointRow[];
 }) {
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const selected = rows.find((row) => row.path === selectedPath);
   const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({});
   const structureRows = useMemo(() => buildStateStructureRows(rows), [rows]);
   const filteredRows = useMemo(
@@ -1244,6 +1264,7 @@ function StateStructureView({
           <input
             className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             onChange={(event) => onPathQueryChange(event.target.value)}
+            aria-label="Search state structure"
             placeholder="Search paths, titles, types..."
             value={pathQuery}
           />
@@ -1252,42 +1273,77 @@ function StateStructureView({
           {visibleRows.length} visible {visibleRows.length === 1 ? 'row' : 'rows'}
         </span>
       </div>
-      <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
-        <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-xs leading-5">
-          <colgroup>
-            <col className="w-[30%] min-w-[220px]" />
-            <col className="w-[38%]" />
-            <col className="w-[70px]" />
-            <col className="w-[90px]" />
-            <col className="w-[90px]" />
-            <col className="w-[60px]" />
-          </colgroup>
-          <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] shadow-[0_1px_0_var(--stroke-divider)]">
-            <tr>
-              <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
-                Path / Key
-              </th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Value</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Type</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Status</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Source / Op</th>
-              <th className="border-b border-[var(--stroke-divider)] px-3 py-2 text-center">
-                Issues
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map((row) => (
-              <StatePointTableRow
-                expanded={searching || isStateStructureRowExpanded(row, expansionOverrides)}
-                key={row.id}
-                onToggle={() => toggleRow(row)}
-                row={row}
-              />
-            ))}
-          </tbody>
-        </table>
-      </StateScrollArea>
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
+          <table className="w-full min-w-[480px] table-fixed border-collapse text-left text-xs leading-5">
+            <colgroup>
+              <col className="w-[30%] min-w-[220px]" />
+              <col className="w-[38%]" />
+              <col className="w-[120px]" />
+            </colgroup>
+            <thead className="sticky top-0 z-20 bg-[var(--surface-card)] text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] shadow-[0_1px_0_var(--stroke-divider)]">
+              <tr>
+                <th className="sticky left-0 z-30 border-b border-r border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
+                  Path / Key
+                </th>
+                <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Value</th>
+                <th className="border-b border-[var(--stroke-divider)] px-3 py-2">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row) => (
+                <StatePointTableRow
+                  expanded={searching || isStateStructureRowExpanded(row, expansionOverrides)}
+                  key={row.id}
+                  onSelect={() => setSelectedPath(row.path)}
+                  selected={selectedPath === row.path}
+                  onToggle={() => toggleRow(row)}
+                  row={row}
+                />
+              ))}
+            </tbody>
+          </table>
+        </StateScrollArea>
+        <aside
+          aria-label="Selected node"
+          className="overflow-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 lg:border-l lg:border-t-0"
+        >
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+            Selected node
+          </h3>
+          {selected ? (
+            <>
+              <h4 className="mt-4 break-words text-lg font-semibold">{selected.key}</h4>
+              <p className="mt-1 break-all font-mono text-xs text-[var(--text-secondary)]">
+                {selected.path}
+              </p>
+              <p className="mt-3 text-xs text-[var(--text-secondary)]">
+                {selected.type} · Committed state
+              </p>
+              <pre className="mt-4 whitespace-pre-wrap break-words rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 text-sm">
+                {selected.value}
+              </pre>
+              {selected.status !== 'unchanged' ? (
+                <div className="mt-4">
+                  <StatusPill row={selected} />
+                </div>
+              ) : null}
+              {selected.sourceOp !== '-' ? (
+                <p className="mt-4 font-mono text-xs">{selected.sourceOp}</p>
+              ) : null}
+              {selected.issueCount > 0 ? (
+                <p className="mt-4 text-sm text-[var(--status-warning)]">
+                  {selected.issueCount} recorded issues
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-[var(--text-secondary)]">
+              Select a node to read its complete value and recorded change.
+            </p>
+          )}
+        </aside>
+      </div>
     </section>
   );
 }
@@ -1300,6 +1356,8 @@ interface StateStructureRow extends StatePointRow {
 }
 
 function StatePointTableRow({
+  onSelect,
+  selected,
   expanded,
   onToggle,
   row,
@@ -1307,6 +1365,8 @@ function StatePointTableRow({
   expanded: boolean;
   onToggle: () => void;
   row: StateStructureRow;
+  onSelect: () => void;
+  selected: boolean;
 }) {
   const expandableLabel = `${expanded ? 'Collapse' : 'Expand'} ${row.key}`;
 
@@ -1316,9 +1376,11 @@ function StatePointTableRow({
         'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)] transition-colors',
         row.expandable ? 'h-9' : 'h-[34px]',
         row.expandable && 'cursor-pointer hover:bg-[var(--surface-hover)]',
-        row.status === 'missing' && 'bg-[var(--status-warning-muted)]/15'
+        selected
+          ? 'bg-[var(--status-info-muted)]'
+          : row.status === 'missing' && 'bg-[var(--status-warning-muted)]/15'
       )}
-      onClick={row.expandable ? onToggle : undefined}
+      onClick={onSelect}
     >
       <td
         className={cn(
@@ -1348,16 +1410,20 @@ function StatePointTableRow({
           ) : (
             <span className="w-3.5 shrink-0" />
           )}
-          <span
+          <button
+            type="button"
+            aria-label={`Inspect ${row.path}`}
+            aria-pressed={selected}
+            onClick={onSelect}
             className={cn(
-              'min-w-0 flex-1 truncate text-[var(--text-primary)]',
+              'text-left min-w-0 flex-1 truncate text-[var(--text-primary)]',
               row.expandable ? 'font-semibold' : 'font-medium',
               row.depth < 2 && row.expandable && 'text-[14px]'
             )}
             title={row.path}
           >
             {row.key}
-          </span>
+          </button>
           {row.issueCount > 0 ? (
             <span
               className="inline-flex size-1.5 shrink-0 rounded-full bg-[var(--status-danger)]"
@@ -1377,21 +1443,11 @@ function StatePointTableRow({
       >
         {row.value}
       </td>
-      <td className="px-3 py-1.5 text-xs font-normal text-[var(--text-tertiary)]">{row.type}</td>
       <td className="px-3 py-1.5">
-        <StatusPill row={row} />
-      </td>
-      <td className="px-3 py-1.5 font-mono text-xs font-normal text-[var(--text-tertiary)]">
-        {row.sourceOp}
-      </td>
-      <td className="px-3 py-1.5 text-center">
-        {row.issueCount > 0 ? (
-          <span className="inline-flex size-5 min-w-5 px-1 items-center justify-center rounded-full bg-[var(--status-danger)] text-[12px] font-bold text-[var(--on-status)]">
-            {row.issueCount}
-          </span>
-        ) : (
-          <span className="text-[var(--text-tertiary)] opacity-40">-</span>
-        )}
+        {row.status !== 'unchanged' ? <StatusPill row={row} /> : null}
+        {row.sourceOp !== '-' ? (
+          <span className="ml-2 font-mono text-xs">{row.sourceOp}</span>
+        ) : null}
       </td>
     </tr>
   );
