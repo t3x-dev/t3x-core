@@ -5,7 +5,6 @@
  * Gate 2: Semantic (LLM-based, optional)
  * Gate 3: Business (configurable rules, optional)
  *
- * @see docs/plans/core-engine/09-gate-and-ci.md
  */
 
 import type { LLMProvider } from '../llm/types';

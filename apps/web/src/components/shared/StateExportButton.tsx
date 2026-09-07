@@ -51,7 +51,10 @@ export function StateExportButton({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Export State</DialogTitle>
-          <DialogDescription>Download the complete committed value.</DialogDescription>
+          <DialogDescription>
+            Download the complete stored State, including its structure. Code and render views may
+            show a different representation.
+          </DialogDescription>
         </DialogHeader>
         <p className="break-all font-mono text-xs text-[var(--text-secondary)]">{commitDigest}</p>
         <fieldset disabled={pending} className="flex gap-2">

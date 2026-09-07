@@ -9,7 +9,6 @@
  * - {{#variable}}...{{/variable}} - Conditional block (shown if variable has value)
  *
  * Owner: GEN-* track
- * @see docs/plans/parallel-dev-guidelines.md
  */
 
 import { serializeForPrompt } from '../semantic/serialize';

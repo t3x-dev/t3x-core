@@ -15,7 +15,7 @@ import { ChangeDecisionHandoff } from './ChangeDecisionHandoff';
 
 /** A local human draft. Only the existing native review/decision lifecycle writes a Commit. */
 export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCandidate }) {
-  const { loadDraftContent } = useWorkspaceYOps(candidate);
+  const { loadDraftContent, rootKey } = useWorkspaceYOps(candidate);
   const transition = useWorkspaceTransition(candidate);
   const [content, setContent] = useState<WorkspaceTransitionContent>();
   const [error, setError] = useState<string>();
@@ -39,6 +39,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
   function update(trees: WorkspaceYOpsTreeNode[]) {
     if (!content) return;
     transition.reset();
+    setError(undefined);
     setContent({ ...content, trees });
   }
   return (
@@ -47,13 +48,22 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
         <p className="mb-4 text-sm text-[var(--text-secondary)]">
           Edit values and named nodes, then review the exact change.
         </p>
+        <p className="mb-4 text-xs text-[var(--text-secondary)]">
+          Definition root: <code>{rootKey}</code>. Add your fields and nodes inside this root.
+        </p>
         {error ? <p role="alert">{error}</p> : null}
         {!content && !error ? <output>Loading current draft…</output> : null}
         <form
           onChange={transition.reset}
           onSubmit={(event) => {
             event.preventDefault();
-            if (content) void transition.review(content, why);
+            if (!content) return;
+            if (content.trees.length !== 1 || content.trees[0]?.key !== rootKey) {
+              setError(`Keep one ${rootKey} root node and add your content inside it.`);
+              return;
+            }
+            setError(undefined);
+            void transition.review(content, why);
           }}
         >
           <fieldset disabled={busy || Boolean(candidate.lastCommitHash)} className="space-y-4">
@@ -67,7 +77,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
                 }
               />
             ))}
-            {content ? (
+            {content && content.trees.length === 0 ? (
               <AddName
                 label="Root node"
                 onAdd={(key) => {

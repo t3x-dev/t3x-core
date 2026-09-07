@@ -5,7 +5,6 @@
  * - Legacy deterministic rules: rejected until a declarative evaluator is available
  * - LLM-based checks: Prompt-based evaluation using an LLM provider
  *
- * @see docs/plans/core-engine/09-gate-and-ci.md §Gate 3
  */
 
 import type { LLMProvider } from '../llm/types';

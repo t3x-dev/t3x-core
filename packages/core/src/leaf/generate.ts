@@ -5,7 +5,6 @@
  * via the `provider` option, with fallback to direct Anthropic API calls.
  *
  * Owner: GEN-* track
- * @see docs/plans/parallel-dev-guidelines.md
  */
 
 import type { LLMProvider } from '../llm/types';

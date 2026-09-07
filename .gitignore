@@ -108,3 +108,14 @@ specs/
 packages/yops/src/specData.ts
 
 demo/
+
+# Internal working material stays outside the repository.
+/docs/plans/
+/docs/verification/
+/docs/history/
+/design-qa.md
+/MIGRATION_PLAN.md
+/docs/cloud-features-progress.md
+/notes/
+/playwright-report/
+/blob-report/

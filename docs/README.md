@@ -16,8 +16,9 @@ repository.
 - `docs/` is for public, maintained documentation.
 - `notes/` is for local working notes, AI-generated drafts, audits, and
   exploratory plans. It is ignored by git.
-- Draft material should move from `notes/` into `docs/` only after an owner
-  edits it into a stable project document.
+- Internal plans, screenshots, audit reports and per-PR progress logs never move
+  into `docs/`. Extract only maintained developer contracts; put verification
+  summaries in PR descriptions. CI enforces the internal-artifact boundary.
 
 ## Current Public Docs
 

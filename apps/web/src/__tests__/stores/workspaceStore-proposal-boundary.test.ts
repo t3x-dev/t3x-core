@@ -13,8 +13,7 @@
  * workspaceStore.ts — and this test fails CI if anything in the file
  * writes those fields outside the whitelist.
  *
- * Per-field whitelist (matches `docs/plans/2026-05-03-centralize-draft-
- * proposal-writes.md` §5):
+ * Per-field whitelist enforced by this test:
  *
  *   draftOps / draftTree / draftVariants
  *     → writeDraftProposal, clearDraft, restoreDraftFor,

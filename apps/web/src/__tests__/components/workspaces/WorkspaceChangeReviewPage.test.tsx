@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeReviewPage } from '@/components/workspaces/WorkspaceChangeReviewPage';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 
+const replace = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
+
 vi.mock('@/hooks/workspaces/useWorkspaceReviewSnapshot', () => ({
   useWorkspaceReviewSnapshot: vi.fn(),
 }));
@@ -105,7 +108,9 @@ describe('WorkspaceChangeReviewPage', () => {
       'href',
       '/project/proj_1/workspaces?tab=workspaces&workspace=workspace_prd_handoff'
     );
-    expect(await screen.findByText('Reduce device log volume')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Review Workspace change' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Snapshot panel' })).toHaveTextContent(
       'rvs_88888888888888888888888888888888'
     );
@@ -136,8 +141,35 @@ describe('WorkspaceChangeReviewPage', () => {
       />
     );
 
-    await screen.findByText('Reduce device log volume');
+    await screen.findByRole('heading', { name: 'Review Workspace change' });
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
     await waitFor(() => expect(load).toHaveBeenCalledOnce());
   });
+});
+
+it('links the exact committed State and replaces the obsolete pre-decision snapshot URL', () => {
+  const data = snapshotResponse();
+  data.snapshot.snapshotId = 'rvs_committed';
+  Object.assign(data.snapshot, { objects: { commit: { digest: 'sha256:committed' } } });
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: data as never, deciding: false, error: null, loading: false },
+  });
+  render(
+    <WorkspaceChangeReviewPage
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId="rvs_old"
+    />
+  );
+  expect(screen.getByRole('link', { name: 'View State & export' })).toHaveAttribute(
+    'href',
+    '/project/proj_1?commit=sha256%3Acommitted&view=overview'
+  );
+  expect(replace).toHaveBeenCalledWith(
+    '/project/proj_1/changes/workspace_prd_handoff/rvs_committed'
+  );
 });

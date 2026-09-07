@@ -1,7 +1,9 @@
 'use client';
 
-import { ArrowLeft, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
@@ -17,6 +19,7 @@ export function WorkspaceChangeReviewPage({
   snapshotId: string;
   workspaceId: string;
 }) {
+  const router = useRouter();
   const normalizedProjectId = safeDecodeURIComponent(projectId);
   const normalizedSnapshotId = safeDecodeURIComponent(snapshotId);
   const normalizedWorkspaceId = safeDecodeURIComponent(workspaceId);
@@ -28,6 +31,18 @@ export function WorkspaceChangeReviewPage({
   const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId);
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
+  const commit = snapshot?.objects?.commit?.digest;
+  const stateHref = commit
+    ? `/project/${encodePathSegment(normalizedProjectId)}?${new URLSearchParams({ commit, view: 'overview' }).toString()}`
+    : null;
+
+  useEffect(() => {
+    if (snapshot && snapshot.snapshotId !== normalizedSnapshotId) {
+      router.replace(
+        `/project/${encodePathSegment(normalizedProjectId)}/changes/${encodePathSegment(normalizedWorkspaceId)}/${encodePathSegment(snapshot.snapshotId)}`
+      );
+    }
+  }, [snapshot, normalizedSnapshotId, normalizedProjectId, normalizedWorkspaceId, router]);
 
   return (
     <main className="min-h-screen bg-[var(--workspace-bg)] text-[var(--text-primary)]">
@@ -43,16 +58,22 @@ export function WorkspaceChangeReviewPage({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-base font-semibold text-[var(--text-primary)]">
-                {projection?.title ?? 'Workspace change review'}
+                {commit ? 'Saved change' : 'Review Workspace change'}
               </h1>
               <Badge variant="commit-subtle">Immutable snapshot</Badge>
               {projection ? <Badge variant="outline">{projection.status}</Badge> : null}
             </div>
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-              Changes is the review and decision surface backed by an immutable ReviewSnapshot.
-              Workspace remains the editable draft and preparation surface.
+              {commit
+                ? 'This revision is saved. Open State to inspect or export it.'
+                : 'Review the changes and checks before saving to the branch.'}
             </p>
           </div>
+          {stateHref ? (
+            <Button asChild size="sm">
+              <Link href={stateHref}>View State & export</Link>
+            </Button>
+          ) : null}
           <Button
             disabled={state.loading}
             onClick={() => void load()}
@@ -71,24 +92,6 @@ export function WorkspaceChangeReviewPage({
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-4 p-4">
-        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-          <div className="flex items-start gap-2">
-            <ShieldCheck
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-[var(--accent-commit)]"
-            />
-            <div className="min-w-0 text-xs leading-5 text-[var(--text-secondary)]">
-              <p className="font-semibold text-[var(--text-primary)]">
-                ChangeProjection is not authoritative.
-              </p>
-              <p>
-                It is a task-oriented view over snapshot facts: project, workspace, Transition,
-                policy, review digest, object descriptors, checks, and action capability.
-              </p>
-            </div>
-          </div>
-        </section>
-
         {state.error ? (
           <section
             aria-label="Change review unavailable"

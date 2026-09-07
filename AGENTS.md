@@ -157,8 +157,8 @@ Docker is an evaluation path, not a production-readiness promise.
 - Do not move release, standards, or workflow files without updating tests and
   CODEOWNERS.
 - Do not revert user changes.
-- Keep generated or local working material out of git unless the task explicitly
-  asks for it.
+- Keep internal plans, audit reports, screenshots and local working material out
+  of git. Put concise verification summaries in PRs; retain executable tests.
 
 ## Verification
 

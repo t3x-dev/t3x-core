@@ -54,6 +54,7 @@ import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
+import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -403,7 +404,21 @@ export function ProjectStateTab({
     headCommit?.hash ?? null,
     readerKind === 'skill'
   );
-  const validationReady = currentValidation?.status === 'verified';
+  const isNativeCommit = headCommit?.provenance?.method === 'transition_v2';
+  const nativeReview = useCommitTransitionView(
+    projectId,
+    branchFocus,
+    isNativeCommit ? (headCommit?.hash ?? null) : null
+  );
+  const nativeChecks =
+    nativeReview.view?.mode === 'transition' ? nativeReview.view.checks.validation : null;
+  const nativeValidationPassed =
+    nativeChecks?.observation === 'observed' &&
+    nativeChecks.outcomes.length > 0 &&
+    nativeChecks.outcomes.every((outcome) => outcome === 'passed');
+  const validationReady = isNativeCommit
+    ? nativeValidationPassed
+    : currentValidation?.status === 'verified';
   const validationGapCount = currentValidation?.gapCount ?? validationGaps.length;
   const validationIssueCount = currentValidation
     ? currentValidation.errorCount + currentValidation.gapCount
@@ -535,7 +550,21 @@ export function ProjectStateTab({
   }, [availableHeadHash, branchFocus, focusedCommitHash, pathname, replaceRoute]);
 
   const contextRailVisible = activeView !== 'canvas' && activeView !== 'overview';
-  const readinessLabel = stateReadinessLabel(validationReady);
+  const readinessLabel = snapshot.loading
+    ? 'Loading State'
+    : !headCommit
+      ? 'No committed state'
+      : isNativeCommit
+        ? nativeReview.loading
+          ? 'Loading validation'
+          : nativeValidationPassed
+            ? 'Native validation passed'
+            : nativeChecks?.observation === 'observed'
+              ? 'Native validation needs review'
+              : nativeReview.error
+                ? 'Validation evidence unavailable'
+                : 'No validation recorded'
+        : stateReadinessLabel(validationReady);
   const lastCheckedLabel = freshnessChecking
     ? 'Checking…'
     : lastCheckedAt
@@ -577,7 +606,7 @@ export function ProjectStateTab({
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 onRunValidation={
-                  headCommit && onRunValidation
+                  headCommit && !isNativeCommit && schemaName !== 't3x/state' && onRunValidation
                     ? () => onRunValidation(headCommit.hash, schemaName)
                     : undefined
                 }
@@ -585,7 +614,7 @@ export function ProjectStateTab({
                 relativeTime={formatRelativeTime(headCommit?.committed_at)}
                 rootKey={rootKey}
                 schemaName={schemaName}
-                validationError={validationError}
+                validationError={isNativeCommit ? nativeReview.error : validationError}
                 validationReady={validationReady}
                 validationRunning={validationRunning}
                 workspaceHref={workspaceHref}
@@ -610,7 +639,8 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 <StateEmpty
-                  message="Create or select a committed branch to inspect state as Overview, Structure, or Code."
+                  message="Start in a Workspace, review your changes, and create the first commit."
+                  workspaceHref={workspaceHref}
                   title="No commit on this branch"
                 />
               ) : null}
@@ -628,6 +658,7 @@ export function ProjectStateTab({
                       projectId={projectId}
                       commitDigest={headCommit.hash}
                       projectName={projectName}
+                      validationLabel={readinessLabel}
                       refName={branchFocus}
                       onAuthorRevision={(digest) => {
                         void refresh();
@@ -1395,12 +1426,25 @@ function StatusPill({ row }: { row: StatePointRow }) {
   );
 }
 
-function StateEmpty({ message, title }: { message: string; title: string }) {
+function StateEmpty({
+  message,
+  title,
+  workspaceHref,
+}: {
+  message: string;
+  title: string;
+  workspaceHref?: string;
+}) {
   return (
     <div className="flex min-h-[360px] items-center justify-center p-8 text-center">
       <div>
         <h2 className="text-base font-bold text-[var(--text-primary)]">{title}</h2>
         <p className="mt-2 max-w-md text-sm text-[var(--text-secondary)]">{message}</p>
+        {workspaceHref ? (
+          <Button asChild className="mt-4">
+            <Link href={workspaceHref}>Open Workspace</Link>
+          </Button>
+        ) : null}
       </div>
     </div>
   );

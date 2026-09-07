@@ -100,13 +100,6 @@ function VerifiedTransitionReview({
         <Badge variant={decisionBadgeVariant(view)}>{decisionLabel(view)}</Badge>
       </header>
 
-      {reviewSnapshot || changeProjection ? (
-        <ReviewSnapshotSummary
-          changeProjection={changeProjection}
-          reviewSnapshot={reviewSnapshot}
-        />
-      ) : null}
-
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <ClaimCard claim={view.claims.intent} label="Purpose" />
         <ClaimCard claim={view.claims.rationale} label="Reason" />
@@ -167,6 +160,13 @@ function VerifiedTransitionReview({
         <summary className="cursor-pointer font-semibold text-[var(--text-secondary)]">
           Advanced audit
         </summary>
+        {reviewSnapshot || changeProjection ? (
+          <ReviewSnapshotSummary
+            changeProjection={changeProjection}
+            reviewSnapshot={reviewSnapshot}
+          />
+        ) : null}
+
         <dl className="mt-3 grid gap-2 text-[var(--text-secondary)]">
           <AuditRow label="Effect" value={view.audit.effect.digest} />
           <AuditRow label="Proposal" value={view.audit.proposal.digest} />
@@ -301,15 +301,14 @@ function SnapshotMeta({ label, value }: { label: string; value: string }) {
 }
 
 function ClaimCard({ claim, label }: { claim: ClaimView; label: string }) {
+  if (claim.mode === 'unspecified') return null;
   return (
     <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
       <div className="flex items-center justify-between gap-2">
         <h4 className="text-xs font-semibold text-[var(--text-primary)]">{label}</h4>
         <Badge variant="outline">{originLabel(claim.origin)}</Badge>
       </div>
-      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-        {claim.mode === 'unspecified' ? 'Not provided.' : claim.value}
-      </p>
+      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{claim.value}</p>
     </section>
   );
 }
@@ -436,6 +435,11 @@ function safeDecodeURIComponent(value: string): string {
 
 function operationLabel(operation: unknown, index: number): string {
   if (!isRecord(operation)) return `Change ${index + 1}`;
+  const keyed = Object.entries(operation).find(
+    ([key, value]) => ['set', 'assert', 'delete', 'insert', 'move'].includes(key) && isRecord(value)
+  );
+  if (keyed)
+    return operationLabel({ op: keyed[0], ...(keyed[1] as Record<string, unknown>) }, index);
   const op = typeof operation.op === 'string' ? operation.op.toUpperCase() : 'CHANGE';
   const path = Array.isArray(operation.path)
     ? operation.path.map(String).join('/')
@@ -447,6 +451,14 @@ function operationLabel(operation: unknown, index: number): string {
 
 function operationDetail(operation: unknown): string {
   if (!isRecord(operation)) return JSON.stringify(operation);
+  const keyed = Object.entries(operation).find(
+    ([key, value]) => ['set', 'assert', 'delete', 'insert', 'move'].includes(key) && isRecord(value)
+  );
+  if (keyed) return operationDetail({ op: keyed[0], ...(keyed[1] as Record<string, unknown>) });
+  if (operation.op === 'assert' && typeof operation.exists === 'boolean')
+    return operation.exists
+      ? 'Must exist before applying this change.'
+      : 'Must be absent before applying this change.';
   if ('expect' in operation && 'value' in operation) {
     return `${JSON.stringify(operation.expect)} → ${JSON.stringify(operation.value)}`;
   }
