@@ -539,7 +539,23 @@ const logoTones = [
 const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
 
 function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
+  const intro = useSchemaIntroduction(item.presentationRef);
+  const avatar = intro.data?.document.resources.find(
+    (resource) => resource.path === intro.data?.document.avatarPath
+  );
   const name = item.identity.canonicalName;
+  if (avatar) {
+    return (
+      <Image
+        src={resourceUrl(avatar)}
+        alt=""
+        width={40}
+        height={40}
+        unoptimized
+        className="size-10 shrink-0 rounded-xl object-cover shadow-sm"
+      />
+    );
+  }
   // Only unowned built-ins receive T3X artwork. Similar community names do not
   // inherit an official identity. Other glyphs are decorative, not capabilities.
   if (
@@ -550,6 +566,7 @@ function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
     return (
       <Image
         src={`/schema-logos/${name.split('/')[1]}.png`}
+        unoptimized
         alt=""
         width={40}
         height={40}
@@ -590,7 +607,8 @@ function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
 function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
   const intro = useSchemaIntroduction(item.presentationRef);
   const cover = intro.data?.document.resources.find(
-    (resource) => resource.path === item.presentationRef?.coverPath
+    (resource) =>
+      resource.path === (item.presentationRef?.coverPath ?? intro.data?.document.avatarPath)
   );
   const artwork = cover
     ? resourceUrl(cover)

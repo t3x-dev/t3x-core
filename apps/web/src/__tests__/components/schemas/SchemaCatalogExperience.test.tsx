@@ -11,7 +11,12 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   useStudioCandidates: () => ({ items: [], loading: false }),
 }));
 
-const mocks = vi.hoisted(() => ({ push: vi.fn(), query: '', catalog: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  query: '',
+  catalog: vi.fn(),
+  introduction: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
   usePathname: () => '/team/project/schemas',
@@ -22,7 +27,7 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaCollections: () => [
     { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure'] },
   ],
-  useSchemaIntroduction: () => ({ loading: false }),
+  useSchemaIntroduction: mocks.introduction,
   useSchemaReleaseReading: () => ({ loading: false }),
 }));
 const item = {
@@ -43,6 +48,7 @@ const item = {
 };
 beforeEach(() => {
   mocks.query = '';
+  mocks.introduction.mockReturnValue({ loading: false });
   mocks.push.mockReset();
   mocks.catalog.mockReturnValue({
     data: { items: [item], has_more: false },
@@ -58,6 +64,26 @@ function mount() {
   );
 }
 describe('Schema catalog journey', () => {
+  it.each([
+    'browse',
+    'discover',
+  ])('uses the project avatar in %s when no separate cover exists', (view) => {
+    mocks.query = `schemaView=${view}`;
+    mocks.introduction.mockReturnValue({
+      data: {
+        document: {
+          avatarPath: 'avatar.png',
+          resources: [
+            { path: 'avatar.png', mediaType: 'image/png', base64: 'YXJ0', alt: 'Author art' },
+          ],
+        },
+      },
+      loading: false,
+    });
+    mount();
+    const card = screen.getByRole('button', { name: 'Explore Release definition 1.2.3' });
+    expect(card.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,YXJ0');
+  });
   it('keeps Discover visual and sends search to Browse, preserving workspace context', () => {
     mocks.query = 'workspace=main';
     mount();
