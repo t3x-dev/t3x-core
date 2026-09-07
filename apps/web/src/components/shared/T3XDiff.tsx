@@ -129,6 +129,7 @@ export function T3XDiff({
                         <button
                           type="button"
                           className="text-left hover:underline"
+                          aria-label={`Inspect ${change.path}`}
                           onClick={() => onSelectChange(change.id)}
                         >
                           {row.key}
