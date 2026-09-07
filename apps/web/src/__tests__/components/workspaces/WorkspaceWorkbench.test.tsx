@@ -1377,9 +1377,9 @@ describe('WorkspaceWorkbench', () => {
     });
     expect(screen.getByText('YOps validation passed', { exact: true })).toBeInTheDocument();
     activateTab(/Preview/);
-    expect(screen.getByRole('region', { name: 'PRD preview' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
+    expect(screen.getByRole('region', { name: 'Workspace preview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Changes' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Rendered YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       '1 YOps ready'
     );
@@ -1396,40 +1396,25 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: 'Workspace preview' })).toHaveTextContent(
       'Product and engineering reviewers'
     );
     expect(screen.getByRole('button', { name: 'Continue to Commit' })).toBeEnabled();
     fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
-    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
-      'Materialized preview'
-    );
-    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
-      'Ready to commit'
-    );
-    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
-      'YOps valid'
-    );
-    fireEvent.click(
-      within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole('tab', {
-        name: 'Diff',
-      })
-    );
-    const diffDetail = within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole(
-      'region',
-      { name: 'Node diff detail' }
-    );
+    const diffDetail = screen.getByRole('region', { name: 'T3X Diff' });
+    expect(diffDetail).toHaveTextContent('Materialized preview');
+    expect(diffDetail).toHaveTextContent('Replay validated');
     expect(diffDetail).toHaveTextContent('Internal reviewers');
     expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
     expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Rendered YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
 
     activateTab(/Compose/);
     activateTab(/Preview/);
-    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: 'Workspace preview' })).toHaveTextContent(
       'Product and engineering reviewers'
     );
     expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2);
@@ -1535,12 +1520,12 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Rendered YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'One draft release-note section'
     );
 
-    expect(screen.getByText('Review required')).toBeInTheDocument();
+    expect(screen.getByText('Commit review required')).toBeInTheDocument();
     expect(screen.getByText('1 schema gap')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review Commit blockers' }));
     const reviewButton = screen.getByRole('button', { name: 'Review change' });
@@ -1576,7 +1561,7 @@ describe('WorkspaceWorkbench', () => {
     expect(countFetchCalls(fetchMock.mock.calls, `${workspaceUrl}/commit`)).toBe(0);
 
     activateTab(/Preview/);
-    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: 'Workspace preview' })).toHaveTextContent(
       'One draft release-note section'
     );
   });
@@ -2026,7 +2011,7 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/Preview/);
 
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, commitUrl)).toBe(1));
-    expect(await screen.findByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+    expect(await screen.findByRole('region', { name: 'Workspace preview' })).toHaveTextContent(
       'Frozen committed audience'
     );
     expect(screen.queryByRole('region', { name: 'Preview unavailable' })).not.toBeInTheDocument();
@@ -2830,20 +2815,16 @@ describe('WorkspaceWorkbench', () => {
     await screen.findByText('Materialized 5');
 
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
-    const prdPreview = screen.getByRole('region', { name: 'PRD preview' });
+    const prdPreview = screen.getByRole('region', { name: 'Workspace preview' });
     expect(prdPreview).toHaveTextContent('Backend product reviewers');
     expect(prdPreview).toHaveTextContent(
       'YOps receives reviewed candidate fields from backend source evidence.'
     );
-    expect(
-      within(prdPreview).getByRole('complementary', {
-        name: 'PRD source and validation summary',
-      })
-    ).toHaveTextContent('Preview readiness');
-    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
+    expect(prdPreview).toHaveTextContent('Replay validated');
+    expect(screen.getByRole('tab', { name: 'Changes' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
     expect(screen.getByRole('heading', { name: 'Evidence coverage' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'PRD' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
 
     expect(screen.getByText('Preview ready for commit')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Continue to Commit' }));

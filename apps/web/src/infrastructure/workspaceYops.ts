@@ -1,6 +1,13 @@
+import {
+  getWorkspaceYOpsRootKey,
+  normalizeYOpsPath,
+  toSnakeKey,
+} from '@/domain/workspaces/yopsPaths';
+
+export { getWorkspaceYOpsRootKey } from '@/domain/workspaces/yopsPaths';
+
 import type {
   WorkspaceCandidate,
-  WorkspaceSchemaBinding,
   WorkspaceSchemaCandidateField,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
@@ -67,19 +74,6 @@ export async function validateWorkspaceYOps(
     previewRelations: data.preview?.relations,
     error: data.error,
   };
-}
-
-export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): string {
-  const primary = bindings[0];
-  if (primary?.rootKey && /^[a-z][a-z0-9_]*$/.test(primary.rootKey)) return primary.rootKey;
-  const canonicalName = primary?.canonicalName?.trim().toLowerCase();
-  if (canonicalName?.startsWith('studio:')) return 'candidate';
-  if (canonicalName === 't3x/esphome-device') return 'device';
-  if (canonicalName) return toSnakeKey(canonicalName.split('/').at(-1) ?? 'candidate');
-
-  const primaryName = primary?.schemaName.replace(/\s+Schema$/i, '') ?? 'candidate';
-  if (/esphome\s+device/i.test(primaryName)) return 'device';
-  return toSnakeKey(primaryName);
 }
 
 export function buildWorkspaceBaselineTrees(
@@ -230,17 +224,6 @@ function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string)
   return { set: { path, value } };
 }
 
-function normalizeYOpsPath(path: string, rootKey: string): string {
-  const withoutArrayPush = path.replace(/\/-$/, '');
-  const segments = withoutArrayPush
-    .split('/')
-    .filter(Boolean)
-    .map((segment) => toSnakeKey(segment));
-
-  if (segments[0] === rootKey) return segments.join('/');
-  return [rootKey, ...segments].join('/');
-}
-
 function coerceFieldValue(field: WorkspaceSchemaCandidateField): WorkspaceYOpsValue {
   if (field.type === 'array' || field.type.endsWith('[]')) {
     return field.value ? [field.value] : [];
@@ -255,13 +238,4 @@ function ensureChildNode(parent: WorkspaceYOpsTreeNode, key: string): WorkspaceY
   const child: WorkspaceYOpsTreeNode = { key, slots: {}, children: [] };
   parent.children.push(child);
   return child;
-}
-
-function toSnakeKey(value: string): string {
-  return value
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
 }

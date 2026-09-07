@@ -43,8 +43,6 @@ import type {
 } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ChangeDecisionHandoff } from './ChangeDecisionHandoff';
-import { ChangeReviewDock } from './ChangeReviewDock';
-import { PrdPreviewView } from './PrdPreviewView';
 import type {
   ProposalGenerationAction,
   ProposalGenerationReviewState,
@@ -52,6 +50,7 @@ import type {
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
+import { WorkspacePreviewView } from './WorkspacePreviewView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -938,25 +937,10 @@ function PreviewReviewView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
-      <PrdPreviewView
+      <WorkspacePreviewView
         appliedCount={appliedCount}
         candidate={candidate}
-        changesView={
-          <ChangeReviewDock
-            candidate={candidate}
-            flowState={{
-              appliedCount,
-              baselineTrees,
-              commitHash: committedHash ?? undefined,
-              error: visibleErrorMessage ?? undefined,
-              previewReady: Boolean(materializedTrees),
-              previewTrees: validatedPreviewTrees,
-              validationPassed,
-              yopsDraftId: candidate.yopsDraft.id,
-            }}
-          />
-        }
-        commitReady={Boolean(committedHash) || commitBlockers.length === 0}
+        baselineTrees={baselineTrees}
         operationCount={generatedYOpsCount}
         previewReady={Boolean(materializedTrees)}
         previewTrees={materializedTrees ?? validatedPreviewTrees}
@@ -1613,7 +1597,7 @@ function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
 
 function getYOpsViewDescription(view: WorkspaceYOpsFlowView): string {
   if (view === 'validation') return 'Check the Proposal against schema, evidence, and replay.';
-  if (view === 'preview') return 'Read the rendered PRD and inspect its evidence before commit.';
+  if (view === 'preview') return 'Review the resulting state and its evidence before commit.';
   if (view === 'commit') return 'Commit the validated workspace result.';
   return 'Review what T3X recommends and why.';
 }
