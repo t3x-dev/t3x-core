@@ -183,10 +183,9 @@ function buildNextWorkspaceAtBranchHead(
       previousCommittedWorkspace.outputTargets.length > 0
         ? previousCommittedWorkspace.outputTargets
         : starterCandidate.outputTargets,
-    schemaBindings:
-      previousCommittedWorkspace.schemaBindings.length > 0
-        ? previousCommittedWorkspace.schemaBindings
-        : starterCandidate.schemaBindings,
+    schemaBindings: Array.isArray(previousCommittedWorkspace.schemaBindings)
+      ? previousCommittedWorkspace.schemaBindings
+      : starterCandidate.schemaBindings,
     sourceBundle: mergeSourceBundles(
       starterCandidate.sourceBundle,
       previousCommittedWorkspace.sourceBundle.filter((source) => source.type !== 'chat')
@@ -207,17 +206,14 @@ function mergeWorkspaceCandidate(
     : [];
   const persistedSchemaBindings = Array.isArray(persistedCandidate.schemaBindings)
     ? persistedCandidate.schemaBindings
-    : [];
+    : previewCandidate.schemaBindings;
 
   return {
     ...previewCandidate,
     ...persistedCandidate,
     outputTargets:
       persistedOutputTargets.length > 0 ? persistedOutputTargets : previewCandidate.outputTargets,
-    schemaBindings:
-      persistedSchemaBindings.length > 0
-        ? persistedSchemaBindings
-        : previewCandidate.schemaBindings,
+    schemaBindings: persistedSchemaBindings,
     sourceBundle: mergeSourceBundles(
       previewCandidate.sourceBundle,
       persistedCandidate.sourceBundle

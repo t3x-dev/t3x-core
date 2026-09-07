@@ -2,6 +2,7 @@ import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 
 export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): string {
   const primary = bindings[0];
+  if (!primary) return '';
   if (primary?.rootKey && /^[a-z][a-z0-9_]*$/.test(primary.rootKey)) return primary.rootKey;
   const canonicalName = primary?.canonicalName?.trim().toLowerCase();
   if (canonicalName?.startsWith('studio:')) return 'candidate';
@@ -15,6 +16,8 @@ export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): str
 
 export function normalizeYOpsPath(path: string, rootKey: string): string {
   const withoutArrayPush = path.replace(/\/-$/, '');
+  // Unbound projects use exact document paths, without a synthetic schema root.
+  if (!rootKey) return withoutArrayPush;
   const segments = withoutArrayPush
     .split('/')
     .filter(Boolean)

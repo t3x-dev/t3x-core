@@ -48,9 +48,15 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
         <p className="mb-4 text-sm text-[var(--text-secondary)]">
           Edit values and named nodes, then review the exact change.
         </p>
-        <p className="mb-4 text-xs text-[var(--text-secondary)]">
-          Definition root: <code>{rootKey}</code>. Add your fields and nodes inside this root.
-        </p>
+        {rootKey ? (
+          <p className="mb-4 text-xs text-[var(--text-secondary)]">
+            Definition root: <code>{rootKey}</code>. Add your fields and nodes inside this root.
+          </p>
+        ) : (
+          <p className="mb-4 text-xs text-[var(--text-secondary)]">
+            No schema bound · edit your existing roots or add a named root.
+          </p>
+        )}
         {error ? <p role="alert">{error}</p> : null}
         {!content && !error ? <output>Loading current draft…</output> : null}
         <form
@@ -58,7 +64,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
           onSubmit={(event) => {
             event.preventDefault();
             if (!content) return;
-            if (content.trees.length !== 1 || content.trees[0]?.key !== rootKey) {
+            if (rootKey && (content.trees.length !== 1 || content.trees[0]?.key !== rootKey)) {
               setError(`Keep one ${rootKey} root node and add your content inside it.`);
               return;
             }
@@ -77,7 +83,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
                 }
               />
             ))}
-            {content && content.trees.length === 0 ? (
+            {content && (!rootKey || content.trees.length === 0) ? (
               <AddName
                 label="Root node"
                 onAdd={(key) => {

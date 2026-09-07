@@ -81,6 +81,15 @@ export function buildWorkspaceBaselineTrees(
   rootKey: string,
   inheritedTrees: WorkspaceYOpsTreeNode[]
 ): WorkspaceYOpsTreeNode[] {
+  // A committed baseline is immutable input to replay, never a place for proposed fields.
+  if (
+    !rootKey ||
+    inheritedTrees.length > 0 ||
+    /^sha256:[a-f\d]{64}$/i.test(candidate.baseCommitHash ?? '')
+  ) {
+    return inheritedTrees.map(cloneWorkspaceTree);
+  }
+
   const root: WorkspaceYOpsTreeNode = {
     key: rootKey,
     slots: { title: candidate.title },
@@ -213,7 +222,7 @@ function workspaceYOpsValuesEqual(left: WorkspaceYOpsValue, right: WorkspaceYOps
 
 function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string): WorkspaceYOp {
   const path = normalizeYOpsPath(operation.path, rootKey);
-  const value = operation.afterValue ?? operation.summary;
+  const value = operation.afterValue === undefined ? operation.summary : operation.afterValue;
 
   if (operation.op === 'add' || operation.op === 'append') {
     return { append: { path: path.replace(/\/-$/, ''), value } };
