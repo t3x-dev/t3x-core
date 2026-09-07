@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { YValue } from '@t3x-dev/yops';
 import { compileYSchemaCompositionV2, validateTree } from '@t3x-dev/yschema';
 import { expect, it } from 'vitest';
@@ -22,6 +23,21 @@ it.each(
   const valid = validateTree({ schema: result.schema, tree: module.starter as YValue });
   expect(valid.errors).toEqual([]);
   expect(valid.gaps).toEqual([]);
+  const slug = module.canonicalName.split('/')[1];
+  const project = JSON.parse(
+    readFileSync(
+      new URL(`../../../../examples/official-projects/${slug}/project.json`, import.meta.url),
+      'utf8'
+    )
+  );
+  expect(project.companionSchema).toEqual({
+    canonicalName: module.canonicalName,
+    version: module.version,
+  });
+  expect(project.initial).toEqual(module.starter);
+  const revised = validateTree({ schema: result.schema, tree: project.demonstration.value });
+  expect(revised.errors).toEqual([]);
+  expect(revised.gaps).toEqual([]);
   const invalid = validateTree({ schema: result.schema, tree: {} });
   expect(invalid.errors.length + invalid.gaps.length).toBeGreaterThan(0);
 });
