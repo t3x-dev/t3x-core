@@ -43,6 +43,35 @@ export function T3XDiff({
   const pathTree = useMemo(() => buildDiffPathTree(changes), [changes]);
   const selectedChange =
     changes.find((change) => change.id === selectedChangeId) ?? changes[0] ?? null;
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
+  const changesByPath = useMemo(() => {
+    const byPath = new Map<string, StructuredDiffChange>();
+    for (const change of changes) {
+      if (!byPath.has(change.path)) byPath.set(change.path, change);
+    }
+    return byPath;
+  }, [changes]);
+  const contextChangeIds = useMemo(
+    () => new Set(contextRows?.map((row) => changesByPath.get(row.path)?.id)),
+    [contextRows, changesByPath]
+  );
+  const visibleRows = useMemo(() => {
+    let hiddenBelowDepth: number | null = null;
+    return contextRows?.filter((row) => {
+      if (hiddenBelowDepth !== null && row.depth > hiddenBelowDepth) return false;
+      hiddenBelowDepth = row.expandable && collapsedPaths.has(row.path) ? row.depth : null;
+      return true;
+    });
+  }, [contextRows, collapsedPaths]);
+  const selectChange = (changeId: string) => {
+    const change = changes.find((item) => item.id === changeId);
+    if (change) {
+      setCollapsedPaths(
+        (current) => new Set([...current].filter((path) => !change.path.startsWith(`${path}/`)))
+      );
+    }
+    onSelectChange(changeId);
+  };
   const evidenceCount = new Set(
     changes.map((change) => change.evidence).filter((value): value is string => Boolean(value))
   ).size;
@@ -97,7 +126,7 @@ export function T3XDiff({
                   <DiffPathTreeNode
                     key={node.id}
                     node={node}
-                    onSelectChange={onSelectChange}
+                    onSelectChange={selectChange}
                     selectedChangeId={selectedChange.id}
                   />
                 ))}
@@ -111,26 +140,54 @@ export function T3XDiff({
               <header className="border-b border-[var(--stroke-divider)] px-4 py-3 text-xs font-semibold">
                 {contextRows ? 'State' : 'Changed nodes'} · {projectedLabel}
               </header>
-              {contextRows?.map((row) => {
-                const change = changes.find((item) => item.path === row.path);
+              {visibleRows?.map((row) => {
+                const change = changesByPath.get(row.path);
+                const expanded = !collapsedPaths.has(row.path);
                 return (
                   <div
                     key={row.id}
                     className={cn(
                       'flex items-start gap-3 border-b border-[var(--stroke-divider)] px-3 py-2 text-xs',
-                      change && 'bg-[var(--status-warning-muted)]'
+                      change && 'bg-[var(--status-warning-muted)]',
+                      change?.id === selectedChange.id &&
+                        'border-l-2 border-l-[var(--accent-branch)]'
                     )}
                   >
                     <span
-                      className="w-2/5 shrink-0 break-all font-mono"
+                      className="flex w-2/5 shrink-0 items-start gap-1 break-all font-mono"
                       style={{ paddingLeft: row.depth * 12 }}
                     >
+                      {row.expandable ? (
+                        <button
+                          type="button"
+                          aria-label={`${expanded ? 'Collapse' : 'Expand'} state ${row.path}`}
+                          aria-expanded={expanded}
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-[var(--hover-bg)]"
+                          onClick={() =>
+                            setCollapsedPaths((current) => {
+                              const next = new Set(current);
+                              if (next.has(row.path)) next.delete(row.path);
+                              else next.add(row.path);
+                              return next;
+                            })
+                          }
+                        >
+                          {expanded ? (
+                            <ChevronDown className="size-3.5" aria-hidden="true" />
+                          ) : (
+                            <ChevronRight className="size-3.5" aria-hidden="true" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="size-5 shrink-0" aria-hidden="true" />
+                      )}
                       {change ? (
                         <button
                           type="button"
                           className="text-left hover:underline"
                           aria-label={`Inspect ${change.path}`}
-                          onClick={() => onSelectChange(change.id)}
+                          aria-pressed={selectedChange.id === change.id}
+                          onClick={() => selectChange(change.id)}
                         >
                           {row.key}
                         </button>
@@ -146,13 +203,13 @@ export function T3XDiff({
                 );
               })}
               {changes
-                .filter((change) => !contextRows?.some((row) => row.path === change.path))
+                .filter((change) => !contextChangeIds.has(change.id))
                 .map((change) => (
                   <button
                     key={change.id}
                     type="button"
                     aria-pressed={selectedChange.id === change.id}
-                    onClick={() => onSelectChange(change.id)}
+                    onClick={() => selectChange(change.id)}
                     className={cn(
                       'flex w-full items-start gap-3 border-b border-[var(--stroke-divider)] px-4 py-3 text-left text-xs hover:bg-[var(--hover-bg)]',
                       selectedChange.id === change.id && 'bg-[var(--status-warning-muted)]'
