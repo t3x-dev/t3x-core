@@ -5,13 +5,18 @@ import {
   BookOpen,
   Box,
   Code2,
+  Cpu,
+  Database,
+  FileText,
   FlaskConical,
   Layers3,
+  Network,
   Search,
   Shield,
   SlidersHorizontal,
   Sparkles,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -460,7 +465,7 @@ export function SchemaCatalogExperience({
                       className="flex w-full min-w-0 items-center gap-3 bg-[var(--surface-card)] px-3 py-3 text-left hover:bg-[var(--hover-bg)]"
                       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
                     >
-                      <Box className="size-8 shrink-0 rounded-md bg-[var(--status-info-muted)] p-1.5 text-[var(--status-info)]" />
+                      <CatalogLogo item={item} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">
                           {item.identity.displayName || item.identity.canonicalName}
@@ -523,10 +528,86 @@ export function SchemaCatalogExperience({
     </section>
   );
 }
+const logoTones = [
+  'bg-[var(--status-info)]',
+  'bg-[var(--accent-branch)]',
+  'bg-[var(--status-success)]',
+  'bg-[var(--accent-pending)]',
+  'bg-[var(--accent-conversation)]',
+];
+const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
+
+function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
+  const intro = useSchemaIntroduction(item.presentationRef);
+  const avatar = intro.data?.document.resources.find(
+    (resource) => resource.path === intro.data?.document.avatarPath
+  );
+  const name = item.identity.canonicalName;
+  if (avatar) {
+    return (
+      <Image
+        src={resourceUrl(avatar)}
+        alt=""
+        width={40}
+        height={40}
+        unoptimized
+        className="size-10 shrink-0 rounded-xl object-cover shadow-sm"
+      />
+    );
+  }
+  // Only unowned built-ins receive T3X artwork. Similar community names do not
+  // inherit an official identity. Other glyphs are decorative, not capabilities.
+  if (
+    !item.identity.ownerProjectId &&
+    item.identity.visibility === 'official' &&
+    starterLogos.has(name)
+  ) {
+    return (
+      <Image
+        src={`/schema-logos/${name.split('/')[1]}.png`}
+        unoptimized
+        alt=""
+        width={40}
+        height={40}
+        className="size-10 shrink-0 rounded-xl shadow-sm"
+      />
+    );
+  }
+  const hash = Array.from(name).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 0);
+  const Icon = /power|energy/.test(name)
+    ? Zap
+    : /network|api/.test(name)
+      ? Network
+      : /sensor|hardware|actuator|device/.test(name)
+        ? Cpu
+        : /evaluat|experiment|research/.test(name)
+          ? FlaskConical
+          : /security|safety|policy|guardrail/.test(name)
+            ? Shield
+            : /database|data/.test(name)
+              ? Database
+              : /agent|prompt|context/.test(name)
+                ? Sparkles
+                : /workflow|automation|rollout|delivery/.test(name)
+                  ? Workflow
+                  : /prd|requirement|plan|brief/.test(name)
+                    ? FileText
+                    : Layers3;
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${logoTones[hash % logoTones.length]} text-[var(--on-status)] shadow-sm`}
+    >
+      <Icon className="size-5" strokeWidth={1.8} />
+    </span>
+  );
+}
+
 function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
   const intro = useSchemaIntroduction(item.presentationRef);
   const cover = intro.data?.document.resources.find(
-    (resource) => resource.path === item.presentationRef?.coverPath
+    (resource) =>
+      resource.path === (item.presentationRef?.coverPath ?? intro.data?.document.avatarPath)
   );
   const artwork = cover
     ? resourceUrl(cover)
@@ -536,9 +617,9 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
       type="button"
       onClick={onOpen}
       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
-      className="group overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
+      className="group flex flex-col overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
     >
-      <div className="flex min-h-56 flex-col sm:flex-row">
+      <div className="flex min-h-56 flex-1 flex-col sm:flex-row">
         {artwork ? (
           <div className="relative h-44 shrink-0 overflow-hidden sm:h-auto sm:w-[38%]">
             <Image
