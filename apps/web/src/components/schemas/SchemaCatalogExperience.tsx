@@ -37,6 +37,7 @@ import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
 import { ActiveSchemaBindings } from './ActiveSchemaBindings';
 import { AddToStudio } from './AddToStudio';
+import { builtinSchemaCover } from './builtinSchemaCover';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
 
 const filterKeys = [
@@ -190,7 +191,7 @@ export function SchemaCatalogExperience({
           {children}
         </SchemaStudioExperience>
       ) : (
-        <div className="p-4 sm:p-6">
+        <div className="bg-[var(--surface-card)] p-4 sm:p-6 lg:px-8">
           {view === 'discover' ? (
             <>
               <header className="flex flex-col justify-between gap-6 py-5 lg:flex-row lg:items-center">
@@ -302,6 +303,30 @@ export function SchemaCatalogExperience({
                     }}
                     className="space-y-4 border-t border-[var(--stroke-divider)] pt-4"
                   >
+                    {items.some((item) => item.identity.tags.length) ? (
+                      <div>
+                        <p className="mb-2 text-xs font-medium">Explore tags</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[...new Set(items.flatMap((item) => item.identity.tags))]
+                            .slice(0, 10)
+                            .map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                aria-pressed={params.get('tags') === tag}
+                                onClick={() =>
+                                  navigate('browse', {
+                                    tags: params.get('tags') === tag ? undefined : tag,
+                                  })
+                                }
+                                className="rounded-md border border-[var(--stroke-divider)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:border-[var(--status-info)] aria-pressed:bg-[var(--status-info-muted)] aria-pressed:text-[var(--status-info)]"
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {(
                       [
                         ['tags', 'Tags', 'research, custom-tag'],
@@ -450,6 +475,9 @@ export function SchemaCatalogExperience({
                       <span className="hidden rounded border border-[var(--stroke-divider)] px-2 py-1 text-[11px] text-[var(--text-secondary)] sm:inline">
                         {item.release.kind}
                       </span>
+                      <span className="hidden rounded border border-[var(--stroke-divider)] px-2 py-1 text-[11px] text-[var(--text-secondary)] lg:inline">
+                        {item.formats.join(' / ').toUpperCase()}
+                      </span>
                       <ArrowRight className="size-4 shrink-0 text-[var(--text-tertiary)]" />
                     </button>
                   )
@@ -500,92 +528,69 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
   const cover = intro.data?.document.resources.find(
     (resource) => resource.path === item.presentationRef?.coverPath
   );
+  const artwork = cover
+    ? resourceUrl(cover)
+    : builtinSchemaCover(item.identity.canonicalName, item.identity.ownerProjectId);
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
-      className="overflow-hidden rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-colors hover:border-[var(--status-info)]"
+      className="group overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
     >
-      <div className="flex min-h-44 flex-col sm:flex-row">
-        <div
-          className={cn(
-            'relative shrink-0 items-center justify-center bg-[var(--status-info-muted)] text-[var(--status-info)] sm:flex sm:w-2/5',
-            item.identity.tags.includes('care')
-              ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
-              : item.identity.tags.includes('planning')
-                ? 'bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]'
-                : '',
-            cover ? 'flex h-36 sm:h-auto' : 'hidden'
-          )}
-        >
-          {cover ? (
+      <div className="flex min-h-56 flex-col sm:flex-row">
+        {artwork ? (
+          <div className="relative h-44 shrink-0 overflow-hidden sm:h-auto sm:w-[38%]">
             <Image
-              src={resourceUrl(cover)}
-              alt={cover.alt}
+              src={artwork}
+              alt={cover?.alt ?? 'T3X editorial illustration'}
               fill
               unoptimized
+              sizes="(min-width: 1024px) 260px, 100vw"
               className="object-cover"
             />
-          ) : (
-            <div className="w-full space-y-3 p-5">
-              <div className="mb-5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest">
-                <Layers3 className="size-3.5" /> Definition
-              </div>
-              {(item.definition.nodes ?? []).length ? (
-                item.definition.nodes.map((node) => (
-                  <div key={node.path} className="relative border-l border-current/20 pl-3">
-                    <div className="absolute -left-1 top-2 size-2 rounded-full bg-current" />
-                    <div className="rounded-md border border-current/10 bg-[var(--surface-card)]/80 p-3 shadow-sm">
-                      <p className="truncate font-mono text-xs font-semibold">{node.path}</p>
-                      <p className="mt-1 truncate text-[10px] text-[var(--text-secondary)]">
-                        {node.slots.join(' · ') || 'Nested structure'}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Box className="size-8 stroke-1" />
-                  <span className="text-sm">{item.definition.pathCount} declared paths</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1 p-5">
           <p className="mb-3 text-xs font-medium text-[var(--status-info)]">
             {item.identity.tags[0] || item.release.kind}
           </p>
-          {item.editorial ? (
-            <p className="mb-3 text-xs font-medium text-[var(--accent-conversation)]">
-              {item.editorial.editor} pick · {item.editorial.selectedAt}
-            </p>
-          ) : null}
-          <h3 className="text-xl font-semibold leading-tight">
+          <h3 className="text-xl font-semibold leading-tight tracking-tight">
             {item.identity.displayName || item.identity.canonicalName}
           </h3>
-          <p className="mt-2 line-clamp-2 text-sm text-[var(--text-secondary)]">
+          <p className="mt-2 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">
             {item.editorial?.reason || item.identity.description}
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
-            <span>{item.definition.pathCount} paths</span>
-            <span aria-hidden="true">·</span>
-            <span>{item.formats.join(' / ').toUpperCase()}</span>
+          <div className="mt-4 divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)] text-xs">
+            {(item.definition.nodes ?? []).slice(0, 2).map((node) => (
+              <div key={node.path} className="flex items-start gap-2 px-3 py-2.5">
+                <Box className="mt-0.5 size-3.5 shrink-0 text-[var(--status-info)]" />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{node.path}</p>
+                  <p className="mt-1 truncate text-[var(--text-secondary)]">
+                    {node.slots.join(' · ') || 'Nested structure'}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {!item.definition.nodes?.length ? (
+              <p className="px-3 py-2.5">{item.definition.pathCount} declared paths</p>
+            ) : null}
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-[var(--stroke-divider)] px-4 py-3 text-xs">
+      <div className="flex items-center justify-between gap-3 border-t border-[var(--stroke-divider)] px-4 py-3 text-xs">
         <span className="min-w-0 truncate text-[var(--text-secondary)]">
           {item.identity.publisher} · {item.release.version}
         </span>
-        <span className="ml-3 flex shrink-0 items-center gap-2 text-[var(--status-info)]">
-          Explore release <ArrowRight className="size-3" />
+        <span className="flex shrink-0 items-center gap-2 text-[var(--status-info)]">
+          Explore release <ArrowRight className="size-3.5" />
         </span>
       </div>
     </button>
   );
 }
+
 function ReleaseDetail({
   item,
   projectId,
@@ -646,7 +651,15 @@ function ReleaseDetail({
         </div>
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 border-y border-[var(--stroke-divider)] py-4 text-xs">
           <dt className="text-[var(--text-tertiary)]">Release</dt>
-          <dd className="break-all font-mono">{item.release.hash}</dd>
+          <dd>
+            <span className="font-mono">{item.release.version}</span>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[var(--text-secondary)]">
+                Exact source
+              </summary>
+              <p className="mt-2 break-all font-mono">{item.release.hash}</p>
+            </details>
+          </dd>
           <dt className="text-[var(--text-tertiary)]">Definition</dt>
           <dd>
             {item.release.kind} · {item.definition.pathCount} declared paths

@@ -1,6 +1,6 @@
 'use client';
 import type { AddStudioCandidate } from '@t3x-dev/api-client';
-import { ArrowRight, Check, LockKeyhole } from 'lucide-react';
+import { ArrowRight, Box, Check, LockKeyhole } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -36,8 +36,12 @@ export function AddToStudio({
         <SheetContent className="flex w-full flex-col sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Add to Studio</SheetTitle>
-            <SheetDescription>
-              {title} · {source.version}
+            <SheetDescription className="mt-4 flex items-center gap-3 rounded-lg bg-[var(--status-info-muted)] p-4">
+              <Box className="size-8 shrink-0 text-[var(--status-info)]" />
+              <span>
+                <span className="block font-semibold text-[var(--text-primary)]">{title}</span>
+                <span className="mt-1 block font-mono text-xs">{source.version}</span>
+              </span>
             </SheetDescription>
           </SheetHeader>
           {open ? (
@@ -152,9 +156,10 @@ function CandidateConfirmation({
           {source.version}
         </p>
         {source.expectedHash ? (
-          <p className="mt-2 break-all font-mono text-[11px] text-[var(--text-tertiary)]">
-            {source.expectedHash}
-          </p>
+          <details className="mt-3 text-xs text-[var(--text-tertiary)]">
+            <summary className="cursor-pointer">Exact source hash</summary>
+            <p className="mt-2 break-all font-mono text-[11px]">{source.expectedHash}</p>
+          </details>
         ) : null}
       </div>
       <div>

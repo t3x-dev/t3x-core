@@ -1,7 +1,7 @@
 'use client';
 
 import type { StudioPreview, StudioSample } from '@t3x-dev/api-client';
-import { CheckCircle2, Code2, Eye, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Code2, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
@@ -14,64 +14,42 @@ export function StudioSamplePreview({
   candidateIds,
   preview,
   xray,
+  title,
 }: {
   projectId: string;
   candidateIds: string[];
   preview: StudioPreview;
   xray: boolean;
+  title?: string;
 }) {
-  const [mode, setMode] = useState<'sample' | 'definition'>('sample');
   const [sampleId, setSampleId] = useState(preview.samples[0]?.id);
   const sample = preview.samples.find((item) => item.id === sampleId) ?? preview.samples[0];
   if (!sample) return <StudioDefinitionPreview preview={preview} xray={xray} />;
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav className="flex gap-1" aria-label="Preview content">
-          <Button
-            size="sm"
-            variant={mode === 'sample' ? 'secondary' : 'ghost'}
-            onClick={() => setMode('sample')}
-            aria-pressed={mode === 'sample'}
-          >
-            <Eye className="size-3.5" /> Sample
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === 'definition' ? 'secondary' : 'ghost'}
-            onClick={() => setMode('definition')}
-            aria-pressed={mode === 'definition'}
-          >
-            Definition
-          </Button>
-        </nav>
-        {preview.samples.length > 1 ? (
-          <select
-            aria-label="Author sample"
-            value={sample.id}
-            onChange={(event) => setSampleId(event.target.value)}
-            className="max-w-full rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2 text-xs"
-          >
-            {preview.samples.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.source?.canonicalName} · {item.source?.version}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </div>
-      {mode === 'definition' ? (
-        <StudioDefinitionPreview preview={preview} xray={xray} />
-      ) : (
-        <SampleEditor
-          key={sample.id}
-          projectId={projectId}
-          candidateIds={candidateIds}
-          preview={preview}
-          sample={sample}
-          xray={xray}
-        />
-      )}
+    <div className="space-y-4">
+      {preview.samples.length > 1 ? (
+        <select
+          aria-label="Author sample"
+          value={sample.id}
+          onChange={(event) => setSampleId(event.target.value)}
+          className="max-w-full rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2 text-xs"
+        >
+          {preview.samples.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.source?.canonicalName} · {item.source?.version}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <SampleEditor
+        key={sample.id}
+        projectId={projectId}
+        candidateIds={candidateIds}
+        preview={preview}
+        sample={sample}
+        xray={xray}
+        title={title}
+      />
     </div>
   );
 }
@@ -81,12 +59,14 @@ function SampleEditor({
   preview,
   sample,
   xray,
+  title,
 }: {
   projectId: string;
   candidateIds: string[];
   preview: StudioPreview;
   sample: StudioSample;
   xray: boolean;
+  title?: string;
 }) {
   const checkSample = useValidateStudioSample(projectId);
   const original = JSON.stringify(sample.value ?? {}, null, 2);
@@ -143,7 +123,7 @@ function SampleEditor({
   return (
     <section aria-label="Sample preview" className="space-y-4">
       <header>
-        <h3 className="text-xl font-semibold tracking-tight">Sample preview</h3>
+        <h3 className="text-2xl font-semibold tracking-tight">{title || 'Sample preview'}</h3>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           {modified ? 'Local draft' : 'Author sample'} · {sample.source?.canonicalName} ·{' '}
           {sample.source?.version}
@@ -273,7 +253,13 @@ function SampleReading({
               row &&
               typeof row === 'object' &&
               !Array.isArray(row) &&
-              Object.values(row).every((cell) => cell === null || typeof cell !== 'object')
+              Object.values(row).every(
+                (cell) =>
+                  cell === null ||
+                  typeof cell !== 'object' ||
+                  (Array.isArray(cell) &&
+                    cell.every((value) => value === null || typeof value !== 'object'))
+              )
           );
         const columns = flat
           ? [...new Set(rows.flatMap(([, row]) => Object.keys(row as object)))]
