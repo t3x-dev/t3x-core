@@ -480,7 +480,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
-    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
     expect(projectNavigation.closest('header')).toHaveClass('min-[1200px]:h-14');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
