@@ -35,6 +35,9 @@ export const SchemaCatalogItemSchema = z.object({
     publishedAt: z.string(),
   }),
   presentationRef: SchemaReleasePresentationReferenceSchema.nullable().default(null),
+  editorial: z
+    .object({ reason: z.string().max(240), editor: z.string().max(80), selectedAt: z.string() })
+    .optional(),
   contentKind: z.literal('definition'),
   definition: z.object({
     pathCount: z.number().int(),

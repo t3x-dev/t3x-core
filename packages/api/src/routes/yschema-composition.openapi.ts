@@ -36,6 +36,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import {
   artifactViewToManifest,
   ensureBuiltInYSchemaArtifacts,
@@ -263,6 +264,7 @@ const catalogCollections = [
 ];
 const CatalogQuerySchema = z
   .object({
+    selection: z.literal('editor-picks').optional(),
     q: z.string().trim().max(200).optional(),
     canonical_name: z.string().trim().min(1).max(200).optional(),
     tags: z
@@ -668,6 +670,21 @@ yschemaCompositionRoutes.openapi(catalogRoute, async (c) => {
   const query = c.req.valid('query');
   const db = await getDB();
   await ensureBuiltInYSchemaArtifacts(db);
+  if (query.selection === 'editor-picks') {
+    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
+        },
+        400
+      );
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
+      200
+    );
+  }
   const page = await listYSchemaCatalogReleases(db, {
     ...query,
     any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
@@ -682,6 +699,21 @@ yschemaCompositionRoutes.openapi(projectCatalogRoute, async (c) => {
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
   await ensureBuiltInYSchemaArtifacts(db);
+  if (query.selection === 'editor-picks') {
+    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
+        },
+        400
+      );
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
+      200
+    );
+  }
   const page = await listYSchemaCatalogReleases(db, {
     ...query,
     project_id: projectId,

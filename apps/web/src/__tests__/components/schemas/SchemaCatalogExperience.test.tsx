@@ -61,6 +61,8 @@ describe('Schema catalog journey', () => {
   it('keeps Discover visual and sends search to Browse, preserving workspace context', () => {
     mocks.query = 'workspace=main';
     mount();
+    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=12&selection=editor-picks', true);
+    expect(screen.getByRole('heading', { name: 'Editor’s Choice' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeVisible();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search definitions' }), {

@@ -9,6 +9,8 @@ test('original ecosystem starters are discoverable, filterable and importable at
   try {
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=discover`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Editor’s Choice' })).toBeVisible();
+    await expect(page.getByText('Make a small service stack readable before you ship it.')).toBeVisible();
     for (const title of ['Product brief', 'Care checklist', 'Compose services'])
       await expect(page.getByRole('button', { name: `Explore ${title} 1.0.0`, exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('starters-discover.png'), animations: 'disabled' });
