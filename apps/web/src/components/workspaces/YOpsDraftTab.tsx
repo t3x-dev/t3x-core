@@ -1013,7 +1013,7 @@ function RenderedYOpsTree({
     >
       <PaneHeader
         icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
-        label="Rendered PRD YAML"
+        label="Rendered YAML"
         meta={materializedTrees ? `${appliedCount} applied` : 'Waiting for validation'}
       />
       {materializedTrees ? (
