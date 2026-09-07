@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import type { StructuredDiffChange, StructuredDiffKind } from '@/domain/diff/structuredStateDiff';
+import type { StatePointRow } from '@/domain/project/stateViewModel';
 import { cn } from '@/utils/cn';
 
 interface DiffPathNode {
@@ -13,6 +14,7 @@ interface DiffPathNode {
 }
 
 interface T3XDiffProps {
+  contextRows?: StatePointRow[];
   baselineLabel: string;
   changes: StructuredDiffChange[];
   headerSubtitle: string;
@@ -26,6 +28,7 @@ interface T3XDiffProps {
 }
 
 export function T3XDiff({
+  contextRows,
   baselineLabel,
   changes,
   headerSubtitle,
@@ -78,7 +81,7 @@ export function T3XDiff({
 
       {open ? (
         selectedChange ? (
-          <div className="grid min-h-[400px] grid-cols-1 overflow-hidden lg:h-[400px] lg:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(500px,1fr)_340px]">
+          <div className="grid min-h-[440px] grid-cols-1 lg:grid-cols-[230px_minmax(0,1fr)_320px]">
             <aside className="min-h-0 overflow-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:border-r lg:border-b-0">
               <div className="sticky top-0 z-10 flex min-h-[54px] items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2.5">
                 <div>
@@ -101,23 +104,77 @@ export function T3XDiff({
               </div>
             </aside>
 
-            <section className="min-h-0 min-w-0 overflow-auto border-b border-[var(--stroke-divider)] lg:border-b-0 2xl:border-r">
-              <header className="border-b border-[var(--stroke-divider)] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                  Node / field
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <ChangeKindBadge kind={selectedChange.kind} />
-                  <Badge variant="outline">{selectedChange.op}</Badge>
-                  <h5 className="text-sm font-semibold text-[var(--text-primary)]">
-                    {selectedChange.summary}
-                  </h5>
-                </div>
-                <p className="mt-1 break-all font-mono text-[10px] text-[var(--text-tertiary)]">
-                  {selectedChange.path}
-                </p>
+            <section
+              aria-label="Changed nodes"
+              className="min-w-0 overflow-auto border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
+            >
+              <header className="border-b border-[var(--stroke-divider)] px-4 py-3 text-xs font-semibold">
+                {contextRows ? 'State' : 'Changed nodes'} · {projectedLabel}
               </header>
-              <div className="grid gap-3 p-4 md:grid-cols-2">
+              {contextRows?.map((row) => {
+                const change = changes.find((item) => item.path === row.path);
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      'flex items-start gap-3 border-b border-[var(--stroke-divider)] px-3 py-2 text-xs',
+                      change && 'bg-[var(--status-warning-muted)]'
+                    )}
+                  >
+                    <span
+                      className="w-2/5 shrink-0 break-all font-mono"
+                      style={{ paddingLeft: row.depth * 12 }}
+                    >
+                      {change ? (
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => onSelectChange(change.id)}
+                        >
+                          {row.key}
+                        </button>
+                      ) : (
+                        row.key
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[var(--text-secondary)]">
+                      {row.value}
+                    </span>
+                    {change ? <ChangeKindBadge kind={change.kind} /> : null}
+                  </div>
+                );
+              })}
+              {changes
+                .filter((change) => !contextRows?.some((row) => row.path === change.path))
+                .map((change) => (
+                  <button
+                    key={change.id}
+                    type="button"
+                    aria-pressed={selectedChange.id === change.id}
+                    onClick={() => onSelectChange(change.id)}
+                    className={cn(
+                      'flex w-full items-start gap-3 border-b border-[var(--stroke-divider)] px-4 py-3 text-left text-xs hover:bg-[var(--hover-bg)]',
+                      selectedChange.id === change.id && 'bg-[var(--status-warning-muted)]'
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-all font-mono">{change.path}</span>
+                      <span className="mt-2 block whitespace-pre-wrap break-words text-[var(--text-secondary)]">
+                        {change.kind === 'removed' ? change.beforeValue : change.afterValue}
+                      </span>
+                    </span>
+                    <ChangeKindBadge kind={change.kind} />
+                  </button>
+                ))}
+            </section>
+
+            <aside className="min-h-0 min-w-0 overflow-auto bg-[var(--surface-card)] p-4">
+              <SectionLabel>Selected change</SectionLabel>
+              <h5 className="mt-3 text-sm font-semibold">{selectedChange.summary}</h5>
+              <p className="mt-1 break-all font-mono text-xs text-[var(--text-secondary)]">
+                {selectedChange.path}
+              </p>
+              <div className="my-4 grid gap-3">
                 <DiffValue
                   meta={baselineLabel}
                   title="Before"
@@ -131,9 +188,6 @@ export function T3XDiff({
                   variant="after"
                 />
               </div>
-            </section>
-
-            <aside className="min-h-0 min-w-0 overflow-auto bg-[var(--surface-card)] p-4 lg:col-span-2 lg:border-t lg:border-[var(--stroke-divider)] 2xl:col-span-1 2xl:border-t-0">
               <SectionLabel>Reason</SectionLabel>
               <p className="mt-2 text-sm leading-6 text-[var(--text-primary)]">
                 {selectedChange.reason}
@@ -253,7 +307,7 @@ function DiffValue({
   return (
     <section
       className={cn(
-        'min-h-32 overflow-hidden rounded-md border',
+        'overflow-hidden rounded-md border',
         variant === 'after'
           ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)]'
           : 'border-[var(--stroke-divider)] bg-[var(--surface-panel)]'

@@ -7,6 +7,7 @@ import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import type { ApiCommit } from '@/types/api';
 
 interface CommitHistoryDiffViewProps {
@@ -20,6 +21,7 @@ export function CommitHistoryDiffView({
   onBack,
   parentCommit,
 }: CommitHistoryDiffViewProps) {
+  const contextRows = useMemo(() => buildStatePointRows(commit.content), [commit.content]);
   const changes = useMemo(
     () =>
       buildStructuredStateDiff({
@@ -78,6 +80,7 @@ export function CommitHistoryDiffView({
 
       <div className="overflow-hidden rounded-md border border-[var(--stroke-divider)] shadow-sm [&>section]:border-t-0">
         <T3XDiff
+          contextRows={contextRows}
           baselineLabel={parentLabel}
           changes={changes}
           headerSubtitle={

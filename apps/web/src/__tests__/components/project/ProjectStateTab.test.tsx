@@ -633,6 +633,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
     expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Revision details'));
     const stateDetails = screen.getByRole('heading', { name: 'State details' }).closest('section');
     expect(stateDetails).not.toBeNull();
     expect(within(stateDetails as HTMLElement).getAllByText('cb5813f')[0]).toHaveAttribute(
@@ -677,7 +678,7 @@ describe('ProjectStateTab', () => {
     expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(within(structureView).getByRole('table')).toHaveClass(
       'w-full',
-      'min-w-[760px]',
+      'min-w-[480px]',
       'table-fixed',
       'text-xs',
       'leading-5'
@@ -697,6 +698,18 @@ describe('ProjectStateTab', () => {
     expect(
       screen.queryByRole('separator', { name: 'Resize state details' })
     ).not.toBeInTheDocument();
+  });
+
+  it('selects a node independently of expansion and exposes its full value', async () => {
+    renderStateTab();
+    await screen.findByRole('region', { name: 'Structured state tree' });
+    const tree = screen.getByRole('region', { name: 'Structured state tree' });
+    const buttons = within(tree).getAllByRole('button', { name: /^Inspect / });
+    fireEvent.click(buttons[0]);
+    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('complementary', { name: 'Selected node' })).toHaveTextContent(
+      'Committed state'
+    );
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
@@ -725,7 +738,7 @@ describe('ProjectStateTab', () => {
       within(structureView)
         .getAllByRole('columnheader')
         .map((header) => header.textContent?.trim())
-    ).toEqual(['Path / Key', 'Value', 'Type', 'Status', 'Source / Op', 'Issues']);
+    ).toEqual(['Path / Key', 'Value', 'Change']);
 
     const mustToggle = within(structureView).getByRole('button', {
       name: 'Expand Must conditions',
@@ -751,7 +764,7 @@ describe('ProjectStateTab', () => {
     const collapsedMustToggle = within(structureView).getByRole('button', {
       name: 'Expand Must conditions',
     });
-    fireEvent.click(collapsedMustToggle.closest('tr')!);
+    fireEvent.click(collapsedMustToggle);
     expect(
       within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
@@ -762,11 +775,11 @@ describe('ProjectStateTab', () => {
     const problemToggle = within(structureView).getByRole('button', {
       name: 'Collapse summary',
     });
-    fireEvent.click(problemToggle.closest('tr')!);
+    fireEvent.click(problemToggle);
     expect(within(structureView).queryByText('problem')).not.toBeInTheDocument();
 
     const rootToggle = within(structureView).getByRole('button', { name: 'Collapse prd' });
-    fireEvent.click(rootToggle.closest('tr')!);
+    fireEvent.click(rootToggle);
     expect(
       within(structureView).queryByRole('button', { name: 'Collapse Must conditions' })
     ).not.toBeInTheDocument();
@@ -1488,10 +1501,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
-    const details = screen.getByRole('heading', { name: 'State details' }).closest('section');
-    expect(details).not.toBeNull();
-    const changedLabel = within(details as HTMLElement).getByText('Changed');
-    expect(changedLabel.nextElementSibling).toHaveTextContent('0 paths');
+    expect(screen.queryByRole('complementary', { name: 'Selected node' })).not.toBeInTheDocument();
   });
 
   it('keeps an empty main branch selected instead of redirecting to another branch', async () => {
