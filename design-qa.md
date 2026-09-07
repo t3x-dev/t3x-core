@@ -37,3 +37,7 @@ Final screenshot critique removed misleading empty-container text and corrected 
 Wave 4 result: passed for local compatibility.
 
 Overall result: passed for the four requested delivery waves. Editorial content, original epic stretch criteria and commercial Team entitlement approval are not silently marked complete.
+
+## 2026-09-07 — reviewed editor picks
+
+Passed for this scope. [Actual Discover/Browse screenshots and reference comparison](docs/verification/editor-picks/README.md). The existing visual card layout is retained; only reviewed releases receive T3X recommendation copy. The real browser completed the catalog-to-Studio flow without model calls. Three usable starters are shown instead of pretending the larger conceptual ecosystem is already available.

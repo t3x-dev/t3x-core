@@ -13,6 +13,8 @@ export interface ListYSchemaCatalogOptions {
   project_id?: string;
   q?: string;
   canonical_name?: string;
+  exact_version?: string;
+  exact_hash?: string;
   tags?: string[];
   any_tags?: string[];
   ecosystem?: string;
@@ -83,6 +85,8 @@ export async function listYSchemaCatalogReleases(
 
   const conditions = [
     options.canonical_name ? eq(a.canonicalName, options.canonical_name) : undefined,
+    options.exact_version ? eq(v.version, options.exact_version) : undefined,
+    options.exact_hash ? eq(v.artifactHash, options.exact_hash) : undefined,
     eq(a.lifecycleStatus, 'active'),
     isNull(a.archivedAt),
     inArray(a.kind, ['core', 'module', 'schema']),

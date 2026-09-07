@@ -92,6 +92,7 @@ export function SchemaCatalogExperience({
       if (value) filters.set(key, value);
     }
   filters.set('limit', view === 'discover' ? '12' : '24');
+  if (view === 'discover') filters.set('selection', 'editor-picks');
   const catalog = useSchemaCatalog(
     projectId,
     filters.toString(),
@@ -236,8 +237,11 @@ export function SchemaCatalogExperience({
                   );
                 })}
               </fieldset>
+              <p className="mb-3 text-xs text-[var(--text-secondary)]">
+                Selected by T3X for useful ideas and thoughtful definitions.
+              </p>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold">Recently published</h2>
+                <h2 className="text-base font-semibold">Editor’s Choice</h2>
                 <button
                   type="button"
                   onClick={() => navigate('browse')}
@@ -573,11 +577,16 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
           <p className="mb-3 text-xs font-medium text-[var(--status-info)]">
             {item.identity.tags[0] || item.release.kind}
           </p>
+          {item.editorial ? (
+            <p className="mb-3 text-xs font-medium text-[var(--accent-conversation)]">
+              {item.editorial.editor} pick · {item.editorial.selectedAt}
+            </p>
+          ) : null}
           <h3 className="text-xl font-semibold leading-tight">
             {item.identity.displayName || item.identity.canonicalName}
           </h3>
           <p className="mt-2 line-clamp-2 text-sm text-[var(--text-secondary)]">
-            {item.identity.description}
+            {item.editorial?.reason || item.identity.description}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
             <span>{item.definition.pathCount} paths</span>

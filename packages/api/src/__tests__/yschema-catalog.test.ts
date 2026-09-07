@@ -10,7 +10,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
-import { yschemaArtifactVersions } from '../../../storage/src/schema';
+import { yschemaArtifacts, yschemaArtifactVersions } from '../../../storage/src/schema';
 import { setupTestDB, testData } from './setup';
 
 let db: AnyDB;
@@ -316,4 +316,67 @@ it('projects only bounded node and field names for discovery, without field valu
     { path: 'service', slots: ['image', 'ports'] },
   ]);
   expect(JSON.stringify(result)).not.toContain('PRIVATE_DEFAULT_NEVER_INDEX');
+});
+
+it('serves reviewed exact public picks independently of recency and rejects mixed search', async () => {
+  const response = await app.request('/v1/yschema/catalog?selection=editor-picks');
+  expect(response.status).toBe(200);
+  const page = SchemaCatalogPageSchema.parse((await response.json()).data);
+  expect(page.items.map((item) => item.identity.canonicalName)).toEqual([
+    't3x/compose-services',
+    't3x/care-checklist',
+    't3x/product-brief',
+  ]);
+  expect(
+    page.items.every((item) => item.editorial?.reason && item.release.version === '1.0.0')
+  ).toBe(true);
+  expect(page.has_more).toBe(false);
+  const limited = await (
+    await app.request('/v1/yschema/catalog?selection=editor-picks&limit=1')
+  ).json();
+  expect(limited.data.items).toHaveLength(1);
+  expect((await app.request('/v1/yschema/catalog?selection=editor-picks&q=secret')).status).toBe(
+    400
+  );
+  const before = page.items[0];
+  const [pinned] = await db
+    .select()
+    .from(yschemaArtifactVersions)
+    .where(eq(yschemaArtifactVersions.artifactVersionId, before.release.artifactVersionId));
+  await db.insert(yschemaArtifactVersions).values({
+    ...pinned,
+    artifactVersionId: 'newer-editorial-test',
+    version: '2.0.0',
+    artifactHash: `sha256:${'a'.repeat(64)}`,
+    createdAt: new Date(),
+  });
+  try {
+    const unchanged = SchemaCatalogPageSchema.parse(
+      (await (await app.request('/v1/yschema/catalog?selection=editor-picks')).json()).data
+    );
+    expect(unchanged.items[0]?.release.artifactVersionId).toBe(before.release.artifactVersionId);
+  } finally {
+    await db
+      .delete(yschemaArtifactVersions)
+      .where(eq(yschemaArtifactVersions.artifactVersionId, 'newer-editorial-test'));
+  }
+  await db
+    .update(yschemaArtifacts)
+    .set({ visibility: 'private' })
+    .where(eq(yschemaArtifacts.artifactId, before.identity.artifactId));
+  try {
+    const hidden = (await (await app.request('/v1/yschema/catalog?selection=editor-picks')).json())
+      .data;
+    expect(
+      hidden.items.some(
+        (item: { identity: { artifactId: string } }) =>
+          item.identity.artifactId === before.identity.artifactId
+      )
+    ).toBe(false);
+  } finally {
+    await db
+      .update(yschemaArtifacts)
+      .set({ visibility: 'official' })
+      .where(eq(yschemaArtifacts.artifactId, before.identity.artifactId));
+  }
 });
