@@ -5,13 +5,18 @@ import {
   BookOpen,
   Box,
   Code2,
+  Cpu,
+  Database,
+  FileText,
   FlaskConical,
   Layers3,
+  Network,
   Search,
   Shield,
   SlidersHorizontal,
   Sparkles,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -460,7 +465,7 @@ export function SchemaCatalogExperience({
                       className="flex w-full min-w-0 items-center gap-3 bg-[var(--surface-card)] px-3 py-3 text-left hover:bg-[var(--hover-bg)]"
                       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
                     >
-                      <Box className="size-8 shrink-0 rounded-md bg-[var(--status-info-muted)] p-1.5 text-[var(--status-info)]" />
+                      <CatalogLogo item={item} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">
                           {item.identity.displayName || item.identity.canonicalName}
@@ -523,6 +528,65 @@ export function SchemaCatalogExperience({
     </section>
   );
 }
+const logoTones = [
+  'from-blue-500 to-indigo-600',
+  'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-700',
+  'from-orange-400 to-rose-600',
+  'from-cyan-500 to-blue-700',
+  'from-pink-500 to-violet-600',
+];
+const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
+
+function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
+  const name = item.identity.canonicalName;
+  // Only unowned built-ins receive T3X artwork. Similar community names do not
+  // inherit an official identity. Other glyphs are decorative, not capabilities.
+  if (
+    !item.identity.ownerProjectId &&
+    item.identity.visibility === 'official' &&
+    starterLogos.has(name)
+  ) {
+    return (
+      <Image
+        src={`/schema-logos/${name.split('/')[1]}.png`}
+        alt=""
+        width={40}
+        height={40}
+        className="size-10 shrink-0 rounded-xl shadow-sm"
+      />
+    );
+  }
+  const hash = Array.from(name).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 0);
+  const Icon = /power|energy/.test(name)
+    ? Zap
+    : /network|api/.test(name)
+      ? Network
+      : /sensor|hardware|actuator|device/.test(name)
+        ? Cpu
+        : /evaluat|experiment|research/.test(name)
+          ? FlaskConical
+          : /security|safety|policy|guardrail/.test(name)
+            ? Shield
+            : /database|data/.test(name)
+              ? Database
+              : /agent|prompt|context/.test(name)
+                ? Sparkles
+                : /workflow|automation|rollout|delivery/.test(name)
+                  ? Workflow
+                  : /prd|requirement|plan|brief/.test(name)
+                    ? FileText
+                    : Layers3;
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${logoTones[hash % logoTones.length]} text-white shadow-sm ring-1 ring-inset ring-white/15`}
+    >
+      <Icon className="size-5" strokeWidth={1.8} />
+    </span>
+  );
+}
+
 function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
   const intro = useSchemaIntroduction(item.presentationRef);
   const cover = intro.data?.document.resources.find(
