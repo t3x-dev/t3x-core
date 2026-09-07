@@ -529,12 +529,11 @@ export function SchemaCatalogExperience({
   );
 }
 const logoTones = [
-  'from-blue-500 to-indigo-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-700',
-  'from-orange-400 to-rose-600',
-  'from-cyan-500 to-blue-700',
-  'from-pink-500 to-violet-600',
+  'bg-[var(--status-info)]',
+  'bg-[var(--accent-branch)]',
+  'bg-[var(--status-success)]',
+  'bg-[var(--accent-pending)]',
+  'bg-[var(--accent-conversation)]',
 ];
 const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
 
@@ -597,7 +596,7 @@ function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
   return (
     <span
       aria-hidden="true"
-      className={`flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${logoTones[hash % logoTones.length]} text-white shadow-sm ring-1 ring-inset ring-white/15`}
+      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${logoTones[hash % logoTones.length]} text-[var(--on-status)] shadow-sm`}
     >
       <Icon className="size-5" strokeWidth={1.8} />
     </span>
