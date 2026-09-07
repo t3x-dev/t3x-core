@@ -618,9 +618,9 @@ function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () =
       type="button"
       onClick={onOpen}
       aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
-      className="group overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
+      className="group flex flex-col overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
     >
-      <div className="flex min-h-56 flex-col sm:flex-row">
+      <div className="flex min-h-56 flex-1 flex-col sm:flex-row">
         {artwork ? (
           <div className="relative h-44 shrink-0 overflow-hidden sm:h-auto sm:w-[38%]">
             <Image
