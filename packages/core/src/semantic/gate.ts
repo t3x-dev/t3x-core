@@ -4,7 +4,6 @@
  * Uses an LLM to review extraction quality across 5 dimensions:
  * completeness, accuracy, relations, granularity, hallucination.
  *
- * @see docs/plans/core-engine/09-gate-and-ci.md
  */
 
 import type { LLMProvider } from '../llm/types';

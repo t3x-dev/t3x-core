@@ -9,7 +9,6 @@
  *
  * Both tracks import from here to ensure compatibility.
  *
- * @see docs/plans/parallel-dev-guidelines.md
  */
 
 import type { Lesson } from '../feedback/types';

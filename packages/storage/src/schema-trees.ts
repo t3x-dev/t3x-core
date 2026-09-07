@@ -1281,7 +1281,6 @@ export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // State index (cross-conversation entity/topic graph)
-// @see docs/plans/2026-03-05-knowledge-graph-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const knowledgeNodes = pgTable(

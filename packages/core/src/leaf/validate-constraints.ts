@@ -15,7 +15,6 @@
  * └────────────┴────────────┴─────────────────────────────────┴───────────┘
  *
  * Owner: VAL-* track
- * @see docs/plans/parallel-dev-guidelines.md
  */
 
 import { nanoid } from 'nanoid';

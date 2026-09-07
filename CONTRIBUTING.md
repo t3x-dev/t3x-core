@@ -110,3 +110,18 @@ dependency graph, data formats, ID conventions, and testing patterns.
 
 Open an issue for questions, bugs, or feature proposals. GitHub Discussions are
 not the current support path for this repository.
+
+## Documentation boundary
+
+Keep committed documentation minimal and useful to external developers: setup,
+usage, API/protocol contracts, extension, security, recovery, release and
+contribution guidance. Keep executable fixtures and machine-checked contracts
+with the code. Update existing guidance instead of adding per-PR reports.
+
+Internal plans, design reviews, screenshots, audit narratives, progress logs and
+local test outputs belong outside this repository (or in ignored `notes/`).
+Summarize verification in the PR; do not commit its evidence bundle. A stable
+contract extracted from a review may be documented without the review history.
+Do not put internal artifacts in `public/` or runtime resources. Docker contexts
+exclude documentation, browser evidence and tests; npm packages retain their
+public README/license and explicit runtime file lists.

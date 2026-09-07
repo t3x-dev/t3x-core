@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { AVATAR_PNG_BASE64 } from '../fixtures/avatar';
 import { getProjectRepoPath } from '../../src/domain/project/repoPath';
 import { expect, test } from '../fixtures/test';
 import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestProject } from '../fixtures/api-helpers';
@@ -14,7 +14,7 @@ test('discover real releases, filter, inspect an exact introduction and open Stu
     expect(owned.project_id).toBe(projectId);
     const projectPath = getProjectRepoPath({ id: owned.project_id, name: owned.name });
     const commitDigest = await createTestCommitFromTrees(request, projectId, [{ key: 'service', slots: { image: 'app:v1' }, children: [] }]);
-    const base64 = readFileSync('../../docs/plans/state-schema-delivery-2026-09-05/verification/state-overview/desktop.png').toString('base64');
+    const base64 = AVATAR_PNG_BASE64;
     const presentationResponse = await request.post(`${API_BASE}/projects/${projectId}/commits/${encodeURIComponent(commitDigest)}/presentation`, { data: {
       description: 'Review a service definition before delivery.', readme: '# Team release guide\n\nKeep configuration changes reviewable.\n\n## Delivery\n\nReview the version before connecting your workflow.', tags: ['infrastructure'],
       resources: [{ path: 'images/overview.png', alt: 'Team supplied State overview', mediaType: 'image/png', base64 }], avatarPath: 'images/overview.png',
