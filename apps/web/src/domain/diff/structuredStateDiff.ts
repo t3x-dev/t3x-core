@@ -1,5 +1,5 @@
-import type { SemanticContent, TreeNode } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
+import type { StateTreeContent, StateTreeNode } from '@/domain/project/stateViewModel';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -22,8 +22,8 @@ export interface StructuredDiffChange {
 }
 
 interface BuildStructuredStateDiffInput {
-  baseline: SemanticContent;
-  head: SemanticContent;
+  baseline: StateTreeContent;
+  head: StateTreeContent;
   workspace?: WorkspaceCandidate | null;
 }
 
@@ -107,8 +107,8 @@ export function buildStructuredStateDiff({
   return rawChanges.map((change) => enrichChange(change, workspace));
 }
 
-function flattenNodes(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
-  const nodes = new Map<string, TreeNode>();
+function flattenNodes(trees: StateTreeNode[], prefix = ''): Map<string, StateTreeNode> {
+  const nodes = new Map<string, StateTreeNode>();
   for (const node of trees) {
     const path = prefix ? `${prefix}/${node.key}` : node.key;
     nodes.set(path, node);

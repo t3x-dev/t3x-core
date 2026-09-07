@@ -1,4 +1,4 @@
-import type { SemanticContent, TreeNode } from '@t3x-dev/core';
+import type { SemanticContent } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 
 export type StatePointStatus = 'changed' | 'created' | 'missing' | 'set' | 'unchanged';
@@ -340,7 +340,17 @@ export interface PromptRenderModelOptions {
   sources?: Array<{ id: string; title?: string; type: string }> | null;
 }
 
-function semanticContentToPlain(content: SemanticContent): Record<string, unknown> {
+// Read-only projections also accept JSON workspace values, including null.
+export interface StateTreeNode {
+  key: string;
+  slots: Record<string, unknown>;
+  children: StateTreeNode[];
+}
+export interface StateTreeContent {
+  trees: StateTreeNode[];
+}
+
+function semanticContentToPlain(content: StateTreeContent): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const tree of content.trees ?? []) {
     const [key, value] = treeNodeToPlain(tree);
@@ -349,7 +359,7 @@ function semanticContentToPlain(content: SemanticContent): Record<string, unknow
   return out;
 }
 
-function treeNodeToPlain(node: TreeNode): [string, Record<string, unknown>] {
+function treeNodeToPlain(node: StateTreeNode): [string, Record<string, unknown>] {
   const value: Record<string, unknown> = { ...(node.slots ?? {}) };
   for (const child of node.children ?? []) {
     const [childKey, childValue] = treeNodeToPlain(child);
@@ -359,7 +369,7 @@ function treeNodeToPlain(node: TreeNode): [string, Record<string, unknown>] {
 }
 
 export function buildStatePointRows(
-  content: SemanticContent,
+  content: StateTreeContent,
   options: BuildStatePointRowsOptions = {}
 ): StatePointRow[] {
   const plain = semanticContentToPlain(content);
@@ -1248,6 +1258,7 @@ function valueType(value: unknown): string {
 }
 
 function valueSummary(value: unknown): string {
+  if (value === null) return 'null';
   if (Array.isArray(value)) return itemCount(value.length);
   if (isArrayLikeRecord(value)) return itemCount(Object.keys(toRecord(value)).length);
   if (value && typeof value === 'object') return '-';
