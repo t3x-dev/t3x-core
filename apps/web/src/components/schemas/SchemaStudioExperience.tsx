@@ -28,6 +28,7 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
+import { CreateStudioWorkspace } from './CreateStudioWorkspace';
 import { StudioChanges } from './StudioDefinitionPreview';
 import { StudioSamplePreview } from './StudioSamplePreview';
 
@@ -79,6 +80,14 @@ export function SchemaStudioExperience({
     target?.revision
   );
   const data = preview.data;
+  useEffect(() => {
+    if (
+      selection.includes(compareId) ||
+      !candidates.items.some((item) => item.id === compareId && item.available)
+    ) {
+      setCompareId('');
+    }
+  }, [selection, compareId, candidates.items]);
   const binding = target?.schemaBindings[0];
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
@@ -282,7 +291,7 @@ export function SchemaStudioExperience({
             >
               <option value="">No comparison</option>
               {candidates.items
-                .filter((item) => item.available)
+                .filter((item) => item.available && !selection.includes(item.id))
                 .map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.title} · {item.source?.version}
@@ -397,6 +406,17 @@ export function SchemaStudioExperience({
               <p role="alert" className="mt-2 text-xs">
                 {workspaces.error}
               </p>
+            ) : null}
+            {!workspaces.loading &&
+            !workspaces.error &&
+            !workspaces.workspaces.some((item) => item.status !== 'committed') ? (
+              <CreateStudioWorkspace
+                projectId={projectId}
+                onCreated={async (id) => {
+                  await workspaces.refresh();
+                  setWorkspaceId(id);
+                }}
+              />
             ) : null}
             {binding ? (
               <div className="mt-4 border-t border-[var(--stroke-divider)] pt-3">

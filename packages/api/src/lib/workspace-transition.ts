@@ -529,6 +529,11 @@ async function prepareWorkspaceTransition(
     db,
     input.projectId
   );
+  if (input.content.trees.length !== 1 || input.content.trees[0]?.key !== rootKey) {
+    throw new TypeError(
+      `Keep one ${rootKey} root tree and place the definition content inside it.`
+    );
+  }
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,

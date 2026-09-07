@@ -1,0 +1,10 @@
+{
+  "status": 400,
+  "body": {
+    "success": false,
+    "error": {
+      "code": "INVALID_REQUEST",
+      "message": "Keep one candidate root tree and place the definition content inside it."
+    }
+  }
+}

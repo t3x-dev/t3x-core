@@ -74,16 +74,16 @@ describe('Schema catalog journey', () => {
       { scroll: false }
     );
   });
-  it('opens an exact release in Studio without applying it to a workspace', () => {
+  it('offers one Add to Studio action for an exact release', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('sha256:abc')).toBeVisible();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Open in Studio' }));
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?schemaView=studio&mode=versions&catalogName=team%2Frelease&catalogVersion=1.2.3',
-      { scroll: false }
-    );
+    expect(within(dialog).getByRole('button', { name: 'Add to Studio' })).toBeEnabled();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Open in Studio' })
+    ).not.toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';

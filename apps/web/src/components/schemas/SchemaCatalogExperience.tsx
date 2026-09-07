@@ -122,25 +122,6 @@ export function SchemaCatalogExperience({
     if (href) router.push(href);
     else setSelected(item);
   }
-  function openStudio(item: SchemaCatalogItem) {
-    navigate(
-      'studio',
-      item.release.kind === 'schema'
-        ? {
-            mode: 'versions',
-            catalogName: item.identity.canonicalName,
-            catalogVersion: item.release.version,
-          }
-        : {
-            mode: 'compose',
-            module: item.identity.canonicalName,
-            version: item.release.version,
-            family: ['prd', 'prompt', 'skill', 'esphome-device'].includes(item.identity.family)
-              ? item.identity.family
-              : undefined,
-          }
-    );
-  }
   const items = catalog.data?.items ?? [];
   const searchForm = (large = false) => (
     <form
@@ -506,7 +487,6 @@ export function SchemaCatalogExperience({
               item={selected}
               projectId={projectId}
               returnTo={`${pathname}?${params.toString()}`}
-              onStudio={() => openStudio(selected)}
               onAdded={() => setSelected(undefined)}
             />
           ) : null}
@@ -610,13 +590,11 @@ function ReleaseDetail({
   item,
   projectId,
   returnTo,
-  onStudio,
   onAdded,
 }: {
   item: SchemaCatalogItem;
   projectId: string;
   returnTo: string;
-  onStudio: () => void;
   onAdded: () => void;
 }) {
   const intro = useSchemaIntroduction(item.presentationRef);
@@ -636,8 +614,6 @@ function ReleaseDetail({
   const cover = intro.data?.document.resources.find(
     (resource) => resource.path === reference?.coverPath
   );
-  const canOpenStudio =
-    item.release.kind !== 'schema' || item.identity.ownerProjectId === projectId;
   return (
     <>
       <SheetHeader>
@@ -713,11 +689,6 @@ function ReleaseDetail({
               expectedHash: item.release.hash,
             }}
           />
-          {canOpenStudio ? (
-            <Button variant="default" onClick={onStudio}>
-              Open in Studio <ArrowRight className="size-4" />
-            </Button>
-          ) : null}
           {reference ? (
             <Button variant="canvas-outline" asChild>
               <Link

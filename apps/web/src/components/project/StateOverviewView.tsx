@@ -16,11 +16,13 @@ export function StateOverviewView({
   reader,
   refName,
   onAuthorRevision,
+  validationLabel = 'Validation not run',
 }: {
   projectId: string;
   commitDigest: string;
   projectName: string;
   refName?: string;
+  validationLabel?: string;
   onAuthorRevision?: (digest: string) => void;
   reader?: (expanded: boolean, expand: () => void) => ReactNode;
 }) {
@@ -199,7 +201,7 @@ export function StateOverviewView({
             {reader ? 'Document reader' : 'Structured reader'} · {commitDigest.slice(7, 19)}
           </p>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">State loaded · Read-only</p>
-          <p className="mt-1 text-xs text-[var(--text-tertiary)]">Validation not run</p>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">{validationLabel}</p>
         </header>
         {reader && selected === null ? (
           <div className="flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden">

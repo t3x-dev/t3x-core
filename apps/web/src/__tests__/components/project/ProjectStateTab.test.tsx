@@ -13,6 +13,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
+  nativeView: null as unknown,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
   loadCommit: vi.fn(),
@@ -24,6 +25,10 @@ const hookMocks = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   schemaArtifacts: [] as SchemaArtifactPreview[],
   skillArtifact: null as SkillArtifact | null,
+}));
+
+vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
+  useCommitTransitionView: () => ({ view: hookMocks.nativeView, loading: false, error: null }),
 }));
 
 vi.mock('@/components/project/StateOverviewView', () => ({
@@ -547,6 +552,7 @@ describe('ProjectStateTab', () => {
     setupHookMocks();
     hookMocks.schemaArtifacts = [];
     hookMocks.skillArtifact = null;
+    hookMocks.nativeView = null;
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({
       edges: [],
@@ -555,6 +561,34 @@ describe('ProjectStateTab', () => {
       nodes: [],
       projectId: 'proj_test',
     } as never);
+  });
+
+  it.each([
+    ['passed', 'Native validation passed'],
+    ['failed', 'Native validation needs review'],
+  ])('uses recorded native %s checks instead of guessing a State schema', async (outcome, label) => {
+    const native = {
+      ...PRD_COMMIT,
+      provenance: { method: 'transition_v2' },
+      content: { trees: [{ key: 'candidate', slots: {}, children: [] }], relations: [] },
+    };
+    hookMocks.branchHeads = { main: native.hash };
+    hookMocks.loadCommit.mockResolvedValue(native);
+    hookMocks.loadCommits.mockResolvedValue([native]);
+    hookMocks.nativeView = {
+      mode: 'transition',
+      checks: { validation: { observation: 'observed', outcomes: [outcome] } },
+    };
+    render(
+      <ProjectStateTab
+        initialView="structure"
+        projectId="proj_test"
+        projectName="Test Project"
+        onRunValidation={vi.fn()}
+      />
+    );
+    expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
   });
 
   it('keeps the same pinned snapshot mounted when branch refresh returns a new map', async () => {

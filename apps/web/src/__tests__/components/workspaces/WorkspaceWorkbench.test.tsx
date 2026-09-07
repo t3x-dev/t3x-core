@@ -849,18 +849,18 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getAllByText('chat').length).toBeGreaterThan(0);
     expect(within(detail).getByText('document')).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Import doc' })).toBeInTheDocument();
-    expect(within(detail).getByRole('button', { name: 'Upload PDF/doc' })).toBeInTheDocument();
-    expect(within(detail).getByRole('button', { name: 'Add manual note source' })).toBeDisabled();
+    expect(
+      within(detail).queryByRole('button', { name: 'Upload PDF/doc' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(detail).queryByRole('button', { name: 'Add manual note source' })
+    ).not.toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Paste text' })).toBeEnabled();
     expect(within(detail).getByRole('button', { name: 'Paste text' })).toHaveAttribute(
       'title',
       'Paste text as a source material.'
     );
-    expect(within(detail).getByRole('button', { name: 'Add URL' })).toBeDisabled();
-    expect(within(detail).getByRole('button', { name: 'Add URL' })).toHaveAttribute(
-      'title',
-      'URL sources need a persisted workspace source endpoint before enabling.'
-    );
+    expect(within(detail).queryByRole('button', { name: 'Add URL' })).not.toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Delete PRD import' })).toBeInTheDocument();
     expect(within(detail).getByRole('region', { name: 'Parsed text preview' })).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Re-parse' })).toBeDisabled();

@@ -61,3 +61,9 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
+
+it('does not offer the selected candidate as its own comparison', () => {
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
+  expect(screen.getByText('Create a Workspace to review and apply this definition.')).toBeVisible();
+});

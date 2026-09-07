@@ -127,9 +127,11 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByRole('link', { name: 'Community' })).not.toBeInTheDocument();
     expect(screen.queryByText('People')).not.toBeInTheDocument();
     expect(screen.queryByText('Topics')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Outputs 2').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Outputs 2')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Commits 18').length).toBeGreaterThan(0);
+    expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs 19')).not.toBeInTheDocument();
-    expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('YSchema pending')).not.toBeInTheDocument();
     expect(screen.queryByText('YSchema 3')).not.toBeInTheDocument();
   });
 
