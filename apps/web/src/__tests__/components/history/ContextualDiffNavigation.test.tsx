@@ -51,34 +51,32 @@ const head: ApiCommit = {
 
 function mount() {
   render(<CommitHistoryDiffView commit={head} parentCommit={parent} onBack={() => undefined} />);
-  return within(screen.getByRole('region', { name: 'Changed nodes' }));
+  return within(screen.getByRole('region', { name: 'State rows' }));
 }
 
 describe('Contextual diff navigation', () => {
-  it('collapses a subtree without hiding its siblings or the deleted change', () => {
+  it('collapses deleted and changed descendants together without hiding siblings', () => {
     const state = mount();
-    fireEvent.click(state.getByRole('button', { name: 'Collapse state services/api' }));
-    expect(
-      state.queryByRole('button', { name: 'Inspect services/api/replicas' })
-    ).not.toBeInTheDocument();
+    expect(state.getByText('obsolete')).toBeInTheDocument();
+    fireEvent.click(state.getByRole('button', { name: 'Collapse api', exact: true }));
+    expect(state.queryByText('obsolete')).not.toBeInTheDocument();
     expect(state.getByText('worker')).toBeInTheDocument();
-    expect(state.getByText('services/api/obsolete')).toBeInTheDocument();
-    fireEvent.click(state.getByRole('button', { name: 'Expand state services/api' }));
-    expect(
-      state.getByRole('button', { name: 'Inspect services/api/replicas' })
-    ).toBeInTheDocument();
+    fireEvent.click(state.getByRole('button', { name: 'Expand api', exact: true }));
+    expect(state.getByText('obsolete')).toBeInTheDocument();
+    expect(state.getByText('3')).toBeInTheDocument();
   });
 
-  it('reveals the selected changed path inside collapsed ancestors', () => {
+  it('searches within collapsed ancestors and inspects the matching change', () => {
     const state = mount();
-    fireEvent.click(state.getByRole('button', { name: 'Collapse state services' }));
-    const paths = within(screen.getByRole('tree', { name: 'Changed state paths' }));
-    fireEvent.click(paths.getByRole('button', { name: 'replicas' }));
-    expect(state.getByRole('button', { name: 'Inspect services/api/replicas' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
+    fireEvent.click(state.getByRole('button', { name: 'Collapse services', exact: true }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search historical state' }), {
+      target: { value: 'services/api/replicas' },
+    });
+    fireEvent.click(state.getByText('replicas'));
+    const inspector = within(
+      screen.getByRole('complementary', { name: 'History change walkthrough' })
     );
-    const after = screen.getByText('After').closest('section');
-    expect(within(after!).getByText('3')).toBeInTheDocument();
+    expect(inspector.getByText('3')).toBeInTheDocument();
+    expect(inspector.getByText('1')).toBeInTheDocument();
   });
 });

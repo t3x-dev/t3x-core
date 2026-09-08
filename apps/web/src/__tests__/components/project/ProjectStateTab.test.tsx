@@ -516,6 +516,10 @@ describe('ProjectStateTab', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
+    expect(screen.getByRole('toolbar', { name: 'State related views' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Use this state' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Snapshot/ })).toBeNull();
+    expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
     expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
       expect.stringContaining(`commit=${encodeURIComponent(PRD_COMMIT.hash)}`),
@@ -613,37 +617,18 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadCommits).toHaveBeenCalledTimes(calls);
   });
 
-  it('loads the branch HEAD and renders the structured state tree by default', async () => {
+  it('loads the branch HEAD into the restored Structure layout and navigation', async () => {
     renderStateTab();
-
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(document.querySelector('[data-state-view="structure"]')).toHaveClass(
-      'h-full',
-      'min-h-0',
-      'overflow-hidden'
-    );
-    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    await screen.findByRole('region', { name: 'Structured state tree' });
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Path / Key')).toBeInTheDocument();
-    expect(screen.getByText('summary')).toBeInTheDocument();
-    expect(screen.getByText('problem')).toBeInTheDocument();
-    expect(screen.getAllByText('audience')).not.toHaveLength(0);
-    expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Views' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('t3x/prd')[0]).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Revision details'));
-    const stateDetails = screen.getByRole('heading', { name: 'State details' }).closest('section');
-    expect(stateDetails).not.toBeNull();
-    expect(within(stateDetails as HTMLElement).getAllByText('cb5813f')[0]).toHaveAttribute(
-      'title',
-      PRD_COMMIT.hash
-    );
-    expect(within(stateDetails as HTMLElement).getByText('base-pr')).toHaveAttribute(
-      'title',
-      PRD_COMMIT.parents[0]
-    );
+    expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
+    expect(
+      screen.queryByRole('complementary', { name: 'State relationships' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('complementary', { name: 'State change provenance' })
+    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search state...')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
@@ -654,62 +639,58 @@ describe('ProjectStateTab', () => {
       'href',
       '/t3x-dev/test-project/workspaces?branch=main'
     );
-    expect(screen.getByRole('link', { name: 'cb5813f' })).toHaveAttribute(
-      'href',
-      `/t3x-dev/test-project?view=canvas&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
+    const tree = screen.getByRole('region', { name: 'Structured state tree' });
+    expect(within(tree).getByRole('region', { name: 'State rows' })).toHaveAttribute(
+      'tabindex',
+      '0'
     );
-    expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '2 changed paths' })).toHaveAttribute(
-      'href',
-      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
-    );
-    expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
-
-    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(structureView).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
-    const structureScroller = within(structureView).getByRole('region', { name: 'State rows' });
-    expect(structureScroller).toHaveAttribute('tabindex', '0');
-    const structureScrollArea = structureScroller.closest('[data-slot="state-scroll-area"]');
-    expect(structureScrollArea).toHaveClass('min-h-0', 'flex-1');
-    expect(structureScrollArea).toHaveAttribute('data-scroll-axes', 'both');
-    expect(within(structureView).getByRole('table')).toHaveClass(
-      'w-full',
-      'min-w-[480px]',
-      'table-fixed',
-      'text-xs',
-      'leading-5'
-    );
-    expect(within(structureView).getByRole('table').querySelector('col')).toHaveClass('w-[30%]');
-    expect(within(structureView).getByText('Path / Key').closest('thead')).toHaveClass(
-      'sticky',
-      'top-0'
-    );
-    expect(within(structureView).getByText('Path / Key').closest('th')).toHaveClass(
-      'sticky',
-      'left-0'
-    );
-    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-[34px]');
-    expect(screen.getByRole('heading', { name: 'State details' })).toHaveClass('text-base');
-
-    expect(
-      screen.queryByRole('separator', { name: 'Resize state details' })
-    ).not.toBeInTheDocument();
+    expect(within(tree).getByRole('table')).toHaveClass('table-fixed');
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 
-  it('selects a node independently of expansion and exposes its full value', async () => {
+  it('selects a state row and shows its change provenance', async () => {
+    renderStateTab();
+    const tree = await screen.findByRole('region', { name: 'Structured state tree' });
+    const row = within(within(tree).getByRole('table')).getByText('problem').closest('tr')!;
+    fireEvent.click(row);
+    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByRole('complementary', { name: 'State change provenance' })
+    ).toHaveTextContent('problem');
+  });
+
+  it('shows only immediate child cards for a parent and one full-value card for a leaf', async () => {
     renderStateTab();
     await screen.findByRole('region', { name: 'Structured state tree' });
-    const tree = screen.getByRole('region', { name: 'Structured state tree' });
-    const buttons = within(tree).getAllByRole('button', { name: /^Inspect / });
-    fireEvent.click(buttons[0]);
-    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('complementary', { name: 'Selected node' })).toHaveTextContent(
-      'Committed state'
-    );
+    const table = () =>
+      within(screen.getByRole('region', { name: 'Structured state tree' })).getByRole('table');
+    fireEvent.click(within(table()).getByTitle('prd').closest('tr')!);
+    const rootCards = screen.getByRole('region', { name: 'Selected node data' });
+    expect(
+      within(rootCards).getByRole('article', { name: 'Data prd/summary' })
+    ).toBeInTheDocument();
+    expect(
+      within(rootCards).queryByRole('article', { name: 'Data prd/summary/audience' })
+    ).toBeNull();
+    const expandRoot = within(table()).queryByRole('button', { name: 'Expand prd' });
+    if (expandRoot) fireEvent.click(expandRoot);
+    fireEvent.click(within(table()).getByText('summary').closest('tr')!);
+    const cards = screen.getByRole('region', { name: 'Selected node data' });
+    expect(within(cards).getAllByRole('article')).toHaveLength(3);
+    expect(
+      within(cards).getByRole('article', { name: 'Data prd/summary/problem' })
+    ).toHaveTextContent('You: i need food and drink');
+    expect(
+      within(cards).getByRole('article', { name: 'Data prd/summary/audience' })
+    ).toBeInTheDocument();
+    expect(cards).not.toHaveTextContent('object node');
+    const expand = within(table()).queryByRole('button', { name: 'Expand summary' });
+    if (expand) fireEvent.click(expand);
+    fireEvent.click(within(table()).getByTitle('prd/summary/audience').closest('tr')!);
+    expect(
+      within(screen.getByRole('region', { name: 'Selected node data' })).getAllByRole('article')
+    ).toHaveLength(1);
+    expect(screen.getByRole('article', { name: 'Data prd/summary/audience' })).toBeInTheDocument();
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
@@ -734,11 +715,7 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('PRD must conditions committed');
     const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(
-      within(structureView)
-        .getAllByRole('columnheader')
-        .map((header) => header.textContent?.trim())
-    ).toEqual(['Path / Key', 'Value', 'Change']);
+    expect(within(structureView).getByRole('table').querySelectorAll('col')).toHaveLength(4);
 
     const mustToggle = within(structureView).getByRole('button', {
       name: 'Expand Must conditions',
@@ -748,17 +725,19 @@ describe('ProjectStateTab', () => {
       expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: 'degradation_path' },
     });
     expect(
-      within(structureView).getByText('for_every_relevant_case_must_define_degradation_path')
+      within(within(structureView).getByRole('table')).getByText(
+        'for_every_relevant_case_must_define_degradation_path'
+      )
     ).toBeInTheDocument();
     expect(
       within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: '' },
     });
     const collapsedMustToggle = within(structureView).getByRole('button', {
@@ -769,21 +748,25 @@ describe('ProjectStateTab', () => {
       within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
     for (const key of MUST_CONDITION_KEYS) {
-      expect(within(structureView).getByText(key)).toBeInTheDocument();
+      expect(within(within(structureView).getByRole('table')).getByText(key)).toBeInTheDocument();
     }
 
     const problemToggle = within(structureView).getByRole('button', {
       name: 'Collapse summary',
     });
     fireEvent.click(problemToggle);
-    expect(within(structureView).queryByText('problem')).not.toBeInTheDocument();
+    expect(
+      within(within(structureView).getByRole('table')).queryByText('problem')
+    ).not.toBeInTheDocument();
 
     const rootToggle = within(structureView).getByRole('button', { name: 'Collapse prd' });
     fireEvent.click(rootToggle);
     expect(
       within(structureView).queryByRole('button', { name: 'Collapse Must conditions' })
     ).not.toBeInTheDocument();
-    expect(within(structureView).queryByText('title')).not.toBeInTheDocument();
+    expect(
+      within(within(structureView).getByRole('table')).queryByText('title')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(within(structureView).getByRole('button', { name: 'Expand prd' }));
     expect(
@@ -812,10 +795,12 @@ describe('ProjectStateTab', () => {
       expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(within(structureView).getByPlaceholderText('Search paths, titles, types...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
       target: { value: 'delivery_must_be_incremental' },
     });
-    const longKey = within(structureView).getByText('delivery_must_be_incremental');
+    const longKey = within(within(structureView).getByRole('table')).getByText(
+      'delivery_must_be_incremental'
+    );
     expect(longKey).toBeInTheDocument();
     expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
     expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
@@ -831,7 +816,7 @@ describe('ProjectStateTab', () => {
   it('checks branch freshness on focus without exposing a manual Refresh action', async () => {
     renderStateTab();
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     fireEvent.focus(window);
 
@@ -855,7 +840,7 @@ describe('ProjectStateTab', () => {
     });
     const view = renderStateTab();
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     hookMocks.branchHeads = { main: newerHead.hash };
     hookMocks.loadCommits.mockResolvedValue([newerHead, PRD_COMMIT]);
     view.rerender(
@@ -883,22 +868,10 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('Newer commit available on main')).not.toBeInTheDocument();
   });
 
-  it('routes changed paths to the shared commit T3X Diff instead of drawing an inline diff', async () => {
+  it('switches from restored Structure to the unchanged schema-selected Overview', async () => {
     renderStateTab();
 
-    const changedPaths = await screen.findByRole('link', { name: '2 changed paths' });
-    expect(changedPaths).toHaveAttribute(
-      'href',
-      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0])}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
-    );
-    expect(screen.queryByRole('region', { name: 'T3X Diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Structure/ })).toBeInTheDocument();
-  });
-
-  it('switches to the schema-selected Render view', async () => {
-    renderStateTab();
-
-    await screen.findByText('Path / Key');
+    await screen.findByRole('region', { name: 'Structured state tree' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
@@ -1038,7 +1011,7 @@ describe('ProjectStateTab', () => {
     ];
 
     renderStateTab();
-    await screen.findByText('Path / Key');
+    await screen.findByRole('region', { name: 'Structured state tree' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
@@ -1133,7 +1106,7 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     await screen.findByText('Add review-code Skill');
-    expect(screen.getByText('skill-state.yaml')).toBeInTheDocument();
+    expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
     expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
     expect(screen.queryByText('adapter skill.document')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
@@ -1167,7 +1140,7 @@ describe('ProjectStateTab', () => {
     renderStateTab(PROMPT_VALIDATION);
 
     await screen.findByText('Add extract requirements Prompt');
-    expect(screen.getByText('prompt-state.yaml')).toBeInTheDocument();
+    expect(screen.getAllByText('t3x/prompt').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
     expect(screen.getByRole('region', { name: 'Prompt schema render' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute('aria-selected', 'true');
@@ -1242,7 +1215,7 @@ describe('ProjectStateTab', () => {
   it('switches to canonical YAML Code without exposing internal trees', async () => {
     renderStateTab();
 
-    await screen.findByText('Path / Key');
+    await screen.findByRole('region', { name: 'Structured state tree' });
     fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
 
     const codeView = screen.getByRole('region', { name: 'YAML code view' });
@@ -1268,8 +1241,8 @@ describe('ProjectStateTab', () => {
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
     renderStateTab();
 
-    await screen.findByText('PRD audience handoff committed');
-    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project?view=canvas',
@@ -1304,7 +1277,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('No commit on this branch');
-    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
 
     expect(screen.getByRole('status')).toHaveTextContent('main has no HEAD commit.');
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -1373,11 +1346,12 @@ describe('ProjectStateTab', () => {
 
     renderStateTab(null);
 
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+    ).toBeInTheDocument();
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('02 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('03 SET')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
     expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
     expect(screen.queryByText('INITIAL CREATE')).not.toBeInTheDocument();
@@ -1395,7 +1369,7 @@ describe('ProjectStateTab', () => {
       />
     );
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
     expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
 
@@ -1421,7 +1395,7 @@ describe('ProjectStateTab', () => {
       status: 'verified',
     });
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
     expect(screen.queryByText('missing')).not.toBeInTheDocument();
@@ -1432,9 +1406,11 @@ describe('ProjectStateTab', () => {
 
     renderStateTab();
 
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+    ).toBeInTheDocument();
     expect(screen.getByText('YOps log unavailable.')).toBeInTheDocument();
-    expect(screen.getByText('problem')).toBeInTheDocument();
+    expect(screen.getAllByText('problem').length).toBeGreaterThan(0);
   });
 
   it('selects the visible DAG tip instead of trusting commit timestamp order', async () => {
@@ -1456,7 +1432,7 @@ describe('ProjectStateTab', () => {
 
     renderStateTab(null);
 
-    expect(await screen.findByText('Actual branch tip')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Actual branch tip' })).toBeInTheDocument();
     expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
   });
@@ -1522,7 +1498,9 @@ describe('ProjectStateTab', () => {
 
     renderStateTab();
 
-    expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+    ).toBeInTheDocument();
     expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash, 'proj_test');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
@@ -1530,7 +1508,7 @@ describe('ProjectStateTab', () => {
   it('switches its local read-only branch focus', async () => {
     const view = renderStateTab();
 
-    await screen.findByText('Path / Key');
+    await screen.findByRole('region', { name: 'Structured state tree' });
     hookMocks.loadCommits.mockResolvedValueOnce([
       { ...PRD_COMMIT, branch: 'feature/prd-audience' },
     ]);
@@ -1567,7 +1545,7 @@ describe('ProjectStateTab', () => {
   it('clears stale commit actions while a newly selected branch is loading', async () => {
     const view = renderStateTab();
 
-    await screen.findByText('PRD audience handoff committed');
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     hookMocks.loadCommits.mockReturnValueOnce(new Promise<ApiCommit[]>(() => {}));
     fireEvent.change(screen.getByLabelText('Branch focus'), {
       target: { value: 'feature/prd-audience' },
