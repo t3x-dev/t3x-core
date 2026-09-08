@@ -296,13 +296,16 @@ describe('ProjectWorkspacesTab', () => {
     expect(screen.getByRole('button', { name: 'Delete audience-note.txt' })).toBeInTheDocument();
   });
 
-  it('keeps fixture bindings when a legacy workspace draft is missing array fields', async () => {
+  it.each([
+    undefined,
+    [],
+  ])('does not restore a PRD binding for an unbound draft (%j)', async (bindings) => {
     const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
     const legacyDraft = {
       ...baseWorkspace,
       title: 'Legacy backend draft',
       outputTargets: undefined,
-      schemaBindings: undefined,
+      schemaBindings: bindings,
     } as unknown;
     fetchProjectWorkspacesMock.mockResolvedValueOnce([legacyDraft]);
 
@@ -315,7 +318,8 @@ describe('ProjectWorkspacesTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
-    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(screen.queryByText('PRD Schema v2')).not.toBeInTheDocument();
+    expect(screen.getByText('No schema')).toBeInTheDocument();
   });
 
   it('routes View in State to Canvas with the committed branch and commit selected', async () => {

@@ -119,6 +119,10 @@ function workspaceOperationName(opName: string): WorkspaceYOpsDraftOperation['op
 }
 
 function normalizeWorkspacePath(path: string, rootKey: string, append: boolean): string {
+  if (!rootKey) {
+    const exactPath = path.replace(/\/-$/, '');
+    return append ? `${exactPath}/-` : exactPath;
+  }
   const segments = path
     .replace(/\/-$/, '')
     .split('/')

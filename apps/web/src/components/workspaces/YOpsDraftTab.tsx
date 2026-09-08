@@ -1875,6 +1875,7 @@ function formatTreeValue(value: unknown): string {
 }
 
 function operationPreviewPath(operation: WorkspaceYOpsDraftOperation, rootKey: string) {
+  if (!rootKey) return operation.path;
   const path = operation.path.replace(/\/-$/, '');
   const segments = path
     .split('/')

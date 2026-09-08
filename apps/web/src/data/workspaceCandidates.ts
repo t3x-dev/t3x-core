@@ -221,12 +221,6 @@ const workspaceCandidates: WorkspaceCandidate[] = [
   },
 ];
 
-const DEFAULT_PROJECT_WORKSPACE_BINDING = {
-  schemaName: 'PRD Schema',
-  version: 'v2',
-  mode: 'pinned' as const,
-};
-
 export function getProjectWorkspaceStarterCandidate(
   projectId: string,
   materials: Material[] = [],
@@ -246,7 +240,7 @@ export function getProjectWorkspaceStarterCandidate(
     baseCommitHash,
     targetBranch: normalizedBranch,
     sourceBundle: materials.map(materialToSourceBundleItem),
-    schemaBindings: [DEFAULT_PROJECT_WORKSPACE_BINDING],
+    schemaBindings: [],
     schemaCandidate: {
       summary: 'Add source evidence, then generate a candidate proposal.',
       fields: [],
