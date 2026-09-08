@@ -25,6 +25,11 @@ const mocks = vi.hoisted(() => ({
     rings?: Record<string, unknown>;
     role: 'assistant' | 'user';
   }>,
+  validateComparison: vi.fn(),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
+  validateWorkspaceCandidateYOps: mocks.validateComparison,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -142,9 +147,40 @@ function workspace(
   };
 }
 
+function mockComparison(summary: Record<string, string>, title?: string) {
+  mocks.validateComparison.mockResolvedValue({
+    ok: true,
+    applied: Object.keys(summary).length + (title ? 1 : 0),
+    yops: [],
+    baselineRelations: [],
+    previewRelations: [],
+    baselineTrees: [{ key: 'prd', slots: {}, children: [] }],
+    previewTrees: [
+      {
+        key: 'prd',
+        slots: {},
+        children: [
+          { key: 'summary', slots: summary, children: [] },
+          ...(title
+            ? [
+                {
+                  key: 'requirements',
+                  slots: {},
+                  children: [{ key: 'canary', slots: { title }, children: [] }],
+                },
+              ]
+            : []),
+        ],
+      },
+    ],
+  });
+}
+
 describe('WorkspaceWorkbench Compose/Review integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateComparison.mockReset();
+    mockComparison({});
     mocks.chatMessages.length = 0;
     mocks.refreshWorkspaces.mockResolvedValue([]);
     mocks.extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
@@ -234,7 +270,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.queryByText(/I saved this as proposal source/)).not.toBeInTheDocument();
   });
 
-  it('renders structured changes in Compose and lets Review nodes select their evidence', () => {
+  it('renders structured changes in Compose and lets Review nodes select their evidence', async () => {
+    mockComparison({ outcome: 'Auditable rollouts' }, 'Canary rollout');
     const candidate = workspace('workspace_main', 'Main workspace', [
       operation('op_outcome', 'prd/summary/outcome', 'Auditable rollouts'),
       operation('op_title', 'prd/requirements/canary/title', 'Canary rollout'),
@@ -244,7 +281,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getAllByText('2 changes').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
-    expect(screen.getByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     const secondNode = within(screen.getByRole('table'))
       .getByTitle('prd/requirements/canary/title')
       .closest('tr')!;
@@ -296,7 +334,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(scenario.id);
   });
 
-  it('renders the selected workspace changes in Review without the retired compare control', () => {
+  it('renders the selected workspace changes in Review without the retired compare control', async () => {
+    mockComparison({ outcome: 'Baseline', audience: 'Platform engineers' });
     const baseline = workspace('workspace_main', 'Main workspace', [
       operation('op_outcome', 'prd/summary/outcome', 'Baseline'),
       operation('op_audience', 'prd/summary/audience', 'Platform engineers'),
@@ -325,7 +364,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     expect(
       within(screen.getByRole('table')).getByTitle('prd/summary/audience')
