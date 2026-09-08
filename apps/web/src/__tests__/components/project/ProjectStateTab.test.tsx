@@ -692,7 +692,7 @@ describe('ProjectStateTab', () => {
       'sticky',
       'left-0'
     );
-    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-[34px]');
+    expect(within(structureView).getByText('problem').closest('tr')).toHaveClass('h-9');
     expect(screen.getByRole('heading', { name: 'State details' })).toHaveClass('text-base');
 
     expect(
@@ -710,6 +710,9 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('complementary', { name: 'Selected node' })).toHaveTextContent(
       'Committed state'
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Close node details' }));
+    expect(screen.queryByRole('complementary', { name: 'Selected node' })).not.toBeInTheDocument();
+    expect(buttons[0]).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {

@@ -58,15 +58,15 @@ export function StateOverviewView({
   return (
     <div
       data-testid="state-overview"
-      className={`grid min-h-0 flex-1 overflow-auto ${expanded ? '' : 'lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]'} lg:overflow-hidden`}
+      className={`grid min-h-0 flex-1 overflow-auto ${expanded ? '' : 'lg:grid-cols-[minmax(0,1fr)_minmax(340px,38%)]'} lg:overflow-hidden`}
     >
       {!expanded && (
         <section
           aria-label="Project introduction"
-          className="min-w-0 p-5 lg:overflow-y-auto lg:p-6"
+          className="min-w-0 py-6 pr-0 lg:overflow-y-auto lg:pr-8"
         >
           <StateSchemaAdoption projectId={projectId} commitDigest={commitDigest} />
-          <header className="mb-5 flex flex-wrap items-start gap-3">
+          <header className="mb-6 flex flex-wrap items-start gap-4">
             {avatar ? (
               <img
                 src={resourceUrl(avatar)}
@@ -80,7 +80,7 @@ export function StateOverviewView({
               />
             )}
             <div className="min-w-0">
-              <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+              <h2 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
                 {projectName}
               </h2>
               {author && (
@@ -118,9 +118,9 @@ export function StateOverviewView({
           </header>
           <section
             aria-label="T3X definition summary"
-            className="mb-5 overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--status-info-muted)]"
+            className="mb-6 overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
           >
-            <header className="flex items-center gap-2 border-b border-[var(--stroke-divider)] px-3 py-2.5 text-sm font-medium">
+            <header className="flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm font-medium">
               <Box aria-hidden="true" className="size-4 text-[var(--status-info)]" />
               State summary{' '}
               <span className="ml-auto rounded bg-[var(--status-info-muted)] px-1.5 py-0.5 text-[10px] text-[var(--status-info)]">
@@ -151,7 +151,7 @@ export function StateOverviewView({
                     .getElementById('overview-render-content')
                     ?.scrollIntoView({ block: 'nearest' });
                 }}
-                className="flex w-full items-center gap-3 border-b border-[var(--stroke-divider)] px-3 py-2 text-left last:border-0 hover:bg-[var(--status-info-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
+                className="flex w-full items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2.5 text-left last:border-0 hover:bg-[var(--status-info-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
               >
                 <Box aria-hidden="true" className="size-3.5 shrink-0 text-[var(--status-info)]" />
                 <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
@@ -178,9 +178,9 @@ export function StateOverviewView({
       )}
       <aside
         aria-label="T3X rendered State"
-        className="flex min-h-[320px] min-w-0 flex-col border-t border-[var(--stroke-divider)] bg-[var(--status-info-muted)] lg:min-h-0 lg:border-l lg:border-t-0"
+        className="flex min-h-[320px] min-w-0 flex-col border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] lg:min-h-0 lg:border-l lg:border-t-0"
       >
-        <header className="shrink-0 border-b border-[var(--stroke-divider)] p-4">
+        <header className="shrink-0 border-b border-[var(--stroke-divider)] p-5">
           <div className="flex items-center gap-2">
             <Box className="size-5 text-[var(--status-info)]" aria-hidden="true" />
             <h3 className="font-medium">Rendered State</h3>
@@ -212,7 +212,7 @@ export function StateOverviewView({
             id="overview-render-content"
             label="Rendered committed content"
             className="min-h-0 flex-1"
-            viewportClassName="p-4"
+            viewportClassName="p-5"
           >
             {semantic ? (
               <>
