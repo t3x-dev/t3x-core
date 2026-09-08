@@ -170,6 +170,19 @@ function sourceDraftReplyRings(reply: SourceChatDraftReplyResponse): Record<stri
   };
 }
 
+function assistantStreamStatusRings(
+  reason: 'stream_eof' | 'stream_error' | 'user_aborted'
+): Record<string, unknown> {
+  return {
+    assistant_stream_status: {
+      schema: 't3x/assistant-stream-status-v1',
+      version: 1,
+      status: 'partial',
+      reason,
+    },
+  };
+}
+
 function buildMemorySystemMessage(memoryContext: string): GenerationMessage | null {
   const content = memoryContext.trim();
   if (!content) return null;
@@ -423,6 +436,8 @@ export function useSourceThreadGeneration({
         let fullResponse = '';
         let addedFinalMessage = false;
         let localAssistantMessageId: string | null = null;
+        let streamCompleted = false;
+        let streamFailed = false;
         stream.tokenBufferRef.current = '';
 
         if (fixtureAssistantResponse) {
@@ -515,6 +530,7 @@ export function useSourceThreadGeneration({
           } else if (event.type === 'searching') {
             stream.setSearchQuery(event.query ?? null);
           } else if (event.type === 'done') {
+            streamCompleted = true;
             stream.setSearchQuery(null);
             if (event.citations?.length) {
               stream.setCitations(event.citations);
@@ -556,6 +572,7 @@ export function useSourceThreadGeneration({
               addedFinalMessage = true;
             }
           } else if (event.type === 'error') {
+            streamFailed = true;
             warnings.setError(formatUserFacingError(event.message, 'Chat request failed.'));
           }
         }
@@ -578,9 +595,22 @@ export function useSourceThreadGeneration({
             });
           }
           stream.setStreamingContent('');
+          if (!streamCompleted && !streamFailed) {
+            warnings.showWarning(
+              'Assistant stream ended before completion — partial response preserved.'
+            );
+          }
         }
 
-        if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
+        if (!isTemporaryMode) {
+          await saveAssistantResponse(
+            fullResponse,
+            localAssistantMessageId,
+            streamCompleted
+              ? undefined
+              : assistantStreamStatusRings(streamFailed ? 'stream_error' : 'stream_eof')
+          );
+        }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
@@ -601,7 +631,11 @@ export function useSourceThreadGeneration({
                 content: partial,
               });
             } else {
-              await saveAssistantResponse(partial, localAssistantMessageId);
+              await saveAssistantResponse(
+                partial,
+                localAssistantMessageId,
+                assistantStreamStatusRings('user_aborted')
+              );
             }
           }
           stream.setStreamingContent('');

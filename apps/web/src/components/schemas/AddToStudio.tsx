@@ -1,6 +1,6 @@
 'use client';
 import type { AddStudioCandidate } from '@t3x-dev/api-client';
-import { ArrowRight, Box, Check, LockKeyhole } from 'lucide-react';
+import { ArrowRight, Box, Check, FileText, LockKeyhole } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -33,14 +33,20 @@ export function AddToStudio({
         Add to Studio <ArrowRight className="size-4" />
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="flex w-full flex-col sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Add to Studio</SheetTitle>
-            <SheetDescription className="mt-4 flex items-center gap-3 rounded-lg bg-[var(--status-info-muted)] p-4">
-              <Box className="size-8 shrink-0 text-[var(--status-info)]" />
-              <span>
-                <span className="block font-semibold text-[var(--text-primary)]">{title}</span>
-                <span className="mt-1 block font-mono text-xs">{source.version}</span>
+        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden bg-[var(--surface-card)] sm:max-w-[400px]">
+          <SheetHeader className="shrink-0 gap-0 px-6 pb-5 pt-6">
+            <SheetTitle className="pr-7 text-sm">Add to Studio</SheetTitle>
+            <SheetDescription className="mt-6 flex items-center gap-3">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
+                <Box className="size-6 text-[var(--accent-commit)]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block break-words text-[13px] font-semibold text-[var(--text-primary)]">
+                  {title}
+                </span>
+                <span className="mt-1 block break-all font-mono text-[11px] leading-4">
+                  {source.version}
+                </span>
               </span>
             </SheetDescription>
           </SheetHeader>
@@ -74,14 +80,14 @@ function Destination({
   const { projects, error } = useProjects(100);
   const [projectId, setProjectId] = useState(defaultProjectId);
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">
-      <label className="block text-sm font-medium">
+    <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto px-6">
+      <label className="block text-xs font-medium text-[var(--text-secondary)]">
         Destination project
         <select
           aria-label="Destination project"
           value={projectId}
           onChange={(event) => setProjectId(event.target.value)}
-          className="my-3 h-11 w-full rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3"
+          className="mb-5 mt-2 h-9 w-full rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-[13px] text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         >
           {!projects.some((project) => project.project_id === defaultProjectId) ? (
             <option value={defaultProjectId}>Current project</option>
@@ -147,11 +153,11 @@ function CandidateConfirmation({
     }
   }
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-[var(--stroke-divider)] p-4">
-        <p className="text-sm font-medium">Source release</p>
-        <p className="mt-2 break-all text-sm">{source.canonicalName}</p>
-        <p className="mt-2 flex items-center gap-2 font-mono text-xs text-[var(--text-secondary)]">
+    <div className="flex flex-col gap-5">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-[var(--text-secondary)]">Source release</p>
+        <p className="mt-2 break-all text-[13px] leading-5">{source.canonicalName}</p>
+        <p className="mt-2 flex min-h-9 items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] px-2.5 font-mono text-xs text-[var(--text-secondary)]">
           <LockKeyhole className="size-3" />
           {source.version}
         </p>
@@ -162,15 +168,26 @@ function CandidateConfirmation({
           </details>
         ) : null}
       </div>
-      <div>
-        <h3 className="mb-3 text-sm font-medium">Already in this Studio</h3>
+      <div className="border-t border-[var(--stroke-divider)] pt-5">
+        <h3 className="mb-3 text-xs font-medium text-[var(--text-secondary)]">
+          Already in this Studio
+        </h3>
         {studio.loading ? (
           <output>Loading candidates…</output>
         ) : studio.items.length ? (
-          <ul className="divide-y divide-[var(--stroke-divider)]">
+          <ul className="space-y-2">
             {studio.items.map((item) => (
-              <li key={item.id} className="flex justify-between gap-3 py-3 text-sm">
-                <span>{item.title ?? 'Unavailable source'}</span>
+              <li
+                key={item.id}
+                className={`flex min-h-10 items-center gap-2 rounded-[5px] border px-2.5 py-2 text-xs ${existing?.id === item.id ? 'border-[var(--accent-commit)] bg-[var(--status-info-muted)]' : 'border-[var(--stroke-divider)]'}`}
+              >
+                <FileText
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-[var(--text-tertiary)]"
+                />
+                <span className="min-w-0 flex-1 break-words leading-5">
+                  {item.title ?? 'Unavailable source'}
+                </span>
                 <span className="shrink-0 text-[var(--text-secondary)]">
                   {item.source?.version}
                 </span>
@@ -192,24 +209,35 @@ function CandidateConfirmation({
           Saved as a candidate
         </p>
       ) : null}
-      <p className="text-xs text-[var(--text-secondary)]">
-        Explore and compare before applying to a Workspace.
-      </p>
-      <div className="grid gap-2">
-        <Button disabled={studio.pending || studio.loading} onClick={() => void save(true)}>
-          {existing || added ? 'Open Studio' : 'Add & open Studio'}{' '}
-          <ArrowRight className="size-4" />
-        </Button>
-        <Button
-          variant="canvas-outline"
-          disabled={studio.pending || studio.loading}
-          onClick={() => void save(false)}
-        >
-          Add & keep browsing
-        </Button>
-        <Button variant="ghost" onClick={onDone}>
-          Close
-        </Button>
+      <div className="sticky bottom-0 -mx-6 mt-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-6 pb-5 pt-4">
+        <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">
+          Explore and compare before applying to a Workspace.
+        </p>
+        <div className="grid gap-2">
+          <Button
+            className="h-10 w-full rounded-[5px] bg-[var(--accent-commit)] text-[var(--on-accent)] hover:bg-[var(--accent-commit)] hover:brightness-95"
+            disabled={studio.pending || studio.loading}
+            onClick={() => void save(true)}
+          >
+            {existing || added ? 'Open Studio' : 'Add & open Studio'}{' '}
+            <ArrowRight className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-9 text-xs text-[var(--accent-commit)]"
+            disabled={studio.pending || studio.loading}
+            onClick={() => void save(false)}
+          >
+            Add & keep browsing
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-8 text-xs text-[var(--text-tertiary)]"
+            onClick={onDone}
+          >
+            Close
+          </Button>
+        </div>
       </div>
     </div>
   );
