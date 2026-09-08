@@ -11,6 +11,7 @@ import {
   RotateCw,
   Search,
   TableProperties,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -573,23 +574,23 @@ export function ProjectStateTab({
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-app)] p-[7px]"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-panel)] px-3 pb-3 pt-2 sm:px-6 sm:pb-6"
       data-state-view={activeView}
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-1 shadow-sm">
+      {activeView === 'canvas' && (
         <StateModeTabs
-          activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
-          onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
+          activeMode="canvas"
+          onModeChange={() => updateActiveView(lastSnapshotView)}
         />
-      </div>
+      )}
 
       <div
         className={cn(
-          'mt-[7px] grid min-h-0 flex-1 gap-[9px] overflow-auto min-[1121px]:overflow-hidden',
+          'grid min-h-0 flex-1 gap-6 overflow-auto min-[1121px]:overflow-hidden',
           contextRailVisible && 'min-[1121px]:grid-cols-[minmax(0,1fr)_224px]'
         )}
       >
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-panel)]">
           {activeView !== 'canvas' ? (
             <>
               <StateUnifiedToolbar
@@ -627,12 +628,20 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              <StateViewTabs
-                activeView={activeView}
-                detailsOpen={stateDetailsOpen}
-                onDetailsToggle={() => setStateDetailsOpen((open) => !open)}
-                onViewChange={updateActiveView}
-              />
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 border-b border-[var(--stroke-divider)]">
+                <StateViewTabs
+                  activeView={activeView}
+                  detailsOpen={stateDetailsOpen}
+                  onDetailsToggle={() => setStateDetailsOpen((open) => !open)}
+                  onViewChange={updateActiveView}
+                />
+                <StateModeTabs
+                  activeMode="snapshot"
+                  onModeChange={(mode) =>
+                    updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)
+                  }
+                />
+              </div>
 
               {snapshot.primaryError ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
@@ -719,31 +728,33 @@ export function ProjectStateTab({
                       }
                     />
                   ) : null}
-                  {activeView === 'structure' || activeView === 'code' ? (
-                    <StateReadmeDisclosure
-                      key={headCommit.hash}
-                      projectId={projectId}
-                      commitDigest={headCommit.hash}
-                    />
-                  ) : null}
-                  {activeView === 'structure' ? (
-                    <details className="border-b border-[var(--stroke-divider)] px-3 py-2 text-xs">
-                      <summary className="cursor-pointer text-[var(--text-secondary)]">
-                        Revision details
-                      </summary>
-                      <StateContextRail
-                        branch={branchFocus}
-                        changedPathCount={committedDiffChanges.length}
-                        headCommit={headCommit}
-                        lastCheckedLabel={lastCheckedLabel}
-                        operations={effectiveOperations}
-                        projectName={projectName}
-                        readinessLabel={readinessLabel}
-                        schemaName={schemaName}
-                        warning={stateWarning}
+                  <div className="flex shrink-0 flex-wrap border-b border-[var(--stroke-divider)] empty:hidden [&>details]:border-0 [&>details[open]]:basis-full">
+                    {activeView === 'structure' || activeView === 'code' ? (
+                      <StateReadmeDisclosure
+                        key={headCommit.hash}
+                        projectId={projectId}
+                        commitDigest={headCommit.hash}
                       />
-                    </details>
-                  ) : null}
+                    ) : null}
+                    {activeView === 'structure' ? (
+                      <details className="border-b border-[var(--stroke-divider)] px-3 py-2 text-xs">
+                        <summary className="cursor-pointer text-[var(--text-secondary)]">
+                          Revision details
+                        </summary>
+                        <StateContextRail
+                          branch={branchFocus}
+                          changedPathCount={committedDiffChanges.length}
+                          headCommit={headCommit}
+                          lastCheckedLabel={lastCheckedLabel}
+                          operations={effectiveOperations}
+                          projectName={projectName}
+                          readinessLabel={readinessLabel}
+                          schemaName={schemaName}
+                          warning={stateWarning}
+                        />
+                      </details>
+                    ) : null}
+                  </div>
                   {activeView === 'structure' ? (
                     <StateStructureView
                       onPathQueryChange={setPathQuery}
@@ -846,32 +857,101 @@ function StateUnifiedToolbar({
   workspaceHref: string;
 }) {
   return (
-    <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1.5 shadow-xs">
-      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <StateBranchControls
-          branch={branch}
-          branchOptions={branchOptions}
-          headCommitHash={headCommitHash}
-          onBranchChange={onBranchChange}
-          onCreateBranch={onCreateBranch}
-        />
+    <div className="shrink-0">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 py-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+          <StateBranchControls
+            branch={branch}
+            branchOptions={branchOptions}
+            headCommitHash={headCommitHash}
+            onBranchChange={onBranchChange}
+            onCreateBranch={onCreateBranch}
+          />
 
-        <span className="text-xs text-[var(--text-tertiary)] opacity-40">/</span>
+          {schemaName !== 't3x/state' && (
+            <span className="truncate text-xs text-[var(--text-secondary)]" title={rootKey}>
+              {schemaArtifactFileName(schemaName)}
+            </span>
+          )}
+        </div>
 
-        <span className="truncate text-xs font-normal text-[var(--text-secondary)]">
-          state{' '}
-          <span className="font-medium text-[var(--text-primary)]">
-            {schemaArtifactFileName(schemaName)}
-          </span>{' '}
-          / <span className="font-medium text-[var(--text-primary)]">{rootKey}</span>
-        </span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge
+            className="min-h-[22px] px-2 text-[11px] font-medium"
+            variant={
+              validationReady
+                ? 'success'
+                : readinessLabel === 'No validation recorded'
+                  ? 'outline'
+                  : 'warning'
+            }
+          >
+            {readinessLabel}
+          </Badge>
 
+          {validationError ? (
+            <span
+              className="max-w-44 truncate text-xs font-medium text-[var(--status-warning)]"
+              title={validationError}
+            >
+              {validationError}
+            </span>
+          ) : null}
+
+          {!validationReady && onRunValidation && headCommit ? (
+            <Button
+              className="h-7 text-xs font-medium px-2.5"
+              disabled={validationRunning}
+              onClick={onRunValidation}
+              size="sm"
+              type="button"
+              variant="commit"
+            >
+              <RotateCw className={cn('size-3.5', validationRunning && 'animate-spin')} />
+              {validationRunning ? 'Running…' : 'Run validation'}
+            </Button>
+          ) : null}
+
+          {headCommit && (
+            <StateExportButton
+              key={headCommit.hash}
+              projectId={headCommit.project_id}
+              commitDigest={headCommit.hash}
+            />
+          )}
+
+          <Button
+            asChild
+            className="h-7 text-xs font-medium px-2.5"
+            size="sm"
+            variant="canvas-outline"
+          >
+            <Link aria-label="History" href={historyHref}>
+              <History className="size-3.5 opacity-70" />
+              <span>History</span>
+              <span className="ml-0.5 rounded-full border border-[var(--stroke-default)] bg-[var(--surface-app)] px-1.5 py-0 text-[10px] font-mono text-[var(--text-secondary)]">
+                {commitCount}
+              </span>
+            </Link>
+          </Button>
+
+          <Button
+            asChild
+            className="h-7 text-xs font-medium px-2.5"
+            size="sm"
+            variant="canvas-outline"
+          >
+            <Link href={workspaceHref}>Open workspace</Link>
+          </Button>
+        </div>
+      </div>
+      <div className="flex min-h-11 flex-wrap items-center gap-2.5 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2 mb-2">
         {headCommit ? (
           <>
-            <span className="text-xs text-[var(--text-tertiary)] opacity-40">·</span>
+            <GitCommit aria-hidden="true" className="size-4 shrink-0 text-[var(--text-tertiary)]" />
             <div className="flex min-w-0 items-center gap-2 text-xs">
               <h2
-                className="max-w-[240px] truncate font-semibold text-[var(--text-primary)]"
+                className="max-w-[480px] truncate font-semibold text-[var(--text-primary)]"
                 title={commitTitle}
               >
                 {commitTitle}
@@ -907,70 +987,6 @@ function StateUnifiedToolbar({
             </Link>
           </>
         ) : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <Badge
-          className="min-h-[22px] px-2 text-[11px] font-medium"
-          variant={validationReady ? 'success' : 'warning'}
-        >
-          {readinessLabel}
-        </Badge>
-
-        {validationError ? (
-          <span
-            className="max-w-44 truncate text-xs font-medium text-[var(--status-warning)]"
-            title={validationError}
-          >
-            {validationError}
-          </span>
-        ) : null}
-
-        {!validationReady && onRunValidation && headCommit ? (
-          <Button
-            className="h-7 text-xs font-medium px-2.5"
-            disabled={validationRunning}
-            onClick={onRunValidation}
-            size="sm"
-            type="button"
-            variant="commit"
-          >
-            <RotateCw className={cn('size-3.5', validationRunning && 'animate-spin')} />
-            {validationRunning ? 'Running…' : 'Run validation'}
-          </Button>
-        ) : null}
-
-        {headCommit && (
-          <StateExportButton
-            key={headCommit.hash}
-            projectId={headCommit.project_id}
-            commitDigest={headCommit.hash}
-          />
-        )}
-
-        <Button
-          asChild
-          className="h-7 text-xs font-medium px-2.5"
-          size="sm"
-          variant="canvas-outline"
-        >
-          <Link aria-label="History" href={historyHref}>
-            <History className="size-3.5 opacity-70" />
-            <span>History</span>
-            <span className="ml-0.5 rounded-full border border-[var(--stroke-default)] bg-[var(--surface-app)] px-1.5 py-0 text-[10px] font-mono text-[var(--text-secondary)]">
-              {commitCount}
-            </span>
-          </Link>
-        </Button>
-
-        <Button
-          asChild
-          className="h-7 text-xs font-medium px-2.5"
-          size="sm"
-          variant="canvas-outline"
-        >
-          <Link href={workspaceHref}>Open workspace</Link>
-        </Button>
       </div>
     </div>
   );
@@ -1051,7 +1067,11 @@ function StateModeTabs({
   ];
 
   return (
-    <div aria-label="State modes" className="flex min-h-10 shrink-0 items-stretch" role="tablist">
+    <div
+      aria-label="State modes"
+      className="my-1 flex shrink-0 items-center gap-1 rounded-md bg-[var(--surface-card)] p-1"
+      role="tablist"
+    >
       {modes.map((mode) => {
         const Icon = mode.icon;
         const selected = activeMode === mode.id;
@@ -1059,13 +1079,14 @@ function StateModeTabs({
           <button
             aria-selected={selected}
             className={cn(
-              'border-b-2 px-3.5 py-2 text-left transition-colors',
+              'rounded px-2.5 py-1.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent-commit)]',
               selected
-                ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             )}
             data-intro-target={mode.id === 'snapshot' ? 'state-snapshot-mode' : undefined}
             key={mode.id}
+            title={mode.subtitle}
             onClick={() => onModeChange(mode.id)}
             role="tab"
             type="button"
@@ -1073,9 +1094,6 @@ function StateModeTabs({
             <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium">
               <Icon aria-hidden="true" className="size-3.5 opacity-80" />
               {mode.label}
-              <span className="hidden text-[11px] font-normal text-[var(--text-tertiary)] lg:inline">
-                · {mode.subtitle}
-              </span>
             </span>
           </button>
         );
@@ -1098,7 +1116,7 @@ function StateViewTabs({
   return (
     <div
       aria-label="State views"
-      className="flex min-h-[38px] shrink-0 items-stretch justify-between gap-2 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-1"
+      className="flex min-h-[38px] shrink-0 items-stretch justify-between gap-2 overflow-x-auto bg-[var(--surface-panel)]"
       role="tablist"
     >
       <div className="flex shrink-0 items-stretch gap-0.5">
@@ -1109,7 +1127,7 @@ function StateViewTabs({
             <button
               aria-selected={selected}
               className={cn(
-                'min-w-24 border-b-2 px-3 py-1.5 text-left transition-colors',
+                'min-w-24 border-b-2 px-3 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent-commit)]',
                 selected
                   ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -1126,9 +1144,7 @@ function StateViewTabs({
                 />
                 {view.label}
               </span>
-              <span className="mt-0.5 block text-[10px] leading-tight text-[var(--text-tertiary)] font-normal">
-                {view.subtitle}
-              </span>
+              <span className="sr-only">{view.subtitle}</span>
             </button>
           );
         })}
@@ -1255,14 +1271,14 @@ function StateStructureView({
       aria-label="Structured state tree"
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-1">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-3">
         <label className="relative h-[30px] w-full max-w-[260px]">
           <Search
             aria-hidden="true"
             className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
           />
           <input
-            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-8 pr-3 text-xs text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)] placeholder:text-[var(--text-tertiary)]"
             onChange={(event) => onPathQueryChange(event.target.value)}
             aria-label="Search state structure"
             placeholder="Search paths, titles, types..."
@@ -1273,7 +1289,12 @@ function StateStructureView({
           {visibleRows.length} visible {visibleRows.length === 1 ? 'row' : 'rows'}
         </span>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-1 rounded-lg border border-[var(--stroke-divider)]',
+          selected && 'lg:grid-cols-[minmax(0,1fr)_320px]'
+        )}
+      >
         <StateScrollArea className="min-h-0 flex-1" horizontal label="State rows">
           <table className="w-full min-w-[480px] table-fixed border-collapse text-left text-xs leading-5">
             <colgroup>
@@ -1304,45 +1325,51 @@ function StateStructureView({
             </tbody>
           </table>
         </StateScrollArea>
-        <aside
-          aria-label="Selected node"
-          className="overflow-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 lg:border-l lg:border-t-0"
-        >
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-            Selected node
-          </h3>
-          {selected ? (
-            <>
-              <h4 className="mt-4 break-words text-lg font-semibold">{selected.key}</h4>
-              <p className="mt-1 break-all font-mono text-xs text-[var(--text-secondary)]">
-                {selected.path}
-              </p>
-              <p className="mt-3 text-xs text-[var(--text-secondary)]">
-                {selected.type} · Committed state
-              </p>
-              <pre className="mt-4 whitespace-pre-wrap break-words rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 text-sm">
-                {selected.value}
-              </pre>
-              {selected.status !== 'unchanged' ? (
-                <div className="mt-4">
-                  <StatusPill row={selected} />
-                </div>
-              ) : null}
-              {selected.sourceOp !== '-' ? (
-                <p className="mt-4 font-mono text-xs">{selected.sourceOp}</p>
-              ) : null}
-              {selected.issueCount > 0 ? (
-                <p className="mt-4 text-sm text-[var(--status-warning)]">
-                  {selected.issueCount} recorded issues
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="mt-4 text-sm text-[var(--text-secondary)]">
-              Select a node to read its complete value and recorded change.
+        {selected && (
+          <aside
+            aria-label="Selected node"
+            className="overflow-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 lg:border-l lg:border-t-0"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                Selected node
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label="Close node details"
+                onClick={() => setSelectedPath(null)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <h4 className="mt-4 break-words text-lg font-semibold">{selected.key}</h4>
+            <p className="mt-1 break-all font-mono text-xs text-[var(--text-secondary)]">
+              {selected.path}
             </p>
-          )}
-        </aside>
+            <p className="mt-3 text-xs text-[var(--text-secondary)]">
+              {selected.type} · Committed state
+            </p>
+            <pre className="mt-4 whitespace-pre-wrap break-words rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 text-sm">
+              {selected.value}
+            </pre>
+            {selected.status !== 'unchanged' ? (
+              <div className="mt-4">
+                <StatusPill row={selected} />
+              </div>
+            ) : null}
+            {selected.sourceOp !== '-' ? (
+              <p className="mt-4 font-mono text-xs">{selected.sourceOp}</p>
+            ) : null}
+            {selected.issueCount > 0 ? (
+              <p className="mt-4 text-sm text-[var(--status-warning)]">
+                {selected.issueCount} recorded issues
+              </p>
+            ) : null}
+          </aside>
+        )}
       </div>
     </section>
   );
@@ -1374,7 +1401,7 @@ function StatePointTableRow({
     <tr
       className={cn(
         'group border-b border-[var(--stroke-divider)] text-[var(--text-primary)] transition-colors',
-        row.expandable ? 'h-9' : 'h-[34px]',
+        row.expandable ? 'h-10' : 'h-9',
         row.expandable && 'cursor-pointer hover:bg-[var(--surface-hover)]',
         selected
           ? 'bg-[var(--status-info-muted)]'
@@ -1384,8 +1411,10 @@ function StatePointTableRow({
     >
       <td
         className={cn(
-          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1 font-medium transition-colors text-[13px] leading-5',
-          row.expandable && 'group-hover:bg-[var(--surface-hover)]',
+          'sticky left-0 z-10 border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-1 font-medium transition-colors text-sm leading-5',
+          selected
+            ? 'bg-[var(--status-info-muted)] shadow-[inset_3px_0_0_var(--accent-commit)]'
+            : 'group-hover:bg-[var(--surface-hover)]',
           row.status === 'missing' && 'bg-[var(--status-warning-muted)]/35'
         )}
       >
@@ -1438,7 +1467,7 @@ function StatePointTableRow({
         </span>
       </td>
       <td
-        className="truncate px-3 py-1 text-[13px] leading-5 font-normal text-[var(--text-secondary)]"
+        className="truncate px-3 py-1 text-sm leading-5 font-normal text-[var(--text-secondary)]"
         title={row.value}
       >
         {row.value}
