@@ -648,18 +648,18 @@ function ProposedDraftPanel({
     : 'Proceed to Review';
 
   return (
-    <div className="flex h-full bg-white">
-      <div className="relative flex min-h-0 w-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full bg-[var(--surface-card)]">
+      <div className="relative flex min-h-0 w-full flex-col overflow-hidden bg-[var(--surface-card)]">
         <header className="flex shrink-0 items-center justify-between gap-4 px-8 pb-5 pt-6 text-left">
           <div className="flex min-w-0 items-center gap-3">
-            <h3 className="min-w-0 truncate text-lg font-bold leading-6 text-slate-900">
+            <h3 className="min-w-0 truncate text-lg font-bold leading-6 text-[var(--text-primary)]">
               {proposalLabel}
             </h3>
             <ProposalStatusPill status={status} />
           </div>
           <button
             aria-label="Hide proposed draft sidebar"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-sm transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             onClick={onSidebarToggle}
             title="显示/隐藏侧边栏"
             type="button"
@@ -670,15 +670,15 @@ function ProposedDraftPanel({
 
         <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-2">
           <section className="mb-6 flex items-start gap-3 px-1 py-2">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--status-warning-muted)] text-[var(--status-warning)]">
               <CircleAlert aria-hidden="true" className="size-5" />
             </span>
             <div className="min-w-0">
-              <h4 className="mb-1 text-sm font-bold leading-tight text-amber-900">
+              <h4 className="mb-1 text-sm font-bold leading-tight text-[var(--status-warning)]">
                 {attentionItems.length > 0 ? 'Review Required' : 'Description'}
               </h4>
               <p
-                className="line-clamp-3 text-sm leading-relaxed text-amber-700/80"
+                className="line-clamp-3 text-sm leading-relaxed text-[var(--status-warning)]"
                 title={reviewNotice}
               >
                 {reviewNotice}
@@ -700,7 +700,7 @@ function ProposedDraftPanel({
                 <ProposalMetricChip icon={Cuboid} label={formatProposalSourceTitle(sourceCount)} />
               </div>
               <p
-                className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500"
+                className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--text-secondary)]"
                 title={formatProposalOriginLabel(candidate, sourceCount)}
               >
                 {formatProposalOriginLabel(candidate, sourceCount)}
@@ -718,7 +718,7 @@ function ProposedDraftPanel({
                 {controller.scenarios.options.length > 1 ? (
                   <select
                     aria-label="Workspace scenario"
-                    className="h-7 max-w-full shrink-0 rounded bg-slate-100 px-2 text-xs font-medium text-slate-700 outline-none transition-colors hover:bg-slate-200 focus:ring-2 focus:ring-blue-500"
+                    className="h-7 max-w-full shrink-0 rounded bg-[var(--surface-app)] px-2 text-xs font-medium text-[var(--text-primary)] outline-none transition-colors hover:bg-[var(--surface-hover)] focus:ring-2 focus:ring-[var(--ring)]"
                     onChange={(event) => controller.scenarios.select(event.target.value)}
                     value={controller.scenarios.selectedId}
                   >
@@ -750,7 +750,7 @@ function ProposedDraftPanel({
             <ProposalTimelineItem
               action={
                 <button
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold leading-none text-blue-600 transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold leading-none text-[var(--accent-commit)] transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={controller.isBusy || operations.length === 0}
                   onClick={() => void prepareAndOpenReview(controller, onModeChange)}
                   type="button"
@@ -769,10 +769,10 @@ function ProposedDraftPanel({
           </div>
         </div>
 
-        <footer className="sticky bottom-0 mt-auto shrink-0 border-t border-slate-100 bg-white p-6">
+        <footer className="sticky bottom-0 mt-auto shrink-0 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] p-6">
           <button
             aria-label={primaryReviewLabel}
-            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-commit)] py-3.5 text-sm font-bold text-[var(--on-accent)] shadow-[var(--fx-shadow-md)] transition-colors hover:bg-[var(--commit-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={controller.isBusy}
             onClick={() => void prepareAndOpenReview(controller, onModeChange)}
             type="button"
@@ -791,7 +791,7 @@ function ProposedDraftPanel({
             )}
           </button>
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-3.5 text-sm font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-app)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={controller.isBusy || (attentionItems.length === 0 && operations.length === 0)}
             onClick={() => void prepareAndOpenReview(controller, onModeChange)}
             type="button"
@@ -847,10 +847,10 @@ function ProposalStatusPill({ status }: { status: ReturnType<typeof getProposalS
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase leading-none tracking-wider',
         status.tone === 'warning'
-          ? 'bg-amber-100 text-amber-700'
+          ? 'bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
           : status.tone === 'success'
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-slate-100 text-slate-600'
+            ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+            : 'bg-[var(--surface-app)] text-[var(--text-secondary)]'
       )}
     >
       <span aria-hidden="true" className={cn('size-1.5 rounded-full', status.dotClass)} />
@@ -914,7 +914,7 @@ function ProposalTimelineItem({
 
 function ProposalMetricChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-blue-600">
+    <span className="inline-flex items-center gap-1 rounded bg-[var(--surface-app)] px-2 py-1 text-xs font-medium text-[var(--accent-commit)]">
       <Icon aria-hidden="true" className="size-3.5" />
       {label}
     </span>
@@ -924,11 +924,11 @@ function ProposalMetricChip({ icon: Icon, label }: { icon: LucideIcon; label: st
 function ProposalConfigChip({ label, value }: { label: string; value: string }) {
   return (
     <span
-      className="inline-flex max-w-full items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+      className="inline-flex max-w-full items-center gap-1 rounded bg-[var(--surface-app)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)]"
       title={`${label}: ${value}`}
     >
-      <span className="shrink-0 text-slate-400">{label}:</span>
-      <span className="min-w-0 truncate font-mono text-slate-700">{value}</span>
+      <span className="shrink-0 text-[var(--text-tertiary)]">{label}:</span>
+      <span className="min-w-0 truncate font-mono text-[var(--text-primary)]">{value}</span>
     </span>
   );
 }
@@ -944,13 +944,13 @@ function ProposalChangesetPreview({ operations }: { operations: WorkspaceYOpsDra
 
   return (
     <div className="mt-3 flex gap-2">
-      <div className="w-1 shrink-0 rounded-full bg-emerald-400" />
-      <div className="min-w-0 flex-1 space-y-1 font-mono text-xs leading-relaxed text-slate-600">
+      <div className="w-1 shrink-0 rounded-full bg-[var(--status-success)]" />
+      <div className="min-w-0 flex-1 space-y-1 font-mono text-xs leading-relaxed text-[var(--text-secondary)]">
         {operations.slice(0, 4).map((operation) => (
           <ProposalChangePreviewLine key={operation.id} operation={operation} />
         ))}
         {operations.length > 4 ? (
-          <div className="truncate text-slate-400">+ {operations.length - 4} more</div>
+          <div className="truncate text-[var(--text-tertiary)]">+ {operations.length - 4} more</div>
         ) : null}
       </div>
     </div>
@@ -974,15 +974,15 @@ function ProposalChangePreviewLine({ operation }: { operation: WorkspaceYOpsDraf
         className={cn(
           'shrink-0 font-bold',
           kind === 'add'
-            ? 'text-emerald-700'
+            ? 'text-[var(--status-success)]'
             : kind === 'remove'
-              ? 'text-rose-700'
-              : 'text-amber-700'
+              ? 'text-[var(--diff-removed-text)]'
+              : 'text-[var(--status-warning)]'
         )}
       >
         {kind === 'add' ? '+' : kind === 'remove' ? '-' : '~'}
       </span>
-      <span className="shrink-0 truncate text-slate-500">{label}</span>
+      <span className="shrink-0 truncate text-[var(--text-secondary)]">{label}</span>
       <span className="min-w-0 truncate">{value}</span>
     </div>
   );
