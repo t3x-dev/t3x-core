@@ -1185,6 +1185,7 @@ export function StateStructureView({
 }) {
   const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({});
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [nodeHistoryOpen, setNodeHistoryOpen] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [walkthroughPlaying, setWalkthroughPlaying] = useState(false);
   const historyTreeRef = useRef<HTMLDivElement>(null);
@@ -1465,7 +1466,17 @@ export function StateStructureView({
             })()}
         </StateScrollArea>
       </div>
-      {historyPresentation ? (
+      {historyPresentation && nodeHistoryOpen && nodeHistoryEnabled && selectedRow ? (
+        <aside className={historyStyles.inspector}>
+          <StateNodeHistoryPanel
+            key={`${headCommit.hash}:${selectedRow.path}`}
+            commit={headCommit}
+            path={selectedRow.path}
+            name={selectedRow.key}
+            onBack={() => setNodeHistoryOpen(false)}
+          />
+        </aside>
+      ) : historyPresentation ? (
         <HistoryChangeInspector
           cards={historyCards}
           selectedId={selectedRowId}
@@ -1475,6 +1486,14 @@ export function StateStructureView({
           onStep={showWalkthroughStep}
           onPlayingChange={setWalkthroughPlaying}
           changeReason={changeReason}
+          onViewNodeHistory={
+            nodeHistoryEnabled && selectedRow && !selectedRow.virtualGroup
+              ? () => {
+                  setWalkthroughPlaying(false);
+                  setNodeHistoryOpen(true);
+                }
+              : undefined
+          }
         />
       ) : (
         <StateSelectedNodeInspector

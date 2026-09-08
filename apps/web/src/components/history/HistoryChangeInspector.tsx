@@ -25,6 +25,7 @@ export function HistoryChangeInspector({
   onStep,
   onPlayingChange,
   changeReason,
+  onViewNodeHistory,
 }: {
   cards: HistoryChangeCard[];
   selectedId: string | null;
@@ -34,6 +35,7 @@ export function HistoryChangeInspector({
   onStep: (step: number | null) => void;
   onPlayingChange: (playing: boolean) => void;
   changeReason: string;
+  onViewNodeHistory?: () => void;
 }) {
   const [collapsedId, setCollapsedId] = useState<string | null>(null);
   const [pace, setPace] = useState(3000);
@@ -91,6 +93,15 @@ export function HistoryChangeInspector({
           {selectedIndex >= 0 ? `${selectedIndex + 1} / ${cards.length}` : `${cards.length} total`}
         </span>
       </header>
+      {onViewNodeHistory && (
+        <button
+          type="button"
+          className="mx-3 my-2 rounded-[5px] border border-[var(--stroke-divider)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+          onClick={onViewNodeHistory}
+        >
+          View node history
+        </button>
+      )}
       <div
         className={styles.cardList}
         ref={list}
