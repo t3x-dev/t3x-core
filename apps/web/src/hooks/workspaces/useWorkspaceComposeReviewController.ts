@@ -123,6 +123,7 @@ export function useWorkspaceComposeReviewController({
   const supportsThinking = providerSupports(modelSelection.selectedProvider ?? '', 'thinking');
   const materialUpload = useMaterialUpload();
   const pinsCrud = usePinsCrud();
+  const { fetch: refreshPins } = pinsCrud;
   const pins = usePinsStore((state) => state.pins);
 
   useEffect(() => {
@@ -155,8 +156,8 @@ export function useWorkspaceComposeReviewController({
   }, [sourceConversationIdProp]);
 
   useEffect(() => {
-    void pinsCrud.fetch(candidate.projectId);
-  }, [candidate.projectId, pinsCrud.fetch]);
+    void refreshPins(candidate.projectId);
+  }, [candidate.projectId, refreshPins]);
 
   const chat = useSourceThreadGeneration({
     projectId: candidate.projectId,

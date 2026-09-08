@@ -215,7 +215,7 @@ function CandidateConfirmation({
         </p>
         <div className="grid gap-2">
           <Button
-            className="h-10 w-full rounded-[5px] bg-[var(--accent-commit)] text-white hover:bg-[var(--accent-commit)] hover:brightness-95"
+            className="h-10 w-full rounded-[5px] bg-[var(--accent-commit)] text-[var(--on-accent)] hover:bg-[var(--accent-commit)] hover:brightness-95"
             disabled={studio.pending || studio.loading}
             onClick={() => void save(true)}
           >
