@@ -1,346 +1,125 @@
 // @vitest-environment jsdom
-
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
-import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
-import { extractWorkspaceCandidate } from '@/infrastructure/workspaceFlow';
+import type { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
+import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 
-const replaceMock = vi.fn();
-const pushMock = vi.fn();
-const fetchMaterialsByProjectMock = vi.fn();
-const fetchProjectWorkspacesMock = vi.fn();
-let searchParamsValue = new URLSearchParams('tab=workspaces');
-let branchHeadsValue: Record<string, string | null> = {};
-
-class FakeWebSocket {
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onclose: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-
-  close() {}
-}
-
-vi.mock('@/infrastructure/workspaceFlow', () => ({
-  extractWorkspaceCandidate: vi.fn(),
-  sendWorkspaceYOpsDraft: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  query: 'tab=workspaces',
+  workspaces: [] as WorkspaceCandidate[],
+  branchHeads: { main: null } as Record<string, string | null>,
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn().mockResolvedValue(undefined),
+  props: {} as ComponentProps<typeof WorkspaceWorkbench>,
 }));
-
-const extractWorkspaceCandidateMock = vi.mocked(extractWorkspaceCandidate);
-
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/project/proj_test',
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useSearchParams: () => new URLSearchParams(mocks.query),
+}));
+vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+  useProjectMaterials: () => ({ materials: [], refresh: mocks.refresh }),
+}));
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
-    branchHeads: branchHeadsValue,
-    branches: Object.keys(branchHeadsValue),
+    branchHeads: mocks.branchHeads,
+    branches: Object.keys(mocks.branchHeads),
     loading: false,
-    refresh: vi.fn(),
+    refresh: mocks.refresh,
   }),
 }));
-
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/t3x-dev/test-project/workspaces',
-  useRouter: () => ({ push: pushMock, replace: replaceMock }),
-  useSearchParams: () => searchParamsValue,
+vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
+  useProjectWorkspaces: () => ({
+    workspaces: mocks.workspaces,
+    loading: false,
+    error: null,
+    refresh: mocks.refresh,
+  }),
 }));
-
-vi.mock('@/queries/materials', () => ({
-  fetchMaterialsByProject: (...args: unknown[]) => fetchMaterialsByProjectMock(...args),
+vi.mock('@/components/workspaces/WorkspaceWorkbench', () => ({
+  WorkspaceWorkbench: (props: ComponentProps<typeof WorkspaceWorkbench>) => {
+    mocks.props = props;
+    return (
+      <button
+        type="button"
+        onClick={() => props.onViewCommitInState?.('sha256:saved', 'feature/test')}
+      >
+        View State
+      </button>
+    );
+  },
 }));
-
-vi.mock('@/queries/workspaces', () => ({
-  fetchProjectWorkspaces: (...args: unknown[]) => fetchProjectWorkspacesMock(...args),
-}));
-
-describe('ProjectWorkspacesTab', () => {
+function draft(id: string, branch = 'main'): WorkspaceCandidate {
+  return {
+    ...getProjectWorkspaceStarterCandidate('proj_test'),
+    id,
+    title: id,
+    targetBranch: branch,
+    revision: 4,
+  };
+}
+describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
   beforeEach(() => {
-    vi.stubGlobal('WebSocket', FakeWebSocket);
-    replaceMock.mockClear();
-    pushMock.mockClear();
-    fetchMaterialsByProjectMock.mockResolvedValue([]);
-    fetchProjectWorkspacesMock.mockResolvedValue([]);
-    extractWorkspaceCandidateMock.mockReset();
-    extractWorkspaceCandidateMock.mockImplementation(async (candidate) => ({
-      candidate_id: `candidate:${candidate.id}`,
-      workspace: candidate,
-    }));
-    searchParamsValue = new URLSearchParams('tab=workspaces');
-    branchHeadsValue = {
-      main: null,
-      'feature/prd-audience': 'sha256:feature-head',
-      'release/notes': null,
-    };
+    vi.clearAllMocks();
+    mocks.query = 'tab=workspaces';
+    mocks.workspaces = [];
+    mocks.branchHeads = { main: null };
   });
-
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('starts a new project with a clean main workspace instead of preview fixture state', async () => {
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
-    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    expect(screen.getByRole('tab', { name: 'Proposal' })).toBeInTheDocument();
-  });
-
-  it('rebuilds a leaked preview workspace on main without keeping its fake baseline', async () => {
-    const [leakedWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([leakedWorkspace]);
-    searchParamsValue = new URLSearchParams('branch=main');
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
-    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
-
-    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
-    expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'feature/prd-audience' })).toBeInTheDocument();
-  });
-
-  it('starts the next main workspace when a merge advances the branch head', async () => {
-    const [committedWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    branchHeadsValue = {
-      main: 'sha256:merged-main-head',
-      'feature/checkout-retry-hardening': 'sha256:feature-head',
-    };
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      {
-        ...committedWorkspace,
-        id: 'workspace_main',
-        projectId: 'proj_other',
-        revision: 5,
-        status: 'committed',
-        targetBranch: 'main',
-        baseCommitHash: null,
-        lastCommitHash: 'sha256:previous-main-head',
-      },
-    ]);
-    searchParamsValue = new URLSearchParams('branch=main');
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    expect(await screen.findByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
-    expect(screen.queryByText('No workspaces yet.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Generate candidate proposal' })).toBeEnabled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
-
-    await waitFor(() => expect(extractWorkspaceCandidateMock).toHaveBeenCalledOnce());
-    const continuedWorkspace = extractWorkspaceCandidateMock.mock.calls[0]?.[0];
-    expect(continuedWorkspace).toMatchObject({
-      id: 'workspace_main',
-      revision: 5,
-      status: 'draft',
+  it('starts with a clean draft and exposes branch options to Compose', () => {
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.candidates[0]).toMatchObject({
+      projectId: 'proj_test',
       targetBranch: 'main',
-      baseCommitHash: 'sha256:merged-main-head',
+      yopsDraft: { operations: [] },
+      schemaBindings: [],
+    });
+    expect(mocks.props.branchOptions).toEqual(['main']);
+  });
+  it('preserves the explicitly requested draft when several share a branch', () => {
+    mocks.workspaces = [draft('first'), draft('requested')];
+    mocks.query = 'tab=workspaces&branch=main&workspace=requested';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.selectedWorkspaceId).toBe('requested');
+    expect(mocks.props.candidates).toHaveLength(1);
+    expect(mocks.props.candidates[0]).toMatchObject({ id: 'requested', revision: 4 });
+  });
+  it('keeps persisted unbound drafts unbound', () => {
+    mocks.workspaces = [draft('persisted')];
+    mocks.query = 'tab=workspaces&workspace=persisted';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(
+      mocks.props.candidates.find((item: WorkspaceCandidate) => item.id === 'persisted')
+    ).toMatchObject({ schemaBindings: [], title: 'persisted' });
+  });
+  it('passes the source conversation through to Compose', () => {
+    mocks.query = 'tab=workspaces&sourceConversation=source_42';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.sourceConversationId).toBe('source_42');
+  });
+  it('starts the next draft from the advanced main HEAD', () => {
+    mocks.branchHeads = { main: 'sha256:advanced' };
+    mocks.workspaces = [
+      { ...draft('committed'), status: 'committed', lastCommitHash: 'sha256:previous' },
+    ];
+    mocks.query = 'tab=workspaces&branch=main';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.candidates[0]).toMatchObject({
+      status: 'draft',
+      baseCommitHash: 'sha256:advanced',
       yopsDraft: { operations: [] },
     });
-    expect(continuedWorkspace?.lastCommitHash).toBeUndefined();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Commit' }));
-
-    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue('main');
-    expect(
-      screen.getByRole('option', { name: 'feature/checkout-retry-hardening' })
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'View in State' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Target branch changed from/)).not.toBeInTheDocument();
   });
-
-  it('keeps an explicitly requested Workspace when multiple drafts share one branch', async () => {
-    const [first, second] = getWorkspacePreviewCandidates('proj_other');
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      { ...first, id: 'first', title: 'Other draft', targetBranch: 'main' },
-      { ...second, id: 'selected', title: 'Upgrade target', targetBranch: 'main' },
-    ]);
-    searchParamsValue = new URLSearchParams('branch=main&workspace=selected');
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-    expect(await screen.findByRole('heading', { name: 'Upgrade target' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'Other draft' })).not.toBeInTheDocument();
-  });
-
-  it('selects the workspace from the URL without showing an internal workspace selector', async () => {
-    const [mainWorkspace, releaseWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      { ...mainWorkspace, id: 'workspace_main', targetBranch: 'main' },
-      releaseWorkspace,
-    ]);
-    searchParamsValue = new URLSearchParams(
-      `branch=release%2Fnotes&workspace=${releaseWorkspace.id}`
-    );
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    expect(await screen.findByText('Release note cleanup')).toBeInTheDocument();
-    expect(screen.queryByText('Audience chat')).not.toBeInTheDocument();
-    expect(screen.queryByText('PRD import')).not.toBeInTheDocument();
-    expect(screen.queryByText('Release note outline')).not.toBeInTheDocument();
-
-    const sourceChatTab = screen.getByRole('tab', { name: 'Chat' });
-    fireEvent.mouseDown(sourceChatTab, { button: 0, ctrlKey: false });
-    fireEvent.click(sourceChatTab);
-
-    expect(screen.getByText('No source chat turns yet.')).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        'Start by importing a document, pasting source text, or adding a manual note.'
-      )
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        'I will keep analysis separate until you mark a turn or material as source evidence.'
-      )
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
-
-    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Release note cleanup/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /PRD audience handoff/ })).not.toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
-  });
-
-  it('restores a persisted workspace draft title over the fixture candidate', async () => {
-    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      {
-        ...baseWorkspace,
-        title: 'Restored backend draft',
-        status: 'schema_review',
-        schemaCandidate: {
-          ...baseWorkspace.schemaCandidate,
-          summary: 'Loaded from persisted workspace state.',
-        },
-      },
-    ]);
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
-    });
-
-    expect(screen.queryByRole('heading', { name: 'PRD audience handoff' })).not.toBeInTheDocument();
-  });
-
-  it('keeps uploaded material sources when restoring a persisted workspace draft', async () => {
-    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    fetchMaterialsByProjectMock.mockResolvedValueOnce([
-      {
-        id: 'mat_uploaded_doc',
-        project_id: 'proj_other',
-        source_type: 'document',
-        title: 'uploaded-brief.docx',
-        filename: 'uploaded-brief.docx',
-        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        content_hash: 'abc123',
-        content_excerpt: 'Uploaded material should remain visible.',
-        token_estimate: 8,
-        metadata: {},
-        created_at: '2026-07-15T00:00:00.000Z',
-        archived_at: null,
-        created_by: null,
-      },
-    ]);
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      {
-        ...baseWorkspace,
-        sourceBundle: [],
-        title: 'Restored backend draft',
-      },
-    ]);
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
-    });
-
-    expect(screen.getAllByText('uploaded-brief.docx').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('1 doc').length).toBeGreaterThan(0);
-  });
-
-  it('shows pasted text materials as manageable text sources', async () => {
-    fetchMaterialsByProjectMock.mockResolvedValueOnce([
-      {
-        id: 'mat_pasted_text',
-        project_id: 'proj_other',
-        source_type: 'document',
-        title: 'audience-note.txt',
-        filename: 'audience-note.txt',
-        mime_type: 'text/plain',
-        content_hash: 'hash_pasted_text',
-        content_excerpt: 'Audience: Product reviewers and engineering owners.',
-        token_estimate: 8,
-        metadata: {},
-        created_at: '2026-07-15T00:00:00.000Z',
-        archived_at: null,
-        created_by: null,
-      },
-    ]);
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    await waitFor(() => {
-      expect(screen.getAllByText('audience-note.txt').length).toBeGreaterThan(0);
-    });
-
-    expect(screen.getAllByText('1 text').length).toBeGreaterThan(0);
-    expect(screen.getByText('text')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete audience-note.txt' })).toBeInTheDocument();
-  });
-
-  it.each([
-    undefined,
-    [],
-  ])('does not restore a PRD binding for an unbound draft (%j)', async (bindings) => {
-    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    const legacyDraft = {
-      ...baseWorkspace,
-      title: 'Legacy backend draft',
-      outputTargets: undefined,
-      schemaBindings: bindings,
-    } as unknown;
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([legacyDraft]);
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Legacy backend draft' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
-
-    expect(screen.queryByText('PRD Schema v2')).not.toBeInTheDocument();
-    expect(screen.getByText('No schema')).toBeInTheDocument();
-  });
-
-  it('routes View in State to Canvas with the committed branch and commit selected', async () => {
-    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
-    fetchProjectWorkspacesMock.mockResolvedValueOnce([
-      {
-        ...baseWorkspace,
-        lastCommitHash: 'sha256:workspace-commit',
-        status: 'committed',
-        targetBranch: 'feature/prd-audience',
-      },
-    ]);
-
-    render(<ProjectWorkspacesTab projectId="proj_other" />);
-
-    fireEvent.click(await screen.findByRole('tab', { name: 'Review', exact: true }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Commit/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'View in State' }));
-
-    expect(pushMock).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience&commit=sha256%3Aworkspace-commit&view=canvas'
-    );
+  it('opens the exact committed revision and branch in State', () => {
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    fireEvent.click(screen.getByRole('button', { name: 'View State' }));
+    const url = new URL(mocks.push.mock.calls[0]![0], 'http://localhost:3000');
+    expect(url.pathname).toBe('/project/proj_test');
+    expect(url.searchParams.get('commit')).toBe('sha256:saved');
+    expect(url.searchParams.get('branch')).toBe('feature/test');
   });
 });
