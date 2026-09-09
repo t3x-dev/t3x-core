@@ -204,6 +204,7 @@
     "apps/web/src/components/workspaces/WorkspaceChangeReviewPage.tsx",
     "apps/web/src/components/workspaces/WorkspaceContentEditor.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/hooks/workspaces/useWorkspaceComposeReviewController.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
