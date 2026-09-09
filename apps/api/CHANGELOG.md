@@ -1,5 +1,14 @@
 # @t3x-dev/api
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267)]:
+  - @t3x-dev/storage@1.4.0
+  - @t3x-dev/api@1.4.0
+  - @t3x-dev/core@1.3.1
+
 ## 1.2.1
 
 ### Patch Changes

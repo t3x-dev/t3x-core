@@ -1,5 +1,36 @@
 # @t3x-dev/storage
 
+## 1.4.0
+
+### Minor Changes
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Validate archive-local repository records, canonical object identities, commit
+  membership, branch heads and parent closure using the shared CommitV2 verifier.
+  Reject unknown fields, duplicates, unbounded inputs and external object resolution.
+  Structural integrity does not authorize restore or prove policy evaluation/replay.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Expose legacy YOps through a project-scoped historical-evidence API and preserve user-removed
+  rows by archiving them out of active replay instead of physically deleting their audit content.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Publish immutable author description, README, tags and image resources alongside
+  an exact project commit. Verify content hashes and project permissions, preserve
+  historical bundles, and keep author sidecars out of business YAML/JSON exports.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Add explicit Workspace downloads of exact committed YAML/JSON with idempotent delivery receipts. Preserve generation targets as legacy instead of creating new Leaves. Schema v73 adds delivery evidence independently of CommitV2.
+
+### Patch Changes
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Add a permission-aware published Schema Catalog projection with immutable release references, literal search, loose tag filters, editorial collections and stable pagination. Keep definition metadata separate from starter data and runtime validation claims.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Allow Schema releases to pin an integrity-checked author introduction and bundled cover image. Require project edit authority for Schema publication, identity/lifecycle changes and composition writes. Keep private introduction references out of public and foreign-project catalog results.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Persist exact Schema Studio candidate references with idempotent addition, scoped removal and live source access checks. Resolve latest once, redact unavailable sources, and keep candidates separate from Workspace bindings.
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Validate project archive JSON payload framing, UTF-8, declared record counts and per-record byte bounds in addition to checksums. Full graph validation and restore remain separate boundaries.
+
+- Updated dependencies []:
+  - @t3x-dev/core@1.3.1
+
 ## 1.2.1
 
 ### Patch Changes

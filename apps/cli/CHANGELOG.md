@@ -1,5 +1,17 @@
 # @t3x-dev/cli
 
+## 2.0.0
+
+### Major Changes
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Require immutable Source/Workspace extraction and route the `yops apply` and top-level `commit` compatibility commands through canonical Transition proposal and CommitV2 authority.
+
+### Patch Changes
+
+- Updated dependencies [[`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267)]:
+  - @t3x-dev/api-client@1.4.0
+  - @t3x-dev/core@1.3.1
+
 ## 1.2.1
 
 ### Patch Changes
