@@ -16,7 +16,7 @@ import path from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import {
   closePostgresStorage,
-  createPostgresStorage,
+  createPostgresBootstrapStorage,
   getPostgresClient,
   type PostgresDB,
 } from './postgres';
@@ -181,7 +181,7 @@ export async function createEmbeddedStorage(config: EmbeddedConfig = {}): Promis
 
   // Delegate to existing postgres adapter via connection string
   const connectionString = `postgresql://postgres:${DEFAULT_PASSWORD}@localhost:${port}/${database}`;
-  const db = await createPostgresStorage({ connectionString });
+  const db = await createPostgresBootstrapStorage({ connectionString });
 
   return db;
 }

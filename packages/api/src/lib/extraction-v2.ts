@@ -13,6 +13,13 @@ import {
   findTurnsByHashes,
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
+import {
+  InferenceAdmissionDeniedError,
+  InferenceExecutionError,
+  type InferenceRuntime,
+  type InferenceScope,
+} from './inference';
+import { bindInferenceProvider } from './inference-provider';
 import { resolveProviderAndModel } from './provider-resolver';
 import {
   getConversationInheritedBaseline,
@@ -33,6 +40,11 @@ export interface ApiExtractionV2Input {
   userId?: string;
   topicId?: string;
   forceExtract?: boolean;
+  inference: {
+    runtime: InferenceRuntime;
+    runId: string;
+    scope: InferenceScope;
+  };
 }
 
 export type ApiExtractionV2Result =
@@ -166,16 +178,33 @@ export async function runApiExtractionV2(
     });
   }
 
+  const provider = bindInferenceProvider(providerResolution.provider, {
+    runtime: input.inference.runtime,
+    input: {
+      runId: input.inference.runId,
+      feature: 'extraction.pipeline',
+      requestedModel: input.model ?? providerResolution.model,
+      scope: input.inference.scope,
+    },
+    resolvedProvider: providerResolution.providerId,
+    resolvedModel: providerResolution.model,
+  });
   const result = await extractAndApply({
     turns: promptTurns,
     mode,
     providerId: providerResolution.providerId,
-    provider: providerResolution.provider,
+    provider,
     model: providerResolution.model,
     snapshot: replayedSnapshot.trees.length > 0 ? replayedSnapshot : undefined,
   });
 
   if (!result.ok) {
+    if (
+      result.failure.cause instanceof InferenceAdmissionDeniedError ||
+      result.failure.cause instanceof InferenceExecutionError
+    ) {
+      throw result.failure.cause;
+    }
     return { ok: false, kind: 'failure', message: result.failure.message, failure: result.failure };
   }
 

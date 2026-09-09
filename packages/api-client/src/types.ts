@@ -32,9 +32,12 @@ export interface ApiErrorResponse {
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 // Project types
+export type ProjectVisibility = 'private' | 'unlisted' | 'public';
+
 export interface Project {
   project_id: string;
   name: string;
+  visibility: ProjectVisibility;
   created_at: string;
   metadata: Record<string, unknown> | null;
 }
@@ -48,6 +51,8 @@ export interface ProjectWithStats extends Project {
 }
 
 export interface CreateProjectInput {
+  /** Initialize a private repository with a deterministic, editable PRD; no AI call. */
+  starter?: 'prd-v1';
   name: string;
   metadata?: Record<string, unknown>;
 }
@@ -55,6 +60,18 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   name?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface ChangeProjectVisibilityInput {
+  expected_visibility: ProjectVisibility;
+  visibility: ProjectVisibility;
+  confirm_publication?: boolean;
+}
+
+export interface ChangeProjectVisibilityResult {
+  project: Project;
+  changed: boolean;
+  evidence_id: string | null;
 }
 
 export interface ListProjectsResponse {
@@ -196,6 +213,38 @@ export interface ConversationSourceEvidence {
   referring_commits: SourceCommitReference[];
 }
 
+export interface LegacyYOpsEvidence {
+  mode: 'historical_evidence';
+  authoritative_for_project_state: false;
+  items: Array<{
+    id: string;
+    conversation_id: string;
+    project_id: string;
+    source: string;
+    turn_hash: string | null;
+    topic_id: string | null;
+    yops: unknown;
+    metadata: unknown | null;
+    created_at: string;
+    lifecycle: {
+      status: 'committed' | 'superseded' | 'legacy_uncommitted';
+      superseded_at: string | null;
+      committed_by: string[];
+    };
+  }>;
+  page: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface LegacyYOpsEvidenceParams extends PaginationParams {
+  topicId?: string;
+  archivedOnly?: boolean;
+  order?: 'asc' | 'desc';
+}
+
 export interface CommitDescriptorV2 {
   kind: 'commit';
   schema: 't3x/commit/v2';
@@ -274,42 +323,6 @@ export interface ListBranchesResponse {
   branches: Branch[];
   limit: number;
   offset: number;
-}
-
-// Draft types
-export interface Draft {
-  draft_id: string;
-  project_id: string;
-  conversation_id: string;
-  bridge_id: string;
-  intent: string;
-  status: 'pending' | 'active' | 'committed' | 'discarded';
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-}
-
-export interface CreateDraftInput {
-  project_id: string;
-  conversation_id: string;
-  bridge_id: string;
-  intent: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ListDraftsResponse {
-  drafts: Draft[];
-  limit: number;
-  offset: number;
-}
-
-// Apply YOps
-export interface ApplyYOpsResult {
-  draft_id: string;
-  revision: number;
-  trees: unknown[];
-  applied_count: number;
-  tree_count: number;
-  slot_count: number;
 }
 
 // Diff types
@@ -589,6 +602,11 @@ export interface SourceThreadCapability {
     conversationId: string,
     params?: PaginationParams
   ): Promise<SourceThreadEvidence>;
+  legacyYOpsEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: LegacyYOpsEvidenceParams
+  ): Promise<LegacyYOpsEvidence>;
 }
 
 /** Persisted Repository Review Workspace projection. */
@@ -945,49 +963,6 @@ export interface PlatformImportResult {
 // Integration Verbs
 // ============================================
 
-// Extract
-export interface ExtractInput {
-  project_id: string;
-  text: string;
-  conversation_id?: string;
-  source?: string;
-}
-
-export interface ExtractTree {
-  key: string;
-  slots: Record<string, unknown>;
-  children: ExtractTree[];
-  source?: string;
-}
-
-export interface DriftItem {
-  node_path: string;
-  before: string;
-  after: string;
-}
-
-export interface ExtractResult {
-  conversation_id: string;
-  draft_id: string;
-  trees: ExtractTree[];
-  yaml?: string;
-  drift?: DriftItem[];
-}
-
-// Commit from Draft
-export interface CommitFromDraftInput {
-  project_id: string;
-  draft_id: string;
-  message?: string;
-  branch?: string;
-}
-
-export interface CommitFromDraftResult {
-  commit_hash: string;
-  tree_count: number;
-  branch: string;
-}
-
 // Check
 export interface CheckInput {
   project_id: string;
@@ -1009,6 +984,13 @@ export interface CheckResult {
 }
 
 // Context
+export interface ExtractTree {
+  key: string;
+  slots: Record<string, unknown>;
+  children: ExtractTree[];
+  source?: string;
+}
+
 export interface ContextParams {
   branch?: string;
   format?: 'json' | 'yaml';

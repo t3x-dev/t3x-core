@@ -63,6 +63,7 @@ import {
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { workspaceDeliveryRoutes } from './workspace-deliveries.openapi';
 
 const SourceBundleItemSchema = z.object({
   id: z.string(),
@@ -689,6 +690,7 @@ const getWorkspaceTransitionReviewSnapshotRoute = createRoute({
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+workspaceRoutes.route('/', workspaceDeliveryRoutes);
 
 workspaceRoutes.onError((error, c) => {
   if (error instanceof ConflictError || isWorkspaceIdConflict(error)) {

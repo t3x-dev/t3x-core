@@ -38,14 +38,6 @@ const MOCK_PROJECT = {
   extractionStyle: null,
 };
 
-const MOCK_DRAFT = {
-  id: 'draft_test1',
-  project_id: 'proj_test1',
-  title: 'Workbench Draft',
-  status: 'editing',
-  revision: 3,
-};
-
 const MOCK_LEAF = {
   id: 'leaf_test1',
   commit_hash: 'sha256:abc',
@@ -77,10 +69,6 @@ vi.mock('@t3x-dev/storage', () => ({
     Promise.resolve(id === 'proj_test1' ? MOCK_PROJECT : null)
   ),
   findProjects: vi.fn(() => Promise.resolve([MOCK_PROJECT])),
-  findDraftById: vi.fn((_db: unknown, id: string) =>
-    Promise.resolve(id === 'draft_test1' ? MOCK_DRAFT : null)
-  ),
-  listDraftsByProject: vi.fn(() => Promise.resolve([MOCK_DRAFT])),
   getVerifiedTransitionCommitGraph: vi.fn((_db: unknown, projectId: string, hash: string) =>
     Promise.resolve(
       projectId === 'proj_test1' && hash === 'sha256:abc'
@@ -180,14 +168,6 @@ describe('t3x_query handler', () => {
     const result = await queryHandler({ target: 'project', id: 'proj_missing' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Project not found');
-  });
-
-  it('returns a draft by id', async () => {
-    const result = await queryHandler({ target: 'draft', id: 'draft_test1' });
-    expect(result.isError).toBeUndefined();
-    const data = JSON.parse(result.content[0].text);
-    expect(data.id).toBe('draft_test1');
-    expect(data.title).toBe('Workbench Draft');
   });
 
   it('returns a commit by hash', async () => {
@@ -363,32 +343,6 @@ describe('t3x_query handler', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
-  });
-
-  it('lists drafts by project', async () => {
-    const result = await queryHandler({ target: 'drafts', project_id: 'proj_test1' });
-    expect(result.isError).toBeUndefined();
-    const data = JSON.parse(result.content[0].text);
-    expect(Array.isArray(data)).toBe(true);
-    expect(data[0].id).toBe('draft_test1');
-  });
-
-  it('passes limit and offset to workbench draft list queries', async () => {
-    const { listDraftsByProject } = await import('@t3x-dev/storage');
-    const mock = listDraftsByProject as ReturnType<typeof vi.fn>;
-    mock.mockClear();
-
-    await queryHandler({
-      target: 'drafts',
-      project_id: 'proj_test1',
-      limit: 5,
-      offset: 10,
-    });
-
-    expect(mock).toHaveBeenCalledWith(mockDB, 'proj_test1', {
-      limit: 5,
-      offset: 10,
-    });
   });
 
   it('lists commits by project', async () => {

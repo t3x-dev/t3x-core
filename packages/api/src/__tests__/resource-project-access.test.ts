@@ -4,10 +4,8 @@ import {
   createLeafHistory,
   createMergeDraft,
   createPin,
-  createTopic,
   createWebhook,
   insertConversation,
-  insertDraft,
   insertNotification,
   insertProject,
   insertRun,
@@ -23,8 +21,6 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { draftsCrudRoutes } from '../routes/drafts-crud.openapi';
-import { draftsWorkflowRoutes } from '../routes/drafts-workflows.openapi';
 import { gateRoutes } from '../routes/gate.openapi';
 import { leavesHistoryRoutes } from '../routes/leaves-history.openapi';
 import { leavesMLRoutes } from '../routes/leaves-ml.openapi';
@@ -32,7 +28,6 @@ import { mergeRoutes } from '../routes/merge.openapi';
 import { notificationsRoutes } from '../routes/notifications.openapi';
 import { pinsRoutes } from '../routes/pins.openapi';
 import { runsRoutes } from '../routes/runs.openapi';
-import { topicsRoutes } from '../routes/topics.openapi';
 import { webhooksRoutes } from '../routes/webhooks.openapi';
 
 function createAuthenticatedApp(userId: string) {
@@ -49,14 +44,11 @@ function createAuthenticatedApp(userId: string) {
     });
     return next();
   });
-  app.route('/', draftsCrudRoutes);
-  app.route('/', draftsWorkflowRoutes);
   app.route('/', gateRoutes);
   app.route('/', pinsRoutes);
   app.route('/', webhooksRoutes);
   app.route('/', runsRoutes);
   app.route('/', notificationsRoutes);
-  app.route('/', topicsRoutes);
   app.route('/', leavesHistoryRoutes);
   app.route('/', leavesMLRoutes);
   app.route('/', mergeRoutes);
@@ -65,7 +57,6 @@ function createAuthenticatedApp(userId: string) {
 
 describe('project ownership on child-resource routes', () => {
   let cleanup: () => Promise<void>;
-  let ownerProjectId: string;
   let otherProjectId: string;
 
   beforeAll(async () => {
@@ -73,63 +64,12 @@ describe('project ownership on child-resource routes', () => {
     mockDB = setup.db;
     cleanup = setup.cleanup;
 
-    ownerProjectId = (await insertProject(mockDB, { name: 'Owner project', ownerId: 'user_owner' }))
-      .projectId;
     otherProjectId = (await insertProject(mockDB, { name: 'Other project', ownerId: 'user_other' }))
       .projectId;
   });
 
   afterAll(async () => {
     await cleanup();
-  });
-
-  it('blocks cross-project draft create, list, read, update, and delete', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: otherProjectId,
-      title: 'Private draft',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect(
-      (
-        await app.request('/v1/drafts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: otherProjectId, title: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/drafts?project_id=${otherProjectId}`)).status).toBe(403);
-    expect((await app.request(`/v1/drafts/${draft.id}`)).status).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/drafts/${draft.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: 'Unauthorized', if_revision: 1 }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/drafts/${draft.id}`, { method: 'DELETE' })).status).toBe(403);
-  });
-
-  it('blocks every cross-project draft workflow before generation, search, fork, or commit', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: otherProjectId,
-      title: 'Private workflow draft',
-      goal: 'private retrieval intent',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    for (const action of ['preview', 'commit', 'suggest']) {
-      const response = await app.request(`/v1/drafts/${draft.id}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      expect(response.status, action).toBe(403);
-    }
-    expect((await app.request(`/v1/drafts/${draft.id}/fork`, { method: 'POST' })).status).toBe(403);
   });
 
   it('blocks every cross-project merge-draft read and mutation before downstream work', async () => {
@@ -238,17 +178,6 @@ describe('project ownership on child-resource routes', () => {
     ).toBe(403);
   });
 
-  it('allows owners to access resources in their own project', async () => {
-    const draft = await insertDraft(mockDB, {
-      project_id: ownerProjectId,
-      title: 'Owned draft',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect((await app.request(`/v1/drafts/${draft.id}`)).status).toBe(200);
-    expect((await app.request(`/v1/drafts?project_id=${ownerProjectId}`)).status).toBe(200);
-  });
-
   it('blocks cross-project run reads, mutations, lists, and aggregate metadata', async () => {
     const run = await insertRun(mockDB, {
       run_id: 'run_private_access_test',
@@ -299,42 +228,6 @@ describe('project ownership on child-resource routes', () => {
     ).toBe(403);
   });
 
-  it('blocks cross-project topic reads and mutations', async () => {
-    const conversation = await insertConversation(mockDB, {
-      projectId: otherProjectId,
-      title: 'Private conversation',
-    });
-    const topic = await createTopic(mockDB, {
-      conversationId: conversation.conversationId,
-      projectId: otherProjectId,
-      name: 'Private topic',
-    });
-    const app = createAuthenticatedApp('user_owner');
-
-    expect(
-      (await app.request(`/v1/conversations/${conversation.conversationId}/topics`)).status
-    ).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/conversations/${conversation.conversationId}/topics`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect(
-      (
-        await app.request(`/v1/topics/${topic.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Unauthorized' }),
-        })
-      ).status
-    ).toBe(403);
-    expect((await app.request(`/v1/topics/${topic.id}`, { method: 'DELETE' })).status).toBe(403);
-  });
-
   it('blocks gate checks from resolving a conversation in another project', async () => {
     const conversation = await insertConversation(mockDB, {
       projectId: otherProjectId,
@@ -355,7 +248,7 @@ describe('project ownership on child-resource routes', () => {
     expect(response.status).toBe(403);
   });
 
-  it('blocks cross-project leaf history and ML routes before provider work', async () => {
+  it('keeps private history unreadable while retired writers return no resource content', async () => {
     const leaf = await createLeaf(mockDB, {
       commit_hash: 'sha256:private_leaf_access_test',
       project_id: otherProjectId,
@@ -373,7 +266,7 @@ describe('project ownership on child-resource routes', () => {
 
     expect((await app.request(`/v1/leaves/${leaf.id}/history`)).status).toBe(403);
     expect((await app.request(`/v1/leaf-history/${history.id}`, { method: 'DELETE' })).status).toBe(
-      403
+      410
     );
     expect(
       (
@@ -383,6 +276,6 @@ describe('project ownership on child-resource routes', () => {
           body: JSON.stringify({}),
         })
       ).status
-    ).toBe(403);
+    ).toBe(410);
   });
 });

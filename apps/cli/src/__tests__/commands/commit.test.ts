@@ -1,27 +1,15 @@
-/**
- * CLI Commit Command Tests
- */
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockClient, createClientMock } = vi.hoisted(() => ({
-  mockClient: {
-    commitFromDraft: vi.fn(),
-  },
+  mockClient: { commitTransition: vi.fn() },
   createClientMock: vi.fn(),
 }));
 
 createClientMock.mockImplementation(() => mockClient);
-
-vi.mock('@t3x-dev/api-client', () => ({
-  createClient: createClientMock,
-}));
+vi.mock('@t3x-dev/api-client', () => ({ createClient: createClientMock }));
 
 const mockSpinner = { start: vi.fn(), stop: vi.fn(), succeed: vi.fn(), fail: vi.fn() };
-vi.mock('ora', () => ({
-  default: vi.fn(() => mockSpinner),
-}));
-
+vi.mock('ora', () => ({ default: vi.fn(() => mockSpinner) }));
 vi.spyOn(console, 'log').mockImplementation(() => {});
 vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -37,79 +25,77 @@ function createProgram() {
 }
 
 describe('registerCommitCommand', () => {
-  const originalDraft = process.env.T3X_DRAFT;
-  const originalApiKey = process.env.T3X_API_KEY;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.T3X_DRAFT;
     delete process.env.T3X_API_KEY;
   });
 
-  afterEach(() => {
-    if (originalDraft === undefined) delete process.env.T3X_DRAFT;
-    else process.env.T3X_DRAFT = originalDraft;
+  it('commits an accepted Transition with exact expected-head CAS', async () => {
+    mockClient.commitTransition.mockResolvedValue({ transition_id: 'trn_1' });
 
-    if (originalApiKey === undefined) delete process.env.T3X_API_KEY;
-    else process.env.T3X_API_KEY = originalApiKey;
-  });
-
-  it('commits a draft by id', async () => {
-    mockClient.commitFromDraft.mockResolvedValue({
-      commit_hash: 'sha256:newcommit',
-      tree_count: 2,
-      branch: 'main',
-    });
-
-    const program = createProgram();
-    await program.parseAsync([
+    await createProgram().parseAsync([
       'node',
       'test',
       'commit',
-      'draft_abc',
+      'trn_1',
       '-p',
       'proj_1',
-      '-m',
-      'Draft commit',
+      '--request-id',
+      'req_1',
+      '--decision-digest',
+      'sha256:decision',
+      '--expected-head',
+      'sha256:head',
     ]);
 
-    expect(mockClient.commitFromDraft).toHaveBeenCalledWith({
-      project_id: 'proj_1',
-      draft_id: 'draft_abc',
-      message: 'Draft commit',
-      branch: undefined,
+    expect(mockClient.commitTransition).toHaveBeenCalledWith('proj_1', 'trn_1', {
+      request_id: 'req_1',
+      decision_digest: 'sha256:decision',
+      expected_head: 'sha256:head',
     });
   });
 
-  it('falls back to T3X_DRAFT when positional draft id is omitted', async () => {
-    process.env.T3X_DRAFT = 'draft_env';
-    mockClient.commitFromDraft.mockResolvedValue({
-      commit_hash: 'sha256:newcommit',
-      tree_count: 1,
-      branch: 'main',
-    });
+  it('supports an explicitly empty target ref', async () => {
+    mockClient.commitTransition.mockResolvedValue({ transition_id: 'trn_1' });
 
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'commit', '-p', 'proj_1']);
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'commit',
+      'trn_1',
+      '-p',
+      'proj_1',
+      '--request-id',
+      'req_1',
+      '--decision-digest',
+      'sha256:decision',
+      '--empty-head',
+    ]);
 
-    expect(mockClient.commitFromDraft).toHaveBeenCalledWith({
-      project_id: 'proj_1',
-      draft_id: 'draft_env',
-      message: undefined,
-      branch: undefined,
-    });
+    expect(mockClient.commitTransition).toHaveBeenCalledWith(
+      'proj_1',
+      'trn_1',
+      expect.objectContaining({ expected_head: null })
+    );
   });
 
   it('passes bearer auth via getClientWithAuth', async () => {
     process.env.T3X_API_KEY = 't3xk_test';
-    mockClient.commitFromDraft.mockResolvedValue({
-      commit_hash: 'sha256:newcommit',
-      tree_count: 1,
-      branch: 'main',
-    });
+    mockClient.commitTransition.mockResolvedValue({ transition_id: 'trn_1' });
 
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'commit', 'draft_abc', '-p', 'proj_1']);
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'commit',
+      'trn_1',
+      '-p',
+      'proj_1',
+      '--request-id',
+      'req_1',
+      '--decision-digest',
+      'sha256:decision',
+      '--empty-head',
+    ]);
 
     expect(createClientMock).toHaveBeenCalledWith({
       baseUrl: 'http://localhost:8000/api',
@@ -117,11 +103,21 @@ describe('registerCommitCommand', () => {
     });
   });
 
-  it('exits when no draft id and no T3X_DRAFT are provided', async () => {
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'commit', '-p', 'proj_1']);
+  it('rejects a commit without an explicit expected head', async () => {
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'commit',
+      'trn_1',
+      '-p',
+      'proj_1',
+      '--request-id',
+      'req_1',
+      '--decision-digest',
+      'sha256:decision',
+    ]);
 
     expect(mockExit).toHaveBeenCalledWith(1);
-    expect(mockClient.commitFromDraft).not.toHaveBeenCalled();
+    expect(mockClient.commitTransition).not.toHaveBeenCalled();
   });
 });

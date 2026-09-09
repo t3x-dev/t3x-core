@@ -1,5 +1,5 @@
 /**
- * Canonical wire envelope for /v1/extract-yops responses.
+ * Canonical extraction outcome shared by Workspace proposal adapters.
  *
  * Three outcomes — `ok | partial | failed` — sharing one `ExtractionFailureCode`
  * vocabulary. `partial` exists because the v2 pipeline can salvage a usable

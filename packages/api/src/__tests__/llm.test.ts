@@ -13,6 +13,12 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-registry';
+import {
+  createGenerationModelCatalogSnapshot,
+  createGenerationProviderRuntimeMiddleware,
+  GENERATION_PROVIDER_RUNTIME_VERSION,
+  type GenerationProviderRuntime,
+} from '../lib/provider-runtime';
 import { llmRoutes } from '../routes/llm.openapi';
 
 const originalEnv = { ...process.env };
@@ -132,6 +138,65 @@ describe('GET /v1/llm/models', () => {
         expect(model.max_output_tokens).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('publishes the versioned provider-neutral catalog projection', async () => {
+    await storage.upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    const res = await app.request('/v1/llm/models');
+    const body = await res.json();
+    const catalog = body.data.catalog;
+
+    expect(catalog.schema).toBe('t3x.language-model-catalog/v1');
+    expect(catalog.revision).toContain('openai-1');
+    expect(catalog.defaultModelId).toBe('gpt-5.4');
+    expect(catalog.models.find((model: { id: string }) => model.id === 'gpt-5.4')).toEqual({
+      id: 'gpt-5.4',
+      label: 'GPT-5.4',
+      capabilities: ['text'],
+      availability: 'available',
+      limits: { maxOutputTokens: 131072 },
+    });
+    expect(JSON.stringify(catalog)).not.toContain('providerModelId');
+    expect(JSON.stringify(catalog)).not.toContain('pricing');
+    expect(JSON.stringify(catalog)).not.toContain('api_key');
+  });
+
+  it('uses an application-injected hosted catalog without exposing its binding authority', async () => {
+    const hostedCatalog = createGenerationModelCatalogSnapshot({
+      revision: 'hosted-7',
+      defaultModelId: 'balanced',
+      models: [
+        {
+          id: 'balanced',
+          label: 'Balanced',
+          capabilities: ['text', 'tool_use', 'streaming'],
+          availability: 'available',
+        },
+      ],
+    });
+    const runtime: GenerationProviderRuntime = {
+      contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
+      catalog: {
+        async snapshot() {
+          return hostedCatalog;
+        },
+      },
+      async resolve() {
+        return { ok: false, code: 'unavailable', message: 'not exercised' };
+      },
+    };
+    const hostedApp = new Hono();
+    hostedApp.use('*', createGenerationProviderRuntimeMiddleware(runtime));
+    hostedApp.route('/', llmRoutes);
+
+    const body = await hostedApp.request('/v1/llm/models').then((response) => response.json());
+    expect(body.data.catalog).toEqual(hostedCatalog);
+    expect(body.data.catalog.models[0]).not.toHaveProperty('providerModelId');
+    expect(body.data.catalog.models[0]).not.toHaveProperty('pricing');
   });
 
   it('returns the latest public 3-model sets for OpenAI and Google', async () => {

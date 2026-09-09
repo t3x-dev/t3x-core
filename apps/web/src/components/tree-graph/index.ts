@@ -1,6 +1,5 @@
 export type { DiffStats } from './DiffOverlay';
 export { DiffOverlay } from './DiffOverlay';
-export { DiffSplit } from './DiffSplit';
 export { MergeView } from './MergeView';
 export { RelationEdge, RelationEdgeMarkerDefs } from './RelationEdge';
 export { TreeGraphToolbar } from './TreeGraphToolbar';

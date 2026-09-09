@@ -181,32 +181,11 @@ export async function executeRecipe(
           break;
         }
         case 'auto_commit_draft': {
-          const draftId = step.config.draft_id as string;
-          if (!draftId) {
-            results.push({
-              action: step.action,
-              success: false,
-              error: 'missing draft_id in step config',
-            });
-            break;
-          }
-          assertSafePathSegment(draftId, 'draft_id');
-          const baseUrlCommit = deps.apiBaseUrl || 'http://localhost:8000';
-          const commitHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-          const internalKeyCommit = process.env.INTERNAL_API_KEY || process.env.API_KEY;
-          if (internalKeyCommit) {
-            commitHeaders.Authorization = `Bearer ${internalKeyCommit}`;
-          }
-          const commitRes = await fetch(`${baseUrlCommit}/v1/drafts/${draftId}/auto-commit`, {
-            method: 'POST',
-            headers: commitHeaders,
-          });
-          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-          const commitBody = (await commitRes.json()) as any;
           results.push({
             action: step.action,
-            success: commitRes.ok && commitBody.success,
-            data: commitBody.data,
+            success: false,
+            error:
+              'auto_commit_draft is retired; create, review, decide, and commit a Transition instead',
           });
           break;
         }

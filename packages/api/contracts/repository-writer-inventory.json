@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "purpose": "Prove that every first-party repository mutation surface converges on Transition authority.",
+  "canonical_authority": {
+    "id": "transition_control_plane",
+    "application_command": "packages/application/src/transition/commands.ts",
+    "commit_authority": "packages/storage/src/queries/transition-commits.ts",
+    "invariants": [
+      "deterministic_effect",
+      "immutable_review_snapshot",
+      "recorded_decision",
+      "exact_expected_head_cas",
+      "commit_v2"
+    ]
+  },
+  "states": ["canonical", "canonical_adapter", "legacy_writer"],
+  "interfaces": [
+    {
+      "id": "rest-transition-control-plane",
+      "surface": "rest",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/transition-control-plane.openapi.ts",
+      "anchors": ["createTransitionControlPlaneRoutes", "commitTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal. This is the provider-independent repository mutation API."
+    },
+    {
+      "id": "rest-workspace-transition-adapter",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/workspaces.openapi.ts",
+      "anchors": ["reviewWorkspaceTransitionRoute", "decideWorkspaceTransitionRoute"],
+      "replacement": null,
+      "removal_gate": "Retain while the WebUI needs Workspace-shaped requests; the adapter must continue deriving Transition authority facts on the server."
+    },
+    {
+      "id": "rest-workspace-source-transition-adapter",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/workspace-source-transition.openapi.ts",
+      "anchors": ["createWorkspaceSourceTransitionRoutes", "decideWorkspaceSourceTransition("],
+      "replacement": null,
+      "removal_gate": "Retain while exact-source operations need a server-owned Workspace adapter; it may not create a second commit authority."
+    },
+    {
+      "id": "web-workspace-transition",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",
+      "anchors": ["reviewWorkspaceTransition(", "decideWorkspaceTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal while it remains the WebUI adapter to canonical review and decision commands."
+    },
+    {
+      "id": "web-workspace-source-transition",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
+      "anchors": ["reviewWorkspaceSourceTransition(", "reviewWorkspaceSourceRevert("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal while exact-source review remains server-owned."
+    },
+    {
+      "id": "web-workspace-review-snapshot-decision",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
+      "anchors": ["preconditionFromSnapshot(", "decideWorkspaceTransition("],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal. Decisions must remain bound to an immutable server-authored ReviewSnapshot."
+    },
+    {
+      "id": "web-chat-source-workspace-handoff",
+      "surface": "webui",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/web/src/components/chat/ChatHeader.tsx",
+      "anchors": ["getProjectIdWorkspacePath(", "sourceConversationId: conversationId"],
+      "replacement": null,
+      "removal_gate": "Retain while Chat captures immutable Source turns; review and mutation must remain in Repository Workspace."
+    },
+    {
+      "id": "cli-transition-commands",
+      "surface": "cli",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "apps/cli/src/commands/transition.ts",
+      "anchors": [
+        "client.proposeTransition(",
+        "client.decideTransition(",
+        "client.commitTransition("
+      ],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal."
+    },
+    {
+      "id": "mcp-transition-tools",
+      "surface": "mcp",
+      "state": "canonical",
+      "authority": "transition_control_plane",
+      "file": "packages/mcp/src/tools/transition/index.ts",
+      "anchors": [
+        "client.proposeTransition(",
+        "client.decideTransition(",
+        "client.commitTransition("
+      ],
+      "replacement": null,
+      "removal_gate": "Not scheduled for removal."
+    },
+    {
+      "id": "cli-workspace-extract",
+      "surface": "cli",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/cli/src/commands/extract.ts",
+      "anchors": ["client.workspaces.createExtractionProposal("],
+      "replacement": null,
+      "removal_gate": "Retain as the CLI Source-to-Workspace proposal adapter."
+    },
+    {
+      "id": "cli-yops-transition-proposal",
+      "surface": "cli",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/cli/src/commands/yops.ts",
+      "anchors": ["proposeTransition(options.project"],
+      "replacement": null,
+      "removal_gate": "The yops apply spelling is a compatibility alias; it may not write a legacy Draft."
+    },
+    {
+      "id": "cli-transition-commit-alias",
+      "surface": "cli",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "apps/cli/src/commands/commit.ts",
+      "anchors": ["client.commitTransition("],
+      "replacement": null,
+      "removal_gate": "The top-level spelling may remain while it requires Decision digest and exact expected-head CAS."
+    },
+    {
+      "id": "mcp-workspace-extract",
+      "surface": "mcp",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/mcp/src/tools/core/extract.ts",
+      "anchors": ["createExtractionProposal(projectId, workspaceId"],
+      "replacement": null,
+      "removal_gate": "Retain as the MCP Source-to-Workspace proposal adapter."
+    },
+    {
+      "id": "mcp-transition-proposal-alias",
+      "surface": "mcp",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/mcp/src/tools/core/edit.ts",
+      "anchors": ["proposeTransitionHandler({ ...args, kind: 'structured_yops' })"],
+      "replacement": null,
+      "removal_gate": "The t3x_edit spelling may remain only as a canonical proposal alias."
+    },
+    {
+      "id": "mcp-transition-commit-alias",
+      "surface": "mcp",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/mcp/src/tools/core/commit.ts",
+      "anchors": ["commitHandler: ToolHandler = commitTransitionHandler"],
+      "replacement": null,
+      "removal_gate": "The t3x_commit spelling may remain only as a canonical commit alias."
+    },
+    {
+      "id": "rest-state-author-revisions",
+      "surface": "rest",
+      "state": "canonical_adapter",
+      "authority": "transition_control_plane",
+      "file": "packages/api/src/routes/state-presentations.openapi.ts",
+      "anchors": ["revisePresentationRoute", "commitRepositoryYOpsState("],
+      "replacement": null,
+      "removal_gate": "Retain while author content is published with documentation-only CommitV2 revisions through server-selected authority and exact-head CAS."
+    }
+  ],
+  "legacy_caller_guards": [
+    {
+      "symbol": "createWorkbenchDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "commitWorkbenchDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "extractIncremental(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "extractToDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.getDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.listDrafts(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.createDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.deleteDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.getAgentDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "client.createAgentDraft(",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    },
+    {
+      "symbol": "/v1/drafts/{draftId}/auto-commit",
+      "roots": [
+        "apps/web/src",
+        "apps/cli/src",
+        "packages/mcp/src",
+        "packages/api-client/src",
+        "packages/api/src"
+      ],
+      "allowed_files": []
+    }
+  ],
+  "retirement_policy": {
+    "delete_code_with_last_caller": true,
+    "delete_historical_rows": false,
+    "drop_tables_in_wave_1": false,
+    "required_exit_gates": [
+      "replacement_is_live",
+      "legacy_caller_guard_is_empty",
+      "archived_evidence_is_readable",
+      "route_and_typed_client_are_removed_together",
+      "replay_and_cas_tests_pass"
+    ]
+  },
+  "retired_interfaces": [
+    {
+      "id": "rest-conversation-yops-log",
+      "former_file": "packages/api/src/routes/yops-log.openapi.ts",
+      "replacement": "Transition structured_yops proposal plus immutable archived YOps evidence reads.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract",
+      "former_file": "packages/api/src/routes/extract.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-extract-yops",
+      "former_file": "packages/api/src/routes/extract-yops.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-incremental-extract",
+      "former_file": "packages/api/src/routes/extract-incremental.openapi.ts",
+      "replacement": "Workspace extraction candidate followed by a structured_yops Transition proposal.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-draft-workflows",
+      "former_file": "packages/api/src/routes/drafts-workflows.openapi.ts",
+      "replacement": "Workspace revision, ReviewSnapshot, Decision, and CommitV2 lifecycle.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-commit-from-draft",
+      "former_file": "packages/api/src/routes/commit-from-draft.openapi.ts",
+      "replacement": "Decision-authorized commit_transition with exact expected-head CAS.",
+      "issue": 1297
+    },
+    {
+      "id": "rest-legacy-autopilot-draft-commit",
+      "former_file": "packages/api/src/routes/autopilot.openapi.ts",
+      "replacement": "Decision-authorized commit_transition; historical recipe actions fail closed.",
+      "issue": 1297
+    }
+  ]
+}

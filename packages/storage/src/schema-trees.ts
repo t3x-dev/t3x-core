@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -25,7 +26,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { conversations, projects } from './schema';
+import { conversations, namespaces, projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // users: Authentication (identity, keyed by email)
@@ -80,6 +81,212 @@ export const users = pgTable('users', {
 
 export type UserRecord = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// namespace_memberships / project_grants / collaboration_invitations:
+// Canonical stored access facts
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Namespace-wide authority for a human, agent, or service principal.
+ *
+ * Rows are revoked in place so a former grant cannot disappear from the
+ * authorization history. Billing and commercial eligibility deliberately do
+ * not live in this shared Core table.
+ */
+export const namespaceMemberships = pgTable(
+  'namespace_memberships',
+  {
+    membershipId: text('membership_id').primaryKey(),
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    principalKind: text('principal_kind').notNull(),
+    principalId: text('principal_id').notNull(),
+    role: text('role').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('uq_namespace_memberships_principal').on(
+      table.namespaceId,
+      table.principalKind,
+      table.principalId
+    ),
+    index('idx_namespace_memberships_active_principal')
+      .on(table.principalKind, table.principalId, table.namespaceId)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_namespace_memberships_active_namespace')
+      .on(table.namespaceId, table.role)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      'namespace_memberships_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'namespace_memberships_role_check',
+      sql`${table.role} IN ('owner', 'admin', 'editor', 'viewer')`
+    ),
+    check('namespace_memberships_status_check', sql`${table.status} IN ('active', 'revoked')`),
+    check(
+      'namespace_memberships_owner_human_check',
+      sql`${table.role} <> 'owner' OR ${table.principalKind} = 'human'`
+    ),
+    check(
+      'namespace_memberships_revocation_check',
+      sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+/** Project-scoped guest authority, isolated from namespace membership. */
+export const projectGrants = pgTable(
+  'project_grants',
+  {
+    grantId: text('grant_id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    namespaceId: text('namespace_id').notNull(),
+    principalKind: text('principal_kind').notNull(),
+    principalId: text('principal_id').notNull(),
+    role: text('role').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.namespaceId],
+      foreignColumns: [projects.projectId, projects.namespaceId],
+      name: 'project_grants_project_namespace_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('uq_project_grants_principal').on(
+      table.projectId,
+      table.principalKind,
+      table.principalId
+    ),
+    index('idx_project_grants_active_principal')
+      .on(table.principalKind, table.principalId, table.projectId)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_project_grants_active_project')
+      .on(table.projectId, table.role)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      'project_grants_principal_kind_check',
+      sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    check('project_grants_role_check', sql`${table.role} IN ('admin', 'editor', 'viewer')`),
+    check('project_grants_status_check', sql`${table.status} IN ('active', 'revoked')`),
+    check(
+      'project_grants_expiry_check',
+      sql`${table.expiresAt} IS NULL OR ${table.expiresAt} > ${table.createdAt}`
+    ),
+    check(
+      'project_grants_revocation_check',
+      sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+/**
+ * Recipient-bound invitation to namespace membership or one project grant.
+ *
+ * `project_id = null` identifies a namespace invitation. The raw invitation
+ * secret is never stored; callers persist only a one-way token hash. Owner is
+ * deliberately excluded because ownership changes use the transfer workflow.
+ */
+export const collaborationInvitations = pgTable(
+  'collaboration_invitations',
+  {
+    invitationId: text('invitation_id').primaryKey(),
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    projectId: text('project_id'),
+    recipientUserId: text('recipient_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    recipientEmail: text('recipient_email'),
+    role: text('role').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    status: text('status').notNull().default('pending'),
+    createdByPrincipalKind: text('created_by_principal_kind').notNull(),
+    createdByPrincipalId: text('created_by_principal_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedByUserId: text('accepted_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    expiredAt: timestamp('expired_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.namespaceId],
+      foreignColumns: [projects.projectId, projects.namespaceId],
+      name: 'collaboration_invitations_project_namespace_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('uq_collaboration_invitations_pending_user')
+      .on(table.namespaceId, sql`COALESCE(${table.projectId}, '')`, table.recipientUserId)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientUserId} IS NOT NULL`),
+    uniqueIndex('uq_collaboration_invitations_pending_email')
+      .on(table.namespaceId, sql`COALESCE(${table.projectId}, '')`, table.recipientEmail)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientEmail} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_user')
+      .on(table.recipientUserId, table.expiresAt)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientUserId} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_email')
+      .on(table.recipientEmail, table.expiresAt)
+      .where(sql`${table.status} = 'pending' AND ${table.recipientEmail} IS NOT NULL`),
+    index('idx_collaboration_invitations_pending_target')
+      .on(table.namespaceId, table.projectId, table.expiresAt)
+      .where(sql`${table.status} = 'pending'`),
+    check(
+      'collaboration_invitations_recipient_check',
+      sql`${table.recipientUserId} IS NOT NULL OR ${table.recipientEmail} IS NOT NULL`
+    ),
+    check(
+      'collaboration_invitations_email_check',
+      sql`${table.recipientEmail} IS NULL OR (${table.recipientEmail} = lower(btrim(${table.recipientEmail})) AND length(${table.recipientEmail}) > 0)`
+    ),
+    check(
+      'collaboration_invitations_principal_kind_check',
+      sql`${table.createdByPrincipalKind} IN ('human', 'agent', 'service')`
+    ),
+    check(
+      'collaboration_invitations_role_check',
+      sql`${table.role} IN ('admin', 'editor', 'viewer')`
+    ),
+    check(
+      'collaboration_invitations_status_check',
+      sql`${table.status} IN ('pending', 'accepted', 'revoked', 'expired')`
+    ),
+    check('collaboration_invitations_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+    check(
+      'collaboration_invitations_recipient_acceptance_check',
+      sql`${table.recipientUserId} IS NULL OR ${table.acceptedByUserId} IS NULL OR ${table.recipientUserId} = ${table.acceptedByUserId}`
+    ),
+    check(
+      'collaboration_invitations_lifecycle_check',
+      sql`(${table.status} = 'pending' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'accepted' AND ${table.acceptedAt} IS NOT NULL AND ${table.acceptedByUserId} IS NOT NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'revoked' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NOT NULL AND ${table.expiredAt} IS NULL)
+        OR (${table.status} = 'expired' AND ${table.acceptedAt} IS NULL AND ${table.acceptedByUserId} IS NULL AND ${table.revokedAt} IS NULL AND ${table.expiredAt} IS NOT NULL)`
+    ),
+  ]
+);
+
+export type NamespaceMembershipRecord = typeof namespaceMemberships.$inferSelect;
+export type NamespaceMembershipInsert = typeof namespaceMemberships.$inferInsert;
+export type ProjectGrantRecord = typeof projectGrants.$inferSelect;
+export type ProjectGrantInsert = typeof projectGrants.$inferInsert;
+export type CollaborationInvitationRecord = typeof collaborationInvitations.$inferSelect;
+export type CollaborationInvitationInsert = typeof collaborationInvitations.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // accounts: OAuth Provider Records (many-to-one with users)
@@ -1074,7 +1281,6 @@ export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // State index (cross-conversation entity/topic graph)
-// @see docs/plans/2026-03-05-knowledge-graph-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const knowledgeNodes = pgTable(

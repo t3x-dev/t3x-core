@@ -1,3 +1,4 @@
+import { stateOverviewRoutes } from './state-overview.openapi';
 /**
  * CommitV2 repository routes with OpenAPI.
  *
@@ -9,6 +10,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { exportCommittedState, StateExportIntegrityError } from '@t3x-dev/application';
 import type { SemanticContent } from '@t3x-dev/core';
 import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
@@ -28,15 +30,24 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
   decodeRepositorySemanticContentState,
   getRepositoryConversationEvidence,
   getRepositorySemanticCommit,
+  RepositoryStateDecisionDeniedError,
   RepositoryStateDomainUnsupportedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import {
   ErrorResponseSchema,
@@ -45,8 +56,113 @@ import {
   SuccessResponseSchema,
 } from '../schemas/common';
 
+import { statePresentationRoutes } from './state-presentations.openapi';
+
 export const commitRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+commitRoutes.route('/', statePresentationRoutes);
+commitRoutes.route('/', stateOverviewRoutes);
+
+const exportStateRoute = createRoute({
+  method: 'get',
+  path: '/v1/commits/{hash}/export',
+  tags: ['Commits'],
+  summary: 'Export the complete value of an exact committed State',
+  request: {
+    params: z.object({ hash: z.string().regex(/^sha256:[0-9a-f]{64}$/) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      format: z.enum(['json', 'yaml']),
+      state_digest: z
+        .string()
+        .regex(/^sha256:[0-9a-f]{64}$/)
+        .optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'UTF-8 artifact and exact source descriptors; no presentation sidecars',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              format: z.enum(['json', 'yaml']),
+              scope: z.literal('full-state-value'),
+              mimeType: z.string(),
+              filename: z.string(),
+              content: z.string(),
+              byteLength: z.number().int().nonnegative(),
+              byteDigest: z.string(),
+              sourceCommit: z.object({
+                kind: z.literal('commit'),
+                schema: z.literal('t3x/commit/v2'),
+                digest: z.string(),
+              }),
+              sourceState: z.object({
+                kind: z.literal('state'),
+                schema: z.literal('t3x/state/v1'),
+                digest: z.string(),
+              }),
+              codec: z.object({ mediaType: z.string(), version: z.string() }),
+              serialization: z.string(),
+            })
+          ),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid format or descriptor',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Commit not found in project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'State digest mismatch',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Graph integrity or export failure',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(exportStateRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const { project_id: projectId, format, state_digest } = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
+    if (!graph) return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found in project');
+    return c.json(
+      {
+        success: true as const,
+        data: exportCommittedState({
+          commitDigest: hash,
+          commit: graph.commit,
+          state: graph.state,
+          format,
+          expectedStateDigest: state_digest,
+        }),
+      },
+      200
+    );
+  } catch (error) {
+    if (error instanceof StateExportIntegrityError) {
+      return errorResponse(c, 'HASH_CONFLICT', error.message);
+    }
+    return errorResponse(c, 'INTERNAL_ERROR', 'Unable to verify and export the requested State');
+  }
 });
 
 // ============================================================
@@ -202,6 +318,14 @@ const createCommitRoute = createRoute({
       description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Project access or Transition capability denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Ref head conflict or required machine policy binding is missing',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Internal server error',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -242,6 +366,12 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       yopsLogIds = await findUncommittedYOpsIds(db, sourceConversationId, body.project_id);
     }
     const targetBranch = body.branch ?? 'main';
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: body.project_id,
+      refName: targetBranch,
+    });
     if (targetBranch === 'main') await ensureMainBranch(db, body.project_id);
     const expectedHead = body.expected_head;
     if (inheritedParentHash !== null && inheritedParentHash !== expectedHead) {
@@ -267,7 +397,6 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       );
     }
     const target = createRepositoryYOpsStateFromSemanticContent(content);
-    const userId = getUserId(c);
     let created: Awaited<ReturnType<typeof commitRepositoryYOpsState>> | undefined;
     await (db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as typeof db;
@@ -280,10 +409,11 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
         refName: targetBranch,
         expectedHead,
         target,
-        actor: {
-          kind: 'human',
-          id: userId ? `user:${userId}` : 'human:local-user',
-        },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         ...(body.message?.trim() ? { intent: body.message.trim() } : {}),
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
@@ -314,6 +444,23 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       200
     );
   } catch (err) {
+    if (
+      err instanceof TransitionScopeDeniedError ||
+      err instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', err.message, { protocol_code: err.code });
+    }
+    if (
+      err instanceof TransitionPolicyBindingRequiredError ||
+      err instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', err.message, { protocol_code: err.code });
+    }
+    if (err instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
+        failures: err.failures,
+      });
+    }
     if (err instanceof SourceConversationAlreadyCommittedError) {
       return errorResponse(c, 'ALREADY_COMMITTED', err.message);
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import { ClipboardPaste, Download, FileJson, FileText, Play } from 'lucide-react';
+import { ClipboardPaste, Download, FileJson, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,6 @@ interface TemplatePreviewDialogProps {
   template: Template | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUse: (template: Template) => void;
 }
 
 function HighlightedPrompt({ text }: { text: string }) {
@@ -59,7 +58,6 @@ export function TemplatePreviewDialog({
   template,
   open,
   onOpenChange,
-  onUse,
 }: TemplatePreviewDialogProps) {
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const { run: exportTemplate } = useExportTemplate();
@@ -186,16 +184,6 @@ export function TemplatePreviewDialog({
           </DropdownMenu>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
-          </Button>
-          <Button
-            onClick={() => {
-              onOpenChange(false);
-              onUse(template);
-            }}
-            className="gap-1"
-          >
-            <Play className="h-3 w-3" />
-            Use Template
           </Button>
         </DialogFooter>
       </DialogContent>

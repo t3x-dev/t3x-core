@@ -2,8 +2,10 @@
 
 import type { Node } from '@xyflow/react';
 import { X } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
@@ -13,7 +15,6 @@ import type {
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ConversationView } from './ConversationView';
-import { PendingCommitView } from './PendingCommitView';
 
 export type NodeQuickAction = {
   key: string;
@@ -27,9 +28,6 @@ interface NodeModalProps {
   node?: Node<CanvasNodeData>;
   onClose: () => void;
   onUpdate: (patch: Partial<CanvasNodeData>) => void;
-  onConvertDraft?: () => void;
-  onBranchChange?: (branch: 'main' | 'branch') => void;
-  onBranchNameChange?: (name: string) => void;
   quickActions?: NodeQuickAction[];
   onSaveConstraints?: (constraints: ConversationConstraints) => void;
   effectiveConstraints?: {
@@ -46,9 +44,6 @@ export function NodeModal({
   node,
   onClose,
   onUpdate,
-  onConvertDraft,
-  onBranchChange,
-  onBranchNameChange,
   quickActions,
   onSaveConstraints,
   effectiveConstraints,
@@ -56,10 +51,8 @@ export function NodeModal({
   isConversationLocked,
   viewMode = 'commit',
 }: NodeModalProps) {
+  const router = useRouter();
   const projectId = useCanvasStore((state) => state.projectId);
-
-  // For staging units: toggle between conversation view and commit config view
-  const [showCommitConfig, setShowCommitConfig] = useState(false);
 
   if (!node) return null;
 
@@ -70,9 +63,7 @@ export function NodeModal({
   const isStagingUnit = isUnit && data.commitStatus === 'staging';
   const isCommittedUnit = isUnit && data.commitStatus === 'committed';
 
-  const isConversation =
-    (isStagingUnit && !showCommitConfig) || (isUnit && viewMode === 'conversation');
-  const isPendingCommit = isStagingUnit && showCommitConfig && viewMode !== 'conversation';
+  const isConversation = isStagingUnit || (isUnit && viewMode === 'conversation');
 
   if (isConversation) {
     return (
@@ -87,22 +78,10 @@ export function NodeModal({
         effectiveConstraints={effectiveConstraints}
         onUpdateConstraintOverrides={onUpdateConstraintOverrides}
         isConversationLocked={isConversationLocked}
-        onShowCommitConfig={() => setShowCommitConfig(true)}
-      />
-    );
-  }
-
-  if (isPendingCommit) {
-    return (
-      <PendingCommitView
-        node={node}
-        onClose={onClose}
-        onUpdate={onUpdate}
-        projectId={projectId || ''}
-        onShowConversation={() => setShowCommitConfig(false)}
-        onConvertDraft={onConvertDraft}
-        onBranchChange={onBranchChange}
-        onBranchNameChange={onBranchNameChange}
+        onOpenWorkspace={() => {
+          router.push(buildWorkspaceHandoffPath(projectId, data));
+          onClose();
+        }}
       />
     );
   }
@@ -154,4 +133,15 @@ export function NodeModal({
       </div>
     </div>
   );
+}
+
+export function buildWorkspaceHandoffPath(projectId: string | null, data: CanvasNodeData): string {
+  if (!projectId) return '/';
+  const branch =
+    data.pendingBranch === 'branch' ? data.pendingBranchName?.trim() || 'main' : 'main';
+  const conversationId = data.sourceConversationId || data.conversationId;
+  return getProjectIdWorkspacePath(projectId, {
+    branch,
+    sourceConversationId: conversationId,
+  });
 }

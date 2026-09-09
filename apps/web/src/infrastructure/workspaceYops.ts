@@ -1,6 +1,13 @@
+import {
+  getWorkspaceYOpsRootKey,
+  normalizeYOpsPath,
+  toSnakeKey,
+} from '@/domain/workspaces/yopsPaths';
+
+export { getWorkspaceYOpsRootKey } from '@/domain/workspaces/yopsPaths';
+
 import type {
   WorkspaceCandidate,
-  WorkspaceSchemaBinding,
   WorkspaceSchemaCandidateField,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
@@ -69,22 +76,20 @@ export async function validateWorkspaceYOps(
   };
 }
 
-export function getWorkspaceYOpsRootKey(bindings: WorkspaceSchemaBinding[]): string {
-  const primary = bindings[0];
-  const canonicalName = primary?.canonicalName?.trim().toLowerCase();
-  if (canonicalName === 't3x/esphome-device') return 'device';
-  if (canonicalName) return toSnakeKey(canonicalName.split('/').at(-1) ?? 'candidate');
-
-  const primaryName = primary?.schemaName.replace(/\s+Schema$/i, '') ?? 'candidate';
-  if (/esphome\s+device/i.test(primaryName)) return 'device';
-  return toSnakeKey(primaryName);
-}
-
-function buildWorkspaceBaselineTrees(
+export function buildWorkspaceBaselineTrees(
   candidate: WorkspaceCandidate,
   rootKey: string,
   inheritedTrees: WorkspaceYOpsTreeNode[]
 ): WorkspaceYOpsTreeNode[] {
+  // A committed baseline is immutable input to replay, never a place for proposed fields.
+  if (
+    !rootKey ||
+    inheritedTrees.length > 0 ||
+    /^sha256:[a-f\d]{64}$/i.test(candidate.baseCommitHash ?? '')
+  ) {
+    return inheritedTrees.map(cloneWorkspaceTree);
+  }
+
   const root: WorkspaceYOpsTreeNode = {
     key: rootKey,
     slots: { title: candidate.title },
@@ -217,7 +222,7 @@ function workspaceYOpsValuesEqual(left: WorkspaceYOpsValue, right: WorkspaceYOps
 
 function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string): WorkspaceYOp {
   const path = normalizeYOpsPath(operation.path, rootKey);
-  const value = operation.afterValue ?? operation.summary;
+  const value = operation.afterValue === undefined ? operation.summary : operation.afterValue;
 
   if (operation.op === 'add' || operation.op === 'append') {
     return { append: { path: path.replace(/\/-$/, ''), value } };
@@ -226,17 +231,6 @@ function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string)
   if (operation.op === 'drop') return { drop: { path } };
   if (operation.op === 'unset') return { unset: { path } };
   return { set: { path, value } };
-}
-
-function normalizeYOpsPath(path: string, rootKey: string): string {
-  const withoutArrayPush = path.replace(/\/-$/, '');
-  const segments = withoutArrayPush
-    .split('/')
-    .filter(Boolean)
-    .map((segment) => toSnakeKey(segment));
-
-  if (segments[0] === rootKey) return segments.join('/');
-  return [rootKey, ...segments].join('/');
 }
 
 function coerceFieldValue(field: WorkspaceSchemaCandidateField): WorkspaceYOpsValue {
@@ -253,13 +247,4 @@ function ensureChildNode(parent: WorkspaceYOpsTreeNode, key: string): WorkspaceY
   const child: WorkspaceYOpsTreeNode = { key, slots: {}, children: [] };
   parent.children.push(child);
   return child;
-}
-
-function toSnakeKey(value: string): string {
-  return value
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
 }

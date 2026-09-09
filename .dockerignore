@@ -26,3 +26,20 @@ coverage
 # Deployment credentials and local provider state must never enter the context.
 .env*
 .vercel
+
+# Documentation and local evidence are not runtime inputs.
+docs
+**/docs
+notes
+**/notes
+**/*.md
+**/test-results
+**/playwright-report
+**/blob-report
+**/screenshots
+**/e2e
+**/__tests__
+**/*.test.*
+**/*.spec.*
+**/.next
+**/*.tsbuildinfo

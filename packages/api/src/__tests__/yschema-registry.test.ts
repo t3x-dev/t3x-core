@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalSchemaNameFromBinding,
   resolveBuiltInYSchema,
+  schemaRootKeyFromBinding,
   schemaVersionFromBinding,
 } from '../lib/yschema-registry';
 
@@ -32,4 +33,15 @@ describe('YSchema registry bindings', () => {
   it('recognizes the legacy Prompt Schema display name', () => {
     expect(canonicalSchemaNameFromBinding({ schemaName: 'Prompt Schema' })).toBe('t3x/prompt');
   });
+});
+
+it('keeps stable explicit roots and supports existing Studio bindings without hash-shaped node keys', () => {
+  expect(schemaRootKeyFromBinding({ canonicalName: 'studio:sha256:abc' })).toBe('candidate');
+  expect(schemaRootKeyFromBinding({ canonicalName: 'studio:sha256:def', rootKey: 'prd' })).toBe(
+    'prd'
+  );
+  expect(
+    schemaRootKeyFromBinding({ canonicalName: 'studio:sha256:abc', rootKey: '../invalid' })
+  ).toBe('candidate');
+  expect(schemaRootKeyFromBinding({ canonicalName: 't3x/esphome-device' })).toBe('device');
 });

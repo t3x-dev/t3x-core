@@ -20,7 +20,7 @@ const canvasSurfaceMocks = vi.hoisted(() => ({
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
-let searchParamsValue = new URLSearchParams();
+let searchParamsValue = new URLSearchParams('view=structure');
 let routeParamsValue: Record<string, string> = { projectId: 'proj_test' };
 let pathnameValue = '/t3x-dev/test-project';
 
@@ -29,6 +29,12 @@ vi.mock('next/navigation', () => ({
   usePathname: () => pathnameValue,
   useSearchParams: () => searchParamsValue,
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
+}));
+
+vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
+  useSchemaCatalog: () => ({ data: { items: [], has_more: false }, loading: false }),
+  useSchemaCollections: () => [],
+  useSchemaIntroduction: () => ({ loading: false }),
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -158,7 +164,7 @@ beforeEach(() => {
   });
   stateHookMocks.refreshBranches.mockResolvedValue(undefined);
   stateHookMocks.refreshWorkspaces.mockResolvedValue(undefined);
-  searchParamsValue = new URLSearchParams();
+  searchParamsValue = new URLSearchParams('view=structure');
   pathnameValue = '/t3x-dev/test-project';
   routeParamsValue = { projectId: 'proj_test' };
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
@@ -208,15 +214,20 @@ describe('ProjectDetailPage — project-first shell states', () => {
   const renderProjectContent = () =>
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-  it('canonicalizes project id routes to owner/repo routes', async () => {
+  it('keeps project ID routes independent of namespace directory access', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces&zoom=1.00&x=10&y=20');
     pathnameValue = '/project/proj_test';
 
     render(<ProjectDetailPage />);
 
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces');
-    });
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument()
+    );
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?tab=schemas'
+    );
   });
 
   it('renders project detail from an owner/repo route override', () => {
@@ -237,7 +248,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
@@ -247,7 +258,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
@@ -290,8 +301,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('does not start Canvas I/O on repository surfaces', async () => {
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Structure' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
     expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
     expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
@@ -382,7 +393,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('shows failed YSchema gaps and can rerun validation from State', async () => {
-    searchParamsValue = new URLSearchParams('tab=state');
+    searchParamsValue = new URLSearchParams('tab=state&view=structure');
     stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: STATE_COMMIT.hash,
@@ -442,9 +453,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('missing')).toHaveLength(2);
+    expect(await screen.findAllByText('Missing')).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByText('Revision details'));
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {
@@ -463,15 +475,15 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByText('t3x-dev')).toBeInTheDocument();
+    expect(screen.getByRole('banner')).toHaveTextContent('Project');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
-    expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.parentElement).toHaveClass('h-dvh', 'overflow-hidden');
+    expect(projectNavigation.closest('header')).toHaveClass('min-[1200px]:h-14');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
@@ -481,7 +493,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces'
+      '/project/proj_test?tab=workspaces'
     );
   });
 
@@ -495,7 +507,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -510,31 +522,28 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      'Main workspace'
+    );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(screen.getByText('No source material yet.')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', {
-        scroll: false,
-      });
-    });
+    expect(
+      screen.getByRole('heading', { name: 'What would you like to change?' })
+    ).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('renders the fixture-backed Schemas tab preview from the query string', () => {
+  it('opens Schema discovery from the project tab query string', () => {
     searchParamsValue = new URLSearchParams('tab=schemas');
 
     renderProjectContent();
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Schema versions' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('region', { name: 'Selected schema version' })
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search definitions' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('keeps repository State visible while Canvas is loading', async () => {
@@ -548,7 +557,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(await screen.findByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -573,7 +582,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('ignores selected-node deep links while the intro demo opens committed State', async () => {
-    searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
+    searchParamsValue = new URLSearchParams('view=structure&introDemo=1&selected=sha256%3Aabc123');
     useCanvasStore.setState({
       nodes: [
         { id: 'sha256:abc123', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -589,7 +598,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
@@ -650,7 +659,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByRole('heading', { name: 'State details' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     });
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();

@@ -53,34 +53,6 @@ const PROMPTS: PromptDef[] = [
     },
   },
   {
-    name: 'inspect_workbench_draft',
-    description: 'User entry for opening a workbench draft and refining it safely.',
-    arguments: [{ name: 'draft_id', description: 'Workbench draft to inspect.', required: true }],
-    render: (args) => {
-      const draftId = args.draft_id ?? '<draft_id>';
-      return {
-        description:
-          'Use this workflow to inspect a workbench draft, revise it with YOps, and verify the result.',
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: [
-                'Workflow: inspect and refine a workbench draft.',
-                formatResourceUri(`t3x://workbench-drafts/${draftId}`),
-                '1. Read the workbench draft resource first.',
-                '2. Draft YOps edits based on the current revision.',
-                '3. Apply changes with `t3x_edit`.',
-                '4. Re-read the draft and confirm the revision moved forward.',
-              ].join('\n'),
-            },
-          },
-        ],
-      };
-    },
-  },
-  {
     name: 'prepare_resolve_merge',
     description:
       'User entry for comparing two commits, preparing a merge draft, and resolving conflicts.',

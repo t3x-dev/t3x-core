@@ -56,10 +56,6 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/components/canvas/AutoDraftBadge', () => ({
-  AutoDraftBadge: () => <span data-testid="auto-draft-badge" />,
-}));
-
 vi.mock('@/components/canvas/SealAnimation', () => ({
   SealAnimation: () => null,
 }));
@@ -312,7 +308,7 @@ describe('Canvas node semantic markers', () => {
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('shows a local new leaf action after expanding existing leaf output', () => {
+  it('keeps expanded legacy output readable without create or delete controls', () => {
     renderUnitNode(makeNodeData());
 
     const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
@@ -320,9 +316,8 @@ describe('Canvas node semantic markers', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
-    fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
-
-    expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+    expect(screen.queryByRole('button', { name: /New Leaf|Remove leaf/i })).not.toBeInTheDocument();
+    expect(openLeafPanelMock).not.toHaveBeenCalled();
   });
 
   it('uses the canvas project id for leaf detail links when the route has no projectId param', () => {

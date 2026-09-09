@@ -17,6 +17,16 @@ import { canonicalizeProtocolValue, TransitionProtocolError } from '@t3x-dev/tra
 import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  InferenceExecutionError,
+  resolveInferenceActor,
+  resolveInferenceIngressChannel,
+  resolveInferenceProjectScope,
+  resolveInferenceRunId,
+} from '../lib/inference';
 import { assertProjectAccess } from '../lib/project-access';
 import {
   generateTransitionProposal,
@@ -459,6 +469,19 @@ function wireReviewPrecondition(precondition: z.infer<typeof TransitionReviewPre
 }
 
 function controlPlaneError(c: Context, error: unknown) {
+  if (error instanceof InferenceAdmissionDeniedError) {
+    return errorResponse(c, 'RATE_LIMITED', error.message, {
+      admission_code: error.code,
+      generation_id: error.attempt.generationId,
+    });
+  }
+  if (error instanceof InferenceExecutionError) {
+    if (error.cause instanceof LLMProviderError) return controlPlaneError(c, error.cause);
+    return errorResponse(c, 'GENERATION_FAILED', error.message, {
+      generation_id: error.attempt.generationId,
+      terminal: error.terminal.kind,
+    });
+  }
   if (error instanceof ProposalGenerationProviderError) {
     return errorResponse(c, 'GENERATION_NOT_CONFIGURED', error.message, {
       protocol_code: error.code,
@@ -580,10 +603,12 @@ async function defaultProposalGenerationModel(input: {
         ProposalGenerationDraftSchema,
         { model: resolved.model, temperature: 0, maxTokens: 16_000 }
       );
-      return result.data;
+      return { draft: result.data, usage: result.usage };
     },
   };
 }
+
+const defaultInferenceRuntime = createInferenceRuntime();
 
 const generateProposalRoute = createRoute({
   method: 'post',
@@ -613,6 +638,10 @@ const generateProposalRoute = createRoute({
     },
     409: {
       description: 'Idempotency, policy, or Workspace conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Inference admission denied',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -855,6 +884,15 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
             requester: principal.actor,
             request,
           }) ?? defaultProposalGenerationModel({ db, projectId, request }),
+        inference: {
+          runtime: getInferenceRuntime(c) ?? defaultInferenceRuntime,
+          runId: resolveInferenceRunId(c),
+          scope: {
+            actor: resolveInferenceActor(c),
+            ingressChannel: resolveInferenceIngressChannel(c),
+            ...resolveInferenceProjectScope(access),
+          },
+        },
       });
       return c.json(
         {

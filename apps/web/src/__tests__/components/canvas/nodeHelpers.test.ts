@@ -1,4 +1,4 @@
-import { GitCommit, MessageSquarePlus, PenSquare, Plus } from 'lucide-react';
+import { GitCommit, MessageSquarePlus, Plus } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 import { getNextStep } from '@/components/canvas/node-parts/nodeHelpers';
 
@@ -8,15 +8,13 @@ describe('getNextStep', () => {
     const openNodeModal = vi.fn();
 
     const nextStep = getNextStep({
-      isDraft: false,
       isStaging: true,
       isCommitted: false,
       conversationId: 'conv_123',
       nodeId: 'node_1',
       t: () => 'Create Commit',
-      icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
+      icons: { MessageSquarePlus, GitCommit, Plus },
       actions: {
-        navigateToDraft: vi.fn(),
         navigateToConversation,
         openNodeModal,
         openLeafPanel: vi.fn(),

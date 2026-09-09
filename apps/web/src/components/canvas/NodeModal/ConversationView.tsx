@@ -1,13 +1,12 @@
 'use client';
 
 import type { Node } from '@xyflow/react';
-import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
+import { Clock, GitCommit, Link2, Settings, Workflow, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
@@ -36,7 +35,7 @@ export interface ConversationViewProps {
     | undefined;
   onUpdateConstraintOverrides: ((overrides: Partial<DraftConstraintOverrides>) => void) | undefined;
   isConversationLocked: boolean | undefined;
-  onShowCommitConfig: () => void;
+  onOpenWorkspace: () => void;
 }
 
 export function ConversationView({
@@ -46,9 +45,8 @@ export function ConversationView({
   projectId,
   isStagingUnit,
   quickActions,
-  onShowCommitConfig,
+  onOpenWorkspace,
 }: ConversationViewProps) {
-  const { t } = useTerminology();
   const data = node.data;
 
   // Derive the addCommitAction from quickActions
@@ -119,15 +117,15 @@ export function ConversationView({
             >
               <Settings size={18} />
             </Button>
-            {/* For staging units: show Commit button to enter commit config view */}
+            {/* Repository Workspace is the only active review and commit authority. */}
             {isStagingUnit && (
               <Button
-                onClick={onShowCommitConfig}
-                title={t('configure_and_commit')}
+                onClick={onOpenWorkspace}
+                title="Review and commit through the repository Workspace"
                 className="gap-1.5"
               >
-                <Check size={16} />
-                <span>{t('commitAction')}</span>
+                <Workflow size={16} />
+                <span>Open Workspace</span>
               </Button>
             )}
             {/* For committed units: show Create Unit button */}

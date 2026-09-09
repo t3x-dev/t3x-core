@@ -45,7 +45,8 @@ const NO_DRIFT: DriftResult = { drifted: false };
 /**
  * Detect topic drift using LLM.
  *
- * @param provider - LLM provider for generation
+ * @param provider - LLM provider for generation. Hosted callers must pass an
+ * application-bound provider so admission and terminal receipts wrap the call.
  * @param currentTopicName - Name of the current root topic (or first frame type)
  * @param existingFrameTypes - Type names of existing frames
  * @param recentTurns - Last 2-3 conversation turns

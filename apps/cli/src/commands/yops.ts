@@ -5,6 +5,7 @@
  */
 
 import * as fs from 'node:fs';
+import type { TransitionProtocolValue } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import YAML from 'yaml';
 import { error, getApiKey, getApiUrl, info, readStdin, success } from '../utils.js';
@@ -82,102 +83,78 @@ export function registerYopsCommands(program: Command): void {
     });
 
   yops
-    .command('apply [draft-id]')
-    .description('Apply YOps to a draft (writes to yops_log)')
+    .command('apply <workspace-id>')
+    .description('Compatibility alias: propose YOps through Transition authority')
+    .requiredOption('-p, --project <id>', 'Project ID')
+    .requiredOption('--request-id <id>', 'Idempotency key')
     .option('-f, --file <path>', 'YOps YAML file')
     .option('--stdin', 'Read from stdin')
-    .option('--if-revision <n>', 'Draft revision for optimistic locking (default: auto-fetch)')
+    .option('--if-revision <n>', 'Expected Workspace revision')
+    .option('--why <text>', 'Concise rationale')
     .option('--json', 'Output as JSON')
-    .action(async (draftIdArg: string | undefined, options) => {
-      const { getClientWithAuth, getDraftId } = await import('../utils.js');
-      const draftId = getDraftId(draftIdArg);
-      if (!draftId) return;
-
+    .action(async (workspaceId: string, options) => {
+      const { getClientWithAuth } = await import('../utils.js');
       const yamlText = await readYOpsInput(options);
       const ops = parseYOps(yamlText);
       if (!ops) return;
 
-      const client = getClientWithAuth();
-
-      let revision: number;
-      if (options.ifRevision !== undefined) {
-        revision = parseInt(String(options.ifRevision), 10);
-        if (Number.isNaN(revision)) {
-          error('--if-revision must be a number');
-          process.exit(1);
-        }
-      } else {
-        const draft = (await client.getDraft(draftId)) as { revision?: number };
-        if (typeof draft.revision !== 'number') {
-          error('Draft response did not include a revision field');
-          process.exit(1);
-        }
-        revision = draft.revision;
-      }
-
       try {
-        const result = await client.applyYOps(draftId, ops, revision);
+        const revision = options.ifRevision === undefined ? undefined : Number(options.ifRevision);
+        if (revision !== undefined && (!Number.isInteger(revision) || revision < 1)) {
+          throw new Error('--if-revision must be a positive integer');
+        }
+        const result = await getClientWithAuth().proposeTransition(options.project, {
+          kind: 'structured_yops',
+          request_id: options.requestId,
+          workspace_id: workspaceId,
+          operations: ops as TransitionProtocolValue[],
+          ...(revision === undefined ? {} : { if_revision: revision }),
+          ...(options.why ? { why: options.why } : {}),
+        });
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
           return;
         }
 
-        success(
-          `Applied ${result.applied_count} operation${result.applied_count !== 1 ? 's' : ''}`
-        );
-        console.log(`  Draft: ${result.draft_id}  (revision ${revision} → ${result.revision})`);
-        console.log(`  Trees: ${result.tree_count} nodes, ${result.slot_count} slots`);
+        success('Proposed Transition');
+        console.log(JSON.stringify(result, null, 2));
       } catch (e: unknown) {
-        error(`Apply failed: ${e instanceof Error ? e.message : String(e)}`);
+        error(`Proposal failed: ${e instanceof Error ? e.message : String(e)}`);
         process.exit(1);
       }
     });
 
   yops
     .command('log')
-    .description('Show YOps history for a conversation')
-    .requiredOption('-c, --conversation <id>', 'Conversation ID')
+    .description('Show archived YOps evidence for a source thread')
+    .requiredOption('-p, --project <id>', 'Project ID')
+    .requiredOption('-c, --conversation <id>', 'Source thread ID')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
-      const baseUrl = getApiUrl();
+      const { getClientWithAuth } = await import('../utils.js');
       try {
-        const response = await fetch(`${baseUrl}/v1/conversations/${options.conversation}/yops`, {
-          headers: buildHeaders(),
-        });
-
-        const json = (await response.json()) as {
-          success: boolean;
-          data?: Array<{
-            source: string;
-            created_at: string;
-            yops: Array<Record<string, unknown>>;
-          }>;
-          error?: { code: string; message: string };
-        };
-
-        if (!response.ok || !json.success) {
-          const err = json.error ?? { code: 'UNKNOWN', message: 'Unknown error' };
-          error(`Request failed: ${err.code} — ${err.message}`);
-          process.exit(1);
-        }
-
-        const entries = json.data ?? [];
+        const evidence = await getClientWithAuth().sourceThreads.legacyYOpsEvidence(
+          options.project,
+          options.conversation,
+          { order: 'asc', archivedOnly: true }
+        );
+        const entries = evidence.items;
 
         if (options.json) {
-          console.log(JSON.stringify(entries, null, 2));
+          console.log(JSON.stringify(evidence, null, 2));
           return;
         }
 
-        if (!Array.isArray(entries) || entries.length === 0) {
-          info('No YOps history found.');
+        if (entries.length === 0) {
+          info('No archived YOps evidence found.');
           return;
         }
 
         for (const entry of entries) {
-          console.log(`\n— ${entry.source} (${entry.created_at})`);
-          for (const op of entry.yops) {
-            const name = Object.keys(op)[0];
+          console.log(`\n— ${entry.source} (${entry.created_at}) [${entry.lifecycle.status}]`);
+          for (const op of normalizeYOps(entry.yops)) {
+            const name = Object.keys(op)[0] ?? 'unknown';
             console.log(`  ${name}: ${summarizeOp(op)}`);
           }
         }
@@ -186,6 +163,19 @@ export function registerYopsCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
+
+function normalizeYOps(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && !Array.isArray(item)
+    );
+  }
+  if (typeof value === 'object' && value !== null && 'yops' in value) {
+    return normalizeYOps((value as { yops: unknown }).yops);
+  }
+  return [];
 }
 
 async function readYOpsInput(options: { file?: string; stdin?: boolean }): Promise<string> {

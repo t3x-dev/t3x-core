@@ -10,7 +10,7 @@
 
 import postgres from 'postgres';
 import type { AnyDB } from '../adapters';
-import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
+import { closePostgresStorage, createPostgresBootstrapStorage } from '../adapters/postgres';
 import { getTestPostgresPort } from './pgTestConfig';
 
 /**
@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   owner_id TEXT,
   namespace_id TEXT REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  visibility TEXT NOT NULL DEFAULT 'private',
   metadata_json TEXT,
   provider_config TEXT,
   default_provider TEXT,
@@ -67,10 +68,166 @@ CREATE TABLE IF NOT EXISTS projects (
   business_rules JSONB DEFAULT '[]',
   extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ
+  deleted_at TIMESTAMPTZ,
+  CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id),
+  CONSTRAINT projects_visibility_check
+    CHECK (visibility IN ('private', 'unlisted', 'public'))
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_namespace_created ON projects(namespace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_projects_visibility_created ON projects(visibility, created_at);
+
+CREATE TABLE IF NOT EXISTS project_visibility_events (
+  event_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL,
+  from_visibility TEXT NOT NULL,
+  to_visibility TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  publication_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT project_visibility_events_project_namespace_fk
+    FOREIGN KEY (project_id, namespace_id)
+    REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+  CONSTRAINT project_visibility_events_from_check
+    CHECK (from_visibility IN ('private', 'unlisted', 'public')),
+  CONSTRAINT project_visibility_events_to_check
+    CHECK (to_visibility IN ('private', 'unlisted', 'public')),
+  CONSTRAINT project_visibility_events_actor_kind_check
+    CHECK (actor_kind IN ('human', 'agent', 'service', 'local')),
+  CONSTRAINT project_visibility_events_public_confirmation_check
+    CHECK (to_visibility <> 'public' OR publication_confirmed = TRUE),
+  CONSTRAINT project_visibility_events_transition_check
+    CHECK (from_visibility <> to_visibility)
+);
+CREATE INDEX IF NOT EXISTS idx_project_visibility_events_project_created
+  ON project_visibility_events(project_id, created_at, event_id);
+
+CREATE TABLE IF NOT EXISTS namespace_memberships (
+  membership_id TEXT PRIMARY KEY,
+  namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  principal_kind TEXT NOT NULL CHECK (principal_kind IN ('human', 'agent', 'service')),
+  principal_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ,
+  CONSTRAINT namespace_memberships_owner_human_check
+    CHECK (role <> 'owner' OR principal_kind = 'human'),
+  CONSTRAINT namespace_memberships_revocation_check
+    CHECK (
+      (status = 'active' AND revoked_at IS NULL)
+      OR (status = 'revoked' AND revoked_at IS NOT NULL)
+    )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_namespace_memberships_principal
+  ON namespace_memberships(namespace_id, principal_kind, principal_id);
+CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_principal
+  ON namespace_memberships(principal_kind, principal_id, namespace_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_namespace
+  ON namespace_memberships(namespace_id, role)
+  WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS project_grants (
+  grant_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL,
+  principal_kind TEXT NOT NULL CHECK (principal_kind IN ('human', 'agent', 'service')),
+  principal_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'viewer')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  CONSTRAINT project_grants_project_namespace_fk
+    FOREIGN KEY (project_id, namespace_id)
+    REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+  CONSTRAINT project_grants_revocation_check
+    CHECK (
+      (status = 'active' AND revoked_at IS NULL)
+      OR (status = 'revoked' AND revoked_at IS NOT NULL)
+    ),
+  CONSTRAINT project_grants_expiry_check
+    CHECK (expires_at IS NULL OR expires_at > created_at)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_project_grants_principal
+  ON project_grants(project_id, principal_kind, principal_id);
+CREATE INDEX IF NOT EXISTS idx_project_grants_active_principal
+  ON project_grants(principal_kind, principal_id, project_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_project_grants_active_project
+  ON project_grants(project_id, role)
+  WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS collaboration_invitations (
+  invitation_id TEXT PRIMARY KEY,
+  namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+  project_id TEXT,
+  recipient_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  recipient_email TEXT,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'viewer')),
+  token_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'revoked', 'expired')),
+  created_by_principal_kind TEXT NOT NULL
+    CHECK (created_by_principal_kind IN ('human', 'agent', 'service')),
+  created_by_principal_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ,
+  accepted_by_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  revoked_at TIMESTAMPTZ,
+  expired_at TIMESTAMPTZ,
+  CONSTRAINT collaboration_invitations_project_namespace_fk
+    FOREIGN KEY (project_id, namespace_id)
+    REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+  CONSTRAINT collaboration_invitations_recipient_check
+    CHECK (recipient_user_id IS NOT NULL OR recipient_email IS NOT NULL),
+  CONSTRAINT collaboration_invitations_email_check
+    CHECK (
+      recipient_email IS NULL
+      OR (recipient_email = lower(btrim(recipient_email)) AND length(recipient_email) > 0)
+    ),
+  CONSTRAINT collaboration_invitations_expiry_check
+    CHECK (expires_at > created_at),
+  CONSTRAINT collaboration_invitations_recipient_acceptance_check
+    CHECK (
+      recipient_user_id IS NULL
+      OR accepted_by_user_id IS NULL
+      OR recipient_user_id = accepted_by_user_id
+    ),
+  CONSTRAINT collaboration_invitations_lifecycle_check
+    CHECK (
+      (status = 'pending' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NULL AND expired_at IS NULL)
+      OR (status = 'accepted' AND accepted_at IS NOT NULL AND accepted_by_user_id IS NOT NULL
+        AND revoked_at IS NULL AND expired_at IS NULL)
+      OR (status = 'revoked' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NOT NULL AND expired_at IS NULL)
+      OR (status = 'expired' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+        AND revoked_at IS NULL AND expired_at IS NOT NULL)
+    )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_user
+  ON collaboration_invitations(namespace_id, COALESCE(project_id, ''), recipient_user_id)
+  WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_email
+  ON collaboration_invitations(namespace_id, COALESCE(project_id, ''), recipient_email)
+  WHERE status = 'pending' AND recipient_email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_user
+  ON collaboration_invitations(recipient_user_id, expires_at)
+  WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_email
+  ON collaboration_invitations(recipient_email, expires_at)
+  WHERE status = 'pending' AND recipient_email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_target
+  ON collaboration_invitations(namespace_id, project_id, expires_at)
+  WHERE status = 'pending';
 
 -- Conversations
 CREATE TABLE IF NOT EXISTS conversations (
@@ -1114,7 +1271,7 @@ export async function createTestDB(): Promise<{
   await adminSql.end();
 
   // Let the real adapter own schema bootstrap so tests exercise production init once.
-  const db = await createPostgresStorage({
+  const db = await createPostgresBootstrapStorage({
     connectionString,
     onnotice: ignoreNotice,
   });

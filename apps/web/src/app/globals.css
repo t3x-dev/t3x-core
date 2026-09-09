@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "../components/merge/mergeYAMLTokens.css";
 
+@source "../../node_modules/streamdown/dist/*.js";
+@source "../../node_modules/@streamdown/cjk/dist/*.js";
+@source "../../node_modules/@streamdown/code/dist/*.js";
+@source "../../node_modules/@streamdown/math/dist/*.js";
+@source "../../node_modules/@streamdown/mermaid/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================
@@ -26,19 +32,22 @@
      Multiple .dark blocks with hue conflict → unified hue 260, single block
    ============================================ */
 :root {
-  /* Typography — Inter + JetBrains Mono (Unified Design v2) */
-  font-family: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Typography — Geist Sans + Geist Mono */
+  font-family:
+    var(--font-geist-sans, "Geist"), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
   /* Note: no font-size override on :root — browser default 16px preserved to avoid breaking rem units */
   line-height: 1.6;
   font-weight: 400;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-kerning: normal;
+  font-optical-sizing: auto;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
   /* Monospace font for code & YAML */
   --font-mono:
-    var(--font-jetbrains-mono), "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, monospace;
+    var(--font-geist-mono, "Geist Mono"), "SF Mono", "Roboto Mono", ui-monospace, monospace;
 
   /* Brand Colors - Modern Blue/Indigo */
   --color-brand: #4f46e5;
@@ -118,6 +127,12 @@
   --radius-2xl: 20px;
   --radius-full: 9999px;
 
+  /* Dense workbench radius profile — matched to the State surface */
+  --radius-workbench: 10px;
+  --radius-workbench-group: 6px;
+  --radius-workbench-control: 5px;
+  --radius-workbench-inner: 4px;
+
   /* Modern Shadows - softer, layered (Linear/Vercel style) */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -178,10 +193,6 @@
   --edge-merge-hover: var(--accent-branch);
   --edge-merge-selected: var(--accent-branch);
   --edge-merge-glow: color-mix(in srgb, var(--accent-branch) 34%, transparent);
-  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 44%, transparent);
-  --edge-draft-hover: var(--accent-pending);
-  --edge-draft-selected: var(--accent-pending);
-  --edge-draft-glow: color-mix(in srgb, var(--accent-pending) 28%, transparent);
   --edge-commit-selected: var(--accent-commit);
   --edge-commit-glow: color-mix(in srgb, var(--accent-commit) 34%, transparent);
   --edge-branch-selected: var(--accent-branch);
@@ -211,6 +222,7 @@
   /* Word-level highlights — strong contrast against line bg */
   --diff-added-word-bg: rgba(22, 163, 74, 0.28);
   --diff-removed-word-bg: rgba(220, 38, 38, 0.25);
+  --diff-modified-word-bg: rgba(217, 119, 6, 0.2);
   /* Backward compat: --diff-*-line → --diff-*-accent (migrate to proper tokens in #360) */
   --diff-added-line: var(--diff-added-accent);
   --diff-removed-line: var(--diff-removed-accent);
@@ -584,6 +596,7 @@
   --diff-identical-text: #a9b2c2;
   --diff-added-word-bg: rgba(123, 201, 159, 0.28);
   --diff-removed-word-bg: rgba(223, 133, 133, 0.26);
+  --diff-modified-word-bg: rgba(200, 155, 84, 0.24);
   /* Unified aliases */
   --diff-add-bg: var(--diff-added-bg);
   --diff-add-accent: var(--diff-added-accent);
@@ -687,7 +700,6 @@
   --edge-selected-color: var(--accent-commit);
   --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 52%, transparent);
   --edge-merge-base: color-mix(in srgb, var(--accent-branch) 52%, transparent);
-  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
   --edge-default-opacity: 0.5;
   --edge-dim-opacity: 0.2;
 }
@@ -943,6 +955,10 @@ h3,
    ============================================ */
 
 @theme inline {
+  /* Typography */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
   /* Radius - using var() for calc expressions */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -1500,7 +1516,7 @@ h3,
   border-radius: var(--radius-xs, 6px);
   cursor: pointer;
   transition: all 0.15s;
-  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+  font-family: var(--font-geist-sans, "Geist"), system-ui, sans-serif;
 }
 .res-btn:hover {
   border-color: var(--accent-commit);

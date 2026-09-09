@@ -4,8 +4,10 @@ import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import type { Node } from '@xyflow/react';
 import { describe, expect, it, vi } from 'vitest';
-import { NodeModal } from '@/components/canvas/NodeModal';
+import { buildWorkspaceHandoffPath, NodeModal } from '@/components/canvas/NodeModal';
 import type { CanvasNodeData } from '@/types/nodes';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: (selector: (state: { projectId: string }) => unknown) =>
@@ -16,13 +18,6 @@ vi.mock('@/components/canvas/NodeModal/ConversationView', async () => {
   const React = await import('react');
   return {
     ConversationView: () => React.createElement('div', { 'data-testid': 'conversation-view' }),
-  };
-});
-
-vi.mock('@/components/canvas/NodeModal/PendingCommitView', async () => {
-  const React = await import('react');
-  return {
-    PendingCommitView: () => React.createElement('div', { 'data-testid': 'pending-commit-view' }),
   };
 });
 
@@ -45,6 +40,26 @@ function committedNode(): Node<CanvasNodeData> {
 }
 
 describe('NodeModal', () => {
+  it('hands a staging conversation to the branch Workspace', () => {
+    expect(
+      buildWorkspaceHandoffPath('proj/one', {
+        commitStatus: 'staging',
+        entryId: 'unit_1',
+        kind: 'unit',
+        pendingBranch: 'branch',
+        pendingBranchName: 'feature/next',
+        sourceConversationId: 'conv/one',
+        status: 'staging',
+        summary: '',
+        tags: [],
+        timestamp: '2026-08-03T00:00:00Z',
+        title: 'Next unit',
+      })
+    ).toBe(
+      '/project/proj%2Fone?branch=feature%2Fnext&tab=workspaces&sourceConversation=conv%2Fone'
+    );
+  });
+
   it('renders nothing for a committed node in commit mode', () => {
     const { container } = render(
       <NodeModal node={committedNode()} onClose={vi.fn()} onUpdate={vi.fn()} viewMode="commit" />

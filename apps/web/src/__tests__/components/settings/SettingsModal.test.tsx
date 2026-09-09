@@ -33,6 +33,11 @@ vi.mock('next-themes', () => ({
   ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
+  DeploymentCapabilitiesProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useDeploymentCapabilities: () => ({ canAdministerProviderCredentials: true }),
+}));
+
 vi.mock('@/components/ui/dialog', async () => {
   const React = await import('react');
 

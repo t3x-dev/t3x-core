@@ -100,7 +100,10 @@ export interface DemoWorkspaceSeedMarker {
 }
 
 export interface SeedDemoWorkspaceOptions {
+  /** Caller-selected project ID when a host must reserve capacity before creation. */
+  projectId?: string;
   ownerId?: string | null;
+  namespaceId?: string;
   resetDeleted?: boolean;
 }
 
@@ -141,7 +144,12 @@ async function seedDemoWorkspaceTransaction(
     }
 
     if (options.resetDeleted) {
-      const created = await createDemoWorkspaceRows(db, ownerId);
+      const created = await createDemoWorkspaceRows(
+        db,
+        ownerId,
+        options.namespaceId,
+        options.projectId
+      );
       await setGlobalSetting(db, settingKey, {
         fixture_id: DEMO_WORKSPACE_FIXTURE.id,
         fixture_version: DEMO_WORKSPACE_FIXTURE.project.metadata.demo_fixture_version,
@@ -163,7 +171,12 @@ async function seedDemoWorkspaceTransaction(
     return { status: 'skipped_deleted', project: null };
   }
 
-  const created = await createDemoWorkspaceRows(db, ownerId);
+  const created = await createDemoWorkspaceRows(
+    db,
+    ownerId,
+    options.namespaceId,
+    options.projectId
+  );
   await setGlobalSetting(db, settingKey, {
     fixture_id: DEMO_WORKSPACE_FIXTURE.id,
     fixture_version: DEMO_WORKSPACE_FIXTURE.project.metadata.demo_fixture_version,
@@ -178,7 +191,9 @@ async function seedDemoWorkspaceTransaction(
 
 async function createDemoWorkspaceRows(
   db: AnyDB,
-  ownerId: string | null
+  ownerId: string | null,
+  namespaceId?: string,
+  projectId?: string
 ): Promise<{
   project: Project;
   conversation: Conversation;
@@ -193,9 +208,11 @@ async function createDemoWorkspaceRows(
   };
 
   const project = await insertProject(db, {
+    projectId,
     name: DEMO_WORKSPACE_FIXTURE.project.name,
     metadata,
     ownerId: ownerId ?? undefined,
+    namespaceId,
   });
   await ensureMainBranch(db, project.projectId);
 

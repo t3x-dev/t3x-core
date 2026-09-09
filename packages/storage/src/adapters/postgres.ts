@@ -21,6 +21,37 @@ export interface PostgresConfig {
   onnotice?: (notice: postgres.Notice) => void;
 }
 
+export type PostgresSchemaStatus = 'missing' | 'unversioned' | 'outdated' | 'current' | 'newer';
+
+/** Metadata that deployment hosts can use to coordinate their own migration job. */
+export interface PostgresSchemaMetadata {
+  table: 'public._schema_version';
+  currentVersion: number | null;
+  expectedVersion: number;
+  status: PostgresSchemaStatus;
+}
+
+export type PostgresSchemaVersionErrorReason =
+  | Exclude<PostgresSchemaStatus, 'current'>
+  | 'unreadable';
+
+/**
+ * Raised when the read-only runtime entry point cannot safely use the database.
+ * Runtime startup never attempts to repair the condition represented here.
+ */
+export class PostgresSchemaVersionError extends Error {
+  readonly code = 'T3X_POSTGRES_SCHEMA_INCOMPATIBLE';
+
+  constructor(
+    message: string,
+    readonly reason: PostgresSchemaVersionErrorReason,
+    readonly metadata?: PostgresSchemaMetadata
+  ) {
+    super(message);
+    this.name = 'PostgresSchemaVersionError';
+  }
+}
+
 let client: postgres.Sql | null = null;
 let db: PostgresDB | null = null;
 
@@ -29,25 +60,30 @@ let db: PostgresDB | null = null;
 // current database so isolated test databases can still initialize in parallel.
 const SCHEMA_INIT_LOCK_NAMESPACE = 0x543358;
 
-/**
- * Create PostgreSQL storage for Docker/production
- */
-export async function createPostgresStorage(config: PostgresConfig): Promise<PostgresDB> {
-  // Create postgres.js client
-  const nextClient = postgres(config.connectionString, {
-    max: config.maxConnections || 10,
+function createClient(config: PostgresConfig, maxConnections?: number): postgres.Sql {
+  return postgres(config.connectionString, {
+    max: maxConnections ?? config.maxConnections ?? 10,
     onnotice: config.onnotice,
   });
+}
 
-  // Create Drizzle instance
+async function activatePostgresStorage(
+  config: PostgresConfig,
+  mode: 'bootstrap' | 'runtime'
+): Promise<PostgresDB> {
+  const nextClient = postgres(config.connectionString, {
+    max: config.maxConnections ?? 10,
+    onnotice: config.onnotice,
+  });
   const nextDb = drizzle(nextClient, { schema });
 
   try {
-    // Initialize schema (create tables if not exist)
-    await initializeSchema(nextClient);
-
-    // Seed builtin templates
-    await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+    if (mode === 'bootstrap') {
+      await initializeSchema(nextClient);
+      await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+    } else {
+      await validatePostgresSchema(nextClient);
+    }
   } catch (error) {
     await nextClient.end().catch(() => {});
     throw error;
@@ -59,11 +95,66 @@ export async function createPostgresStorage(config: PostgresConfig): Promise<Pos
 }
 
 /**
+ * Backward-compatible bootstrap connection for local development and tests.
+ * Deployment runtimes should use createPostgresRuntimeStorage instead.
+ */
+export async function createPostgresStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return createPostgresBootstrapStorage(config);
+}
+
+/** Open storage after explicitly applying schema migrations and builtin seeds. */
+export async function createPostgresBootstrapStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return activatePostgresStorage(config, 'bootstrap');
+}
+
+/**
+ * Open storage for application traffic using read-only schema validation.
+ * This entry point never executes schema DDL or seed mutations.
+ */
+export async function createPostgresRuntimeStorage(config: PostgresConfig): Promise<PostgresDB> {
+  return activatePostgresStorage(config, 'runtime');
+}
+
+/**
+ * Run the storage-owned migration and seed workflow as a standalone job.
+ * The job owns a transient connection and never replaces the runtime singleton.
+ */
+export async function migratePostgresStorage(
+  config: PostgresConfig
+): Promise<PostgresSchemaMetadata> {
+  const migrationClient = createClient(config, 1);
+  const migrationDb = drizzle(migrationClient, { schema });
+
+  try {
+    await initializeSchema(migrationClient);
+    await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    return await inspectPostgresSchemaWithClient(migrationClient);
+  } finally {
+    await migrationClient.end().catch(() => {});
+  }
+}
+
+/** Read the storage schema version without running migrations or seeds. */
+export async function inspectPostgresSchema(
+  config: PostgresConfig
+): Promise<PostgresSchemaMetadata> {
+  const inspectionClient = createClient(config, 1);
+  try {
+    return await inspectPostgresSchemaWithClient(inspectionClient);
+  } finally {
+    await inspectionClient.end().catch(() => {});
+  }
+}
+
+/**
  * Get the current database instance
  */
 export function getPostgresDB(): PostgresDB {
   if (!db) {
-    throw new Error('PostgreSQL database not initialized. Call createPostgresStorage() first.');
+    throw new Error(
+      'PostgreSQL database not initialized. Call createPostgresRuntimeStorage() or ' +
+        'createPostgresBootstrapStorage() first.'
+    );
   }
   return db;
 }
@@ -74,7 +165,10 @@ export function getPostgresDB(): PostgresDB {
  */
 export function getPostgresClient(): postgres.Sql {
   if (!client) {
-    throw new Error('PostgreSQL client not initialized. Call createPostgresStorage() first.');
+    throw new Error(
+      'PostgreSQL client not initialized. Call createPostgresRuntimeStorage() or ' +
+        'createPostgresBootstrapStorage() first.'
+    );
   }
   return client;
 }
@@ -93,7 +187,78 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 68;
+export const POSTGRES_SCHEMA_VERSION = 75;
+
+function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
+  if (!tableExists) return 'missing';
+  if (currentVersion === null) return 'unversioned';
+  if (currentVersion < POSTGRES_SCHEMA_VERSION) return 'outdated';
+  if (currentVersion > POSTGRES_SCHEMA_VERSION) return 'newer';
+  return 'current';
+}
+
+async function inspectPostgresSchemaWithClient(sql: postgres.Sql): Promise<PostgresSchemaMetadata> {
+  const [table] = await sql.unsafe<Array<{ tableName: string | null }>>(
+    `SELECT to_regclass('public._schema_version')::text AS "tableName"`
+  );
+  const tableExists = table?.tableName !== null && table?.tableName !== undefined;
+  let currentVersion: number | null = null;
+
+  if (tableExists) {
+    const [version] = await sql.unsafe<Array<{ version: number }>>(
+      'SELECT version FROM public._schema_version WHERE singleton = TRUE'
+    );
+    currentVersion = version?.version ?? null;
+  }
+
+  return {
+    table: 'public._schema_version',
+    currentVersion,
+    expectedVersion: POSTGRES_SCHEMA_VERSION,
+    status: schemaStatus(currentVersion, tableExists),
+  };
+}
+
+async function validatePostgresSchema(sql: postgres.Sql): Promise<PostgresSchemaMetadata> {
+  let metadata: PostgresSchemaMetadata;
+  try {
+    metadata = await inspectPostgresSchemaWithClient(sql);
+  } catch (error) {
+    const detail = error instanceof Error ? ` PostgreSQL reported: ${error.message}` : '';
+    throw new PostgresSchemaVersionError(
+      'PostgreSQL runtime cannot read public._schema_version. Grant the runtime role USAGE on ' +
+        'schema public and SELECT on public._schema_version; run migrations with a separate ' +
+        `migration-owner role before startup.${detail}`,
+      'unreadable'
+    );
+  }
+
+  if (metadata.status === 'current') return metadata;
+
+  if (metadata.status === 'newer') {
+    throw new PostgresSchemaVersionError(
+      `PostgreSQL schema version ${metadata.currentVersion} is newer than this runtime supports ` +
+        `(${metadata.expectedVersion}). Upgrade the T3X runtime; runtime startup will not modify ` +
+        'or downgrade the database.',
+      metadata.status,
+      metadata
+    );
+  }
+
+  const current =
+    metadata.status === 'missing'
+      ? 'is missing'
+      : metadata.status === 'unversioned'
+        ? 'has no recorded version'
+        : `is version ${metadata.currentVersion}`;
+  throw new PostgresSchemaVersionError(
+    `PostgreSQL schema ${current}; version ${metadata.expectedVersion} is required. Run ` +
+      'migratePostgresStorage() with the migration-owner connection before starting the runtime role. ' +
+      'Runtime startup performs no DDL or seed repair.',
+    metadata.status,
+    metadata
+  );
+}
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -126,7 +291,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     await ensurePullRequestsSchema(sql);
   }
 
-  if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
+  if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
     return;
   }
 
@@ -2113,14 +2278,337 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     END $$;
   `);
 
+  // ── Schema v69: canonical namespace memberships and project grants ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'uq_projects_id_namespace'
+          AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT uq_projects_id_namespace UNIQUE (project_id, namespace_id);
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS namespace_memberships (
+      membership_id TEXT PRIMARY KEY,
+      namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+      principal_kind TEXT NOT NULL,
+      principal_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      CONSTRAINT namespace_memberships_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT namespace_memberships_role_check
+        CHECK (role IN ('owner', 'admin', 'editor', 'viewer')),
+      CONSTRAINT namespace_memberships_status_check
+        CHECK (status IN ('active', 'revoked')),
+      CONSTRAINT namespace_memberships_owner_human_check
+        CHECK (role <> 'owner' OR principal_kind = 'human'),
+      CONSTRAINT namespace_memberships_revocation_check
+        CHECK (
+          (status = 'active' AND revoked_at IS NULL)
+          OR (status = 'revoked' AND revoked_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_namespace_memberships_principal
+      ON namespace_memberships(namespace_id, principal_kind, principal_id);
+    CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_principal
+      ON namespace_memberships(principal_kind, principal_id, namespace_id)
+      WHERE status = 'active';
+    CREATE INDEX IF NOT EXISTS idx_namespace_memberships_active_namespace
+      ON namespace_memberships(namespace_id, role)
+      WHERE status = 'active';
+
+    CREATE TABLE IF NOT EXISTS project_grants (
+      grant_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      namespace_id TEXT NOT NULL,
+      principal_kind TEXT NOT NULL,
+      principal_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      CONSTRAINT project_grants_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT project_grants_principal_kind_check
+        CHECK (principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT project_grants_role_check
+        CHECK (role IN ('admin', 'editor', 'viewer')),
+      CONSTRAINT project_grants_status_check
+        CHECK (status IN ('active', 'revoked')),
+      CONSTRAINT project_grants_revocation_check
+        CHECK (
+          (status = 'active' AND revoked_at IS NULL)
+          OR (status = 'revoked' AND revoked_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_project_grants_principal
+      ON project_grants(project_id, principal_kind, principal_id);
+    CREATE INDEX IF NOT EXISTS idx_project_grants_active_principal
+      ON project_grants(principal_kind, principal_id, project_id)
+      WHERE status = 'active';
+    CREATE INDEX IF NOT EXISTS idx_project_grants_active_project
+      ON project_grants(project_id, role)
+      WHERE status = 'active';
+
+    INSERT INTO namespace_memberships (
+      membership_id,
+      namespace_id,
+      principal_kind,
+      principal_id,
+      role,
+      status
+    )
+    SELECT
+      'nsm_' || md5(namespace.namespace_id || ':' || namespace.owner_user_id),
+      namespace.namespace_id,
+      'human',
+      namespace.owner_user_id,
+      'owner',
+      'active'
+    FROM namespaces AS namespace
+    INNER JOIN users AS owner_user ON owner_user.id = namespace.owner_user_id
+    WHERE namespace.kind = 'personal'
+      AND namespace.owner_user_id IS NOT NULL
+    ON CONFLICT (namespace_id, principal_kind, principal_id) DO NOTHING;
+  `);
+
+  // ── Schema v70: expiring grants and recipient-bound invitations ──
+  await sql.unsafe(`
+    ALTER TABLE project_grants
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'project_grants_expiry_check'
+          AND conrelid = 'project_grants'::regclass
+      ) THEN
+        ALTER TABLE project_grants
+          ADD CONSTRAINT project_grants_expiry_check
+          CHECK (expires_at IS NULL OR expires_at > created_at);
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS collaboration_invitations (
+      invitation_id TEXT PRIMARY KEY,
+      namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
+      project_id TEXT,
+      recipient_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+      recipient_email TEXT,
+      role TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_by_principal_kind TEXT NOT NULL,
+      created_by_principal_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      accepted_at TIMESTAMPTZ,
+      accepted_by_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+      revoked_at TIMESTAMPTZ,
+      expired_at TIMESTAMPTZ,
+      CONSTRAINT collaboration_invitations_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT collaboration_invitations_recipient_check
+        CHECK (recipient_user_id IS NOT NULL OR recipient_email IS NOT NULL),
+      CONSTRAINT collaboration_invitations_email_check
+        CHECK (
+          recipient_email IS NULL
+          OR (recipient_email = lower(btrim(recipient_email)) AND length(recipient_email) > 0)
+        ),
+      CONSTRAINT collaboration_invitations_principal_kind_check
+        CHECK (created_by_principal_kind IN ('human', 'agent', 'service')),
+      CONSTRAINT collaboration_invitations_role_check
+        CHECK (role IN ('admin', 'editor', 'viewer')),
+      CONSTRAINT collaboration_invitations_status_check
+        CHECK (status IN ('pending', 'accepted', 'revoked', 'expired')),
+      CONSTRAINT collaboration_invitations_expiry_check
+        CHECK (expires_at > created_at),
+      CONSTRAINT collaboration_invitations_recipient_acceptance_check
+        CHECK (
+          recipient_user_id IS NULL
+          OR accepted_by_user_id IS NULL
+          OR recipient_user_id = accepted_by_user_id
+        ),
+      CONSTRAINT collaboration_invitations_lifecycle_check
+        CHECK (
+          (status = 'pending' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NULL AND expired_at IS NULL)
+          OR (status = 'accepted' AND accepted_at IS NOT NULL AND accepted_by_user_id IS NOT NULL
+            AND revoked_at IS NULL AND expired_at IS NULL)
+          OR (status = 'revoked' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NOT NULL AND expired_at IS NULL)
+          OR (status = 'expired' AND accepted_at IS NULL AND accepted_by_user_id IS NULL
+            AND revoked_at IS NULL AND expired_at IS NOT NULL)
+        )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_user
+      ON collaboration_invitations(
+        namespace_id,
+        COALESCE(project_id, ''),
+        recipient_user_id
+      )
+      WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_collaboration_invitations_pending_email
+      ON collaboration_invitations(
+        namespace_id,
+        COALESCE(project_id, ''),
+        recipient_email
+      )
+      WHERE status = 'pending' AND recipient_email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_user
+      ON collaboration_invitations(recipient_user_id, expires_at)
+      WHERE status = 'pending' AND recipient_user_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_email
+      ON collaboration_invitations(recipient_email, expires_at)
+      WHERE status = 'pending' AND recipient_email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_collaboration_invitations_pending_target
+      ON collaboration_invitations(namespace_id, project_id, expires_at)
+      WHERE status = 'pending';
+  `);
+
+  // ── Schema v71: explicit fail-closed project visibility ──
+  await sql.unsafe(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS visibility TEXT;
+
+    -- Every pre-v71 project is private. Legacy ownership, owner-null rows, and
+    -- the shared bootstrap namespace are provenance, never publication intent.
+    UPDATE projects
+      SET visibility = 'private'
+      WHERE visibility IS NULL;
+
+    ALTER TABLE projects
+      ALTER COLUMN visibility SET DEFAULT 'private',
+      ALTER COLUMN visibility SET NOT NULL;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'projects_visibility_check'
+          AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT projects_visibility_check
+          CHECK (visibility IN ('private', 'unlisted', 'public'));
+      END IF;
+    END $$;
+
+    CREATE INDEX IF NOT EXISTS idx_projects_visibility_created
+      ON projects(visibility, created_at);
+  `);
+
+  // ── Schema v72: transactional project visibility audit evidence ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS project_visibility_events (
+      event_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      namespace_id TEXT NOT NULL,
+      from_visibility TEXT NOT NULL,
+      to_visibility TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      publication_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT project_visibility_events_project_namespace_fk
+        FOREIGN KEY (project_id, namespace_id)
+        REFERENCES projects(project_id, namespace_id) ON DELETE CASCADE,
+      CONSTRAINT project_visibility_events_from_check
+        CHECK (from_visibility IN ('private', 'unlisted', 'public')),
+      CONSTRAINT project_visibility_events_to_check
+        CHECK (to_visibility IN ('private', 'unlisted', 'public')),
+      CONSTRAINT project_visibility_events_actor_kind_check
+        CHECK (actor_kind IN ('human', 'agent', 'service', 'local')),
+      CONSTRAINT project_visibility_events_public_confirmation_check
+        CHECK (to_visibility <> 'public' OR publication_confirmed = TRUE),
+      CONSTRAINT project_visibility_events_transition_check
+        CHECK (from_visibility <> to_visibility)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_visibility_events_project_created
+      ON project_visibility_events(project_id, created_at, event_id);
+  `);
+
   await ensureSourceTextRevisionsSchema(sql);
   await ensurePullRequestsSchema(sql);
+
+  // Schema v73: immutable application receipts for exact workspace downloads.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS workspace_deliveries (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      adapter TEXT NOT NULL CHECK (adapter = 't3x.download/v1'),
+      format TEXT NOT NULL CHECK (format IN ('json', 'yaml')),
+      artifact_digest TEXT,
+      status TEXT NOT NULL CHECK (status IN ('prepared', 'failed')),
+      error_code TEXT,
+      retry_of TEXT REFERENCES workspace_deliveries(id),
+      attempt INTEGER NOT NULL CHECK (attempt >= 1),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK ((status = 'prepared' AND artifact_digest IS NOT NULL AND error_code IS NULL)
+        OR (status = 'failed' AND artifact_digest IS NULL AND error_code IS NOT NULL))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS workspace_deliveries_idempotency
+      ON workspace_deliveries(project_id, workspace_id, idempotency_key);
+    CREATE INDEX IF NOT EXISTS workspace_deliveries_history
+      ON workspace_deliveries(project_id, workspace_id, created_at);
+  `);
+
+  // Versioned author sidecars: payload stays separate from protocol State.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS state_presentations (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE RESTRICT,
+      commit_digest TEXT NOT NULL,
+      presentation_digest TEXT NOT NULL,
+      document JSONB NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, commit_digest)
+    );
+  `);
+
+  // Studio candidates retain exact references, never private manifest/resource copies.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS schema_studio_candidates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_project_id TEXT,
+      canonical_name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      artifact_version_id TEXT NOT NULL,
+      artifact_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (project_id, artifact_version_id, artifact_hash)
+    );
+    CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
+      ON schema_studio_candidates(project_id, created_at, id);
+  `);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
-    VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
-    ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+    VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())
+    ON CONFLICT (singleton) DO UPDATE SET version = ${POSTGRES_SCHEMA_VERSION}, applied_at = NOW()
   `);
 }
 

@@ -1,34 +1,23 @@
-import type { ProviderName } from '@t3x-dev/core';
 import {
   GENERATION_RUNTIME_PROVIDER_ID_BY_PUBLIC_PROVIDER,
   getModelsByProvider,
-  isGenerationRuntimeProviderId,
-  MODEL_CATALOG,
-  PUBLIC_PROVIDER_ID_BY_RUNTIME_PROVIDER,
   PUBLIC_PROVIDER_LABELS,
 } from '@t3x-dev/core';
 import { Hono } from 'hono';
-import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
-
-function getGenerationProviderOrder(
-  registry: Awaited<ReturnType<typeof getProviderRegistry>>
-): ProviderName[] {
-  const orderedProviders = registry
-    .getProviderIdsForRole('generation')
-    .filter(isGenerationRuntimeProviderId)
-    .map((providerId) => PUBLIC_PROVIDER_ID_BY_RUNTIME_PROVIDER[providerId]);
-
-  const remainingProviders = (Object.keys(MODEL_CATALOG) as ProviderName[]).filter(
-    (providerId) => !orderedProviders.includes(providerId)
-  );
-
-  return [...orderedProviders, ...remainingProviders];
-}
+import { getGenerationProviderOrder } from '../lib/oss-generation-model-catalog';
+import { getProviderRegistry } from '../lib/provider-registry';
+import {
+  defaultGenerationProviderRuntime,
+  getGenerationProviderRuntime,
+} from '../lib/provider-runtime';
 
 export const llmRoutes = new Hono();
 
 llmRoutes.get('/v1/llm/models', async (c) => {
-  await refreshProviderRegistryConfig();
+  const runtime = getGenerationProviderRuntime(c);
+  const catalogAuthority = runtime.catalog ?? defaultGenerationProviderRuntime.catalog;
+  if (!catalogAuthority) throw new Error('Default generation model catalog is unavailable');
+  const catalog = await catalogAuthority.snapshot();
   const registry = await getProviderRegistry();
   const generationProviderOrder = getGenerationProviderOrder(registry);
 
@@ -51,6 +40,7 @@ llmRoutes.get('/v1/llm/models', async (c) => {
   return c.json({
     success: true,
     data: {
+      catalog,
       generation_provider_order: generationProviderOrder,
       default_provider: generationProviderOrder[0] ?? null,
       providers,

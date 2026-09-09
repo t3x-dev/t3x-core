@@ -1,29 +1,20 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
-import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import {
   isLegacyRepositorySourceLink,
   legacyRepositorySourceTarget,
 } from '@/domain/sourceEvidenceNavigation';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
-import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useLegacySourceRedirectResolver } from '@/hooks/sources/useLegacySourceRedirectResolver';
 import { useChatStore } from '@/store/chatStore';
 import { isTemporaryChatId } from '@/store/temporaryChatsStore';
-import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
-import {
-  CHAT_COLUMN_MIN_WIDTH,
-  clampWorkspacePanelWidth,
-  getPreferredWorkspacePanelWidth,
-  WORKSPACE_PANEL_FALLBACK_WIDTH,
-} from '@/utils/chatWorkspaceLayout';
 
 export default function ConversationPage() {
   // Match /chat landing: useSearchParams forces a CSR bailout in Next 16,
@@ -123,98 +114,33 @@ function ConversationWorkbenchRoute({
   const resolvedProjectId = isTemporaryChatId(conversationId)
     ? null
     : (projectIdParam ?? activeProjectId);
-  const panelExpanded = useWorkspaceStore(selectPanelExpanded);
-  const setActiveWorkspaceProject = useWorkspaceStore((s) => s.setActiveProject);
-  const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
-  const compactViewport = useChatCompactViewport();
   const [materialReader, setMaterialReader] = useState<MaterialReaderSelection | null>(null);
-
-  // Mirror the resolved project into the workspace store so the per-project
-  // expansion preference (`panelExpandedByProject[resolvedProjectId]`) keys
-  // off the right project for both reads and writes.
-  useEffect(() => {
-    setActiveWorkspaceProject(resolvedProjectId ?? null);
-  }, [resolvedProjectId, setActiveWorkspaceProject]);
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
   const resolvedInheritFromCommitHash = inheritFromParam ?? inheritFromCommitHash;
   const { completeIntroDemo } = useIntroDemoCompletion(resolvedProjectId);
 
-  const [panelWidth, setPanelWidth] = useState(WORKSPACE_PANEL_FALLBACK_WIDTH);
-  const isDragging = useRef(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const hasMeasuredPanelWidth = useRef(false);
-  const showWorkspace = !compactViewport;
-  const isExpanded = showWorkspace && panelExpanded;
-
-  useEffect(() => {
-    if (!isExpanded || !containerRef.current) return;
-
-    const syncPanelWidth = () => {
-      if (!containerRef.current) return;
-      const containerWidth = containerRef.current.getBoundingClientRect().width;
-      const firstMeasurement = !hasMeasuredPanelWidth.current;
-      const preferredWidth = getPreferredWorkspacePanelWidth(containerWidth);
-      hasMeasuredPanelWidth.current = true;
-      setPanelWidth((current) => {
-        const requested = firstMeasurement ? preferredWidth : current;
-        return clampWorkspacePanelWidth(requested, containerWidth);
-      });
-    };
-
-    syncPanelWidth();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const resizeObserver = new ResizeObserver(syncPanelWidth);
-    resizeObserver.observe(containerRef.current);
-    return () => resizeObserver.disconnect();
-  }, [isExpanded]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = containerRect.right - ev.clientX;
-      setPanelWidth(clampWorkspacePanelWidth(newWidth, containerRect.width));
-    };
-
-    const handleMouseUp = () => {
-      isDragging.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, []);
-
   const handleMaterialReaderChange = useCallback(
-    (selection: MaterialReaderSelection | null) => {
-      setMaterialReader(selection);
-      if (selection) setPanelExpanded(true);
-    },
-    [setPanelExpanded]
+    (selection: MaterialReaderSelection | null) => setMaterialReader(selection),
+    []
   );
 
-  const continueIntroDemoToCanvas = useCallback(() => {
+  const continueIntroDemoToWorkspace = useCallback(() => {
     if (!resolvedProjectId) return;
-    router.push(`${getProjectIdCanvasPath(resolvedProjectId)}&introDemo=1`);
-  }, [resolvedProjectId, router]);
+    router.push(
+      `${getProjectIdWorkspacePath(resolvedProjectId, {
+        branch: 'main',
+        sourceConversationId: conversationId,
+      })}&introDemo=1`
+    );
+  }, [conversationId, resolvedProjectId, router]);
 
   useEffect(() => {
     setMaterialReader(null);
   }, [conversationId, resolvedProjectId]);
 
   return (
-    <div ref={containerRef} className="flex h-full overflow-hidden">
-      {/* Chat area takes remaining space — key forces full re-mount on conversation switch */}
+    <div className="flex h-full overflow-hidden">
       <ChatWorkspace
         key={conversationId}
         conversationId={conversationId}
@@ -223,44 +149,15 @@ function ConversationWorkbenchRoute({
         initialProvider={initialProvider ?? undefined}
         initialModel={initialModel ?? undefined}
         className="flex-1 min-w-0"
-        style={showWorkspace ? { minWidth: CHAT_COLUMN_MIN_WIDTH } : undefined}
         inheritFromCommitHash={resolvedInheritFromCommitHash ?? undefined}
         onInheritComplete={clearInherit}
         activeMaterialReader={materialReader}
         onMaterialReaderChange={handleMaterialReaderChange}
         introDemo={introDemoRequested}
-        onIntroDemoDone={continueIntroDemoToCanvas}
+        onIntroDemoDone={continueIntroDemoToWorkspace}
         onIntroDemoSkip={() => void completeIntroDemo()}
-        introDemoDoneLabel="Open Canvas"
+        introDemoDoneLabel="Open Workspace"
       />
-
-      {/* Drag handle (only when panel is expanded) */}
-      {isExpanded && (
-        <div
-          onMouseDown={handleMouseDown}
-          className="group relative w-px flex-shrink-0 cursor-col-resize bg-[var(--stroke-divider)]"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 bg-transparent"
-          />
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--stroke-divider)] transition-colors group-hover:bg-[var(--accent-commit)]/45 group-active:bg-[var(--accent-commit)]/60"
-          />
-        </div>
-      )}
-
-      {/* YOps workspace panel */}
-      {showWorkspace && (
-        <div className="flex h-full min-w-0 shrink-0">
-          <YOpsWorkspace
-            customWidth={isExpanded ? panelWidth : undefined}
-            materialReader={materialReader}
-            onCloseMaterialReader={() => handleMaterialReaderChange(null)}
-          />
-        </div>
-      )}
     </div>
   );
 }

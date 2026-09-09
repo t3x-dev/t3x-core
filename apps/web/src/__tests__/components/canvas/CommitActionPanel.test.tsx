@@ -8,13 +8,13 @@ describe('buildCommitActions', () => {
 
   it('returns neutral canvas actions without duplicating commit detail navigation', () => {
     const actions = buildCommitActions(baseOpts);
-    expect(actions.map((a) => a.label)).toEqual(['New Leaf']);
+    expect(actions.map((a) => a.label)).toEqual([]);
   });
 
   it('adds View Diff when a parent comparison is available', () => {
     const onViewDiff = vi.fn();
     const actions = buildCommitActions({ ...baseOpts, onViewDiff });
-    expect(actions.map((a) => a.label)).toEqual(['View Diff', 'New Leaf']);
+    expect(actions.map((a) => a.label)).toEqual(['View Diff']);
     actions[0].onClick();
     expect(onViewDiff).toHaveBeenCalledTimes(1);
   });
@@ -22,7 +22,7 @@ describe('buildCommitActions', () => {
   it('keeps existing leaves one click away while still allowing a new leaf', () => {
     const onOpenLeaf = vi.fn();
     const actions = buildCommitActions({ ...baseOpts, onOpenLeaf });
-    expect(actions.map((a) => a.label)).toEqual(['Open Leaf', 'New Leaf']);
+    expect(actions.map((a) => a.label)).toEqual(['Open Leaf']);
     actions[0].onClick();
     expect(onOpenLeaf).toHaveBeenCalledTimes(1);
   });
@@ -30,8 +30,8 @@ describe('buildCommitActions', () => {
   it('appends a Merge action when onMerge is provided', () => {
     const onMerge = vi.fn();
     const actions = buildCommitActions({ ...baseOpts, onMerge });
-    expect(actions.map((a) => a.label)).toEqual(['New Leaf', 'Merge']);
-    actions[1].onClick();
+    expect(actions.map((a) => a.label)).toEqual(['Merge']);
+    actions[0].onClick();
     expect(onMerge).toHaveBeenCalledTimes(1);
   });
 

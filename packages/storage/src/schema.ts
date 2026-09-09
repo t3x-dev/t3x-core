@@ -13,6 +13,7 @@ import {
   boolean,
   check,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -74,6 +75,10 @@ export const projects = pgTable(
     namespaceId: text('namespace_id').references(() => namespaces.namespaceId, {
       onDelete: 'restrict',
     }),
+    /** Explicit product visibility. Ownership or missing legacy identity never implies publication. */
+    visibility: text('visibility', { enum: ['private', 'unlisted', 'public'] })
+      .notNull()
+      .default('private'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     metadataJson: text('metadata_json'),
@@ -108,6 +113,60 @@ export const projects = pgTable(
   (table) => [
     index('idx_projects_owner').on(table.ownerId),
     index('idx_projects_namespace_created').on(table.namespaceId, table.createdAt),
+    index('idx_projects_visibility_created').on(table.visibility, table.createdAt),
+    unique('uq_projects_id_namespace').on(table.projectId, table.namespaceId),
+    check(
+      'projects_visibility_check',
+      sql`${table.visibility} IN ('private', 'unlisted', 'public')`
+    ),
+  ]
+);
+
+/** Append-only evidence for explicit project visibility transitions. */
+export const projectVisibilityEvents = pgTable(
+  'project_visibility_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    namespaceId: text('namespace_id').notNull(),
+    fromVisibility: text('from_visibility', { enum: ['private', 'unlisted', 'public'] }).notNull(),
+    toVisibility: text('to_visibility', { enum: ['private', 'unlisted', 'public'] }).notNull(),
+    actorKind: text('actor_kind', { enum: ['human', 'agent', 'service', 'local'] }).notNull(),
+    actorId: text('actor_id').notNull(),
+    publicationConfirmed: boolean('publication_confirmed').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'project_visibility_events_project_namespace_fk',
+      columns: [table.projectId, table.namespaceId],
+      foreignColumns: [projects.projectId, projects.namespaceId],
+    }).onDelete('cascade'),
+    index('idx_project_visibility_events_project_created').on(
+      table.projectId,
+      table.createdAt,
+      table.eventId
+    ),
+    check(
+      'project_visibility_events_from_check',
+      sql`${table.fromVisibility} IN ('private', 'unlisted', 'public')`
+    ),
+    check(
+      'project_visibility_events_to_check',
+      sql`${table.toVisibility} IN ('private', 'unlisted', 'public')`
+    ),
+    check(
+      'project_visibility_events_actor_kind_check',
+      sql`${table.actorKind} IN ('human', 'agent', 'service', 'local')`
+    ),
+    check(
+      'project_visibility_events_public_confirmation_check',
+      sql`${table.toVisibility} <> 'public' OR ${table.publicationConfirmed} = TRUE`
+    ),
+    check(
+      'project_visibility_events_transition_check',
+      sql`${table.fromVisibility} <> ${table.toVisibility}`
+    ),
   ]
 );
 
@@ -910,6 +969,7 @@ export const validationFindings = pgTable(
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
+export type ProjectVisibilityEvent = typeof projectVisibilityEvents.$inferSelect;
 export type Namespace = typeof namespaces.$inferSelect;
 export type NewNamespace = typeof namespaces.$inferInsert;
 
@@ -971,5 +1031,9 @@ export type TemplateAuditRecord = typeof templateAuditLog.$inferSelect;
 export type GlobalSetting = typeof globalSettings.$inferSelect;
 export type NewGlobalSetting = typeof globalSettings.$inferInsert;
 
+export * from './schema-deliveries';
 // Events outbox for realtime sync (see schema-events.ts)
 export { type EventRow, events, type NewEventRow } from './schema-events';
+export * from './schema-presentations';
+
+export * from './schema-studio';

@@ -19,7 +19,7 @@ import {
   parseProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -28,10 +28,6 @@ import {
   COMMITS_BROADCAST_CHANNEL,
   isCommitCreatedForProject,
 } from '@/hooks/commits/commitEvents';
-import {
-  applyIntroDemoCommitToCanvasGraph,
-  readIntroDemoLocalCommit,
-} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
@@ -46,7 +42,7 @@ import { recordRecentProjectOpen } from '@/utils/recentProjects';
 export default function ProjectDetailPage() {
   return (
     <Suspense>
-      <ProjectIdCanonicalRedirect />
+      <ProjectDetailPageContent />
     </Suspense>
   );
 }
@@ -97,60 +93,6 @@ function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
   );
 }
 
-function ProjectIdCanonicalRedirect() {
-  const params = useParams<{ projectId?: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const projectId = typeof params.projectId === 'string' ? params.projectId : '';
-  const projectFromStore = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId)
-  );
-  const [lookupError, setLookupError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    if (!projectId) return;
-
-    const replaceWithProject = (project: ProjectSummary) => {
-      router.replace(
-        getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
-      );
-    };
-
-    if (projectFromStore) {
-      replaceWithProject(projectFromStore);
-      return;
-    }
-
-    let cancelled = false;
-    setLookupError(null);
-    fetchProject(projectId)
-      .then((detail) => {
-        if (!cancelled) replaceWithProject(apiProjectToSummary(detail));
-      })
-      .catch((err) => {
-        if (!cancelled) setLookupError(err instanceof Error ? err : new Error(String(err)));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectFromStore, projectId, router, searchParams]);
-
-  if (lookupError) {
-    return (
-      <div className="flex h-full flex-col">
-        <ErrorMessage error={lookupError} onRetry={() => setLookupError(null)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full flex-col">
-      <LoadingSpinner message="Opening repository..." />
-    </div>
-  );
-}
-
 export function ProjectDetailPageContent({
   initialTabOverride,
   projectIdOverride,
@@ -170,7 +112,9 @@ export function ProjectDetailPageContent({
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
-  const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
+  // Old Leaf-tour bookmarks now lead to State delivery.
+  const projectTourStage =
+    introDemoStage === 'leaf' || introDemoStage === 'delivery' ? 'delivery' : 'details';
   const [projectTourOpen, setProjectTourOpen] = useState(showIntroDemo);
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
@@ -216,7 +160,6 @@ export function ProjectDetailPageContent({
   const canvasError = useCanvasStore((state) => state.loadError);
   const canvasAutoRefreshBlocked = isRefHeadIntegrityInvalid(canvasError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
-  const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
   const closeNodeModal = useCanvasStore((state) => state.closeNodeModal);
 
   // Parse initial viewport from URL params
@@ -236,7 +179,7 @@ export function ProjectDetailPageContent({
   }, [closeNodeModal, isCanvasActive, showIntroDemo]);
 
   useEffect(() => {
-    if (isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
+    if (routeProjectId || isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
     if (searchParams.has('tab') && !project) return;
 
     const nextPath =
@@ -244,7 +187,7 @@ export function ProjectDetailPageContent({
         ? getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
-  }, [isCanvasSurface, pathname, project, router, searchParams]);
+  }, [isCanvasSurface, pathname, project, routeProjectId, router, searchParams]);
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -341,44 +284,6 @@ export function ProjectDetailPageContent({
       void loadCanvas(projectId);
     }
   }, [isCanvasActive, projectId, loadCanvas]);
-
-  useEffect(() => {
-    if (
-      !isCanvasActive ||
-      !showIntroDemo ||
-      canvasLoading ||
-      canvasError ||
-      loadedProjectId !== projectId
-    )
-      return;
-    const localCommit = readIntroDemoLocalCommit(projectId);
-    if (!localCommit) return;
-
-    useCanvasStore.setState((state) => {
-      if (state.projectId !== projectId) return {};
-      const patched = applyIntroDemoCommitToCanvasGraph({
-        nodes: state.nodes,
-        edges: state.edges,
-        commit: localCommit,
-      });
-      if (!patched) return {};
-      return {
-        nodes: patched.nodes,
-        edges: patched.edges,
-        hasMainCommit: true,
-        latestMainCommitId:
-          localCommit.branch === 'main' ? localCommit.hash : state.latestMainCommitId,
-      };
-    });
-  }, [
-    canvasError,
-    canvasLoading,
-    canvasNodeCount,
-    isCanvasActive,
-    loadedProjectId,
-    projectId,
-    showIntroDemo,
-  ]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.
@@ -528,7 +433,7 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          stateHref={getProjectRepoPath(project)}
+          stateHref={routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />
@@ -551,6 +456,7 @@ export function ProjectDetailPageContent({
         onRunValidation={handleRunYSchemaValidation}
         projectId={projectId}
         projectName={project.name}
+        projectDescription={project.description}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}
@@ -579,7 +485,7 @@ export function ProjectDetailPageContent({
 
   return (
     <>
-      <ProjectShell activeTab={activeTab} project={project}>
+      <ProjectShell activeTab={activeTab} project={project} projectIdNavigation={!!routeProjectId}>
         {activeContent}
       </ProjectShell>
       {isEmbeddedCanvasSurface ? (

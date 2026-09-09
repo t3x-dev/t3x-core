@@ -27,8 +27,12 @@ export interface RestoreResult {
 }
 
 export interface RestoreOptions {
+  /** Caller-selected project ID when a host must reserve capacity before import. */
+  projectId?: string;
   /** Owner assigned to the newly-created project. Omit for local/public restores. */
   ownerId?: string;
+  /** Canonical namespace assigned to the newly-created project. */
+  namespaceId?: string;
 }
 
 /**
@@ -47,8 +51,10 @@ export async function restoreFromCfpack(
 ): Promise<RestoreResult> {
   // Create new project (generates new project ID)
   const project = await insertProject(db, {
+    projectId: options.projectId,
     name: cfpack.project.name,
     ownerId: options.ownerId,
+    namespaceId: options.namespaceId,
   });
 
   const newProjectId = project.projectId;

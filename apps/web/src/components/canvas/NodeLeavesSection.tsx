@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronRight, Circle, Clock, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Circle, Clock, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
 import { getProjectOutputsPath } from '@/domain/project/repoPath';
@@ -23,10 +23,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   prefersReducedMotion,
   projectId,
   projectName,
-  nodeId,
-  onCreateLeaf,
-  leafContextMenuHandler,
-  removeLeafFromNode,
 }: {
   leaves: EmbeddedLeaf[];
   totalPassed: number;
@@ -38,12 +34,10 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   projectId?: string;
   projectName?: string;
   nodeId: string;
-  onCreateLeaf: () => void;
   leafContextMenuHandler:
     | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
     | null
     | undefined;
-  removeLeafFromNode: (nodeId: string, leafId: string) => void;
 }) {
   const firstLeaf = leaves[0];
   const firstLeafLabel = firstLeaf?.title || firstLeaf?.id || 'leaf';
@@ -57,12 +51,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
     return getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id);
   };
   const firstLeafHref = firstLeaf ? getLeafHref(firstLeaf) : undefined;
-
-  const handleCreateLeaf = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onCreateLeaf();
-  };
 
   return (
     <div className="border-t border-[var(--stroke-divider)]">
@@ -155,14 +143,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
               )}
             />
           </button>
-          <button
-            type="button"
-            className="nodrag inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2 text-[11px] font-semibold text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15"
-            onClick={handleCreateLeaf}
-          >
-            <Plus size={11} />
-            <span>New Leaf</span>
-          </button>
         </div>
       )}
       <AnimatePresence>
@@ -225,7 +205,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
                     data-node-type="leaf"
                     className="group/leaf flex items-center gap-1"
                     onClick={(e) => e.stopPropagation()}
-                    onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, nodeId)}
                   >
                     {leafHref ? (
                       <Link
@@ -240,18 +219,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
                         {leafContent}
                       </div>
                     )}
-                    <button
-                      type="button"
-                      className="opacity-0 group-hover/leaf:opacity-100 p-1 rounded hover:bg-[var(--status-error-muted)] text-[var(--text-tertiary)]/50 hover:text-[var(--status-error)] transition-all shrink-0"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        removeLeafFromNode(nodeId, leaf.id);
-                      }}
-                      aria-label={`Remove leaf ${leaf.title || leaf.id}`}
-                    >
-                      <Trash2 size={11} />
-                    </button>
                   </div>
                 );
               })}

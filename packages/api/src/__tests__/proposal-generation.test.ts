@@ -10,6 +10,7 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createInferenceRuntime } from '../lib/inference';
 import {
   generateTransitionProposal,
   PROPOSAL_GENERATOR_ACTOR,
@@ -151,8 +152,27 @@ function draft(
   } as const;
 }
 
-function model(generate = vi.fn(async () => draft())): ProposalGenerationModel {
+function model(
+  generate = vi.fn(async () => ({ draft: draft(), usage: { inputTokens: 11, outputTokens: 7 } }))
+): ProposalGenerationModel {
   return { provider: 'test', model: 'test-model', generate };
+}
+
+let generationSequence = 0;
+const inferenceRuntime = createInferenceRuntime({
+  createGenerationId: () => `gen_proposal_${++generationSequence}`,
+});
+
+function inference(projectId: string) {
+  return {
+    runtime: inferenceRuntime,
+    runId: `test:proposal-generation:${projectId}`,
+    scope: {
+      actor: { kind: 'user' as const, id: 'user:test' },
+      projectId,
+      projectVisibility: 'unknown' as const,
+    },
+  };
 }
 
 function databaseFacade(target: AnyDB): AnyDB {
@@ -181,7 +201,7 @@ describe('governed Proposal generation', () => {
     });
     const generate = vi.fn(async () => {
       await gate;
-      return draft();
+      return { draft: draft(), usage: { inputTokens: 11, outputTokens: 7 } };
     });
     const selected = model(generate);
     const requester = { kind: 'human' as const, id: 'user:requester' };
@@ -198,8 +218,8 @@ describe('governed Proposal generation', () => {
         expectedRevision: data.workspace.revision,
       },
       resolveModel: async () => selected,
+      inference: inference(data.projectId),
       now: () => new Date('2026-08-13T01:00:00.000Z'),
-      runId: () => 'run:generation-identity',
     };
 
     const first = generateTransitionProposal(common);
@@ -239,7 +259,10 @@ describe('governed Proposal generation', () => {
 
   it('rejects forged quote pointers without persisting a Proposal', async () => {
     const data = await fixture('Forged evidence');
-    const generate = vi.fn(async () => draft('a claim absent from the source'));
+    const generate = vi.fn(async () => ({
+      draft: draft('a claim absent from the source'),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
 
     await expect(
       generateTransitionProposal({
@@ -254,6 +277,7 @@ describe('governed Proposal generation', () => {
           sourceMaterialIds: [data.material.id],
         },
         resolveModel: async () => model(generate),
+        inference: inference(data.projectId),
       })
     ).rejects.toBeInstanceOf(ProposalGenerationDraftError);
     expect(generate).toHaveBeenCalledTimes(1);
@@ -277,6 +301,7 @@ describe('governed Proposal generation', () => {
           sourceMaterialIds: [owner.material.id],
         },
         resolveModel,
+        inference: inference(consumer.projectId),
       })
     ).rejects.toBeInstanceOf(ProposalGenerationContextError);
     expect(resolveModel).not.toHaveBeenCalled();
@@ -298,6 +323,7 @@ describe('governed Proposal generation', () => {
         sourceMaterialIds: [data.material.id],
       },
       resolveModel: async () => selected,
+      inference: inference(data.projectId),
     });
     const resolveModel = vi.fn(async () => selected);
 
@@ -314,6 +340,7 @@ describe('governed Proposal generation', () => {
           sourceMaterialIds: [data.material.id],
         },
         resolveModel,
+        inference: inference(data.projectId),
       })
     ).rejects.toBeInstanceOf(TransitionRequestConflictError);
     expect(resolveModel).not.toHaveBeenCalled();
@@ -327,7 +354,7 @@ describe('governed Proposal generation', () => {
     });
     const generate = vi.fn(async () => {
       await gate;
-      return draft();
+      return { draft: draft(), usage: { inputTokens: 11, outputTokens: 7 } };
     });
     const common = {
       projectId: data.projectId,
@@ -341,18 +368,16 @@ describe('governed Proposal generation', () => {
         expectedRevision: data.workspace.revision,
       },
       resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
       now: () => new Date('2026-08-13T01:00:00.000Z'),
     };
-    let run = 0;
     const first = generateTransitionProposal({
       ...common,
       db: databaseFacade(db),
-      runId: () => `run:worker-${++run}`,
     });
     const second = generateTransitionProposal({
       ...common,
       db: databaseFacade(db),
-      runId: () => `run:worker-${++run}`,
     });
     await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
     release();
@@ -377,6 +402,7 @@ describe('governed Proposal generation', () => {
         expectedRevision: data.workspace.revision,
       },
       resolveModel: async () => model(),
+      inference: inference(data.projectId),
     });
     const policyDigest = generated.view.precondition.policyDigest;
     if (policyDigest === null) throw new Error('Generated Proposal has no applicable policy');

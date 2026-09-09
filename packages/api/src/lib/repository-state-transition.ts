@@ -1,8 +1,12 @@
 import {
   prepareRepositoryYOpsMergeWrite,
   prepareRepositoryYOpsStateWrite,
+  REPOSITORY_MERGE_POLICY,
+  REPOSITORY_STATE_POLICY,
   RepositoryStateDecisionDeniedError,
   RepositoryStateProposalError,
+  type RepositoryWriterPolicyBinding,
+  TransitionReviewStaleError,
 } from '@t3x-dev/application';
 import {
   type CommitV2,
@@ -53,6 +57,14 @@ export interface CommitRepositoryYOpsStateInput {
   /** Server-resolved immutable source provenance for the Proposal claims. */
   evidence?: readonly EvidenceRef[];
   yopsLogIds?: readonly string[];
+  /** Exact server-selected policy binding; compatibility callers retain the built-in policy. */
+  policyBinding?: RepositoryWriterPolicyBinding;
+  /**
+   * `server-selected` revalidates the observed binding, including absence,
+   * under the commit transaction lock. Omission preserves explicit/internal
+   * policy semantics.
+   */
+  policyBindingSource?: 'explicit' | 'server-selected';
 }
 
 export interface CommitRepositoryYOpsStateResult {
@@ -82,7 +94,11 @@ export class RepositoryCommitMembershipAmbiguousError extends Error {
   }
 }
 
-export { RepositoryStateDecisionDeniedError, RepositoryStateProposalError };
+export {
+  RepositoryStateDecisionDeniedError,
+  RepositoryStateProposalError,
+  TransitionReviewStaleError,
+};
 
 /** Losslessly encode structured repository content in the versioned YOps State domain. */
 export function createRepositoryYOpsStateFromSemanticContent(content: SemanticContent): State {
@@ -196,6 +212,14 @@ export async function getRepositorySemanticCommit(
 export async function commitRepositoryYOpsState(
   input: CommitRepositoryYOpsStateInput
 ): Promise<CommitRepositoryYOpsStateResult> {
+  const actor = structuredClone(input.actor);
+  const policyBindingSource = input.policyBindingSource ?? 'explicit';
+  const policyBinding =
+    input.policyBinding === undefined ? undefined : structuredClone(input.policyBinding);
+  const serverPolicyBindingExpectation =
+    policyBindingSource === 'server-selected'
+      ? { expected: policyBinding ?? null, required: actor.kind !== 'human' }
+      : undefined;
   const head = await getTransitionRefHead(input.db, {
     projectId: input.projectId,
     refName: input.refName,
@@ -213,19 +237,22 @@ export async function commitRepositoryYOpsState(
     base,
     target: input.target,
     ...(head.format === 'transition_v2' ? { parentCommit: head.commit } : {}),
-    actor: input.actor,
+    actor,
     ...(input.intent === undefined ? {} : { intent: input.intent }),
     ...(input.rationale === undefined ? {} : { rationale: input.rationale }),
     ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
     ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+    policyBinding: policyBinding ?? REPOSITORY_STATE_POLICY,
+    ...(serverPolicyBindingExpectation === undefined ? {} : { serverPolicyBindingExpectation }),
     recordedAt,
   });
   try {
     const created = await commitPreparedRepositoryTransition({
       db: input.db,
-      projectId: input.projectId,
-      refName: input.refName,
-      expectedHead: input.expectedHead,
+      preparedTarget: prepared.target,
+      projectId: prepared.target.projectId,
+      refName: prepared.target.refName,
+      expectedHead: prepared.target.expectedHead,
       proposal: prepared.proposal,
       effect: prepared.effect,
       rationale: prepared.rationale,
@@ -234,6 +261,9 @@ export async function commitRepositoryYOpsState(
       parents: prepared.parents,
       objects: prepared.objects,
       ...(prepared.yopsLogIds === undefined ? {} : { yopsLogIds: prepared.yopsLogIds }),
+      ...(prepared.serverPolicyBindingExpectation === undefined
+        ? {}
+        : { serverPolicyBindingExpectation: prepared.serverPolicyBindingExpectation }),
     });
     return created;
   } catch (error) {
@@ -361,6 +391,10 @@ export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMer
   decisions: MergeDecision;
   actor: ActorRef;
   message: string;
+  /** Exact server-selected policy binding; compatibility callers retain the built-in policy. */
+  policyBinding?: RepositoryWriterPolicyBinding;
+  /** See {@link CommitRepositoryYOpsStateInput.policyBindingSource}. */
+  policyBindingSource?: 'explicit' | 'server-selected';
 }
 
 export interface CommitRepositoryYOpsMergeResult {
@@ -376,6 +410,14 @@ export interface CommitRepositoryYOpsMergeResult {
 export async function commitRepositoryYOpsMerge(
   input: CommitRepositoryYOpsMergeInput
 ): Promise<CommitRepositoryYOpsMergeResult> {
+  const actor = structuredClone(input.actor);
+  const policyBindingSource = input.policyBindingSource ?? 'explicit';
+  const policyBinding =
+    input.policyBinding === undefined ? undefined : structuredClone(input.policyBinding);
+  const serverPolicyBindingExpectation =
+    policyBindingSource === 'server-selected'
+      ? { expected: policyBinding ?? null, required: actor.kind !== 'human' }
+      : undefined;
   const head = await getTransitionRefHead(input.db, {
     projectId: input.projectId,
     refName: input.refName,
@@ -402,17 +444,20 @@ export async function commitRepositoryYOpsMerge(
     sourceCommit: context.source.commit,
     targetCommit: context.target.commit,
     decisions: input.decisions,
-    actor: input.actor,
+    actor,
     message: input.message,
+    policyBinding: policyBinding ?? REPOSITORY_MERGE_POLICY,
+    ...(serverPolicyBindingExpectation === undefined ? {} : { serverPolicyBindingExpectation }),
     recordedAt,
   });
   let created: Awaited<ReturnType<typeof commitPreparedRepositoryTransition>>;
   try {
     created = await commitPreparedRepositoryTransition({
       db: input.db,
-      projectId: input.projectId,
-      refName: input.refName,
-      expectedHead: input.targetDigest,
+      preparedTarget: prepared.target,
+      projectId: prepared.target.projectId,
+      refName: prepared.target.refName,
+      expectedHead: prepared.target.expectedHead,
       proposal: prepared.proposal,
       effect: prepared.effect,
       rationale: prepared.rationale,
@@ -420,6 +465,9 @@ export async function commitRepositoryYOpsMerge(
       authority: prepared.authority,
       parents: prepared.parents,
       objects: prepared.objects,
+      ...(prepared.serverPolicyBindingExpectation === undefined
+        ? {}
+        : { serverPolicyBindingExpectation: prepared.serverPolicyBindingExpectation }),
     });
   } catch (error) {
     if (error instanceof TransitionDecisionDeniedError) {

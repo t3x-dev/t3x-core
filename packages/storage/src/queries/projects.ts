@@ -20,6 +20,8 @@ import { transitionCommits } from '../schema-transition-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
+  /** Caller-selected resource ID for reservation-safe orchestration. */
+  projectId?: string;
   name: string;
   metadata?: Record<string, unknown>;
   /** Owner user ID. Omit or undefined → NULL (local/legacy data). */
@@ -37,6 +39,11 @@ export interface ListProjectsOptions {
   owner_id?: string;
   /** Filter projects by their persisted namespace resource ID. */
   namespace_id?: string;
+  /** Canonical current authority; server-derived and never accepted from query JSON. */
+  authority?: {
+    principal_kind: 'human' | 'agent' | 'service';
+    principal_id: string;
+  };
 }
 
 export interface ProjectStats {
@@ -55,7 +62,7 @@ export interface ProjectWithStats extends Project {
  * Insert a new project
  */
 export async function insertProject(db: AnyDB, input: CreateProjectInput): Promise<Project> {
-  const projectId = generateProjectId();
+  const projectId = input.projectId ?? generateProjectId();
   const createdAt = new Date();
   const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 
@@ -127,6 +134,28 @@ export async function findProjects(
   const namespaceCondition = options.namespace_id
     ? eq(projects.namespaceId, options.namespace_id)
     : undefined;
+  const authorityCondition = options.authority
+    ? sql<boolean>`(
+        EXISTS (
+          SELECT 1
+          FROM namespace_memberships AS membership
+          WHERE membership.namespace_id = ${projects.namespaceId}
+            AND membership.principal_kind = ${options.authority.principal_kind}
+            AND membership.principal_id = ${options.authority.principal_id}
+            AND membership.status = 'active'
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM project_grants AS project_grant
+          WHERE project_grant.project_id = ${projects.projectId}
+            AND project_grant.namespace_id = ${projects.namespaceId}
+            AND project_grant.principal_kind = ${options.authority.principal_kind}
+            AND project_grant.principal_id = ${options.authority.principal_id}
+            AND project_grant.status = 'active'
+            AND (project_grant.expires_at IS NULL OR project_grant.expires_at > NOW())
+        )
+      )`
+    : undefined;
 
   if (options.cursor !== undefined) {
     // Cursor pagination mode
@@ -134,6 +163,7 @@ export async function findProjects(
 
     if (ownerCondition) conditions.push(ownerCondition);
     if (namespaceCondition) conditions.push(namespaceCondition);
+    if (authorityCondition) conditions.push(authorityCondition);
 
     if (options.cursor !== '') {
       const { t, k } = decodeCursor(options.cursor);
@@ -165,6 +195,7 @@ export async function findProjects(
   const conditions = [isNull(projects.deletedAt)];
   if (ownerCondition) conditions.push(ownerCondition);
   if (namespaceCondition) conditions.push(namespaceCondition);
+  if (authorityCondition) conditions.push(authorityCondition);
 
   return db
     .select()
@@ -192,12 +223,13 @@ export async function findUnownedProjects(db: AnyDB, limit = 100): Promise<Proje
 export async function claimUnownedProjects(
   db: AnyDB,
   ownerId: string,
+  namespaceId: string,
   projectIds: string[]
 ): Promise<Project[]> {
   if (projectIds.length === 0) return [];
   return db
     .update(projects)
-    .set({ ownerId })
+    .set({ ownerId, namespaceId })
     .where(
       and(
         inArray(projects.projectId, projectIds),

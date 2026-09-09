@@ -42,7 +42,6 @@ export function buildUnitNodeMenu(opts: {
   onCreateBranch: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
-  isDraft: boolean;
   isDeveloperMode: boolean;
   hasConversation?: boolean;
 }): ContextMenuGroup[] {
@@ -101,21 +100,16 @@ export function buildUnitNodeMenu(opts: {
 
 export function buildLeafNodeMenu(opts: {
   onOpenDetail: () => void;
-  onGenerate: () => void;
   onShare: () => void;
   onExport: () => void;
-  onDelete: () => void;
 }): ContextMenuGroup[] {
   return [
     {
       items: [
         { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
-        { label: 'Generate', icon: <FileOutput size={14} />, action: opts.onGenerate },
+        { label: 'Export', icon: <FileOutput size={14} />, action: opts.onExport },
         { label: 'Share', icon: <Share2 size={14} />, action: opts.onShare },
       ],
-    },
-    {
-      items: [{ label: 'Delete', icon: <Trash2 size={14} />, action: opts.onDelete, danger: true }],
     },
   ];
 }

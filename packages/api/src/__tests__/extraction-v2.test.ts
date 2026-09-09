@@ -26,6 +26,17 @@ vi.mock('../lib/provider-resolver', () => providerMock);
 vi.mock('../lib/yops-log-utils', () => replayMock);
 
 import { runApiExtractionV2 } from '../lib/extraction-v2';
+import { createInferenceRuntime } from '../lib/inference';
+
+const inference = {
+  runtime: createInferenceRuntime(),
+  runId: 'test:extraction-v2',
+  scope: {
+    actor: { kind: 'user' as const, id: 'user:test' },
+    projectId: 'proj_1',
+    projectVisibility: 'unknown' as const,
+  },
+};
 
 describe('runApiExtractionV2', () => {
   beforeEach(() => {
@@ -64,6 +75,7 @@ describe('runApiExtractionV2', () => {
       conversationId: 'conv_1',
       turnHashes: ['turn_1'],
       baselineSnapshot,
+      inference,
     });
 
     expect(result.ok).toBe(true);

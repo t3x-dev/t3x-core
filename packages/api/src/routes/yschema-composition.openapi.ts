@@ -1,9 +1,20 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  SchemaCatalogCollectionsSchema,
+  SchemaCatalogPageSchema,
+  SchemaReleasePresentationReferenceSchema,
+  StatePresentationSchema,
+} from '@t3x-dev/api-client';
+import { createStatePresentation } from '@t3x-dev/application';
+import {
   ConflictError,
+  decodeCursor,
+  findStatePresentation,
   findWorkspaceDraft,
+  getVerifiedTransitionCommitGraph,
   listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
+  listYSchemaCatalogReleases,
   publishYSchemaArtifactVersion,
   saveYSchemaCompositionSnapshot,
   updateYSchemaArtifactIdentity,
@@ -25,6 +36,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import {
   artifactViewToManifest,
   ensureBuiltInYSchemaArtifacts,
@@ -152,6 +164,10 @@ const ApplyWorkspaceCompositionRequestSchema = z
   .strict()
   .openapi('ApplyWorkspaceYSchemaCompositionRequest');
 
+const PublishPresentationReferenceSchema = SchemaReleasePresentationReferenceSchema.omit({
+  projectId: true,
+});
+
 const PublishWorkspaceCompositionRequestSchema = z
   .object({
     composition_revision: z.number().int().positive(),
@@ -165,6 +181,7 @@ const PublishWorkspaceCompositionRequestSchema = z
     title: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).optional(),
     release_notes: z.string().trim().max(1000).optional(),
+    presentation_ref: PublishPresentationReferenceSchema.optional(),
     tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
   })
   .strict()
@@ -234,6 +251,108 @@ const ArtifactRegistryResponseSchema = z
 const ProjectYSchemaVersionHistoryResponseSchema = z
   .object({ items: z.array(z.any()) })
   .openapi('ProjectYSchemaVersionHistoryResponse');
+
+// Editorial collections are loose discovery aliases, never schema types or runtime authority.
+const catalogCollections = [
+  { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure', 'devops', 'homelab'] },
+  { id: 'ai-agents', title: 'AI & Agents', tags: ['ai', 'agents', 'evaluation'] },
+  { id: 'science', title: 'Science & Research', tags: ['science', 'research'] },
+  { id: 'security', title: 'Security', tags: ['security', 'detection'] },
+  { id: 'devices', title: 'Devices & Automation', tags: ['devices', 'iot', 'automation'] },
+  { id: 'data', title: 'Data & Visualization', tags: ['data', 'visualization'] },
+  { id: 'work-life', title: 'Work & Life', tags: ['planning', 'work', 'care'] },
+];
+const CatalogQuerySchema = z
+  .object({
+    selection: z.literal('editor-picks').optional(),
+    q: z.string().trim().max(200).optional(),
+    canonical_name: z.string().trim().min(1).max(200).optional(),
+    tags: z
+      .string()
+      .max(1600)
+      .transform((value) =>
+        value
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      )
+      .pipe(z.array(z.string().max(80)).max(16))
+      .optional(),
+    ecosystem: z.string().trim().min(1).max(80).optional(),
+    publisher: z.string().trim().min(1).max(120).optional(),
+    family: z.string().trim().min(1).max(80).optional(),
+    kind: z.enum(['core', 'module', 'schema']).optional(),
+    format: z.enum(['json', 'yaml']).optional(),
+    capability: z.string().trim().min(1).max(160).optional(),
+    collection: z
+      .string()
+      .refine((value) => catalogCollections.some((item) => item.id === value), 'Unknown collection')
+      .optional(),
+    cursor: z
+      .string()
+      .max(2048)
+      .refine((value) => {
+        try {
+          decodeCursor(value);
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Invalid cursor')
+      .optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(24),
+  })
+  .strict();
+const catalogResponses = {
+  200: {
+    description: 'Visible published definitions, with immutable release references',
+    content: {
+      'application/json': { schema: SuccessResponseSchema(SchemaCatalogPageSchema) },
+    },
+  },
+  400: {
+    description: 'Invalid query or cursor',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  403: {
+    description: 'Project access denied',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  404: {
+    description: 'Project not found',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+};
+const catalogRoute = createRoute({
+  method: 'get',
+  path: '/v1/yschema/catalog',
+  tags: ['YSchema'],
+  summary: 'Search public published definitions without exposing manifests or draft versions',
+  request: { query: CatalogQuerySchema },
+  responses: catalogResponses,
+});
+const projectCatalogRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/yschema/catalog',
+  tags: ['YSchema'],
+  summary: 'Search public and authorized project-owned published definitions',
+  request: { params: z.object({ projectId: z.string().min(1) }), query: CatalogQuerySchema },
+  responses: catalogResponses,
+});
+const catalogCollectionsRoute = createRoute({
+  method: 'get',
+  path: '/v1/yschema/catalog/collections',
+  tags: ['YSchema'],
+  summary: 'List official editorial tag collections; not compatibility declarations',
+  responses: {
+    200: {
+      description: 'Editorial discovery filters',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(SchemaCatalogCollectionsSchema) },
+      },
+    },
+  },
+});
 
 const listArtifactsRoute = createRoute({
   method: 'get',
@@ -544,6 +663,66 @@ const publishWorkspaceCompositionRoute = createRoute({
 
 export const yschemaCompositionRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
+yschemaCompositionRoutes.openapi(catalogCollectionsRoute, async (c) => {
+  return c.json({ success: true as const, data: { items: catalogCollections } }, 200);
+});
+yschemaCompositionRoutes.openapi(catalogRoute, async (c) => {
+  const query = c.req.valid('query');
+  const db = await getDB();
+  await ensureBuiltInYSchemaArtifacts(db);
+  if (query.selection === 'editor-picks') {
+    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
+        },
+        400
+      );
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
+      200
+    );
+  }
+  const page = await listYSchemaCatalogReleases(db, {
+    ...query,
+    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
+  });
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
+});
+yschemaCompositionRoutes.openapi(projectCatalogRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const query = c.req.valid('query');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  await ensureBuiltInYSchemaArtifacts(db);
+  if (query.selection === 'editor-picks') {
+    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
+        },
+        400
+      );
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
+      200
+    );
+  }
+  const page = await listYSchemaCatalogReleases(db, {
+    ...query,
+    project_id: projectId,
+    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
+  });
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
+});
+
 yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
   const query = c.req.valid('query');
   const db = await getDB();
@@ -622,7 +801,7 @@ yschemaCompositionRoutes.openapi(updateSchemaIdentityRoute, async (c) => {
   const { projectId, artifactId } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
   const updated = await updateYSchemaArtifactIdentity(db, {
     artifact_id: artifactId,
@@ -642,7 +821,7 @@ yschemaCompositionRoutes.openapi(setSchemaLifecycleRoute, async (c) => {
   const { projectId, artifactId, action } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
   const updated = await updateYSchemaArtifactIdentity(db, {
     artifact_id: artifactId,
@@ -739,7 +918,7 @@ yschemaCompositionRoutes.openapi(saveWorkspaceCompositionRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { composition, if_revision: ifRevision } = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
@@ -841,8 +1020,47 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   const { projectId, workspaceId } = c.req.valid('param');
   const input = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
+
+  let presentationRef: z.infer<typeof SchemaReleasePresentationReferenceSchema> | undefined;
+  if (input.presentation_ref) {
+    const reference = input.presentation_ref;
+    const graph = await getVerifiedTransitionCommitGraph(db, projectId, reference.commitDigest);
+    if (!graph)
+      return errorResponse(c, 'COMMIT_NOT_FOUND', 'Introduction commit not found in this project');
+    const row = await findStatePresentation(db, projectId, reference.commitDigest);
+    if (!row) return errorResponse(c, 'NOT_FOUND', 'No introduction is published for this commit');
+    try {
+      const saved = StatePresentationSchema.parse({
+        digest: row.presentationDigest,
+        document: row.document,
+      });
+      const verified = createStatePresentation({
+        ...saved.document,
+        avatarPath: saved.document.avatarPath ?? undefined,
+      });
+      if (
+        verified.digest !== row.presentationDigest ||
+        verified.digest !== reference.presentationDigest
+      ) {
+        throw new Error('Introduction digest mismatch');
+      }
+      if (
+        reference.coverPath &&
+        !verified.document.resources.some((resource) => resource.path === reference.coverPath)
+      ) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          'Cover must reference an image in this introduction'
+        );
+      }
+    } catch {
+      return errorResponse(c, 'HASH_CONFLICT', 'Introduction failed integrity verification');
+    }
+    presentationRef = { projectId, ...reference };
+  }
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   if (!draft?.workspace_state) {
@@ -937,6 +1155,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       schema,
       registry: {
         origin: 'composition',
+        ...(presentationRef ? { presentationRef } : {}),
         compilerVersion: 'yschema-v2',
         compositionHash: preview.compositionHash,
         compiledSchemaHash: preview.compiledSchemaHash,
@@ -1046,6 +1265,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     schema,
     registry: {
       origin: 'composition',
+      ...(presentationRef ? { presentationRef } : {}),
       compositionId: persisted.composition.id,
       compositionRevision: persisted.composition.revision,
       compositionHash: preview.compositionHash,
@@ -1100,7 +1320,7 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
     composition_hash: expectedCompositionHash,
   } = c.req.valid('json');
   const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
 
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);

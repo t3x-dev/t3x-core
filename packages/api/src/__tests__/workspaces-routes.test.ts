@@ -20,7 +20,32 @@ const storageMock = vi.hoisted(() => {
     },
     findMaterialsByProject: vi.fn(() => Promise.resolve([])),
     findProjectById: vi.fn((_db, projectId: string) =>
-      Promise.resolve({ projectId, ownerId: null })
+      Promise.resolve({ projectId, namespaceId: 'ns_test', ownerId: null })
+    ),
+    findProjectAuthorityFacts: vi.fn(
+      (
+        _db,
+        input: {
+          projectId: string;
+          principal: { kind: 'human' | 'agent' | 'service'; principalId: string };
+        }
+      ) =>
+        Promise.resolve({
+          project: { projectId: input.projectId, namespaceId: 'ns_test', ownerId: null },
+          namespaceMembership: null,
+          projectGrant: {
+            grantId: `grant_${input.principal.principalId}`,
+            projectId: input.projectId,
+            namespaceId: 'ns_test',
+            principalKind: input.principal.kind,
+            principalId: input.principal.principalId,
+            role: 'editor',
+            status: 'active',
+            createdAt: new Date('2026-08-31T00:00:00.000Z'),
+            updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+            revokedAt: null,
+          },
+        })
     ),
     findBranchByName: vi.fn((_db, _projectId: string, name: string) =>
       Promise.resolve({ name, parentBranch: name === 'main' ? null : 'main' })
@@ -135,6 +160,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
     findProjectById: storageMock.findProjectById,
+    findProjectAuthorityFacts: storageMock.findProjectAuthorityFacts,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,

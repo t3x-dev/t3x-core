@@ -30,6 +30,8 @@ export type CompressionV2Result =
       ok: false;
       error: string;
       usage: CompressionV2Usage;
+      /** Original provider failure for application-layer error classification. */
+      cause?: unknown;
     };
 
 export interface CompressionV2PipelineInput {
@@ -61,6 +63,7 @@ export async function runCompressionV2Pipeline(
       ok: false,
       error: `LLM error: ${err instanceof Error ? err.message : String(err)}`,
       usage,
+      cause: err,
     };
   }
 

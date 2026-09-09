@@ -5,6 +5,12 @@ import {
 } from '@t3x-dev/core';
 import { type AnyDB, findConversationById, findTurnsByHashes, recordUsage } from '@t3x-dev/storage';
 import { z } from 'zod';
+import {
+  executeMeteredInference,
+  InferenceAdmissionDeniedError,
+  type InferenceRuntime,
+  type InferenceScope,
+} from './inference';
 import { resolveProviderAndModel } from './provider-resolver';
 import { resolveWorkspaceExtractionContext } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
@@ -31,6 +37,11 @@ export interface CreateSourceChatDraftReplyInput {
   provider?: string;
   model?: string;
   userId?: string;
+  inference: {
+    runtime: InferenceRuntime;
+    runId: string;
+    scope: InferenceScope;
+  };
 }
 
 export interface SourceChatDraftItem {
@@ -526,18 +537,34 @@ export async function createSourceChatDraftReply(
 
   let replyResult: Awaited<ReturnType<StructuredProvider['generateStructured']>>;
   try {
-    replyResult = await structuredProvider.generateStructured(
-      buildReplyPrompt({
-        sourceText: userTurn.content,
-        catalogDigest,
-        targets,
-        hardExclusions,
-        warnings,
-      }),
-      replySchema,
-      { model: providerResolution.model, temperature: 0, maxTokens: 4096 }
-    );
+    const execution = await executeMeteredInference({
+      runtime: input.inference.runtime,
+      input: {
+        runId: input.inference.runId,
+        feature: 'source-chat.draft-reply',
+        requestedModel: input.model?.trim() || providerResolution.model,
+        scope: input.inference.scope,
+      },
+      resolvedProvider: providerResolution.providerId,
+      resolvedModel: providerResolution.model,
+      async invoke() {
+        const result = await structuredProvider.generateStructured(
+          buildReplyPrompt({
+            sourceText: userTurn.content,
+            catalogDigest,
+            targets,
+            hardExclusions,
+            warnings,
+          }),
+          replySchema,
+          { model: providerResolution.model, temperature: 0, maxTokens: 4096 }
+        );
+        return { value: result, usage: result.usage };
+      },
+    });
+    replyResult = execution.value;
   } catch (error) {
+    if (error instanceof InferenceAdmissionDeniedError) throw error;
     const message = error instanceof Error ? error.message : 'Source Chat draft generation failed';
     throw new SourceChatDraftReplyError('generation_failed', message);
   }

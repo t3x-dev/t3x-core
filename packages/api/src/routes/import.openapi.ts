@@ -13,6 +13,12 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { generateProjectId } from '@t3x-dev/core';
+import {
+  DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
+  findNamespaceBySlug,
+  findPersonalNamespaceByOwner,
+} from '@t3x-dev/storage';
 import { restoreFromCfpack } from '@t3x-dev/storage/backup';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
@@ -26,7 +32,14 @@ import {
   parsePlatformExportFromBuffer,
   parseUrl,
 } from '../lib/import';
+import { assertNamespaceAccess } from '../lib/namespace-access';
 import { assertProjectAccess, assertProjectCreationAccess, getUserId } from '../lib/project-access';
+import {
+  getProjectLifecyclePolicy,
+  PROJECT_LIFECYCLE_POLICY_VERSION,
+  ProjectLifecyclePolicyDeniedError,
+  resolveProjectLifecycleActor,
+} from '../lib/project-lifecycle-policy';
 import { jsonError } from '../lib/response';
 import { createHeartbeatSseStream } from '../lib/sse-heartbeat';
 import { isInternalUrlResolved } from '../lib/ssrf';
@@ -203,10 +216,17 @@ const importCfpackRoute = createRoute({
         'application/json': { schema: ErrorResponseSchema },
       },
     },
+    409: {
+      description: 'Project capacity conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    429: {
+      description: 'Project admission rate limited',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 importRoutes.openapi(importCfpackRoute, async (c) => {
   const cfpack = c.req.valid('json');
   const denied = assertProjectCreationAccess(c);
@@ -215,10 +235,54 @@ importRoutes.openapi(importCfpackRoute, async (c) => {
   const db = await getDB();
 
   try {
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const result = await restoreFromCfpack(db, cfpack as any, { ownerId: getUserId(c) });
+    const userId = getUserId(c);
+    const namespace = userId
+      ? await findPersonalNamespaceByOwner(db, userId)
+      : await findNamespaceBySlug(db, DEFAULT_ORGANIZATION_NAMESPACE_SLUG);
+    if (!namespace) {
+      return jsonError(
+        c,
+        'NOT_FOUND',
+        userId ? 'Personal namespace not created yet' : 'Namespace not found',
+        404
+      );
+    }
+    const namespaceDenied = await assertNamespaceAccess(c, db, namespace, 'project:create');
+    if (namespaceDenied) return namespaceDenied;
+    const actor = resolveProjectLifecycleActor(c);
+    if (!actor) return jsonError(c, 'FORBIDDEN', 'A canonical actor is required', 403);
+    const projectId = generateProjectId();
+
+    const result = await getProjectLifecyclePolicy(c).execute(
+      {
+        contractVersion: PROJECT_LIFECYCLE_POLICY_VERSION,
+        operation: 'import',
+        namespaceId: namespace.namespaceId,
+        projects: [
+          {
+            projectId,
+            fromNamespaceId: null,
+            fromVisibility: null,
+            toVisibility: 'private',
+          },
+        ],
+        actor,
+      },
+      () =>
+        restoreFromCfpack(db, cfpack as Parameters<typeof restoreFromCfpack>[1], {
+          projectId,
+          ownerId: userId,
+          namespaceId: namespace.namespaceId,
+        })
+    );
     return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
+    if (err instanceof ProjectLifecyclePolicyDeniedError) {
+      return c.json(
+        { success: false as const, error: { code: err.code, message: err.message } },
+        err.status
+      );
+    }
     return c.json(
       {
         success: false as const,

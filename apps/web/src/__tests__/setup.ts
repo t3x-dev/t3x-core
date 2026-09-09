@@ -68,7 +68,7 @@ function installMemoryLocalStorage(): void {
 
 installMemoryLocalStorage();
 
-import { type AnyDB, closePostgresStorage, createPostgresStorage } from '@t3x-dev/storage';
+import { type AnyDB, closePostgresStorage, createPostgresBootstrapStorage } from '@t3x-dev/storage';
 import postgres from 'postgres';
 import { vi } from 'vitest';
 
@@ -124,7 +124,7 @@ export async function createTestDB(): Promise<{
   const rawSql = postgres(connectionString, { max: 5 });
 
   // Create Drizzle instance
-  const db = await createPostgresStorage({ connectionString });
+  const db = await createPostgresBootstrapStorage({ connectionString });
 
   // Cleanup function
   const cleanup = async () => {

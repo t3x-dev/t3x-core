@@ -66,16 +66,16 @@ function getActionNote(node: CanvasUnitNode, hasParent: boolean, canMerge: boole
   const hasLeaf = (node.data.leaves?.length ?? 0) > 0;
   if (!hasParent) {
     return hasLeaf
-      ? 'Version context stays on the canvas. Open Leaf keeps existing output one click away; New Leaf creates another output from this exact version.'
-      : 'Version context stays on the canvas. New Leaf creates output from this exact version.';
+      ? 'Version context stays on the canvas. Open Leaf opens the saved output for this version.'
+      : 'Version context stays on the canvas. Use State or Commit Export for delivery.';
   }
   if (node.data.branchType === 'branch' && canMerge) {
-    return 'Version context stays on the canvas. New Leaf targets this exact branch version.';
+    return 'Version context stays on the canvas. Review and merge this branch version.';
   }
   if (node.data.branchType === 'branch') {
     return 'Version context stays on the canvas. Use Pull requests for branch review and merge.';
   }
-  return 'Version context stays on the canvas. New Leaf targets this exact version.';
+  return 'Version context stays on the canvas. Use State or Commit Export for delivery.';
 }
 
 function actionButtonClass(action: CommitAction): string {
@@ -92,19 +92,17 @@ function actionButtonClass(action: CommitAction): string {
 }
 
 function panelActionLabel(action: CommitAction): string {
-  if (action.label === 'New Leaf') return 'Create Leaf From This Version';
   if (action.label === 'Merge') return 'Start Merge Into Main';
   return action.label;
 }
 
 function panelActionClass(action: CommitAction): string {
-  return action.label === 'New Leaf' || action.label === 'Merge' ? 'col-span-2' : '';
+  return action.label === 'Merge' ? 'col-span-2' : '';
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
   if (action.label === 'View Diff') return 'canvas-action-diff';
   if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
-  if (action.label === 'New Leaf') return 'canvas-action-new-leaf';
   if (action.label === 'Merge') return 'canvas-action-merge';
   return undefined;
 }
@@ -277,7 +275,7 @@ export function CanvasSelectionPanel({
           {hasLeaf && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[var(--accent-leaf)]">
               <Leaf size={12} />
-              <span>Existing leaf remains openable; New Leaf creates another artifact.</span>
+              <span>Existing Leaf output remains available.</span>
             </div>
           )}
         </PanelBlock>
@@ -287,19 +285,19 @@ export function CanvasSelectionPanel({
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">root</span>
               <span className="text-[var(--text-tertiary)]">
-                Open Leaf + New Leaf. Diff is hidden because root has no parent.
+                Open a saved Leaf. Diff is hidden because root has no parent.
               </span>
             </div>
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">main child</span>
               <span className="text-[var(--text-tertiary)]">
-                Diff + Create Leaf. Merge is hidden on main.
+                View Diff. Merge is hidden on main.
               </span>
             </div>
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">branch head</span>
               <span className="text-[var(--text-tertiary)]">
-                Diff + Create Leaf + Merge. Merge exists only on latest branch head.
+                View Diff and Merge. Merge exists only on the latest branch head.
               </span>
             </div>
           </div>

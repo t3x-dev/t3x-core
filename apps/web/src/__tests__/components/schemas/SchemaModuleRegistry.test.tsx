@@ -275,14 +275,14 @@ describe('SchemaModuleRegistry', () => {
           onPublished,
           composition: {
             apiVersion: 't3x.dev/yschema-composition/v2',
-            id: 'composition:workspace_modules',
+            id: 'imported-composition-identity',
             revision: 1,
             status: 'draft',
             modules: [
               {
                 canonicalName: 't3x/prd-frontend-design',
                 version: '1.0.0',
-                presentationOrder: 10,
+                presentationOrder: 42,
               },
             ],
           },
@@ -302,6 +302,13 @@ describe('SchemaModuleRegistry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Publish 1.0.0' }));
 
     await waitFor(() => expect(onPublished).toHaveBeenCalledTimes(1));
+    const verifyCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/preview'));
+    expect(JSON.parse(String(verifyCall?.[1]?.body))).toMatchObject({
+      id: 'imported-composition-identity',
+      modules: [
+        { canonicalName: 't3x/prd-frontend-design', version: '1.0.0', presentationOrder: 42 },
+      ],
+    });
     const publishCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/publish'));
     expect(JSON.parse(String(publishCall?.[1]?.body))).toMatchObject({
       canonical_name: 'projects/proj_modules/schema',

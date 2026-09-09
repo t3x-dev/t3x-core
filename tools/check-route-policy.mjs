@@ -20,6 +20,7 @@ const approvedPublicRoutes = new Set([
   'app.ts::GET /openapi.json',
   'auth-local.openapi.ts::POST /v1/auth/login',
   'auth-local.openapi.ts::POST /v1/auth/register',
+  'deployment-capabilities.openapi.ts::GET /v1/deployment/capabilities',
   'health.openapi.ts::GET /health',
   'llm.openapi.ts::GET /v1/llm/models',
   'namespaces.openapi.ts::GET /v1/namespaces/{slug}',

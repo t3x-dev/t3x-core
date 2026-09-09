@@ -82,29 +82,6 @@ export async function updateConversation(
 }
 
 /**
- * Export conversation context as a downloadable file (JSON or Markdown).
- * Returns the blob plus the server-advised filename (falls back to a
- * sensible default when Content-Disposition is absent).
- */
-export async function exportConversationContext(
-  conversationId: string,
-  format: 'json' | 'markdown'
-): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/context-export?format=${format}`
-  );
-  if (!res.ok) {
-    throw new Error(`Export failed (${res.status})`);
-  }
-  const disposition = res.headers.get('Content-Disposition');
-  const filenameMatch = disposition?.match(/filename="(.+)"/);
-  const filename =
-    filenameMatch?.[1] ?? `${conversationId}-context.${format === 'markdown' ? 'md' : 'json'}`;
-  const blob = await res.blob();
-  return { blob, filename };
-}
-
-/**
  * Fetch the plain-text memory representation of a conversation
  * for clipboard/export style flows. Distinct from
  * `@/infrastructure/pins.getConversationMemory`, which returns the

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
   compileProposalGenerationDraft,
   createYSchemaResourceDescriptor,
@@ -24,6 +24,14 @@ import {
   type State,
 } from '@t3x-dev/transition';
 import type { YSchema } from '@t3x-dev/yschema';
+import {
+  executeMeteredInference,
+  type InferenceFinishStatus,
+  type InferenceProviderCost,
+  type InferenceRuntime,
+  type InferenceScope,
+  type InferenceUsage,
+} from './inference';
 import { inspectTransition, type TransitionControlPlaneView } from './transition-control-plane';
 import {
   canonicalTransitionRequest,
@@ -105,7 +113,15 @@ export interface ProposalGenerationModelInput {
 export interface ProposalGenerationModel {
   provider: string;
   model: string;
-  generate(input: ProposalGenerationModelInput): Promise<unknown>;
+  generate(input: ProposalGenerationModelInput): Promise<ProposalGenerationModelResult>;
+}
+
+export interface ProposalGenerationModelResult {
+  draft: unknown;
+  usage: InferenceUsage;
+  finishStatus?: InferenceFinishStatus;
+  providerRequestId?: string;
+  providerReportedCost?: InferenceProviderCost;
 }
 
 export class ProposalGenerationContextError extends Error {
@@ -340,8 +356,12 @@ export async function generateTransitionProposal(input: {
   requester: ActorRef;
   request: ProposalGenerationRequest;
   resolveModel(): Promise<ProposalGenerationModel>;
+  inference: {
+    runtime: InferenceRuntime;
+    runId: string;
+    scope: InferenceScope;
+  };
   now?: () => Date;
-  runId?: () => string;
 }): Promise<{ view: TransitionControlPlaneView; reused: boolean }> {
   if (input.requestId.trim().length === 0) throw new TypeError('requestId must be non-empty');
   if (input.request.instruction.trim().length === 0) {
@@ -393,6 +413,7 @@ export async function generateTransitionProposal(input: {
         resolvedSchema.version
       );
     }
+    const yschema = resolvedSchema.schema;
     const sources = await resolveSources(
       input.db,
       input.projectId,
@@ -401,9 +422,9 @@ export async function generateTransitionProposal(input: {
     const profile = proposalGenerationProfileResource(input.request.posture);
     const schemaResource = createYSchemaResourceDescriptor(
       `t3x://schemas/${encodeURIComponent(resolvedSchema.canonicalName)}/${encodeURIComponent(
-        String(resolvedSchema.version ?? resolvedSchema.schema.version ?? 'unversioned')
+        String(resolvedSchema.version ?? yschema.version ?? 'unversioned')
       )}`,
-      resolvedSchema.schema
+      yschema
     );
     const instructionResource = textResource(
       `t3x://proposal-generation/instructions/${sha256(input.request.instruction).slice(
@@ -428,15 +449,39 @@ export async function generateTransitionProposal(input: {
     };
 
     const model = await input.resolveModel();
-    const rawDraft = await model.generate({
-      profile: profile.profile,
-      context,
-      base: workspace.base,
-      yschema: { resource: schemaResource, value: resolvedSchema.schema },
-      sources,
-      instruction: input.request.instruction,
-      prompt: GENERATION_PROMPT,
+    const execution = await executeMeteredInference({
+      runtime: input.inference.runtime,
+      input: {
+        runId: input.inference.runId,
+        feature: 'transition.proposal-generation',
+        requestedModel: input.request.requestedModel ?? model.model,
+        scope: input.inference.scope,
+      },
+      resolvedProvider: model.provider,
+      resolvedModel: model.model,
+      now: input.now,
+      invoke: async () => {
+        const result = await model.generate({
+          profile: profile.profile,
+          context,
+          base: workspace.base,
+          yschema: { resource: schemaResource, value: yschema },
+          sources,
+          instruction: input.request.instruction,
+          prompt: GENERATION_PROMPT,
+        });
+        return {
+          value: result.draft,
+          usage: result.usage,
+          ...(result.finishStatus ? { finishStatus: result.finishStatus } : {}),
+          ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
+          ...(result.providerReportedCost
+            ? { providerReportedCost: result.providerReportedCost }
+            : {}),
+        };
+      },
     });
+    const rawDraft = execution.value;
     let draft: ProposalGenerationDraftV1;
     try {
       draft = parseProposalGenerationDraft(rawDraft);
@@ -454,7 +499,7 @@ export async function generateTransitionProposal(input: {
       provider: model.provider,
       model: model.model,
       run: {
-        id: input.runId?.() ?? `proposal-generation:${randomUUID()}`,
+        id: execution.attempt.generationId,
         recordedAt: (input.now?.() ?? new Date()).toISOString(),
       },
       evidenceBindings: verifiedEvidenceBindings(draft, sources),

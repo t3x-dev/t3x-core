@@ -11,6 +11,7 @@ const {
   touchSpy,
   findApiKeySpy,
   findProjectSpy,
+  findProjectAuthorityFactsSpy,
   findConversationSpy,
 } = vi.hoisted(() => {
   return {
@@ -21,6 +22,7 @@ const {
     touchSpy: vi.fn(() => Promise.resolve()),
     findApiKeySpy: vi.fn(),
     findProjectSpy: vi.fn(),
+    findProjectAuthorityFactsSpy: vi.fn(),
     findConversationSpy: vi.fn(),
   };
 });
@@ -57,6 +59,7 @@ vi.mock('@t3x-dev/storage', () => ({
   touchLastUsed: touchSpy,
   findApiKeyByValue: findApiKeySpy,
   findProjectById: findProjectSpy,
+  findProjectAuthorityFacts: findProjectAuthorityFactsSpy,
   findConversationById: findConversationSpy,
 }));
 
@@ -97,8 +100,46 @@ describe('ws route — query parameter validation', () => {
     touchSpy.mockClear();
     findProjectSpy.mockReset();
     findProjectSpy.mockImplementation((_db, projectId: string) =>
-      Promise.resolve({ projectId, ownerId: 'u1' })
+      Promise.resolve({ projectId, namespaceId: 'ns_ws', ownerId: 'u1' })
     );
+    findProjectAuthorityFactsSpy.mockReset();
+    findProjectAuthorityFactsSpy.mockImplementation(async (_db, input) => {
+      const project = await findProjectSpy(_db, input.projectId);
+      if (!project) return null;
+      const namespaceId = project.namespaceId ?? 'ns_ws';
+      const isHuman = input.principal.kind === 'human';
+      const isOwner = isHuman && project.ownerId === input.principal.principalId;
+      const now = new Date('2026-08-31T00:00:00.000Z');
+      return {
+        project: { ...project, namespaceId },
+        namespaceMembership: isOwner
+          ? {
+              membershipId: `membership_${input.principal.principalId}`,
+              namespaceId,
+              principalKind: 'human',
+              principalId: input.principal.principalId,
+              role: 'owner',
+              status: 'active',
+              createdAt: now,
+              updatedAt: now,
+            }
+          : null,
+        projectGrant: isHuman
+          ? null
+          : {
+              grantId: `grant_${input.principal.principalId}`,
+              projectId: input.projectId,
+              namespaceId,
+              principalKind: input.principal.kind,
+              principalId: input.principal.principalId,
+              role: 'editor',
+              status: 'active',
+              createdAt: now,
+              updatedAt: now,
+              revokedAt: null,
+            },
+      };
+    });
     findConversationSpy.mockReset();
     findConversationSpy.mockImplementation((_db, conversationId: string) =>
       Promise.resolve({ conversationId, projectId: 'proj_conversation' })

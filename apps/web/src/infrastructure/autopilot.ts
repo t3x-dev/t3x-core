@@ -24,19 +24,6 @@ export interface AdaptiveResult {
   stats?: Record<string, unknown>;
 }
 
-export interface AutoCommitResult {
-  auto_committed: boolean;
-  reason?: string;
-  commit?: {
-    hash: string;
-    branch?: string;
-    committed_at?: string;
-  };
-  nodes_committed?: number;
-  nodes_skipped?: number;
-  skipped?: Array<{ id: string; reason: string }>;
-}
-
 // ============================================================================
 // Autopilot Operations
 // ============================================================================
@@ -78,19 +65,4 @@ export async function getAdaptiveThreshold(projectId: string): Promise<AdaptiveR
     `${API_V1}/projects/${encodeURIComponent(projectId)}/autopilot/adaptive`
   );
   return handleResponse<AdaptiveResult>(res);
-}
-
-/**
- * Auto-commit a draft using autopilot rules.
- */
-export async function autoCommitDraft(draftId: string): Promise<AutoCommitResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/drafts/${encodeURIComponent(draftId)}/auto-commit`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    }
-  );
-  return handleResponse<AutoCommitResult>(res);
 }

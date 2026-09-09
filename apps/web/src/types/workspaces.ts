@@ -63,6 +63,14 @@ export interface SourceConversationTurn {
 export type SchemaBindingMode = 'pinned' | 'draft_override';
 
 export interface WorkspaceSchemaBinding {
+  rootKey?: string;
+  studioSources?: Array<{
+    projectId: string | null;
+    canonicalName: string;
+    version: string;
+    artifactVersionId: string;
+    hash: string;
+  }>;
   canonicalName?: string;
   schemaHash?: string;
   compositionId?: string;

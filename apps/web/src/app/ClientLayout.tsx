@@ -3,6 +3,7 @@
 import { useParams, usePathname } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useEffect } from 'react';
+import { DeploymentCapabilitiesProvider } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDialog';
@@ -82,38 +83,35 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     };
   }, [setProjectNotify, setCanvasNotify, setPinsNotify]);
 
-  // Login page: render bare layout without sidebar/shell
-  if (isLoginPage) {
-    return (
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        {children}
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <ErrorBoundary>
-        <div className="flex min-h-screen bg-background">
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
-          >
-            Skip to content
-          </a>
-          <main
-            id="main-content"
-            aria-label="Main content"
-            className="flex flex-1 flex-col overflow-hidden"
-          >
-            <div className="flex flex-1 flex-col min-h-0">{children}</div>
-          </main>
-          <Toaster position="bottom-right" richColors closeButton />
-          <CommandPalette repositoryPath={repositoryPath} />
-          <KeyboardShortcutsDialog />
-          <SettingsModal />
-        </div>
-      </ErrorBoundary>
+      <DeploymentCapabilitiesProvider>
+        {isLoginPage ? (
+          children
+        ) : (
+          <ErrorBoundary>
+            <div className="flex min-h-screen bg-background">
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg"
+              >
+                Skip to content
+              </a>
+              <main
+                id="main-content"
+                aria-label="Main content"
+                className="flex flex-1 flex-col overflow-hidden"
+              >
+                <div className="flex flex-1 flex-col min-h-0">{children}</div>
+              </main>
+              <Toaster position="bottom-right" richColors closeButton />
+              <CommandPalette repositoryPath={repositoryPath} />
+              <KeyboardShortcutsDialog />
+              <SettingsModal />
+            </div>
+          </ErrorBoundary>
+        )}
+      </DeploymentCapabilitiesProvider>
     </ThemeProvider>
   );
 }

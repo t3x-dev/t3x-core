@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validateWorkspaceYOps } from '@/infrastructure/workspaceYops';
+import { getWorkspaceYOpsRootKey, validateWorkspaceYOps } from '@/infrastructure/workspaceYops';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 function jsonResponse(body: unknown) {
@@ -320,4 +320,18 @@ describe('validateWorkspaceYOps', () => {
     expect(requestBody?.trees[0]?.key).toBe('device');
     expect(requestBody?.yops).toEqual([{ set: { path: 'device', value: device } }]);
   });
+});
+
+it('uses the pinned stable Studio root independently of the selection hash', () => {
+  const binding = {
+    canonicalName: 'studio:sha256:abc',
+    schemaName: 'Care checklist',
+    version: '1.0.0',
+    mode: 'pinned' as const,
+  };
+  expect(getWorkspaceYOpsRootKey([binding])).toBe('candidate');
+  expect(
+    getWorkspaceYOpsRootKey([{ ...binding, canonicalName: 'studio:sha256:def', rootKey: 'prd' }])
+  ).toBe('prd');
+  expect(getWorkspaceYOpsRootKey([{ ...binding, rootKey: '../invalid' }])).toBe('candidate');
 });

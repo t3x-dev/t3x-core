@@ -17,8 +17,25 @@
 
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import {
+  createDeploymentCapabilitiesMiddleware,
+  type DeploymentCapabilitiesSource,
+} from './lib/deployment-capabilities';
+import {
+  createInferenceRuntime,
+  createInferenceRuntimeMiddleware,
+  type InferenceRuntime,
+  type InferenceRuntimeOptions,
+} from './lib/inference';
+import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
+import type { ProjectVisibilityPolicy } from './lib/project-visibility-policy';
+import {
+  createGenerationProviderRuntimeMiddleware,
+  defaultGenerationProviderRuntime,
+  type GenerationProviderRuntime,
+} from './lib/provider-runtime';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
   createWorkspaceSourceRunnerProvider,
@@ -38,35 +55,34 @@ import {
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import {
-  agentDraftRoutes,
   apiKeysRoutes,
   authLocalRoutes,
   authMeRoutes,
   autopilotRoutes,
   branchRoutes,
   checkRoutes,
-  commitFromDraftRoutes,
+  collaborationCommandRoutes,
+  collaborationInvitationRoutes,
+  collaborationReadRoutes,
   commitRoutes,
   comparisonsRoutes,
   contextRoutes,
   conversationRoutes,
+  createProjectVisibilityRoutes,
   createTransitionControlPlaneRoutes,
   createWorkspaceSourceTransitionRoutes,
   curateRoutes,
   deployAgentRoutes,
+  deploymentCapabilitiesRoutes,
   diffRoutes,
   docsYopsRoutes,
-  draftsRoutes,
   exportRoutes,
-  extractIncrementalRoutes,
   extractionFeedbackRoutes,
-  extractYopsRoutes,
   gateRoutes,
   generationRoutes,
   healthRoutes,
   importRoutes,
   ingestRoutes,
-  integrationExtractRoutes,
   knowledgeGraphRoutes,
   leavesRoutes,
   llmRoutes,
@@ -84,6 +100,7 @@ import {
   relationsRoutes,
   runnerRoutes,
   runsRoutes,
+  schemaStudioRoutes,
   searchRoutes,
   shareRoutes,
   skillArtifactRoutes,
@@ -92,7 +109,6 @@ import {
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
-  topicsRoutes,
   transitionPolicyBindingRoutes,
   turnRoutes,
   usageRoutes,
@@ -100,13 +116,13 @@ import {
   workspaceExtractionProposalRoutes,
   workspaceRoutes,
   workspaceValidationRoutes,
-  yopsLogRoutes,
   yopsValidateRoutes,
   yschemaCompositionRoutes,
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
+import type { AppEnv } from './types';
 
 export interface CreateAppOptions {
   /** Shared rate-limit backend. Defaults to persistent PostgreSQL counters. */
@@ -127,10 +143,24 @@ export interface CreateAppOptions {
   workspaceSourceTransition?: WorkspaceSourceTransitionCapabilities;
   /** Server-owned Transition verification providers and external predicate allowlist. */
   transitionControlPlane?: TransitionControlPlaneOptions;
+  /** Provider-neutral execution gateway and admission policy. Defaults preserve OSS behavior. */
+  inference?: InferenceRuntimeOptions;
+  /** Provider-neutral model composition. Defaults adapt the direct OSS registry. */
+  providerRuntime?: GenerationProviderRuntime;
+  /** Public deployment-scoped capabilities. Dynamic sources fail closed per request. */
+  deploymentCapabilities?: DeploymentCapabilitiesSource;
+  /** Host-owned publication and private-project capacity orchestration. */
+  projectVisibilityPolicy?: ProjectVisibilityPolicy;
+  /** Host-owned admission policy for create, import, restore, transfer, and clone operations. */
+  projectLifecyclePolicy?: ProjectLifecyclePolicy;
 }
 
 export interface CreateAppResult {
   app: Hono;
+  /** Provider-neutral model authority composed for this application instance. */
+  providerRuntime: GenerationProviderRuntime;
+  /** Provider-neutral inference boundary composed for this application. */
+  inferenceRuntime: InferenceRuntime;
   /** Pass to the `websocket` option of @hono/node-server v2 `serve()`. */
   websocket: ReturnType<typeof setupWebSocket>['websocket'];
 }
@@ -138,6 +168,8 @@ export interface CreateAppResult {
 export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
   const rateLimitStore = options?.rateLimitStore ?? databaseRateLimitStore;
+  const providerRuntime = options?.providerRuntime ?? defaultGenerationProviderRuntime;
+  const inferenceRuntime = createInferenceRuntime(options?.inference);
   const transitionControlPlane =
     options?.workspaceSourceTransition?.runner === undefined
       ? options?.transitionControlPlane
@@ -153,6 +185,9 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // → L1 Rate Limit → Auth/[extensions] → L2 Rate Limit). The cache policy wraps
   // auth so it can apply headers after either built-in or Cloud auth completes.
   app.use('*', requestIdMiddleware);
+  app.use('*', createDeploymentCapabilitiesMiddleware(options?.deploymentCapabilities));
+  app.use('*', createGenerationProviderRuntimeMiddleware(providerRuntime));
+  app.use('*', createInferenceRuntimeMiddleware(inferenceRuntime));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
   app.use('*', responseCachePolicyMiddleware);
@@ -196,19 +231,30 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     },
   });
 
+  if (options?.projectLifecyclePolicy) {
+    api.use('*', async (c, next) => {
+      (c as Context<AppEnv>).set('projectLifecyclePolicy', options.projectLifecyclePolicy);
+      return next();
+    });
+  }
+
   // Project-level access control: gate all /v1/projects/:projectId/* sub-routes
   api.use('/v1/projects/:projectId/*', projectAccessMiddleware);
 
   // Mount routes
   api.route('/', statusRoutes);
+  api.route('/', deploymentCapabilitiesRoutes);
   api.route('/', namespaceRoutes);
+  api.route('/', collaborationReadRoutes);
+  api.route('/', collaborationCommandRoutes);
+  api.route('/', collaborationInvitationRoutes);
   api.route('/', projectRoutes);
+  api.route('/', createProjectVisibilityRoutes(options?.projectVisibilityPolicy));
   api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
   api.route('/', commitRoutes);
   api.route('/', branchRoutes);
-  api.route('/', agentDraftRoutes);
   api.route('/', generationRoutes);
   api.route('/', curateRoutes);
   api.route('/', diffRoutes);
@@ -216,11 +262,10 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', mergeRoutes);
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
-  api.route('/', draftsRoutes);
   api.route('/', gateRoutes); // /v1/gate/check
-  api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
+  api.route('/', schemaStudioRoutes);
   api.route('/', yschemaCompositionRoutes); // /v1/yschema/artifacts and /v1/yschema/compositions/preview
   api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
@@ -254,13 +299,8 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', autopilotRoutes);
   api.route('/', checkRoutes);
   api.route('/', contextRoutes);
-  api.route('/', integrationExtractRoutes);
-  api.route('/', commitFromDraftRoutes);
   api.route('/', relationsRoutes);
-  api.route('/', extractYopsRoutes); // /v1/extract-yops
-  api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
-  api.route('/', topicsRoutes);
   api.route('/', workspaceValidationRoutes);
   api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
   api.route('/', workspaceExtractionProposalRoutes);
@@ -297,9 +337,14 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     },
     servers: [{ url: 'http://localhost:8000/api', description: 'Local development' }],
     tags: [
+      { name: 'Deployment', description: 'Public deployment capability discovery' },
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },
+      {
+        name: 'Collaboration',
+        description: 'Namespace membership, project guest, and invitation management',
+      },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
       { name: 'Sources', description: 'Repository-owned source and evidence reads' },
@@ -408,7 +453,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     );
   });
 
-  return { app, websocket };
+  return { app, providerRuntime, inferenceRuntime, websocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──

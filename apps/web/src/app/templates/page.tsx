@@ -1,11 +1,10 @@
 'use client';
 
-import { LayoutGrid, Loader2, Plus, Search } from 'lucide-react';
+import { LayoutGrid, Loader2, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog';
+import { PrdStarterCard } from '@/components/templates/PrdStarterCard';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { TemplatePreviewDialog } from '@/components/templates/TemplatePreviewDialog';
-import { UseTemplateDialog } from '@/components/templates/UseTemplateDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -44,14 +43,10 @@ export default function TemplatesPage() {
     setCategory,
     setLeafType,
     setSearch,
-    deleteTemplate,
   } = useTemplates();
 
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [useTemplate, setUseTemplate] = useState<Template | null>(null);
-  const [useOpen, setUseOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
 
   useEffect(() => {
@@ -73,44 +68,25 @@ export default function TemplatesPage() {
     setPreviewOpen(true);
   }, []);
 
-  const handleUse = useCallback((template: Template) => {
-    setUseTemplate(template);
-    setUseOpen(true);
-  }, []);
-
-  const handleDelete = useCallback(
-    async (template: Template) => {
-      if (!confirm(`Delete template "${template.title}"?`)) return;
-      try {
-        await deleteTemplate(template.template_id);
-      } catch {
-        // Error handled by store
-      }
-    },
-    [deleteTemplate]
-  );
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-[var(--stroke-divider)] px-6 py-4">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Template Gallery</h1>
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+              Project starters & prompt archive
+            </h1>
             <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-              Browse and use prompt templates for leaf generation
+              Start a structured project. Review or export saved legacy prompts below.
             </p>
           </div>
-          <Button className="gap-1.5" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Create Template
-          </Button>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative min-w-48 flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
             <Input
               placeholder="Search templates..."
@@ -121,7 +97,7 @@ export default function TemplatesPage() {
           </div>
 
           {/* Category filter */}
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {CATEGORIES.map((c) => (
               <Button
                 key={c.value ?? 'all'}
@@ -140,6 +116,7 @@ export default function TemplatesPage() {
 
           {/* Leaf type filter */}
           <select
+            aria-label="Legacy prompt type"
             value={leafType ?? ''}
             onChange={(e) => {
               const next = e.target.value;
@@ -158,6 +135,12 @@ export default function TemplatesPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
+        <PrdStarterCard />
+        <h2 className="mb-4 text-sm font-semibold">Legacy prompt archive</h2>
+        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+          Read-only prompts. Deliver project YAML, JSON, or a supported render from State or Commit
+          export.
+        </p>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
@@ -173,7 +156,7 @@ export default function TemplatesPage() {
             description={
               search || category || leafType
                 ? 'Try adjusting your search or filters.'
-                : 'Create your first template to get started.'
+                : 'No legacy prompts are saved. Use the project starter above to begin structured work.'
             }
             action={
               search || category || leafType
@@ -186,10 +169,7 @@ export default function TemplatesPage() {
                       setLeafType(null);
                     },
                   }
-                : {
-                    label: 'Create Template',
-                    onClick: () => setCreateOpen(true),
-                  }
+                : undefined
             }
           />
         ) : (
@@ -199,8 +179,6 @@ export default function TemplatesPage() {
                 key={template.template_id}
                 template={template}
                 onPreview={handlePreview}
-                onUse={handleUse}
-                onDelete={handleDelete}
               />
             ))}
           </div>
@@ -212,14 +190,7 @@ export default function TemplatesPage() {
         template={previewTemplate}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
-        onUse={handleUse}
       />
-
-      {/* Use Template Dialog */}
-      <UseTemplateDialog template={useTemplate} open={useOpen} onOpenChange={setUseOpen} />
-
-      {/* Create Template Dialog */}
-      <CreateTemplateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

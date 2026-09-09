@@ -1,6 +1,13 @@
+import {
+  prepareRepositoryYOpsStateWrite,
+  REPOSITORY_MERGE_POLICY,
+  REPOSITORY_STATE_POLICY,
+} from '@t3x-dev/application';
 import { createYamlSourceState, createYOpsState, describeTransitionObject } from '@t3x-dev/core';
 import {
   type AnyDB,
+  acquireTransitionPolicyBindingLock,
+  bindTransitionPolicy,
   ensureMainBranch,
   getTransitionRefHead,
   getVerifiedTransitionCommitGraph,
@@ -19,10 +26,16 @@ import {
   decodeRepositorySemanticContentState,
   getRepositorySemanticCommit,
   prepareRepositoryYOpsMerge,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
+import {
+  commitPreparedRepositoryTransition,
+  TransitionDecisionMembershipError,
+} from '../lib/transition-control-plane/lifecycle';
 import { setupTestDB, testData } from './setup';
 
 const HUMAN = { kind: 'human' as const, id: 'user:repository-state-test' };
+type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
 
 let db: AnyDB;
 let cleanup: () => Promise<void>;
@@ -43,6 +56,13 @@ describe('repository YOps State Transition application service', () => {
     );
     await ensureMainBranch(db, project.projectId);
     const target = createYOpsState({ service: { enabled: true } });
+    const policyBinding = {
+      policy: REPOSITORY_STATE_POLICY.policy,
+      resource: {
+        ...REPOSITORY_STATE_POLICY.resource,
+        uri: `t3x://projects/${project.projectId}/policies/repository-state`,
+      },
+    };
 
     const created = await commitRepositoryYOpsState({
       db,
@@ -53,6 +73,7 @@ describe('repository YOps State Transition application service', () => {
       actor: HUMAN,
       intent: 'Enable the service',
       rationale: 'The repository command requested the exact target State.',
+      policyBinding,
     });
 
     expect(created.transition).toMatchObject({
@@ -74,10 +95,235 @@ describe('repository YOps State Transition application service', () => {
     );
     expect(graph?.effect.result).toEqual(describeTransitionObject(target));
     expect(graph?.state).toEqual(target);
+    expect(graph?.decision.predicate.policy).toEqual({
+      mode: 'evaluated',
+      resource: policyBinding.resource,
+    });
     await expect(listTransitionCommits(db, project.projectId)).resolves.toHaveLength(1);
     await expect(
       listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })
     ).resolves.toEqual([expect.objectContaining({ outcome: 'accepted' })]);
+  });
+
+  it('rejects a server policy rebind serialized ahead of one-shot authorization', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Repository policy race' }));
+    await ensureMainBranch(db, project.projectId);
+    const selected = await bindTransitionPolicy(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      uri: 't3x://policies/repository-race/selected',
+      policy: REPOSITORY_STATE_POLICY.policy,
+      actor: { kind: 'human', id: 'user:policy-admin' },
+    });
+
+    let releasePolicyWriter!: () => void;
+    const policyWriterCanContinue = new Promise<void>((resolve) => {
+      releasePolicyWriter = resolve;
+    });
+    let reportPolicyLocked!: () => void;
+    const policyLocked = new Promise<void>((resolve) => {
+      reportPolicyLocked = resolve;
+    });
+    const policyWriter = (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      await acquireTransitionPolicyBindingLock(tx, project.projectId, 'main');
+      reportPolicyLocked();
+      await policyWriterCanContinue;
+      await bindTransitionPolicy(tx, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/repository-race/rebound',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+    });
+    await policyLocked;
+
+    let commitSettled = false;
+    const commit = commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ version: 'raced' }),
+      actor: HUMAN,
+      policyBinding: selected,
+      policyBindingSource: 'server-selected',
+    }).finally(() => {
+      commitSettled = true;
+    });
+    void commit.catch(() => undefined);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(commitSettled).toBe(false);
+    } finally {
+      releasePolicyWriter();
+      await policyWriter;
+    }
+
+    await expect(commit).rejects.toBeInstanceOf(TransitionReviewStaleError);
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+    await expect(
+      listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toEqual([]);
+  });
+
+  it('rejects a first server binding inserted after observed absence', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository first policy bind race' })
+    );
+    await ensureMainBranch(db, project.projectId);
+
+    let releasePolicyWriter!: () => void;
+    const policyWriterCanContinue = new Promise<void>((resolve) => {
+      releasePolicyWriter = resolve;
+    });
+    let reportPolicyLocked!: () => void;
+    const policyLocked = new Promise<void>((resolve) => {
+      reportPolicyLocked = resolve;
+    });
+    const policyWriter = (db as unknown as TxRunner).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      const locked = await acquireTransitionPolicyBindingLock(tx, project.projectId, 'main');
+      expect(locked.policyBindingFound).toBe(false);
+      reportPolicyLocked();
+      await policyWriterCanContinue;
+      await bindTransitionPolicy(tx, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/repository-race/first-binding',
+        policy: REPOSITORY_STATE_POLICY.policy,
+        actor: { kind: 'human', id: 'user:policy-admin' },
+      });
+    });
+    await policyLocked;
+
+    let commitSettled = false;
+    const commit = commitRepositoryYOpsState({
+      db,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ version: 'first-bind-raced' }),
+      actor: HUMAN,
+      policyBindingSource: 'server-selected',
+    }).finally(() => {
+      commitSettled = true;
+    });
+    void commit.catch(() => undefined);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(commitSettled).toBe(false);
+    } finally {
+      releasePolicyWriter();
+      await policyWriter;
+    }
+
+    await expect(commit).rejects.toBeInstanceOf(TransitionReviewStaleError);
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+  });
+
+  it('rejects an independently substituted expected head for a parentless prepared write', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository Prepared Target Binding' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const prepared = prepareRepositoryYOpsStateWrite({
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      base: createYOpsState({}),
+      target: createYOpsState({ version: 1 }),
+      actor: HUMAN,
+      policyBinding: REPOSITORY_STATE_POLICY,
+      recordedAt: '2026-08-29T00:00:00.000Z',
+    });
+
+    await expect(
+      commitPreparedRepositoryTransition({
+        db,
+        preparedTarget: prepared.target,
+        projectId: prepared.target.projectId,
+        refName: prepared.target.refName,
+        expectedHead: `sha256:${'f'.repeat(64)}`,
+        proposal: prepared.proposal,
+        effect: prepared.effect,
+        rationale: prepared.rationale,
+        decidedAt: prepared.decidedAt,
+        authority: prepared.authority,
+        parents: prepared.parents,
+        objects: prepared.objects,
+      })
+    ).rejects.toBeInstanceOf(TransitionDecisionMembershipError);
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+  });
+
+  it('rejects substitutions across the prepared commit bundle before audit persistence', async () => {
+    const project = await insertProject(
+      db,
+      testData.project({ name: 'Repository Prepared Bundle Binding' })
+    );
+    await ensureMainBranch(db, project.projectId);
+    const prepared = prepareRepositoryYOpsStateWrite({
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      base: createYOpsState({}),
+      target: createYOpsState({ version: 'bound-bundle' }),
+      actor: HUMAN,
+      rationale: 'The exact prepared bundle was reviewed.',
+      yopsLogIds: ['yop_bundle_identity'],
+      policyBinding: REPOSITORY_STATE_POLICY,
+      serverPolicyBindingExpectation: {
+        expected: REPOSITORY_STATE_POLICY,
+        required: false,
+      },
+      recordedAt: '2026-08-29T00:00:00.000Z',
+    });
+    const exact: Parameters<typeof commitPreparedRepositoryTransition>[0] = {
+      db,
+      preparedTarget: prepared.target,
+      projectId: prepared.target.projectId,
+      refName: prepared.target.refName,
+      expectedHead: prepared.target.expectedHead,
+      proposal: prepared.proposal,
+      effect: prepared.effect,
+      rationale: prepared.rationale,
+      decidedAt: prepared.decidedAt,
+      authority: prepared.authority,
+      parents: prepared.parents,
+      objects: prepared.objects,
+      yopsLogIds: prepared.yopsLogIds,
+      serverPolicyBindingExpectation: prepared.serverPolicyBindingExpectation,
+    };
+    const substitutions: Array<Parameters<typeof commitPreparedRepositoryTransition>[0]> = [
+      { ...exact, parents: [...prepared.parents] },
+      { ...exact, objects: [...prepared.objects] },
+      { ...exact, rationale: structuredClone(prepared.rationale) },
+      { ...exact, decidedAt: '2026-08-29T00:00:00.001Z' },
+      { ...exact, yopsLogIds: [...prepared.yopsLogIds!] },
+      { ...exact, serverPolicyBindingExpectation: undefined },
+      {
+        ...exact,
+        serverPolicyBindingExpectation: structuredClone(prepared.serverPolicyBindingExpectation!),
+      },
+      {
+        ...exact,
+        serverPolicyBindingExpectation: { expected: null, required: false },
+      },
+    ];
+
+    for (const substituted of substitutions) {
+      await expect(commitPreparedRepositoryTransition(substituted)).rejects.toThrow(
+        'exact prepared write bundle'
+      );
+    }
+    await expect(listTransitionCommits(db, project.projectId)).resolves.toEqual([]);
+    await expect(
+      listRepositoryDecisionAudit(db, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toEqual([]);
   });
 
   it('creates a first-parent CommitV2 chain and rejects a stale observed head', async () => {
@@ -277,6 +523,13 @@ describe('repository YOps State Transition application service', () => {
       actor: HUMAN,
       intent: 'Change target branch',
     });
+    const mergePolicyBinding = {
+      policy: REPOSITORY_MERGE_POLICY.policy,
+      resource: {
+        ...REPOSITORY_MERGE_POLICY.resource,
+        uri: `t3x://projects/${project.projectId}/policies/repository-merge`,
+      },
+    };
 
     const prepared = await prepareRepositoryYOpsMerge({
       db,
@@ -301,6 +554,7 @@ describe('repository YOps State Transition application service', () => {
       },
       actor: HUMAN,
       message: 'Merge feature into main',
+      policyBinding: mergePolicyBinding,
     });
 
     const graph = await getVerifiedTransitionCommitGraph(
@@ -324,6 +578,10 @@ describe('repository YOps State Transition application service', () => {
           locator: { scheme: 't3x.protocol-object/v1' },
         },
       ],
+    });
+    expect(graph?.decision.predicate.policy).toEqual({
+      mode: 'evaluated',
+      resource: mergePolicyBinding.resource,
     });
     expect(
       decodeRepositorySemanticContentState(graph!.state).trees.map((tree) => tree.key)

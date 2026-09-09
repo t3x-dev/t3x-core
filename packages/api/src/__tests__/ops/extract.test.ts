@@ -3,6 +3,7 @@
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import { describe, expect, it, vi } from 'vitest';
+import { createInferenceRuntime } from '../../lib/inference';
 import type { ApiPipelineContext } from '../../ops/context';
 import type { ExtractInput } from '../../ops/extract';
 import { extractOp } from '../../ops/extract';
@@ -25,6 +26,15 @@ function buildMockContext(overrides: Partial<ApiPipelineContext> = {}): ApiPipel
     projectId: 'proj_123',
     userId: 'user_1',
     providerRegistry: {} as any,
+    inference: {
+      runtime: createInferenceRuntime(),
+      runId: 'test:extract-op',
+      scope: {
+        actor: { kind: 'user', id: 'user_1' },
+        projectId: 'proj_123',
+        projectVisibility: 'unknown',
+      },
+    },
     abortSignal: new AbortController().signal,
     ...overrides,
   } as ApiPipelineContext;
@@ -121,6 +131,8 @@ describe('extractOp', () => {
       turnHashes: ['sha256:turn1', 'sha256:turn2'],
       provider: 'openai',
       model: 'gpt-5.4',
+      userId: 'user_42',
+      inference: ctx.inference,
     });
   });
 

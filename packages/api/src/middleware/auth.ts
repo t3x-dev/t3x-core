@@ -43,6 +43,7 @@ const PUBLIC_PATHS = [
   '/health',
   '/api/docs',
   '/api/openapi.json',
+  '/api/v1/deployment/capabilities',
   '/api/v1/llm/models',
   // /ws owns its own auth via ?token= query param (headers are not settable
   // on browser WebSocket handshakes, so we cannot use Authorization: Bearer).

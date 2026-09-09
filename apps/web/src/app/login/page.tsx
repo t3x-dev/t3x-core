@@ -9,12 +9,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { safeAuthCallbackUrl } from '@/domain/authCallback';
 import { useLocalAuth } from '@/hooks/shared/useLocalAuth';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = safeAuthCallbackUrl(searchParams.get('callbackUrl'));
   const { authenticate, persistSession, getErrorMessage } = useLocalAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');

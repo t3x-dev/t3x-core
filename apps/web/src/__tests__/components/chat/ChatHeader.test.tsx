@@ -123,18 +123,13 @@ describe('ChatHeader branch switching', () => {
     window.removeEventListener(CONVERSATION_BRANCH_CHANGED_EVENT, branchChanged);
   });
 
-  it('locks branch switching after YOps have been materialized', async () => {
-    useWorkspaceStore.setState({
-      opsLog: [{ set: { path: 'concepts/name', value: 'T3X' }, source: { type: 'human' } }],
-    } as never);
-
+  it('hands the exact Source and branch to Repository Workspace', () => {
     render(
       <ChatHeader conversationId="conv_1" selectedProvider="openai" selectedModel="gpt-5.4" />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /switch branch: main/i }));
-
-    expect(updateConversationMock).not.toHaveBeenCalled();
-    expect(document.body.querySelector('.fixed')).toBeNull();
+    expect(screen.getByTestId('open-workspace-button').getAttribute('href')).toBe(
+      '/project/proj_1?branch=main&tab=workspaces&sourceConversation=conv_1'
+    );
   });
 });

@@ -9,7 +9,7 @@
  * replay. Callers (useChatInit) write the replayed baseline tree to the
  * store and render a banner; they do *not* drop the rest of the conversation.
  *
- * `replayAppended` is the optimistic-update helper used by useGoldEdit.
+ * `replayAppended` is the historical optimistic-replay helper.
  * It keeps fail-fast semantics: a bad append throws YOpsReplayError so
  * the caller can roll back before persisting.
  */
@@ -185,8 +185,8 @@ export interface AppendedReplay {
  * is empty so callers can short-circuit writes.
  *
  * Throws `YOpsReplayError` when the appended ops produce a structurally
- * invalid tree — callers (useGoldEdit) rely on this to roll back the
- * optimistic update before persisting.
+ * invalid tree so a caller can roll back an optimistic view before
+ * persisting.
  */
 export function replayAppended(
   prevOps: SourcedYOp[],

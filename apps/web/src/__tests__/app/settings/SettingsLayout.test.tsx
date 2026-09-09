@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import {
+  type DeploymentCapabilities,
+  SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+} from '@t3x-dev/api-client';
 import { render, screen } from '@testing-library/react';
 import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import SettingsLayout from '@/app/settings/layout';
+import { DeploymentCapabilitiesProvider } from '@/components/deployment/DeploymentCapabilitiesProvider';
 
 let mockPathname = '/settings';
 let mockSearchParams = new URLSearchParams();
@@ -33,16 +38,22 @@ vi.mock('@/hooks/shared/useSession', () => ({
   }),
 }));
 
+function renderLayout(capabilities: DeploymentCapabilities = SELF_HOSTED_DEPLOYMENT_CAPABILITIES) {
+  return render(
+    <DeploymentCapabilitiesProvider initialCapabilities={capabilities}>
+      <SettingsLayout>
+        <div>Settings content</div>
+      </SettingsLayout>
+    </DeploymentCapabilitiesProvider>
+  );
+}
+
 describe('SettingsLayout', () => {
   it('groups settings navigation by product ownership and scope', () => {
     mockPathname = '/settings';
     mockSearchParams = new URLSearchParams();
 
-    render(
-      <SettingsLayout>
-        <div>Settings content</div>
-      </SettingsLayout>
-    );
+    renderLayout();
 
     expect(screen.getByText('OVERVIEW')).toBeInTheDocument();
     expect(screen.getByText('LOCAL')).toBeInTheDocument();
@@ -72,15 +83,23 @@ describe('SettingsLayout', () => {
     mockPathname = '/settings/providers';
     mockSearchParams = new URLSearchParams('returnTo=%2Ft3x-dev%2Fsettings');
 
-    render(
-      <SettingsLayout>
-        <div>Settings content</div>
-      </SettingsLayout>
-    );
+    renderLayout();
 
     expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute(
       'href',
       '/t3x-dev/settings'
     );
+  });
+
+  it('does not advertise local provider administration in managed mode', () => {
+    renderLayout({
+      ...SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+      deployment_mode: 'managed',
+      provider_credentials: { administration: 'disabled' },
+      inference: { mode: 'managed' },
+    });
+
+    expect(screen.queryByText('AI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Providers/i })).not.toBeInTheDocument();
   });
 });

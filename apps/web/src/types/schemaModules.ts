@@ -1,3 +1,4 @@
+import type { SchemaReleasePresentationReference } from '@t3x-dev/api-client';
 export type SchemaArtifactKind = 'core' | 'module';
 export type YSchemaArtifactFamily = 'esphome-device' | 'prd' | 'prompt' | 'skill';
 
@@ -124,6 +125,7 @@ export interface SchemaCompositionWorkspaceContext {
 }
 
 export interface PublishSchemaCompositionInput {
+  presentationRef?: SchemaReleasePresentationReference;
   compositionRevision: number;
   compositionHash: string;
   canonicalName: string;

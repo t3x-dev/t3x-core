@@ -1,5 +1,5 @@
 import type { AnyDB } from '@t3x-dev/storage';
-import { findNamespaceBySlug, findProjects } from '@t3x-dev/storage';
+import { findNamespaceBySlug, findProjects, namespaceMemberships } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -64,6 +64,17 @@ describe('Namespace persistence and project isolation', () => {
     expect(((await currentNamespaceResponse.json()) as { data: { slug: string } }).data.slug).toBe(
       'personal-space'
     );
+
+    const organization = await findNamespaceBySlug(mockDB, 't3x-dev');
+    if (!organization) throw new Error('default organization namespace missing');
+    await mockDB.insert(namespaceMemberships).values({
+      membershipId: 'nsm_namespace_org_editor',
+      namespaceId: organization.namespaceId,
+      principalKind: 'human',
+      principalId: 'user_namespace_owner',
+      role: 'editor',
+      status: 'active',
+    });
 
     for (const [name, namespace] of [
       ['Personal project', 'personal-space'],

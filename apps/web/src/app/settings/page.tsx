@@ -1,5 +1,6 @@
 import { ArrowRight, Blocks, GitBranch, KeyRound, SlidersHorizontal, Webhook } from 'lucide-react';
 import Link from 'next/link';
+import { ProviderSettingsOverviewCard } from '@/components/settings/ProviderSettingsOverviewCard';
 
 export default function SettingsPage() {
   return (
@@ -16,15 +17,7 @@ export default function SettingsPage() {
       </header>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <EntryCard
-          href="/settings/providers"
-          icon={Blocks}
-          label="AI Providers"
-          title="Model providers"
-          detail="Configure model, extraction, and generation credentials."
-          meta="Global setting"
-          action="Configure"
-        />
+        <ProviderSettingsOverviewCard />
         <EntryCard
           href="/settings/access"
           icon={KeyRound}

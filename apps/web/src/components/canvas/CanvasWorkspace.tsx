@@ -52,13 +52,11 @@ import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
-import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
 import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
-import { LeafPanel } from './LeafPanel';
 import { NodeModal } from './NodeModal';
 
 const GRID_SIZE = 16;
@@ -138,7 +136,6 @@ function CanvasWorkspaceInner({
     projectId,
     loading: canvasLoading,
     updateNode,
-    commitPendingCommit,
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -150,7 +147,6 @@ function CanvasWorkspaceInner({
     modalViewMode,
     openNodeModal,
     closeNodeModal,
-    openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -404,20 +400,6 @@ function CanvasWorkspaceInner({
     }
   }, [closeNodeModal, modalNode, modalViewMode]);
 
-  const pendingCommitBranchMode = useCanvasStore((state) => {
-    if (!openNodeId) {
-      return undefined;
-    }
-    const pendingNode = state.nodes.find(
-      (node) =>
-        node.id === openNodeId && node.data.kind === 'unit' && node.data.commitStatus === 'staging'
-    );
-    if (!pendingNode) {
-      return undefined;
-    }
-    return state.getPendingCommitBranchMode(openNodeId);
-  });
-
   // Get effective constraints for pending commit nodes
   const effectiveConstraints = useMemo(() => {
     if (
@@ -481,9 +463,6 @@ function CanvasWorkspaceInner({
                 );
               }
             : undefined,
-        onCreateLeaf: () => {
-          openLeafPanel(node.id);
-        },
       }),
       canMerge: false,
       parentHash,
@@ -729,40 +708,12 @@ function CanvasWorkspaceInner({
       )}
       <CanvasStatusBar />
       {modalNode &&
-        modalNode.data.commitStatus === 'draft' &&
-        modalNode.data.draftId &&
-        projectId && (
-          <DraftQuickSheet open onClose={closeNodeModal} draftId={modalNode.data.draftId} />
-        )}
-      {modalNode &&
-        modalNode.data.commitStatus !== 'draft' &&
         (modalNode.data.commitStatus !== 'committed' || modalViewMode === 'conversation') && (
           <NodeModal
             node={modalNode}
             onClose={closeNodeModal}
             onUpdate={(patch) => updateNode(modalNode.id, patch)}
             viewMode={modalViewMode || 'commit'}
-            onConvertDraft={
-              modalNode.data.kind === 'unit' &&
-              modalNode.data.commitStatus === 'staging' &&
-              pendingCommitBranchMode !== 'blocked'
-                ? () => {
-                    commitPendingCommit(modalNode.id);
-                    closeNodeModal();
-                    notify?.('Unit committed successfully', 'success');
-                  }
-                : undefined
-            }
-            onBranchChange={
-              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-                ? (branch) => updateNode(modalNode.id, { pendingBranch: branch })
-                : undefined
-            }
-            onBranchNameChange={
-              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-                ? (name) => updateNode(modalNode.id, { pendingBranchName: name })
-                : undefined
-            }
             onSaveConstraints={
               modalNode.data.kind === 'unit'
                 ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
@@ -777,7 +728,6 @@ function CanvasWorkspaceInner({
             isConversationLocked={isConversationLocked}
           />
         )}
-      <LeafPanel projectName={projectName} />
       <MergePanel />
       <DeletionConfirmDialog />
       {projectId && (

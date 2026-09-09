@@ -17,6 +17,11 @@ vi.mock('../lib/provider-resolver', () => providerMock);
 vi.mock('../lib/workspace-transition', () => transitionMock);
 vi.mock('../lib/workspace-yschema', () => yschemaMock);
 
+import {
+  createInferenceRuntime,
+  InferenceAdmissionDeniedError,
+  type InferenceAdmissionPolicy,
+} from '../lib/inference';
 import { createSourceChatDraftReply } from '../lib/source-chat-draft-reply';
 
 describe('createSourceChatDraftReply', () => {
@@ -49,6 +54,15 @@ describe('createSourceChatDraftReply', () => {
   });
 
   it('lets the provider bind source items by catalog target_id', async () => {
+    const authorize = vi.fn(async () => ({
+      outcome: 'admitted' as const,
+      admission: { id: 'admission_source_draft' },
+    }));
+    const settle = vi.fn<InferenceAdmissionPolicy['settle']>();
+    const runtime = createInferenceRuntime({
+      createGenerationId: () => 'gen_source_draft',
+      admissionPolicy: { authorize, settle, release: vi.fn() },
+    });
     const generateStructured = vi.fn(async () => ({
       data: {
         schema: 't3x/source-chat-draft-reply',
@@ -82,6 +96,16 @@ describe('createSourceChatDraftReply', () => {
       provider: 'google',
       model: 'gemini-3.6-flash',
       expectedRevision: 3,
+      inference: {
+        runtime,
+        runId: 'request:req_source_draft',
+        scope: {
+          actor: { kind: 'user', id: 'user_1' },
+          namespaceId: 'ns_1',
+          projectId: 'proj_1',
+          projectVisibility: 'unknown',
+        },
+      },
     });
 
     expect(generateStructured).toHaveBeenCalledWith(
@@ -105,5 +129,61 @@ describe('createSourceChatDraftReply', () => {
         source_turn_hash: 'turn_user_1',
       }),
     ]);
+    expect(authorize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationId: 'gen_source_draft',
+        runId: 'request:req_source_draft',
+        feature: 'source-chat.draft-reply',
+        requestedModel: 'gemini-3.6-flash',
+        scope: expect.objectContaining({ namespaceId: 'ns_1', projectId: 'proj_1' }),
+      })
+    );
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminal: expect.objectContaining({
+          kind: 'receipt',
+          receipt: expect.objectContaining({
+            resolvedProvider: 'google-ai',
+            resolvedModel: 'gemini-3.6-flash',
+            usage: { inputTokens: 11, outputTokens: 13 },
+          }),
+        }),
+      })
+    );
+  });
+
+  it('does not invoke the provider after admission denial', async () => {
+    const generateStructured = vi.fn();
+    providerMock.resolveProviderAndModel.mockResolvedValue({
+      ok: true,
+      providerId: 'google-ai',
+      provider: { generateStructured },
+      model: 'gemini-3.6-flash',
+    });
+    const runtime = createInferenceRuntime({
+      createGenerationId: () => 'gen_denied',
+      admissionPolicy: {
+        async authorize() {
+          return { outcome: 'denied', code: 'quota_exhausted', reason: 'No grant remains' };
+        },
+        settle: vi.fn(),
+        release: vi.fn(),
+      },
+    });
+
+    await expect(
+      createSourceChatDraftReply({} as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        conversationId: 'conv_1',
+        userTurnHash: 'turn_user_1',
+        inference: {
+          runtime,
+          runId: 'request:req_denied',
+          scope: { actor: { kind: 'user', id: 'user_1' }, projectId: 'proj_1' },
+        },
+      })
+    ).rejects.toBeInstanceOf(InferenceAdmissionDeniedError);
+    expect(generateStructured).not.toHaveBeenCalled();
   });
 });

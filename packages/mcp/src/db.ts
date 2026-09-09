@@ -22,8 +22,17 @@ async function initializeDB(): Promise<AnyDB> {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (databaseUrl) {
-    const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
-    db = await createPostgresStorage({ connectionString: databaseUrl });
+    const startupMode = process.env.T3X_POSTGRES_STARTUP_MODE || 'runtime';
+    if (startupMode !== 'bootstrap' && startupMode !== 'runtime') {
+      throw new Error(
+        `Invalid T3X_POSTGRES_STARTUP_MODE=${startupMode}; expected "runtime" or "bootstrap"`
+      );
+    }
+    const { closePostgresStorage, createPostgresBootstrapStorage, createPostgresRuntimeStorage } =
+      await import('@t3x-dev/storage');
+    db = await (startupMode === 'bootstrap'
+      ? createPostgresBootstrapStorage({ connectionString: databaseUrl })
+      : createPostgresRuntimeStorage({ connectionString: databaseUrl }));
     closeFunction = closePostgresStorage;
   } else {
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/pg-data';

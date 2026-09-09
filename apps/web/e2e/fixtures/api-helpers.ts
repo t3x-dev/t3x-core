@@ -19,7 +19,9 @@ export async function createTestProject(
 ): Promise<{ projectId: string; name: string }> {
   const projectName = name || `E2E Test ${Date.now()}`;
   const response = await request.post(`${API_BASE}/projects`, {
-    data: { name: projectName },
+    // Hosted qualification can select a provisioned personal namespace without
+    // bypassing its real account/capacity policy. Standalone behavior is unchanged.
+    data: { name: projectName, ...(process.env.T3X_E2E_NAMESPACE ? { namespace: process.env.T3X_E2E_NAMESPACE } : {}) },
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create project: ${data.error?.message}`);
@@ -160,23 +162,25 @@ async function ensureTestBranch(
  * Create a leaf from a commit
  */
 export async function createTestLeaf(
-  request: APIRequestContext,
+  _request: APIRequestContext,
   commitHash: string,
   projectId: string,
-  constraints?: Array<{ type: string; value: string; match_mode?: string }>
+  constraints?: Array<{ type: string; value: string; match_mode?: string }>,
+  options?: { output?: string; title?: string }
 ): Promise<string> {
-  const response = await request.post(`${API_BASE}/leaves`, {
-    data: {
-      commit_hash: commitHash,
-      project_id: projectId,
-      type: 'deploy_agent',
-      title: 'E2E Test Leaf',
-      constraints: constraints || [],
-    },
-  });
-  const data = await response.json();
-  if (!data.success) throw new Error(`Failed to create leaf: ${data.error?.message}`);
-  return data.data.id;
+  // Archive fixtures may only be seeded into the full runner's disposable local DB.
+  if (process.env.T3X_E2E_FULL !== '1' || process.env.DATABASE_URL || new URL(API_ORIGIN).hostname !== '127.0.0.1') {
+    throw new Error('Historical Leaf fixtures require the isolated full-stack runner');
+  }
+  const port = Number(process.env.T3X_PG_PORT);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid fixture DB port');
+  const { createPostgresRuntimeStorage, closePostgresStorage, createLeaf, updateLeafOutput } = await import('@t3x-dev/storage');
+  const db = await createPostgresRuntimeStorage({ connectionString: `postgresql://postgres:password@127.0.0.1:${port}/t3x`, maxConnections: 1 });
+  try {
+    const leaf = await createLeaf(db, { commit_hash: commitHash, project_id: projectId, type: 'deploy_agent', title: options?.title ?? 'Archived E2E Leaf', constraints: constraints as Parameters<typeof createLeaf>[1]['constraints'] ?? [], config: {} });
+    if (options?.output) await updateLeafOutput(db, leaf.id, options.output);
+    return leaf.id;
+  } finally { await closePostgresStorage(); }
 }
 
 /**

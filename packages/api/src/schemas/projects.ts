@@ -22,10 +22,13 @@ const ProviderConfigSchema = z
   })
   .nullable();
 
+export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public']);
+
 // Project entity
 export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
+  visibility: ProjectVisibilitySchema,
   created_at: z.string().datetime(),
   metadata: MetadataSchema,
   provider_config: ProviderConfigSchema.optional(),
@@ -49,17 +52,21 @@ export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(255),
   metadata: z.record(z.string(), z.any()).optional(),
   namespace: z.string().min(2).max(39).optional(),
+  // Omitted preserves the existing empty-project workflow.
+  starter: z.literal('prd-v1').optional(),
 });
 
 // Update project request
-export const UpdateProjectSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
-  provider_config: ProviderConfigSchema.optional(),
-  default_provider: z.string().nullable().optional(),
-  default_model: z.string().nullable().optional(),
-  extraction_style: ExtractionStyleSchema.nullable().optional(),
-});
+export const UpdateProjectSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
+    provider_config: ProviderConfigSchema.optional(),
+    default_provider: z.string().nullable().optional(),
+    default_model: z.string().nullable().optional(),
+    extraction_style: ExtractionStyleSchema.nullable().optional(),
+  })
+  .strict();
 
 // Project with counts (for list view — lighter than full stats)
 export const ProjectWithCountsSchema = ProjectSchema.extend({

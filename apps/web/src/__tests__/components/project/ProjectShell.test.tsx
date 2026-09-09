@@ -27,11 +27,14 @@ describe('ProjectShell', () => {
         </ProjectShell>
       );
 
-      expect(screen.getByRole('banner')).toHaveClass('h-9', 'px-2.5');
-      expect(screen.getByRole('heading', { name: 'Test Project' })).toHaveClass('text-base');
-      expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-8');
+      expect(screen.getByRole('banner')).toHaveClass('min-[1200px]:h-14', 'px-3');
+      expect(screen.getByRole('heading', { name: 'Test Project' })).toHaveAttribute(
+        'title',
+        'Test Project'
+      );
+      expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-10');
       expect(screen.getByText('active')).toHaveClass('text-xs');
-      expect(screen.getByRole('link', { name: 'Outputs' })).toHaveTextContent('Outputs1');
+      expect(screen.queryByRole('link', { name: 'Outputs' })).not.toBeInTheDocument();
     }
   });
 });

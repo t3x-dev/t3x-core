@@ -2,27 +2,6 @@
   "version": 1,
   "routes": [
     {
-      "source": "agent-drafts.openapi.ts",
-      "method": "POST",
-      "path": "/v1/agent/drafts",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "agent-drafts.openapi.ts",
-      "method": "GET",
-      "path": "/v1/agent/drafts/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "agent-drafts.openapi.ts",
-      "method": "PATCH",
-      "path": "/v1/agent/drafts/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
       "source": "api-keys.openapi.ts",
       "method": "GET",
       "path": "/v1/api-keys",
@@ -84,13 +63,6 @@
       "path": "/v1/auth/me",
       "policy": "authenticated",
       "rationale": "Authenticated user surface without a cross-project resource."
-    },
-    {
-      "source": "autopilot.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{draftId}/auto-commit",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
       "source": "autopilot.openapi.ts",
@@ -170,11 +142,109 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
-      "source": "commit-from-draft.openapi.ts",
+      "source": "collaboration-commands.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/namespaces/{id}/members",
+      "policy": "authenticated",
+      "rationale": "Namespace administration authorization is evaluated before membership is changed."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/namespaces/{id}/members/{membershipId}",
+      "policy": "authenticated",
+      "rationale": "Namespace administration authorization and last-owner protection are enforced before membership is revoked."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
       "method": "POST",
-      "path": "/v1/commit",
+      "path": "/v1/namespaces/{id}/ownership-transfer",
+      "policy": "authenticated",
+      "rationale": "Only the current authenticated human owner may atomically transfer namespace ownership."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{id}/guests",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Project administration authorization is evaluated before a guest grant is changed."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{id}/guests/{grantId}",
+      "policy": "project",
+      "rationale": "Project administration authorization is evaluated before a guest grant is revoked."
+    },
+    {
+      "source": "collaboration-commands.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{id}/transfer",
+      "policy": "project",
+      "rationale": "Source project transfer and target namespace project-create authority are both evaluated before the compare-and-set move."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/namespaces/{id}/invitations",
+      "policy": "authenticated",
+      "rationale": "Namespace administration authorization is evaluated before an invitation is issued."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{id}/invitations",
+      "policy": "project",
+      "rationale": "Project administration authorization is evaluated before an invitation is issued."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/invitations/{id}",
+      "policy": "authenticated",
+      "rationale": "The invitation target is resolved and its namespace or project administration authorization is evaluated before revocation."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/invitations/accept",
+      "policy": "authenticated",
+      "rationale": "Invitation acceptance requires an authenticated principal bound to the one-time invitation token."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces",
+      "policy": "authenticated",
+      "rationale": "Returns only namespaces visible to the authenticated principal."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/{id}/members",
+      "policy": "authenticated",
+      "rationale": "Namespace authorization is evaluated for the authenticated principal before membership data is returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/namespaces/{id}/invitations",
+      "policy": "authenticated",
+      "rationale": "Namespace authorization is evaluated for the authenticated principal before invitation data is returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/guests",
+      "policy": "project",
+      "rationale": "Project authorization is evaluated before guest grants are returned."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{id}/invitations",
+      "policy": "project",
+      "rationale": "Project authorization is evaluated before project invitations are returned."
     },
     {
       "source": "commits.openapi.ts",
@@ -271,13 +341,6 @@
       "source": "conversations.openapi.ts",
       "method": "POST",
       "path": "/v1/conversations",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "conversations.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/:id/context-export",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -380,6 +443,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "deployment-capabilities.openapi.ts",
+      "method": "GET",
+      "path": "/v1/deployment/capabilities",
+      "policy": "public",
+      "rationale": "Explicitly allowlisted deployment metadata without account or entitlement data."
+    },
+    {
       "source": "diff.openapi.ts",
       "method": "POST",
       "path": "/v1/diff/frame",
@@ -408,90 +478,6 @@
       "rationale": "Authenticated user surface without a cross-project resource."
     },
     {
-      "source": "drafts-crud.openapi.ts",
-      "method": "GET",
-      "path": "/v1/drafts",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-crud.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-crud.openapi.ts",
-      "method": "DELETE",
-      "path": "/v1/drafts/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-crud.openapi.ts",
-      "method": "GET",
-      "path": "/v1/drafts/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-crud.openapi.ts",
-      "method": "PATCH",
-      "path": "/v1/drafts/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-special.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/promote",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-special.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/review-action",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-workflows.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/commit",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-workflows.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/fork",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-workflows.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/preview",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-workflows.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/suggest",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "drafts-yops.openapi.ts",
-      "method": "POST",
-      "path": "/v1/drafts/{id}/apply-yops",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
       "source": "export.openapi.ts",
       "method": "GET",
       "path": "/v1/export/cfpack",
@@ -502,27 +488,6 @@
       "source": "export.openapi.ts",
       "method": "GET",
       "path": "/v1/export/ledger",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "extract-incremental.openapi.ts",
-      "method": "POST",
-      "path": "/v1/extract/incremental",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "extract-yops.openapi.ts",
-      "method": "POST",
-      "path": "/v1/extract-yops",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "extract.openapi.ts",
-      "method": "POST",
-      "path": "/v1/extract",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -996,6 +961,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "project-visibility.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{id}/visibility",
+      "policy": "project",
+      "rationale": "Project-scoped visibility mutation guarded by explicit visibility-management authority."
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",
@@ -1430,6 +1402,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "source-evidence.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/sources/conversations/{conversationId}/legacy-yops",
+      "policy": "project",
+      "rationale": "Project-scoped, read-only access to archived legacy YOps evidence."
+    },
+    {
       "source": "source-text-revisions.openapi.ts",
       "method": "GET",
       "path": "/v1/source-text-revisions",
@@ -1491,34 +1470,6 @@
       "path": "/v1/templates/{id}/audit",
       "policy": "operator",
       "rationale": "Explicit server-operator administration boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/{id}/topics",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "POST",
-      "path": "/v1/conversations/{id}/topics",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "DELETE",
-      "path": "/v1/topics/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "topics.openapi.ts",
-      "method": "PATCH",
-      "path": "/v1/topics/{id}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
       "source": "transition-control-plane.openapi.ts",
@@ -1836,34 +1787,6 @@
       "rationale": "Explicitly allowlisted unauthenticated surface."
     },
     {
-      "source": "yops-log.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/{conversationId}/draft",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "yops-log.openapi.ts",
-      "method": "GET",
-      "path": "/v1/conversations/{conversationId}/yops",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "yops-log.openapi.ts",
-      "method": "POST",
-      "path": "/v1/conversations/{conversationId}/yops",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "yops-log.openapi.ts",
-      "method": "DELETE",
-      "path": "/v1/conversations/{conversationId}/yops/{yopsId}",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
       "source": "yops-validate.openapi.ts",
       "method": "POST",
       "path": "/v1/yops/validate",
@@ -1882,21 +1805,21 @@
       "method": "PUT",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/apply",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/publish",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
@@ -1924,14 +1847,14 @@
       "method": "PATCH",
       "path": "/v1/projects/{projectId}/yschemas/{artifactId}",
       "policy": "project",
-      "rationale": "Only project-owned Schema identity metadata can be updated."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/yschemas/{artifactId}/{action}",
       "policy": "project",
-      "rationale": "Only project-owned Schema identities can be archived or restored."
+      "rationale": "Requires project:edit authority before changing Schema definitions, publication, or metadata."
     },
     {
       "source": "yschema-composition.openapi.ts",
@@ -1988,6 +1911,125 @@
       "path": "/v1/yschema-validation-runs/{runId}",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/commits/{hash}/export",
+      "policy": "project",
+      "rationale": "Exact commit graph export requires project read access and project-bound graph membership."
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
+      "policy": "project",
+      "rationale": "Project read authority and project-bound workspace/verified commit membership; only local download preparation."
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
+      "policy": "project",
+      "rationale": "Project edit authority for receipt creation and project-bound workspace/verified commit membership; only local download preparation."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",
+      "policy": "project",
+      "rationale": "Exact project-bound commit; project read authority for author sidecar."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",
+      "policy": "project",
+      "rationale": "Exact project-bound commit; project edit authority for author sidecar."
+    },
+    {
+      "source": "state-overview.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{commitDigest}/overview",
+      "policy": "project",
+      "rationale": "Project read authority and verified project-bound commit; exact State and author sidecar only."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema/catalog",
+      "policy": "authenticated",
+      "rationale": "Authenticated registry discovery projects only public releases; no private manifests."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/yschema/catalog/collections",
+      "policy": "authenticated",
+      "rationale": "Static editorial labels; no project data or runtime authority."
+    },
+    {
+      "source": "yschema-composition.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/yschema/catalog",
+      "policy": "project",
+      "rationale": "Project read authority precedes private/team catalog projection."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/refs/{refName}/presentation-authoring",
+      "policy": "project",
+      "rationale": "Project read authority reports exact-ref authoring eligibility; no writes."
+    },
+    {
+      "source": "state-presentations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/refs/{refName}/presentation-revisions",
+      "policy": "project",
+      "rationale": "Project edit authority and server-selected Transition policy with exact-head CAS."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/candidates",
+      "policy": "project",
+      "rationale": "Checks target read and rechecks source access; unavailable pins are redacted."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/candidates",
+      "policy": "project",
+      "rationale": "Requires target project:edit and live source read access; pins immutable release."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/projects/{projectId}/schema-studio/candidates/{candidateId}",
+      "policy": "project",
+      "rationale": "Requires target project:edit; removes only the scoped candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preview",
+      "policy": "project",
+      "rationale": "Checks target read and each exact source; read-only compiler/diff with workspace review preconditions."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/apply",
+      "policy": "project",
+      "rationale": "Requires target edit, source redistribution authority, exact review hash and Workspace revision CAS."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/source",
+      "policy": "project",
+      "rationale": "Reads an exact release only after target and source read authority and manifest integrity checks; no candidate mutation."
     }
   ]
 }

@@ -305,6 +305,46 @@ describe('T3xClient', () => {
     });
   });
 
+  describe('deployment capabilities', () => {
+    const capabilities = {
+      version: 1 as const,
+      deployment_mode: 'self_hosted' as const,
+      provider_credentials: { administration: 'local' as const },
+      inference: { mode: 'direct' as const },
+      identity: {
+        mode: 'local' as const,
+        auth_operations: ['register', 'sign_in', 'sign_out'] as const,
+        account_operations: ['read', 'update'] as const,
+        namespaces: true,
+      },
+      usage: { mode: 'telemetry' as const },
+      ui_extensions: { account: true, billing: false },
+    };
+
+    it('fetches and validates the shared versioned contract', async () => {
+      const fn = mockFetch(successResponse(capabilities));
+      const client = createTestClient(fn);
+
+      await expect(client.getDeploymentCapabilities()).resolves.toEqual(capabilities);
+      expect(fn).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/deployment/capabilities',
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it.each([
+      { ...capabilities, version: 2 },
+      { ...capabilities, unexpected: 'actor-specific-data' },
+      { ...capabilities, identity: { ...capabilities.identity, plan: 'pro' } },
+    ])('rejects stale or expanded wire contracts', async (payload) => {
+      const client = createTestClient(mockFetch(successResponse(payload)));
+
+      await expect(client.getDeploymentCapabilities()).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    });
+  });
+
   // =========================================================================
   // Projects
   // =========================================================================
@@ -358,6 +398,35 @@ describe('T3xClient', () => {
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/projects/proj_1'),
         expect.objectContaining({ method: 'PATCH' })
+      );
+    });
+
+    it('changeProjectVisibility sends an explicit compare-and-set command', async () => {
+      const data = {
+        project: { project_id: 'proj_1', name: 'Published', visibility: 'public' },
+        changed: true,
+        evidence_id: 'pve_1',
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      await expect(
+        client.changeProjectVisibility('proj_1', {
+          expected_visibility: 'private',
+          visibility: 'public',
+          confirm_publication: true,
+        })
+      ).resolves.toEqual(data);
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/visibility'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            expected_visibility: 'private',
+            visibility: 'public',
+            confirm_publication: true,
+          }),
+        })
       );
     });
 
@@ -419,6 +488,31 @@ describe('T3xClient', () => {
         expect.stringContaining('/v1/conversations?project_id=proj_1'),
         expect.objectContaining({ method: 'GET' })
       );
+    });
+
+    it('reads legacy YOps only through the project-scoped evidence capability', async () => {
+      const data = {
+        mode: 'historical_evidence',
+        authoritative_for_project_state: false,
+        items: [],
+        page: { total: 0, limit: 50, offset: 0 },
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+
+      await expect(
+        client.sourceThreads.legacyYOpsEvidence('proj_1', 'conv_1', {
+          archivedOnly: true,
+          topicId: 'topic_1',
+          order: 'desc',
+          limit: 50,
+        })
+      ).resolves.toEqual(data);
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('/v1/projects/proj_1/sources/conversations/conv_1/legacy-yops');
+      expect(url).toContain('archived_only=true');
+      expect(url).toContain('topic_id=topic_1');
+      expect(url).toContain('order=desc');
     });
 
     it('listConversations adds project_id to query', async () => {
@@ -1025,90 +1119,6 @@ describe('T3xClient', () => {
   });
 
   // =========================================================================
-  // Drafts
-  // =========================================================================
-  describe('drafts', () => {
-    it('listDrafts adds project_id', async () => {
-      const fn = mockFetch(successResponse({ drafts: [], limit: 20, offset: 0 }));
-      const client = createTestClient(fn);
-
-      await client.listDrafts('proj_1');
-      const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('project_id=proj_1');
-    });
-
-    it('getDraft sends GET', async () => {
-      const fn = mockFetch(successResponse({ draft_id: 'd_1' }));
-      const client = createTestClient(fn);
-
-      await client.getDraft('d_1');
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/drafts/d_1'),
-        expect.any(Object)
-      );
-    });
-
-    it('createDraft sends POST', async () => {
-      const fn = mockFetch(successResponse({ draft_id: 'd_new' }));
-      const client = createTestClient(fn);
-
-      await client.createDraft({
-        project_id: 'proj_1',
-        conversation_id: 'conv_1',
-        bridge_id: 'br_1',
-        intent: 'test',
-      });
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/drafts'),
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-
-    it('deleteDraft sends DELETE', async () => {
-      const fn = mockFetch(successResponse(null));
-      const client = createTestClient(fn);
-
-      await client.deleteDraft('d_1');
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/drafts/d_1'),
-        expect.objectContaining({ method: 'DELETE' })
-      );
-    });
-  });
-
-  // =========================================================================
-  // Agent Drafts
-  // =========================================================================
-  describe('agent drafts', () => {
-    it('getAgentDraft calls /v1/agent/drafts/:id', async () => {
-      const fn = mockFetch(successResponse({ draft_id: 'ad_1' }));
-      const client = createTestClient(fn);
-
-      await client.getAgentDraft('ad_1');
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/agent/drafts/ad_1'),
-        expect.any(Object)
-      );
-    });
-
-    it('createAgentDraft sends POST', async () => {
-      const fn = mockFetch(successResponse({ draft_id: 'ad_new' }));
-      const client = createTestClient(fn);
-
-      await client.createAgentDraft({
-        project_id: 'proj_1',
-        conversation_id: 'conv_1',
-        bridge_id: 'br_1',
-        intent: 'agent test',
-      });
-      expect(fn).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/agent/drafts'),
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-  });
-
-  // =========================================================================
   // Diff
   // =========================================================================
   describe('diff', () => {
@@ -1656,4 +1666,147 @@ describe('T3xClient', () => {
       expect(url).not.toContain('offset');
     });
   });
+});
+
+describe('exact State export', () => {
+  it('sends an exact commit, format and optional State expectation', async () => {
+    const artifact = {
+      format: 'json',
+      scope: 'full-state-value',
+      mimeType: 'application/json',
+      filename: 'state.json',
+      content: '{}\n',
+      byteLength: 3,
+      byteDigest: digest('a'),
+      sourceCommit: descriptor('commit', 'b'),
+      sourceState: descriptor('state', 'c'),
+      codec: { mediaType: 'application/json', version: '1' },
+      serialization: 't3x.json-value/v1',
+    };
+    const fetchFn = mockFetch(successResponse(artifact));
+    const client = createTestClient(fetchFn);
+    await expect(
+      client.exportCommitState('project', digest('b'), 'json', digest('c'))
+    ).resolves.toEqual(artifact);
+    const url = new URL(vi.mocked(fetchFn).mock.calls[0][0] as string);
+    expect(decodeURIComponent(url.pathname)).toBe(`/v1/commits/${digest('b')}/export`);
+    expect(url.searchParams.get('project_id')).toBe('project');
+    expect(url.searchParams.get('state_digest')).toBe(digest('c'));
+  });
+  it('rejects a legacy Leaf-shaped successful response', async () => {
+    const client = createTestClient(mockFetch(successResponse({ output: 'generated content' })));
+    await expect(client.exportCommitState('project', digest('b'), 'yaml')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    });
+  });
+});
+
+it('validates the delivery receipt response and sends the explicit idempotent request', async () => {
+  const request = {
+    targetId: 't3x:committed-state',
+    commitDigest: digest('a'),
+    format: 'yaml' as const,
+    workspaceRevision: 1,
+    idempotencyKey: 'a1234567-1234-4123-8123-123456789012',
+  };
+  const receipt = {
+    ...request,
+    id: 'b1234567-1234-4123-8123-123456789012',
+    projectId: 'p',
+    workspaceId: 'w',
+    adapter: 't3x.download/v1',
+    artifactDigest: null,
+    status: 'failed',
+    errorCode: 'ARTIFACT_PREPARATION_FAILED',
+    requestDigest: 'c'.repeat(64),
+    retryOf: null,
+    attempt: 1,
+    createdAt: new Date().toISOString(),
+  };
+  const fetchFn = mockFetch(successResponse({ receipt, artifact: null }));
+  const client = createTestClient(fetchFn);
+  expect((await client.prepareWorkspaceDelivery('p', 'w', request)).receipt.status).toBe('failed');
+  expect(fetchFn).toHaveBeenCalledWith(
+    expect.stringContaining('/projects/p/workspaces/w/deliveries'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify(request) })
+  );
+  const badClient = createTestClient(
+    mockFetch(successResponse({ receipt: { ...receipt, status: 'deployed' }, artifact: null }))
+  );
+  await expect(badClient.prepareWorkspaceDelivery('p', 'w', request)).rejects.toThrow();
+});
+
+it('publishes and reads exact author content using the presentation runtime contract', async () => {
+  const result = {
+    commitDigest: digest('a'),
+    stateDigest: digest('b'),
+    presentation: null,
+    createdBy: null,
+    createdAt: null,
+  };
+  const fetchFn = mockFetch(successResponse(result));
+  const client = createTestClient(fetchFn);
+  await client.getStatePresentation('p', digest('a'), digest('c'));
+  expect(fetchFn).toHaveBeenCalledWith(
+    expect.stringContaining(
+      `/v1/projects/p/commits/${encodeURIComponent(digest('a'))}/presentation?presentation_digest=${encodeURIComponent(digest('c'))}`
+    ),
+    expect.objectContaining({ method: 'GET' })
+  );
+  await client.publishStatePresentation('p', digest('a'), { description: 'Authored' });
+  expect(fetchFn).toHaveBeenLastCalledWith(
+    expect.stringContaining('/presentation'),
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ description: 'Authored' }) })
+  );
+  const bad = createTestClient(
+    mockFetch(successResponse({ ...result, presentation: { digest: 'invalid', document: {} } }))
+  );
+  await expect(bad.getStatePresentation('p', digest('a'))).rejects.toThrow();
+});
+
+it('reads a pinned generic Overview and rejects incompatible status claims', async () => {
+  const result = {
+    revision: { commitDigest: digest('a'), stateDigest: digest('b'), presentationDigest: null },
+    author: null,
+    summary: { kind: 'sections', rootType: 'null', total: 0, truncated: false, items: [] },
+    render: {
+      context: {
+        sourceCommit: descriptor('commit', 'a'),
+        sourceState: descriptor('state', 'b'),
+        value: null,
+        binding: null,
+        validation: 'not-run',
+      },
+      status: {
+        state: 'loaded',
+        schema: 'not-requested',
+        renderer: 'fallback',
+        validation: 'not-run',
+      },
+      renderer: { key: 't3x.generic', version: 1, modelSchema: 't3x.render/generic-state/v1' },
+      model: { value: null },
+      recovery: { json: 'null', yaml: 'null' },
+    },
+  };
+  const fetchFn = mockFetch(successResponse(result));
+  const client = createTestClient(fetchFn);
+  expect(
+    await client.getStateOverview('team/project', digest('a'), {
+      stateDigest: digest('b'),
+      presentationDigest: digest('c'),
+    })
+  ).toEqual(result);
+  const url = new URL(vi.mocked(fetchFn).mock.calls[0]![0] as string);
+  expect(url.pathname).toContain('/projects/team%2Fproject/');
+  expect(url.searchParams.get('state_digest')).toBe(digest('b'));
+  expect(url.searchParams.get('presentation_digest')).toBe(digest('c'));
+  const bad = createTestClient(
+    mockFetch(
+      successResponse({
+        ...result,
+        render: { ...result.render, status: { ...result.render.status, validation: 'passed' } },
+      })
+    )
+  );
+  await expect(bad.getStateOverview('p', digest('a'))).rejects.toThrow();
 });

@@ -7,7 +7,12 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getConversationSourceEvidence } from '@t3x-dev/storage';
+import {
+  findCommitHashesByYOpsLogIds,
+  findConversationById,
+  getConversationSourceEvidence,
+  listLegacyYOpsEvidencePage,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -108,6 +113,34 @@ const SourceEvidenceResponseSchema = z.object({
   referring_commits: z.array(SourceCommitReferenceSchema),
 });
 
+const LegacyYOpsEvidenceResponseSchema = z.object({
+  mode: z.literal('historical_evidence'),
+  authoritative_for_project_state: z.literal(false),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      conversation_id: z.string(),
+      project_id: z.string(),
+      source: z.string(),
+      turn_hash: z.string().nullable(),
+      topic_id: z.string().nullable(),
+      yops: z.unknown(),
+      metadata: z.unknown().nullable(),
+      created_at: z.string(),
+      lifecycle: z.object({
+        status: z.enum(['committed', 'superseded', 'legacy_uncommitted']),
+        superseded_at: z.string().nullable(),
+        committed_by: z.array(z.string()),
+      }),
+    })
+  ),
+  page: z.object({
+    total: z.number().int().min(0),
+    limit: z.number().int().min(1),
+    offset: z.number().int().min(0),
+  }),
+});
+
 const getConversationSourceEvidenceRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/sources/conversations/{conversationId}',
@@ -140,6 +173,50 @@ const getConversationSourceEvidenceRoute = createRoute({
     },
     404: {
       description: 'Project or source not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const getLegacyYOpsEvidenceRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/sources/conversations/{conversationId}/legacy-yops',
+  tags: ['Sources'],
+  summary: 'Read legacy YOps as repository historical evidence',
+  description:
+    'Returns a project-scoped, read-only page over preserved yops_log content. These rows provide migration and audit evidence and never define current repository state.',
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      conversationId: z.string().min(1),
+    }),
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(100).optional(),
+      offset: z.coerce.number().int().min(0).default(0).optional(),
+      topic_id: z.string().min(1).optional(),
+      archived_only: z.enum(['true', 'false']).optional(),
+      order: z.enum(['asc', 'desc']).default('asc').optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Legacy YOps historical evidence page',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(LegacyYOpsEvidenceResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Source conversation not found in the project',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -286,6 +363,76 @@ sourceEvidenceRoutes.openapi(getConversationSourceEvidenceRoute, async (c) => {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to read source evidence';
+    return errorResponse(c, 'READ_FAILED', message);
+  }
+});
+
+sourceEvidenceRoutes.openapi(getLegacyYOpsEvidenceRoute, async (c) => {
+  const { projectId, conversationId } = c.req.valid('param');
+  const { limit = 100, offset = 0, topic_id, archived_only, order = 'asc' } = c.req.valid('query');
+  const db = await getDB();
+
+  try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
+    const conversation = await findConversationById(db, conversationId);
+    if (conversation?.projectId !== projectId) {
+      return errorResponse(c, 'NOT_FOUND', 'Source conversation ' + conversationId + ' not found');
+    }
+
+    const page = await listLegacyYOpsEvidencePage(db, {
+      projectId,
+      conversationId,
+      limit,
+      offset,
+      topicId: topic_id,
+      archivedOnly: archived_only === 'true',
+      newestFirst: order === 'desc',
+    });
+    const committedBy = await findCommitHashesByYOpsLogIds(
+      db,
+      projectId,
+      page.items.map((item) => item.id)
+    );
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          mode: 'historical_evidence' as const,
+          authoritative_for_project_state: false as const,
+          items: page.items.map((item) => {
+            const commits = committedBy.get(item.id) ?? [];
+            return {
+              id: item.id,
+              conversation_id: item.conversationId,
+              project_id: item.projectId,
+              source: item.source,
+              turn_hash: item.turnHash,
+              topic_id: item.topicId,
+              yops: item.yops,
+              metadata: item.metadata ?? null,
+              created_at: item.createdAt.toISOString(),
+              lifecycle: {
+                status:
+                  commits.length > 0
+                    ? ('committed' as const)
+                    : item.supersededAt
+                      ? ('superseded' as const)
+                      : ('legacy_uncommitted' as const),
+                superseded_at: item.supersededAt?.toISOString() ?? null,
+                committed_by: commits,
+              },
+            };
+          }),
+          page: { total: page.total, limit, offset },
+        },
+      },
+      200
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to read legacy YOps evidence';
     return errorResponse(c, 'READ_FAILED', message);
   }
 });

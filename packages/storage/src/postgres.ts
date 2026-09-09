@@ -9,8 +9,8 @@
  *
  * Usage:
  * ```typescript
- * import { createPostgresStorage, insertProject } from '@t3x-dev/storage/postgres';
- * const db = await createPostgresStorage({ connectionString: process.env.DATABASE_URL });
+ * import { createPostgresRuntimeStorage, insertProject } from '@t3x-dev/storage/postgres';
+ * const db = await createPostgresRuntimeStorage({ connectionString: process.env.DATABASE_URL });
  * const project = await insertProject(db, { name: 'My Project' });
  * ```
  */
@@ -18,10 +18,19 @@
 // PostgreSQL adapter only
 export {
   closePostgresStorage,
+  createPostgresBootstrapStorage,
+  createPostgresRuntimeStorage,
   createPostgresStorage,
   getPostgresDB,
+  inspectPostgresSchema,
+  migratePostgresStorage,
+  POSTGRES_SCHEMA_VERSION,
   type PostgresConfig,
   type PostgresDB,
+  type PostgresSchemaMetadata,
+  type PostgresSchemaStatus,
+  PostgresSchemaVersionError,
+  type PostgresSchemaVersionErrorReason,
 } from './adapters/postgres';
 // Query functions
 export * from './queries';

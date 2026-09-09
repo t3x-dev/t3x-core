@@ -11,14 +11,12 @@
 import type { Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
-import { createWorkbenchDraft } from '@/commands/drafts';
 import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 import { fetchCommits } from '@/infrastructure/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';
-import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 import {
   hasPendingUnitNode,
@@ -94,22 +92,11 @@ export function useCanvasNodeActions() {
           existingNodePositions.set(node.id, node.position);
         });
 
-        // Drafts (non-critical)
-        let editingDrafts: Awaited<ReturnType<typeof fetchWorkbenchDrafts>> = [];
-        try {
-          editingDrafts = await fetchWorkbenchDrafts(projectId, 'editing');
-        } catch {
-          // non-critical
-        }
-
-        if (useCanvasStore.getState().projectId !== projectId) return;
-
         const result = composeCanvasFromFetches(
           projectId,
           conversations,
           apiCommits,
           projectLeaves,
-          editingDrafts,
           turnToConvMap,
           existingNodePositions
         );
@@ -201,41 +188,5 @@ export function useCanvasNodeActions() {
     []
   );
 
-  const addDraft = useCallback(async (position?: { x: number; y: number }): Promise<void> => {
-    const store = useCanvasStore.getState();
-    if (!store.projectId) {
-      throw new Error('Cannot create draft: no project selected');
-    }
-    const total = store.nodes.length;
-    const basePosition = position ?? {
-      x: 140 + (total % 3) * 220,
-      y: 100 + Math.floor(total / 3) * 180,
-    };
-    const snappedPosition = snapPosition(basePosition);
-
-    const draft = await createWorkbenchDraft({
-      project_id: store.projectId,
-      title: 'Untitled Draft',
-    });
-
-    const newNode: Node<CanvasNodeData> = {
-      id: draft.id,
-      type: 'unit',
-      position: snappedPosition,
-      data: {
-        entryId: draft.id.replace(/^draft_/, '').slice(0, 8),
-        title: draft.title,
-        summary: 'Draft',
-        status: 'draft',
-        timestamp: draft.created_at,
-        tags: ['draft'],
-        kind: 'unit',
-        commitStatus: 'draft',
-        draftId: draft.id,
-      },
-    };
-    useCanvasStore.getState().addToNodes(newNode);
-  }, []);
-
-  return { load, refresh, add, addDraft };
+  return { load, refresh, add };
 }

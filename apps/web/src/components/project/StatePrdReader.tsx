@@ -94,6 +94,8 @@ interface PrdSelectedNode {
 }
 
 interface StatePrdReaderProps {
+  compact?: boolean;
+  onRequestExpand?: () => void;
   model: PrdRenderModel;
   schemaArtifacts?: SchemaArtifactPreview[];
   schemaComposition?: SchemaCompositionDraft;
@@ -106,6 +108,8 @@ interface StatePrdReaderProps {
 }
 
 export function StatePrdReader({
+  compact = false,
+  onRequestExpand,
   model,
   schemaArtifacts = [],
   schemaComposition,
@@ -301,6 +305,31 @@ export function StatePrdReader({
       }
     };
   }, []);
+
+  if (compact)
+    return (
+      <section
+        aria-label="Schema render"
+        className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
+      >
+        <StateScrollArea
+          label="Rendered PRD document"
+          className="min-h-0 flex-1"
+          viewportClassName="[&_article]:!px-5 [&_h1]:!text-2xl"
+        >
+          <PrdDocument
+            model={model}
+            onInspectEvidence={() => onRequestExpand?.()}
+            onSelectNode={(nodeId) => selectNode(nodeId)}
+            schemaName={schemaName}
+            schemaNavigation={schemaNavigation}
+            selectedNodeId={selectedNodeId}
+            validationGapCount={validationGapCount}
+            validationReady={validationReady}
+          />
+        </StateScrollArea>
+      </section>
+    );
 
   return (
     <section

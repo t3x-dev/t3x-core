@@ -28,10 +28,6 @@ function metricValue(value: number | undefined): number {
   return value ?? 0;
 }
 
-function outputCount(project: ProjectSummary): number {
-  return Math.max(0, project.outputsCount ?? 0);
-}
-
 function ProjectMetric({
   label,
   value,
@@ -39,14 +35,12 @@ function ProjectMetric({
 }: {
   label: string;
   value: number | string;
-  tone: 'source' | 'schema' | 'yops' | 'state' | 'leaf';
+  tone: 'source' | 'schema' | 'state';
 }) {
   const toneVar = {
     source: 'var(--source)',
     schema: 'var(--accent-extract)',
-    yops: 'var(--accent-pending)',
     state: 'var(--accent-commit)',
-    leaf: 'var(--accent-leaf)',
   }[tone];
 
   return (
@@ -66,11 +60,8 @@ function ProjectMetric({
 function ProjectMetrics({ project }: { project: ProjectSummary }) {
   return (
     <div className="flex flex-wrap gap-x-3.5 gap-y-1.5">
-      <ProjectMetric label="Sources" value={metricValue(project.nodes)} tone="source" />
-      <ProjectMetric label="YSchema" value="pending" tone="schema" />
-      <ProjectMetric label="YOps" value="pending" tone="yops" />
-      <ProjectMetric label="State" value={metricValue(project.commitsCount)} tone="state" />
-      <ProjectMetric label="Outputs" value={outputCount(project)} tone="leaf" />
+      <ProjectMetric label="Commits" value={metricValue(project.commitsCount)} tone="state" />
+      <ProjectMetric label="Branches" value={metricValue(project.branchesCount)} tone="schema" />
     </div>
   );
 }
@@ -235,7 +226,7 @@ function NamespaceHeader({
               : 'Organization namespace for structured state repositories.'}
           </p>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-            <span>{isPersonalNamespace ? 'Personal namespace' : '3 members'}</span>
+            <span>{isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}</span>
             <span>{dataAvailable ? projects.length : '—'} repos</span>
             <span>{dataAvailable ? commits : '—'} commits</span>
           </div>
@@ -252,23 +243,24 @@ function DirectorySideRail({
   dataAvailable: boolean;
   projects: ProjectSummary[];
 }) {
-  const openReviews = projects.filter((project) => project.status === 'draft').length;
-  const outputs = projects.reduce((sum, project) => sum + outputCount(project), 0);
+  const drafts = projects.filter((project) => project.status === 'draft').length;
   const recent = projects[0];
 
   if (!dataAvailable) {
     return (
       <aside className="space-y-7">
         <section>
-          <h2 className="text-base font-bold text-[var(--text-primary)]">Open work</h2>
+          <h2 className="text-base font-bold text-[var(--text-primary)]">
+            Repositories at a glance
+          </h2>
           <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
             Repository data is unavailable.
           </p>
         </section>
         <section className="border-t border-[var(--stroke-divider)] pt-6">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">Recent activity</h2>
+          <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
           <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-            Retry loading repositories to view recent activity.
+            Retry loading repositories to see recent creations.
           </p>
         </section>
       </aside>
@@ -278,19 +270,16 @@ function DirectorySideRail({
   return (
     <aside className="space-y-7">
       <section>
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Open work</h2>
+        <h2 className="text-base font-bold text-[var(--text-primary)]">Repositories at a glance</h2>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-          <ProjectMetric label="reviews" value={openReviews} tone="schema" />
-          <ProjectMetric label="YOps" value="pending" tone="yops" />
-          <ProjectMetric label="outputs" value={outputs} tone="leaf" />
+          <ProjectMetric label="Repositories" value={projects.length} tone="state" />
+          <ProjectMetric label="Without commits" value={drafts} tone="schema" />
         </div>
       </section>
       <section className="border-t border-[var(--stroke-divider)] pt-6">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Recent activity</h2>
+        <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
         <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-          {recent
-            ? `${recent.name} updated ${recent.updatedAt}.`
-            : 'No recent repository activity.'}
+          {recent ? `${recent.name} created ${recent.updatedAt}.` : 'No repositories yet.'}
         </p>
       </section>
     </aside>
@@ -339,8 +328,8 @@ function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
       </div>
       <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No repositories yet</h2>
       <p className="mt-2 max-w-[420px] text-sm leading-normal text-[var(--text-secondary)]">
-        Create a repository first, then enter its workbench to collect sources, validate schema,
-        apply YOps, and produce Leaf artifacts.
+        Create a repository, shape your YAML or JSON in a Workspace, then review, commit, and export
+        it.
       </p>
       <Button asChild className="mt-5" variant="commit">
         <Link href={newRepositoryPath}>

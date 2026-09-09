@@ -1,51 +1,165 @@
 /**
  * Project Access Control
  *
- * Indirect ownership model: only projects have owner_id.
- * All sub-tables (conversations, commits, leaves, pins, runs)
- * inherit access through project_id — no owner_id on child tables.
+ * Canonical authority model: projects belong to one namespace and current
+ * namespace membership or an exact project grant authorizes the principal.
+ * owner_id is historical provenance only.
  *
  * Access rules:
  * - Project not found → 404
- * - AUTH_DISABLED (no principal) → allow
- * - Any principal with an exact project binding → allow
- * - Global human principal matching project.owner_id → allow
- * - Legacy unowned projects require an explicit operator claim first
+ * - Explicit AUTH_DISABLED local mode → allow
+ * - Authenticated principals load current stored membership/grant facts
+ * - Machine credentials additionally require an exact project binding
  * - Otherwise → 403
  */
 
+import {
+  type CanonicalPrincipalDto,
+  evaluateProjectAction,
+  MEMBERSHIP_STATUSES,
+  NAMESPACE_ROLES,
+  type NamespaceMembershipDto,
+  PRINCIPAL_KINDS,
+  PROJECT_ACTIONS,
+  PROJECT_GRANT_ROLES,
+  type ProjectAction,
+  type ProjectGrantDto,
+  type TrustedNamespaceAuthorityFacts,
+} from '@t3x-dev/application';
 import type { ApiKey, ApiKeyPrincipalKind } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  findProjectAuthorityFacts,
   findProjectById,
   findProjectByIdIncludingDeleted,
   listTransitionCommitProjectIds,
+  type NamespaceMembershipRecord,
+  type ProjectGrantRecord,
+  type StoredProjectAuthorityFacts,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
+import { isAuthenticationDisabled } from './auth-config';
 import { createError, type ErrorCode } from './errors';
 
 export interface ProjectAccessPrincipal {
   userId: string | null | undefined;
   projectId: string | null | undefined;
   principalKind: ApiKeyPrincipalKind | undefined;
+  keyId?: string | null | undefined;
 }
 
 export type ProjectAccessDecision =
   | { allowed: true; project: NonNullable<Awaited<ReturnType<typeof findProjectById>>> }
   | { allowed: false; status: 403 | 404; code: 'FORBIDDEN' | 'NOT_FOUND'; message: string };
 
-type ProjectAccessProject = NonNullable<Awaited<ReturnType<typeof findProjectById>>>;
-type ProjectAccessLookup = (db: AnyDB, projectId: string) => Promise<ProjectAccessProject | null>;
+function includesValue<T extends string>(values: readonly T[], value: string): value is T {
+  return values.includes(value as T);
+}
 
-async function evaluateProjectAccessWithLookup(
+function canonicalPrincipal(principal: ProjectAccessPrincipal): CanonicalPrincipalDto | null {
+  const kind = principal.principalKind ?? 'human';
+  if (!includesValue(PRINCIPAL_KINDS, kind)) return null;
+  const principalId = kind === 'human' ? principal.userId : principal.keyId;
+  return principalId ? { kind, principal_id: principalId } : null;
+}
+
+function membershipDto(record: NamespaceMembershipRecord | null): NamespaceMembershipDto | null {
+  if (!record) return null;
+  if (
+    !includesValue(PRINCIPAL_KINDS, record.principalKind) ||
+    !includesValue(NAMESPACE_ROLES, record.role) ||
+    !includesValue(MEMBERSHIP_STATUSES, record.status)
+  ) {
+    return null;
+  }
+  return {
+    membership_id: record.membershipId,
+    namespace_id: record.namespaceId,
+    principal: { kind: record.principalKind, principal_id: record.principalId },
+    role: record.role,
+    status: record.status,
+    created_at: record.createdAt.toISOString(),
+    updated_at: record.updatedAt.toISOString(),
+  };
+}
+
+function projectGrantDto(record: ProjectGrantRecord | null): ProjectGrantDto | null {
+  if (!record) return null;
+  if (
+    !includesValue(PRINCIPAL_KINDS, record.principalKind) ||
+    !includesValue(PROJECT_GRANT_ROLES, record.role) ||
+    !includesValue(MEMBERSHIP_STATUSES, record.status)
+  ) {
+    return null;
+  }
+  return {
+    grant_id: record.grantId,
+    project_id: record.projectId,
+    principal: { kind: record.principalKind, principal_id: record.principalId },
+    role: record.role,
+    status: record.status,
+    created_at: record.createdAt.toISOString(),
+    updated_at: record.updatedAt.toISOString(),
+    expires_at: record.expiresAt?.toISOString() ?? null,
+  };
+}
+
+function trustedProjectAuthorityFacts(
+  stored: StoredProjectAuthorityFacts,
+  principal: CanonicalPrincipalDto,
+  credential: ProjectAccessPrincipal
+): TrustedNamespaceAuthorityFacts | null {
+  if (!stored.project.namespaceId) return null;
+  return {
+    principal,
+    project: {
+      project_id: stored.project.projectId,
+      namespace_id: stored.project.namespaceId,
+    },
+    namespace_membership: membershipDto(stored.namespaceMembership),
+    project_grant: projectGrantDto(stored.projectGrant),
+    evaluated_at: new Date().toISOString(),
+    ...(credential.projectId
+      ? { credential_scope: { project_id: credential.projectId, actions: PROJECT_ACTIONS } }
+      : {}),
+  };
+}
+
+async function evaluateProjectAccessFromFacts(
   db: AnyDB,
   projectId: string,
   principal: ProjectAccessPrincipal | undefined,
-  lookup: ProjectAccessLookup
+  action: ProjectAction,
+  options: { includeDeleted?: boolean; allowLocalBypass?: boolean }
 ): Promise<ProjectAccessDecision> {
-  const project = await lookup(db, projectId);
+  if (!principal) {
+    const project = await (options.includeDeleted
+      ? findProjectByIdIncludingDeleted
+      : findProjectById)(db, projectId);
+    if (!project) {
+      return {
+        allowed: false,
+        status: 404,
+        code: 'NOT_FOUND',
+        message: `Project ${projectId} not found`,
+      };
+    }
+    return options.allowLocalBypass
+      ? { allowed: true, project }
+      : { allowed: false, status: 403, code: 'FORBIDDEN', message: 'Access denied' };
+  }
 
-  if (!project) {
+  const trustedPrincipal = canonicalPrincipal(principal);
+  if (!trustedPrincipal) {
+    return { allowed: false, status: 403, code: 'FORBIDDEN', message: 'Access denied' };
+  }
+
+  const facts = await findProjectAuthorityFacts(db, {
+    projectId,
+    principal: { kind: trustedPrincipal.kind, principalId: trustedPrincipal.principal_id },
+    includeDeleted: options.includeDeleted,
+  });
+  if (!facts) {
     return {
       allowed: false,
       status: 404,
@@ -54,25 +168,8 @@ async function evaluateProjectAccessWithLookup(
     };
   }
 
-  // AUTH_DISABLED mode has no principal and intentionally preserves local,
-  // single-user access to all projects.
-  if (!principal) return { allowed: true, project };
-
-  if (principal.projectId) {
-    if (principal.projectId !== projectId) {
-      return {
-        allowed: false,
-        status: 403,
-        code: 'FORBIDDEN',
-        message: 'Access denied',
-      };
-    }
-    return { allowed: true, project };
-  }
-
-  // Machine credentials must always carry a concrete project boundary. A
-  // global/null binding must not fall through to human ownership rules.
-  if (principal.principalKind !== undefined && principal.principalKind !== 'human') {
+  const authorityFacts = trustedProjectAuthorityFacts(facts, trustedPrincipal, principal);
+  if (!authorityFacts) {
     return {
       allowed: false,
       status: 403,
@@ -81,7 +178,8 @@ async function evaluateProjectAccessWithLookup(
     };
   }
 
-  if (!principal.userId || !project.ownerId || project.ownerId !== principal.userId) {
+  const decision = evaluateProjectAction(authorityFacts, action);
+  if (!decision.allowed) {
     return {
       allowed: false,
       status: 403,
@@ -90,7 +188,7 @@ async function evaluateProjectAccessWithLookup(
     };
   }
 
-  return { allowed: true, project };
+  return { allowed: true, project: facts.project };
 }
 
 /**
@@ -101,28 +199,81 @@ async function evaluateProjectAccessWithLookup(
 export async function evaluateProjectAccess(
   db: AnyDB,
   projectId: string,
-  principal?: ProjectAccessPrincipal
+  principal: ProjectAccessPrincipal | undefined,
+  action: ProjectAction = 'project:read',
+  options: { allowLocalBypass?: boolean } = {}
 ): Promise<ProjectAccessDecision> {
-  return evaluateProjectAccessWithLookup(db, projectId, principal, findProjectById);
+  return evaluateProjectAccessFromFacts(db, projectId, principal, action, options);
 }
 
 /** Resolve the same authority decision for restore and permanent-delete paths. */
 export async function evaluateProjectAccessIncludingDeleted(
   db: AnyDB,
   projectId: string,
-  principal?: ProjectAccessPrincipal
+  principal: ProjectAccessPrincipal | undefined,
+  action: ProjectAction,
+  options: { allowLocalBypass?: boolean } = {}
 ): Promise<ProjectAccessDecision> {
-  return evaluateProjectAccessWithLookup(db, projectId, principal, findProjectByIdIncludingDeleted);
+  return evaluateProjectAccessFromFacts(db, projectId, principal, action, {
+    ...options,
+    includeDeleted: true,
+  });
 }
 
-function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
+export function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   if (!apiKey) return undefined;
   return {
     userId: apiKey.user_id,
     projectId: apiKey.project_id,
     principalKind: apiKey.principal_kind,
+    keyId: apiKey.id,
   };
+}
+
+/** Resolve all server-authorized project actions from one stored-state read. */
+export async function listAuthorizedProjectActions(
+  c: Context,
+  db: AnyDB,
+  projectId: string
+): Promise<ProjectAction[]> {
+  const credential = getProjectAccessPrincipal(c);
+  if (!credential) return isAuthenticationDisabled() ? [...PROJECT_ACTIONS] : [];
+
+  const principal = canonicalPrincipal(credential);
+  if (!principal) return [];
+  const stored = await findProjectAuthorityFacts(db, {
+    projectId,
+    principal: { kind: principal.kind, principalId: principal.principal_id },
+  });
+  if (!stored) return [];
+  const facts = trustedProjectAuthorityFacts(stored, principal, credential);
+  if (!facts) return [];
+  return PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed);
+}
+
+/** Principal shape used by tenant-safe project list queries. */
+export function getProjectListAuthority(
+  c: Context
+): { principal_kind: 'human' | 'agent' | 'service'; principal_id: string } | undefined {
+  const principal = getProjectAccessPrincipal(c);
+  if (!principal) return undefined;
+  const canonical = canonicalPrincipal(principal);
+  return canonical
+    ? { principal_kind: canonical.kind, principal_id: canonical.principal_id }
+    : undefined;
+}
+
+/** Resolve a coarse project action from trusted route metadata, not request JSON. */
+export function projectActionForRequest(c: Context): ProjectAction {
+  const method = c.req.method.toUpperCase();
+  const path = c.req.path;
+  if (method === 'GET' || method === 'HEAD') return 'project:read';
+  if (/\/(?:api\/)?v1\/projects\/[^/]+\/restore$/.test(path)) return 'project:restore';
+  if (method === 'DELETE' && /\/(?:api\/)?v1\/projects\/[^/]+$/.test(path)) {
+    return 'project:delete';
+  }
+  return 'project:edit';
 }
 
 /**
@@ -131,8 +282,21 @@ function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefin
  * Returns the project on success; throws an HTTP error response on failure.
  * Downstream handlers can use the returned project to avoid a redundant DB lookup.
  */
-export async function assertProjectAccess(c: Context, db: AnyDB, projectId: string) {
-  const decision = await evaluateProjectAccess(db, projectId, getProjectAccessPrincipal(c));
+export async function assertProjectAccess(
+  c: Context,
+  db: AnyDB,
+  projectId: string,
+  action: ProjectAction = projectActionForRequest(c)
+) {
+  const decision = await evaluateProjectAccess(
+    db,
+    projectId,
+    getProjectAccessPrincipal(c),
+    action,
+    {
+      allowLocalBypass: isAuthenticationDisabled(),
+    }
+  );
   if (!decision.allowed) {
     return c.json(createError(decision.code, decision.message), decision.status);
   }
@@ -253,7 +417,9 @@ export async function assertProjectAccessIncludingDeleted(
   const decision = await evaluateProjectAccessIncludingDeleted(
     db,
     projectId,
-    getProjectAccessPrincipal(c)
+    getProjectAccessPrincipal(c),
+    projectActionForRequest(c),
+    { allowLocalBypass: isAuthenticationDisabled() }
   );
   if (!decision.allowed) {
     return c.json(createError(decision.code, decision.message), decision.status);

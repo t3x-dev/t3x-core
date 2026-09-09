@@ -1,6 +1,6 @@
 'use client';
 
-import { GitCompareArrows, GitMerge, Leaf, Plus } from 'lucide-react';
+import { GitCompareArrows, GitMerge, Leaf } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { cn } from '@/utils/cn';
 
@@ -61,6 +61,8 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
     }
   }, [x, y]);
 
+  if (!actions.length) return null;
+
   return (
     <div
       ref={panelRef}
@@ -104,7 +106,6 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
 
 function introTargetForAction(action: CommitAction): string | undefined {
   if (action.label === 'Open Leaf') return 'canvas-floating-action-open-leaf';
-  if (action.label === 'New Leaf') return 'canvas-floating-action-new-leaf';
   if (action.label === 'Merge') return 'canvas-floating-action-merge';
   return undefined;
 }
@@ -113,7 +114,6 @@ function introTargetForAction(action: CommitAction): string | undefined {
 export function buildCommitActions(opts: {
   onViewDiff?: () => void;
   onOpenLeaf?: () => void;
-  onCreateLeaf: () => void;
   /** Optional: surfaces a "Merge" action when the commit is the latest tip of a non-main branch. */
   onMerge?: () => void;
 }): CommitAction[] {
@@ -135,13 +135,6 @@ export function buildCommitActions(opts: {
       tone: 'leaf',
     });
   }
-
-  actions.push({
-    label: 'New Leaf',
-    icon: <Plus size={14} />,
-    onClick: opts.onCreateLeaf,
-    tone: 'leaf',
-  });
 
   if (opts.onMerge) {
     actions.push({

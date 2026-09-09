@@ -1,3 +1,14 @@
+import { type StateOverview, StateOverviewSchema } from './state-overview';
+import {
+  type StatePresentationInput,
+  type StatePresentationResult,
+  StatePresentationResultSchema,
+} from './state-presentation.js';
+import {
+  type WorkspaceDeliveryInput,
+  type WorkspaceDeliveryResult,
+  WorkspaceDeliveryResultSchema,
+} from './workspace-delivery.js';
 /**
  * T3X API Client
  *
@@ -5,19 +16,52 @@
  */
 
 import { ZodError, type ZodType } from 'zod';
+import {
+  type AcceptCollaborationInvitationRequest,
+  type AcceptCollaborationInvitationResponse,
+  AcceptCollaborationInvitationResponseSchema,
+  type CollaborationMutationResult,
+  CollaborationMutationResultSchema,
+  type CreateCollaborationInvitationResponse,
+  CreateCollaborationInvitationResponseSchema,
+  type CreateNamespaceInvitationRequest,
+  type CreateProjectInvitationRequest,
+  type ListNamespaceAccountsResponse,
+  ListNamespaceAccountsResponseSchema,
+  type ListNamespaceInvitationsResponse,
+  ListNamespaceInvitationsResponseSchema,
+  type ListNamespaceMembersResponse,
+  ListNamespaceMembersResponseSchema,
+  type ListProjectGuestsResponse,
+  ListProjectGuestsResponseSchema,
+  type ListProjectInvitationsResponse,
+  ListProjectInvitationsResponseSchema,
+  type TransferNamespaceOwnershipRequest,
+  type TransferProjectRequest,
+  type UpsertNamespaceMemberRequest,
+  type UpsertNamespaceMemberResponse,
+  UpsertNamespaceMemberResponseSchema,
+  type UpsertProjectGuestRequest,
+  type UpsertProjectGuestResponse,
+  UpsertProjectGuestResponseSchema,
+} from './collaboration.js';
+import {
+  type DeploymentCapabilities,
+  DeploymentCapabilitiesSchema,
+} from './deployment-capabilities.js';
+import { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
   ApiErrorResponse,
   ApiResponse,
   ApiSuccessResponse,
-  ApplyYOpsResult,
   AttachTransitionStatementInput,
   AttachTransitionStatementResult,
   Branch,
+  ChangeProjectVisibilityInput,
+  ChangeProjectVisibilityResult,
   CheckInput,
   CheckResult,
-  CommitFromDraftInput,
-  CommitFromDraftResult,
   CommitRepositoryStateInput,
   CommitTransitionInput,
   CommitTransitionResult,
@@ -27,7 +71,6 @@ import type {
   ConversationSourceEvidence,
   CreateBranchInput,
   CreateConversationInput,
-  CreateDraftInput,
   CreatedRepositoryCommit,
   CreateLeafInput,
   CreateMergeDraftInput,
@@ -41,11 +84,8 @@ import type {
   DecideTransitionResult,
   DecideWorkspaceTransitionInput,
   DiffResult,
-  Draft,
   ExportCfpackInput,
   ExportLedgerInput,
-  ExtractInput,
-  ExtractResult,
   GenerateLeafInput,
   GenerationCapability,
   GenerationProviderCatalog,
@@ -59,10 +99,11 @@ import type {
   ImportUrlResult,
   InspectTransitionResult,
   Leaf,
+  LegacyYOpsEvidence,
+  LegacyYOpsEvidenceParams,
   ListBranchesResponse,
   ListCommitsResponse,
   ListConversationsResponse,
-  ListDraftsResponse,
   ListLeavesResponse,
   ListPinsResponse,
   ListProjectsResponse,
@@ -171,6 +212,8 @@ export class T3xClient {
       memory: (id) => this.getSourceThreadMemory(id),
       evidence: (projectId, conversationId, params) =>
         this.getSourceThreadEvidence(projectId, conversationId, params),
+      legacyYOpsEvidence: (projectId, conversationId, params) =>
+        this.getLegacyYOpsEvidence(projectId, conversationId, params),
     });
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
@@ -284,6 +327,243 @@ export class T3xClient {
     return this.request<StatusResponse>('GET', '/v1/status');
   }
 
+  /** Public deployment-scoped capabilities; never actor entitlements. */
+  async getDeploymentCapabilities(): Promise<DeploymentCapabilities> {
+    return this.request<DeploymentCapabilities>(
+      'GET',
+      '/v1/deployment/capabilities',
+      undefined,
+      undefined,
+      undefined,
+      DeploymentCapabilitiesSchema
+    );
+  }
+
+  // ============================================
+  // Namespace collaboration
+  // ============================================
+
+  async listNamespaceAccounts(options?: T3xRequestOptions): Promise<ListNamespaceAccountsResponse> {
+    return this.request<ListNamespaceAccountsResponse>(
+      'GET',
+      '/v1/namespaces',
+      undefined,
+      undefined,
+      options,
+      ListNamespaceAccountsResponseSchema
+    );
+  }
+
+  async listNamespaceMembers(
+    namespaceId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListNamespaceMembersResponse> {
+    return this.request<ListNamespaceMembersResponse>(
+      'GET',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members`,
+      undefined,
+      undefined,
+      options,
+      ListNamespaceMembersResponseSchema
+    );
+  }
+
+  async upsertNamespaceMember(
+    namespaceId: string,
+    input: UpsertNamespaceMemberRequest,
+    options?: T3xRequestOptions
+  ): Promise<UpsertNamespaceMemberResponse> {
+    return this.request<UpsertNamespaceMemberResponse>(
+      'PUT',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members`,
+      input,
+      undefined,
+      options,
+      UpsertNamespaceMemberResponseSchema
+    );
+  }
+
+  async revokeNamespaceMember(
+    namespaceId: string,
+    membershipId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/members/${encodeURIComponent(
+        membershipId
+      )}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async transferNamespaceOwnership(
+    namespaceId: string,
+    input: TransferNamespaceOwnershipRequest,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'POST',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/ownership-transfer`,
+      input,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async listNamespaceInvitations(
+    namespaceId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListNamespaceInvitationsResponse> {
+    return this.request<ListNamespaceInvitationsResponse>(
+      'GET',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/invitations`,
+      undefined,
+      undefined,
+      options,
+      ListNamespaceInvitationsResponseSchema
+    );
+  }
+
+  async createNamespaceInvitation(
+    namespaceId: string,
+    input: CreateNamespaceInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<CreateCollaborationInvitationResponse> {
+    return this.request<CreateCollaborationInvitationResponse>(
+      'POST',
+      `/v1/namespaces/${encodeURIComponent(namespaceId)}/invitations`,
+      input,
+      undefined,
+      options,
+      CreateCollaborationInvitationResponseSchema
+    );
+  }
+
+  // ============================================
+  // Project collaboration
+  // ============================================
+
+  async listProjectGuests(
+    projectId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListProjectGuestsResponse> {
+    return this.request<ListProjectGuestsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests`,
+      undefined,
+      undefined,
+      options,
+      ListProjectGuestsResponseSchema
+    );
+  }
+
+  async upsertProjectGuest(
+    projectId: string,
+    input: UpsertProjectGuestRequest,
+    options?: T3xRequestOptions
+  ): Promise<UpsertProjectGuestResponse> {
+    return this.request<UpsertProjectGuestResponse>(
+      'PUT',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests`,
+      input,
+      undefined,
+      options,
+      UpsertProjectGuestResponseSchema
+    );
+  }
+
+  async revokeProjectGuest(
+    projectId: string,
+    grantId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/projects/${encodeURIComponent(projectId)}/guests/${encodeURIComponent(grantId)}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async transferProject(
+    projectId: string,
+    input: TransferProjectRequest,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/transfer`,
+      input,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async listProjectInvitations(
+    projectId: string,
+    options?: T3xRequestOptions
+  ): Promise<ListProjectInvitationsResponse> {
+    return this.request<ListProjectInvitationsResponse>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/invitations`,
+      undefined,
+      undefined,
+      options,
+      ListProjectInvitationsResponseSchema
+    );
+  }
+
+  async createProjectInvitation(
+    projectId: string,
+    input: CreateProjectInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<CreateCollaborationInvitationResponse> {
+    return this.request<CreateCollaborationInvitationResponse>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/invitations`,
+      input,
+      undefined,
+      options,
+      CreateCollaborationInvitationResponseSchema
+    );
+  }
+
+  async revokeCollaborationInvitation(
+    invitationId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'DELETE',
+      `/v1/invitations/${encodeURIComponent(invitationId)}`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
+    );
+  }
+
+  async acceptCollaborationInvitation(
+    input: AcceptCollaborationInvitationRequest,
+    options?: T3xRequestOptions
+  ): Promise<AcceptCollaborationInvitationResponse> {
+    return this.request<AcceptCollaborationInvitationResponse>(
+      'POST',
+      '/v1/invitations/accept',
+      input,
+      undefined,
+      options,
+      AcceptCollaborationInvitationResponseSchema
+    );
+  }
+
   // ============================================
   // Projects
   // ============================================
@@ -307,6 +587,17 @@ export class T3xClient {
 
   async updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
     return this.request<Project>('PATCH', `/v1/projects/${id}`, input);
+  }
+
+  async changeProjectVisibility(
+    id: string,
+    input: ChangeProjectVisibilityInput
+  ): Promise<ChangeProjectVisibilityResult> {
+    return this.request<ChangeProjectVisibilityResult>(
+      'PUT',
+      `/v1/projects/${id}/visibility`,
+      input
+    );
   }
 
   async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {
@@ -373,6 +664,27 @@ export class T3xClient {
       {
         limit: params?.limit,
         offset: params?.offset,
+      }
+    );
+  }
+
+  async getLegacyYOpsEvidence(
+    projectId: string,
+    conversationId: string,
+    params?: LegacyYOpsEvidenceParams
+  ): Promise<LegacyYOpsEvidence> {
+    return this.request<LegacyYOpsEvidence>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/sources/conversations/${encodeURIComponent(
+        conversationId
+      )}/legacy-yops`,
+      undefined,
+      {
+        limit: params?.limit,
+        offset: params?.offset,
+        topic_id: params?.topicId,
+        archived_only: params?.archivedOnly === undefined ? undefined : String(params.archivedOnly),
+        order: params?.order,
       }
     );
   }
@@ -485,6 +797,85 @@ export class T3xClient {
     );
   }
 
+  async getStateOverview(
+    projectId: string,
+    commitDigest: string,
+    options: { stateDigest?: string; presentationDigest?: string } = {}
+  ): Promise<StateOverview> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/overview`,
+      undefined,
+      { state_digest: options.stateDigest, presentation_digest: options.presentationDigest },
+      undefined,
+      StateOverviewSchema
+    );
+  }
+
+  async getStatePresentation(
+    projectId: string,
+    commitDigest: string,
+    presentationDigest?: string
+  ): Promise<StatePresentationResult> {
+    const suffix = presentationDigest
+      ? `?presentation_digest=${encodeURIComponent(presentationDigest)}`
+      : '';
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/presentation${suffix}`,
+      undefined,
+      undefined,
+      undefined,
+      StatePresentationResultSchema
+    );
+  }
+  async publishStatePresentation(
+    projectId: string,
+    commitDigest: string,
+    input: StatePresentationInput
+  ): Promise<StatePresentationResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/presentation`,
+      input,
+      undefined,
+      undefined,
+      StatePresentationResultSchema
+    );
+  }
+
+  async prepareWorkspaceDelivery(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceDeliveryInput
+  ): Promise<WorkspaceDeliveryResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeliveryResultSchema
+    );
+  }
+
+  async exportCommitState(
+    projectId: string,
+    digest: string,
+    format: 'json' | 'yaml',
+    expectedStateDigest?: string,
+    options?: T3xRequestOptions
+  ): Promise<StateExportArtifact> {
+    return this.request<StateExportArtifact>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}/export`,
+      undefined,
+      { project_id: projectId, format, state_digest: expectedStateDigest },
+      options,
+      StateExportArtifactSchema
+    );
+  }
+
   async commitRepositoryState(input: CommitRepositoryStateInput): Promise<CreatedRepositoryCommit> {
     return this.request<CreatedRepositoryCommit>('POST', '/v1/commits', input);
   }
@@ -515,48 +906,6 @@ export class T3xClient {
       project_id: projectId,
       branch_name: branchName,
     });
-  }
-
-  // ============================================
-  // Drafts
-  // ============================================
-
-  async listDrafts(projectId: string, params?: PaginationParams): Promise<ListDraftsResponse> {
-    return this.request<ListDraftsResponse>('GET', '/v1/drafts', undefined, {
-      project_id: projectId,
-      ...params,
-    });
-  }
-
-  async getDraft(id: string): Promise<Draft> {
-    return this.request<Draft>('GET', `/v1/drafts/${id}`);
-  }
-
-  async createDraft(input: CreateDraftInput): Promise<Draft> {
-    return this.request<Draft>('POST', '/v1/drafts', input);
-  }
-
-  async deleteDraft(id: string): Promise<void> {
-    await this.request<void>('DELETE', `/v1/drafts/${id}`);
-  }
-
-  async applyYOps(draftId: string, yops: unknown[], ifRevision: number): Promise<ApplyYOpsResult> {
-    return this.request<ApplyYOpsResult>('POST', `/v1/drafts/${draftId}/apply-yops`, {
-      yops,
-      if_revision: ifRevision,
-    });
-  }
-
-  // ============================================
-  // Agent Drafts
-  // ============================================
-
-  async getAgentDraft(id: string): Promise<Draft> {
-    return this.request<Draft>('GET', `/v1/agent/drafts/${id}`);
-  }
-
-  async createAgentDraft(input: CreateDraftInput): Promise<Draft> {
-    return this.request<Draft>('POST', '/v1/agent/drafts', input);
   }
 
   // ============================================
@@ -882,10 +1231,6 @@ export class T3xClient {
   // Integration Verbs
   // ============================================
 
-  async extract(input: ExtractInput): Promise<ExtractResult> {
-    return this.request<ExtractResult>('POST', '/v1/extract', input);
-  }
-
   async listRepositoryWorkspaces(projectId: string): Promise<ListRepositoryWorkspacesResponse> {
     return this.request<ListRepositoryWorkspacesResponse>(
       'GET',
@@ -996,10 +1341,6 @@ export class T3xClient {
       undefined,
       params as Record<string, string | number | undefined>
     );
-  }
-
-  async commitFromDraft(input: CommitFromDraftInput): Promise<CommitFromDraftResult> {
-    return this.request<CommitFromDraftResult>('POST', '/v1/commit', input);
   }
 
   // ============================================

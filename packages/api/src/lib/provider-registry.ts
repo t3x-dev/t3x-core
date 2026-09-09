@@ -8,9 +8,6 @@
 import {
   createDefaultProviderRegistry,
   type EmbeddingProvider,
-  type GenerateOptions,
-  type GenerateResult,
-  generateLeafOutput,
   type LLMProvider,
   type ProviderRegistry,
   type RegistryConfig,
@@ -140,18 +137,4 @@ export async function getLLMProvider(): Promise<LLMProvider | null> {
 export async function getEmbeddingProvider(): Promise<EmbeddingProvider | null> {
   const reg = await getProviderRegistry();
   return reg.getForRole<EmbeddingProvider>('embedding');
-}
-
-/**
- * Generate leaf output with automatic provider fallback.
- * Tries each provider assigned to the 'generation' role in priority order.
- * On retryable errors (RATE_LIMIT, OVERLOADED, NETWORK_ERROR), moves to the next provider.
- */
-export async function generateWithFallback(
-  options: Omit<GenerateOptions, 'provider'>
-): Promise<GenerateResult> {
-  const reg = await getProviderRegistry();
-  return reg.tryWithFallback<LLMProvider, GenerateResult>('generation', (provider) =>
-    generateLeafOutput({ ...options, provider })
-  );
 }

@@ -37,6 +37,19 @@ export function getProjectIdCanvasPath(projectId: string): string {
   return `${getProjectIdRepoPath(projectId)}?view=canvas`;
 }
 
+export function getProjectIdWorkspacePath(
+  projectId: string,
+  options?: { branch?: string | null; sourceConversationId?: string | null }
+): string {
+  const params = new URLSearchParams({
+    branch: options?.branch?.trim() || 'main',
+    tab: 'workspaces',
+  });
+  const sourceConversationId = options?.sourceConversationId?.trim();
+  if (sourceConversationId) params.set('sourceConversation', sourceConversationId);
+  return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;
+}
+
 export function getProjectIdCanvasCommitPath(projectId: string, commitHash: string): string {
   const params = new URLSearchParams({ view: 'canvas', commit: commitHash });
   return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;

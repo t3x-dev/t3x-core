@@ -7,6 +7,7 @@ import {
   type SchemaBindingFeedbackTone,
   SchemaRegistry,
 } from '@/components/schemas';
+import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
@@ -37,7 +38,14 @@ interface WorkspaceBindingResult {
   regenerationError?: string;
 }
 
-export function ProjectSchemasTab({ projectId, schemaBindings }: ProjectSchemasTabProps) {
+export function ProjectSchemasTab(props: ProjectSchemasTabProps) {
+  return (
+    <SchemaCatalogExperience key={props.projectId} projectId={props.projectId}>
+      <ProjectSchemaStudio {...props} />
+    </SchemaCatalogExperience>
+  );
+}
+function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabProps) {
   const searchParams = useSearchParams();
   const publishedVersions = useProjectYSchemaVersions(projectId);
   const identityManagement = useYSchemaIdentityManagement(projectId, publishedVersions.refresh);

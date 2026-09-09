@@ -753,43 +753,34 @@ describe('mcp audit scenarios', () => {
     resetProviderRegistry();
   });
 
-  it('runs extract -> query -> edit, then stops storage-backed commit writes at the MCP boundary', async () => {
+  it('keeps compatibility mutation names behind the API Transition boundary', async () => {
     const callTool = getCallTool();
 
-    const project = expectOkJson(
-      await callTool('t3x_admin', { action: 'create_project', name: 'Scenario A1/A2' })
-    );
-
-    const firstExtract = expectOkJson(
-      await callTool('t3x_extract', {
-        project_id: project.project_id,
-        text: 'Plan a Tokyo trip with budget 5000',
-      })
-    );
-    expect(firstExtract.is_new_conversation).toBe(true);
-
-    const firstDraft = expectOkJson(
-      await callTool('t3x_query', { target: 'draft', id: firstExtract.draft_id })
-    );
-    expect(firstDraft.id).toBe(firstExtract.draft_id);
-
-    const edited = expectOkJson(
-      await callTool('t3x_edit', {
-        draft_id: firstExtract.draft_id,
-        yops: 'yops:\n  - set:\n      path: trip/budget\n      value: 7000',
-        if_revision: firstDraft.revision,
-      })
-    );
-    expect(edited.applied).toBe(true);
-
-    const commit = await callTool('t3x_commit', {
-      project_id: project.project_id,
-      draft_id: firstExtract.draft_id,
-      message: 'Initial snapshot',
+    const extract = await callTool('t3x_extract', {
+      project_id: 'prj_scenario',
+      workspace_id: 'ws_scenario',
+      source_thread_id: 'src_scenario',
+      turn_hashes: ['sha256:turn'],
     });
+    const edit = await callTool('t3x_edit', {
+      project_id: 'prj_scenario',
+      workspace_id: 'ws_scenario',
+      request_id: 'req_edit_scenario',
+      operations: [{ op: 'set', path: '/budget', value: 7000 }],
+    });
+    const commit = await callTool('t3x_commit', {
+      project_id: 'prj_scenario',
+      transition_id: 'trn_scenario',
+      request_id: 'req_commit_scenario',
+      decision_digest: 'sha256:decision',
+      expected_head: null,
+    });
+
+    expect(extract.isError).toBe(true);
+    expect(getText(extract)).toContain('t3x_extract requires T3X_MCP_BACKEND=api');
+    expect(JSON.parse(getText(edit)).error.code).toBe('API_BACKEND_REQUIRED');
     expect(commit.isError).toBe(true);
-    expect(getText(commit)).toContain('t3x_commit requires T3X_MCP_BACKEND=api');
-    expect(getText(commit)).toContain('shared API/application command');
+    expect(JSON.parse(getText(commit)).error.code).toBe('API_BACKEND_REQUIRED');
   });
 
   it('runs diff through tools/call over seeded commits', async () => {
@@ -923,25 +914,27 @@ describe('mcp audit scenarios', () => {
     expect(getText(executed)).toContain('t3x_merge execute requires T3X_MCP_BACKEND=api');
   });
 
-  it('distinguishes empty text from non-extractable text through tools/call', async () => {
+  it('rejects retired raw-text extraction and empty canonical turn selections', async () => {
     const callTool = getCallTool();
 
-    const project = expectOkJson(
-      await callTool('t3x_admin', { action: 'create_project', name: 'Scenario A5' })
+    const legacyRawText = await callTool('t3x_extract', {
+      project_id: 'prj_scenario',
+      text: 'Plan a Tokyo trip',
+    });
+    expect(legacyRawText.isError).toBe(true);
+    expect(getText(legacyRawText)).toContain(
+      'project_id, workspace_id, source_thread_id, and turn_hashes are required'
     );
 
-    const emptyText = await callTool('t3x_extract', {
-      project_id: project.project_id,
-      text: '',
+    const emptyTurnSelection = await callTool('t3x_extract', {
+      project_id: 'prj_scenario',
+      workspace_id: 'ws_scenario',
+      source_thread_id: 'src_scenario',
+      turn_hashes: [],
     });
-    expect(emptyText.isError).toBe(true);
-    expect(getText(emptyText)).toContain('"text" is required');
-
-    const noExtractableContent = await callTool('t3x_extract', {
-      project_id: project.project_id,
-      text: '!!! ???',
-    });
-    expect(noExtractableContent.isError).toBe(true);
-    expect(getText(noExtractableContent)).toContain('No extractable content found');
+    expect(emptyTurnSelection.isError).toBe(true);
+    expect(getText(emptyTurnSelection)).toContain(
+      'project_id, workspace_id, source_thread_id, and turn_hashes are required'
+    );
   });
 });

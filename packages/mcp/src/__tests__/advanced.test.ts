@@ -706,83 +706,10 @@ describe('t3x_admin handler', () => {
     expect(result.content[0].text).toContain('Missing or invalid "action"');
   });
 
-  it('create_leaf: returns error when project_id is missing', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      commit_hash: 'sha256:aaa',
-      leaf_type: 'tweet',
-    });
+  it('create_leaf: retires the command without requiring credentials or creating records', async () => {
+    const result = await adminHandler({ action: 'create_leaf' });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"project_id" is required');
-  });
-
-  it('create_leaf: returns error when commit_hash is missing', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      project_id: 'proj_test1',
-      leaf_type: 'tweet',
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"commit_hash" is required');
-  });
-
-  it('create_leaf: returns error when leaf_type is missing', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      project_id: 'proj_test1',
-      commit_hash: 'sha256:aaa',
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"leaf_type" is required');
-  });
-
-  it('create_leaf: returns error for invalid leaf_type', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      project_id: 'proj_test1',
-      commit_hash: 'sha256:aaa',
-      leaf_type: 'podcast',
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Invalid leaf type');
-  });
-
-  it('create_leaf: returns error when commit is not found', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      project_id: 'proj_test1',
-      commit_hash: 'sha256:missing',
-      leaf_type: 'tweet',
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Commit not found');
-  });
-
-  it('create_leaf: creates a leaf from an existing commit', async () => {
-    const result = await adminHandler({
-      action: 'create_leaf',
-      project_id: 'proj_test1',
-      commit_hash: 'sha256:aaa',
-      leaf_type: 'tweet',
-      title: 'Trip Summary',
-      constraints: [
-        {
-          type: 'require',
-          match_mode: 'exact',
-          value: 'Tokyo',
-        },
-      ],
-      config: { model: 'gpt-5.4' },
-    });
-
-    expect(result.isError).toBeUndefined();
-    const data = JSON.parse(result.content[0].text);
-    expect(data.leaf_id).toBe('leaf_new');
-    expect(data.commit_hash).toBe('sha256:aaa');
-    expect(data.type).toBe('tweet');
-    expect(data.project_id).toBe('proj_test1');
-    expect(data.constraints).toHaveLength(1);
-    expect(data.config).toEqual({ model: 'gpt-5.4' });
+    expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
   });
 
   // -- create_project --

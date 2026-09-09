@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "patternVersion": 1,
+  "scope": [
+    "apps/api/src",
+    "apps/mcp/src",
+    "apps/runner/src",
+    "packages/api/src",
+    "packages/core/src",
+    "packages/mcp/src"
+  ],
+  "excludedAdapterRoots": [
+    "packages/api/src/lib/legacy-generation-model-adapter.ts",
+    "packages/core/src/providers/embedding",
+    "packages/core/src/providers/llm"
+  ],
+  "totalObservedCalls": 29,
+  "sources": [
+    {
+      "file": "packages/api/src/lib/proposal-generation.ts",
+      "feature": "proposal-generation",
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Governed Proposal generation uses trusted project scope, pre-invocation admission, provider-reported usage, and terminal receipts."
+    },
+    {
+      "file": "packages/api/src/lib/inference-provider.ts",
+      "feature": "provider-neutral-inference-adapter",
+      "status": "migrated",
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "Provider methods are invoked only after shared admission and produce normalized terminal receipts."
+    },
+    {
+      "file": "packages/api/src/lib/source-chat-draft-reply.ts",
+      "feature": "source-chat-draft-reply",
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Structured Source Chat drafts use the shared admission and terminal receipt lifecycle."
+    },
+    {
+      "file": "packages/api/src/routes/chat.openapi.ts",
+      "feature": "generation-chat",
+      "status": "migrated",
+      "coveredCount": 7,
+      "observedCount": 7,
+      "note": "Non-streaming and provider-specific streaming transports share the execution lifecycle."
+    },
+    {
+      "file": "packages/core/src/extractors/v2/compress.ts",
+      "feature": "extraction-compression",
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "The API compression composition binds the resolved provider before Core execution and preserves typed admission and uncertain terminal failures."
+    },
+    {
+      "file": "packages/core/src/extractors/v2/pipeline.ts",
+      "feature": "extraction-pipeline",
+      "status": "migrated",
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "All API and operation entry points bind resolved extraction providers to the shared inference runtime before entering Core."
+    },
+    {
+      "file": "packages/core/src/leaf/constraintSuggester.ts",
+      "feature": "constraint-suggestion",
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Hosted suggestion and reverse-learning routes bind each selected or fallback provider to canonical admission and terminal receipts."
+    },
+    {
+      "file": "packages/core/src/leaf/generate.ts",
+      "feature": "leaf-generation",
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Hosted operation and comparison callers admit generation before entering Core; the external MCP caller remains deployment-local."
+    },
+    {
+      "file": "packages/core/src/leaf/multi-round-generate.ts",
+      "feature": "multi-round-leaf-generation",
+      "status": "migrated",
+      "coveredCount": 4,
+      "observedCount": 4,
+      "note": "Each hosted refinement round executes through the provider binding and produces its own terminal receipt."
+    },
+    {
+      "file": "packages/core/src/pipeline/ambiguityDetector.ts",
+      "feature": "ambiguity-detection",
+      "status": "dormant-core-library",
+      "observedCount": 1,
+      "note": "Provider-injected Core algorithm with no production server caller. A guard rejects mounting it without first adding an application inference binding."
+    },
+    {
+      "file": "packages/core/src/pipeline/driftDetector.ts",
+      "feature": "drift-detection",
+      "status": "dormant-core-library",
+      "observedCount": 1,
+      "note": "Provider-injected Core algorithm with no production server caller. A guard rejects mounting it without first adding an application inference binding."
+    },
+    {
+      "file": "packages/core/src/providers/registry.ts",
+      "feature": "provider-connection-test",
+      "status": "provider-administration",
+      "observedCount": 1
+    },
+    {
+      "file": "packages/core/src/semantic/businessGate.ts",
+      "feature": "business-gate",
+      "status": "migrated",
+      "coveredCount": 1,
+      "observedCount": 1,
+      "note": "Each hosted LLM business rule receives its own admission and terminal receipt through a dedicated application binding."
+    },
+    {
+      "file": "packages/core/src/semantic/gate.ts",
+      "feature": "semantic-gate",
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Hosted semantic review uses a dedicated application binding; the dormant coverage method inherits the same bound provider when invoked."
+    }
+  ]
+}

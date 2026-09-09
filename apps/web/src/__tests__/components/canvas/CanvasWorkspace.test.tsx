@@ -134,13 +134,6 @@ vi.mock('@/components/canvas/NodeModal', async () => {
   };
 });
 
-vi.mock('@/components/draft/DraftQuickSheet', async () => {
-  const React = await import('react');
-  return {
-    DraftQuickSheet: () => React.createElement('div', { 'data-testid': 'draft-quick-sheet' }),
-  };
-});
-
 vi.mock('@/components/import/ImportDialog', async () => {
   const React = await import('react');
   return {
@@ -424,16 +417,16 @@ describe('CanvasWorkspace initial fit view', () => {
       ...unitNode('sha256:parent'),
       data: { ...unitNode('sha256:parent').data, commitHash: 'sha256:parent' },
     };
-    const draft = {
-      ...unitNode('draft_1'),
+    const pending = {
+      ...unitNode('conv_pending'),
       data: {
-        ...unitNode('draft_1').data,
+        ...unitNode('conv_pending').data,
         branchType: undefined,
-        commitStatus: 'draft' as const,
-        draftId: 'draft_1',
+        commitStatus: 'staging' as const,
+        conversationId: 'conv_pending',
       },
     };
-    const nodes = [committed, draft];
+    const nodes = [committed, pending];
     useCanvasStore.setState({
       edges: [],
       hasDbPositions: true,
@@ -455,6 +448,15 @@ describe('CanvasWorkspace initial fit view', () => {
   });
 
   it('reanchors an open commit action panel after dragging the selected node', async () => {
+    useCanvasStore.setState({
+      nodes: useCanvasStore.getState().nodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          leaves: [{ id: 'legacy', type: 'article', title: 'Legacy output' }],
+        },
+      })),
+    });
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
     render(<CanvasWorkspace projectName="Trust Gate" />);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -485,15 +487,15 @@ describe('CanvasWorkspace initial fit view', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(260);
     });
-    expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
+    expect(screen.getByTestId('commit-action-panel')).toBeInTheDocument();
 
-    const firstPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
+    const firstPanel = screen.getByTestId('commit-action-panel');
     expect(firstPanel).toHaveStyle({ left: '200px', top: '308px' });
 
     act(() => {
       flowMocks.reactFlowProps?.onNodeDragStart?.({ target: clickTarget }, node);
     });
-    expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('commit-action-panel')).not.toBeInTheDocument();
 
     const dropTarget = document.createElement('div');
     dropTarget.className = 'react-flow__node';
@@ -517,7 +519,7 @@ describe('CanvasWorkspace initial fit view', () => {
       );
     });
 
-    const reanchoredPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
+    const reanchoredPanel = screen.getByTestId('commit-action-panel');
     expect(reanchoredPanel).toHaveStyle({ left: '460px', top: '468px' });
   });
 
@@ -553,10 +555,9 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Create Leaf From This Version' })).toHaveAttribute(
-      'data-intro-target',
-      'canvas-action-new-leaf'
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Create Leaf From This Version' })
+    ).not.toBeInTheDocument();
   });
 
   it('closes stale commit-mode state for a committed node without rendering the modal', async () => {

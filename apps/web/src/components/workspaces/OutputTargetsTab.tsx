@@ -1,324 +1,151 @@
-import {
-  ArrowRight,
-  FileText,
-  GitCommitHorizontal,
-  Leaf,
-  Settings2,
-  ShieldCheck,
-} from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Download, FileText, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatUserFacingError } from '@/domain/format/errors';
-import { buildOutputTargetLeafInput } from '@/domain/workspaces/outputTargetLeaf';
-import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
-import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
-import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
+import { useWorkspaceDelivery } from '@/hooks/workspaces/useWorkspaceDelivery';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 
 export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate }) {
-  const targets = candidate.outputTargets;
-  const committedHash = candidate.lastCommitHash ?? null;
-  const { create: createLeaf } = useCreateLeaf();
-  const [selectedTargetId, setSelectedTargetId] = useState(() => targets[0]?.id ?? '');
-  const [creatingTargetId, setCreatingTargetId] = useState<string | null>(null);
-  const [createdLeafByTargetId, setCreatedLeafByTargetId] = useState<Record<string, string>>({});
-  const [leafError, setLeafError] = useState<string | null>(null);
-  const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? targets[0];
-  const createdLeafId = selectedTarget ? createdLeafByTargetId[selectedTarget.id] : undefined;
-  const creating = creatingTargetId === selectedTarget?.id;
-  const createLeafTitle = getCreateLeafTitle({
-    committedHash,
-    createdLeafId,
-    creating,
-  });
-
-  const handleCreateLeaf = async () => {
-    if (!selectedTarget || !committedHash || creating || createdLeafId) return;
-
-    setCreatingTargetId(selectedTarget.id);
-    setLeafError(null);
-    try {
-      const leaf = await createLeaf(buildOutputTargetLeafInput(candidate, selectedTarget.id));
-      setCreatedLeafByTargetId((current) => ({ ...current, [selectedTarget.id]: leaf.id }));
-      dispatchLeafChanged({
-        commitHash: committedHash,
-        leafId: leaf.id,
-        projectId: candidate.projectId,
-        reason: 'created',
-      });
-    } catch (error) {
-      setLeafError(formatUserFacingError(error, 'Could not create leaf.'));
-    } finally {
-      setCreatingTargetId(null);
-    }
-  };
-
-  if (!selectedTarget) {
-    return (
-      <div className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-subtle)] p-6 text-center text-sm text-[var(--text-secondary)]">
-        No leaf config yet.
-      </div>
-    );
-  }
-
   return (
-    <div className="grid min-h-[520px] gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside
-        aria-label="Leaf draft configs"
-        className="flex min-h-0 flex-col rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)]"
-      >
-        <div className="border-b border-[var(--stroke-divider)] px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Leaf drafts</h3>
-            <Badge variant="leaf">{targets.length} config</Badge>
-          </div>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            Prepared now, created after commit.
-          </p>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {targets.map((target) => {
-            const selected = target.id === selectedTarget.id;
-            return (
-              <button
-                aria-current={selected ? 'true' : undefined}
-                className={cn(
-                  'grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-md border px-3 py-3 text-left transition-colors',
-                  selected
-                    ? 'border-[var(--accent-leaf)]/40 bg-[var(--accent-leaf-soft)]'
-                    : 'border-transparent bg-transparent hover:border-[var(--stroke-divider)] hover:bg-[var(--surface-card)]'
-                )}
-                key={target.id}
-                onClick={() => setSelectedTargetId(target.id)}
-                type="button"
-              >
-                <span className="mt-0.5 flex size-8 items-center justify-center rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--surface-card)] text-[var(--accent-leaf)]">
-                  <Leaf className="size-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
-                    {target.title}
-                  </span>
-                  <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                    <span>{target.leafType ?? target.type}</span>
-                    <span aria-hidden="true">/</span>
-                    <span>{target.format}</span>
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
-      <section
-        aria-label="Leaf config detail"
-        className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]"
-      >
-        <div className="flex min-h-0 flex-col rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">
-                  {selectedTarget.title}
-                </h3>
-                <Badge variant="pending">Pre-commit config</Badge>
-              </div>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Define the Leaf that will be created from the committed YOps result.
-              </p>
-            </div>
-            <Button
-              disabled={!committedHash || creating || Boolean(createdLeafId)}
-              onClick={handleCreateLeaf}
-              size="sm"
-              title={createLeafTitle}
-              type="button"
-              variant="leaf"
-            >
-              <Leaf className="size-4" />
-              {createdLeafId
-                ? 'Leaf created'
-                : creating
-                  ? 'Creating leaf'
-                  : committedHash
-                    ? 'Create Leaf'
-                    : 'Create after commit'}
-            </Button>
-          </div>
-          {leafError ? (
-            <div
-              className="border-t border-[var(--stroke-divider)] bg-[var(--status-error-muted)] px-4 py-2 text-sm text-[var(--status-error)]"
-              role="alert"
-            >
-              {leafError}
-            </div>
-          ) : null}
-          {createdLeafId ? (
-            <output className="block border-t border-[var(--stroke-divider)] bg-[var(--accent-leaf-soft)] px-4 py-2 text-sm font-medium text-[var(--accent-leaf)]">
-              Created leaf {createdLeafId}
-            </output>
-          ) : null}
-
-          <div className="grid gap-3 p-4">
-            <ConfigRow
-              icon={<GitCommitHorizontal className="size-4" />}
-              label="Commit gate"
-              value={
-                candidate.lastCommitHash
-                  ? `Ready from ${candidate.lastCommitHash}`
-                  : 'Waiting for workspace commit'
-              }
-            />
-            <ConfigRow
-              icon={<FileText className="size-4" />}
-              label="Leaf type"
-              value={`${selectedTarget.leafType ?? selectedTarget.type} / ${selectedTarget.format}`}
-            />
-            <ConfigRow
-              icon={<Settings2 className="size-4" />}
-              label="Source scope"
-              value={selectedTarget.sourceScope ?? 'Committed candidate tree and source refs.'}
-            />
-
-            <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)] p-3">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                <Settings2 className="size-3.5" />
-                Generation instruction
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--text-primary)]">
-                {selectedTarget.instruction ??
-                  'Generate the configured Leaf from the committed state.'}
-              </p>
-            </div>
-
-            <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)] p-3">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                <ShieldCheck className="size-3.5" />
-                Constraints
-              </div>
-              <ul className="mt-2 grid gap-2">
-                {(selectedTarget.constraints ?? ['Use committed state only.']).map((constraint) => (
-                  <li className="flex gap-2 text-sm text-[var(--text-primary)]" key={constraint}>
-                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent-leaf)]" />
-                    <span>{constraint}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <LeafPreview target={selectedTarget} candidate={candidate} committedHash={committedHash} />
-      </section>
-    </div>
+    <WorkspaceDeliveryPanel key={`${candidate.projectId}:${candidate.id}`} candidate={candidate} />
   );
 }
-
-function getCreateLeafTitle({
-  committedHash,
-  createdLeafId,
-  creating,
-}: {
-  committedHash: string | null;
-  createdLeafId?: string;
-  creating: boolean;
-}): string {
-  if (createdLeafId) return `Leaf ${createdLeafId} has already been created.`;
-  if (creating) return 'Creating a Leaf from the committed workspace state.';
-  if (!committedHash) return 'Commit this workspace before creating a Leaf.';
-  return 'Create a Leaf from the committed workspace state.';
-}
-
-function ConfigRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="grid gap-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)] px-3 py-2">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-        {icon}
-        {label}
-      </div>
-      <p className="text-sm font-medium text-[var(--text-primary)]">{value}</p>
-    </div>
+function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }) {
+  const { data, pending, error, notice, deliver, refresh } = useWorkspaceDelivery(
+    candidate.projectId,
+    candidate.id,
+    candidate.revision
   );
-}
-
-function LeafPreview({
-  candidate,
-  committedHash,
-  target,
-}: {
-  candidate: WorkspaceCandidate;
-  committedHash: string | null;
-  target: WorkspaceOutputTarget;
-}) {
+  const [selectedId, setSelectedId] = useState('t3x:committed-state');
+  const [format, setFormat] = useState<'json' | 'yaml'>('yaml');
+  const selected = data?.targets.find((target) => target.id === selectedId) ?? data?.targets[0];
+  const effectiveFormat = selected?.configurable ? format : selected?.format;
   return (
-    <aside
-      aria-label="Leaf output preview"
-      className="flex min-h-0 flex-col rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)]"
+    <section
+      aria-label="Workspace delivery"
+      className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]"
     >
-      <div className="border-b border-[var(--stroke-divider)] px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Leaf preview</h3>
-          <Badge variant="leaf">Draft</Badge>
+      <aside className="rounded-md border border-[var(--stroke-divider)] p-3">
+        <h3 className="mb-3 text-sm font-semibold">Delivery targets</h3>
+        <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={refresh}>
+          Refresh
+        </Button>
+        {data?.targets.map((target) => (
+          <button
+            key={target.id}
+            type="button"
+            disabled={pending}
+            aria-current={selected?.id === target.id ? 'true' : undefined}
+            onClick={() => setSelectedId(target.id)}
+            className={cn(
+              'mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm',
+              selected?.id === target.id
+                ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
+                : 'text-[var(--text-secondary)]'
+            )}
+          >
+            <FileText className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{target.title}</span>
+            {target.mode === 'legacy' && <Badge variant="pending">Legacy</Badge>}
+          </button>
+        ))}
+      </aside>
+      <div className="min-w-0 space-y-4">
+        <div className="rounded-md border border-[var(--stroke-divider)] p-4">
+          <h3 className="text-base font-semibold">{selected?.title ?? 'Delivery'}</h3>
+          {!data && !error && <p className="mt-3 text-sm">Loading delivery targets…</p>}
+          {selected?.mode === 'legacy' ? (
+            <p className="mt-3 text-sm text-[var(--text-secondary)]">
+              {selected.reason} Select Committed State to download YAML or JSON.
+            </p>
+          ) : (
+            data && (
+              <>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Complete committed State · file download
+                </p>
+                <p className="mt-3 break-all font-mono text-xs">
+                  {data.commitDigest ?? 'Commit this workspace before preparing a delivery.'}
+                </p>
+                {selected?.configurable && (
+                  <label className="mt-4 flex items-center gap-3 text-sm">
+                    Format
+                    <select
+                      aria-label="Delivery format"
+                      disabled={pending}
+                      className="rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-3 py-1.5"
+                      value={format}
+                      onChange={(event) => setFormat(event.target.value as 'json' | 'yaml')}
+                    >
+                      <option value="yaml">YAML</option>
+                      <option value="json">JSON</option>
+                    </select>
+                  </label>
+                )}
+                <Button
+                  className="mt-4"
+                  type="button"
+                  disabled={
+                    pending ||
+                    !data.commitDigest ||
+                    (effectiveFormat !== 'json' && effectiveFormat !== 'yaml')
+                  }
+                  onClick={() =>
+                    selected &&
+                    (effectiveFormat === 'yaml' || effectiveFormat === 'json') &&
+                    deliver(selected.id, effectiveFormat)
+                  }
+                >
+                  {pending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Download className="size-4" />
+                  )}
+                  {pending ? 'Preparing…' : 'Download State'}
+                </Button>
+              </>
+            )
+          )}
+          {error && (
+            <p role="alert" className="mt-3 text-sm text-[var(--status-error)]">
+              {error}
+            </p>
+          )}
+          {notice && <output className="mt-3 block text-sm">{notice}</output>}
         </div>
-        <p className="mt-1 text-xs text-[var(--text-secondary)]">
-          Mirrors the Chat Leaf workspace.
-        </p>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="rounded-md border border-[var(--accent-leaf)]/30 bg-[var(--surface-panel)] p-3">
-          <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
-              <Leaf className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                {target.previewTitle ?? target.title}
-              </p>
-              <p className="text-xs text-[var(--text-secondary)]">
-                {target.leafType ?? target.type} artifact
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
-            {target.previewBody ??
-              'Leaf output will be generated from the committed workspace state.'}
+        <div className="rounded-md border border-[var(--stroke-divider)] p-4">
+          <h3 className="text-sm font-semibold">Delivery history</h3>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+            Files prepared here. Browser save completion is not observable.
           </p>
-        </div>
-
-        <div className="grid gap-2 text-sm">
-          <PreviewStep label="YOps result" value={candidate.title} />
-          <PreviewStep label="Branch" value={candidate.targetBranch} />
-          <PreviewStep label="Format" value={target.format.toUpperCase()} />
-        </div>
-
-        <div className="mt-auto rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-            <GitCommitHorizontal className="size-4 text-[var(--accent-commit)]" />
-            {committedHash ? 'Commit ready' : 'Commit first'}
-            <ArrowRight className="size-4 text-[var(--text-tertiary)]" />
-            <Leaf className="size-4 text-[var(--accent-leaf)]" />
-          </div>
-          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-            {committedHash
-              ? `Leaf creation can cite ${committedHash}.`
-              : 'Leaf creation stays after commit so output can cite a stable state hash.'}
-          </p>
+          {data?.receipts.length === 0 && (
+            <p className="mt-4 text-sm text-[var(--text-secondary)]">No deliveries yet.</p>
+          )}
+          <ul className="mt-3 divide-y divide-[var(--stroke-divider)]">
+            {data?.receipts.map((receipt) => (
+              <li key={receipt.id} className="py-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {receipt.format.toUpperCase()} · attempt {receipt.attempt}
+                  </span>
+                  <span>
+                    {receipt.status === 'prepared' ? 'File prepared' : 'Preparation failed'}
+                  </span>
+                </div>
+                <p className="mt-1 break-all font-mono text-[var(--text-secondary)]">
+                  {receipt.commitDigest}
+                </p>
+                {receipt.artifactDigest && (
+                  <p className="mt-1 break-all font-mono text-[var(--text-tertiary)]">
+                    {receipt.artifactDigest}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-    </aside>
-  );
-}
-
-function PreviewStep({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2">
-      <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
-      <span className="truncate text-sm font-medium text-[var(--text-primary)]">{value}</span>
-    </div>
+    </section>
   );
 }

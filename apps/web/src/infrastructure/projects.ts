@@ -2,7 +2,13 @@
  * Projects CRUD API
  */
 
+import type {
+  ChangeProjectVisibilityInput,
+  ChangeProjectVisibilityResult,
+  CreateProjectInput,
+} from '@t3x-dev/api-client';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+import { getSharedApiClient } from './sharedApiClient';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
 export async function listProjects(
@@ -23,12 +29,13 @@ export async function getProject(projectId: string): Promise<ProjectDetail> {
 export async function createProject(
   name: string,
   metadata?: Record<string, unknown>,
-  namespace?: string
+  namespace?: string,
+  starter?: CreateProjectInput['starter']
 ): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, metadata, namespace }),
+    body: JSON.stringify({ name, metadata, namespace, starter }),
   });
   return handleResponse<Project>(res);
 }
@@ -70,6 +77,16 @@ export async function updateProject(
     body: JSON.stringify(payload),
   });
   return handleResponse<Project>(res);
+}
+
+export type ChangeProjectVisibilityPayload = ChangeProjectVisibilityInput;
+export type ChangeProjectVisibilityResponse = ChangeProjectVisibilityResult;
+
+export async function changeProjectVisibility(
+  projectId: string,
+  payload: ChangeProjectVisibilityPayload
+): Promise<ChangeProjectVisibilityResponse> {
+  return getSharedApiClient().changeProjectVisibility(projectId, payload);
 }
 
 // ============================================================================

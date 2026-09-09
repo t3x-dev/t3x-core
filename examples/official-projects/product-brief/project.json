@@ -1,0 +1,40 @@
+{
+  "slug": "product-brief",
+  "title": "Product brief",
+  "description": "Turn a problem into reviewable requirements.",
+  "license": "Apache-2.0",
+  "tags": ["planning", "work", "ecosystem:t3x", "prd"],
+  "companionSchema": {
+    "canonicalName": "t3x/product-brief",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "product": {
+      "title": "Release checklist",
+      "problem": "Release decisions need explicit acceptance criteria."
+    },
+    "requirements": {
+      "export": {
+        "title": "Export a reviewed revision",
+        "acceptance": "The exported file identifies the reviewed commit.",
+        "priority": "must"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Clarify the export acceptance criterion",
+    "value": {
+      "product": {
+        "title": "Release checklist",
+        "problem": "Release decisions need explicit acceptance criteria."
+      },
+      "requirements": {
+        "export": {
+          "title": "Export a reviewed revision",
+          "acceptance": "JSON export preserves the committed requirements and identifies the selected revision.",
+          "priority": "must"
+        }
+      }
+    }
+  }
+}

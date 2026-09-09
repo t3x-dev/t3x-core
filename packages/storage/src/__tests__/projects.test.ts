@@ -47,6 +47,7 @@ describe('Projects Storage', () => {
       expect(result).toBeDefined();
       expect(result.projectId).toMatch(/^proj_[a-f0-9]+$/);
       expect(result.name).toBe('My Project');
+      expect(result.visibility).toBe('private');
       expect(result.createdAt).toBeInstanceOf(Date);
     });
 
@@ -61,6 +62,19 @@ describe('Projects Storage', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].name).toBe('DB Test Project');
       expect(rows[0].projectId).toBe(result.projectId);
+    });
+
+    it('uses a caller-selected ID for reservation-safe creation', async () => {
+      const result = await insertProject(db, {
+        projectId: 'proj_reserved_capacity_slot',
+        name: 'Reserved project',
+      });
+
+      expect(result.projectId).toBe('proj_reserved_capacity_slot');
+      expect(await findProjectById(db, result.projectId)).toMatchObject({
+        projectId: 'proj_reserved_capacity_slot',
+        name: 'Reserved project',
+      });
     });
 
     it('stores metadata as JSON', async () => {
@@ -78,6 +92,17 @@ describe('Projects Storage', () => {
       const metadata = JSON.parse(rows[0].metadataJson!);
       expect(metadata.tags).toEqual(['test', 'demo']);
       expect(metadata.priority).toBe(1);
+    });
+
+    it('rejects visibility values outside the explicit contract', async () => {
+      await expect(
+        db.insert(projects).values({
+          projectId: 'proj_invalid_visibility',
+          name: 'Invalid visibility',
+          createdAt: new Date(),
+          visibility: 'discoverable' as never,
+        })
+      ).rejects.toThrow();
     });
   });
 

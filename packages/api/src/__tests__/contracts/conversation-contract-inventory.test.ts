@@ -133,6 +133,16 @@ describe('conversation-adjacent contract inventory', () => {
     }
   });
 
+  it('contains no legacy conversation workflow authority', () => {
+    expect(
+      inventory.contracts.filter(
+        (contract) =>
+          contract.owner === 'legacy_conversation_workflow' ||
+          contract.compatibility === 'compatibility'
+      )
+    ).toEqual([]);
+  });
+
   it('matches the exact routes implemented by every audited capability module', () => {
     const implemented = inventory.route_modules.flatMap((sourceFile) => {
       const source = readFileSync(repositoryPath(sourceFile), 'utf8');

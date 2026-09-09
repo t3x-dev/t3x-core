@@ -5,12 +5,8 @@ import {
   FileUp,
   GitBranch,
   GitCommitHorizontal,
-  ImagePlus,
-  Link,
   MessageSquareText,
-  Plus,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GenerationComposer } from '@/components/generation/GenerationComposer';
@@ -72,8 +68,6 @@ const SOURCE_CHAT_TURN_PIN_TYPE = 'conversation_turn' as const;
 const IMPORT_ACTIONS = [
   { label: 'Import doc', icon: FileUp },
   { label: 'Paste text', icon: ClipboardPaste },
-  { label: 'Add URL', icon: Link },
-  { label: 'Upload PDF/doc', icon: ImagePlus },
 ];
 
 const SOURCE_SEGMENT_EDITING_DISABLED_TITLE =
@@ -499,34 +493,12 @@ function SourceBundlePanel({
             {summarizeSourceBundle(sources)}
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            aria-label="Add manual note source"
-            disabled
-            size="icon-sm"
-            title="Manual note sources need a persisted workspace source endpoint before enabling."
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Plus className="size-4" />
-          </Button>
-          <Button
-            aria-label="Upload document source"
-            size="icon-sm"
-            onClick={onUploadClick}
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Upload className="size-4" />
-          </Button>
-        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-b border-[var(--stroke-divider)] p-2 sm:grid-cols-4 lg:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2 border-b border-[var(--stroke-divider)] p-2">
         {IMPORT_ACTIONS.map((action) => {
           const Icon = action.icon;
-          const uploadsMaterial =
-            action.label === 'Import doc' || action.label === 'Upload PDF/doc';
+          const uploadsMaterial = action.label === 'Import doc';
           const pastesText = action.label === 'Paste text';
           const enabled = uploadsMaterial || pastesText;
 
@@ -654,7 +626,7 @@ function ParsedTextPreview({
   if (!source) {
     return (
       <div className="flex min-h-64 items-center justify-center p-6 text-sm text-[var(--text-secondary)]">
-        Import a document, image, PDF, URL, or chat turn to create a parsed text preview.
+        Import a document, image, PDF, pasted text, or chat turn to create a parsed text preview.
       </div>
     );
   }
@@ -1486,9 +1458,6 @@ function getImportActionTitle(
   if (materialUploading && enabled) return 'Source import is already in progress.';
   if (label === 'Paste text') {
     return 'Paste text as a source material.';
-  }
-  if (label === 'Add URL') {
-    return 'URL sources need a persisted workspace source endpoint before enabling.';
   }
   return undefined;
 }

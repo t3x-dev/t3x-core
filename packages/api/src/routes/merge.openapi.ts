@@ -36,8 +36,17 @@ import {
   prepareRepositoryYOpsMerge,
   RepositoryMergeCommitNotFoundError,
   RepositoryMergeInvalidError,
+  RepositoryStateDecisionDeniedError,
+  TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
+import {
+  resolveCompatibilityTransitionWriteAuthority,
+  TransitionPolicyBindingRequiredError,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+  toTrustedTransitionAuthor,
+  transitionApiKey,
+} from '../lib/transition-authority';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
@@ -215,8 +224,13 @@ Executes a frame merge after the user has made all resolution decisions.
       description: 'Source or target commit not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Project access or Transition capability denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     409: {
-      description: 'Merge commit does not extend the target branch head',
+      description:
+        'Merge commit does not extend the target branch head or a required machine policy binding is missing',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -234,12 +248,20 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const { project_id, source_hash, target_hash, prepared, decisions, message, branch } =
     c.req.valid('json');
 
-  const author = await getAuthorFromContext(c);
-
   try {
     const db = await getDB();
     const accessResult = await assertProjectAccess(c, db, project_id);
     if (accessResult instanceof Response) return accessResult;
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: project_id,
+      refName: branch,
+    });
+    const author = toTrustedTransitionAuthor(
+      writeAuthority.principal,
+      await getAuthorFromContext(c)
+    );
     const ctx = await buildPipelineContext(c, project_id);
     const { commit: savedCommit, merge_summary: mergeSummary } = await collectResult(
       runOperation(
@@ -253,6 +275,12 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
           message,
           branch,
           author,
+          writeAuthority: {
+            actor: writeAuthority.principal.actor,
+            ...(writeAuthority.policyBinding === null
+              ? {}
+              : { policyBinding: writeAuthority.policyBinding }),
+          },
         },
         ctx
       )
@@ -300,6 +328,23 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       201
     );
   } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
+    }
+    if (
+      error instanceof TransitionPolicyBindingRequiredError ||
+      error instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', error.message, { protocol_code: error.code });
+    }
+    if (error instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', error.message, {
+        failures: error.failures,
+      });
+    }
     if (error instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'CONFLICT', error.message);
     }
@@ -724,8 +769,6 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
   const prepared = JSON.parse(draft.preparedJson) as MergeResult;
 
-  const author = await getAuthorFromContext(c);
-
   // Explicit commit input wins, then the durable draft decision. The final
   // fallback preserves behavior for undecided, conflict-free legacy drafts.
   const mergeDecisions: MergeDecision = decisionsInput ??
@@ -755,7 +798,16 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   }
 
   try {
-    const actorKind = author.type;
+    const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId: draft.projectId,
+      refName: targetBranch,
+    });
+    const author = toTrustedTransitionAuthor(
+      writeAuthority.principal,
+      await getAuthorFromContext(c)
+    );
     let merged!: Awaited<ReturnType<typeof commitRepositoryYOpsMerge>>;
     await (db as any).transaction(async (tx: typeof db) => {
       // The exact execution decision is part of the durable draft record, even
@@ -769,10 +821,11 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         sourceDigest: draft.sourceHash,
         targetDigest: draft.targetHash,
         decisions: mergeDecisions,
-        actor: {
-          kind: actorKind,
-          id: author.id ?? `${actorKind}:merge:${author.name?.trim() || 'anonymous'}`,
-        },
+        actor: writeAuthority.principal.actor,
+        policyBindingSource: 'server-selected',
+        ...(writeAuthority.policyBinding === null
+          ? {}
+          : { policyBinding: writeAuthority.policyBinding }),
         message,
       });
       await commitMergeDraft(tx, id);
@@ -816,6 +869,23 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    ) {
+      return errorResponse(c, 'FORBIDDEN', error.message, { protocol_code: error.code });
+    }
+    if (
+      error instanceof TransitionPolicyBindingRequiredError ||
+      error instanceof TransitionReviewStaleError
+    ) {
+      return errorResponse(c, 'CONFLICT', error.message, { protocol_code: error.code });
+    }
+    if (error instanceof RepositoryStateDecisionDeniedError) {
+      return errorResponse(c, 'DECISION_NOT_PERMITTED', error.message, {
+        failures: error.failures,
+      });
+    }
     if (error instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'CONFLICT', error.message);
     }
@@ -1037,21 +1107,7 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
 
   // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
   const _conflict = prepared.conflicts[idx];
-  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
-
-  // Record usage (fire-and-forget)
-  if (usage.inputTokens || usage.outputTokens) {
-    const db = await getDB();
-    recordUsageFireAndForget(db, {
-      user_id: getUserId(c) ?? undefined,
-      project_id: draft.projectId,
-      endpoint: 'merge_suggest',
-      model: trackedLlm.id,
-      input_tokens: usage.inputTokens,
-      output_tokens: usage.outputTokens,
-    });
-  }
 
   return c.json({ success: true as const, data: { suggestion } }, 200);
 });
@@ -1146,21 +1202,7 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   }
 
   // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
-  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
-
-  // Record usage (fire-and-forget)
-  if (usage.inputTokens || usage.outputTokens) {
-    const db = await getDB();
-    recordUsageFireAndForget(db, {
-      user_id: getUserId(c) ?? undefined,
-      project_id: draft.projectId,
-      endpoint: 'merge_suggest_frame',
-      model: trackedLlm.id,
-      input_tokens: usage.inputTokens,
-      output_tokens: usage.outputTokens,
-    });
-  }
 
   return c.json({ success: true as const, data: { suggestion } }, 200);
 });

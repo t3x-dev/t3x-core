@@ -4,8 +4,8 @@
  * createMergeDraft).
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
- * hooks. The slice retains pure state mutation (commitPendingCommit,
- * addPendingCommitFromCommit, addUnitFromUnit) and pure getters
+ * hooks. The slice retains pure state mutation (addPendingCommitFromCommit,
+ * addUnitFromUnit) and pure getters
  * (getPendingCommitBranchMode, canCreatePendingCommitFromConversation),
  * plus a new setter `appendNodeAndEdge` that these methods call after
  * the I/O resolves.

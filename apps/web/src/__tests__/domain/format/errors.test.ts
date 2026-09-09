@@ -60,6 +60,18 @@ describe('formatUserFacingError', () => {
     );
   });
 
+  it('maps hosted capacity codes preserved through command causes', () => {
+    const error = Object.assign(new Error('project_persistence failed'), {
+      cause: Object.assign(new Error('Private-project capacity is exhausted (3/3)'), {
+        code: 'PRIVATE_PROJECT_CAPACITY_EXHAUSTED',
+      }),
+    });
+
+    expect(formatUserFacingError(error)).toBe(
+      'This workspace has reached its private and unlisted project capacity. Make another project public or choose a different workspace.'
+    );
+  });
+
   it('maps raw provider invalid x-api-key errors to key replacement guidance', () => {
     expect(
       formatUserFacingError(

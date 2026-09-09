@@ -9,7 +9,7 @@
  * - DELETE /v1/api-keys/:id — Revoke an API key
  */
 
-import { type AnyDB, insertProject } from '@t3x-dev/storage';
+import { type AnyDB, insertPersonalNamespace, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -70,8 +70,15 @@ describe('API Key Routes', () => {
     // Create api_keys table (not included in the shared CREATE_TABLES_SQL)
     await testSql.unsafe(CREATE_API_KEYS_TABLE_SQL);
 
-    // Create a test project
-    const project = await insertProject(mockDB, testData.project({ name: 'API Keys Route Test' }));
+    // Create a canonically namespaced test project.
+    const namespace = await insertPersonalNamespace(mockDB, {
+      slug: 'api-key-route-owner',
+      ownerUserId: 'user_api_key_route_owner',
+    });
+    const project = await insertProject(mockDB, {
+      ...testData.project({ name: 'API Keys Route Test' }),
+      namespaceId: namespace.namespaceId,
+    });
     testProjectId = project.projectId;
   });
 

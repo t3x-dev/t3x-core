@@ -52,9 +52,15 @@ function rawMessage(error: unknown): string {
 }
 
 function rawCode(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' ? code : null;
+  let current = error;
+  const seen = new Set<object>();
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
 }
 
 export function isRefHeadIntegrityInvalid(error: unknown): boolean {
@@ -90,6 +96,18 @@ export function formatUserFacingError(
 
   if (code === 'PROVIDER_UNAVAILABLE') {
     return 'Provider is unavailable. Try again later or choose another configured provider.';
+  }
+
+  if (code === 'PRIVATE_PROJECT_CAPACITY_EXHAUSTED') {
+    return 'This workspace has reached its private and unlisted project capacity. Make another project public or choose a different workspace.';
+  }
+
+  if (code === 'PROJECT_CAPACITY_POLICY_UNAVAILABLE') {
+    return 'Private project capacity is not available for this workspace right now.';
+  }
+
+  if (code === 'PROJECT_CAPACITY_ACCOUNT_REQUIRED') {
+    return 'This workspace is not ready for private project capacity yet.';
   }
 
   if (!message) return fallback;

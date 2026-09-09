@@ -5,7 +5,6 @@
  * Supports both legacy string concatenation and template-based rendering.
  *
  * Owner: GEN-* track
- * @see docs/plans/parallel-dev-guidelines.md
  */
 
 import { escapeConstraintValue } from '../llm/sanitize';

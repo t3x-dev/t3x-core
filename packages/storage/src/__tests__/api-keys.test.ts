@@ -12,6 +12,7 @@
  * @see packages/storage/src/queries/api-keys.ts
  */
 
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -22,7 +23,9 @@ import {
   revokeApiKey,
   touchLastUsed,
 } from '../queries/api-keys';
+import { insertPersonalNamespace } from '../queries/namespaces';
 import { insertProject } from '../queries/projects';
+import { projectGrants } from '../schema-trees';
 import { createTestDB, testData } from './setup';
 
 const testApiKey = (suffix: string) => `t3xk_${suffix}`;
@@ -37,8 +40,16 @@ describe('API Keys Storage', () => {
     db = setup.db;
     cleanup = setup.cleanup;
 
-    // Create a test project for project-scoped keys
-    const project = await insertProject(db, testData.project({ name: 'API Keys Test Project' }));
+    // Create a canonically namespaced project for project-scoped keys.
+    const namespace = await insertPersonalNamespace(db, {
+      slug: 'api-keys-owner',
+      ownerUserId: 'user_api_keys_owner',
+    });
+    const project = await insertProject(db, {
+      ...testData.project({ name: 'API Keys Test Project' }),
+      ownerId: 'user_api_keys_owner',
+      namespaceId: namespace.namespaceId,
+    });
     testProjectId = project.projectId;
   });
 
@@ -112,6 +123,18 @@ describe('API Keys Storage', () => {
 
       expect(result.principal_kind).toBe('agent');
       expect(result.transition_scopes).toEqual(['transition:propose', 'transition:verify']);
+      const grants = await db
+        .select()
+        .from(projectGrants)
+        .where(eq(projectGrants.principalId, result.id));
+      expect(grants).toMatchObject([
+        {
+          projectId: testProjectId,
+          principalKind: 'agent',
+          role: 'editor',
+          status: 'active',
+        },
+      ]);
     });
 
     it('rejects unscoped agent and service Transition writers', async () => {

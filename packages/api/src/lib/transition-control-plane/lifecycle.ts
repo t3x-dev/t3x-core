@@ -1,4 +1,5 @@
 import {
+  assertPreparedRepositoryTransitionAuthorityBundle,
   assertTransitionDecisionMembership,
   assertTransitionReviewPrecondition,
   buildTransitionCommitCommand,
@@ -6,6 +7,8 @@ import {
   decisionRationale,
   digestTransitionReviewPrecondition as digestTransitionReviewPreconditionWith,
   isGeneratedProposalPreparation,
+  type PreparedRepositoryTransitionTarget,
+  type RepositoryWriterServerPolicyBindingExpectation,
   sameTransitionPolicyResource,
   TransitionAutomatedOverrideDeniedError,
   TransitionDecisionDeniedError,
@@ -27,6 +30,8 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  acquireTransitionPolicyBindingLock,
+  acquireTransitionReviewLock,
   createTransitionCommit,
   DecisionNotAuthorizedError,
   digestTransitionRequestCanonicalJson,
@@ -37,12 +42,14 @@ import {
   getTransitionPolicyBinding,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  type ResolvedTransitionProposalGraph,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   recordTransitionCommandReceipt,
   resolveTransitionProposalGraph,
   TransitionCommandConflictError,
   TransitionHeadConflictError,
+  type TransitionPolicyBinding,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
@@ -70,8 +77,18 @@ const REPOSITORY_SCOPE = Object.freeze({
 export type { TransitionReviewPrecondition };
 
 export interface TransitionDecisionAuthoritySelection {
-  policyDigest: string;
-  authority: RepositoryDecisionAuthority;
+  select(input: {
+    graph: ResolvedTransitionProposalGraph;
+    refPolicyBinding: TransitionPolicyBinding | null;
+  }):
+    | {
+        policyDigest: string;
+        authority: RepositoryDecisionAuthority;
+      }
+    | Promise<{
+        policyDigest: string;
+        authority: RepositoryDecisionAuthority;
+      }>;
 }
 
 export interface TransitionWorkspaceCommitProjection {
@@ -86,6 +103,7 @@ export interface TransitionWorkspaceCommitProjection {
 
 export interface CommitPreparedRepositoryTransitionInput {
   db: AnyDB;
+  preparedTarget: PreparedRepositoryTransitionTarget;
   projectId: string;
   refName: string;
   expectedHead: string | null;
@@ -97,6 +115,12 @@ export interface CommitPreparedRepositoryTransitionInput {
   parents: readonly CommitV2[];
   objects: readonly ProtocolObject[];
   yopsLogIds?: readonly string[];
+  /**
+   * Exact server binding observed by a compatibility adapter before
+   * preparation. Presence is tri-state: omitting this field selects an
+   * internal explicit policy; `expected: null` seals an observed absence.
+   */
+  serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
 }
 
 export interface CommitPreparedRepositoryTransitionResult {
@@ -126,39 +150,25 @@ async function resolveReviewFacts(
   db: AnyDB,
   projectId: string,
   transitionId: string,
-  authoritySelection?: TransitionDecisionAuthoritySelection
+  policyBindingFoundAtLock: boolean
 ) {
   const graph = await resolveTransitionProposalGraph(db, projectId, transitionId);
-  const [workspace, head, policyBinding] = await Promise.all([
+  const [workspace, head, refPolicyBinding] = await Promise.all([
     findWorkspaceDraft(db, projectId, graph.membership.workspaceId),
     getTransitionRefHead(db, {
       projectId,
       refName: graph.membership.refName,
     }),
-    authoritySelection === undefined
+    policyBindingFoundAtLock
       ? getTransitionPolicyBinding(db, projectId, graph.membership.refName)
       : Promise.resolve(null),
   ]);
-  if (workspace === null || (authoritySelection === undefined && policyBinding === null)) {
-    throw new TransitionReviewStaleError();
-  }
-  const applicablePolicy =
-    authoritySelection !== undefined
-      ? null
-      : resolveApplicableTransitionPolicy({
-          refPolicyBinding: policyBinding!,
-          requestKind: graph.membership.requestKind,
-          preparationFacts:
-            graph.preparation === null
-              ? null
-              : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue),
-        });
+  if (workspace === null) throw new TransitionReviewStaleError();
   return {
     graph,
     workspace,
     head,
-    policyBinding: applicablePolicy,
-    policyDigest: authoritySelection?.policyDigest ?? applicablePolicy!.resource.digest,
+    refPolicyBinding,
   };
 }
 
@@ -254,51 +264,95 @@ export async function decideTransition(input: {
   const prior = await resolveDecisionRetry({ ...input, requestDigest });
   if (prior !== null) return prior;
 
-  const facts = await resolveReviewFacts(
-    input.db,
-    input.projectId,
-    input.transitionId,
-    input.authoritySelection
-  );
-  assertTransitionReviewPrecondition({
-    precondition: input.precondition,
-    facts: {
-      graph: facts.graph,
-      workspaceRevision: facts.workspace.revision,
-      refHead: facts.head.head,
-      policyDigest: facts.policyDigest,
-    },
-  });
-  const authority: RepositoryDecisionAuthority = input.authoritySelection?.authority ?? {
-    async resolve() {
-      return {
-        actorContext: { actor: input.actor },
-        observationScope: REPOSITORY_SCOPE,
-        policy: facts.policyBinding!.policy,
-        policyResource: facts.policyBinding!.resource,
-        statements: facts.graph.observations.map((observation) => ({
-          statement: observation.statement as StatementObservation['statement'],
-          issuerContext: observation.issuerContext,
-        })),
-      };
-    },
-  };
-  const issued = await authorizeDecisionForRepository({
-    projectId: input.projectId,
-    refName: facts.graph.membership.refName,
-    proposal: facts.graph.proposal,
-    effect: facts.graph.effect,
-    outcome: input.outcome,
-    rationale: decisionRationale(input),
-    decidedAt: new Date().toISOString() as CanonicalTimestamp,
-    authority,
-  });
-  if (!issued.ok) throw new TransitionDecisionDeniedError(issued.failures);
-
-  const decisionDigest = describeTransitionObject(issued.decision).digest;
+  let persisted:
+    | {
+        view: TransitionControlPlaneView;
+        decision: DecisionStatement;
+        decisionDigest: string;
+      }
+    | undefined;
   try {
-    await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
+    persisted = await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
+      const locked = await acquireTransitionReviewLock(tx, input.projectId, input.transitionId);
+      if (
+        locked.membershipFound &&
+        input.authoritySelection === undefined &&
+        !locked.policyBindingFound
+      ) {
+        // Default repository authority requires an explicit binding. The
+        // project-parent lock keeps this observed absence sealed until the
+        // transaction finishes.
+        throw new TransitionReviewStaleError();
+      }
+      const facts = await resolveReviewFacts(
+        tx,
+        input.projectId,
+        input.transitionId,
+        locked.policyBindingFound
+      );
+      const selected =
+        input.authoritySelection === undefined
+          ? (() => {
+              if (facts.refPolicyBinding === null) throw new TransitionReviewStaleError();
+              const applicablePolicy = resolveApplicableTransitionPolicy({
+                refPolicyBinding: facts.refPolicyBinding,
+                requestKind: facts.graph.membership.requestKind,
+                preparationFacts:
+                  facts.graph.preparation === null
+                    ? null
+                    : (JSON.parse(facts.graph.preparation.canonicalJson) as ProtocolValue),
+              });
+              return {
+                policyDigest: applicablePolicy.resource.digest,
+                authority: {
+                  async resolve() {
+                    return {
+                      actorContext: { actor: input.actor },
+                      observationScope: REPOSITORY_SCOPE,
+                      policy: applicablePolicy.policy,
+                      policyResource: applicablePolicy.resource,
+                      statements: facts.graph.observations.map((observation) => ({
+                        statement: observation.statement as StatementObservation['statement'],
+                        issuerContext: observation.issuerContext,
+                      })),
+                    };
+                  },
+                } satisfies RepositoryDecisionAuthority,
+              };
+            })()
+          : await input.authoritySelection.select({
+              graph: facts.graph,
+              refPolicyBinding: facts.refPolicyBinding,
+            });
+      assertTransitionReviewPrecondition({
+        precondition: input.precondition,
+        facts: {
+          graph: facts.graph,
+          workspaceRevision: facts.workspace.revision,
+          refHead: facts.head.head,
+          policyDigest: selected.policyDigest,
+        },
+      });
+      const issued = await authorizeDecisionForRepository({
+        projectId: input.projectId,
+        refName: facts.graph.membership.refName,
+        proposal: facts.graph.proposal,
+        effect: facts.graph.effect,
+        outcome: input.outcome,
+        rationale: decisionRationale(input),
+        decidedAt: new Date().toISOString() as CanonicalTimestamp,
+        authority: selected.authority,
+      });
+      if (!issued.ok) throw new TransitionDecisionDeniedError(issued.failures);
+      if (
+        issued.decision.predicate.policy.mode !== 'evaluated' ||
+        issued.decision.predicate.policy.resource.digest !== selected.policyDigest
+      ) {
+        throw new TransitionReviewStaleError();
+      }
+
+      const decisionDigest = describeTransitionObject(issued.decision).digest;
       if (issued.authorization === null) {
         await recordRepositoryDecision(tx, issued.record);
       } else {
@@ -314,6 +368,17 @@ export async function decideTransition(input: {
         resultKind: 'decision',
         resultDigest: decisionDigest,
       });
+      return {
+        view: await inspectTransition({
+          db: tx,
+          projectId: input.projectId,
+          transitionId: input.transitionId,
+          actor: input.actor,
+          decision: issued.decision,
+        }),
+        decision: issued.decision,
+        decisionDigest,
+      };
     });
   } catch (error) {
     if (error instanceof TransitionCommandConflictError) {
@@ -322,17 +387,12 @@ export async function decideTransition(input: {
     }
     throw error;
   }
+  if (persisted === undefined) throw new TransitionReviewStaleError();
 
   return {
-    view: await inspectTransition({
-      db: input.db,
-      projectId: input.projectId,
-      transitionId: input.transitionId,
-      actor: input.actor,
-      decision: issued.decision,
-    }),
-    decision: issued.decision,
-    decisionDigest,
+    view: persisted.view,
+    decision: persisted.decision,
+    decisionDigest: persisted.decisionDigest,
     reviewDigest,
     reused: false,
   };
@@ -414,6 +474,30 @@ async function persistTransitionCommitGraph(
   });
 }
 
+async function resolvePreparedServerPolicyBinding(input: {
+  tx: AnyDB;
+  projectId: string;
+  refName: string;
+  expectation: NonNullable<
+    CommitPreparedRepositoryTransitionInput['serverPolicyBindingExpectation']
+  >;
+}): Promise<TransitionPolicyBinding | null> {
+  const locked = await acquireTransitionPolicyBindingLock(input.tx, input.projectId, input.refName);
+  const live = locked.policyBindingFound
+    ? await getTransitionPolicyBinding(input.tx, input.projectId, input.refName)
+    : null;
+  if (
+    (input.expectation.required && live === null) ||
+    (input.expectation.expected === null) !== (live === null) ||
+    (input.expectation.expected !== null &&
+      live !== null &&
+      !sameTransitionPolicyResource(input.expectation.expected.resource, live.resource))
+  ) {
+    throw new TransitionReviewStaleError();
+  }
+  return live;
+}
+
 /**
  * Execute the shared Decision -> Commit portion for a task adapter that has
  * already prepared and verified an immutable Proposal graph.
@@ -425,48 +509,101 @@ async function persistTransitionCommitGraph(
 export async function commitPreparedRepositoryTransition(
   input: CommitPreparedRepositoryTransitionInput
 ): Promise<CommitPreparedRepositoryTransitionResult> {
-  const issued = await authorizeDecisionForRepository({
-    projectId: input.projectId,
-    refName: input.refName,
+  assertPreparedRepositoryTransitionAuthorityBundle({
+    authority: input.authority,
+    target: input.preparedTarget,
     proposal: input.proposal,
     effect: input.effect,
-    outcome: 'accepted',
     rationale: input.rationale,
     decidedAt: input.decidedAt,
-    authority: input.authority,
+    parents: input.parents,
+    objects: input.objects,
+    ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
+    ...(input.serverPolicyBindingExpectation === undefined
+      ? {}
+      : { serverPolicyBindingExpectation: input.serverPolicyBindingExpectation }),
   });
-  if (!issued.ok || issued.authorization === null) {
-    throw new TransitionDecisionDeniedError(issued.ok ? [] : issued.failures);
+  const { projectId, refName, expectedHead } = input.preparedTarget;
+  if (input.projectId !== projectId) {
+    throw new TransitionDecisionMembershipError(
+      'Prepared repository target project does not match the commit project'
+    );
   }
-  const authorization = issued.authorization;
-
-  const objects: ProtocolObject[] = [...input.objects, ...authorization.objects];
-  const commit = await createCommitV2({
-    parents: input.parents.map(describeCommitV2),
-    decision: issued.decision,
-    resolver: new InMemoryTransitionObjectResolver(objects),
-  });
-  const created = await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
+  if (input.refName !== refName) {
+    throw new TransitionDecisionMembershipError(
+      'Prepared repository target ref does not match the commit ref'
+    );
+  }
+  if (input.expectedHead !== expectedHead) {
+    throw new TransitionDecisionMembershipError(
+      'Prepared repository target expected head does not match the commit expected head'
+    );
+  }
+  const persisted = await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
+    const liveServerPolicyBinding =
+      input.serverPolicyBindingExpectation === undefined
+        ? null
+        : await resolvePreparedServerPolicyBinding({
+            tx,
+            projectId,
+            refName,
+            expectation: input.serverPolicyBindingExpectation,
+          });
+    const issued = await authorizeDecisionForRepository({
+      projectId,
+      refName,
+      proposal: input.proposal,
+      effect: input.effect,
+      outcome: 'accepted',
+      rationale: input.rationale,
+      decidedAt: input.decidedAt,
+      authority: input.authority,
+    });
+    if (!issued.ok || issued.authorization === null) {
+      throw new TransitionDecisionDeniedError(issued.ok ? [] : issued.failures);
+    }
+    if (
+      liveServerPolicyBinding !== null &&
+      (issued.decision.predicate.policy.mode !== 'evaluated' ||
+        !sameTransitionPolicyResource(
+          issued.decision.predicate.policy.resource,
+          liveServerPolicyBinding.resource
+        ))
+    ) {
+      throw new TransitionReviewStaleError();
+    }
+    const authorization = issued.authorization;
+    const objects: ProtocolObject[] = [...input.objects, ...authorization.objects];
+    const commit = await createCommitV2({
+      parents: input.parents.map(describeCommitV2),
+      decision: issued.decision,
+      resolver: new InMemoryTransitionObjectResolver(objects),
+    });
     await recordRepositoryDecisionAuthorization(tx, authorization);
-    return persistTransitionCommitGraph(tx, {
-      projectId: input.projectId,
-      refName: input.refName,
-      expectedHead: input.expectedHead,
+    const created = await persistTransitionCommitGraph(tx, {
+      projectId,
+      refName,
+      expectedHead,
       commit,
       objects,
       ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),
     });
+    return { commit, created };
   });
   const transition = await getTransitionViewForCommit(input.db, {
-    projectId: input.projectId,
-    refName: input.refName,
-    commitId: created.digest,
+    projectId,
+    refName,
+    commitId: persisted.created.digest,
   });
   if (transition === null) {
     throw new TransitionDecisionMembershipError('Committed repository Transition is unavailable');
   }
-  return { commit, commitDigest: created.digest, transition };
+  return {
+    commit: persisted.commit,
+    commitDigest: persisted.created.digest,
+    transition,
+  };
 }
 
 export async function commitTransition(input: {
@@ -490,7 +627,7 @@ export async function commitTransition(input: {
 
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
   if (input.expectedHead !== graph.membership.refHead) {
-    throw new TransitionHeadConflictError(graph.membership.refHead, input.expectedHead);
+    throw new TransitionHeadConflictError(input.expectedHead, graph.membership.refHead);
   }
   const [audit, head, workspace, refPolicyBinding] = await Promise.all([
     getRepositoryDecisionAudit(input.db, {

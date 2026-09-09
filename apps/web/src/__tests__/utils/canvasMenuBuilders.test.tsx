@@ -10,7 +10,6 @@ describe('buildUnitNodeMenu', () => {
     const groups = buildUnitNodeMenu({
       hasConversation: true,
       isDeveloperMode: false,
-      isDraft: false,
       onCreateBranch: vi.fn(),
       onDelete,
     });

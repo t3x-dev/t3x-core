@@ -1,16 +1,8 @@
 'use client';
-import {
-  AlertCircle,
-  FileSearch,
-  GitCommit,
-  Loader2,
-  MessageSquarePlus,
-  PanelRight,
-} from 'lucide-react';
+import { AlertCircle, GitCommit, Loader2, MessageSquarePlus, PanelRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
@@ -22,22 +14,19 @@ import {
 } from '@/hooks/conversations/useConversationBranchSwitch';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
-import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
-import { useIntroDemoReplayActions } from '@/hooks/onboarding/useIntroDemoReplayActions';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
-import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
-import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { FeatureTourOverlay, type FeatureTourStep } from '../onboarding/FeatureTourOverlay';
@@ -45,7 +34,6 @@ import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
-import { ChatSpanActions } from './ChatSpanActions';
 import { ContextManifestBar } from './ContextManifestBar';
 import { MaterialReader, type MaterialReaderSelection } from './MaterialReader';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
@@ -74,64 +62,29 @@ interface ChatWorkspaceProps {
 
 export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
-    id: 'console',
-    label: 'Console',
-    title: 'Open extraction controls',
-    description: 'Show extraction controls.',
-    target: 'chat-yops-panel',
-    tone: 'extract',
+    id: 'sources',
+    label: 'Sources',
+    title: 'Review the source bundle',
+    description: 'Confirm the conversation and any attached evidence.',
+    target: 'chat-sources',
+    tone: 'source',
     icon: PanelRight,
-    advanceOnTargetClick: true,
   },
   {
-    id: 'extract',
-    label: 'Extract',
-    title: 'Load demo YOps',
-    description: 'Load demo YOps.',
-    target: 'chat-extract-action',
-    tone: 'extract',
-    icon: FileSearch,
-    advanceOnTargetClick: true,
+    id: 'conversation',
+    label: 'Conversation',
+    title: 'Capture exact source turns',
+    description: 'Continue the conversation until it contains the evidence you need.',
+    target: 'chat-thread',
+    tone: 'source',
+    icon: MessageSquarePlus,
   },
   {
-    id: 'apply',
-    label: 'Apply',
-    title: 'Apply selected changes',
-    description: 'Apply selected changes.',
-    target: 'chat-apply-action',
-    tone: 'pending',
-    icon: PanelRight,
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'commit',
-    label: 'Commit',
-    title: 'Save a version',
-    description: 'Save a version.',
-    target: 'chat-commit-action',
-    tone: 'commit',
-    icon: GitCommit,
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'commit-confirm',
-    label: 'Confirm',
-    title: 'Confirm for Canvas',
-    description: 'Make it available on Canvas.',
-    target: 'chat-commit-confirm',
-    positionTarget: 'chat-commit-dialog',
-    placement: 'above',
-    tone: 'commit',
-    icon: GitCommit,
-    advanceOnTargetClick: true,
-    advanceDelayMs: 520,
-  },
-  {
-    id: 'canvas',
-    label: 'Canvas',
-    title: 'Open the project graph',
-    description: 'Open the project graph.',
-    target: 'sidebar-canvas-tab',
+    id: 'workspace',
+    label: 'Workspace',
+    title: 'Review and commit canonically',
+    description: 'Open Repository Workspace to propose, verify, decide, and commit.',
+    target: 'chat-workspace-action',
     tone: 'commit',
     icon: PanelRight,
     advanceOnTargetClick: true,
@@ -147,7 +100,7 @@ const INTRO_DEMO_ASSISTANT_REPLY = [
   '- Tone should stay calm, precise, and policy-grounded.',
   '- The main risks are skipped citations and drift in the threshold copy.',
   '',
-  'Next, open the console, extract these points into reviewable T3X state, then apply them before moving to Canvas.',
+  'Next, open Repository Workspace to extract these exact turns into a reviewable Transition.',
 ].join('\n');
 
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {
@@ -204,10 +157,8 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const { selection, clearSelection } = useTextSelection(chatContainerRef);
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
   const activeBranch = useChatStore((s) => s.activeBranch);
@@ -390,26 +341,13 @@ export function ChatWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Extraction handler + related state
-  const { handleExtract, isExtracting } = useExtraction({
-    resolvedConversationId,
-    selectedProvider,
-    selectedModel,
-  });
-  const { extract: replayIntroDemoExtract } = useIntroDemoReplayActions();
-
   // Precompute source map from sourceIndex — positions are already known
   // (every LLMSource carries turn_hash + start_char/end_char).
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
   const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
-  const workspaceMode = useWorkspaceStore((s) => s.mode);
-  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
-  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const baselineCommitHash = useWorkspaceStore((s) => s.baselineCommitHash);
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
-  const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
-  const workspaceLastError = useWorkspaceStore((s) => s.lastError);
 
   useEffect(() => {
     if (!introDemo || !resolvedConversationId || isLoading) return;
@@ -445,78 +383,11 @@ export function ChatWorkspace({
   ]);
 
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
-  const showAddForm =
-    !isCommitted &&
-    !hasDraft &&
-    !scriptDirty &&
-    hasYopsContent &&
-    selection &&
-    selection.turnRole !== 'user' &&
-    selection.text.length > 3;
-
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(
     resolvedProjectId,
     resolvedConversationId
   );
-
-  // Listen for extraction request (via custom event)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      const disabledReason = getExtractDisabledReason({
-        activeProjectId: activeProjectId || resolvedProjectId,
-        workspaceConversationId,
-        routeConversationId: resolvedConversationId,
-        turnCount: introDemo ? Math.max(turns.length, 1) : turns.length,
-        workspaceMode,
-        isCommitted,
-        hasDraft,
-        isChatLoading: isLoading,
-        isChatStreaming: isStreaming,
-        modelsLoading,
-        selectedProvider: introDemo ? 'fixture-replay' : selectedProvider,
-        selectedModel: introDemo ? 'fixture-replay' : selectedModel,
-        lastError: workspaceLastError,
-      });
-      if (disabledReason) {
-        toast.message(disabledReason);
-        return;
-      }
-
-      if (detail?.sourcePinIds) {
-        // Came from source panel confirm — extract with selected pins
-        if (introDemo) void replayIntroDemoExtract();
-        else handleExtract(detail.sourcePinIds);
-      } else if (detail?.chooseSources) {
-        setContextManifestOpen(true);
-      } else {
-        // Default behavior: extract immediately, even when pins exist.
-        if (introDemo) void replayIntroDemoExtract();
-        else handleExtract();
-      }
-    };
-    window.addEventListener('t3x:extract-requested', handler);
-    return () => window.removeEventListener('t3x:extract-requested', handler);
-  }, [
-    activeProjectId,
-    handleExtract,
-    hasDraft,
-    introDemo,
-    isCommitted,
-    isLoading,
-    isStreaming,
-    modelsLoading,
-    resolvedConversationId,
-    resolvedProjectId,
-    replayIntroDemoExtract,
-    selectedModel,
-    selectedProvider,
-    turns.length,
-    workspaceConversationId,
-    workspaceLastError,
-    workspaceMode,
-  ]);
 
   const selectedPinsIncludingNewPin = useCallback(
     (pinId: string): string[] | null => {
@@ -1127,11 +998,6 @@ export function ChatWorkspace({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Inline source-text actions require an extracted/applied YOps context. */}
-          {showAddForm && selection && (
-            <ChatSpanActions selection={selection} onDone={clearSelection} />
-          )}
-
           {/* Input area — committed conversations are read-only after commit */}
           {!isCommitted && (
             <div
@@ -1146,7 +1012,6 @@ export function ChatWorkspace({
                   draftKey={chatInputDraftKey}
                   disabled={
                     isLoading ||
-                    isExtracting ||
                     (!introDemo && (modelsLoading || !selectedProvider || !selectedModel))
                   }
                   placeholder="Reply..."

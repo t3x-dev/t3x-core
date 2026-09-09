@@ -1,0 +1,445 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createApp } from '../app';
+import {
+  createInferenceRuntime,
+  executeMeteredInference,
+  INFERENCE_CONTRACT_VERSION,
+  InferenceAdmissionDeniedError,
+  type InferenceAdmissionPolicy,
+  type InferenceAttempt,
+  InferenceExecutionError,
+  type InferenceReceipt,
+  type InferenceTerminal,
+  resolveInferenceIngressChannel,
+  resolveInferenceProjectScope,
+  toGenerationModelScope,
+} from '../lib/inference';
+
+const executionInput = {
+  runId: 'run_123',
+  feature: 'test.inference',
+  requestedModel: 'model-requested',
+  scope: {
+    actor: { kind: 'user' as const, id: 'user_123' },
+    ingressChannel: 'web' as const,
+    namespaceId: 'namespace_123',
+    projectId: 'project_123',
+    projectVisibility: 'private' as const,
+    policyContext: { payerReference: 'opaque' },
+  },
+};
+
+function receipt(attempt: InferenceAttempt): InferenceReceipt {
+  return {
+    contractVersion: INFERENCE_CONTRACT_VERSION,
+    generationId: attempt.generationId,
+    runId: attempt.runId,
+    requestedModel: attempt.requestedModel,
+    resolvedModel: 'model-resolved',
+    resolvedProvider: 'provider-resolved',
+    providerRequestId: 'provider-request-123',
+    usage: {
+      inputTokens: 20,
+      outputTokens: 8,
+      reasoningTokens: 3,
+      cacheReadTokens: 4,
+      cacheWriteTokens: 1,
+    },
+    providerReportedCost: { amount: '0.00125', currency: 'USD' },
+    finishStatus: 'stop',
+    startedAt: '2026-08-30T00:00:01.000Z',
+    completedAt: '2026-08-30T00:00:02.000Z',
+  };
+}
+
+function recordingPolicy(events: string[]): InferenceAdmissionPolicy {
+  return {
+    async authorize(attempt) {
+      events.push(`authorize:${attempt.generationId}`);
+      return { outcome: 'admitted', admission: { id: `admission:${attempt.generationId}` } };
+    },
+    async settle({ terminal }) {
+      events.push(`settle:${terminal.kind}`);
+    },
+    async release({ terminal }) {
+      events.push(`release:${terminal.reason}`);
+    },
+  };
+}
+
+describe('provider-neutral inference runtime', () => {
+  it('derives a billable scope from canonical stored project fields', () => {
+    expect(
+      resolveInferenceProjectScope({
+        projectId: 'project_public',
+        namespaceId: 'namespace_123',
+        visibility: 'public',
+      })
+    ).toEqual({
+      projectId: 'project_public',
+      namespaceId: 'namespace_123',
+      projectVisibility: 'public',
+    });
+
+    expect(
+      resolveInferenceProjectScope({
+        projectId: 'project_unlisted',
+        namespaceId: null,
+        visibility: 'unlisted',
+      })
+    ).toEqual({
+      projectId: 'project_unlisted',
+      projectVisibility: 'unlisted',
+    });
+  });
+
+  it.each([
+    { kind: 'user' as const, id: 'user_123' },
+    { kind: 'agent' as const, id: 'agent_123' },
+    { kind: 'service' as const, id: 'service_123' },
+    { kind: 'anonymous' as const, id: null },
+  ])('projects canonical $kind authority without policy leakage', (actor) => {
+    const projected = toGenerationModelScope(
+      {
+        actor,
+        ingressChannel: 'mcp',
+        namespaceId: 'namespace_123',
+        projectId: 'project_123',
+        projectVisibility: 'private',
+        policyContext: {
+          payerReference: 'must-not-cross-provider-boundary',
+          secret: 'must-not-cross-provider-boundary',
+        },
+      },
+      { conversationId: 'conversation_123' }
+    );
+
+    expect(projected).toEqual({
+      actor,
+      ingressChannel: 'mcp',
+      namespaceId: 'namespace_123',
+      projectId: 'project_123',
+      projectVisibility: 'private',
+      conversationId: 'conversation_123',
+    });
+    expect(projected).not.toHaveProperty('policyContext');
+    expect(projected).not.toHaveProperty('userId');
+    expect(projected.actor).not.toBe(actor);
+  });
+
+  it('accepts only a host-installed ingress marker and defaults ordinary HTTP to api', () => {
+    const context = (value: unknown) =>
+      ({ get: (key: string) => (key === 'inferenceIngressChannel' ? value : undefined) }) as never;
+
+    expect(resolveInferenceIngressChannel(context('web'))).toBe('web');
+    expect(resolveInferenceIngressChannel(context('mcp'))).toBe('mcp');
+    expect(resolveInferenceIngressChannel(context('forged-client-value'))).toBe('api');
+    expect(resolveInferenceIngressChannel(context(undefined))).toBe('api');
+    expect(toGenerationModelScope({ actor: { kind: 'anonymous', id: null } })).toMatchObject({
+      ingressChannel: 'api',
+    });
+  });
+
+  it('adapts a metered provider result into one normalized receipt', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_metered',
+      now: () => new Date('2026-08-30T00:00:00.000Z'),
+    });
+    const timestamps = [new Date('2026-08-30T00:00:01.000Z'), new Date('2026-08-30T00:00:02.000Z')];
+
+    const result = await executeMeteredInference({
+      runtime,
+      input: executionInput,
+      resolvedProvider: 'openai',
+      resolvedModel: 'gpt-resolved',
+      now: () => timestamps.shift()!,
+      async invoke() {
+        events.push('provider');
+        return {
+          value: 'generated',
+          usage: { inputTokens: 12, outputTokens: 7, cacheReadTokens: 3 },
+          providerRequestId: 'provider-request-metered',
+        };
+      },
+    });
+
+    expect(result.value).toBe('generated');
+    expect(result.receipt).toMatchObject({
+      generationId: 'gen_metered',
+      resolvedProvider: 'openai',
+      resolvedModel: 'gpt-resolved',
+      providerRequestId: 'provider-request-metered',
+      usage: { inputTokens: 12, outputTokens: 7, cacheReadTokens: 3 },
+      finishStatus: 'stop',
+      startedAt: '2026-08-30T00:00:01.000Z',
+      completedAt: '2026-08-30T00:00:02.000Z',
+    });
+    expect(events).toEqual(['authorize:gen_metered', 'provider', 'settle:receipt']);
+  });
+
+  it('treats a metered provider error as uncertain after admission', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_metered_error',
+    });
+
+    await expect(
+      executeMeteredInference({
+        runtime,
+        input: executionInput,
+        resolvedProvider: 'anthropic',
+        resolvedModel: 'claude-resolved',
+        async invoke() {
+          throw new Error('connection ended after request write');
+        },
+      })
+    ).rejects.toMatchObject({
+      name: InferenceExecutionError.name,
+      terminal: { kind: 'uncertain', reason: 'provider_error' },
+    });
+    expect(events).toEqual(['authorize:gen_metered_error', 'settle:uncertain']);
+  });
+
+  it('allocates one generation identity before authorization and settles a receipt', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => {
+        events.push('identity');
+        return 'gen_123';
+      },
+      now: () => new Date('2026-08-30T00:00:00.000Z'),
+      gateway: {
+        async execute(input) {
+          events.push(`gateway:${input.attempt.generationId}`);
+          return input.invoke();
+        },
+        async stream(input) {
+          return input.invoke();
+        },
+      },
+    });
+
+    const result = await runtime.execute(executionInput, async (attempt) => {
+      events.push('provider');
+      return {
+        ok: true,
+        value: 'generated',
+        terminal: { kind: 'receipt', receipt: receipt(attempt) },
+      };
+    });
+
+    expect(result.attempt.generationId).toBe('gen_123');
+    expect(result.attempt.attemptIndex).toBe(0);
+    expect(result.value).toBe('generated');
+    expect(result.receipt.providerRequestId).toBe('provider-request-123');
+    expect(events).toEqual([
+      'identity',
+      'authorize:gen_123',
+      'gateway:gen_123',
+      'provider',
+      'settle:receipt',
+    ]);
+  });
+
+  it('preserves an explicit child attempt index through admission and execution', async () => {
+    const authorize = vi.fn(async (attempt: InferenceAttempt) => ({
+      outcome: 'admitted' as const,
+      admission: { id: `admission:${attempt.attemptIndex}` },
+    }));
+    const runtime = createInferenceRuntime({
+      createGenerationId: () => 'gen_retry_2',
+      admissionPolicy: { authorize, settle: vi.fn(), release: vi.fn() },
+    });
+
+    const result = await runtime.execute(
+      { ...executionInput, attemptIndex: 2 },
+      async (attempt) => ({
+        ok: true,
+        value: attempt.attemptIndex,
+        terminal: { kind: 'receipt', receipt: receipt(attempt) },
+      })
+    );
+
+    expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ attemptIndex: 2 }));
+    expect(result.attempt.attemptIndex).toBe(2);
+    expect(result.value).toBe(2);
+  });
+
+  it.each([
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('rejects invalid attempt index %s before identity, admission, or provider I/O', async (attemptIndex) => {
+    const createGenerationId = vi.fn(() => 'must-not-be-created');
+    const authorize = vi.fn();
+    const invoke = vi.fn();
+    const runtime = createInferenceRuntime({
+      createGenerationId,
+      admissionPolicy: { authorize, settle: vi.fn(), release: vi.fn() },
+    });
+
+    await expect(runtime.execute({ ...executionInput, attemptIndex }, invoke)).rejects.toThrow(
+      'attemptIndex must be a non-negative safe integer'
+    );
+    expect(createGenerationId).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('does not reach the gateway after admission denial', async () => {
+    const gateway = {
+      execute: vi.fn(),
+      stream: vi.fn(),
+    };
+    const runtime = createInferenceRuntime({
+      gateway,
+      createGenerationId: () => 'gen_denied',
+      admissionPolicy: {
+        async authorize() {
+          return { outcome: 'denied', code: 'quota_exhausted', reason: 'No grant remains' };
+        },
+        settle: vi.fn(),
+        release: vi.fn(),
+      },
+    });
+
+    await expect(runtime.execute(executionInput, vi.fn())).rejects.toMatchObject({
+      name: InferenceAdmissionDeniedError.name,
+      code: 'quota_exhausted',
+      attempt: { generationId: 'gen_denied' },
+    });
+    expect(gateway.execute).not.toHaveBeenCalled();
+  });
+
+  it('releases only an explicit proven pre-upstream failure', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_preflight',
+    });
+
+    await expect(
+      runtime.execute(executionInput, async () => ({
+        ok: false,
+        error: new Error('provider configuration unavailable'),
+        terminal: { kind: 'released', reason: 'pre_upstream_failure' },
+      }))
+    ).rejects.toMatchObject({
+      name: InferenceExecutionError.name,
+      terminal: { kind: 'released', reason: 'pre_upstream_failure' },
+    });
+    expect(events).toEqual(['authorize:gen_preflight', 'release:pre_upstream_failure']);
+  });
+
+  it('settles an unexpected gateway or provider throw as uncertain', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_unknown',
+    });
+
+    await expect(
+      runtime.execute(executionInput, async () => {
+        throw new Error('socket disappeared after write');
+      })
+    ).rejects.toMatchObject({
+      name: InferenceExecutionError.name,
+      terminal: { kind: 'uncertain', reason: 'gateway_error' },
+    });
+    expect(events).toEqual(['authorize:gen_unknown', 'settle:uncertain']);
+  });
+
+  it('settles an interrupted stream exactly once even when terminal is observed twice', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_stream',
+    });
+    const interrupted: InferenceTerminal = {
+      kind: 'uncertain',
+      reason: 'interrupted_stream',
+      detail: 'client disconnected',
+    };
+
+    const stream = await runtime.stream(executionInput, async () => ({
+      chunks: (async function* () {
+        yield 'partial';
+      })(),
+      terminal: Promise.resolve(interrupted),
+    }));
+
+    const first = await stream.terminal;
+    const second = await stream.terminal;
+    expect(first).toEqual(interrupted);
+    expect(second).toEqual(interrupted);
+    expect(events).toEqual(['authorize:gen_stream', 'settle:uncertain']);
+  });
+
+  it('fails closed when a receipt is rebound to another generation', async () => {
+    const events: string[] = [];
+    const runtime = createInferenceRuntime({
+      admissionPolicy: recordingPolicy(events),
+      createGenerationId: () => 'gen_expected',
+    });
+
+    await expect(
+      runtime.execute(executionInput, async (attempt) => {
+        const mismatched = { ...receipt(attempt), generationId: 'gen_other' };
+        return { ok: true, value: 'untrusted', terminal: { kind: 'receipt', receipt: mismatched } };
+      })
+    ).rejects.toThrow('Inference receipt identity does not match its attempt');
+    expect(events).toEqual(['authorize:gen_expected', 'settle:uncertain']);
+  });
+
+  it('surfaces policy finalization failure and never reports execution success', async () => {
+    const runtime = createInferenceRuntime({
+      createGenerationId: () => 'gen_policy_failure',
+      admissionPolicy: {
+        async authorize() {
+          return { outcome: 'admitted', admission: { id: 'admission_policy_failure' } };
+        },
+        async settle() {
+          throw new Error('durable settlement unavailable');
+        },
+        async release() {},
+      },
+    });
+
+    await expect(
+      runtime.execute(executionInput, async (attempt) => {
+        return {
+          ok: true,
+          value: 'must not escape',
+          terminal: { kind: 'receipt', receipt: receipt(attempt) },
+        };
+      })
+    ).rejects.toThrow('durable settlement unavailable');
+  });
+
+  it('composes and returns the configured runtime from the application factory', async () => {
+    const authorize = vi.fn(async () => ({
+      outcome: 'denied' as const,
+      code: 'hosted_pause',
+      reason: 'Managed inference is paused',
+    }));
+    const { inferenceRuntime } = createApp({
+      inference: {
+        createGenerationId: () => 'gen_injected',
+        admissionPolicy: {
+          authorize,
+          settle: vi.fn(),
+          release: vi.fn(),
+        },
+      },
+    });
+
+    await expect(inferenceRuntime.execute(executionInput, vi.fn())).rejects.toBeInstanceOf(
+      InferenceAdmissionDeniedError
+    );
+    expect(authorize).toHaveBeenCalledOnce();
+  });
+});

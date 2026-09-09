@@ -83,9 +83,6 @@ jobs:
       - name: Typecheck production sources
         run: pnpm typecheck
 
-      - name: Audit production dependencies
-        run: pnpm audit:prod
-
       - name: Check release surface
         run: pnpm check:release-surface
 
@@ -110,3 +107,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
         run: pnpm test
+
+      # Preserve test evidence during registry outages without weakening the
+      # required check. Audit failure still fails this job, even if tests pass.
+      - name: Audit production dependencies
+        if: ${{ !cancelled() }}
+        run: pnpm audit:prod

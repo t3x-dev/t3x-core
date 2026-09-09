@@ -8,7 +8,6 @@ import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { notifyIntroDemoProjectDeleted } from './introDemoEvents';
-import { clearIntroDemoLocalCommit, readIntroDemoLocalCommit } from './introDemoLocalCommit';
 import { isDemoWorkspaceProject } from './useEnsureDemoProject';
 
 export function useIntroDemoCompletion(projectId?: string | null) {
@@ -16,7 +15,6 @@ export function useIntroDemoCompletion(projectId?: string | null) {
   const [completing, setCompleting] = useState(false);
 
   const removeProjectLocally = useCallback((targetProjectId: string) => {
-    clearIntroDemoLocalCommit(targetProjectId);
     notifyIntroDemoProjectDeleted(targetProjectId);
     useProjectStore.getState().removeProject(targetProjectId);
 
@@ -51,8 +49,7 @@ export function useIntroDemoCompletion(projectId?: string | null) {
 
       if (targetProjectId) {
         const project = await fetchProject(targetProjectId).catch(() => null);
-        const hasLocalDemoCommit = Boolean(readIntroDemoLocalCommit(targetProjectId));
-        if ((project && isDemoWorkspaceProject(project)) || hasLocalDemoCommit) {
+        if (!project || isDemoWorkspaceProject(project)) {
           removeProjectLocally(targetProjectId);
           if (project) {
             await deleteProject(targetProjectId).catch((err) => {

@@ -106,7 +106,7 @@ function flattenCandidateFields(fields: unknown[]): Array<Record<string, unknown
 test('complex workspace: multiple sources flow through proposal, validation, preview, and audited commit', async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   test.setTimeout(90_000);
   const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const projectName = `Workspace complex flow ${token}`;
@@ -136,6 +136,7 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     }
     await expect(page.getByText('3 sources', { exact: true })).toBeVisible();
 
+    await page.screenshot({ path: testInfo.outputPath('workspace-compose.png') });
     await page.getByRole('button', { name: 'Generate candidate proposal' }).click();
     await expect(page.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
       'aria-selected',
@@ -176,6 +177,9 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       'true'
     );
     await expect(page.getByText('Proposal ready', { exact: true })).toBeVisible();
+    await expect(page.getByText('YOps validation not run', { exact: true })).toBeVisible();
+    await expect(page.getByText(/changes passed/)).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('workspace-review.png') });
 
     const yopsResponse = await request.get(
       `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
@@ -193,8 +197,10 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     );
 
     await page.getByRole('button', { name: /Validate proposal/ }).click();
-    await expect(page.getByText('Proposal validated', { exact: true })).toBeVisible();
+    await expect(page.getByText('YOps validation passed', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    await expect(page.getByText('YSchema pass', { exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('workspace-review-validated.png') });
 
     await page.getByRole('button', { name: /Apply YOps/ }).click();
     await expect(page.getByRole('tab', { name: /Preview/ })).toHaveAttribute(
@@ -228,6 +234,7 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     );
 
     await page.goto(workspaceUrl);
+    await page.getByRole('tab', { name: 'Review', exact: true }).click();
     await page.getByRole('tab', { name: /Commit/ }).click();
     await expect(page.getByRole('tab', { name: /Commit/ })).toHaveAttribute(
       'aria-selected',

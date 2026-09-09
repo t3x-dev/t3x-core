@@ -6,6 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 
+vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
+  useSchemaCatalog: () => ({ data: { items: [], has_more: false }, loading: false }),
+  useSchemaCollections: () => [],
+  useSchemaIntroduction: () => ({ loading: false }),
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/t3x-dev/test-project/workspaces',
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -25,20 +31,23 @@ describe('project foundation previews', () => {
   it('renders a clean main Workspaces workbench for any project id during W1', async () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(await screen.findByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      'Main workspace'
+    );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(screen.getByText('No source material yet.')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'What would you like to change?' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('renders the Schemas preview for any project id during A0', () => {
+  it('opens Schema discovery without preselecting or applying a definition', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
-    expect(screen.getByText('Select a Schema version')).toBeInTheDocument();
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('reflects schema bindings from the schema tab in the workspace preview', async () => {

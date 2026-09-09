@@ -14,11 +14,20 @@
 // PostgreSQL (Docker)
 export {
   closePostgresStorage,
+  createPostgresBootstrapStorage,
+  createPostgresRuntimeStorage,
   createPostgresStorage,
   getPostgresClient,
   getPostgresDB,
+  inspectPostgresSchema,
+  migratePostgresStorage,
+  POSTGRES_SCHEMA_VERSION,
   type PostgresConfig,
   type PostgresDB,
+  type PostgresSchemaMetadata,
+  type PostgresSchemaStatus,
+  PostgresSchemaVersionError,
+  type PostgresSchemaVersionErrorReason,
 } from './postgres';
 
 // Supabase (cloud)

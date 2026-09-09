@@ -1,21 +1,19 @@
 /**
  * hydrateConversationToStore — composite action that fetches a
  * conversation snapshot via a pure query and writes the derived
- * state to workspaceStore. Shared by useChatInit / useExtraction /
- * useRealtimeSync so each consumer does not duplicate the store-write
+ * state to workspaceStore. Shared by useChatInit and useRealtimeSync so
+ * each consumer does not duplicate the store-write
  * boilerplate.
  *
  * Resilience contract: if the persisted ops log fails after partial
  * progress, we still write the atomic baseline tree + sourceIndex + opsLog
  * to the store and surface a structured `replayWarning` for the UI. We do NOT
  * throw — a single bad legacy op should not brick the workspace. The
- * mode lands as 'idle' and lastError stays null. The banner reads
- * `replayWarning` and offers a "Delete this op" action that calls
- * `removeYOpsEntry` and re-hydrates.
+ * mode lands as 'idle' and lastError stays null. Historical evidence remains
+ * inspectable; this read path cannot delete or replace it.
  *
  * Hard errors (network, persistence) still throw — those are real
- * failures the caller needs to handle (useChatInit falls back to
- * inheritance, useExtraction surfaces a toast).
+ * failures the caller needs to handle (useChatInit falls back to inheritance).
  *
  * Lives in hooks/ but is not itself a hook (no React state). Per v2
  * hooks/ may import queries/ + store/ + infrastructure/ — fine.

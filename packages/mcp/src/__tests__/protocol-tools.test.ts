@@ -642,38 +642,47 @@ describe('MCP protocol tool flows', () => {
     await client.close();
   });
 
-  it('stops storage-backed commit writes before they bypass the API/application kernel', async () => {
+  it('stops compatibility mutation tools before they bypass the API/application kernel', async () => {
     const { client } = await connectClientAndServer();
 
-    const project = parseTextResult(
+    const extract = await client.callTool({
+      name: 't3x_extract',
+      arguments: {
+        project_id: 'prj_protocol',
+        workspace_id: 'ws_protocol',
+        source_thread_id: 'src_protocol',
+        turn_hashes: ['sha256:turn'],
+      },
+    });
+    const edit = parseTextResult(
       await client.callTool({
-        name: 't3x_admin',
-        arguments: { action: 'create_project', name: 'Protocol Flow' },
-      })
-    );
-
-    const firstExtract = parseTextResult(
-      await client.callTool({
-        name: 't3x_extract',
+        name: 't3x_edit',
         arguments: {
-          project_id: project.project_id,
-          text: 'Plan a Tokyo trip with budget 5000',
+          project_id: 'prj_protocol',
+          workspace_id: 'ws_protocol',
+          request_id: 'req_edit_protocol',
+          operations: [{ op: 'set', path: '/budget', value: 5000 }],
         },
       })
     );
 
-    const commit = await client.callTool({
-      name: 't3x_commit',
-      arguments: {
-        project_id: project.project_id,
-        draft_id: firstExtract.draft_id,
-        message: 'First snapshot',
-      },
-    });
+    const commit = parseTextResult(
+      await client.callTool({
+        name: 't3x_commit',
+        arguments: {
+          project_id: 'prj_protocol',
+          transition_id: 'trn_protocol',
+          request_id: 'req_commit_protocol',
+          decision_digest: 'sha256:decision',
+          expected_head: null,
+        },
+      })
+    );
 
-    expect(commit.isError).toBe(true);
-    expect(commit.content[0].text).toContain('t3x_commit requires T3X_MCP_BACKEND=api');
-    expect(commit.content[0].text).toContain('shared API/application command');
+    expect(extract.isError).toBe(true);
+    expect(extract.content[0].text).toContain('t3x_extract requires T3X_MCP_BACKEND=api');
+    expect(edit.error.code).toBe('API_BACKEND_REQUIRED');
+    expect(commit.error.code).toBe('API_BACKEND_REQUIRED');
 
     await client.close();
   });
@@ -741,83 +750,24 @@ describe('MCP protocol tool flows', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"leaf_id" is required');
+    expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
 
     await client.close();
   });
 
-  it('generates output for an existing leaf over the MCP protocol', async () => {
+  it('returns Leaf retirement over the MCP protocol', async () => {
     const { client } = await connectClientAndServer();
-
-    const project = parseTextResult(
-      await client.callTool({
-        name: 't3x_admin',
-        arguments: { action: 'create_project', name: 'Protocol Generate Flow' },
-      })
-    );
-
-    const commitHash = 'sha256:seeded-protocol-commit';
-    state.commits.set(commitHash, {
-      hash: commitHash,
-      schema: 't3x/commit/v2',
-      parents: [],
-      author: { type: 'human', name: 'mcp' },
-      committed_at: '2026-04-22T00:00:00.000Z',
-      content: {
-        trees: [{ key: 'trip', slots: { budget: 5000, destination: 'Tokyo' }, children: [] }],
-        relations: [],
-      },
-      project_id: project.project_id,
-      message: 'Seeded snapshot for leaf generation',
-      branch: 'main',
-      provenance: { method: 'human_curation' },
-      yops_log_ids: [],
-      sources: null,
-    });
-
-    const leaf = parseTextResult(
-      await client.callTool({
-        name: 't3x_admin',
-        arguments: {
-          action: 'create_leaf',
-          project_id: project.project_id,
-          commit_hash: commitHash,
-          leaf_type: 'tweet',
-          title: 'Trip summary',
-          constraints: [
-            {
-              type: 'require',
-              match_mode: 'exact',
-              value: 'Tokyo',
-            },
-          ],
-        },
-      })
-    );
-
-    const generated = parseTextResult(
-      await client.callTool({
-        name: 't3x_generate',
-        arguments: { leaf_id: leaf.leaf_id },
-      })
-    );
-
-    expect(leaf.type).toBe('tweet');
-    expect(leaf.commit_hash).toBe(commitHash);
-    expect(generated.leaf_id).toBe(leaf.leaf_id);
-    expect(generated.output).toBe(`Generated output for ${leaf.leaf_id}`);
-    expect(generated.score).toEqual({
-      all_passed: true,
-      passed: 1,
-      failed: 0,
-      total: 1,
-    });
-    expect(generated.assertions[0].constraint_id).toBe('cst_1');
-    expect(generated.usage).toEqual({
-      input_tokens: 123,
-      output_tokens: 45,
-    });
-
-    await client.close();
+    try {
+      for (const call of [
+        { name: 't3x_admin', arguments: { action: 'create_leaf' } },
+        { name: 't3x_generate', arguments: { leaf_id: 'historic' } },
+      ]) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('LEAF_WRITER_RETIRED');
+      }
+    } finally {
+      await client.close();
+    }
   });
 });

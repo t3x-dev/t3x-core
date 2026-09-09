@@ -57,6 +57,41 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
+// Collaboration lifecycle
+export {
+  CollaborationStorageError,
+  type CollaborationStorageErrorCode,
+  createPostgresCollaborationLifecycleUnitOfWork,
+  type PostgresCollaborationLifecycleTransaction,
+  type PostgresCollaborationLifecycleUnitOfWork,
+  type StoredCollaborationInvitationDto,
+  type StoredCollaborationInvitationInsert,
+  type StoredCollaborationInvitationTarget,
+  type StoredCollaborationPrincipalDto,
+  type StoredCollaborationPrincipalKind,
+  type StoredInvitationStatus,
+  type StoredMembershipStatus,
+  type StoredNamespaceMemberRole,
+  type StoredNamespaceMembershipDto,
+  type StoredNamespaceOwnershipTransferPlan,
+  type StoredNamespaceRole,
+  type StoredProjectGrantDto,
+  type StoredProjectGrantRole,
+  type StoredProjectTransferPlan,
+} from './collaboration-lifecycle';
+export {
+  findCollaborationInvitationViewById,
+  findCollaborationInvitationViewByTokenHash,
+  listNamespaceAccountFacts,
+  listNamespaceInvitationViews,
+  listNamespaceMemberViews,
+  listProjectGrantViews,
+  listProjectInvitationViews,
+  type StoredNamespaceAccountFacts,
+  type StoredNamespaceMemberView,
+  type StoredPrincipalProfile,
+  type StoredProjectGrantView,
+} from './collaboration-reads';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,
@@ -235,10 +270,18 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+export {
+  findNamespaceMembershipForPrincipal,
+  findProjectAuthorityFacts,
+  type StoredAuthorityPrincipal,
+  type StoredPrincipalKind,
+  type StoredProjectAuthorityFacts,
+} from './namespace-authority';
 // Namespaces
 export {
   DEFAULT_ORGANIZATION_NAMESPACE_ID,
   DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
+  findNamespaceById,
   findNamespaceBySlug,
   findPersonalNamespaceByOwner,
   insertPersonalNamespace,
@@ -277,6 +320,15 @@ export {
   type ListPinsOptions,
   updatePinAssertions,
 } from './pins';
+export {
+  type ChangeProjectVisibilityInput,
+  type ChangeProjectVisibilityResult,
+  changeProjectVisibility,
+  listProjectVisibilityEvents,
+  type ProjectVisibility,
+  type ProjectVisibilityActorKind,
+  ProjectVisibilityConflictError,
+} from './project-visibility';
 // Projects
 export {
   type CreateProjectInput,
@@ -365,6 +417,7 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
+export * from './schema-studio';
 // Demo workspace seed (fresh-install no-key replay)
 export {
   type DemoWorkspaceSeedMarker,
@@ -425,6 +478,7 @@ export {
   type UpdateSourceTextRevisionInput,
   updateSourceTextRevision,
 } from './source-text-revisions';
+export * from './state-presentations';
 // Templates (reusable prompt templates)
 export {
   type CreateTemplateInput,
@@ -452,14 +506,6 @@ export {
   type UsageTotal,
   type UsageTotalOptions,
 } from './token-usage';
-// Topics (multi-topic conversations)
-export {
-  createTopic,
-  deleteTopic,
-  getTopicById,
-  listTopicsByConversation,
-  updateTopic,
-} from './topics';
 // Transition Decision/Commit command idempotency receipts
 export * from './transition-command-receipts';
 // CommitV2 repository path
@@ -510,6 +556,11 @@ export {
   TransitionPolicyResourceConflictError,
   unbindTransitionPolicy,
 } from './transition-policy-bindings';
+export {
+  acquireTransitionPolicyBindingLock,
+  acquireTransitionReviewLock,
+  type TransitionReviewLockResult,
+} from './transition-review-lock';
 export * from './transition-review-snapshots';
 export * from './transition-verification-receipts';
 // Tree State (source-of-truth for current trees)
@@ -589,9 +640,11 @@ export {
   updateWebhook,
   type WebhookOutput,
 } from './webhooks';
+export * from './workspace-deliveries';
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
   acquireProjectSupersedeLock,
+  archiveYOpsLogEntryForUndo,
   deleteYOpsLogEntry,
   findCommitHashesByYOpsLogIds,
   getYOpsForCommit,
@@ -600,12 +653,18 @@ export {
   type InsertYOpsLogInput,
   insertYOpsLogEntry,
   listActiveYOpsLogByConversation,
+  listLegacyYOpsEvidencePage,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
   supersedeActiveLLMSuggestions,
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+export {
+  type ListYSchemaCatalogOptions,
+  listYSchemaCatalogReleases,
+  type YSchemaCatalogRelease,
+} from './yschema-catalog';
 export {
   type FindYSchemaArtifactVersionInput,
   findYSchemaArtifactVersion,

@@ -115,7 +115,6 @@ describe('MCP prompts', () => {
 
     expect(result.prompts).toEqual([
       expect.objectContaining({ name: 'extract_review_commit' }),
-      expect.objectContaining({ name: 'inspect_workbench_draft' }),
       expect.objectContaining({ name: 'prepare_resolve_merge' }),
       expect.objectContaining({ name: 'generate_from_leaf' }),
     ]);

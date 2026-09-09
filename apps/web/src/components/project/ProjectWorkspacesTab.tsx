@@ -34,7 +34,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     branches,
     loading: branchesLoading,
     refresh: refreshBranches,
-  } = useBranches(projectId, Boolean(branch));
+  } = useBranches(projectId, true);
   const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
   const starterCandidate = useMemo(
     () =>
@@ -58,10 +58,14 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
+  const sourceConversationId = searchParams.get('sourceConversation')?.trim() || undefined;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
-  const selectedCandidate = branch
-    ? branchWorkspace
-    : (candidates.find((candidate) => candidate.id === requestedWorkspaceId) ?? null);
+  const requestedCandidate = candidates.find((candidate) => candidate.id === requestedWorkspaceId);
+  const selectedCandidate = requestedWorkspaceId
+    ? requestedCandidate && (!branch || requestedCandidate.targetBranch === branch)
+      ? requestedCandidate
+      : null
+    : branchWorkspace;
   const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
   const navigationError = projectWorkspaces.error;
@@ -109,6 +113,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       errorMessage={navigationError ?? undefined}
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
+      sourceConversationId={sourceConversationId}
       viewState={
         projectWorkspaces.loading || (Boolean(branch) && branchesLoading)
           ? 'loading'
@@ -178,10 +183,9 @@ function buildNextWorkspaceAtBranchHead(
       previousCommittedWorkspace.outputTargets.length > 0
         ? previousCommittedWorkspace.outputTargets
         : starterCandidate.outputTargets,
-    schemaBindings:
-      previousCommittedWorkspace.schemaBindings.length > 0
-        ? previousCommittedWorkspace.schemaBindings
-        : starterCandidate.schemaBindings,
+    schemaBindings: Array.isArray(previousCommittedWorkspace.schemaBindings)
+      ? previousCommittedWorkspace.schemaBindings
+      : starterCandidate.schemaBindings,
     sourceBundle: mergeSourceBundles(
       starterCandidate.sourceBundle,
       previousCommittedWorkspace.sourceBundle.filter((source) => source.type !== 'chat')
@@ -202,17 +206,14 @@ function mergeWorkspaceCandidate(
     : [];
   const persistedSchemaBindings = Array.isArray(persistedCandidate.schemaBindings)
     ? persistedCandidate.schemaBindings
-    : [];
+    : previewCandidate.schemaBindings;
 
   return {
     ...previewCandidate,
     ...persistedCandidate,
     outputTargets:
       persistedOutputTargets.length > 0 ? persistedOutputTargets : previewCandidate.outputTargets,
-    schemaBindings:
-      persistedSchemaBindings.length > 0
-        ? persistedSchemaBindings
-        : previewCandidate.schemaBindings,
+    schemaBindings: persistedSchemaBindings,
     sourceBundle: mergeSourceBundles(
       previewCandidate.sourceBundle,
       persistedCandidate.sourceBundle

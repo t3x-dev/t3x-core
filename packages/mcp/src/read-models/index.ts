@@ -59,37 +59,6 @@ export function toCommitReadModel(commit: {
   };
 }
 
-export function toWorkbenchDraftReadModel(draft: {
-  id: string;
-  project_id: string;
-  title: string;
-  status: string;
-  revision: number;
-  target_branch?: string;
-  extraction_mode?: string;
-  nodes: unknown[];
-  constraints: unknown[];
-  created_at: string;
-  updated_at: string;
-}) {
-  return {
-    kind: 'workbench_draft' as const,
-    draft_id: draft.id,
-    project_id: draft.project_id,
-    title: draft.title,
-    status: draft.status,
-    revision: draft.revision,
-    target_branch: draft.target_branch ?? null,
-    extraction_mode: draft.extraction_mode ?? null,
-    node_count: draft.nodes.length,
-    constraint_count: draft.constraints.length,
-    nodes: draft.nodes,
-    constraints: draft.constraints,
-    created_at: draft.created_at,
-    updated_at: draft.updated_at,
-  };
-}
-
 export function toConversationReadModel(conversation: {
   conversationId: string;
   projectId: string;

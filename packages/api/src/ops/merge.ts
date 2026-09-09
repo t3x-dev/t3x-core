@@ -15,6 +15,7 @@ import type {
   PipelineEvent,
   SemanticContent,
 } from '@t3x-dev/core';
+import type { TransitionPolicyBinding } from '@t3x-dev/storage';
 import {
   commitRepositoryYOpsMerge,
   prepareRepositoryYOpsMerge,
@@ -85,20 +86,18 @@ export interface MergeExecuteInput extends MergePrepareInput {
   decisions: MergeDecision;
   message: string;
   branch: string;
+  /** Task projection only; never used to derive Decision authority. */
   author: Author;
+  /** Server-internal authority derived from authenticated request context. */
+  writeAuthority: {
+    actor: { kind: 'human' | 'agent' | 'service'; id: string };
+    policyBinding?: TransitionPolicyBinding;
+  };
 }
 
 export interface MergeExecuteOutput {
   commit: MergeCommitProjection;
   merge_summary: MergeSummaryData;
-}
-
-function actorFromAuthor(author: Author) {
-  const kind = author.type === 'system' ? ('service' as const) : author.type;
-  return {
-    kind,
-    id: author.id ?? `${kind}:merge:${author.name?.trim() || 'anonymous'}`,
-  };
 }
 
 export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = {
@@ -132,7 +131,11 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
         sourceDigest: input.source_hash,
         targetDigest: input.target_hash,
         decisions: input.decisions,
-        actor: actorFromAuthor(input.author),
+        actor: input.writeAuthority.actor,
+        policyBindingSource: 'server-selected',
+        ...(input.writeAuthority.policyBinding === undefined
+          ? {}
+          : { policyBinding: input.writeAuthority.policyBinding }),
         message: input.message,
       });
     } catch (error) {

@@ -17,14 +17,12 @@ vi.mock('@/infrastructure', () => ({
   getTurn: vi.fn(),
   listBranches: vi.fn(),
   getCurrentBranch: vi.fn(),
-  getDraft: vi.fn(),
 }));
 
 import {
   useBranches,
   useConversations,
   useCurrentBranch,
-  useDraft,
   useHealth,
   useProject,
   useProjects,
@@ -286,33 +284,6 @@ describe('useCurrentBranch', () => {
     await waitForHook();
 
     expect(api.getCurrentBranch).not.toHaveBeenCalled();
-    expect(result.current.data).toBeNull();
-    unmount();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// useDraft
-// ---------------------------------------------------------------------------
-
-describe('useDraft', () => {
-  it('fetches draft by id', async () => {
-    const draft = { draft_id: 'draft_1', content: {} };
-    vi.mocked(api.getDraft).mockResolvedValue(draft as never);
-
-    const { result, unmount } = renderHook(() => useDraft('draft_1'));
-    await waitForHook();
-
-    expect(api.getDraft).toHaveBeenCalledWith('draft_1');
-    expect(result.current.data).toEqual(draft);
-    unmount();
-  });
-
-  it('returns null when id is undefined', async () => {
-    const { result, unmount } = renderHook(() => useDraft(undefined));
-    await waitForHook();
-
-    expect(api.getDraft).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
     unmount();
   });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import yaml from 'js-yaml';
 
 const root = new URL('../..', import.meta.url);
 
@@ -9,7 +10,6 @@ test('PR validation enforces production type and dependency gates', () => {
 
   assert.match(workflow, /^permissions:\n {2}contents: read$/m);
   assert.match(workflow, /^ {6}- name: Typecheck production sources\n {8}run: pnpm typecheck$/m);
-  assert.match(workflow, /^ {6}- name: Audit production dependencies\n {8}run: pnpm audit:prod$/m);
   assert.match(
     workflow,
     /^ {6}- name: Check API route policy inventory\n {8}run: pnpm check:route-policy$/m
@@ -19,11 +19,32 @@ test('PR validation enforces production type and dependency gates', () => {
     /^ {6}- name: Check architecture inventory\n {8}run: pnpm check:architecture-inventory$/m
   );
   assert.ok(workflow.indexOf('run: pnpm typecheck') < workflow.indexOf('run: pnpm build'));
-  assert.ok(workflow.indexOf('run: pnpm audit:prod') < workflow.indexOf('run: pnpm build'));
   assert.ok(
     workflow.indexOf('run: pnpm check:architecture-inventory') < workflow.indexOf('run: pnpm build')
   );
   assert.ok(workflow.indexOf('run: pnpm check:route-policy') < workflow.indexOf('run: pnpm build'));
+});
+
+test('audit cannot prevent test execution or weaken the required validation check', () => {
+  const workflow = yaml.load(
+    readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8')
+  );
+  const job = workflow.jobs.validate;
+  const auditSteps = job.steps.filter((step) => step.run === 'pnpm audit:prod');
+  assert.equal(job.name, 'Check, build, and test');
+  assert.equal(job['continue-on-error'], undefined);
+  assert.equal(job.if, undefined);
+  assert.equal(auditSteps.length, 1);
+  const audit = auditSteps[0];
+  assert.match(audit.if, /^\$\{\{ !cancelled\(\) \}\}$/);
+  assert.equal(audit['continue-on-error'], undefined);
+  assert.equal(job.steps.at(-1), audit);
+  for (const command of ['pnpm build', 'pnpm test:security-smoke', 'pnpm test']) {
+    const index = job.steps.findIndex((step) => step.run === command);
+    assert.ok(index >= 0, `${command} must remain in validation`);
+    assert.ok(index < job.steps.indexOf(audit), `${command} must run before audit`);
+    assert.equal(job.steps[index]['continue-on-error'], undefined);
+  }
 });
 
 test('PR validation qualifies merge groups and immutable dev pushes', () => {

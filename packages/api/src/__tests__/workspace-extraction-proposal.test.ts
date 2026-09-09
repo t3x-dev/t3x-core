@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createInferenceRuntime } from '../lib/inference';
 
 const storageMock = vi.hoisted(() => ({
   findConversationById: vi.fn(),
@@ -10,6 +11,15 @@ const extractionMock = vi.hoisted(() => ({ runApiExtractionV2: vi.fn() }));
 const transitionMock = vi.hoisted(() => ({ resolveWorkspaceExtractionContext: vi.fn() }));
 const dbMock = {
   transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
+};
+const inference = {
+  runtime: createInferenceRuntime(),
+  runId: 'test:workspace-extraction-proposal',
+  scope: {
+    actor: { kind: 'agent' as const, id: 'agent:api-key:ak_1' },
+    projectId: 'proj_1',
+    projectVisibility: 'unknown' as const,
+  },
 };
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => ({
@@ -77,6 +87,7 @@ describe('Workspace extraction proposal service', () => {
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_b', 'turn_a'] },
       expectedRevision: 3,
       actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      inference,
     });
 
     expect(transitionMock.resolveWorkspaceExtractionContext).toHaveBeenCalledWith(
@@ -144,6 +155,7 @@ describe('Workspace extraction proposal service', () => {
         workspaceId: 'workspace_1',
         source: { type: 'conversation', id: 'conv_other', turnHashes: ['turn_a'] },
         actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+        inference,
       })
     ).rejects.toMatchObject<Partial<WorkspaceExtractionProposalError>>({
       kind: 'source_project_mismatch',
@@ -162,6 +174,7 @@ describe('Workspace extraction proposal service', () => {
           turnHashes: ['turn_a', 'turn_missing'],
         },
         actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+        inference,
       })
     ).rejects.toMatchObject<Partial<WorkspaceExtractionProposalError>>({
       kind: 'source_selector_invalid',
@@ -176,6 +189,7 @@ describe('Workspace extraction proposal service', () => {
       workspaceId: 'workspace_1',
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
       actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      inference,
     });
     transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
       baseline: { trees: [], relations: [] },
@@ -206,6 +220,7 @@ describe('Workspace extraction proposal service', () => {
       workspaceId: 'workspace_1',
       source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
       actor: { kind: 'agent', id: 'agent:api-key:ak_1' },
+      inference,
     });
     transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
       baseline: { trees: [], relations: [] },

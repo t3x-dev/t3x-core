@@ -3,8 +3,10 @@ import { ArrowRight } from 'lucide-react';
 
 export function ChangeDecisionHandoff({
   reviewSnapshot,
+  compact = false,
 }: {
   reviewSnapshot: ReviewSnapshotV1 | null;
+  compact?: boolean;
 }) {
   const href = reviewSnapshot
     ? reviewSnapshotHref(
@@ -22,13 +24,15 @@ export function ChangeDecisionHandoff({
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Decide in Changes</h3>
         <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-          This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and
-          commit actions now live in Changes so Web has one review lifecycle.
+          {compact
+            ? 'Review the checks and decide whether to commit this revision.'
+            : 'This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and commit actions now live in Changes so Web has one review lifecycle.'}
         </p>
       </div>
       {href ? (
         <a
           className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)] transition-colors hover:brightness-105"
+          style={{ color: 'var(--on-accent)' }}
           href={href}
         >
           Open Changes

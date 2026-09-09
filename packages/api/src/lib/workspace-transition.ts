@@ -1,7 +1,8 @@
-import type {
-  ChangeProjectionV1,
-  ReviewSnapshotV1,
-  TransitionInspectionView,
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  sameTransitionPolicyResource,
+  type TransitionInspectionView,
 } from '@t3x-dev/application';
 import {
   buildReplayVerificationStatement,
@@ -20,6 +21,7 @@ import {
   type ProposalDraft,
   type ProposalStatement,
   parseAcceptancePolicy,
+  parseYSchemaValidationStatement,
   projectTransitionView,
   repositorySemanticYSchemaTree,
   runRepositorySemanticYSchemaStatementProvider,
@@ -28,6 +30,7 @@ import {
   type StatementObservation,
   type TransitionViewV1,
   type TrustedDecisionFacts,
+  YSCHEMA_VALIDATION_PREDICATE_TYPE,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -526,6 +529,11 @@ async function prepareWorkspaceTransition(
     db,
     input.projectId
   );
+  if (input.content.trees.length !== 1 || input.content.trees[0]?.key !== rootKey) {
+    throw new TypeError(
+      `Keep one ${rootKey} root tree and place the definition content inside it.`
+    );
+  }
   const recordedAt = asCanonicalTimestamp(context.workspaceUpdatedAt);
   const schemaResource = createYSchemaResourceDescriptor(
     `t3x://schemas/${canonicalName}/${schema.version}`,
@@ -784,7 +792,6 @@ export async function decideWorkspaceTransition(
   input: DecideWorkspaceTransitionInput
 ): Promise<DecideWorkspaceTransitionResult> {
   try {
-    const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
     let transitionId = input.transitionId;
     if (transitionId === undefined) {
       if (input.content === undefined) {
@@ -850,20 +857,36 @@ export async function decideWorkspaceTransition(
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
       authoritySelection: {
-        policyDigest: policyBinding.resource.digest,
-        authority: {
-          async resolve() {
-            return {
-              actorContext: { actor: input.actor },
-              observationScope: OBSERVATION_SCOPE,
-              policy: policyBinding.policy,
-              policyResource: policyBinding.resource,
-              statements: graph.observations.map((observation) => ({
-                statement: observation.statement,
-                issuerContext: observation.issuerContext,
-              })) as TrustedDecisionFacts['statements'],
-            };
-          },
+        select({ graph: lockedGraph, refPolicyBinding }) {
+          if (
+            input.policyBinding !== undefined &&
+            (input.policyBinding === null || refPolicyBinding === null
+              ? input.policyBinding !== refPolicyBinding
+              : !sameTransitionPolicyResource(
+                  input.policyBinding.resource,
+                  refPolicyBinding.resource
+                ))
+          ) {
+            throw new TransitionReviewStaleError();
+          }
+          const policyBinding = refPolicyBinding ?? WORKSPACE_POLICY;
+          return {
+            policyDigest: policyBinding.resource.digest,
+            authority: {
+              async resolve() {
+                return {
+                  actorContext: { actor: input.actor },
+                  observationScope: OBSERVATION_SCOPE,
+                  policy: policyBinding.policy,
+                  policyResource: policyBinding.resource,
+                  statements: lockedGraph.observations.map((observation) => ({
+                    statement: observation.statement,
+                    issuerContext: observation.issuerContext,
+                  })) as TrustedDecisionFacts['statements'],
+                };
+              },
+            },
+          };
         },
       },
     });
@@ -882,6 +905,37 @@ export async function decideWorkspaceTransition(
         ...artifacts,
       };
     }
+
+    // Project only the native evidence used by this exact, successfully decided review.
+    const nativeChecks = graph.observations
+      .filter(
+        ({ statement, issuerContext }) =>
+          statement.predicateType === YSCHEMA_VALIDATION_PREDICATE_TYPE &&
+          issuerContext.actor.kind === VALIDATION_ACTOR.kind &&
+          issuerContext.actor.id === VALIDATION_ACTOR.id
+      )
+      .map(({ statement }) => parseYSchemaValidationStatement(statement));
+    const nativeCheck = nativeChecks.length === 1 ? nativeChecks[0]!.predicate : null;
+    const committedSchemaReview =
+      nativeCheck?.outcome === 'passed'
+        ? {
+            verdict: 'ready',
+            summary:
+              'Native YSchema validation passed for this committed result. Execution was not run.',
+            gaps: [],
+          }
+        : {
+            verdict: 'needs_review',
+            summary: 'This commit does not have a passing native YSchema check.',
+            gaps:
+              nativeCheck?.outcome === 'failed'
+                ? [
+                    ...new Set(
+                      [...nativeCheck.errors, ...nativeCheck.gaps].map((finding) => finding.path)
+                    ),
+                  ]
+                : ['Native YSchema validation is unavailable.'],
+          };
 
     const projectionFacts: ProtocolValue = {
       adapter: 'workspace_transition',
@@ -919,6 +973,7 @@ export async function decideWorkspaceTransition(
         apply({ workspace, committedAt }) {
           return {
             ...workspace,
+            schemaReview: committedSchemaReview,
             ...(input.workspaceCommitOverride === undefined
               ? {}
               : {

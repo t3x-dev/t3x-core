@@ -100,6 +100,16 @@ describe('seedDemoWorkspace', () => {
     expect(marker?.status).toBe('active');
   });
 
+  it('uses the reserved project ID supplied by a host policy', async () => {
+    const result = await seedDemoWorkspace(db, {
+      projectId: 'proj_reserved_demo_workspace',
+      ownerId: 'reserved-demo-owner',
+    });
+
+    expect(result.status).toBe('created');
+    expect(result.project?.projectId).toBe('proj_reserved_demo_workspace');
+  });
+
   it('is idempotent and does not duplicate demo rows', async () => {
     const first = await seedDemoWorkspace(db, { ownerId: null });
     const second = await seedDemoWorkspace(db, { ownerId: null });

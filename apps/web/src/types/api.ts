@@ -10,7 +10,6 @@
 
 export type {
   AdaptiveResult,
-  AutoCommitResult,
   AutopilotConfig,
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
@@ -32,13 +31,6 @@ export type {
 export { ApiError } from '@/infrastructure/core';
 export type { DeployAgent } from '@/infrastructure/deploy';
 export type { TreeMergeSuggestion } from '@/infrastructure/diff';
-export type {
-  DraftConstraint,
-  DraftNode,
-  LocatedEvidenceAPI,
-  SemanticPointAPI,
-  WorkbenchDraft,
-} from '@/infrastructure/drafts';
 export type { CommitExportFormat } from '@/infrastructure/export/commit';
 // Export-format unions (re-exported so components consume types
 // without touching @/infrastructure — Phase F boundary).
@@ -119,6 +111,7 @@ export type {
   Conversation,
   LLMProviderInfo,
   Project,
+  ProjectVisibility,
   Turn,
 } from '@/infrastructure/types';
 export type { NodeMember } from '@/types/knowledgeGraph';

@@ -9,6 +9,7 @@ import {
   TransitionPolicyBindingIntegrityError,
   unbindTransitionPolicy,
 } from '../queries/transition-policy-bindings';
+import { acquireTransitionPolicyBindingLock } from '../queries/transition-review-lock';
 import { transitionPolicyResources } from '../schema-transition-commits';
 import { createTestDB, testData } from './setup';
 
@@ -70,6 +71,78 @@ describe('Transition AcceptancePolicy bindings', () => {
   });
 
   afterAll(async () => cleanup());
+
+  it.each([
+    { operation: 'rebind', hasExistingBinding: true },
+    { operation: 'first bind', hasExistingBinding: false },
+  ])('seals the current policy pointer against a concurrent $operation', async ({
+    operation,
+    hasExistingBinding,
+  }) => {
+    const project = await insertProject(db, testData.project({ name: `Policy lock ${operation}` }));
+    const existing = hasExistingBinding
+      ? await bindTransitionPolicy(db, {
+          projectId: project.projectId,
+          refName: 'main',
+          uri: 't3x://policies/policy-lock/v1',
+          policy: policy(false),
+          actor: { kind: 'human', id: 'user:maintainer' },
+        })
+      : null;
+
+    let releaseLock!: () => void;
+    const lockCanFinish = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    let reportLocked!: (value: { policyBindingFound: boolean; digest: string | null }) => void;
+    const locked = new Promise<{ policyBindingFound: boolean; digest: string | null }>(
+      (resolve) => {
+        reportLocked = resolve;
+      }
+    );
+    const lockTransaction = (
+      db as unknown as {
+        transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
+      }
+    ).transaction(async (rawTx) => {
+      const tx = rawTx as AnyDB;
+      const result = await acquireTransitionPolicyBindingLock(tx, project.projectId, 'main');
+      const binding = result.policyBindingFound
+        ? await getTransitionPolicyBinding(tx, project.projectId, 'main')
+        : null;
+      reportLocked({
+        policyBindingFound: result.policyBindingFound,
+        digest: binding?.resource.digest ?? null,
+      });
+      await lockCanFinish;
+    });
+    await expect(locked).resolves.toEqual({
+      policyBindingFound: hasExistingBinding,
+      digest: existing?.resource.digest ?? null,
+    });
+
+    let mutationSettled = false;
+    const mutation = bindTransitionPolicy(db, {
+      projectId: project.projectId,
+      refName: 'main',
+      uri: 't3x://policies/policy-lock/v2',
+      policy: policy(true),
+      actor: { kind: 'human', id: 'user:maintainer' },
+    }).finally(() => {
+      mutationSettled = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(mutationSettled).toBe(false);
+    } finally {
+      releaseLock();
+      await lockTransaction;
+    }
+    await expect(mutation).resolves.toMatchObject({
+      projectId: project.projectId,
+      refName: 'main',
+    });
+  });
 
   it('stores immutable policy bytes and updates only the project/ref pointer', async () => {
     const project = await insertProject(db, testData.project({ name: 'Policy binding' }));

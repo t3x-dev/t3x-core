@@ -78,6 +78,18 @@ export function SchemaRegistry({
 
   useEffect(() => {
     const routeQuery = new URLSearchParams(window.location.search);
+    const catalogName = routeQuery.get('catalogName');
+    const catalogVersion = routeQuery.get('catalogVersion');
+    if (catalogName && catalogVersion) {
+      const family = families.find((item) => item.canonicalName === catalogName);
+      const release = family?.releases.find((item) => item.version === catalogVersion);
+      if (family && release) {
+        setSelectedFamilyId(family.id);
+        setSelectedReleaseIds((previous) => ({ ...previous, [family.id]: release.id }));
+        setRegistryView('versions');
+      }
+      return;
+    }
     if (routeQuery.get('mode') !== 'compose') return;
     const linkedFamily = routeQuery.get('family');
     if (linkedFamily && families.some((family) => family.id === linkedFamily)) {

@@ -23,7 +23,8 @@ import {
 } from '@t3x-dev/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type ApiKeyRecord, apiKeys } from '../schema-trees';
+import { projects } from '../schema';
+import { type ApiKeyRecord, apiKeys, projectGrants } from '../schema-trees';
 
 // ============================================================
 // Constants
@@ -114,24 +115,46 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
     throw new TypeError('Global agent and service credentials require an owning user');
   }
 
-  const [row] = await db
-    .insert(apiKeys)
-    .values({
-      id,
-      keyPrefix,
-      keyHash,
-      name: input.name,
-      projectId: input.projectId ?? null,
-      userId: input.userId ?? null,
-      principalKind,
-      transitionScopes,
-      createdAt: now,
-      lastUsedAt: null,
-      revokedAt: null,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(apiKeys)
+      .values({
+        id,
+        keyPrefix,
+        keyHash,
+        name: input.name,
+        projectId: input.projectId ?? null,
+        userId: input.userId ?? null,
+        principalKind,
+        transitionScopes,
+        createdAt: now,
+        lastUsedAt: null,
+        revokedAt: null,
+      })
+      .returning();
 
-  return rowToApiKey(row);
+    if (principalKind !== 'human' && input.projectId) {
+      const [project] = await tx
+        .select({ namespaceId: projects.namespaceId })
+        .from(projects)
+        .where(eq(projects.projectId, input.projectId))
+        .limit(1);
+      if (!project?.namespaceId) {
+        throw new TypeError('Machine credentials require a canonically namespaced project');
+      }
+      await tx.insert(projectGrants).values({
+        grantId: `grant_${id}`,
+        projectId: input.projectId,
+        namespaceId: project.namespaceId,
+        principalKind,
+        principalId: id,
+        role: 'editor',
+        status: 'active',
+      });
+    }
+
+    return rowToApiKey(row);
+  });
 }
 
 /**
@@ -219,14 +242,28 @@ export async function listApiKeys(
  */
 export async function revokeApiKey(db: AnyDB, id: string): Promise<ApiKey | null> {
   const now = new Date();
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(apiKeys)
+      .set({ revokedAt: now })
+      .where(eq(apiKeys.id, id))
+      .returning();
 
-  const [updated] = await db
-    .update(apiKeys)
-    .set({ revokedAt: now })
-    .where(eq(apiKeys.id, id))
-    .returning();
+    if (updated && updated.principalKind !== 'human' && updated.projectId) {
+      await tx
+        .update(projectGrants)
+        .set({ status: 'revoked', revokedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(projectGrants.projectId, updated.projectId),
+            eq(projectGrants.principalKind, updated.principalKind),
+            eq(projectGrants.principalId, updated.id)
+          )
+        );
+    }
 
-  return updated ? rowToApiKey(updated) : null;
+    return updated ? rowToApiKey(updated) : null;
+  });
 }
 
 /**

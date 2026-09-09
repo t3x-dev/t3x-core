@@ -5,7 +5,6 @@
  * - Legacy deterministic rules: rejected until a declarative evaluator is available
  * - LLM-based checks: Prompt-based evaluation using an LLM provider
  *
- * @see docs/plans/core-engine/09-gate-and-ci.md §Gate 3
  */
 
 import type { LLMProvider } from '../llm/types';
@@ -72,11 +71,10 @@ export function evaluateRule(
  * An LLMProvider is only needed when rules of type 'llm' are present.
  */
 export class BusinessGate {
-  private provider?: LLMProvider;
-
-  constructor(provider?: LLMProvider) {
-    this.provider = provider;
-  }
+  constructor(
+    private readonly provider?: LLMProvider,
+    private readonly isFatalProviderError?: (error: unknown) => boolean
+  ) {}
 
   /**
    * Evaluate all rules against the given state content.
@@ -132,6 +130,7 @@ export class BusinessGate {
             severity: rule.severity,
           });
         } catch (err: unknown) {
+          if (this.isFatalProviderError?.(err)) throw err;
           const errMsg = err instanceof Error ? err.message : String(err);
           results.push({
             rule_id: rule.id,

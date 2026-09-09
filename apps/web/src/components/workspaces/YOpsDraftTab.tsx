@@ -43,8 +43,6 @@ import type {
 } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ChangeDecisionHandoff } from './ChangeDecisionHandoff';
-import { ChangeReviewDock } from './ChangeReviewDock';
-import { PrdPreviewView } from './PrdPreviewView';
 import type {
   ProposalGenerationAction,
   ProposalGenerationReviewState,
@@ -52,6 +50,7 @@ import type {
 import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceExtractionProposalView } from './WorkspaceExtractionProposalView';
+import { WorkspacePreviewView } from './WorkspacePreviewView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -503,7 +502,7 @@ export function YOpsDraftTab({
           canValidateProposal={canValidateProposal}
           candidate={candidate}
           extractYOpsTitle={extractYOpsTitle}
-          generatedYOpsCount={generatedYOps?.length ?? 0}
+          validationPassed={validationPassed && status !== 'committed'}
           onApply={handleApply}
           onValidate={handleGenerate}
           onViewChange={onViewChange}
@@ -568,7 +567,7 @@ function ValidationReviewView({
   canValidateProposal,
   candidate,
   extractYOpsTitle,
-  generatedYOpsCount,
+  validationPassed,
   onApply,
   onValidate,
   onViewChange,
@@ -581,7 +580,7 @@ function ValidationReviewView({
   canValidateProposal: boolean;
   candidate: WorkspaceCandidate;
   extractYOpsTitle: string;
-  generatedYOpsCount: number;
+  validationPassed: boolean;
   onApply: () => void;
   onValidate: () => void;
   onViewChange?: (view: WorkspaceYOpsFlowView) => void;
@@ -596,12 +595,18 @@ function ValidationReviewView({
   const [diffOpen, setDiffOpen] = useState(false);
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
-  const validationRan = generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
+  const validationLabel =
+    status === 'generating'
+      ? 'YOps validation running'
+      : visibleErrorMessage
+        ? 'Validation needs attention'
+        : validationPassed
+          ? 'YOps validation passed'
+          : 'YOps validation not run';
   const hasBlockingIssues = candidate.schemaReview.gaps.length > 0 || Boolean(visibleErrorMessage);
-  const passedCount = validationRan && !hasBlockingIssues ? operations.length : 0;
   const statusLabel = hasBlockingIssues
     ? 'Review required'
-    : validationRan
+    : validationPassed
       ? 'Ready for Preview'
       : 'Ready to validate';
 
@@ -617,7 +622,7 @@ function ValidationReviewView({
             Validation
           </h3>
           <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-            Check the projected Proposal against YSchema before Preview.
+            Validate the proposed operations before Preview.
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -629,8 +634,10 @@ function ValidationReviewView({
               ? `${candidate.schemaBindings[0].schemaName} ${candidate.schemaBindings[0].version}`
               : 'No schema'}
           </span>
-          <Badge variant={validationRan ? 'success' : 'pending-subtle'}>
-            {getYOpsStatusText(status)}
+          <Badge
+            variant={visibleErrorMessage ? 'warning' : validationPassed ? 'success' : 'outline'}
+          >
+            {validationLabel}
           </Badge>
           {yopsDraftSent ? <Badge variant="pending-subtle">Proposal ready</Badge> : null}
           <Button
@@ -641,7 +648,7 @@ function ValidationReviewView({
           >
             Edit Proposal
           </Button>
-          {!validationRan ? (
+          {!validationPassed ? (
             <Button
               disabled={!canValidateProposal}
               onClick={onValidate}
@@ -682,16 +689,20 @@ function ValidationReviewView({
           <div>
             <h4 className="text-sm font-semibold text-[var(--text-primary)]">{statusLabel}</h4>
             <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-              The projected PRD meets the active YSchema when every change passes.
+              YOps checks replayability. Schema review findings are tracked separately.
             </p>
           </div>
           <span
             className={cn(
               'text-xs font-semibold',
-              hasBlockingIssues ? 'text-[var(--status-warning)]' : 'text-[var(--status-success)]'
+              hasBlockingIssues
+                ? 'text-[var(--status-warning)]'
+                : validationPassed
+                  ? 'text-[var(--status-success)]'
+                  : 'text-[var(--text-secondary)]'
             )}
           >
-            {passedCount} changes passed · {candidate.schemaReview.gaps.length} issues
+            {validationLabel} · {candidate.schemaReview.gaps.length} schema review findings
           </span>
         </div>
 
@@ -715,12 +726,11 @@ function ValidationReviewView({
             <span>#</span>
             <span>Change</span>
             <span>YSchema rule</span>
-            <span className="text-right">Result</span>
+            <span className="text-right">Scope</span>
           </div>
 
           {operations.map((operation, index) => {
             const selected = selectedOperation?.id === operation.id;
-            const passed = validationRan && !hasBlockingIssues;
             const field = findSchemaFieldForOperation(candidate, operation);
             return (
               <div className="border-b border-[var(--stroke-divider)]" key={operation.id}>
@@ -748,13 +758,7 @@ function ValidationReviewView({
                     {formatSchemaRule(field)}
                   </span>
                   <span className="justify-self-end">
-                    <Badge
-                      variant={
-                        passed ? 'success' : hasBlockingIssues ? 'warning' : 'pending-subtle'
-                      }
-                    >
-                      {passed ? 'PASS' : hasBlockingIssues ? 'REVIEW' : 'CHECK'}
-                    </Badge>
+                    <Badge variant="outline">{validationPassed ? 'Included' : 'Pending'}</Badge>
                   </span>
                 </button>
 
@@ -806,7 +810,7 @@ function ValidationReviewView({
           onSelectOperation={setSelectedOperationId}
           open={diffOpen}
           phase="validation"
-          schemaPassed={validationRan && !hasBlockingIssues}
+          replayValidated={validationPassed}
           selectedOperation={selectedOperation}
         />
       ) : null}
@@ -933,25 +937,10 @@ function PreviewReviewView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
-      <PrdPreviewView
+      <WorkspacePreviewView
         appliedCount={appliedCount}
         candidate={candidate}
-        changesView={
-          <ChangeReviewDock
-            candidate={candidate}
-            flowState={{
-              appliedCount,
-              baselineTrees,
-              commitHash: committedHash ?? undefined,
-              error: visibleErrorMessage ?? undefined,
-              previewReady: Boolean(materializedTrees),
-              previewTrees: validatedPreviewTrees,
-              validationPassed,
-              yopsDraftId: candidate.yopsDraft.id,
-            }}
-          />
-        }
-        commitReady={Boolean(committedHash) || commitBlockers.length === 0}
+        baselineTrees={baselineTrees}
         operationCount={generatedYOpsCount}
         previewReady={Boolean(materializedTrees)}
         previewTrees={materializedTrees ?? validatedPreviewTrees}
@@ -1024,7 +1013,7 @@ function RenderedYOpsTree({
     >
       <PaneHeader
         icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
-        label="Rendered PRD YAML"
+        label="Rendered YAML"
         meta={materializedTrees ? `${appliedCount} applied` : 'Waiting for validation'}
       />
       {materializedTrees ? (
@@ -1608,7 +1597,7 @@ function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
 
 function getYOpsViewDescription(view: WorkspaceYOpsFlowView): string {
   if (view === 'validation') return 'Check the Proposal against schema, evidence, and replay.';
-  if (view === 'preview') return 'Read the rendered PRD and inspect its evidence before commit.';
+  if (view === 'preview') return 'Review the resulting state and its evidence before commit.';
   if (view === 'commit') return 'Commit the validated workspace result.';
   return 'Review what T3X recommends and why.';
 }
@@ -1886,6 +1875,7 @@ function formatTreeValue(value: unknown): string {
 }
 
 function operationPreviewPath(operation: WorkspaceYOpsDraftOperation, rootKey: string) {
+  if (!rootKey) return operation.path;
   const path = operation.path.replace(/\/-$/, '');
   const segments = path
     .split('/')

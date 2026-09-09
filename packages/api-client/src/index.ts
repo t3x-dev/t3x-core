@@ -6,4 +6,22 @@
 
 export type { T3xClientConfig, T3xRequestOptions } from './client.js';
 export { createClient, T3xApiError, T3xClient } from './client.js';
+export * from './collaboration.js';
+export {
+  type AccountOperation,
+  AccountOperationSchema,
+  type AuthOperation,
+  AuthOperationSchema,
+  DEPLOYMENT_CAPABILITIES_VERSION,
+  type DeploymentCapabilities,
+  DeploymentCapabilitiesSchema,
+  SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
+  UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
+} from './deployment-capabilities.js';
+export * from './schema-catalog.js';
+export * from './schema-studio';
+export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
+export * from './state-overview';
+export * from './state-presentation.js';
 export type * from './types.js';
+export * from './workspace-delivery.js';

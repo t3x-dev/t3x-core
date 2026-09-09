@@ -1,1 +1,1 @@
-export { NodeModal, type NodeQuickAction } from './NodeModal';
+export { buildWorkspaceHandoffPath, NodeModal, type NodeQuickAction } from './NodeModal';
