@@ -19,7 +19,6 @@ import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
-import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
@@ -162,6 +161,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
         const commitList = await loadCommits(projectId, branch, 100);
 
         if (cancelled) return;
+        if (commitList.some((commit) => commit.project_id !== projectId)) {
+          throw new Error('History response does not match the selected project.');
+        }
 
         // Sort by committed_at descending (newest first)
         commitList.sort(
@@ -240,6 +242,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     setParentLoading(true);
     void loadCommit(parentHash, projectId)
       .then((commit) => {
+        if (commit.hash !== parentHash || commit.project_id !== projectId) {
+          throw new Error('Parent commit response does not match this historical revision.');
+        }
         if (!cancelled) setParentCommit(commit);
       })
       .catch((err) => {
@@ -297,7 +302,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     <div className="flex h-screen flex-col bg-[var(--surface-app)]">
       {/* ═══════ HEADER ═══════ */}
       <header
-        className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
+        className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
         data-intro-target="history-header"
       >
         <div className="flex items-center gap-3">
@@ -311,28 +316,23 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
           </button>
           <div className="flex items-center gap-2">
             <History size={16} className="text-[var(--text-secondary)]" />
-            <h1 className="text-[14px] font-semibold text-[var(--text-primary)]">Commit History</h1>
+            <h1
+              data-intro-target="history-keyboard"
+              title="j / k: navigate · o: open · Esc: deselect"
+              className="text-[14px] font-semibold text-[var(--text-primary)]"
+            >
+              Commit History
+            </h1>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Keyboard hints */}
-          <div data-intro-target="history-keyboard">
-            <KeyboardHintBar
-              hints={[
-                { key: 'j k', label: 'navigate' },
-                { key: 'o', label: 'open' },
-                { key: 'esc', label: 'deselect' },
-              ]}
-            />
-          </div>
-          <span className="h-4 w-px bg-[var(--stroke-divider)]" />
           {/* Branch filter */}
           <div className="flex items-center gap-2" data-intro-target="history-branch-filter">
             <GitBranch size={14} className="text-[var(--text-tertiary)]" />
             <select
               aria-label="Branch filter"
-              className="py-1 px-2 border border-[var(--stroke-default)] rounded-md text-xs bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
+              className="h-7 max-w-48 rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 text-[13px] text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
               value={selectedBranch}
               onChange={(e) => handleBranchChange(e.target.value)}
             >
@@ -348,9 +348,18 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       </header>
 
       {/* ═══════ SCROLLABLE CONTENT ═══════ */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={
+          selectedCommit
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            : 'min-h-0 flex-1 overflow-y-auto'
+        }
+      >
         {selectedCommit ? (
-          parentLoading ? (
+          parentLoading ||
+          (selectedCommit.parents[0] &&
+            parentCommit?.hash !== selectedCommit.parents[0] &&
+            !parentError) ? (
             <div className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
@@ -372,9 +381,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
             </div>
           ) : (
             <CommitHistoryDiffView
+              key={selectedCommit.hash}
               commit={selectedCommit}
               onBack={() => setSelectedCommitHash(null)}
-              parentCommit={parentCommit}
+              parentCommit={selectedCommit.parents.length === 0 ? null : parentCommit}
             />
           )
         ) : (

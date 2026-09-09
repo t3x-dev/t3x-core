@@ -456,6 +456,7 @@ export function ProjectDetailPageContent({
         onRunValidation={handleRunYSchemaValidation}
         projectId={projectId}
         projectName={project.name}
+        projectDescription={project.description}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}

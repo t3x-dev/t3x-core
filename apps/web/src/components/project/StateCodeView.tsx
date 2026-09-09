@@ -1,7 +1,7 @@
 'use client';
 
 import { JSON_SCHEMA, load } from 'js-yaml';
-import { Check, Code2, Copy, Search } from 'lucide-react';
+import { Check, Code2, Copy, GitBranch, Search } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { cn } from '@/utils/cn';
@@ -72,69 +72,87 @@ export function StateCodeView({
     }
   }
 
+  const fileName = `${rootKey}-state.${mode === 'json' ? 'json' : 'yaml'}`;
+
   return (
     <section
       aria-label="YAML code view"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]"
     >
-      <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
-        <Code2 aria-hidden="true" className="size-5 shrink-0 text-[var(--accent-commit)]" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[14px] font-semibold leading-5">
-            {rootKey}-state.{mode === 'json' ? 'json' : 'yaml'}
+      <header className="flex min-h-[64px] shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-[5px] bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
+          <Code2 aria-hidden="true" className="size-4" strokeWidth={2.2} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate text-[14px] font-semibold leading-5 text-[var(--text-primary)]">
+            {fileName}
           </h2>
-          <p
-            className="truncate font-mono text-[12px] leading-[18px] text-[var(--text-tertiary)]"
-            title={`${branch} · ${commitHash}`}
-          >
-            {branch} · {commitHash}
-          </p>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-[18px] text-[var(--text-tertiary)]">
+            <GitBranch aria-hidden="true" className="size-3" />
+            <span className="truncate font-mono">{branch}</span>
+            <span aria-hidden="true" className="text-[var(--text-quaternary)]">
+              /
+            </span>
+            <span className="truncate font-mono">{rootKey}</span>
+            <span aria-hidden="true" className="text-[var(--text-quaternary)]">
+              /
+            </span>
+            <span className="truncate font-mono">{fileName}</span>
+          </div>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <div
-            role="toolbar"
             aria-label="Code format"
-            className="inline-flex h-8 rounded-md border border-[var(--stroke-divider)] p-0.5"
+            className="hidden h-8 items-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-[2px] text-xs font-medium leading-4 sm:inline-flex"
+            role="toolbar"
           >
             {(['yaml', 'json', 'raw'] as const).map((format) => (
               <button
-                key={format}
-                type="button"
                 aria-pressed={mode === format}
-                onClick={() => setMode(format)}
                 className={cn(
-                  'rounded px-3 text-[12px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)]',
-                  mode === format && 'bg-[var(--surface-hover)] text-[var(--accent-commit)]'
+                  'h-full rounded-[4px] px-3 text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]',
+                  mode === format &&
+                    'border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
                 )}
+                key={format}
+                onClick={() => setMode(format)}
+                type="button"
               >
                 {format === 'raw' ? 'Raw' : format.toUpperCase()}
               </button>
             ))}
           </div>
           <button
-            type="button"
             aria-label={copied ? 'Copied code' : `Copy ${mode === 'json' ? 'JSON' : 'YAML'} code`}
+            className="inline-flex size-8 items-center justify-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
             disabled={Boolean(error)}
             onClick={() => void copy()}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--stroke-divider)] disabled:opacity-40"
+            title={copied ? 'Copied' : 'Copy code'}
+            type="button"
           >
             {copied ? (
-              <Check aria-hidden="true" className="size-4" />
+              <Check aria-hidden="true" className="size-3.5 text-[var(--status-success)]" />
             ) : (
-              <Copy aria-hidden="true" className="size-4" />
+              <Copy aria-hidden="true" className="size-3.5" />
             )}
           </button>
           <button
-            type="button"
             aria-label="Find in code"
             aria-pressed={searchOpen}
+            className={cn(
+              'inline-flex size-8 items-center justify-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
+              searchOpen && 'border-[var(--accent-commit)]/40 text-[var(--accent-commit)]'
+            )}
             onClick={() => setSearchOpen((open) => !open)}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--stroke-divider)]"
+            title="Find in code"
+            type="button"
           >
-            <Search aria-hidden="true" className="size-4" />
+            <Search aria-hidden="true" className="size-3.5" />
           </button>
         </div>
       </header>
+
       {searchOpen && (
         <div className="flex shrink-0 items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2">
           <input
@@ -164,10 +182,10 @@ export function StateCodeView({
               : 'Canonical YAML content'
         }
         horizontal
-        className="min-h-0 flex-1"
+        className="min-h-0 min-w-0 flex-1 bg-[var(--editor-bg)]"
         viewportClassName="font-mono text-[13px] leading-[22px] text-[var(--text-primary)]"
       >
-        <code className="block min-w-max py-3">
+        <code className="block min-w-max py-4 pr-6">
           {!error &&
             lines.map((line, index) => (
               <div
@@ -179,7 +197,7 @@ export function StateCodeView({
               >
                 <span
                   aria-hidden="true"
-                  className="sticky left-0 select-none border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 text-right text-[var(--text-tertiary)]"
+                  className="sticky left-0 select-none border-r border-[var(--stroke-divider)] bg-[var(--editor-gutter)] px-3 text-right text-[var(--text-tertiary)]"
                 >
                   {index + 1}
                 </span>
