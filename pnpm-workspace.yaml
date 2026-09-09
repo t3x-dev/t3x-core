@@ -8,6 +8,8 @@ onlyBuiltDependencies:
   - "@embedded-postgres/linux-x64"
   - "@swc/core"
 overrides:
+  '@xmldom/xmldom@<0.8.15': 0.8.15
+  'js-yaml@>=4.0.0 <4.3.2': 4.3.2
   '@hono/node-server@<2.0.5': 2.1.0
   ajv: 8.20.0
   'body-parser@<1.20.6': 1.20.6
@@ -17,7 +19,7 @@ overrides:
   'nanoid@<3.3.18': 3.3.18
   'nanoid@>=4.0.0 <5.1.16': 5.1.16
   'postcss@<=8.5.25': 8.5.26
-  'sharp@<0.35.0': 0.35.0
+  'sharp@<0.35.4': 0.35.4
   'shell-quote@<=1.8.4': 1.9.0
   picomatch@2.3.1: 2.3.2
   picomatch@4.0.3: 4.0.4
