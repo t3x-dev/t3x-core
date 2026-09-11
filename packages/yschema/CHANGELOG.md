@@ -1,5 +1,11 @@
 # @t3x-dev/yschema
 
+## 1.3.0
+
+### Minor Changes
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Allow Schema releases to pin an integrity-checked author introduction and bundled cover image. Require project edit authority for Schema publication, identity/lifecycle changes and composition writes. Keep private introduction references out of public and foreign-project catalog results.
+
 ## 1.2.0
 
 ### Minor Changes
