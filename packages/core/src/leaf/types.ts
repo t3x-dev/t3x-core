@@ -335,8 +335,7 @@ export const TEMPLATE_VARIABLES: Record<TemplateVariableName, TemplateVariable> 
   },
   formattedSemanticPoints: {
     name: 'formattedSemanticPoints',
-    description:
-      'Selected semantic points section derived from source knowledge',
+    description: 'Selected semantic points section derived from source knowledge',
     required: false,
     defaultValue: '',
   },
