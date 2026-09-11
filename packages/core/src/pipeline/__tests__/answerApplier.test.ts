@@ -13,7 +13,7 @@ const baseSnapshot: SemanticContent = {
   trees: [
     {
       key: 'travel_plan',
-      slots: { destination: 'Hangzhou', budget: '5000左右' },
+      slots: { destination: 'Hangzhou', budget: 'about 5000' },
       children: [
         { key: 'attractions', slots: { places: ['West Lake', 'Lingyin Temple'] }, children: [] },
         { key: 'food', slots: { cuisine: 'Hangbang' }, children: [] },
@@ -40,9 +40,9 @@ describe('applyVaguenessAnswer', () => {
   });
 
   it('updates slot with string value', () => {
-    const result = applyVaguenessAnswer(baseSnapshot, 'travel_plan', 'budget', '5000元');
+    const result = applyVaguenessAnswer(baseSnapshot, 'travel_plan', 'budget', '5000 yuan');
     expect(result.applied).toBe(true);
-    expect(result.snapshot!.trees[0].slots.budget).toBe('5000元');
+    expect(result.snapshot!.trees[0].slots.budget).toBe('5000 yuan');
   });
 
   it('fails for non-existent frame', () => {
