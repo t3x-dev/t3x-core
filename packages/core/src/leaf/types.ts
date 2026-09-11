@@ -205,16 +205,16 @@ export const DEFAULT_TEMPERATURE = 0.7;
  * These are the built-in variables that can be used in templates.
  */
 export const TEMPLATE_VARIABLE_NAMES = [
-  'knowledge', // 原始知识条目数组
-  'formattedKnowledge', // 格式化后的知识（YAML-like）
-  'formattedSemanticPoints', // 选中的语义要点
-  'requires', // require 约束数组
-  'excludes', // exclude 约束数组
-  'formattedConstraints', // 格式化后的约束文本
-  'leafTitle', // Leaf 标题
-  'leafType', // Leaf 类型
-  'additionalInstructions', // 附加指令
-  'typeInstructions', // 类型特定指令（向后兼容）
+  'knowledge', // raw knowledge item array
+  'formattedKnowledge', // formatted knowledge (YAML-like)
+  'formattedSemanticPoints', // selected semantic points
+  'requires', // require constraint array
+  'excludes', // exclude constraint array
+  'formattedConstraints', // formatted constraint text
+  'leafTitle', // leaf title
+  'leafType', // leaf type
+  'additionalInstructions', // extra instructions
+  'typeInstructions', // type-specific instructions (backward compatible)
 ] as const;
 
 export type TemplateVariableName = (typeof TEMPLATE_VARIABLE_NAMES)[number];
@@ -224,16 +224,16 @@ export type TemplateVariableName = (typeof TEMPLATE_VARIABLE_NAMES)[number];
  * Describes what a variable represents and whether it's required.
  */
 export interface TemplateVariable {
-  /** Variable name, e.g., "nodes" (变量名) */
+  /** Variable name, e.g., "nodes" */
   name: TemplateVariableName;
 
-  /** Human-readable description (变量描述) */
+  /** Human-readable description */
   description: string;
 
-  /** Whether this variable is required (是否必需) */
+  /** Whether this variable is required */
   required: boolean;
 
-  /** Default value if not provided (默认值) */
+  /** Default value if not provided */
   defaultValue?: string;
 }
 
@@ -242,25 +242,25 @@ export interface TemplateVariable {
  * Templates define the structure of prompts with variable placeholders.
  */
 export interface LeafTemplate {
-  /** Unique template identifier, e.g., "tweet_default" (模板唯一标识) */
+  /** Unique template identifier, e.g., "tweet_default" */
   id: string;
 
-  /** The leaf type this template is for (对应的 leaf 类型) */
+  /** The leaf type this template is for */
   type: LeafType;
 
-  /** Display name, e.g., "Twitter Standard Template" (显示名称) */
+  /** Display name, e.g., "Twitter Standard Template" */
   name: string;
 
-  /** Template description (模板描述) */
+  /** Template description */
   description: string;
 
-  /** System prompt template with {{variable}} placeholders (系统提示词模板) */
+  /** System prompt template with {{variable}} placeholders */
   systemPrompt: string;
 
-  /** User prompt template with {{variable}} placeholders (用户提示词模板) */
+  /** User prompt template with {{variable}} placeholders */
   userPrompt: string;
 
-  /** Variables used by this template (该模板使用的变量列表) */
+  /** Variables used by this template */
   variables: TemplateVariable[];
 }
 
@@ -269,34 +269,34 @@ export interface LeafTemplate {
  * Contains all values that can be substituted into template variables.
  */
 export interface TemplateContext {
-  /** Raw knowledge item texts (原始知识条目文本列表) */
+  /** Raw knowledge item texts */
   knowledge: string[];
 
-  /** Formatted knowledge in YAML-like format (格式化后的知识) */
+  /** Formatted knowledge in YAML-like format */
   formattedKnowledge: string;
 
-  /** Selected semantic points derived from source knowledge (选中的来源语义要点) */
+  /** Selected semantic points derived from source knowledge */
   formattedSemanticPoints: string;
 
-  /** Formatted require constraints (必须包含的约束列表) */
+  /** Formatted require constraints */
   requires: string[];
 
-  /** Formatted exclude constraints (必须排除的约束列表) */
+  /** Formatted exclude constraints */
   excludes: string[];
 
-  /** Combined formatted constraints text (格式化后的约束文本) */
+  /** Combined formatted constraints text */
   formattedConstraints: string;
 
-  /** Leaf title (Leaf 标题) */
+  /** Leaf title */
   leafTitle: string;
 
-  /** Leaf type (Leaf 类型) */
+  /** Leaf type */
   leafType: AnyLeafType;
 
-  /** Additional instructions (附加指令) */
+  /** Additional instructions */
   additionalInstructions: string;
 
-  /** Type-specific instructions for backward compatibility (类型特定指令) */
+  /** Type-specific instructions for backward compatibility */
   typeInstructions: string;
 }
 
@@ -304,16 +304,16 @@ export interface TemplateContext {
  * Result of rendering a template.
  */
 export interface RenderedTemplate {
-  /** Rendered system prompt (渲染后的系统提示词) */
+  /** Rendered system prompt */
   systemPrompt: string;
 
-  /** Rendered user prompt (渲染后的用户提示词) */
+  /** Rendered user prompt */
   userPrompt: string;
 
-  /** Template ID that was used (使用的模板ID) */
+  /** Template ID that was used */
   templateId: string;
 
-  /** Variables that were substituted (被替换的变量) */
+  /** Variables that were substituted */
   substitutedVariables: TemplateVariableName[];
 }
 
@@ -324,60 +324,60 @@ export interface RenderedTemplate {
 export const TEMPLATE_VARIABLES: Record<TemplateVariableName, TemplateVariable> = {
   knowledge: {
     name: 'knowledge',
-    description: 'Raw array of knowledge item texts from the commit (来源知识条目的原始文本数组)',
+    description: 'Raw array of knowledge item texts from the commit',
     required: false,
     defaultValue: '',
   },
   formattedKnowledge: {
     name: 'formattedKnowledge',
-    description: 'YAML-like formatted knowledge for display (格式化的YAML知识列表)',
+    description: 'YAML-like formatted knowledge for display',
     required: true,
   },
   formattedSemanticPoints: {
     name: 'formattedSemanticPoints',
     description:
-      'Selected semantic points section derived from source knowledge (来源知识派生的已选语义要点部分)',
+      'Selected semantic points section derived from source knowledge',
     required: false,
     defaultValue: '',
   },
   requires: {
     name: 'requires',
-    description: 'Array of formatted require constraints (格式化的必须包含约束数组)',
+    description: 'Array of formatted require constraints',
     required: false,
     defaultValue: '',
   },
   excludes: {
     name: 'excludes',
-    description: 'Array of formatted exclude constraints (格式化的必须排除约束数组)',
+    description: 'Array of formatted exclude constraints',
     required: false,
     defaultValue: '',
   },
   formattedConstraints: {
     name: 'formattedConstraints',
-    description: 'Combined constraints section text (合并的约束部分文本)',
+    description: 'Combined constraints section text',
     required: false,
     defaultValue: '',
   },
   leafTitle: {
     name: 'leafTitle',
-    description: 'Title of the leaf (Leaf 的标题)',
+    description: 'Title of the leaf',
     required: false,
     defaultValue: '',
   },
   leafType: {
     name: 'leafType',
-    description: 'Type of the leaf (Leaf 的类型)',
+    description: 'Type of the leaf',
     required: true,
   },
   additionalInstructions: {
     name: 'additionalInstructions',
-    description: 'Extra instructions provided by user (用户提供的附加指令)',
+    description: 'Extra instructions provided by user',
     required: false,
     defaultValue: '',
   },
   typeInstructions: {
     name: 'typeInstructions',
-    description: 'Type-specific format instructions (类型特定的格式指令)',
+    description: 'Type-specific format instructions',
     required: false,
     defaultValue: '',
   },
