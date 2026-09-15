@@ -108,7 +108,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
     expect(addSource.querySelector('.lucide-plus')).toBeInTheDocument();
     expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
-    expect(branchSelector).toHaveClass('w-[188px]');
+    expect(branchSelector).toHaveClass('w-full');
     fireEvent.change(branchSelector, { target: { value: 'release' } });
     expect(branchChange).toHaveBeenCalledWith('release');
     expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
@@ -291,7 +291,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review change prd/summary/outcome' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed to Review' }));
     await waitFor(() => expect(prepareReview).toHaveBeenCalledOnce());
     expect(onModeChange).toHaveBeenCalledWith('review');
 
@@ -304,6 +304,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
     expect(screen.queryByLabelText('Workspace review structure')).not.toBeInTheDocument();
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(comparisonMocks.validate).toHaveBeenCalledWith(candidate);

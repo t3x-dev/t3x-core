@@ -9,6 +9,7 @@ import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type {
   WorkspaceTransitionContent,
   WorkspaceTransitionOutcome,
@@ -530,6 +531,32 @@ export function useWorkspaceComposeReviewController({
     [busyAction, candidate.id, candidate.projectId, onYOpsCommitted, review]
   );
 
+  const runVerify = useCallback(async () => {
+    if (!review.transitionId || busyAction) {
+      return prepareReview();
+    }
+    setBusyAction('review.verify');
+    setLocalError(null);
+    try {
+      const verified = await getSharedApiClient().verifyTransition(
+        candidate.projectId,
+        review.transitionId,
+        { request_id: `workspace-action:${crypto.randomUUID()}` }
+      );
+      setReview((current) => ({
+        ...current,
+        view: verified.view.transition,
+      }));
+      setNotice('Required action result recorded for this draft.');
+      return true;
+    } catch (error) {
+      setLocalError(formatUserFacingError(error, 'Required action could not be run.'));
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [busyAction, candidate.projectId, prepareReview, review.transitionId]);
+
   const copyReceipt = useCallback(async () => {
     const receipt = review.reviewSnapshot;
     if (!receipt) return false;
@@ -610,6 +637,7 @@ export function useWorkspaceComposeReviewController({
     notice,
     prepareReview,
     renderedYaml,
+    runVerify,
     review,
     resolveCollaborationConflict,
     scenarios: {

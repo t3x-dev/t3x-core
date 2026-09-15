@@ -19,12 +19,10 @@ import {
   FileCode2,
   FileUp,
   GitBranch,
-  GitPullRequest,
   Layers3,
   Link2,
   ListFilter,
   Loader2,
-  MessageSquare,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -43,6 +41,14 @@ import { StateScrollArea } from '@/components/project/StateScrollArea';
 import treeStyles from '@/components/project/StructureTree.module.css';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
+import {
+  type WorkspaceRenderTreeRow,
+  WorkspaceRenderView,
+} from '@/components/workspaces/WorkspaceRenderView';
+import {
+  type WorkspaceRailId,
+  WorkspaceReviewLeftRail,
+} from '@/components/workspaces/WorkspaceReviewLeftRail';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
   buildStructuredStateDiff,
@@ -57,6 +63,10 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import {
+  buildReviewChecks,
+  type ReviewCheckView,
+} from '@/domain/workspaces/reviewCheckPresentation';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -70,11 +80,13 @@ import { cn } from '@/utils/cn';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
-type ReviewPane = 'changes' | 'validation' | 'yaml';
+type ReviewPane = 'changes' | 'render' | 'validation' | 'yaml';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 
 function parseReviewPane(value: string | null): ReviewPane {
-  return value === 'validation' || value === 'yaml' ? value : 'changes';
+  if (value === 'validation' || value === 'yaml' || value === 'changes') return value;
+  if (value === 'structure') return 'changes';
+  return 'render';
 }
 
 function parseWorkspaceSurfaceMode(
@@ -118,8 +130,8 @@ export function WorkspaceComposeReviewSurface({
       const params = new URLSearchParams(routeQuery);
       if (nextMode === 'review') {
         params.set('workspaceMode', 'review');
-        if (nextPane && nextPane !== 'changes') {
-          params.set('reviewPane', nextPane);
+        if (nextPane && nextPane !== 'render') {
+          params.set('reviewPane', nextPane === 'changes' ? 'structure' : nextPane);
         } else {
           params.delete('reviewPane');
         }
@@ -165,141 +177,61 @@ export function WorkspaceComposeReviewSurface({
     if (routeMode && routeMode !== mode) onModeChange(routeMode);
   }, [mode, onModeChange, routeQuery]);
 
-  return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
-      <WorkspaceSurfaceHeader
-        branchOptions={branchOptions}
-        controller={controller}
-        mode={mode}
-        onBranchChange={onBranchChange}
-        onModeChange={setSurfaceMode}
-      />
-      {mode === 'review' ? (
-        <ReviewSurface
-          compareScenarioId=""
-          controller={controller}
-          pane={reviewPane}
-          setPane={setReviewPane}
-          onModeChange={setSurfaceMode}
-        />
-      ) : (
-        <ComposeSurface
-          candidate={controller.candidate ?? candidate}
-          changeCount={changeCount}
-          controller={controller}
-          onModeChange={setSurfaceMode}
-        />
-      )}
-    </div>
-  );
-}
-
-function WorkspaceSurfaceHeader({
-  branchOptions,
-  controller,
-  mode,
-  onBranchChange,
-  onModeChange,
-}: {
-  branchOptions: string[];
-  controller: WorkspaceComposeReviewController;
-  mode: WorkspaceSurfaceMode;
-  onBranchChange?: (branch: string) => Promise<void> | void;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
-}) {
   const selectedBranch = controller.candidate.targetBranch || 'main';
   const availableBranches = Array.from(
     new Set([selectedBranch, ...branchOptions.map((branch) => branch.trim()).filter(Boolean)])
   );
   const branchSelectorDisabled = !onBranchChange || availableBranches.length <= 1;
+  const railActive: WorkspaceRailId =
+    mode === 'compose' ? 'compose' : reviewPane === 'render' ? 'render' : 'structure';
 
-  return (
-    <header className="flex min-h-[42px] shrink-0 items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3">
-      <div
-        aria-label="Workspace workflow tabs"
-        className="inline-flex h-8 shrink-0 items-center gap-[2px] rounded-[6px] bg-[var(--surface-app)] p-[2px] text-[13px] font-medium leading-[18px]"
-        role="tablist"
-      >
-        <WorkspaceModeTab
-          active={mode === 'compose'}
-          icon={MessageSquare}
-          label="Compose"
-          onClick={() => onModeChange('compose')}
-        />
-        <WorkspaceModeTab
-          active={mode === 'review'}
-          icon={GitPullRequest}
-          label="Review"
-          onClick={() => onModeChange('review')}
-        />
-      </div>
-
-      <div className="hidden shrink-0 md:block">
-        <div className="relative">
-          <GitBranch
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--accent-branch)] opacity-90"
-          />
-          <select
-            aria-label="Branch workspace"
-            className="h-7 w-[188px] appearance-none rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-8 pr-8 text-xs font-medium leading-4 text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] outline-none transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:border-[var(--accent-commit)] focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/20 disabled:cursor-default disabled:opacity-100"
-            disabled={branchSelectorDisabled}
-            onChange={(event) => {
-              const nextBranch = event.target.value;
-              if (nextBranch !== selectedBranch) void onBranchChange?.(nextBranch);
-            }}
-            value={selectedBranch}
-          >
-            {availableBranches.map((branch) => (
-              <option key={branch} value={branch}>
-                Branch workspace: {branch}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            aria-hidden="true"
-            className="pointer-events-none absolute right-3 top-1/2 size-3 -translate-y-1/2 text-[var(--text-tertiary)]"
-          />
-        </div>
-      </div>
-    </header>
+  const openReviewPane = useCallback(
+    (pane: ReviewPane) => {
+      setReviewPaneState(pane);
+      writeWorkspaceSurfaceUrl('review', pane);
+      onModeChange('review');
+    },
+    [onModeChange, writeWorkspaceSurfaceUrl]
   );
-}
 
-function WorkspaceModeTab({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-}) {
+  const selectRail = (id: WorkspaceRailId) => {
+    if (id === 'compose') {
+      setSurfaceMode('compose');
+      return;
+    }
+    openReviewPane(id === 'structure' ? 'changes' : 'render');
+  };
+
   return (
-    <button
-      aria-label={label}
-      aria-selected={active}
-      className={cn(
-        'inline-flex h-7 min-w-[92px] items-center justify-center gap-1.5 rounded-[5px] border px-2.5 transition-[background-color,border-color,box-shadow,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/40',
-        active
-          ? 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--accent-commit)] shadow-[var(--fx-shadow-sm)]'
-          : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
-      )}
-      onClick={onClick}
-      role="tab"
-      type="button"
-    >
-      <Icon
-        aria-hidden="true"
-        className={cn(
-          'size-3.5 shrink-0',
-          active ? 'text-[var(--accent-commit)]' : 'text-[var(--text-tertiary)]'
-        )}
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
+      <WorkspaceReviewLeftRail
+        active={railActive}
+        availableBranches={availableBranches}
+        branchSelectorDisabled={branchSelectorDisabled}
+        onBranchChange={onBranchChange}
+        onSelect={selectRail}
+        selectedBranch={selectedBranch}
       />
-      <span>{label}</span>
-    </button>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {mode === 'review' ? (
+          <ReviewSurface
+            compareScenarioId=""
+            controller={controller}
+            onModeChange={setSurfaceMode}
+            openReviewPane={openReviewPane}
+            pane={reviewPane}
+            setPane={setReviewPane}
+          />
+        ) : (
+          <ComposeSurface
+            candidate={controller.candidate ?? candidate}
+            changeCount={changeCount}
+            controller={controller}
+            onOpenReview={openReviewPane}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -307,12 +239,12 @@ function ComposeSurface({
   candidate,
   changeCount,
   controller,
-  onModeChange,
+  onOpenReview,
 }: {
   candidate: WorkspaceCandidate;
   changeCount: number;
   controller: WorkspaceComposeReviewController;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onOpenReview: (pane: ReviewPane) => void;
 }) {
   const [draftSidebarOpen, setDraftSidebarOpen] = useState(true);
 
@@ -336,7 +268,7 @@ function ComposeSurface({
             candidate={candidate}
             changeCount={changeCount}
             controller={controller}
-            onModeChange={onModeChange}
+            onOpenReview={onOpenReview}
             onSidebarToggle={() => setDraftSidebarOpen(false)}
           />
         ) : (
@@ -619,13 +551,13 @@ function ProposedDraftPanel({
   candidate,
   changeCount,
   controller,
-  onModeChange,
+  onOpenReview,
   onSidebarToggle,
 }: {
   candidate: WorkspaceCandidate;
   changeCount: number;
   controller: WorkspaceComposeReviewController;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onOpenReview: (pane: ReviewPane) => void;
   onSidebarToggle: () => void;
 }) {
   const operations = candidate.yopsDraft.operations;
@@ -642,10 +574,7 @@ function ProposedDraftPanel({
     attentionItems.length,
     operations.length
   );
-  const primaryReviewPath = normalizeWorkspaceReviewStructurePath(operations[0]?.path ?? '');
-  const primaryReviewLabel = primaryReviewPath
-    ? `Review change ${primaryReviewPath}`
-    : 'Proceed to Review';
+  const primaryReviewLabel = 'Proceed to Review';
 
   return (
     <div className="flex h-full bg-[var(--surface-card)]">
@@ -752,7 +681,7 @@ function ProposedDraftPanel({
                 <button
                   className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold leading-none text-[var(--accent-commit)] transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={controller.isBusy || operations.length === 0}
-                  onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+                  onClick={() => void prepareAndOpenReview(controller, onOpenReview, 'changes')}
                   type="button"
                 >
                   Full Diff
@@ -774,7 +703,7 @@ function ProposedDraftPanel({
             aria-label={primaryReviewLabel}
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-commit)] py-3.5 text-sm font-bold text-[var(--on-accent)] shadow-[var(--fx-shadow-md)] transition-colors hover:bg-[var(--commit-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={controller.isBusy}
-            onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+            onClick={() => void prepareAndOpenReview(controller, onOpenReview, 'render')}
             type="button"
           >
             {controller.busyAction === 'review.prepare' ? (
@@ -793,7 +722,7 @@ function ProposedDraftPanel({
           <button
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-3.5 text-sm font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-app)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={controller.isBusy || (attentionItems.length === 0 && operations.length === 0)}
-            onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+            onClick={() => void prepareAndOpenReview(controller, onOpenReview, 'changes')}
             type="button"
           >
             <Wrench aria-hidden="true" className="size-4" />
@@ -1105,6 +1034,46 @@ function formatProposalWorkspaceLabel(candidate: WorkspaceCandidate): string {
   return candidate.targetBranch === 'main' ? 'Main Workspace' : candidate.targetBranch;
 }
 
+function formatWorkspaceDraftLabel(candidate: WorkspaceCandidate): string {
+  if (candidate.revision != null) return `v${candidate.revision}`;
+  const raw = candidate.yopsDraft.id.replace(/^draft[:_]?/i, '').trim();
+  if (/^\d+$/.test(raw)) return `v${raw}`;
+  return 'draft';
+}
+
+function mapWorkspaceRenderRows(
+  rows: WorkspaceReviewStructureRow[],
+  operations: WorkspaceYOpsDraftOperation[]
+): WorkspaceRenderTreeRow[] {
+  const operationPaths = operations.map((operation) =>
+    normalizeWorkspaceReviewStructurePath(operation.path)
+  );
+  return rows.map((row) => {
+    const path = normalizeWorkspaceReviewStructurePath(row.path);
+    const touched = operationPaths.some(
+      (operationPath) =>
+        path === operationPath ||
+        path.startsWith(`${operationPath}/`) ||
+        operationPath.startsWith(`${path}/`)
+    );
+    return {
+      afterValue: row.diff?.afterValue ?? row.value,
+      beforeValue: row.diff?.beforeValue,
+      changeKind: row.diff?.kind,
+      changed: Boolean(row.diff?.exact) || touched,
+      depth: row.depth,
+      expandable: row.expandable,
+      id: row.id,
+      key: row.key,
+      parentPath: row.parentPath,
+      path: row.path,
+      reason: row.diff?.reason || row.diff?.summary,
+      type: row.type,
+      value: row.value,
+    };
+  });
+}
+
 function formatProposalSchemaLabel(candidate: WorkspaceCandidate): string {
   const binding = candidate.schemaBindings[0];
   if (binding) {
@@ -1150,12 +1119,14 @@ function ReviewSurface({
   compareScenarioId,
   controller,
   onModeChange,
+  openReviewPane,
   pane,
   setPane,
 }: {
   compareScenarioId: string;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  openReviewPane: (pane: ReviewPane) => void;
   pane: ReviewPane;
   setPane: (pane: ReviewPane) => void;
 }) {
@@ -1206,7 +1177,9 @@ function ReviewSurface({
   const projection = controller.review.changeProjection;
   const view = controller.review.view;
   const checks = getReviewChecks(controller);
-  const requiredChecks = checks.filter((check) => check.requirement === 'required');
+  const requiredChecks = checks.filter(
+    (check) => check.requirement === 'required' || check.requirement === 'action'
+  );
   const passedRequiredCheckCount = requiredChecks.filter(
     (check) => check.status === 'passed'
   ).length;
@@ -1255,11 +1228,21 @@ function ReviewSurface({
     const matchesFilter = !modifiedNodesOnly || row.diff?.kind === 'modified';
     return matchesQuery && matchesFilter;
   });
+  const preferredOperationRow = useMemo(() => {
+    const preferredPath = normalizeWorkspaceReviewStructurePath(operations[0]?.path ?? '');
+    if (!preferredPath) return null;
+    return (
+      structureModel.rows.find(
+        (row) => normalizeWorkspaceReviewStructurePath(row.path) === preferredPath
+      ) ?? null
+    );
+  }, [operations, structureModel.rows]);
   const activeStructureRow =
     (selectedStructureRowId
       ? structureModel.rows.find((row) => row.id === selectedStructureRowId)
       : null) ??
     changedStructureRows[0] ??
+    preferredOperationRow ??
     structureModel.rows[0] ??
     null;
   const reviewStatus = getReviewStatus({
@@ -1281,6 +1264,70 @@ function ReviewSurface({
     snapshotCurrent,
     viewReady: Boolean(view),
   });
+  const draftLabel = formatWorkspaceDraftLabel(controller.candidate);
+  const renderRows = useMemo(
+    () => mapWorkspaceRenderRows(structureModel.rows, operations),
+    [operations, structureModel.rows]
+  );
+  const renderSourceRow = activeStructureRow ?? structureModel.rows[0] ?? null;
+  const renderSource = renderSourceRow
+    ? workspaceReviewSourceDisplay(controller.candidate, renderSourceRow, materialLabel)
+    : {
+        href: null,
+        label: controller.candidate.sourceBundle[0]?.title || 'Workspace source',
+      };
+  const renderWhy = renderSourceRow
+    ? workspaceReviewEffectText(renderSourceRow)
+    : controller.candidate.summary;
+
+  if (pane === 'render') {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+        {controller.error ? (
+          <div
+            className="shrink-0 border-b border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-4 py-2 text-xs text-[var(--status-error)] md:px-6"
+            role="alert"
+          >
+            {controller.error}
+          </div>
+        ) : null}
+        <WorkspaceRenderView
+          acceptAllowed={Boolean(acceptAllowed)}
+          busy={controller.isBusy}
+          checks={checks}
+          commitEnabled={Boolean(view) && !committedId && !rejected}
+          draftLabel={draftLabel}
+          onAskAiToRevise={() => {
+            const row = activeStructureRow;
+            const path = row ? row.path.replace(/\//g, '.') : '';
+            const after = row ? workspaceReviewResultValue(row) : '';
+            controller.chat.setInput(
+              path
+                ? `Revise ${path}. Keep this field selected after the change. Current after value: ${after}`
+                : 'Revise the selected section in this draft.'
+            );
+            onModeChange('compose');
+          }}
+          onCommit={() => void controller.decide('accepted')}
+          onOpenStructureDiff={() => openReviewPane('changes')}
+          onRunAction={() => {
+            if (typeof controller.runVerify === 'function') void controller.runVerify();
+            else void controller.prepareReview();
+          }}
+          onSelectRow={setSelectedStructureRowId}
+          rows={renderRows}
+          selectedRowId={activeStructureRow?.id ?? null}
+          source={{
+            href: renderSource.href,
+            label: renderSource.label,
+          }}
+          subtitle={controller.candidate.summary}
+          title={controller.candidate.title}
+          whyText={renderWhy}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
@@ -2872,13 +2919,6 @@ function WorkspaceChangedPathRow({
   );
 }
 
-interface ReviewCheckView {
-  detail: string;
-  label: string;
-  requirement: 'required' | 'system';
-  status: ReviewCheckStatus;
-}
-
 function ValidationReviewPane({
   checks,
   passedRequiredCheckCount,
@@ -2890,7 +2930,9 @@ function ValidationReviewPane({
   projection: WorkspaceComposeReviewController['review']['changeProjection'];
   requiredCheckCount: number;
 }) {
-  const requiredChecks = checks.filter((check) => check.requirement === 'required');
+  const requiredChecks = checks.filter(
+    (check) => check.requirement === 'required' || check.requirement === 'action'
+  );
   const systemChecks = checks.filter((check) => check.requirement === 'system');
   const requiredChecksPassed =
     requiredCheckCount > 0 && passedRequiredCheckCount === requiredCheckCount;
@@ -2953,7 +2995,11 @@ function ReviewCheckCard({ check }: { check: ReviewCheckView }) {
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-semibold text-[var(--text-primary)]">{check.label}</p>
             <span className="rounded bg-[var(--surface-card)] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-[var(--text-tertiary)]">
-              {check.requirement === 'required' ? 'Required' : 'System'}
+              {check.requirement === 'action'
+                ? 'Action'
+                : check.requirement === 'required'
+                  ? 'Required'
+                  : 'System'}
             </span>
           </div>
           <p className="mt-1 text-[11px] leading-5 text-[var(--text-secondary)]">{check.detail}</p>
@@ -3907,8 +3953,8 @@ function workspaceReviewInspectorChecks(
   candidate: WorkspaceCandidate,
   reviewReady: boolean
 ): ReviewCheckView[] {
-  const replay = checks.find((check) => check.label === 'Deterministic YOps replay');
-  const schema = checks.find((check) => check.label === 'Schema validation');
+  const replay = checks.find((check) => check.id === 'replay');
+  const schema = checks.find((check) => check.id === 'schema');
   const rowSchemaGaps = candidate.schemaReview.gaps.filter((gap) =>
     workspaceReviewGapMatchesRow(gap, row)
   );
@@ -3923,12 +3969,14 @@ function workspaceReviewInspectorChecks(
 
   return [
     {
+      id: 'replay',
       detail: replay?.detail ?? 'Replay runs when Review prepares the exact snapshot.',
       label: replayReadyLabel(replay?.status, reviewReady),
       requirement: 'required',
       status: replay?.status ?? (reviewReady ? 'pending' : 'pending'),
     },
     {
+      id: 'schema',
       detail:
         rowSchemaGaps[0] ??
         schema?.detail ??
@@ -3969,9 +4017,10 @@ function aggregateWorkspaceReviewValue(values: Array<string | undefined>): strin
 
 async function prepareAndOpenReview(
   controller: WorkspaceComposeReviewController,
-  onModeChange: (mode: WorkspaceSurfaceMode) => void
+  onOpenReview: (pane: ReviewPane) => void,
+  pane: ReviewPane
 ) {
-  onModeChange('review');
+  onOpenReview(pane);
   await controller.prepareReview();
 }
 
@@ -4021,78 +4070,17 @@ function compareScenarioOperations(
 function getReviewChecks(controller: WorkspaceComposeReviewController): ReviewCheckView[] {
   const deterministic = controller.review.deterministicValidation;
   const view = controller.review.view;
-  const replayStatementStatus = statementStatus(view?.checks.replay);
-  const replayStatus: ReviewCheckStatus =
-    deterministic?.ok === false || replayStatementStatus === 'failed'
-      ? 'failed'
-      : deterministic?.ok === true && replayStatementStatus === 'passed'
-        ? 'passed'
-        : 'pending';
-  const checks: ReviewCheckView[] = [
-    {
-      label: 'Deterministic YOps replay',
-      requirement: 'required',
-      status: replayStatus,
-      detail: deterministic
-        ? deterministic.ok
-          ? replayStatementStatus === 'passed'
-            ? `${deterministic.applied} operations produced the exact result and a verified Replay Statement.`
-            : `${deterministic.applied} operations produced the result; the immutable Replay Statement is still pending.`
-          : (deterministic.error?.message ?? 'Replay failed.')
-        : 'Apply the YOps draft to the exact base and verify the resulting State.',
-    },
-    statementCheck(
-      'Schema validation',
-      view?.checks.validation,
-      'required',
-      'Check the projected result against the Workspace schema and bound context.'
-    ),
-  ];
-
-  checks.push({
-    label: 'Object integrity',
-    requirement: 'system',
-    status: view?.checks.objectIntegrity === 'verified' ? 'passed' : 'pending',
-    detail:
-      view?.checks.objectIntegrity === 'verified'
-        ? 'The exact State, Effect, Proposal, and Statements passed protocol integrity checks.'
-        : 'Protocol object integrity will be checked when the review snapshot is prepared.',
+  return buildReviewChecks({
+    acceptReasons: view?.capabilities.accept.reasons,
+    objectIntegrity: view?.checks.objectIntegrity,
+    replayApplied: deterministic?.applied,
+    replayError: deterministic?.error?.message,
+    replayOk: deterministic?.ok,
+    replayStatement: view?.checks.replay,
+    runnerStatement: view?.checks.runner,
+    schemaLabel: formatProposalSchemaLabel(controller.candidate),
+    validationStatement: view?.checks.validation,
   });
-  return checks;
-}
-
-function statementCheck(
-  label: string,
-  check: { observation: string; outcomes: string[] } | undefined,
-  requirement: ReviewCheckView['requirement'],
-  pendingDetail: string
-): ReviewCheckView {
-  const status = statementStatus(check);
-  return {
-    label,
-    requirement,
-    status,
-    detail:
-      check?.observation === 'observed'
-        ? check.outcomes.length > 0
-          ? status === 'passed'
-            ? `Passed: ${check.outcomes.join(', ')}.`
-            : `Needs attention: ${check.outcomes.join(', ')}.`
-          : 'Observed without a reported outcome.'
-        : pendingDetail,
-  };
-}
-
-function statementStatus(
-  check: { observation: string; outcomes: string[] } | undefined
-): ReviewCheckStatus {
-  if (!check || check.observation !== 'observed' || check.outcomes.length === 0) return 'pending';
-  if (check.outcomes.every((item) => item === 'passed' || item === 'verified')) return 'passed';
-  return check.outcomes.some((item) =>
-    ['failed', 'invalid', 'denied', 'error', 'false'].includes(item)
-  )
-    ? 'failed'
-    : 'pending';
 }
 
 function getReviewStatus({
