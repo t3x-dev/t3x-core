@@ -1323,6 +1323,7 @@ function ReviewSurface({
           }}
           subtitle={controller.candidate.summary}
           title={controller.candidate.title}
+          schemaLabel={formatProposalSchemaLabel(controller.candidate)}
           whyText={renderWhy}
         />
       </div>

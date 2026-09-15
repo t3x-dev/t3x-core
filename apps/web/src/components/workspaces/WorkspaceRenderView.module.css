@@ -24,6 +24,8 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
   border-right: 1px solid var(--render-line);
   background: #fff;
 }
@@ -33,20 +35,22 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 32px 8px;
+  padding: 20px 36px 6px;
+  background: #fff;
 }
 
 .kicker {
-  font-size: 13.5px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--render-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: #111318;
 }
 
 .previewMeta {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 12px;
-  color: #9aa1ad;
+  font-weight: 400;
+  color: #9aa3b2;
 }
 
 .openDiff {
@@ -72,28 +76,39 @@
 }
 
 .article {
-  padding: 8px 32px 28px;
-  max-width: 760px;
+  padding: 14px 36px 32px;
+  max-width: 720px;
 }
 
 .title {
   margin: 0;
-  font-size: 34px;
+  font-size: 42px;
   font-weight: 800;
-  letter-spacing: -0.032em;
-  line-height: 1.12;
-  color: var(--render-ink);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: #0b0d12;
 }
 
 .lede {
-  margin: 8px 0 22px;
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--render-muted);
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.article > .title + .section,
+.article > .lede + .section {
+  margin-top: 26px;
 }
 
 .section {
-  margin: 0 0 22px;
+  margin: 0 0 20px;
+}
+
+.sectionChanged {
+  border-left: 3px solid var(--render-purple);
+  padding-left: 14px;
 }
 
 .sectionHead {
@@ -105,10 +120,10 @@
 
 .sectionTitle {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.015em;
-  color: var(--render-ink);
+  letter-spacing: -0.02em;
+  color: #111318;
 }
 
 .updated {
@@ -126,8 +141,9 @@
 .ready {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   height: 22px;
+  margin-bottom: 8px;
   padding: 0 9px;
   border-radius: 999px;
   background: var(--render-green-bg);
@@ -136,32 +152,32 @@
   font-weight: 700;
 }
 
-.changedBlock {
-  border-left: 3px solid var(--render-purple);
-  padding: 2px 0 2px 14px;
+.highlightButton {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .highlight {
   margin: 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--render-lavender);
-  color: var(--render-purple-text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f3f0ff;
+  color: #6d28d9;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
   font-weight: 500;
-}
-
-.highlightChanged {
-  border-left: 3px solid var(--render-purple);
-  border-radius: 0 8px 8px 0;
-  padding-left: 14px;
 }
 
 .body {
   margin: 6px 0 0;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.55;
   color: #374151;
 }
 
@@ -174,8 +190,8 @@
 
 .tableWrap {
   margin-top: 2px;
-  border: 1px solid var(--render-line);
-  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -186,9 +202,10 @@
 
 .table th,
 .table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--render-line);
+  padding: 9px 14px;
+  border-bottom: 1px solid #e5e7eb;
   font-size: 13.5px;
+  line-height: 1.4;
   text-align: left;
 }
 
@@ -198,33 +215,40 @@
 }
 
 .table th {
-  width: 38%;
+  width: 36%;
   background: #f9fafb;
   color: #4b5563;
   font-weight: 600;
 }
 
 .table td {
-  color: var(--render-ink);
+  color: #111318;
 }
 
 .checksInline {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 18px;
+  gap: 10px 22px;
 }
 
 .checkItem {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--render-ink);
+  color: #111318;
 }
 
-.checkItem svg {
-  color: var(--render-green);
+.checkGlyph {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
 }
 
 .list {
@@ -244,7 +268,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 32px 16px;
+  padding: 12px 36px 16px;
   border-top: 1px solid var(--render-line);
   background: #fff;
 }

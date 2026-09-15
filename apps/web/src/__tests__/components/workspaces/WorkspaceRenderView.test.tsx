@@ -18,6 +18,16 @@ const rows = [
     value: 'Main workspace',
   },
   {
+    depth: 1,
+    expandable: false,
+    id: 'tagline',
+    key: 'tagline',
+    parentPath: 'workspace',
+    path: 'workspace/tagline',
+    type: 'string',
+    value: 'Internal canary rollout',
+  },
+  {
     afterValue: 'Service checkout-api currently has replicas 4',
     changed: true,
     changeKind: 'modified' as const,
@@ -63,6 +73,26 @@ const rows = [
     value: 'internal-team',
   },
   {
+    depth: 2,
+    expandable: false,
+    id: 'allocation',
+    key: 'allocation',
+    parentPath: 'workspace/rollout',
+    path: 'workspace/rollout/allocation',
+    type: 'string',
+    value: '10%',
+  },
+  {
+    depth: 1,
+    expandable: false,
+    id: 'purpose',
+    key: 'purpose',
+    parentPath: 'workspace',
+    path: 'workspace/purpose',
+    type: 'string',
+    value: 'Review every rollout decision.',
+  },
+  {
     afterValue: 'true',
     changed: true,
     depth: 1,
@@ -103,6 +133,16 @@ const rows = [
     path: 'workspace/requirements/oncall_coverage',
     type: 'boolean',
     value: 'true',
+  },
+  {
+    depth: 1,
+    expandable: false,
+    id: 'notes',
+    key: 'notes',
+    parentPath: 'workspace',
+    path: 'workspace/notes',
+    type: 'string',
+    value: 'Expand access only after the internal review is complete ...',
   },
 ];
 
@@ -167,12 +207,17 @@ describe('WorkspaceRenderView', () => {
 
     expect(screen.getByText('Rendered result - Main workspace v2117046')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.getByText('Internal canary rollout')).toBeInTheDocument();
+    expect(screen.queryByText(/Collect source evidence/)).not.toBeInTheDocument();
     expect(screen.queryByText('Release plan')).not.toBeInTheDocument();
     expect(screen.getAllByText('Updated').length).toBeGreaterThan(0);
     expect(screen.getByText('Service checkout-api currently has replicas 4')).toBeInTheDocument();
+    expect(screen.getByText('Review every rollout decision.')).toBeInTheDocument();
     expect(screen.getByText('internal-preview')).toBeInTheDocument();
+    expect(screen.getByText('10%')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('Monitoring enabled')).toBeInTheDocument();
+    expect(screen.getByText('Oncall coverage')).toBeInTheDocument();
     expect(screen.getByText('Selected section')).toBeInTheDocument();
     expect(screen.getByText('Copy path')).toBeInTheDocument();
     expect(screen.getByText('Show in structure diff')).toBeInTheDocument();
@@ -238,5 +283,103 @@ describe('WorkspaceRenderView', () => {
     expect(screen.getAllByText('Passed')).toHaveLength(2);
     expect(screen.queryByText('T3X Action')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commit changes' })).toBeEnabled();
+  });
+
+  it('uses a bound schema name as the document title', () => {
+    render(
+      <WorkspaceRenderView
+        acceptAllowed
+        checks={[]}
+        commitEnabled={false}
+        draftLabel="v3"
+        onAskAiToRevise={vi.fn()}
+        onCommit={vi.fn()}
+        onOpenStructureDiff={vi.fn()}
+        onSelectRow={vi.fn()}
+        rows={rows}
+        schemaLabel="Release plan Schema"
+        selectedRowId="summary"
+        source={{ label: 'Source chat' }}
+        subtitle="Collect source evidence and build the next structured state commit."
+        title="Main workspace"
+        whyText="Updated desired outcome"
+      />
+    );
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Release plan' })).toBeInTheDocument();
+    expect(screen.getByText('Rendered result - Release plan v3')).toBeInTheDocument();
+    expect(screen.getByText('Internal canary rollout')).toBeInTheDocument();
+    expect(screen.queryByText(/Collect source evidence/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a sparse workspace reader from duplicating summary as a requirement check', () => {
+    render(
+      <WorkspaceRenderView
+        acceptAllowed={false}
+        checks={[]}
+        commitEnabled={false}
+        draftLabel="v2117046"
+        onAskAiToRevise={vi.fn()}
+        onCommit={vi.fn()}
+        onOpenStructureDiff={vi.fn()}
+        onSelectRow={vi.fn()}
+        rows={[
+          {
+            depth: 0,
+            expandable: true,
+            id: 'workspace',
+            key: 'workspace',
+            parentPath: null,
+            path: 'workspace',
+            type: 'object',
+            value: 'Main workspace',
+          },
+          {
+            afterValue: 'Service checkout-api currently has replicas 4',
+            changed: true,
+            depth: 1,
+            expandable: false,
+            id: 'summary',
+            key: 'summary',
+            parentPath: 'workspace',
+            path: 'workspace/summary',
+            type: 'string',
+            value: 'Service checkout-api currently has replicas 4',
+          },
+          {
+            changed: true,
+            depth: 1,
+            expandable: true,
+            id: 'requirements',
+            key: 'requirements',
+            parentPath: 'workspace',
+            path: 'workspace/requirements',
+            type: 'object',
+            value: '1 item',
+          },
+          {
+            changed: true,
+            depth: 2,
+            expandable: false,
+            id: 'req0',
+            key: '0',
+            parentPath: 'workspace/requirements',
+            path: 'workspace/requirements/0',
+            type: 'string',
+            value: 'Service checkout-api currently has replicas 4',
+          },
+        ]}
+        selectedRowId="summary"
+        source={{ label: 'Source chat' }}
+        subtitle="Collect source evidence and build the next structured state commit."
+        title="Main workspace"
+        whyText=""
+      />
+    );
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.queryByText(/Collect source evidence/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Service checkout-api currently has replicas 4')).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: 'Requirements' })).not.toBeInTheDocument();
   });
 });
