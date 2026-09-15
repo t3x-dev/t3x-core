@@ -67,6 +67,7 @@ import {
   buildReviewChecks,
   type ReviewCheckView,
 } from '@/domain/workspaces/reviewCheckPresentation';
+import { isGenericWorkspaceCopy } from '@/domain/workspaces/workspaceRenderDocument';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -1321,7 +1322,9 @@ function ReviewSurface({
             href: renderSource.href,
             label: renderSource.label,
           }}
-          subtitle={controller.candidate.summary}
+          subtitle={
+            isGenericWorkspaceCopy(controller.candidate.summary) ? '' : controller.candidate.summary
+          }
           title={controller.candidate.title}
           schemaLabel={formatProposalSchemaLabel(controller.candidate)}
           whyText={renderWhy}

@@ -40,14 +40,31 @@ const GENERIC_TITLE =
 const GENERIC_LEDE = /collect source evidence/i;
 const LEDE_KEYS = new Set(['headline', 'lede', 'pitch', 'subtitle', 'tagline']);
 
+export function isGenericWorkspaceCopy(value: string | undefined): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed) return false;
+  return GENERIC_LEDE.test(trimmed) || GENERIC_TITLE.test(trimmed);
+}
+
 export function buildWorkspaceRenderDocument(
   rows: WorkspaceRenderTreeRow[],
   options: { fallbackLede?: string; fallbackTitle?: string; schemaLabel?: string } = {}
 ): WorkspaceRenderDocument {
   const identity = resolveWorkspaceRenderIdentity(rows, options);
+  const sections = buildRenderSections(rows, identity.hiddenKeys);
+  const highlightSignatures = new Set(
+    sections
+      .map((section) => section.highlight)
+      .filter((value): value is string => Boolean(value))
+      .map(normalizeSignature)
+  );
+  const lede =
+    identity.lede && highlightSignatures.has(normalizeSignature(identity.lede))
+      ? ''
+      : identity.lede;
   return {
-    lede: identity.lede,
-    sections: buildRenderSections(rows, identity.hiddenKeys),
+    lede,
+    sections,
     title: identity.title,
   };
 }
@@ -92,28 +109,25 @@ function buildRenderSections(
   rows: WorkspaceRenderTreeRow[],
   hiddenKeys: Set<string>
 ): WorkspaceRenderSection[] {
-  const topLevel = rows.filter((row) => row.depth === 1 && !hiddenKeys.has(row.key.toLowerCase()));
+  const root = rows.find((row) => row.depth === 0);
+  const rootPath = root ? normalizeRowPath(root.path) : '';
+  const topLevel = rows.filter((row) => {
+    if (hiddenKeys.has(row.key.toLowerCase())) return false;
+    if (row.depth === 1) return true;
+    return Boolean(rootPath) && isDirectChildPath(row.path, rootPath);
+  });
   const source = topLevel.length > 0 ? topLevel : synthesizeSectionsFromLeaves(rows, hiddenKeys);
   const sections = source
     .map((section) => toRenderSection(rows, section))
     .filter((section) => sectionHasContent(section));
-  const seen = new Set<string>();
-  return sections.filter((section) => {
-    const signature = sectionSignature(section);
-    if (!signature) return true;
-    if (seen.has(signature)) return false;
-    seen.add(signature);
-    return true;
-  });
+  return dedupeRenderSections(sections);
 }
 
 function toRenderSection(
   rows: WorkspaceRenderTreeRow[],
   section: WorkspaceRenderTreeRow
 ): WorkspaceRenderSection {
-  const children = rows.filter(
-    (row) => row.parentPath === section.path && row.depth === section.depth + 1
-  );
+  const children = rowsForParent(rows, section);
   const changed = Boolean(section.changed) || children.some((child) => child.changed);
   const title = humanizeKey(section.key);
   const scalarChildren = children.filter((child) => !child.expandable);
@@ -128,7 +142,7 @@ function toRenderSection(
     (child) =>
       !isTruthyReady(child.value) &&
       isTableValue(rowText(child)) &&
-      !isHighlightChild(child) &&
+      !(highlightPreferred && isHighlightChild(child)) &&
       highlightPreferred !== rowText(child)
   );
   const tableChildren = tableCandidates.length >= 2 ? tableCandidates : [];
@@ -137,7 +151,7 @@ function toRenderSection(
     (child) =>
       !tableIds.has(child.id) &&
       !isTruthyReady(child.value) &&
-      !isHighlightChild(child) &&
+      !(highlightPreferred && isHighlightChild(child)) &&
       Boolean(rowText(child))
   );
   const nestedItems = [...indexedChildren, ...nestedObjects].flatMap((child) =>
@@ -163,14 +177,21 @@ function toRenderSection(
       ? undefined
       : displayValue(section.value)
   );
+  const readyDetail = children.find((child) =>
+    ['body', 'description', 'detail', 'note', 'summary'].includes(child.key.toLowerCase())
+  );
   const bodyFromSection =
     highlightPreferred || ready
       ? undefined
       : firstText(...narrativeChildren.map((child) => rowText(child)), sectionNarrative);
-  const readyBody =
-    ready && highlightPreferred && !isTruthyReady(highlightPreferred)
-      ? highlightPreferred
-      : firstText(...narrativeChildren.map((child) => rowText(child)));
+  const readyBody = ready
+    ? firstText(
+        readyDetail && !isTruthyReady(rowText(readyDetail)) ? rowText(readyDetail) : undefined,
+        highlightPreferred && !isTruthyReady(highlightPreferred) ? highlightPreferred : undefined,
+        ...narrativeChildren.map((child) => rowText(child)),
+        sectionNarrative
+      )
+    : undefined;
   const leftoverList = ready || highlightPreferred ? [] : listRows;
   const leftoverBody = ready
     ? readyBody
@@ -206,7 +227,7 @@ function nestedDisplayItems(
   rows: WorkspaceRenderTreeRow[],
   child: WorkspaceRenderTreeRow
 ): Array<{ id: string; kind: 'check' | 'list'; label: string; value: string }> {
-  const nested = rows.filter((row) => row.parentPath === child.path && !row.expandable);
+  const nested = rowsForParent(rows, child).filter((row) => !row.expandable);
   const titleChild = nested.find((row) => row.key.toLowerCase() === 'title');
   if (titleChild) {
     const title = rowText(titleChild);
@@ -282,6 +303,60 @@ function sectionSignature(section: WorkspaceRenderSection): string | null {
     return normalizeSignature(section.listRows[0].label);
   }
   return null;
+}
+
+function dedupeRenderSections(sections: WorkspaceRenderSection[]): WorkspaceRenderSection[] {
+  const highlights = new Set(
+    sections
+      .map((section) => section.highlight)
+      .filter((value): value is string => Boolean(value))
+      .map(normalizeSignature)
+  );
+  const seen = new Set<string>();
+  return sections
+    .map((section) => ({
+      ...section,
+      checkRows: section.checkRows.filter((row) => !highlights.has(normalizeSignature(row.label))),
+      listRows: section.listRows.filter((row) => !highlights.has(normalizeSignature(row.label))),
+      body:
+        section.body && highlights.has(normalizeSignature(section.body)) && !section.highlight
+          ? undefined
+          : section.body,
+    }))
+    .filter((section) => sectionHasContent(section))
+    .filter((section) => {
+      const signature = sectionSignature(section);
+      if (!signature) return true;
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+}
+
+function rowsForParent(
+  rows: WorkspaceRenderTreeRow[],
+  parent: WorkspaceRenderTreeRow
+): WorkspaceRenderTreeRow[] {
+  const parentPath = normalizeRowPath(parent.path);
+  return rows.filter((row) => row.id !== parent.id && isDirectChildPath(row.path, parentPath));
+}
+
+function isDirectChildPath(path: string, parentPath: string): boolean {
+  const child = normalizeRowPath(path);
+  const parent = normalizeRowPath(parentPath);
+  if (!child || child === parent) return false;
+  if (!parent) return !child.includes('/');
+  if (!child.startsWith(`${parent}/`)) return false;
+  return !child.slice(parent.length + 1).includes('/');
+}
+
+function normalizeRowPath(path: string): string {
+  return path
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/\.+/g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/\/$/, '');
 }
 
 function synthesizeSectionsFromLeaves(
@@ -402,8 +477,8 @@ function titleFromSchemaLabel(label: string | undefined): string | undefined {
   if (!label) return undefined;
   const cleaned = label
     .replace(/^t3x\//i, '')
-    .replace(/\s+schema$/i, '')
     .replace(/\s+v?\d[\w.-]*$/i, '')
+    .replace(/\s+schema$/i, '')
     .replace(/[_-]+/g, ' ')
     .trim();
   if (!cleaned || /not bound/i.test(cleaned)) return undefined;
@@ -430,7 +505,12 @@ export function inspectorHeading(path: string): string {
 
 export function humanizeKey(value: string): string {
   if (/^rollout$/i.test(value)) return 'Rollout plan';
-  const spaced = value.replace(/[_-]+/g, ' ').trim();
+  const spaced = value
+    .replace(/oncall/gi, 'on_call')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\bon call\b/gi, 'on-call')
+    .trim();
   if (!spaced) return value;
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }

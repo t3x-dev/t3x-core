@@ -117,7 +117,7 @@ export function WorkspaceRenderView({
         <header className={styles.documentHeader}>
           <div>
             <div className={styles.kicker}>
-              Rendered result - {document.title} {draftLabel}
+              Rendered result · {document.title} {draftLabel}
             </div>
             <div className={styles.previewMeta}>Preview generated from draft {draftLabel}</div>
           </div>

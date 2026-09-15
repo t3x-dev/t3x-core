@@ -96,13 +96,24 @@ const rows = [
     afterValue: 'true',
     changed: true,
     depth: 1,
-    expandable: false,
+    expandable: true,
     id: 'rollback_readiness',
     key: 'rollback_readiness',
     parentPath: 'workspace',
     path: 'workspace/rollback_readiness',
-    type: 'boolean',
+    type: 'object',
     value: 'true',
+  },
+  {
+    depth: 2,
+    expandable: false,
+    id: 'rollback_detail',
+    key: 'detail',
+    parentPath: 'workspace/rollback_readiness',
+    path: 'workspace/rollback_readiness/detail',
+    type: 'string',
+    value:
+      'We canary to the internal team at 10% with rollback readiness in place. We will monitor key metrics and can quickly roll back if issues are detected.',
   },
   {
     depth: 1,
@@ -205,7 +216,7 @@ describe('WorkspaceRenderView', () => {
       />
     );
 
-    expect(screen.getByText('Rendered result - Main workspace v2117046')).toBeInTheDocument();
+    expect(screen.getByText('Rendered result · Main workspace v2117046')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.getByText('Internal canary rollout')).toBeInTheDocument();
     expect(screen.queryByText(/Collect source evidence/)).not.toBeInTheDocument();
@@ -213,11 +224,15 @@ describe('WorkspaceRenderView', () => {
     expect(screen.getAllByText('Updated').length).toBeGreaterThan(0);
     expect(screen.getByText('Service checkout-api currently has replicas 4')).toBeInTheDocument();
     expect(screen.getByText('Review every rollout decision.')).toBeInTheDocument();
+    expect(screen.getByText('Rollout plan')).toBeInTheDocument();
     expect(screen.getByText('internal-preview')).toBeInTheDocument();
     expect(screen.getByText('10%')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(
+      screen.getByText(/We canary to the internal team at 10% with rollback readiness in place/)
+    ).toBeInTheDocument();
     expect(screen.getByText('Monitoring enabled')).toBeInTheDocument();
-    expect(screen.getByText('Oncall coverage')).toBeInTheDocument();
+    expect(screen.getByText('On-call coverage')).toBeInTheDocument();
     expect(screen.getByText('Selected section')).toBeInTheDocument();
     expect(screen.getByText('Copy path')).toBeInTheDocument();
     expect(screen.getByText('Show in structure diff')).toBeInTheDocument();
@@ -307,7 +322,7 @@ describe('WorkspaceRenderView', () => {
     );
 
     expect(screen.getByRole('heading', { level: 1, name: 'Release plan' })).toBeInTheDocument();
-    expect(screen.getByText('Rendered result - Release plan v3')).toBeInTheDocument();
+    expect(screen.getByText('Rendered result · Release plan v3')).toBeInTheDocument();
     expect(screen.getByText('Internal canary rollout')).toBeInTheDocument();
     expect(screen.queryByText(/Collect source evidence/)).not.toBeInTheDocument();
   });

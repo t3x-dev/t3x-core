@@ -43,7 +43,7 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.012em;
-  color: #111318;
+  color: #1f2937;
 }
 
 .previewMeta {
@@ -82,18 +82,18 @@
 
 .title {
   margin: 0;
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.05;
-  color: #0b0d12;
+  color: #111827;
 }
 
 .lede {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   font-size: 15px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.35;
   color: #6b7280;
 }
 
@@ -165,9 +165,9 @@
 
 .highlight {
   margin: 0;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: #f3f0ff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #eee9fe;
   color: #6d28d9;
   font-size: 14px;
   line-height: 1.5;

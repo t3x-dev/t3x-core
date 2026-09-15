@@ -42,6 +42,28 @@ describe('workspaceRenderDocument', () => {
     expect(document.sections[0]?.highlight).toBe('Service checkout-api currently has replicas 4');
   });
 
+  it('does not repeat the summary highlight as the document lede', () => {
+    const document = buildWorkspaceRenderDocument(
+      [
+        row({ depth: 0, expandable: true, key: 'workspace', path: 'workspace', value: '-' }),
+        row({
+          changed: true,
+          depth: 1,
+          key: 'summary',
+          path: 'workspace/summary',
+          value: 'Service checkout-api currently has replicas 4',
+        }),
+      ],
+      {
+        fallbackLede: 'Service checkout-api currently has replicas 4',
+        fallbackTitle: 'Main workspace',
+      }
+    );
+
+    expect(document.lede).toBe('');
+    expect(document.sections[0]?.highlight).toBe('Service checkout-api currently has replicas 4');
+  });
+
   it('prefers a bound schema name and a short tagline', () => {
     const document = buildWorkspaceRenderDocument(
       [
@@ -69,6 +91,13 @@ describe('workspaceRenderDocument', () => {
     expect(document.title).toBe('Release plan');
     expect(document.lede).toBe('Internal canary rollout');
     expect(document.sections).toEqual([]);
+
+    expect(
+      buildWorkspaceRenderDocument([], {
+        fallbackTitle: 'Main workspace',
+        schemaLabel: 'Release plan Schema v1.2',
+      }).title
+    ).toBe('Release plan');
   });
 
   it('renders TARGET-like section kinds from ordinary tree data', () => {
@@ -109,6 +138,12 @@ describe('workspaceRenderDocument', () => {
           value: 'internal-team',
         }),
         row({
+          depth: 2,
+          key: 'allocation',
+          path: 'release_plan/rollout/allocation',
+          value: '10%',
+        }),
+        row({
           afterValue: 'true',
           changed: true,
           depth: 1,
@@ -116,6 +151,13 @@ describe('workspaceRenderDocument', () => {
           path: 'release_plan/rollback_readiness',
           type: 'boolean',
           value: 'true',
+        }),
+        row({
+          depth: 2,
+          key: 'detail',
+          path: 'release_plan/rollback_readiness/detail',
+          value:
+            'We canary to the internal team at 10% with rollback readiness in place. We will monitor key metrics and can quickly roll back if issues are detected.',
         }),
         row({
           depth: 1,
@@ -134,10 +176,16 @@ describe('workspaceRenderDocument', () => {
         }),
         row({
           depth: 2,
-          key: 'oncall_coverage',
-          path: 'release_plan/requirements/oncall_coverage',
+          key: 'oncall_coverage_confirmed',
+          path: 'release_plan/requirements/oncall_coverage_confirmed',
           type: 'boolean',
           value: 'true',
+        }),
+        row({
+          depth: 1,
+          key: 'notes',
+          path: 'release_plan/notes',
+          value: 'Expand access only after the internal review is complete ...',
         }),
       ],
       { fallbackTitle: 'Main workspace' }
@@ -152,15 +200,19 @@ describe('workspaceRenderDocument', () => {
       ['Rollout plan', false, undefined],
       ['Rollback readiness', true, undefined],
       ['Requirements', false, undefined],
+      ['Notes', false, undefined],
     ]);
     expect(document.sections[2]?.tableRows.map((item) => item.value)).toEqual([
       'internal-preview',
       'internal-team',
+      '10%',
     ]);
+    expect(document.sections[3]?.body).toContain('We canary to the internal team at 10%');
     expect(document.sections[4]?.checkRows.map((item) => item.label)).toEqual([
       'Monitoring enabled',
-      'Oncall coverage',
+      'On-call coverage confirmed',
     ]);
+    expect(document.sections[5]?.clampBody).toBe(true);
   });
 
   it('drops a requirements row that only repeats the summary highlight', () => {
@@ -192,5 +244,48 @@ describe('workspaceRenderDocument', () => {
     ]);
 
     expect(document.sections.map((section) => section.title)).toEqual(['Summary']);
+  });
+
+  it('still builds a rollout table when parentPath is wrong', () => {
+    const document = buildWorkspaceRenderDocument([
+      row({ depth: 0, expandable: true, key: 'release_plan', path: 'release_plan', value: '-' }),
+      row({
+        depth: 1,
+        expandable: true,
+        key: 'rollout',
+        parentPath: 'release_plan',
+        path: 'release_plan/rollout',
+        type: 'object',
+        value: '-',
+      }),
+      row({
+        depth: 2,
+        key: 'stage',
+        parentPath: 'release_plan',
+        path: 'release_plan/rollout/stage',
+        value: 'internal-preview',
+      }),
+      row({
+        depth: 2,
+        key: 'audience',
+        parentPath: 'release_plan',
+        path: 'release_plan/rollout/audience',
+        value: 'internal-team',
+      }),
+      row({
+        depth: 2,
+        key: 'allocation',
+        parentPath: 'release_plan',
+        path: 'release_plan/rollout/allocation',
+        value: '10%',
+      }),
+    ]);
+
+    expect(document.sections[0]?.title).toBe('Rollout plan');
+    expect(document.sections[0]?.tableRows.map((item) => item.value)).toEqual([
+      'internal-preview',
+      'internal-team',
+      '10%',
+    ]);
   });
 });
