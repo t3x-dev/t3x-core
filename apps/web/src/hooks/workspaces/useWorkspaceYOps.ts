@@ -62,5 +62,22 @@ export async function validateWorkspaceCandidateYOps(candidate: WorkspaceCandida
   const inheritedBaseline = isCanonicalCommitHash(candidate.baseCommitHash)
     ? await loadWorkspaceBaseline(candidate.baseCommitHash, candidate.projectId)
     : undefined;
+  if (candidate.yopsDraft.operations.length === 0) {
+    const trees = buildWorkspaceBaselineTrees(
+      candidate,
+      getWorkspaceYOpsRootKey(candidate.schemaBindings),
+      inheritedBaseline?.trees ?? []
+    );
+    const relations = inheritedBaseline?.relations ?? [];
+    return {
+      ok: true,
+      applied: 0,
+      yops: [],
+      baselineTrees: trees,
+      baselineRelations: relations,
+      previewTrees: trees,
+      previewRelations: relations,
+    };
+  }
   return validateWorkspaceYOps(candidate, inheritedBaseline);
 }

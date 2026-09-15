@@ -35,7 +35,8 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     loading: branchesLoading,
     refresh: refreshBranches,
   } = useBranches(projectId, true);
-  const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
+  const starterBranch = branch || 'main';
+  const branchHead = Object.hasOwn(branchHeads, starterBranch) ? branchHeads[starterBranch] : null;
   const starterCandidate = useMemo(
     () =>
       getProjectWorkspaceStarterCandidate(

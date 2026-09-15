@@ -1139,7 +1139,7 @@ function ReviewSurface({
   const candidate = controller.candidate;
   const exactValidation = controller.review.deterministicValidation;
   useEffect(() => {
-    if (exactValidation || operations.length === 0) return;
+    if (exactValidation) return;
     let cancelled = false;
     void validateWorkspaceCandidateYOps(candidate).then(
       (result) => {
@@ -3226,24 +3226,35 @@ function buildWorkspaceReviewContent(
   candidate: WorkspaceCandidate,
   review: WorkspaceComposeReviewController['review']
 ): { baseline: SemanticContent; head: SemanticContent; rootKey: string } {
-  const rootKey = workspaceReviewRootKey(candidate);
   const validation = review.deterministicValidation;
   const reviewContent = review.content;
-  if (validation?.baselineTrees && (reviewContent?.trees || validation.previewTrees)) {
+  const headTrees = reviewContent?.trees ?? validation?.previewTrees ?? validation?.baselineTrees;
+  const baselineTrees =
+    validation?.baselineTrees && validation.baselineTrees.length > 0
+      ? validation.baselineTrees
+      : headTrees;
+  if (Array.isArray(headTrees) && headTrees.length > 0) {
+    const treeRootKey =
+      typeof headTrees[0]?.key === 'string' && headTrees[0].key.trim()
+        ? headTrees[0].key
+        : workspaceReviewRootKey(candidate);
     return {
       baseline: workspaceReviewSemanticContent(
-        validation.baselineTrees,
-        validation.baselineRelations
+        Array.isArray(baselineTrees) && baselineTrees.length > 0 ? baselineTrees : headTrees,
+        validation?.baselineRelations ?? reviewContent?.relations ?? []
       ),
       head: workspaceReviewSemanticContent(
-        reviewContent?.trees ?? validation.previewTrees ?? validation.baselineTrees,
-        reviewContent?.relations ?? validation.previewRelations ?? validation.baselineRelations
+        headTrees,
+        reviewContent?.relations ??
+          validation?.previewRelations ??
+          validation?.baselineRelations ??
+          []
       ),
-      rootKey,
+      rootKey: treeRootKey,
     };
   }
 
-  return buildWorkspaceDraftReviewContent(candidate, rootKey);
+  return buildWorkspaceDraftReviewContent(candidate, workspaceReviewRootKey(candidate));
 }
 
 interface WorkspaceReviewTreeNode {

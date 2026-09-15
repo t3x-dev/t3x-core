@@ -114,6 +114,16 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
       yopsDraft: { operations: [] },
     });
   });
+
+  it('uses the main HEAD for the default workspace when branch is omitted', () => {
+    mocks.branchHeads = { main: 'sha256:advanced' };
+    mocks.query = 'tab=workspaces';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.candidates[0]).toMatchObject({
+      targetBranch: 'main',
+      baseCommitHash: 'sha256:advanced',
+    });
+  });
   it('opens the exact committed revision and branch in State', () => {
     render(<ProjectWorkspacesTab projectId="proj_test" />);
     fireEvent.click(screen.getByRole('button', { name: 'View State' }));

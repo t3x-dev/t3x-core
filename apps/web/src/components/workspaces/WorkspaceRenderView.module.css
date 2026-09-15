@@ -152,6 +152,12 @@
   font-weight: 500;
 }
 
+.highlightChanged {
+  border-left: 3px solid var(--render-purple);
+  border-radius: 0 8px 8px 0;
+  padding-left: 14px;
+}
+
 .body {
   margin: 6px 0 0;
   font-size: 14px;
@@ -159,12 +165,23 @@
   color: #374151;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
+.bodyClamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tableWrap {
+  margin-top: 2px;
   border: 1px solid var(--render-line);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .table th,
@@ -208,6 +225,19 @@
 
 .checkItem svg {
   color: var(--render-green);
+}
+
+.list {
+  margin: 6px 0 0;
+  padding: 0 0 0 18px;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.listItem {
+  text-align: left;
+  color: inherit;
 }
 
 .commitBar {
@@ -468,18 +498,6 @@
   grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-}
-
-.required {
-  display: inline-flex;
-  margin-left: 6px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--render-purple-bg);
-  color: var(--render-purple-text);
-  font-size: 10px;
-  font-weight: 750;
 }
 
 .runAction {

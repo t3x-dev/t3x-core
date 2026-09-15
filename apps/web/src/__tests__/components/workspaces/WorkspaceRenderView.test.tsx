@@ -10,7 +10,7 @@ const rows = [
   {
     depth: 0,
     expandable: true,
-    id: 'root',
+    id: 'workspace',
     key: 'workspace',
     parentPath: null,
     path: 'workspace',
@@ -34,12 +34,74 @@ const rows = [
   {
     changed: true,
     depth: 1,
+    expandable: true,
+    id: 'rollout',
+    key: 'rollout',
+    parentPath: 'workspace',
+    path: 'workspace/rollout',
+    type: 'object',
+    value: '-',
+  },
+  {
+    depth: 2,
     expandable: false,
+    id: 'stage',
+    key: 'stage',
+    parentPath: 'workspace/rollout',
+    path: 'workspace/rollout/stage',
+    type: 'string',
+    value: 'internal-preview',
+  },
+  {
+    depth: 2,
+    expandable: false,
+    id: 'audience',
+    key: 'audience',
+    parentPath: 'workspace/rollout',
+    path: 'workspace/rollout/audience',
+    type: 'string',
+    value: 'internal-team',
+  },
+  {
+    afterValue: 'true',
+    changed: true,
+    depth: 1,
+    expandable: false,
+    id: 'rollback_readiness',
+    key: 'rollback_readiness',
+    parentPath: 'workspace',
+    path: 'workspace/rollback_readiness',
+    type: 'boolean',
+    value: 'true',
+  },
+  {
+    depth: 1,
+    expandable: true,
     id: 'requirements',
     key: 'requirements',
     parentPath: 'workspace',
     path: 'workspace/requirements',
-    type: 'string',
+    type: 'object',
+    value: '-',
+  },
+  {
+    depth: 2,
+    expandable: false,
+    id: 'monitoring',
+    key: 'monitoring_enabled',
+    parentPath: 'workspace/requirements',
+    path: 'workspace/requirements/monitoring_enabled',
+    type: 'boolean',
+    value: 'true',
+  },
+  {
+    depth: 2,
+    expandable: false,
+    id: 'oncall',
+    key: 'oncall_coverage',
+    parentPath: 'workspace/requirements',
+    path: 'workspace/requirements/oncall_coverage',
+    type: 'boolean',
     value: 'true',
   },
 ];
@@ -103,12 +165,14 @@ describe('WorkspaceRenderView', () => {
       />
     );
 
-    expect(screen.getByText('Rendered result · Main workspace v2117046')).toBeInTheDocument();
+    expect(screen.getByText('Rendered result - Main workspace v2117046')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
     expect(screen.queryByText('Release plan')).not.toBeInTheDocument();
     expect(screen.getAllByText('Updated').length).toBeGreaterThan(0);
     expect(screen.getByText('Service checkout-api currently has replicas 4')).toBeInTheDocument();
+    expect(screen.getByText('internal-preview')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.getByText('Monitoring enabled')).toBeInTheDocument();
     expect(screen.getByText('Selected section')).toBeInTheDocument();
     expect(screen.getByText('Copy path')).toBeInTheDocument();
     expect(screen.getByText('Show in structure diff')).toBeInTheDocument();
@@ -119,6 +183,7 @@ describe('WorkspaceRenderView', () => {
     expect(screen.getAllByText('Not run')).toHaveLength(3);
     expect(screen.queryByText('Object integrity')).not.toBeInTheDocument();
     expect(screen.queryByText('Run checks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Required')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run T3X Action' })).toBeInTheDocument();
     expect(
       screen.getByText('Results tied to this draft; edits require recheck.')
