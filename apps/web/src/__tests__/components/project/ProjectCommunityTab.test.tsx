@@ -6,43 +6,33 @@ import { describe, expect, it } from 'vitest';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 
 describe('ProjectCommunityTab', () => {
-  it('renders project handoff notes, collaborators, and external context', () => {
-    render(<ProjectCommunityTab />);
+  it('renders the source-matched empty community state and connected destinations', () => {
+    render(<ProjectCommunityTab projectId="project one" />);
 
-    expect(screen.getByText('Project community')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project community' })).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Human handoff notes, collaborators, and external context stay linked to project objects without entering deterministic mutation paths.'
-      )
-    ).toBeInTheDocument();
-
-    expect(screen.getByText('Handoff notes')).toBeInTheDocument();
-    expect(screen.getByText('PRD audience handoff')).toBeInTheDocument();
-    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
-    expect(screen.getByText('PRD Schema v3 rollout')).toBeInTheDocument();
-    expect(screen.getByText('Workspace: PRD audience handoff')).toBeInTheDocument();
-    expect(screen.getByText('Output: Launch notes summary')).toBeInTheDocument();
-    expect(screen.getByText('Review: PRD Schema v3 rollout')).toBeInTheDocument();
-
-    expect(screen.getByText('Project collaborators')).toBeInTheDocument();
-    expect(screen.getAllByText('Product reviewer').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Schema owner').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Release owner').length).toBeGreaterThan(0);
-
-    expect(screen.getByText('External context')).toBeInTheDocument();
-    expect(screen.getByText('Discord thread')).toBeInTheDocument();
-    expect(screen.getByText('Linear issue')).toBeInTheDocument();
-    expect(screen.getByText(/not source evidence until imported/i)).toBeInTheDocument();
-
-    expect(
-      screen.getByRole('button', { name: 'Open workspace: PRD audience handoff' })
+      screen.getByText('Human handoffs linked to your project, without changing structured State.')
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Open output: Release note cleanup' })
+      screen.getByRole('heading', { name: 'Bring the right people into the work' })
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Open review: PRD Schema v3 rollout' })
-    ).toBeInTheDocument();
+    expect(screen.getByText('No collaborators linked')).toBeInTheDocument();
+    expect(screen.getByText('No links connected')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: /Open workspaces/i })).toHaveAttribute(
+      'href',
+      '/project/project%20one?tab=workspaces'
+    );
+    expect(screen.getByRole('link', { name: /View pull requests/i })).toHaveAttribute(
+      'href',
+      '/project/project%20one?tab=pull-requests'
+    );
+    expect(screen.getByRole('link', { name: /Commit history/i })).toHaveAttribute(
+      'href',
+      '/project/project%20one/history?branch=main&view=list'
+    );
+
+    expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByText(/apply yops/i)).not.toBeInTheDocument();
   });
 });

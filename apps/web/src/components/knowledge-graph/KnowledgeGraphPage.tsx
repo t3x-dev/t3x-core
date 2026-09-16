@@ -22,7 +22,7 @@ export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
   const isEmpty = !loading && nodes.length === 0;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <KGToolbar projectId={projectId} />
 
       <div className="relative flex-1 overflow-hidden">

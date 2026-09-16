@@ -1,77 +1,135 @@
 'use client';
 
 import {
-  ExternalLink,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Copy,
   Loader2,
-  MoreVertical,
+  MoreHorizontal,
   Pencil,
-  Play,
   Plus,
+  RotateCcw,
   Trash2,
   Webhook,
+  X,
+  XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { WebhookForm } from '@/components/settings/WebhookForm';
 import { AlertDialog } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { EmptyState } from '@/components/ui/empty-state';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useWebhookCommands } from '@/hooks/webhooks/useWebhookCommands';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
+import styles from './WebhookSettings.module.css';
+
+interface DeliveryRecord {
+  id: string;
+  endpoint: string;
+  event: string;
+  status: 'success' | 'failed';
+  deliveredAt: Date;
+  webhookId: string;
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  'commit.created': 'Commit created',
+  'merge.completed': 'Merge completed',
+  'leaf.created': 'Leaf created',
+  'leaf.generated': 'Leaf generated',
+  'run.completed': 'Run completed',
+  'run.failed': 'Run failed',
+  'draft.ready': 'Draft ready',
+  'check.failed': 'Check failed',
+};
+
+function eventLabel(event: string): string {
+  return EVENT_LABELS[event] ?? event.replaceAll('.', ' ');
+}
+
+function formatTimestamp(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function truncateEndpoint(endpoint: string): string {
+  return endpoint.length > 38 ? `${endpoint.slice(0, 35)}…` : endpoint;
+}
 
 export default function WebhooksPage() {
+  const projectId = useSearchParams().get('project')?.trim() ?? '';
   const { listWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook } =
     useWebhookCommands();
   const [webhooks, setWebhooks] = useState<WebhookData[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-
-  // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<WebhookData | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-
-  // Test state
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  const projectHref = useMemo(
+    () => (projectId ? `/settings?project=${encodeURIComponent(projectId)}` : '/settings'),
+    [projectId]
+  );
 
   const fetchWebhooks = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await listWebhooks();
-      setWebhooks(data);
+      const loadedWebhooks = await listWebhooks();
+      setWebhooks(
+        projectId
+          ? loadedWebhooks.filter((webhook) => webhook.project_id === projectId)
+          : loadedWebhooks
+      );
     } catch (err) {
-      const message = formatUserFacingError(err, 'Failed to load webhooks.');
-      setError(message);
+      setError(formatUserFacingError(err, 'Failed to load webhooks.'));
     } finally {
       setLoading(false);
     }
-  }, [listWebhooks]);
+  }, [listWebhooks, projectId]);
 
   useEffect(() => {
-    fetchWebhooks();
+    void fetchWebhooks();
   }, [fetchWebhooks]);
 
-  // Create / Edit handler
+  const closeForm = useCallback(() => {
+    setFormOpen(false);
+    setEditingWebhook(null);
+  }, []);
+
+  const openCreate = useCallback(() => {
+    setEditingWebhook(null);
+    setFormOpen(true);
+  }, []);
+
+  const openEdit = useCallback((webhook: WebhookData) => {
+    setEditingWebhook(webhook);
+    setFormOpen(true);
+  }, []);
+
   const handleFormSubmit = useCallback(
     async (data: CreateWebhookInput | UpdateWebhookInput) => {
       setFormLoading(true);
@@ -81,163 +139,341 @@ export default function WebhooksPage() {
             editingWebhook.webhook_id,
             data as UpdateWebhookInput
           );
-          setWebhooks((prev) =>
-            prev.map((w) => (w.webhook_id === updated.webhook_id ? updated : w))
+          setWebhooks((current) =>
+            current.map((webhook) =>
+              webhook.webhook_id === updated.webhook_id ? updated : webhook
+            )
           );
           toast.success('Webhook updated');
         } else {
           const created = await createWebhook(data as CreateWebhookInput);
-          setWebhooks((prev) => [...prev, created]);
+          setWebhooks((current) => [...current, created]);
           toast.success('Webhook created');
         }
-        setFormOpen(false);
-        setEditingWebhook(null);
+        closeForm();
       } catch (err) {
-        const message = formatUserFacingError(err, 'Operation failed.');
-        toast.error(message);
+        toast.error(formatUserFacingError(err, 'Operation failed.'));
       } finally {
         setFormLoading(false);
       }
     },
-    [editingWebhook, createWebhook, updateWebhook]
+    [closeForm, createWebhook, editingWebhook, updateWebhook]
   );
 
-  // Delete handler
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
       await deleteWebhook(deleteTarget.webhook_id);
-      setWebhooks((prev) => prev.filter((w) => w.webhook_id !== deleteTarget.webhook_id));
-      toast.success('Webhook deleted');
+      setWebhooks((current) =>
+        current.filter((webhook) => webhook.webhook_id !== deleteTarget.webhook_id)
+      );
       setDeleteTarget(null);
+      toast.success('Webhook deleted');
     } catch (err) {
-      const message = formatUserFacingError(err, 'Failed to delete webhook.');
-      toast.error(message);
+      toast.error(formatUserFacingError(err, 'Failed to delete webhook.'));
     } finally {
       setDeleteLoading(false);
     }
   }, [deleteTarget, deleteWebhook]);
 
-  // Test handler
   const handleTest = useCallback(
     async (webhook: WebhookData) => {
       setTestingId(webhook.webhook_id);
+      let status: DeliveryRecord['status'] = 'failed';
       try {
         const result = await testWebhook(webhook.webhook_id);
-        if (result.ok) {
-          toast.success(`Test successful (HTTP ${result.status})`);
-        } else {
-          toast.error(`Test failed (HTTP ${result.status})`);
-        }
+        status = result.ok ? 'success' : 'failed';
+        if (result.ok) toast.success(`Test successful (HTTP ${result.status})`);
+        else toast.error(`Test failed (HTTP ${result.status})`);
       } catch (err) {
-        const message = formatUserFacingError(err, 'Test request failed.');
-        toast.error(message);
+        toast.error(formatUserFacingError(err, 'Test request failed.'));
       } finally {
+        setDeliveries((current) => [
+          {
+            id: `${webhook.webhook_id}-${Date.now()}`,
+            endpoint: webhook.url,
+            event: webhook.events[0] ?? 'webhook.test',
+            status,
+            deliveredAt: new Date(),
+            webhookId: webhook.webhook_id,
+          },
+          ...current,
+        ]);
         setTestingId(null);
       }
     },
     [testWebhook]
   );
 
-  // Open create dialog
-  const openCreate = useCallback(() => {
-    setEditingWebhook(null);
-    setFormOpen(true);
-  }, []);
-
-  // Open edit dialog
-  const openEdit = useCallback((webhook: WebhookData) => {
-    setEditingWebhook(webhook);
-    setFormOpen(true);
+  const copyEndpoint = useCallback(async (endpoint: string) => {
+    try {
+      await navigator.clipboard.writeText(endpoint);
+      toast.success('Endpoint copied');
+    } catch {
+      toast.error('Unable to copy endpoint');
+    }
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-[var(--stroke-divider)] px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Webhooks</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-              Receive HTTP notifications when events occur in T3X.
-            </p>
-          </div>
-          <Button className="gap-1.5" onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Create Webhook
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto px-6 py-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-sm text-[var(--status-error)]">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchWebhooks}>
-              Retry
+    <div className={styles.page}>
+      <section className={styles.workspace}>
+        <header className={styles.pageHeader}>
+          <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+            <Link href={projectHref}>Project settings</Link>
+            <span aria-hidden="true">/</span>
+            <span>Automations</span>
+            <span aria-hidden="true">/</span>
+            <strong>Webhooks</strong>
+          </nav>
+          <div className={styles.titleRow}>
+            <div className={styles.titleCluster}>
+              <h1>Webhooks</h1>
+              <span className={styles.scopeBadge}>Project</span>
+            </div>
+            <Button className={styles.newButton} onClick={openCreate}>
+              <Plus aria-hidden="true" className="size-4" />
+              New webhook
             </Button>
           </div>
-        ) : webhooks.length === 0 ? (
-          <EmptyState
-            icon={Webhook}
-            title="No webhooks configured"
-            description="Create a webhook to receive notifications when events occur in your projects."
-            action={{ label: 'Create Webhook', onClick: openCreate }}
-          />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {webhooks.map((webhook) => (
-              <WebhookCard
-                key={webhook.webhook_id}
-                webhook={webhook}
-                onEdit={openEdit}
-                onDelete={setDeleteTarget}
-                onTest={handleTest}
-                testing={testingId === webhook.webhook_id}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        </header>
 
-      {/* Create / Edit Dialog */}
-      <Dialog
-        open={formOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setFormOpen(false);
-            setEditingWebhook(null);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingWebhook ? 'Edit Webhook' : 'Create Webhook'}</DialogTitle>
-            <DialogDescription>
-              {editingWebhook
-                ? 'Update the webhook configuration.'
-                : 'Configure a new webhook endpoint to receive event notifications.'}
-            </DialogDescription>
-          </DialogHeader>
+        <div className={styles.contentScroll}>
+          <section className={styles.panel} aria-labelledby="webhook-list-title">
+            <div className={styles.panelTitle}>
+              <Webhook aria-hidden="true" />
+              <h2 id="webhook-list-title">Webhooks</h2>
+            </div>
+            <div className={styles.tableScroll}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>Events</th>
+                    <th>Status</th>
+                    <th>Last delivery</th>
+                    <th className={styles.actionColumn}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <Loader2 aria-label="Loading webhooks" className={styles.spinner} />
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <span className={styles.errorText}>{error}</span>
+                        <Button size="sm" variant="outline" onClick={() => void fetchWebhooks()}>
+                          Retry
+                        </Button>
+                      </td>
+                    </tr>
+                  ) : webhooks.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <span>No webhooks configured for this project.</span>
+                        <button type="button" onClick={openCreate}>
+                          Create your first webhook
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    webhooks.map((webhook) => {
+                      const latestDelivery = deliveries.find(
+                        (delivery) => delivery.webhookId === webhook.webhook_id
+                      );
+                      return (
+                        <tr key={webhook.webhook_id}>
+                          <td>
+                            <div className={styles.endpointCell}>
+                              <span title={webhook.url}>{truncateEndpoint(webhook.url)}</span>
+                              <button
+                                type="button"
+                                aria-label={`Copy ${webhook.url}`}
+                                onClick={() => void copyEndpoint(webhook.url)}
+                              >
+                                <Copy aria-hidden="true" />
+                              </button>
+                            </div>
+                          </td>
+                          <td>
+                            <div className={styles.eventList}>
+                              {webhook.events.slice(0, 2).map((event) => (
+                                <span className={styles.eventBadge} key={event}>
+                                  {eventLabel(event)}
+                                </span>
+                              ))}
+                              {webhook.events.length > 2 ? (
+                                <span className={styles.moreEvents}>
+                                  +{webhook.events.length - 2}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td>
+                            <span className={webhook.active ? styles.enabled : styles.disabled}>
+                              <span aria-hidden="true" />
+                              {webhook.active ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className={styles.deliveryCell}>
+                              <span>
+                                {latestDelivery ? formatTimestamp(latestDelivery.deliveredAt) : '—'}
+                              </span>
+                              {latestDelivery?.status === 'success' ? (
+                                <CheckCircle2 aria-label="Successful delivery" />
+                              ) : latestDelivery?.status === 'failed' ? (
+                                <XCircle aria-label="Failed delivery" />
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className={styles.actionColumn}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={styles.moreButton}
+                                  aria-label={`Actions for ${webhook.url}`}
+                                >
+                                  <MoreHorizontal aria-hidden="true" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  disabled={testingId === webhook.webhook_id || !webhook.active}
+                                  onClick={() => void handleTest(webhook)}
+                                >
+                                  {testingId === webhook.webhook_id ? (
+                                    <Loader2 className="mr-2 size-4 animate-spin" />
+                                  ) : (
+                                    <Check className="mr-2 size-4" />
+                                  )}
+                                  Send test
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(webhook)}>
+                                  <Pencil className="mr-2 size-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-[var(--status-error)] focus:text-[var(--status-error)]"
+                                  onClick={() => setDeleteTarget(webhook)}
+                                >
+                                  <Trash2 className="mr-2 size-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className={styles.panel} aria-labelledby="delivery-list-title">
+            <div className={styles.panelTitle}>
+              <ClipboardList aria-hidden="true" />
+              <h2 id="delivery-list-title">Recent deliveries</h2>
+            </div>
+            <div className={styles.tableScroll}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Endpoint</th>
+                    <th>Event</th>
+                    <th>Delivery time</th>
+                    <th className={styles.actionColumn}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        Delivery attempts will appear here after you send a test.
+                      </td>
+                    </tr>
+                  ) : (
+                    deliveries.map((delivery) => {
+                      const webhook = webhooks.find(
+                        (item) => item.webhook_id === delivery.webhookId
+                      );
+                      return (
+                        <tr key={delivery.id}>
+                          <td>
+                            {delivery.status === 'success' ? (
+                              <CheckCircle2
+                                aria-label="Successful delivery"
+                                className={styles.successIcon}
+                              />
+                            ) : (
+                              <XCircle aria-label="Failed delivery" className={styles.errorIcon} />
+                            )}
+                          </td>
+                          <td title={delivery.endpoint}>{truncateEndpoint(delivery.endpoint)}</td>
+                          <td>
+                            <span className={styles.eventBadge}>{eventLabel(delivery.event)}</span>
+                          </td>
+                          <td>{formatTimestamp(delivery.deliveredAt)}</td>
+                          <td className={styles.deliveryActions}>
+                            {delivery.status === 'failed' && webhook ? (
+                              <Button
+                                size="sm"
+                                onClick={() => void handleTest(webhook)}
+                                disabled={testingId === webhook.webhook_id}
+                              >
+                                <RotateCcw aria-hidden="true" className="size-3.5" />
+                                Retry
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => toast.info(`${eventLabel(delivery.event)} delivery`)}
+                            >
+                              Details
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      {formOpen ? (
+        <aside
+          className={styles.drawer}
+          aria-label={editingWebhook ? 'Edit webhook' : 'New webhook'}
+        >
+          <div className={styles.drawerHeader}>
+            <h2>{editingWebhook ? 'Edit webhook' : 'New webhook'}</h2>
+            <button type="button" aria-label="Close webhook form" onClick={closeForm}>
+              <X aria-hidden="true" />
+            </button>
+          </div>
           <WebhookForm
             webhook={editingWebhook}
             onSubmit={handleFormSubmit}
-            onCancel={() => {
-              setFormOpen(false);
-              setEditingWebhook(null);
-            }}
+            onCancel={closeForm}
             loading={formLoading}
+            projectId={projectId}
+            variant="drawer"
           />
-        </DialogContent>
-      </Dialog>
+        </aside>
+      ) : null}
 
-      {/* Delete Confirmation */}
       <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
@@ -250,111 +486,6 @@ export default function WebhooksPage() {
         variant="destructive"
         loading={deleteLoading}
       />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// WebhookCard — individual webhook row
-// ---------------------------------------------------------------------------
-
-interface WebhookCardProps {
-  webhook: WebhookData;
-  onEdit: (webhook: WebhookData) => void;
-  onDelete: (webhook: WebhookData) => void;
-  onTest: (webhook: WebhookData) => void;
-  testing: boolean;
-}
-
-function WebhookCard({ webhook, onEdit, onDelete, onTest, testing }: WebhookCardProps) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4 transition-colors hover:bg-[var(--hover-bg)]">
-      <div className="flex flex-col gap-1.5 min-w-0 flex-1 mr-4">
-        {/* URL + status */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full shrink-0 ${
-              webhook.active ? 'bg-[var(--status-success)]' : 'bg-[var(--text-tertiary)]'
-            }`}
-          />
-          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
-            {webhook.url}
-          </span>
-          {!webhook.active && (
-            <Badge
-              variant="outline"
-              className="text-xs text-[var(--text-tertiary)] border-[var(--stroke-default)]"
-            >
-              Inactive
-            </Badge>
-          )}
-        </div>
-
-        {/* Events */}
-        <div className="flex flex-wrap gap-1.5">
-          {webhook.events.map((event) => (
-            <Badge
-              key={event}
-              variant="outline"
-              className="text-xs font-normal text-[var(--text-secondary)] border-[var(--stroke-default)]"
-            >
-              {event}
-            </Badge>
-          ))}
-        </div>
-
-        {/* Meta info */}
-        <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
-          {webhook.project_id && (
-            <span className="flex items-center gap-1">
-              <ExternalLink className="h-3 w-3" />
-              {webhook.project_id}
-            </span>
-          )}
-          {webhook.secret && <span>HMAC enabled</span>}
-          <span>Created {new Date(webhook.created_at).toLocaleDateString()}</span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onTest(webhook)}
-          disabled={testing || !webhook.active}
-          className="gap-1 text-xs"
-        >
-          {testing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Play className="h-3.5 w-3.5" />
-          )}
-          Test
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreVertical className="h-4 w-4" />
-              <span className="sr-only">Webhook actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(webhook)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onDelete(webhook)}
-              className="text-[var(--status-error)] focus:text-[var(--status-error)]"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </div>
   );
 }

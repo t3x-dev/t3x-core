@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createBranch } from '@/infrastructure/branches';
 import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
-import { saveWorkspaceDraft } from '@/queries/workspaces';
+import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 interface StartWorkspaceIterationOptions {
@@ -18,6 +18,10 @@ interface StartWorkspaceIterationResult {
 }
 
 export function useWorkspaceFlow() {
+  const refreshWorkspaces = useCallback(
+    (projectId: string) => fetchProjectWorkspaces(projectId),
+    []
+  );
   const extractCandidate = useCallback((candidate: WorkspaceCandidate) => {
     return extractWorkspaceCandidate(candidate);
   }, []);
@@ -72,7 +76,7 @@ export function useWorkspaceFlow() {
     []
   );
 
-  return { extractCandidate, saveDraft, sendToYOps, startNextIteration };
+  return { extractCandidate, refreshWorkspaces, saveDraft, sendToYOps, startNextIteration };
 }
 
 function buildNextWorkspaceIteration(

@@ -45,7 +45,7 @@ export function WorkspaceChangeReviewPage({
   }, [snapshot, normalizedSnapshotId, normalizedProjectId, normalizedWorkspaceId, router]);
 
   return (
-    <main className="min-h-screen bg-[var(--workspace-bg)] text-[var(--text-primary)]">
+    <main className="min-h-full bg-[var(--workspace-bg)] text-[var(--text-primary)]">
       <header className="border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3">
           <Link

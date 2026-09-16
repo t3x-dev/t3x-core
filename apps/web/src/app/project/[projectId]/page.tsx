@@ -9,7 +9,6 @@ import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
-import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
@@ -107,6 +106,8 @@ export function ProjectDetailPageContent({
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
   const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
+  const isSettingsRedirect = activeTab === 'settings';
+  const isSchemaStudio = activeTab === 'schemas' && searchParams.get('schemaView') === 'studio';
   const isEmbeddedCanvasSurface =
     !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
@@ -121,6 +122,11 @@ export function ProjectDetailPageContent({
   useEffect(() => {
     if (showIntroDemo) setProjectTourOpen(true);
   }, [showIntroDemo]);
+
+  useEffect(() => {
+    if (!isSettingsRedirect) return;
+    router.replace(`/settings?project=${encodeURIComponent(projectId)}`);
+  }, [isSettingsRedirect, projectId, router]);
 
   const projectFromStore = useProjectStore((state) =>
     state.projects.find((item) => item.id === projectId)
@@ -357,6 +363,10 @@ export function ProjectDetailPageContent({
     !fetchedProject &&
     !projectLookupError;
 
+  if (isSettingsRedirect) {
+    return null;
+  }
+
   if (!projectsInitialized || projectsLoading || projectLookupLoading || projectLookupPending) {
     return (
       <div className="flex h-full flex-col">
@@ -456,6 +466,9 @@ export function ProjectDetailPageContent({
         onRunValidation={handleRunYSchemaValidation}
         projectId={projectId}
         projectName={project.name}
+        projectDescription={project.description}
+        projectOwner={project.owner}
+        projectVisibility={project.visibility}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}
@@ -474,9 +487,7 @@ export function ProjectDetailPageContent({
       case 'outputs':
         return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
-        return <ProjectCommunityTab />;
-      case 'settings':
-        return <ProjectSettingsTab project={project} />;
+        return <ProjectCommunityTab projectId={projectId} />;
       default:
         return renderStateTab();
     }
@@ -484,7 +495,12 @@ export function ProjectDetailPageContent({
 
   return (
     <>
-      <ProjectShell activeTab={activeTab} project={project} projectIdNavigation={!!routeProjectId}>
+      <ProjectShell
+        activeTab={activeTab}
+        immersive={isSchemaStudio}
+        project={project}
+        projectIdNavigation={!!routeProjectId}
+      >
         {activeContent}
       </ProjectShell>
       {isEmbeddedCanvasSurface ? (

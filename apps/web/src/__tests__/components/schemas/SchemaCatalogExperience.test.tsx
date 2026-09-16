@@ -64,11 +64,8 @@ function mount() {
   );
 }
 describe('Schema catalog journey', () => {
-  it.each([
-    'browse',
-    'discover',
-  ])('uses the project avatar in %s when no separate cover exists', (view) => {
-    mocks.query = `schemaView=${view}`;
+  it('uses the project avatar in Browse when no separate cover exists', () => {
+    mocks.query = 'schemaView=browse';
     mocks.introduction.mockReturnValue({
       data: {
         document: {
@@ -84,23 +81,26 @@ describe('Schema catalog journey', () => {
     const card = screen.getByRole('button', { name: 'Explore Release definition 1.2.3' });
     expect(card.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,YXJ0');
   });
-  it('keeps Discover visual and sends search to Browse, preserving workspace context', () => {
+  it('renders the shared Explore surface in Discover and sends search to Browse', () => {
     mocks.query = 'workspace=main';
     mount();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=12&selection=editor-picks', true);
-    expect(screen.getByRole('heading', { name: 'Editor’s Choice' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeVisible();
+    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=24', false);
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Discover schemas' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Schema picks' })).toBeVisible();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search definitions' }), {
+    const search = screen.getByRole('textbox', { name: 'Search projects and schemas' });
+    fireEvent.change(search, {
       target: { value: 'dog care' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Search', exact: true }));
+    fireEvent.submit(search.closest('form')!);
     expect(mocks.push).toHaveBeenCalledWith(
       '/team/project/schemas?workspace=main&schemaView=browse&q=dog+care',
       { scroll: false }
     );
   });
   it('offers one Add to Studio action for an exact release', () => {
+    mocks.query = 'schemaView=browse';
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
     const dialog = screen.getByRole('dialog');
@@ -120,6 +120,19 @@ describe('Schema catalog journey', () => {
     unmount();
     mocks.query = 'schemaView=studio';
     mount();
+    const schemaViews = screen.getByRole('navigation', { name: 'Schema views' });
+    expect(
+      within(schemaViews)
+        .getAllByRole('tab')
+        .map((button) => button.textContent)
+    ).toEqual(['Discover', 'Browse', 'Studio']);
+    expect(within(schemaViews).queryByRole('tab', { name: 'Active' })).not.toBeInTheDocument();
+    expect(within(schemaViews).getByRole('tab', { name: 'Studio' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    const studio = screen.getByRole('region', { name: 'Schema Studio' });
+    expect(schemaViews.parentElement?.nextElementSibling).toBe(studio);
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
     expect(screen.getByText('Detailed Studio')).toBeVisible();
@@ -128,6 +141,7 @@ describe('Schema catalog journey', () => {
 });
 
 it('opens a published project introduction at its pinned State revision', () => {
+  mocks.query = 'schemaView=browse';
   mocks.catalog.mockReturnValue({
     data: {
       items: [

@@ -1,17 +1,9 @@
-import { Braces, Download } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
-import { isPromptWorkspace } from '@/domain/workspaces/promptCompile';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
+import type {
+  WorkspaceDraftCommandName,
+  WorkspacePreparationOptions,
+} from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useWorkspaceProposalGeneration } from '@/hooks/workspaces/useWorkspaceProposalGeneration';
 import { usePinsStore } from '@/store/pinsStore';
@@ -22,15 +14,11 @@ import type {
   WorkspaceProposalPosture,
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
-import { cn } from '@/utils/cn';
-import { OutputTargetsTab } from './OutputTargetsTab';
-import { PromptCompilePreviewDrawer } from './PromptCompilePreviewDrawer';
 import type {
   ProposalGenerationAction,
   ProposalGenerationReviewState,
 } from './ProposalGenerationReviewView';
-import { WorkspaceContentEditor } from './WorkspaceContentEditor';
-import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
+import { type WorkspaceTabId, WorkspaceTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
 
@@ -71,6 +59,7 @@ export function WorkspaceWorkbench({
   candidates,
   errorMessage,
   onSourceMaterialUploaded,
+  onSelectedWorkspaceChange,
   onViewCommitInState,
   onWorkspacesRefresh,
   onWorkspaceBranchChange,
@@ -79,26 +68,38 @@ export function WorkspaceWorkbench({
   sourceConversationId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
+  const [localSelectedWorkspaceId, setLocalSelectedWorkspaceId] = useState<string | null>(
+    selectedWorkspaceId ?? candidates[0]?.id ?? null
+  );
   const [flowByWorkspaceId, setFlowByWorkspaceId] = useState<Record<string, WorkspaceFlowState>>(
     {}
   );
   const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
     {}
   );
-  const [compilePreviewOpen, setCompilePreviewOpen] = useState(false);
   const pins = usePinsStore((state) => state.pins);
   const {
     extractCandidate,
+    refreshWorkspaces,
     saveDraft: saveWorkspaceDraft,
     sendToYOps,
     startNextIteration,
   } = useWorkspaceFlow();
   const proposalGeneration = useWorkspaceProposalGeneration();
 
-  const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
+  const availableCandidates = [
+    ...candidates.map((candidate) =>
+      mergeWorkspaceOverride(candidate, workspaceOverrides[candidate.id])
+    ),
+    ...Object.values(workspaceOverrides).filter(
+      (override) => !candidates.some((candidate) => candidate.id === override.id)
+    ),
+  ];
+  const baseSelectedWorkspace = selectWorkspaceCandidate(
+    availableCandidates,
+    selectedWorkspaceId ?? localSelectedWorkspaceId
+  );
   const selectedWorkspace = baseSelectedWorkspace
     ? mergeWorkspaceOverride(baseSelectedWorkspace, workspaceOverrides[baseSelectedWorkspace.id])
     : null;
@@ -111,6 +112,11 @@ export function WorkspaceWorkbench({
           status: 'committed' as const,
         }
       : selectedWorkspace;
+
+  const selectWorkspace = (workspaceId: string) => {
+    setLocalSelectedWorkspaceId(workspaceId);
+    onSelectedWorkspaceChange?.(workspaceId);
+  };
 
   const updateSelectedFlow = (patch: WorkspaceFlowState, workspaceId = selectedWorkspace?.id) => {
     if (!workspaceId) return;
@@ -160,7 +166,7 @@ export function WorkspaceWorkbench({
     [baseSelectedWorkspace]
   );
 
-  const handleExtractCandidate = async () => {
+  const handleExtractCandidate = async (_options: WorkspacePreparationOptions = {}) => {
     if (!selectedWorkspace) return;
 
     updateSelectedFlow({ error: undefined, extracting: true });
@@ -234,7 +240,7 @@ export function WorkspaceWorkbench({
     updateSelectedFlow({ error: undefined, proposalPosture: posture });
   };
 
-  const handleGenerateProposal = async () => {
+  const handleGenerateProposal = async (options: WorkspacePreparationOptions = {}) => {
     if (!selectedWorkspace) return;
     const posture = selectedFlow?.proposalPosture ?? 'guided';
     const sourceMaterialIds = [
@@ -255,7 +261,9 @@ export function WorkspaceWorkbench({
         projectId: selectedWorkspace.projectId,
         workspaceId: selectedWorkspace.id,
         posture,
-        instruction: `Generate a schema-aligned proposal for ${selectedWorkspace.title} from the selected workspace evidence.`,
+        instruction:
+          options.instruction ??
+          `Generate a schema-aligned proposal for ${selectedWorkspace.title} from the selected workspace evidence.`,
         sourceMaterialIds,
         ifRevision: selectedWorkspace.revision,
       });
@@ -414,6 +422,126 @@ export function WorkspaceWorkbench({
     }
   };
 
+  const handleWorkspaceDraftCommand = async (
+    workspace: WorkspaceCandidate,
+    _command: WorkspaceDraftCommandName
+  ): Promise<WorkspaceCandidate> => {
+    updateSelectedFlow({ error: undefined, validationGapCount: undefined }, workspace.id);
+    try {
+      const result = await saveWorkspaceDraft(workspace);
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [result.workspace.id]: result.workspace,
+      }));
+      updateSelectedFlow(
+        {
+          commitHash: undefined,
+          error: undefined,
+          validationGapCount: undefined,
+          yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
+        },
+        result.workspace.id
+      );
+      return result.workspace;
+    } catch (err) {
+      if (isWorkspaceRevisionConflict(err) && onWorkspacesRefresh) {
+        await onWorkspacesRefresh();
+        setWorkspaceOverrides((current) => {
+          const next = { ...current };
+          delete next[workspace.id];
+          return next;
+        });
+        throw new Error(
+          'Workspace changed since it was loaded. The latest draft was refreshed; review the current evidence and retry.'
+        );
+      }
+      throw err instanceof Error ? err : new Error('Unable to save the Workspace draft.');
+    }
+  };
+
+  const handlePrepareDraft = async (
+    workspace: WorkspaceCandidate,
+    _options: WorkspacePreparationOptions
+  ): Promise<WorkspaceCandidate> => {
+    updateSelectedFlow(
+      {
+        commitHash: undefined,
+        error: undefined,
+        extracting: workspace.yopsDraft.operations.length === 0,
+        sendingToYOps: false,
+        validationGapCount: undefined,
+      },
+      workspace.id
+    );
+
+    try {
+      let prepared = selectWorkspaceSourceBundle(workspace, usePinsStore.getState().pins);
+      let candidateId: string | undefined;
+      if (prepared.yopsDraft.operations.length === 0) {
+        const extracted = await extractCandidate(prepared);
+        prepared = extracted.workspace;
+        candidateId = extracted.candidate_id;
+      }
+
+      let yopsDraftId: string | undefined;
+      if (prepared.yopsDraft.operations.length === 0) {
+        updateSelectedFlow({ extracting: false, sendingToYOps: true }, workspace.id);
+        const yops = await sendToYOps(prepared);
+        prepared = yops.workspace;
+        candidateId = yops.candidate_id;
+        yopsDraftId = yops.yops_draft_id ?? yops.workspace.yopsDraft.id;
+      }
+
+      if (prepared.yopsDraft.operations.length === 0) {
+        throw new Error(
+          'No YOps operations were generated. Include at least one source turn or material, then retry.'
+        );
+      }
+
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [prepared.id]: prepared,
+      }));
+      updateSelectedFlow(
+        {
+          candidateId,
+          commitHash: undefined,
+          error: undefined,
+          extracting: false,
+          sendingToYOps: false,
+          validationGapCount: undefined,
+          yopsDraftId: yopsDraftId ?? prepared.yopsDraft.id,
+        },
+        prepared.id
+      );
+      return prepared;
+    } catch (err) {
+      updateSelectedFlow(
+        {
+          error: err instanceof Error ? err.message : 'Workspace draft preparation failed.',
+          extracting: false,
+          sendingToYOps: false,
+        },
+        workspace.id
+      );
+      throw err;
+    }
+  };
+
+  const handleApplyAfterRefresh = async (
+    localWorkspace: WorkspaceCandidate
+  ): Promise<WorkspaceCandidate> => {
+    const refreshed = await refreshWorkspaces(localWorkspace.projectId);
+    const remote = refreshed.find((workspace) => workspace.id === localWorkspace.id);
+    if (!remote?.revision) throw new Error('The latest remote Workspace could not be loaded.');
+    const rebased = {
+      ...localWorkspace,
+      revision: remote.revision,
+      updatedAt: remote.updatedAt,
+    };
+    return handleWorkspaceDraftCommand(rebased, 'collaboration.apply_after_refresh');
+  };
+
   if (viewState === 'loading') {
     return (
       <section className="h-full overflow-auto p-4" data-project-id={projectId}>
@@ -438,31 +566,11 @@ export function WorkspaceWorkbench({
   }
 
   return (
-    <section className="h-full overflow-auto p-3 sm:p-4" data-project-id={projectId}>
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
-        <WorkspacesHeader
-          onEdit={
-            selectedWorkspaceWithFlow && !selectedWorkspaceWithFlow.lastCommitHash
-              ? () => setEditorOpen(true)
-              : undefined
-          }
-          definitionHref={
-            selectedWorkspaceWithFlow?.schemaBindings.length
-              ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'active', workspace: selectedWorkspaceWithFlow.id })}`
-              : undefined
-          }
-          onCompilePreview={() => setCompilePreviewOpen(true)}
-          onDelivery={selectedWorkspaceWithFlow ? () => setDeliveryOpen(true) : undefined}
-          promptWorkspace={isPromptWorkspace(selectedWorkspaceWithFlow)}
-        />
-
-        <WorkspaceToolbar
-          activeWorkflowTab={activeWorkflowTab}
-          selectedWorkspace={selectedWorkspaceWithFlow}
-          onWorkflowTabChange={setActiveWorkflowTab}
-          validationGapCount={selectedFlow?.validationGapCount}
-        />
-
+    <section
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-panel)]"
+      data-project-id={projectId}
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
         {candidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces yet." />
         ) : (
@@ -470,6 +578,7 @@ export function WorkspaceWorkbench({
             activeTab={activeWorkflowTab}
             branchOptions={branchOptions}
             candidate={selectedWorkspaceWithFlow}
+            candidates={availableCandidates}
             flowState={selectedFlow}
             initialSourceConversationId={sourceConversationId}
             onExtractCandidate={handleExtractCandidate}
@@ -487,115 +596,15 @@ export function WorkspaceWorkbench({
             onYOpsScriptSave={handleYOpsScriptSave}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
             onSourceArtifactChange={handleSourceArtifactChange}
+            onDraftCommand={handleWorkspaceDraftCommand}
+            onPrepareDraft={handlePrepareDraft}
+            onApplyAfterRefresh={handleApplyAfterRefresh}
+            onScenarioSelect={selectWorkspace}
+            onWorkspaceBranchChange={onWorkspaceBranchChange}
           />
         )}
       </div>
-      <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
-        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[1200px]">
-          <SheetHeader className="border-b border-[var(--stroke-divider)] p-5">
-            <SheetTitle>Edit Workspace content</SheetTitle>
-            <SheetDescription>Human-authored content · review before committing</SheetDescription>
-          </SheetHeader>
-          {selectedWorkspaceWithFlow ? (
-            <WorkspaceContentEditor
-              key={selectedWorkspaceWithFlow.id}
-              candidate={selectedWorkspaceWithFlow}
-            />
-          ) : null}
-        </SheetContent>
-      </Sheet>
-      <Sheet open={deliveryOpen} onOpenChange={setDeliveryOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
-          <SheetHeader>
-            <SheetTitle>Workspace delivery</SheetTitle>
-            <SheetDescription>
-              Download an exact committed State and keep its delivery receipt.
-            </SheetDescription>
-          </SheetHeader>
-          {deliveryOpen && selectedWorkspaceWithFlow && (
-            <div className="p-6">
-              <OutputTargetsTab candidate={selectedWorkspaceWithFlow} />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-      {selectedWorkspaceWithFlow && isPromptWorkspace(selectedWorkspaceWithFlow) ? (
-        <PromptCompilePreviewDrawer
-          candidate={selectedWorkspaceWithFlow}
-          onOpenChange={setCompilePreviewOpen}
-          open={compilePreviewOpen}
-        />
-      ) : null}
     </section>
-  );
-}
-
-function WorkspacesHeader({
-  onEdit,
-  definitionHref,
-  onDelivery,
-  onCompilePreview,
-  promptWorkspace,
-}: {
-  onEdit?: () => void;
-  definitionHref?: string;
-  onDelivery?: () => void;
-  onCompilePreview: () => void;
-  promptWorkspace: boolean;
-}) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-3">
-      <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
-        T3X Workspace
-      </h2>
-      <div className="flex items-center gap-2">
-        {onEdit ? (
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            Edit content
-          </Button>
-        ) : null}
-        {definitionHref ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href={definitionHref}>View definition</Link>
-          </Button>
-        ) : null}
-        {onDelivery && (
-          <Button onClick={onDelivery} size="sm" type="button" variant="outline">
-            <Download aria-hidden="true" className="size-4" />
-            Delivery
-          </Button>
-        )}
-        {promptWorkspace ? (
-          <Button onClick={onCompilePreview} size="sm" type="button" variant="outline">
-            <Braces aria-hidden="true" className="size-4" />
-            Compile preview
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function WorkspaceToolbar({
-  activeWorkflowTab,
-  onWorkflowTabChange,
-  selectedWorkspace,
-  validationGapCount,
-}: {
-  activeWorkflowTab: WorkspaceTabId;
-  onWorkflowTabChange: (tab: WorkspaceTabId) => void;
-  selectedWorkspace: WorkspaceCandidate | null;
-  validationGapCount?: number;
-}) {
-  return (
-    <div className="border-y border-[var(--stroke-divider)]">
-      <WorkspaceWorkflowTabs
-        activeTab={activeWorkflowTab}
-        candidate={selectedWorkspace}
-        onTabChange={onWorkflowTabChange}
-        validationGapCount={validationGapCount}
-      />
-    </div>
   );
 }
 
@@ -603,8 +612,10 @@ function WorkspaceDetail({
   activeTab,
   branchOptions,
   candidate,
+  candidates,
   flowState,
   initialSourceConversationId,
+  onApplyAfterRefresh,
   onExtractCandidate,
   onGenerateProposal,
   onChatSourceEvidenceChange,
@@ -614,7 +625,11 @@ function WorkspaceDetail({
   onSendToYOps,
   onSourceMaterialUploaded,
   onSourceArtifactChange,
+  onDraftCommand,
+  onPrepareDraft,
+  onScenarioSelect,
   onWorkflowTabChange,
+  onWorkspaceBranchChange,
   onYOpsApplied,
   onYOpsCommitted,
   onYOpsScriptSave,
@@ -624,10 +639,12 @@ function WorkspaceDetail({
   activeTab: WorkspaceTabId;
   branchOptions?: string[];
   candidate: WorkspaceCandidate | null;
+  candidates: WorkspaceCandidate[];
   flowState?: WorkspaceFlowState;
   initialSourceConversationId?: string;
-  onExtractCandidate: () => void;
-  onGenerateProposal: () => void;
+  onApplyAfterRefresh: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
+  onExtractCandidate: (options?: WorkspacePreparationOptions) => void;
+  onGenerateProposal: (options?: WorkspacePreparationOptions) => void;
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onContinueFromCommit: (
     commitHash: string,
@@ -639,7 +656,17 @@ function WorkspaceDetail({
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
+  onDraftCommand: (
+    workspace: WorkspaceCandidate,
+    command: WorkspaceDraftCommandName
+  ) => Promise<WorkspaceCandidate>;
+  onPrepareDraft: (
+    workspace: WorkspaceCandidate,
+    options: WorkspacePreparationOptions
+  ) => Promise<WorkspaceCandidate>;
+  onScenarioSelect: (workspaceId: string) => void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
+  onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
@@ -651,18 +678,15 @@ function WorkspaceDetail({
   return (
     <section
       aria-label="Workspace detail"
-      className={cn(
-        'overflow-hidden rounded-md',
-        activeTab === 'chat'
-          ? 'border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4'
-          : 'bg-transparent'
-      )}
+      aria-description={candidate.title}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]"
     >
-      <div className={cn('flex flex-col', activeTab === 'chat' ? 'gap-3' : '')}>
+      <div className="flex min-h-0 flex-1 flex-col">
         <WorkspaceTabs
           activeTab={activeTab}
           branchOptions={branchOptions}
           candidate={candidate}
+          scenarioOptions={candidates}
           candidateExtracted={Boolean(flowState?.candidateId)}
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
@@ -673,6 +697,11 @@ function WorkspaceDetail({
           }
           onSourceMaterialUploaded={onSourceMaterialUploaded}
           onSourceArtifactChange={onSourceArtifactChange}
+          onDraftCommand={onDraftCommand}
+          onApplyAfterRefresh={onApplyAfterRefresh}
+          onPrepareDraft={onPrepareDraft}
+          onScenarioSelect={onScenarioSelect}
+          onWorkspaceBranchChange={onWorkspaceBranchChange}
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}

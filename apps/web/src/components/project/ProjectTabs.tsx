@@ -10,17 +10,25 @@ export interface ProjectTabsProps {
   activeTab: ProjectTabId;
   repoPath: string;
   projectIdNavigation?: boolean;
+  settingsHref?: string;
+  stacked?: boolean;
 }
 
 export function ProjectTabs({
   activeTab,
   repoPath,
   projectIdNavigation = false,
+  settingsHref = '/settings',
+  stacked = false,
 }: ProjectTabsProps) {
   return (
     <nav
       aria-label="Project views"
-      className="flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto pb-1 min-[1200px]:flex-1 min-[1200px]:justify-center min-[1200px]:gap-2 min-[1200px]:pb-0"
+      className={cn(
+        'flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto pb-1',
+        !stacked &&
+          'min-[1200px]:flex-1 min-[1200px]:justify-center min-[1200px]:gap-2 min-[1200px]:pb-0'
+      )}
     >
       {PROJECT_TABS.map((tab) => {
         const selected = activeTab === tab.id;
@@ -38,11 +46,13 @@ export function ProjectTabs({
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
             href={
-              tab.id === 'state'
-                ? repoPath
-                : projectIdNavigation
-                  ? `${repoPath}?tab=${tab.id}`
-                  : `${repoPath}/${getProjectTabSegment(tab.id)}`
+              tab.id === 'settings'
+                ? settingsHref
+                : tab.id === 'state'
+                  ? repoPath
+                  : projectIdNavigation
+                    ? `${repoPath}?tab=${getProjectTabSegment(tab.id)}`
+                    : `${repoPath}/${getProjectTabSegment(tab.id)}`
             }
             key={tab.id}
             scroll={false}

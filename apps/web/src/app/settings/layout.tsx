@@ -1,181 +1,192 @@
 'use client';
 
 import {
-  Activity,
-  ArrowLeft,
-  Blocks,
-  GitBranch,
+  Box,
+  ChevronUp,
+  Circle,
   KeyRound,
   LogOut,
-  type LucideIcon,
+  PanelLeft,
   Settings,
-  SlidersHorizontal,
   User,
-  Webhook,
+  Users,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
+import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
 import { useSession } from '@/hooks/shared/useSession';
-import { cn } from '@/utils/cn';
-import { RETURN_TO_PARAM, safeInternalReturnTo } from '@/utils/navigationReturn';
+import styles from './SettingsLayout.module.css';
 
 interface SettingsNavItem {
   href: string;
   label: string;
-  icon: LucideIcon;
-  exact?: boolean;
+  icon: typeof User;
+  activePaths: string[];
 }
 
-interface SettingsNavGroup {
-  label: string;
-  items: SettingsNavItem[];
-  note?: string;
-}
-
-const NAV_GROUPS: SettingsNavGroup[] = [
+const PERSONAL_NAV: SettingsNavItem[] = [
+  { href: '/settings/profile', label: 'Profile', icon: User, activePaths: ['/settings/profile'] },
   {
-    label: 'OVERVIEW',
-    items: [{ href: '/settings', label: 'Overview', icon: Activity, exact: true }],
+    href: '/settings/preferences',
+    label: 'Appearance',
+    icon: Settings,
+    activePaths: ['/settings/preferences'],
   },
   {
-    label: 'LOCAL',
-    items: [
-      { href: '/settings/profile', label: 'Profile', icon: User },
-      { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
-    ],
-  },
-  {
-    label: 'AI',
-    items: [{ href: '/settings/providers', label: 'Providers', icon: Blocks }],
-  },
-  {
-    label: 'ACCESS',
-    items: [{ href: '/settings/access', label: 'API / CLI / MCP', icon: KeyRound }],
-  },
-  {
-    label: 'AUTOMATION',
-    items: [
-      { href: '/settings/webhooks', label: 'Webhooks', icon: Webhook },
-      { href: '/settings/recipes', label: 'Recipes', icon: Blocks },
-    ],
-  },
-  {
-    label: 'PROJECT',
-    note: 'Project overrides are edited from each project.',
-    items: [],
+    href: '/settings/providers',
+    label: 'My default model',
+    icon: Box,
+    activePaths: ['/settings/providers'],
   },
 ];
 
-interface SettingsLayoutProps {
-  children: React.ReactNode;
+const ORGANIZATION_NAV: SettingsNavItem[] = [
+  { href: '/settings', label: 'General', icon: Settings, activePaths: ['/settings'] },
+  {
+    href: '/settings/members',
+    label: 'Members',
+    icon: Users,
+    activePaths: ['/settings/members'],
+  },
+  {
+    href: '/settings/model-access',
+    label: 'Model access',
+    icon: Box,
+    activePaths: ['/settings/model-access'],
+  },
+  {
+    href: '/settings/api-tokens',
+    label: 'API tokens',
+    icon: KeyRound,
+    activePaths: ['/settings/api-tokens', '/settings/access'],
+  },
+  {
+    href: '/settings/usage',
+    label: 'Plan & usage',
+    icon: PanelLeft,
+    activePaths: ['/settings/usage'],
+  },
+];
+
+const AUTOMATION_NAV: SettingsNavItem[] = [
+  {
+    href: '/settings/webhooks',
+    label: 'Webhooks',
+    icon: Circle,
+    activePaths: ['/settings/webhooks'],
+  },
+  {
+    href: '/settings/recipes',
+    label: 'Recipes',
+    icon: Circle,
+    activePaths: ['/settings/recipes'],
+  },
+];
+
+function withProjectContext(href: string, projectId: string): string {
+  if (!projectId) return href;
+  return `${href}?${new URLSearchParams({ project: projectId }).toString()}`;
 }
 
-function SettingsBackLink() {
-  const searchParams = useSearchParams();
-  const backHref = safeInternalReturnTo(searchParams.get(RETURN_TO_PARAM), '/');
-
+function SettingsNavLink({
+  item,
+  currentPath,
+  projectId,
+}: {
+  item: SettingsNavItem;
+  currentPath: string;
+  projectId: string;
+}) {
+  const Icon = item.icon;
+  const active = item.activePaths.includes(currentPath);
   return (
     <Link
-      href={backHref}
-      className={cn(
-        'inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium',
-        'text-[var(--text-secondary)] transition-colors duration-150',
-        'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-      )}
+      href={withProjectContext(item.href, projectId)}
+      aria-current={active ? 'page' : undefined}
+      className={active ? styles.navLinkActive : styles.navLink}
     >
-      <ArrowLeft className="h-4 w-4 shrink-0" />
-      <span>Back</span>
+      <Icon aria-hidden="true" size={18} strokeWidth={2} />
+      <span>{item.label}</span>
     </Link>
   );
 }
 
-export default function SettingsLayout({ children }: SettingsLayoutProps) {
-  const pathname = usePathname();
-  const currentPath = pathname ?? '';
+function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
+  const currentPath = usePathname() ?? '';
+  const projectId = useSearchParams().get('project')?.trim() ?? '';
   const { clear, getKey } = useSession();
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
-  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
 
-  useEffect(() => {
-    setIsAuthEnabled(!!getKey());
-  }, [getKey]);
+  useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
 
   return (
-    <div className="flex h-full bg-[var(--surface-app)]">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--stroke-divider)] px-3 py-5">
-        <div className="mb-3 px-1">
-          <Suspense fallback={null}>
-            <SettingsBackLink />
-          </Suspense>
-        </div>
-        <div className="mb-5 flex items-center gap-2 px-3">
-          <Settings className="h-5 w-5 text-[var(--text-primary)]" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h2>
-        </div>
-        <nav className="flex flex-1 flex-col gap-4">
-          {NAV_GROUPS.map((group) => {
-            const items =
-              group.label === 'AI' && !canAdministerProviderCredentials ? [] : group.items;
-            if (items.length === 0 && !group.note) return null;
+    <ProjectRouteShell fallbackProjectName="orbit-labs" projectId={projectId}>
+      <div className={styles.shell}>
+        <aside className={styles.sidebar} aria-label="Settings navigation">
+          <section>
+            <h2 className={styles.groupTitle}>Personal</h2>
+            <nav className={styles.navList}>
+              {PERSONAL_NAV.map((item) => (
+                <SettingsNavLink
+                  key={item.label}
+                  item={item}
+                  currentPath={currentPath}
+                  projectId={projectId}
+                />
+              ))}
+            </nav>
+          </section>
 
-            return (
-              <section key={group.label} className="space-y-1">
-                <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                  {group.label}
-                </div>
-                {items.map((item) => {
-                  const Icon = item.icon;
-                  const isExact = 'exact' in item && item.exact;
-                  const isActive = isExact
-                    ? currentPath === item.href
-                    : currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+          <section>
+            <h2 className={styles.groupTitle}>Organization: orbit-labs</h2>
+            <nav className={styles.navList}>
+              {ORGANIZATION_NAV.map((item) => (
+                <SettingsNavLink
+                  key={item.label}
+                  item={item}
+                  currentPath={currentPath}
+                  projectId={projectId}
+                />
+              ))}
+            </nav>
+            <div className={styles.automationSection}>
+              <div className={styles.automationTitle}>
+                <Zap aria-hidden="true" size={18} strokeWidth={2} />
+                <span>Automations</span>
+                <ChevronUp aria-hidden="true" className={styles.automationChevron} size={15} />
+              </div>
+              <nav className={styles.automationNav} aria-label="Automations">
+                {AUTOMATION_NAV.map((item) => (
+                  <SettingsNavLink
+                    key={item.label}
+                    item={item}
+                    currentPath={currentPath}
+                    projectId={projectId}
+                  />
+                ))}
+              </nav>
+            </div>
+          </section>
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium',
-                        'transition-colors duration-150',
-                        isActive
-                          ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
-                          : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  );
-                })}
-                {group.note && (
-                  <p className="rounded-lg px-3 py-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-                    <GitBranch className="mr-1.5 inline h-3.5 w-3.5 align-[-2px]" />
-                    {group.note}
-                  </p>
-                )}
-              </section>
-            );
-          })}
-        </nav>
-
-        {isAuthEnabled && (
-          <div className="mt-4 border-t border-[var(--stroke-divider)] pt-3">
-            <button
-              type="button"
-              onClick={() => clear()}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors duration-150"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
+          {isAuthEnabled ? (
+            <button type="button" className={styles.signOut} onClick={() => clear()}>
+              <LogOut aria-hidden="true" size={18} />
+              Sign out
             </button>
-          </div>
-        )}
-      </aside>
+          ) : null}
+        </aside>
+        <div className={styles.content}>{children}</div>
+      </div>
+    </ProjectRouteShell>
+  );
+}
 
-      <main className="min-w-0 flex-1 overflow-auto">{children}</main>
-    </div>
+export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <SettingsLayoutContent>{children}</SettingsLayoutContent>
+    </Suspense>
   );
 }

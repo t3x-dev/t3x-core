@@ -230,6 +230,16 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
+  it('redirects the legacy project settings query without rendering the old settings panel', () => {
+    searchParamsValue = new URLSearchParams('tab=settings');
+    pathnameValue = '/project/proj_test';
+
+    const view = render(<ProjectDetailPage />);
+
+    expect(replaceMock).toHaveBeenCalledWith('/settings?project=proj_test');
+    expect(view.container).toBeEmptyDOMElement();
+  });
+
   it('renders project detail from an owner/repo route override', () => {
     routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
@@ -258,7 +268,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compose' })).toBeInTheDocument();
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
@@ -301,8 +311,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('does not start Canvas I/O on repository surfaces', async () => {
     renderProjectContent();
 
-    expect(await screen.findByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Structure' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toHaveAttribute('aria-selected', 'true');
     expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
     expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
     expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
@@ -453,9 +463,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('missing')).toHaveLength(2);
+    expect(await screen.findAllByText('Missing')).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByText('Revision details'));
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {
@@ -479,10 +490,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('banner')).toHaveTextContent('Project');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
-    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('Private')).toBeInTheDocument();
     expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.closest('header')).toHaveClass('min-[1200px]:h-14');
+    expect(projectNavigation.closest('header')).toHaveClass('h-24');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
@@ -506,7 +517,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -521,11 +532,15 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Main workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      'Main workspace'
+    );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(screen.getByText('No source material yet.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'What would you like to change?' })
+    ).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -552,7 +567,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(await screen.findByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -593,7 +608,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
@@ -654,7 +669,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByRole('tab', { name: /^Snapshot/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
     });
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();

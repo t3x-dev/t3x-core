@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { tokenUsage } from '../schema-trees';
 
@@ -33,26 +33,28 @@ export interface RecordUsageInput {
 
 export interface UsageSummaryRow {
   period: string;
+  requests: number;
   input_tokens: number;
   output_tokens: number;
   estimated_cost: number;
 }
 
 export interface UsageTotal {
+  requests: number;
   input_tokens: number;
   output_tokens: number;
   estimated_cost: number;
 }
 
 export interface UsageSummaryOptions {
-  user_id: string;
+  user_id: string | null;
   from: Date;
   to: Date;
   group_by: 'day' | 'week' | 'month';
 }
 
 export interface UsageTotalOptions {
-  user_id: string;
+  user_id: string | null;
   from: Date;
   to: Date;
 }
@@ -167,6 +169,7 @@ export async function getUsageSummary(
   const results = await db
     .select({
       period: truncExpr,
+      requests: sql<number>`count(*)::int`,
       inputTokens: sql<number>`coalesce(sum(${tokenUsage.inputTokens}), 0)::int`,
       outputTokens: sql<number>`coalesce(sum(${tokenUsage.outputTokens}), 0)::int`,
       estimatedCost: sql<string>`coalesce(sum(${tokenUsage.estimatedCost}), 0)`,
@@ -174,7 +177,7 @@ export async function getUsageSummary(
     .from(tokenUsage)
     .where(
       and(
-        eq(tokenUsage.userId, user_id),
+        user_id === null ? isNull(tokenUsage.userId) : eq(tokenUsage.userId, user_id),
         gte(tokenUsage.createdAt, from),
         lte(tokenUsage.createdAt, to)
       )
@@ -184,6 +187,7 @@ export async function getUsageSummary(
 
   return results.map((r) => ({
     period: r.period instanceof Date ? r.period.toISOString() : String(r.period),
+    requests: Number(r.requests),
     input_tokens: Number(r.inputTokens),
     output_tokens: Number(r.outputTokens),
     estimated_cost: Number(r.estimatedCost),
@@ -198,6 +202,7 @@ export async function getUsageTotal(db: AnyDB, options: UsageTotalOptions): Prom
 
   const [result] = await db
     .select({
+      requests: sql<number>`count(*)::int`,
       inputTokens: sql<number>`coalesce(sum(${tokenUsage.inputTokens}), 0)::int`,
       outputTokens: sql<number>`coalesce(sum(${tokenUsage.outputTokens}), 0)::int`,
       estimatedCost: sql<string>`coalesce(sum(${tokenUsage.estimatedCost}), 0)`,
@@ -205,13 +210,14 @@ export async function getUsageTotal(db: AnyDB, options: UsageTotalOptions): Prom
     .from(tokenUsage)
     .where(
       and(
-        eq(tokenUsage.userId, user_id),
+        user_id === null ? isNull(tokenUsage.userId) : eq(tokenUsage.userId, user_id),
         gte(tokenUsage.createdAt, from),
         lte(tokenUsage.createdAt, to)
       )
     );
 
   return {
+    requests: Number(result?.requests ?? 0),
     input_tokens: Number(result?.inputTokens ?? 0),
     output_tokens: Number(result?.outputTokens ?? 0),
     estimated_cost: Number(result?.estimatedCost ?? 0),
@@ -220,6 +226,14 @@ export async function getUsageTotal(db: AnyDB, options: UsageTotalOptions): Prom
 
 export interface UsageByEndpointRow {
   endpoint: string;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+}
+
+export interface UsageByModelRow {
+  model: string;
+  requests: number;
   input_tokens: number;
   output_tokens: number;
   estimated_cost: number;
@@ -244,7 +258,7 @@ export async function getUsageByEndpoint(
     .from(tokenUsage)
     .where(
       and(
-        eq(tokenUsage.userId, user_id),
+        user_id === null ? isNull(tokenUsage.userId) : eq(tokenUsage.userId, user_id),
         gte(tokenUsage.createdAt, from),
         lte(tokenUsage.createdAt, to)
       )
@@ -257,6 +271,40 @@ export async function getUsageByEndpoint(
     input_tokens: Number(r.inputTokens),
     output_tokens: Number(r.outputTokens),
     estimated_cost: Number(r.estimatedCost),
+  }));
+}
+
+/** Get usage aggregated by provider-reported model for a user within a time range. */
+export async function getUsageByModel(
+  db: AnyDB,
+  options: UsageTotalOptions
+): Promise<UsageByModelRow[]> {
+  const { user_id, from, to } = options;
+  const results = await db
+    .select({
+      model: tokenUsage.model,
+      requests: sql<number>`count(*)::int`,
+      inputTokens: sql<number>`coalesce(sum(${tokenUsage.inputTokens}), 0)::int`,
+      outputTokens: sql<number>`coalesce(sum(${tokenUsage.outputTokens}), 0)::int`,
+      estimatedCost: sql<string>`coalesce(sum(${tokenUsage.estimatedCost}), 0)`,
+    })
+    .from(tokenUsage)
+    .where(
+      and(
+        user_id === null ? isNull(tokenUsage.userId) : eq(tokenUsage.userId, user_id),
+        gte(tokenUsage.createdAt, from),
+        lte(tokenUsage.createdAt, to)
+      )
+    )
+    .groupBy(tokenUsage.model)
+    .orderBy(sql`count(*) desc`);
+
+  return results.map((row) => ({
+    model: row.model,
+    requests: Number(row.requests),
+    input_tokens: Number(row.inputTokens),
+    output_tokens: Number(row.outputTokens),
+    estimated_cost: Number(row.estimatedCost),
   }));
 }
 

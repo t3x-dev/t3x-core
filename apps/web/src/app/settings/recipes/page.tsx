@@ -1,65 +1,118 @@
 'use client';
 
-import { Loader2, MoreVertical, Pencil, Plus, Trash2, Workflow } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  ArrowRight,
+  FileOutput,
+  Gauge,
+  GitCommitHorizontal,
+  GitMerge,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Play,
+  Plus,
+  Sparkles,
+  Trash2,
+  Webhook,
+  Workflow,
+  X,
+  XCircle,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { RecipeForm } from '@/components/settings/RecipeForm';
 import { AlertDialog } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { EmptyState } from '@/components/ui/empty-state';
-import { Switch } from '@/components/ui/switch';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
 import { useProjectStore } from '@/store/projectStore';
-import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/types/api';
+import type { CreateRecipeInput, Recipe, RecipeStep, UpdateRecipeInput } from '@/types/api';
+import styles from './RecipeSettings.module.css';
+
+const TRIGGER_LABELS: Record<string, string> = {
+  'commit.created': 'Commit created',
+  'merge.completed': 'Merge completed',
+  'leaf.created': 'Leaf created',
+  'leaf.generated': 'Leaf generated',
+  'run.completed': 'Run completed',
+  'run.failed': 'Run failed',
+};
+
+const ACTION_LABELS: Record<RecipeStep['action'], string> = {
+  send_webhook: 'Send webhook',
+  run_eval: 'Run validation',
+  export_report: 'Export report',
+};
+
+function triggerLabel(event: string): string {
+  return TRIGGER_LABELS[event] ?? event.replaceAll('.', ' ');
+}
+
+function actionLabel(action: RecipeStep['action']): string {
+  return ACTION_LABELS[action] ?? action.replaceAll('_', ' ');
+}
+
+function TriggerIcon({ event }: { event: string }) {
+  const Icon =
+    event === 'merge.completed'
+      ? GitMerge
+      : event === 'run.failed'
+        ? XCircle
+        : event.includes('leaf')
+          ? Sparkles
+          : GitCommitHorizontal;
+  return <Icon aria-hidden="true" />;
+}
+
+function ActionIcon({ action }: { action: RecipeStep['action'] }) {
+  const Icon = action === 'run_eval' ? Gauge : action === 'export_report' ? FileOutput : Webhook;
+  return <Icon aria-hidden="true" />;
+}
 
 export default function RecipesPage() {
-  const projects = useProjectStore((s) => s.projects);
-  const initialized = useProjectStore((s) => s.initialized);
+  const projectId = useSearchParams().get('project')?.trim() ?? '';
+  const projects = useProjectStore((state) => state.projects);
+  const initialized = useProjectStore((state) => state.initialized);
   const { list: fetchProjects } = useProjectCrud();
   const { listRecipes, createRecipe, updateRecipe, deleteRecipe } = useRecipeCommands();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-
-  // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Toggle loading tracker
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  // Ensure projects are loaded
   useEffect(() => {
-    if (!initialized) {
-      fetchProjects();
-    }
-  }, [initialized, fetchProjects]);
+    if (!initialized) void fetchProjects();
+  }, [fetchProjects, initialized]);
+
+  const targetProjectIds = useMemo(
+    () => (projectId ? [projectId] : projects.map((project) => project.id)),
+    [projectId, projects]
+  );
+  const activeProjectId = selectedProjectId || projectId || projects[0]?.id || '';
+  const activeProjectName =
+    projects.find((project) => project.id === activeProjectId)?.name ?? 'Current project';
+  const settingsHref = projectId
+    ? `/settings?project=${encodeURIComponent(projectId)}`
+    : '/settings';
 
   const fetchAllRecipes = useCallback(async () => {
-    if (projects.length === 0) {
+    if (!projectId && !initialized) return;
+    if (targetProjectIds.length === 0) {
       setRecipes([]);
       setLoading(false);
       return;
@@ -68,29 +121,45 @@ export default function RecipesPage() {
     try {
       setLoading(true);
       setError(null);
-      const results = await Promise.allSettled(projects.map((p) => listRecipes(p.id)));
-      const allRecipes: Recipe[] = [];
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          allRecipes.push(...result.value);
-        }
+      const results = await Promise.allSettled(
+        targetProjectIds.map((targetProjectId) => listRecipes(targetProjectId))
+      );
+      setRecipes(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])));
+      if (results.every((result) => result.status === 'rejected')) {
+        const firstFailure = results.find((result) => result.status === 'rejected');
+        throw firstFailure?.reason;
       }
-      setRecipes(allRecipes);
-    } catch (err) {
-      const message = formatUserFacingError(err, 'Failed to load recipes.');
-      setError(message);
+    } catch (fetchError) {
+      setError(formatUserFacingError(fetchError, 'Failed to load recipes.'));
     } finally {
       setLoading(false);
     }
-  }, [projects, listRecipes]);
+  }, [initialized, listRecipes, projectId, targetProjectIds]);
 
   useEffect(() => {
-    if (initialized) {
-      fetchAllRecipes();
-    }
-  }, [initialized, fetchAllRecipes]);
+    void fetchAllRecipes();
+  }, [fetchAllRecipes]);
 
-  // Create / Edit handler
+  const closeForm = useCallback(() => {
+    setFormOpen(false);
+    setEditingRecipe(null);
+    setSelectedProjectId(null);
+  }, []);
+
+  const openCreate = useCallback(() => {
+    const targetProjectId = projectId || projects[0]?.id;
+    if (!targetProjectId) return;
+    setSelectedProjectId(targetProjectId);
+    setEditingRecipe(null);
+    setFormOpen(true);
+  }, [projectId, projects]);
+
+  const openEdit = useCallback((recipe: Recipe) => {
+    setSelectedProjectId(recipe.project_id);
+    setEditingRecipe(recipe);
+    setFormOpen(true);
+  }, []);
+
   const handleFormSubmit = useCallback(
     async (data: CreateRecipeInput | UpdateRecipeInput) => {
       setFormLoading(true);
@@ -101,225 +170,215 @@ export default function RecipesPage() {
             editingRecipe.id,
             data as UpdateRecipeInput
           );
-          setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+          setRecipes((current) =>
+            current.map((recipe) => (recipe.id === updated.id ? updated : recipe))
+          );
           toast.success('Recipe updated');
         } else if (selectedProjectId) {
           const created = await createRecipe(selectedProjectId, data as CreateRecipeInput);
-          setRecipes((prev) => [...prev, created]);
+          setRecipes((current) => [...current, created]);
           toast.success('Recipe created');
         }
-        setFormOpen(false);
-        setEditingRecipe(null);
-        setSelectedProjectId(null);
-      } catch (err) {
-        const message = formatUserFacingError(err, 'Operation failed.');
-        toast.error(message);
+        closeForm();
+      } catch (submitError) {
+        toast.error(formatUserFacingError(submitError, 'Operation failed.'));
       } finally {
         setFormLoading(false);
       }
     },
-    [editingRecipe, selectedProjectId, createRecipe, updateRecipe]
+    [closeForm, createRecipe, editingRecipe, selectedProjectId, updateRecipe]
   );
 
-  // Delete handler
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
       await deleteRecipe(deleteTarget.project_id, deleteTarget.id);
-      setRecipes((prev) => prev.filter((r) => r.id !== deleteTarget.id));
-      toast.success('Recipe deleted');
+      setRecipes((current) => current.filter((recipe) => recipe.id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch (err) {
-      const message = formatUserFacingError(err, 'Failed to delete recipe.');
-      toast.error(message);
+      toast.success('Recipe deleted');
+    } catch (deleteError) {
+      toast.error(formatUserFacingError(deleteError, 'Failed to delete recipe.'));
     } finally {
       setDeleteLoading(false);
     }
-  }, [deleteTarget, deleteRecipe]);
-
-  // Toggle enabled/disabled
-  const handleToggleEnabled = useCallback(
-    async (recipe: Recipe) => {
-      setTogglingId(recipe.id);
-      try {
-        const updated = await updateRecipe(recipe.project_id, recipe.id, {
-          enabled: !recipe.enabled,
-        });
-        setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      } catch (err) {
-        const message = formatUserFacingError(err, 'Failed to toggle recipe.');
-        toast.error(message);
-      } finally {
-        setTogglingId(null);
-      }
-    },
-    [updateRecipe]
-  );
-
-  // Open create dialog
-  const openCreate = useCallback(() => {
-    if (projects.length === 1) {
-      setSelectedProjectId(projects[0].id);
-      setEditingRecipe(null);
-      setFormOpen(true);
-    } else if (projects.length > 1) {
-      // If multiple projects, pick the first one; user can change later
-      setSelectedProjectId(projects[0].id);
-      setEditingRecipe(null);
-      setFormOpen(true);
-    }
-  }, [projects]);
-
-  // Open edit dialog
-  const openEdit = useCallback((recipe: Recipe) => {
-    setEditingRecipe(recipe);
-    setSelectedProjectId(recipe.project_id);
-    setFormOpen(true);
-  }, []);
-
-  // Group recipes by project
-  const recipesByProject = recipes.reduce<Record<string, Recipe[]>>((acc, recipe) => {
-    if (!acc[recipe.project_id]) {
-      acc[recipe.project_id] = [];
-    }
-    acc[recipe.project_id].push(recipe);
-    return acc;
-  }, {});
-
-  const getProjectName = (projectId: string) => {
-    const project = projects.find((p) => p.id === projectId);
-    return project?.name ?? projectId;
-  };
+  }, [deleteRecipe, deleteTarget]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-[var(--stroke-divider)] px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Recipes</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-              Automate workflows triggered by events in your projects.
-            </p>
-          </div>
-          <Button className="gap-1.5" onClick={openCreate} disabled={projects.length === 0}>
-            <Plus className="h-4 w-4" />
-            Create Recipe
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto px-6 py-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-sm text-[var(--status-error)]">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchAllRecipes}>
-              Retry
+    <div className={styles.page}>
+      <section className={styles.workspace}>
+        <header className={styles.pageHeader}>
+          <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+            <Link href={settingsHref}>Project settings</Link>
+            <span aria-hidden="true">/</span>
+            <span>Automations</span>
+            <span aria-hidden="true">/</span>
+            <strong>Recipes</strong>
+          </nav>
+          <div className={styles.titleRow}>
+            <div className={styles.titleCluster}>
+              <h1>Recipes</h1>
+              <span className={styles.scopeBadge}>Project</span>
+            </div>
+            <Button
+              className={styles.newButton}
+              onClick={openCreate}
+              disabled={!projectId && projects.length === 0}
+            >
+              <Plus aria-hidden="true" />
+              New recipe
             </Button>
           </div>
-        ) : recipes.length === 0 ? (
-          <EmptyState
-            icon={Workflow}
-            title="No recipes configured"
-            description={
-              projects.length === 0
-                ? 'Create a project first, then add recipes to automate workflows.'
-                : 'Create a recipe to automate actions when events occur in your projects.'
-            }
-            action={
-              projects.length > 0 ? { label: 'Create Recipe', onClick: openCreate } : undefined
-            }
-          />
-        ) : (
-          <div className="flex flex-col gap-6">
-            {Object.entries(recipesByProject).map(([projectId, projectRecipes]) => (
-              <div key={projectId}>
-                <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
-                  {getProjectName(projectId)}
-                </h2>
-                <div className="flex flex-col gap-3">
-                  {projectRecipes.map((recipe) => (
-                    <RecipeCard
-                      key={recipe.id}
-                      recipe={recipe}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                      onToggle={handleToggleEnabled}
-                      toggling={togglingId === recipe.id}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </header>
 
-      {/* Create / Edit Dialog */}
-      <Dialog
-        open={formOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setFormOpen(false);
-            setEditingRecipe(null);
-            setSelectedProjectId(null);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingRecipe ? 'Edit Recipe' : 'Create Recipe'}</DialogTitle>
-            <DialogDescription>
-              {editingRecipe
-                ? 'Update the recipe configuration.'
-                : 'Configure a new recipe to automate actions when events occur.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Project selector for create mode with multiple projects */}
-          {!editingRecipe && projects.length > 1 && (
-            <div className="flex flex-col gap-2 mb-2">
-              <label
-                htmlFor="recipe-project-select"
-                className="text-sm font-medium text-[var(--text-primary)]"
-              >
-                Project <span className="text-[var(--status-error)]">*</span>
-              </label>
-              <select
-                id="recipe-project-select"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                value={selectedProjectId ?? ''}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+        <div className={styles.contentScroll}>
+          <section className={styles.panel} aria-labelledby="recipe-list-title">
+            <h2 id="recipe-list-title" className="sr-only">
+              Project recipes
+            </h2>
+            <div className={styles.tableScroll}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>
+                      Trigger <ArrowRight aria-hidden="true" /> Action
+                    </th>
+                    <th>Status</th>
+                    <th>Last run</th>
+                    <th className={styles.actionColumn}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <Loader2 aria-label="Loading recipes" className={styles.spinner} />
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <span className={styles.errorText}>{error}</span>
+                        <Button size="sm" variant="outline" onClick={() => void fetchAllRecipes()}>
+                          Retry
+                        </Button>
+                      </td>
+                    </tr>
+                  ) : recipes.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className={styles.emptyCell}>
+                        <span>No recipes configured for this project.</span>
+                        <button type="button" onClick={openCreate}>
+                          Create your first recipe
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    recipes.map((recipe) => {
+                      const firstStep = recipe.steps[0] ?? {
+                        action: 'send_webhook' as const,
+                        config: {},
+                      };
+                      return (
+                        <tr key={recipe.id}>
+                          <td>
+                            <div className={styles.nameCell}>
+                              <span className={styles.recipeIcon}>
+                                <Workflow aria-hidden="true" />
+                              </span>
+                              <span>
+                                <strong>{recipe.name}</strong>
+                                <small>{recipe.description || 'Automated project workflow'}</small>
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className={styles.flowCell}>
+                              <span>
+                                <TriggerIcon event={recipe.trigger.event} />
+                                {triggerLabel(recipe.trigger.event)}
+                              </span>
+                              <ArrowRight aria-hidden="true" className={styles.flowArrow} />
+                              <span>
+                                <ActionIcon action={firstStep.action} />
+                                {actionLabel(firstStep.action)}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={recipe.enabled ? styles.enabled : styles.disabled}>
+                              <span aria-hidden="true" />
+                              {recipe.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td className={styles.lastRun}>—</td>
+                          <td className={styles.actionColumn}>
+                            <div className={styles.rowActions}>
+                              <Button variant="outline" size="sm" onClick={() => openEdit(recipe)}>
+                                <Pencil aria-hidden="true" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toast.info('Run history is not available yet.')}
+                              >
+                                <Play aria-hidden="true" />
+                                Run history
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={styles.moreButton}
+                                    aria-label={`More actions for ${recipe.name}`}
+                                  >
+                                    <MoreVertical aria-hidden="true" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-[var(--status-error)] focus:text-[var(--status-error)]"
+                                    onClick={() => setDeleteTarget(recipe)}
+                                  >
+                                    <Trash2 aria-hidden="true" className="mr-2 size-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </section>
+        </div>
+      </section>
 
+      {formOpen ? (
+        <aside className={styles.drawer} aria-label={editingRecipe ? 'Edit recipe' : 'New recipe'}>
+          <div className={styles.drawerHeader}>
+            <h2>{editingRecipe ? 'Edit recipe' : 'New recipe'}</h2>
+            <button type="button" aria-label="Close recipe form" onClick={closeForm}>
+              <X aria-hidden="true" />
+            </button>
+          </div>
           <RecipeForm
             recipe={editingRecipe}
             onSubmit={handleFormSubmit}
-            onCancel={() => {
-              setFormOpen(false);
-              setEditingRecipe(null);
-              setSelectedProjectId(null);
-            }}
+            onCancel={closeForm}
             loading={formLoading}
+            projectName={activeProjectName}
+            variant="drawer"
           />
-        </DialogContent>
-      </Dialog>
+        </aside>
+      ) : null}
 
-      {/* Delete Confirmation */}
       <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
@@ -332,116 +391,6 @@ export default function RecipesPage() {
         variant="destructive"
         loading={deleteLoading}
       />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// RecipeCard -- individual recipe row
-// ---------------------------------------------------------------------------
-
-const STEP_ACTION_LABELS: Record<string, string> = {
-  send_webhook: 'Webhook',
-  run_eval: 'Eval',
-  export_report: 'Report',
-};
-
-interface RecipeCardProps {
-  recipe: Recipe;
-  onEdit: (recipe: Recipe) => void;
-  onDelete: (recipe: Recipe) => void;
-  onToggle: (recipe: Recipe) => void;
-  toggling: boolean;
-}
-
-function RecipeCard({ recipe, onEdit, onDelete, onToggle, toggling }: RecipeCardProps) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4 transition-colors hover:bg-[var(--hover-bg)]">
-      <div className="flex flex-col gap-1.5 min-w-0 flex-1 mr-4">
-        {/* Name + enabled */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full shrink-0 ${
-              recipe.enabled ? 'bg-[var(--status-success)]' : 'bg-[var(--text-tertiary)]'
-            }`}
-          />
-          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
-            {recipe.name}
-          </span>
-          {!recipe.enabled && (
-            <Badge
-              variant="outline"
-              className="text-xs text-[var(--text-tertiary)] border-[var(--stroke-default)]"
-            >
-              Disabled
-            </Badge>
-          )}
-        </div>
-
-        {/* Description */}
-        {recipe.description && (
-          <p className="text-xs text-[var(--text-tertiary)] truncate">{recipe.description}</p>
-        )}
-
-        {/* Trigger + Steps */}
-        <div className="flex flex-wrap gap-1.5">
-          <Badge
-            variant="outline"
-            className="text-xs font-normal text-[var(--text-secondary)] border-[var(--stroke-default)]"
-          >
-            on: {recipe.trigger.event}
-          </Badge>
-          {recipe.steps.map((step, i) => (
-            <Badge
-              key={`${recipe.id}-step-${i}`}
-              variant="outline"
-              className="text-xs font-normal text-[var(--text-secondary)] border-[var(--stroke-default)]"
-            >
-              {STEP_ACTION_LABELS[step.action] ?? step.action}
-            </Badge>
-          ))}
-        </div>
-
-        {/* Meta */}
-        <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
-          <span>
-            {recipe.steps.length} step{recipe.steps.length !== 1 ? 's' : ''}
-          </span>
-          <span>Created {new Date(recipe.created_at).toLocaleDateString()}</span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <Switch
-          checked={recipe.enabled}
-          onCheckedChange={() => onToggle(recipe)}
-          disabled={toggling}
-          aria-label={`Toggle ${recipe.name}`}
-        />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreVertical className="h-4 w-4" />
-              <span className="sr-only">Recipe actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(recipe)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onDelete(recipe)}
-              className="text-[var(--status-error)] focus:text-[var(--status-error)]"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </div>
   );
 }
