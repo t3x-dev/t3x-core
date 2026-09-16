@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
 import { useSession } from '@/hooks/shared/useSession';
 import styles from './SettingsLayout.module.css';
@@ -113,7 +113,7 @@ function SettingsNavLink({
   );
 }
 
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const currentPath = usePathname() ?? '';
   const projectId = useSearchParams().get('project')?.trim() ?? '';
   const { clear, getKey } = useSession();
@@ -180,5 +180,13 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         <div className={styles.content}>{children}</div>
       </div>
     </ProjectRouteShell>
+  );
+}
+
+export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <SettingsLayoutContent>{children}</SettingsLayoutContent>
+    </Suspense>
   );
 }
