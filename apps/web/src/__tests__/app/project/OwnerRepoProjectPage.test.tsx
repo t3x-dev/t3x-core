@@ -111,6 +111,16 @@ describe('OwnerRepoProjectPage', () => {
     expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
   });
 
+  it('redirects the legacy repository settings path to the shared settings pages', () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'settings'] };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(replaceMock).toHaveBeenCalledWith('/settings?project=proj_audit');
+    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
+    expect(fetchProjects).not.toHaveBeenCalled();
+  });
+
   it('renders a not-found state for invalid repository tab segments', () => {
     routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'yschema'] };
 

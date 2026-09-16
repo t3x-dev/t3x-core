@@ -393,16 +393,16 @@ export function StatePrdReader({
           </Button>
           <div
             aria-label="Preview representation"
-            className="inline-flex min-h-9 items-stretch rounded-md border border-[var(--stroke-default)] bg-[var(--surface-app)] p-0.5"
+            className="inline-flex h-7 items-stretch gap-[3px] rounded-[4px] bg-[var(--surface-app)] p-[1.5px]"
             role="tablist"
           >
             {(['rendered', 'raw'] as const).map((nextMode) => (
               <button
                 aria-selected={mode === nextMode}
                 className={cn(
-                  'min-w-[76px] rounded px-3 text-[11px] font-bold capitalize text-[var(--text-tertiary)] transition-colors',
+                  'min-w-[76px] rounded-[4px] border border-transparent px-3 text-[11px] font-medium capitalize text-[var(--text-secondary)] transition-colors',
                   mode === nextMode &&
-                    'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                    'border-[var(--stroke-divider)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
                 )}
                 key={nextMode}
                 onClick={() => {
@@ -1157,16 +1157,16 @@ function PrdOutline({
             {schemaNavigation ? (
               <div
                 aria-label="PRD navigation view"
-                className="mt-3 grid w-full grid-cols-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-0.5"
+                className="mt-3 grid h-7 w-full grid-cols-2 gap-[3px] rounded-[4px] bg-[var(--surface-app)] p-[1.5px]"
                 role="tablist"
               >
                 {(['modules', 'outline'] as const).map((nextView) => (
                   <button
                     aria-selected={activeView === nextView}
                     className={cn(
-                      'h-7 min-w-0 truncate rounded-[5px] px-2 text-xs font-medium capitalize text-[var(--text-tertiary)] transition-colors',
+                      'h-full min-w-0 truncate rounded-[4px] border border-transparent px-2 text-xs font-medium capitalize text-[var(--text-secondary)] transition-colors',
                       activeView === nextView &&
-                        'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-xs font-semibold'
+                        'border-[var(--stroke-divider)] bg-[var(--surface-elevated)] text-[var(--text-primary)] font-semibold'
                     )}
                     key={nextView}
                     onClick={() => setView(nextView)}

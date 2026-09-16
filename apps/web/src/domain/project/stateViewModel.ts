@@ -385,6 +385,28 @@ export function buildStatePointRows(
   return rows;
 }
 
+/** Resolve the same normalized path used by State rows, without comparing display summaries. */
+export function readStatePointValue(
+  content: StateTreeContent,
+  path: string
+): { exists: boolean; value?: unknown } {
+  const target = normalizePath(path);
+  const matches: unknown[] = [];
+  function visit(value: unknown, currentPath: string) {
+    const normalized = normalizePath(currentPath);
+    if (normalized === target) {
+      matches.push(value);
+      return;
+    }
+    if (!target.startsWith(`${normalized}/`) || value === null || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) visit(child, `${currentPath}/${key}`);
+  }
+  for (const [key, value] of Object.entries(semanticContentToPlain(content))) visit(value, key);
+  if (matches.length > 1)
+    throw new Error('This path matches multiple state nodes. History is ambiguous.');
+  return matches.length ? { exists: true, value: matches[0] } : { exists: false };
+}
+
 export function buildCanonicalStateYaml(content: SemanticContent): string {
   return yaml
     .dump(semanticContentToPlain(content), {

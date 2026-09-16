@@ -98,6 +98,21 @@ export interface TestConnectionResult {
   latency_ms?: number;
 }
 
+export interface TaskModelDefault {
+  primary_model: string;
+  fallback_model: string | null;
+}
+
+export interface ModelAccessConfig {
+  enabled_models: string[];
+  default_model: string | null;
+  task_defaults: {
+    compose: TaskModelDefault;
+    extraction: TaskModelDefault;
+    validation: TaskModelDefault;
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Pure helpers
 // ────────────────────────────────────────────────────────────────────────────

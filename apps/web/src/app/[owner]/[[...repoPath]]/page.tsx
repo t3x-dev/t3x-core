@@ -33,6 +33,7 @@ function OwnerRepoProjectPageContent() {
   const isNewRepositoryPage = repoSlug === 'new' && repoSegments.length === 1;
   const isOrganizationSettingsPage =
     isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
+  const isRepositorySettingsRedirect = repoSegments.length > 1 && tabSegment === 'settings';
   const projects = useProjectStore((state) => state.projects);
   const initialized = useProjectStore((state) => state.initialized);
   const projectScope = useProjectStore((state) => state.projectScope);
@@ -41,7 +42,13 @@ function OwnerRepoProjectPageContent() {
   const { list: fetchProjects } = useProjectCrud();
 
   useEffect(() => {
-    if (isOwnerDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
+    if (
+      isOwnerDirectory ||
+      isNewRepositoryPage ||
+      isOrganizationSettingsPage ||
+      isRepositorySettingsRedirect
+    )
+      return;
     if (projectScope !== ownerSlug && !loading) void fetchProjects(ownerSlug);
   }, [
     fetchProjects,
@@ -49,6 +56,7 @@ function OwnerRepoProjectPageContent() {
     isNewRepositoryPage,
     isOrganizationSettingsPage,
     isOwnerDirectory,
+    isRepositorySettingsRedirect,
     loading,
     ownerSlug,
     projectScope,
@@ -64,6 +72,11 @@ function OwnerRepoProjectPageContent() {
     router.replace(`/${ownerSlug}/${repoSlug}`);
   }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
 
+  useEffect(() => {
+    if (!isRepositorySettingsRedirect || !project?.id) return;
+    router.replace(`/settings?project=${encodeURIComponent(project.id)}`);
+  }, [isRepositorySettingsRedirect, project?.id, router]);
+
   if (isOwnerDirectory) {
     return <ProjectDirectoryPage ownerSlug={ownerSlug} />;
   }
@@ -74,6 +87,10 @@ function OwnerRepoProjectPageContent() {
 
   if (isOrganizationSettingsPage) {
     return <OrganizationSettingsPage ownerSlug={ownerSlug} />;
+  }
+
+  if (isRepositorySettingsRedirect) {
+    return null;
   }
 
   if (!initialized || loading || projectScope !== ownerSlug) {

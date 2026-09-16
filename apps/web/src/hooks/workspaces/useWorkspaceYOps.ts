@@ -10,10 +10,7 @@ import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 
 export function useWorkspaceYOps(candidate: WorkspaceCandidate) {
   const validate = useCallback(async () => {
-    const inheritedBaseline = isCanonicalCommitHash(candidate.baseCommitHash)
-      ? await loadWorkspaceBaseline(candidate.baseCommitHash, candidate.projectId)
-      : undefined;
-    return validateWorkspaceYOps(candidate, inheritedBaseline);
+    return validateWorkspaceCandidateYOps(candidate);
   }, [candidate]);
   const loadCommittedContent = useCallback(
     async (hash: string) => {
@@ -59,4 +56,11 @@ async function loadWorkspaceBaseline(hash: string, projectId: string) {
 
 function isCanonicalCommitHash(hash: string | null | undefined): hash is string {
   return /^sha256:[a-f\d]{64}$/i.test(hash ?? '');
+}
+
+export async function validateWorkspaceCandidateYOps(candidate: WorkspaceCandidate) {
+  const inheritedBaseline = isCanonicalCommitHash(candidate.baseCommitHash)
+    ? await loadWorkspaceBaseline(candidate.baseCommitHash, candidate.projectId)
+    : undefined;
+  return validateWorkspaceYOps(candidate, inheritedBaseline);
 }

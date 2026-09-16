@@ -1,6 +1,19 @@
 'use client';
 
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  FileOutput,
+  Gauge,
+  GitCommitHorizontal,
+  GitMerge,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  Webhook,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +34,7 @@ import type {
   RecipeTrigger,
   UpdateRecipeInput,
 } from '@/types/api';
+import styles from './RecipeForm.module.css';
 
 const TRIGGER_EVENTS = [
   { value: 'commit.created', label: 'Commit Created' },
@@ -37,19 +51,46 @@ const STEP_ACTIONS = [
   { value: 'export_report' as const, label: 'Export Report' },
 ] as const;
 
+const TRIGGER_DESCRIPTIONS: Record<string, string> = {
+  'commit.created': 'When a new commit is created',
+  'merge.completed': 'When a merge is completed',
+  'leaf.created': 'When a new leaf is created',
+  'leaf.generated': 'When leaf output is generated',
+  'run.completed': 'When an evaluation run completes',
+  'run.failed': 'When an evaluation run fails',
+};
+
+const ACTION_DESCRIPTIONS: Record<RecipeStep['action'], string> = {
+  send_webhook: 'Send an event to a webhook',
+  run_eval: 'Run project validation',
+  export_report: 'Export a project report',
+};
+
 interface RecipeFormProps {
   recipe: Recipe | null;
   onSubmit: (data: CreateRecipeInput | UpdateRecipeInput) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  projectName?: string;
+  variant?: 'default' | 'drawer';
 }
 
-export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: RecipeFormProps) {
+export function RecipeForm({
+  recipe,
+  onSubmit,
+  onCancel,
+  loading = false,
+  projectName = 'Current project',
+  variant = 'default',
+}: RecipeFormProps) {
   const isEdit = recipe !== null;
+  const isDrawer = variant === 'drawer';
 
   const [name, setName] = useState(recipe?.name ?? '');
   const [description, setDescription] = useState(recipe?.description ?? '');
-  const [triggerEvent, setTriggerEvent] = useState(recipe?.trigger?.event ?? '');
+  const [triggerEvent, setTriggerEvent] = useState(
+    recipe?.trigger?.event ?? (isDrawer ? 'commit.created' : '')
+  );
   const [enabled, setEnabled] = useState(recipe?.enabled ?? true);
   const [steps, setSteps] = useState<RecipeStep[]>(
     recipe?.steps ?? [{ action: 'send_webhook', config: {} }]
@@ -58,10 +99,10 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
   useEffect(() => {
     setName(recipe?.name ?? '');
     setDescription(recipe?.description ?? '');
-    setTriggerEvent(recipe?.trigger?.event ?? '');
+    setTriggerEvent(recipe?.trigger?.event ?? (isDrawer ? 'commit.created' : ''));
     setEnabled(recipe?.enabled ?? true);
     setSteps(recipe?.steps ?? [{ action: 'send_webhook', config: {} }]);
-  }, [recipe]);
+  }, [recipe, isDrawer]);
 
   const addStep = useCallback(() => {
     setSteps((prev) => [...prev, { action: 'send_webhook', config: {} }]);
@@ -114,6 +155,151 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
   );
 
   const isValid = name.trim() !== '' && triggerEvent !== '' && steps.length > 0;
+
+  const triggerOption =
+    TRIGGER_EVENTS.find((event) => event.value === triggerEvent) ?? TRIGGER_EVENTS[0];
+  const primaryStep = steps[0] ?? { action: 'send_webhook' as const, config: {} };
+  const actionOption =
+    STEP_ACTIONS.find((action) => action.value === primaryStep.action) ?? STEP_ACTIONS[0];
+  const TriggerIcon =
+    triggerEvent === 'merge.completed'
+      ? GitMerge
+      : triggerEvent === 'run.failed'
+        ? XCircle
+        : triggerEvent.includes('leaf')
+          ? Sparkles
+          : GitCommitHorizontal;
+  const ActionIcon =
+    primaryStep.action === 'run_eval'
+      ? Gauge
+      : primaryStep.action === 'export_report'
+        ? FileOutput
+        : Webhook;
+
+  if (isDrawer) {
+    return (
+      <form onSubmit={handleSubmit} className={styles.drawerForm}>
+        <div className={styles.drawerBody}>
+          <div className={styles.field}>
+            <Label htmlFor="recipe-name">Name</Label>
+            <div className={styles.inputWrap}>
+              <Input
+                id="recipe-name"
+                type="text"
+                placeholder="Name this recipe"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                disabled={loading}
+                maxLength={200}
+              />
+              {name ? (
+                <button
+                  type="button"
+                  aria-label="Clear recipe name"
+                  className={styles.clearButton}
+                  onClick={() => setName('')}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className={styles.field}>
+            <Label>When event</Label>
+            <Select value={triggerEvent} onValueChange={setTriggerEvent} disabled={loading}>
+              <SelectTrigger className={styles.choiceTrigger} aria-label="When event">
+                <TriggerIcon aria-hidden="true" />
+                <span className={styles.choiceCopy}>
+                  <strong>{triggerOption.label}</strong>
+                  <small>{TRIGGER_DESCRIPTIONS[triggerOption.value]}</small>
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {TRIGGER_EVENTS.map((event) => (
+                  <SelectItem key={event.value} value={event.value}>
+                    {event.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={styles.field}>
+            <Label>Then action</Label>
+            <Select
+              value={primaryStep.action}
+              onValueChange={(value) => updateStepAction(0, value as RecipeStep['action'])}
+              disabled={loading}
+            >
+              <SelectTrigger className={styles.choiceTrigger} aria-label="Then action">
+                <ActionIcon aria-hidden="true" />
+                <span className={styles.choiceCopy}>
+                  <strong>{actionOption.label}</strong>
+                  <small>{ACTION_DESCRIPTIONS[actionOption.value]}</small>
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {STEP_ACTIONS.map((action) => (
+                  <SelectItem key={action.value} value={action.value}>
+                    {action.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={styles.field}>
+            <Label htmlFor="recipe-target-project">Target project</Label>
+            <div className={styles.projectRow}>
+              <Input id="recipe-target-project" value={projectName} readOnly disabled />
+              <span>Fixed to this project</span>
+            </div>
+          </div>
+
+          <div className={styles.enabledRow}>
+            <Label htmlFor="recipe-enabled">Enabled</Label>
+            <div>
+              <Switch
+                id="recipe-enabled"
+                checked={enabled}
+                onCheckedChange={setEnabled}
+                disabled={loading}
+                aria-label="Enable this recipe"
+              />
+              <span>Enable this recipe</span>
+            </div>
+          </div>
+
+          <div className={styles.preview}>
+            <span className={styles.previewTitle}>Recipe preview</span>
+            <div className={styles.previewFlow}>
+              <div>
+                <TriggerIcon aria-hidden="true" />
+                <span>{triggerOption.label}</span>
+              </div>
+              <ArrowRight aria-hidden="true" className={styles.previewArrow} />
+              <div>
+                <ActionIcon aria-hidden="true" />
+                <span>{actionOption.label}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.drawerActions}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!isValid || loading}>
+            {loading ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
+            {isEdit ? 'Save recipe' : 'Create recipe'}
+          </Button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">

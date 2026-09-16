@@ -1,193 +1,330 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { useAuthMe } from '@/hooks/shared/useAuthMe';
-import { useSession } from '@/hooks/shared/useSession';
 import {
-  DEFAULT_LOCAL_WORKSPACE_NAME,
-  resolveLocalWorkspaceName,
-  useSettingsStore,
-} from '@/store/settingsStore';
-import { cn } from '@/utils/cn';
+  Camera,
+  Columns3,
+  Download,
+  Hand,
+  Laptop,
+  Loader2,
+  Monitor,
+  Smartphone,
+  UserRound,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { formatUserFacingError } from '@/domain/format/errors';
 import {
-  getLocalWorkspaceAvatarClass,
-  LOCAL_WORKSPACE_AVATAR_OPTIONS,
-} from '@/utils/localWorkspaceAvatar';
+  type ProfileSession,
+  type ProfileSettings,
+  useProfileSettings,
+} from '@/hooks/settings/useProfileSettings';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
+import styles from './ProfileSettingsPanel.module.css';
 
-interface ProfileViewModel {
-  name: string | null;
-  username: string | null;
-  email: string | null;
+const TIMEZONES = [
+  ['America/Los_Angeles', '(GMT-08:00) Pacific Time (US & Canada)'],
+  ['America/New_York', '(GMT-05:00) Eastern Time (US & Canada)'],
+  ['Europe/London', '(GMT+00:00) London'],
+  ['UTC', '(GMT+00:00) Coordinated Universal Time'],
+  ['Asia/Shanghai', '(GMT+08:00) China Standard Time'],
+  ['Asia/Tokyo', '(GMT+09:00) Japan Standard Time'],
+] as const;
+
+function initials(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'U'
+  );
+}
+
+function relativeTime(value: string | null): string {
+  if (!value) return 'Not recorded';
+  const elapsed = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 'Just now';
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function sessionPresentation(session: ProfileSession, index: number) {
+  if (session.current) return { title: 'Current browser', detail: 'Active session', Icon: Laptop };
+  return {
+    title: 'Signed-in browser',
+    detail: 'Session credential',
+    Icon: index % 2 === 0 ? Smartphone : Monitor,
+  };
 }
 
 export function ProfileSettingsPanel() {
-  const { loadAuthMe } = useAuthMe();
-  const { getKey, getUser } = useSession();
-  const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
-  const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
-  const setLocalWorkspaceName = useSettingsStore((state) => state.setLocalWorkspaceName);
-  const setLocalWorkspaceAvatarColor = useSettingsStore(
-    (state) => state.setLocalWorkspaceAvatarColor
-  );
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
-  const [profile, setProfile] = useState<ProfileViewModel | null>(authDisabled ? null : null);
+  const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
+  const setLocalWorkspaceName = useSettingsStore((state) => state.setLocalWorkspaceName);
+  const { data, loading, saving, error, retry, save, revoke } = useProfileSettings(!authDisabled);
+  const [draft, setDraft] = useState<ProfileSettings | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (authDisabled) {
-      setProfile(null);
-      return;
-    }
-
-    const sessionKey = getKey();
-    if (!sessionKey) {
-      setProfile(null);
-      return;
-    }
-
-    const cachedUser = getUser();
-    if (cachedUser) {
-      setProfile({
-        name: cachedUser.name,
-        username: cachedUser.username,
+      setDraft({
+        name: resolveLocalWorkspaceName(localWorkspaceName),
         email: null,
+        avatar_url: null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        sessions: [
+          {
+            id: 'local-current-session',
+            name: 'Local browser',
+            current: true,
+            last_active: new Date().toISOString(),
+          },
+        ],
       });
+      return;
     }
+    setDraft(data);
+  }, [authDisabled, data, localWorkspaceName]);
 
-    loadAuthMe()
-      .then((user) => {
-        setProfile({
-          name: user.name,
-          username: user.username,
-          email: user.email,
-        });
-      })
-      .catch(() => {
-        // Keep cached local session info if the background refresh fails.
+  async function saveChanges() {
+    if (!draft) return;
+    if (authDisabled) {
+      const name = resolveLocalWorkspaceName(draft.name);
+      setLocalWorkspaceName(name);
+      setDraft({ ...draft, name });
+      toast.success('Profile saved');
+      return;
+    }
+    try {
+      await save({
+        name: draft.name?.trim() || 'User',
+        avatar_url: draft.avatar_url,
+        timezone: draft.timezone,
       });
-  }, [authDisabled, getKey, getUser, loadAuthMe]);
-
-  const localDisplayName = useMemo(
-    () => resolveLocalWorkspaceName(localWorkspaceName),
-    [localWorkspaceName]
-  );
-  const localInitial = useMemo(() => localDisplayName.charAt(0).toUpperCase(), [localDisplayName]);
-
-  if (authDisabled) {
-    return (
-      <section className="space-y-6">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Local profile</h2>
-          <p className="text-xs text-[var(--text-tertiary)]">
-            Set the local identity used in the sidebar and edit history.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-5">
-          <div className="flex items-start gap-4">
-            <div
-              className={cn(
-                'flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-[var(--on-accent)]',
-                getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor)
-              )}
-            >
-              {localInitial}
-            </div>
-
-            <div className="min-w-0 flex-1 space-y-4">
-              <div className="space-y-2">
-                <label
-                  htmlFor="local-workspace-name"
-                  className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]"
-                >
-                  Display name
-                </label>
-                <Input
-                  id="local-workspace-name"
-                  value={localWorkspaceName}
-                  onChange={(event) => setLocalWorkspaceName(event.target.value)}
-                  onBlur={(event) =>
-                    setLocalWorkspaceName(resolveLocalWorkspaceName(event.target.value))
-                  }
-                  placeholder={DEFAULT_LOCAL_WORKSPACE_NAME}
-                  maxLength={40}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
-                  Avatar color
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {LOCAL_WORKSPACE_AVATAR_OPTIONS.map((option) => {
-                    const isActive = option.value === localWorkspaceAvatarColor;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-label={`Avatar color ${option.value}`}
-                        aria-pressed={isActive}
-                        onClick={() => setLocalWorkspaceAvatarColor(option.value)}
-                        className={cn(
-                          'flex h-8 w-8 items-center justify-center rounded-full ring-offset-2 transition-transform hover:scale-105',
-                          option.className,
-                          isActive
-                            ? 'ring-2 ring-[var(--text-primary)] ring-offset-[var(--surface-primary)]'
-                            : 'ring-1 ring-[var(--stroke-default)]'
-                        )}
-                      >
-                        {isActive && (
-                          <span className="h-2 w-2 rounded-full bg-[var(--surface-card)]" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-                Settings stay local to this browser. The display name is used as the author for
-                local edits.
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
+      toast.success('Profile saved');
+    } catch (cause) {
+      toast.error(formatUserFacingError(cause, 'Failed to save profile.'));
+    }
   }
 
-  const displayName = profile?.name || profile?.username || 'Account';
+  function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !draft) return;
+    const reader = new FileReader();
+    reader.onload = () =>
+      setDraft((current) =>
+        current ? { ...current, avatar_url: String(reader.result) } : current
+      );
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  async function signOutSession(id: string) {
+    try {
+      await revoke(id);
+      toast.success('Session signed out');
+    } catch (cause) {
+      toast.error(formatUserFacingError(cause, 'Failed to sign out session.'));
+    }
+  }
+
+  const displayName = draft?.name?.trim() || 'User';
 
   return (
-    <section className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Account</h2>
-        <p className="text-xs text-[var(--text-tertiary)]">
-          Manage how this workspace identifies you in the settings experience.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-5">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-[var(--text-primary)]">{displayName}</p>
-          {profile?.username && (
-            <p className="text-xs text-[var(--text-secondary)]">@{profile.username}</p>
-          )}
-          {profile?.email && (
-            <p className="text-xs text-[var(--text-secondary)]">{profile.email}</p>
-          )}
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+          <Link href="/settings">Settings</Link>
+          <span>/</span>
+          <span>Personal</span>
+          <span>/</span>
+          <strong>Profile</strong>
+        </nav>
+        <div className={styles.titleGroup}>
+          <h1>Profile</h1>
+          <span>
+            <UserRound size={15} />
+            Personal
+          </span>
         </div>
 
-        {profile ? (
-          <p className="mt-4 text-xs text-[var(--text-secondary)]">
-            Account details come from your current signed-in session.
-          </p>
-        ) : (
-          <p className="mt-4 text-xs text-[var(--text-secondary)]">
-            Sign in to view account details for this workspace.
-          </p>
-        )}
+        {loading ? (
+          <div className={styles.loading}>
+            <Loader2 size={22} className={styles.spin} />
+            Loading profile
+          </div>
+        ) : null}
+        {error && !draft ? (
+          <div className={styles.error} role="alert">
+            <span>{formatUserFacingError(error, 'Failed to load profile.')}</span>
+            <button type="button" onClick={() => void retry()}>
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {draft ? (
+          <>
+            <section className={styles.identityCard}>
+              <div className={styles.avatar}>
+                {draft.avatar_url ? (
+                  <Image src={draft.avatar_url} alt="" width={70} height={70} unoptimized />
+                ) : (
+                  initials(displayName)
+                )}
+              </div>
+              <div className={styles.identityText}>
+                <h2>{displayName}</h2>
+                <p>{draft.email || 'No email address'}</p>
+              </div>
+              <input
+                ref={fileInputRef}
+                className={styles.fileInput}
+                type="file"
+                accept="image/*"
+                onChange={chooseAvatar}
+              />
+              <button
+                type="button"
+                className={styles.editAvatar}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Camera size={17} />
+                Edit avatar
+              </button>
+            </section>
+
+            <section className={styles.detailsCard}>
+              <h2>Personal details</h2>
+              <div className={styles.formGrid}>
+                <label>
+                  <span>Display name</span>
+                  <input
+                    value={draft.name ?? ''}
+                    onChange={(event) => {
+                      setDraft({ ...draft, name: event.target.value });
+                      if (authDisabled) setLocalWorkspaceName(event.target.value);
+                    }}
+                    onBlur={(event) => {
+                      if (!authDisabled) return;
+                      const name = resolveLocalWorkspaceName(event.target.value);
+                      setLocalWorkspaceName(name);
+                      setDraft({ ...draft, name });
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input value={draft.email ?? ''} disabled />
+                </label>
+                <label className={styles.timezoneField}>
+                  <span>Time zone</span>
+                  <select
+                    value={draft.timezone}
+                    onChange={(event) => setDraft({ ...draft, timezone: event.target.value })}
+                  >
+                    {!TIMEZONES.some(([value]) => value === draft.timezone) ? (
+                      <option value={draft.timezone}>{draft.timezone}</option>
+                    ) : null}
+                    {TIMEZONES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={styles.saveButton}
+                  disabled={saving || !draft.name?.trim()}
+                  onClick={() => void saveChanges()}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </section>
+
+            <section className={styles.sessionsCard}>
+              <h2>Sessions</h2>
+              <div className={styles.sessionHeader}>
+                <span>Device</span>
+                <span>Location</span>
+                <span>Last active</span>
+                <span />
+              </div>
+              {draft.sessions.length ? (
+                draft.sessions.map((session, index) => {
+                  const item = sessionPresentation(session, index);
+                  return (
+                    <div className={styles.sessionRow} key={session.id}>
+                      <div className={styles.deviceCell}>
+                        <item.Icon size={20} />
+                        <div>
+                          <strong>{item.title}</strong>
+                          <span>{item.detail}</span>
+                        </div>
+                      </div>
+                      <div className={styles.location}>
+                        <span>—</span>
+                        {session.current ? (
+                          <span className={styles.current}>
+                            <i />
+                            Current
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className={styles.activity}>{relativeTime(session.last_active)}</span>
+                      {session.current ? (
+                        <span />
+                      ) : (
+                        <button type="button" onClick={() => void signOutSession(session.id)}>
+                          Sign out
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className={styles.emptySessions}>
+                  {authDisabled
+                    ? 'Local mode does not create account sessions.'
+                    : 'No active sessions were found.'}
+                </div>
+              )}
+            </section>
+          </>
+        ) : null}
       </div>
-    </section>
+
+      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
+        <button type="button" title="Zoom Out">
+          <ZoomOut size={20} />
+        </button>
+        <button type="button" title="Zoom In">
+          <ZoomIn size={20} />
+        </button>
+        <i />
+        <button type="button" title="Pan Tool">
+          <Hand size={20} />
+        </button>
+        <button type="button" title="Fit to Screen">
+          <Columns3 size={20} />
+        </button>
+        <button type="button" title="Download">
+          <Download size={20} />
+        </button>
+      </div>
+    </div>
   );
 }

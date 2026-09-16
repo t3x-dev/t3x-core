@@ -1,0 +1,492 @@
+.page {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--surface-app);
+}
+
+.workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-elevated);
+}
+
+.pageHeader {
+  flex: 0 0 auto;
+  padding: 20px 28px 16px;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--accent-commit);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.breadcrumbs span[aria-hidden="true"] {
+  color: var(--stroke-strong);
+}
+
+.breadcrumbs strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.titleRow,
+.titleCluster {
+  display: flex;
+  align-items: center;
+}
+
+.titleRow {
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.titleCluster {
+  gap: 12px;
+  min-width: 0;
+}
+
+.titleCluster h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 32px;
+}
+
+.scopeBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  color: var(--accent-commit);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent-commit-soft);
+  border-radius: var(--radius-pill);
+}
+
+.newButton {
+  min-width: 126px;
+  color: var(--on-accent);
+  background: var(--accent-commit);
+}
+
+.newButton:hover {
+  background: var(--commit-hover);
+}
+
+.newButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.contentScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 28px 24px;
+  overflow: auto;
+}
+
+.panel {
+  overflow: hidden;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-control);
+}
+
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+
+.table th {
+  height: 42px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.table th svg {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin: 0 3px;
+  vertical-align: -2px;
+}
+
+.table td {
+  height: 76px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.table th:nth-child(1) {
+  width: 26%;
+}
+
+.table th:nth-child(2) {
+  width: 34%;
+}
+
+.table th:nth-child(3) {
+  width: 13%;
+}
+
+.table th:nth-child(4) {
+  width: 12%;
+}
+
+.table th:nth-child(5) {
+  width: 15%;
+}
+
+.nameCell,
+.flowCell,
+.rowActions {
+  display: flex;
+  align-items: center;
+}
+
+.nameCell {
+  gap: 10px;
+  min-width: 0;
+}
+
+.recipeIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--source);
+  background: var(--accent-commit-soft);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-control);
+}
+
+.recipeIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.nameCell > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nameCell strong,
+.nameCell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nameCell strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 17px;
+}
+
+.nameCell small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.flowCell {
+  gap: 6px;
+  min-width: 0;
+}
+
+.flowCell > span {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 7px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 13px;
+  background: var(--hover-bg);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-control);
+}
+
+.flowCell > span svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--accent-commit);
+}
+
+.flowArrow {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+
+.enabled,
+.disabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+}
+
+.enabled {
+  color: var(--status-success);
+  background: var(--status-success-muted);
+}
+
+.disabled {
+  color: var(--text-tertiary);
+  background: var(--hover-bg-strong);
+}
+
+.enabled > span,
+.disabled > span {
+  width: 6px;
+  height: 6px;
+  background: currentcolor;
+  border-radius: var(--radius-pill);
+}
+
+.table .lastRun {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.table .actionColumn {
+  text-align: right;
+}
+
+.rowActions {
+  position: relative;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.rowActions > button {
+  height: 28px;
+  width: 78px;
+  gap: 4px;
+  padding-inline: 8px;
+  font-size: 10px;
+}
+
+.rowActions > button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.moreButton {
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.table tr:hover .moreButton,
+.moreButton:focus-visible {
+  opacity: 1;
+}
+
+.moreButton:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg-strong);
+}
+
+.moreButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.table .emptyCell {
+  height: 96px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.emptyCell > button {
+  margin-left: 8px;
+  color: var(--accent-commit);
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  margin: 0 auto;
+  color: var(--text-tertiary);
+  animation: spin 800ms linear infinite;
+}
+
+.errorText {
+  margin-right: 10px;
+  color: var(--status-error);
+}
+
+.drawer {
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  width: 320px;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-elevated);
+  border-left: 1px solid var(--stroke-default);
+  box-shadow: var(--fx-shadow-lg);
+}
+
+.drawerHeader {
+  display: flex;
+  flex: 0 0 60px;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+
+.drawerHeader h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+}
+
+.drawerHeader button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+}
+
+.drawerHeader button:hover {
+  background: var(--hover-bg);
+}
+
+.drawerHeader svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1080px) {
+  .drawer {
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(360px, 100%);
+  }
+}
+
+@media (max-width: 720px) {
+  .pageHeader {
+    padding: 16px;
+  }
+
+  .breadcrumbs {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .titleRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .titleCluster h1 {
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .newButton {
+    width: 100%;
+  }
+
+  .contentScroll {
+    padding: 0 16px 20px;
+  }
+}

@@ -1,12 +1,12 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { T3XDiff } from '@/components/shared/T3XDiff';
 import { Badge } from '@/components/ui/badge';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { getWorkspaceYOpsRootKey, normalizeYOpsPath } from '@/domain/workspaces/yopsPaths';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
-import { cn } from '@/utils/cn';
 
 type PreviewTab = 'changes' | 'evidence' | 'yaml';
 interface WorkspacePreviewViewProps {
@@ -68,27 +68,16 @@ export function WorkspacePreviewView(props: WorkspacePreviewViewProps) {
       className="min-w-0 overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3">
-        <div aria-label="Preview views" className="flex" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              id={`workspace-preview-tab-${tab.id}`}
-              aria-controls={`workspace-preview-${tab.id}`}
-              aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'border-b-2 px-3 py-3 text-xs font-semibold',
-                activeTab === tab.id
-                  ? 'border-[var(--accent-branch)] text-[var(--accent-branch)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="Preview views"
+          className="my-2"
+          controlsPrefix="workspace-preview-"
+          idPrefix="workspace-preview-tab-"
+          itemClassName="min-w-[112px] text-xs"
+          items={TABS.map((tab) => ({ label: tab.label, value: tab.id }))}
+          onValueChange={setActiveTab}
+          value={activeTab}
+        />
         <div className="flex flex-wrap gap-2 py-2 text-xs text-[var(--text-secondary)]">
           <Badge variant={validationPassed ? 'success' : 'pending-subtle'}>
             {validationPassed ? 'YOps validated' : 'Not validated'}

@@ -373,7 +373,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
+      <div className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-app)]">
         <div className="flex items-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
           <span className="text-[var(--text-tertiary)]">Loading diff...</span>
@@ -385,7 +385,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Error state
   if (error || !diffResponse) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
+      <div className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-app)]">
         <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
           <h2 className="text-lg font-semibold text-[var(--status-error)] mb-2">
             Failed to load diff

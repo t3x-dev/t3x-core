@@ -1,0 +1,607 @@
+{"kind":"layout","layoutId":"/ppt/slideMasters/slideMaster1.xml","name":"","type":"master","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout1.xml","name":"Title Slide","type":"title","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"subtitle","type":"subtitle","textPreview":"Click to edit Master subtitle style"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout2.xml","name":"Title and Content","type":"obj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout3.xml","name":"Section Header","type":"secHead","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout4.xml","name":"Two Content","type":"twoObj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"content placeholder 3","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout5.xml","name":"Comparison","type":"twoTxTwoObj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"content placeholder 3","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"content placeholder 5","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout6.xml","name":"Title Only","type":"titleOnly","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout7.xml","name":"Blank","type":"blank","placeholders":[{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout8.xml","name":"Content with Caption","type":"objTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout9.xml","name":"Picture with Caption","type":"picTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"picture","type":"picture"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout10.xml","name":"Title and Vertical Text","type":"vertTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout11.xml","name":"Vertical Title and Text","type":"vertTitleAndTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"slide","id":"sl/y90nupkv","slide":1,"title":"心中有信 · 未来可期","textShapes":4}
+{"kind":"shape","id":"sh/547294r6","slide":1,"name":"Rectangle 1","bbox":[0,0,1279.97,17.28]}
+{"kind":"shape","id":"sh/k3yl0zql","slide":1,"name":"Rectangle 2","bbox":[0,702.72,1279.97,17.28]}
+{"kind":"shape","id":"sh/7qp4be9c","slide":1,"name":"Rectangle 3","bbox":[86.4,201.6,15.36,288]}
+{"kind":"textbox","id":"sh/65g3298r","slide":1,"name":"TextBox 4","text":"心中有信 · 未来可期","textPreview":"心中有信 · 未来可期","textChars":11,"textLines":1,"bbox":[129.6,182.4,1056,115.2]}
+{"kind":"textbox","id":"sh/ts7md4r2","slide":1,"name":"TextBox 5","text":"近期宏观变化及资产配置","textPreview":"近期宏观变化及资产配置","textChars":11,"textLines":1,"bbox":[129.6,302.4,1056,134.4]}
+{"kind":"shape","id":"sh/sryl4zqx","slide":1,"name":"Rectangle 6","bbox":[132.48,456,288,3.33]}
+{"kind":"textbox","id":"sh/fu94fe98","slide":1,"name":"TextBox 7","text":"2026.09","textPreview":"2026.09","textChars":7,"textLines":1,"bbox":[129.6,484.8,576,57.6]}
+{"kind":"textbox","id":"sh/utg3698n","slide":1,"name":"TextBox 8","text":"数据截至 2026 年 9 月 8 日","textPreview":"数据截至 2026 年 9 月 8 日","textChars":19,"textLines":1,"bbox":[129.6,542.4,960,22.27]}
+{"kind":"notes","id":"nt/y90nupkv","slide":1,"text":"[Speaker Notes]\n封面沿用 8 月版版式，仅更新月份与数据截至日期。正式交付时请核对机构落款与合规用语。\n\n[Sources]\n数据截至 2026-09-08；版式沿用《近期宏观及资产配置 20260821》。"}
+{"kind":"slide","id":"sl/hwbqtkby","slide":2,"title":"客户需求定位","textShapes":12}
+{"kind":"shape","id":"sh/t8fmd43a","slide":2,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/65o329kz","slide":2,"name":"TextBox 2","text":"客户需求定位","textPreview":"客户需求定位","textChars":6,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/76x4belk","slide":2,"name":"TextBox 3","text":"构建标准化资产配置组合 · 硬性回撤约束下的稳健增值","textPreview":"构建标准化资产配置组合 · 硬性回撤约束下的稳健增值","textChars":26,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/k36l0z2t","slide":2,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/54f2943e","slide":2,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/iho3ypkn","slide":2,"name":"Rectangle 6","bbox":[52.8,177.6,144,48]}
+{"kind":"textbox","id":"sh/j2xk7ul8","slide":2,"name":"Rectangle 7","text":"主体属性","textPreview":"主体属性","textChars":4,"textLines":1,"bbox":[52.8,177.6,144,48]}
+{"kind":"textbox","id":"sh/4zqlcj2x","slide":2,"name":"TextBox 8","text":"经营稳健的实体企业，资金核心诉求是安全性优先、流动性匹配经营节奏、兼顾稳健增值，对本金安全与回撤控制有极致要求。","textPreview":"经营稳健的实体企业，资金核心诉求是安全性优先、流动性匹配经营节奏、兼顾稳健增值，对本金安全与回撤控制有极致要求。","textChars":56,"textLines":1,"bbox":[216,179.52,998.4,96]}
+{"kind":"shape","id":"sh/p0jmloji","slide":2,"name":"Rectangle 9","bbox":[52.8,264,144,48]}
+{"kind":"textbox","id":"sh/zulobi50","slide":2,"name":"Rectangle 10","text":"核心目标","textPreview":"核心目标","textChars":4,"textLines":1,"bbox":[52.8,264,144,48]}
+{"kind":"textbox","id":"sh/etc72x4f","slide":2,"name":"TextBox 11","text":"构建标准化的资产配置组合，硬性约束为组合最大回撤控制在 1% 以内，同时达成“年化 6%”的投资收益目标。","textPreview":"构建标准化的资产配置组合，硬性约束为组合最大回撤控制在 1% 以内，同时达成“年化 6%”的投资收益目标。","textChars":53,"textLines":1,"bbox":[216,265.92,998.4,96]}
+{"kind":"shape","id":"sh/1w36dsnq","slide":2,"name":"Rectangle 12","bbox":[52.8,350.4,144,48]}
+{"kind":"textbox","id":"sh/0vup4nm5","slide":2,"name":"Rectangle 13","text":"持仓现状","textPreview":"持仓现状","textChars":4,"textLines":1,"bbox":[52.8,350.4,144,48]}
+{"kind":"textbox","id":"sh/nylof2lw","slide":2,"name":"TextBox 14","text":"贵司当前已布局部分高风险高收益类产品，本次方案将通过多资产、低相关性策略的科学配置，对冲现有高风险持仓的波动，实现整体组合的风险收益平衡。","textPreview":"贵司当前已布局部分高风险高收益类产品，本次方案将通过多资产、低相关性策略的科学配置，对冲现有高风险持仓的波动，实现整体组合的风险收益平衡。","textChars":69,"textLines":1,"bbox":[216,352.32,998.4,96]}
+{"kind":"shape","id":"sh/mxc76x4b","slide":2,"name":"Rectangle 15","bbox":[52.8,451.2,566.4,163.2]}
+{"kind":"textbox","id":"sh/90n6hc32","slide":2,"name":"Rectangle 16","text":"4-6%\n绝对收益年化目标","textPreview":"4-6% | 绝对收益年化目标","textChars":13,"textLines":2,"bbox":[52.8,451.2,566.4,163.2]}
+{"kind":"shape","id":"sh/ozep87mh","slide":2,"name":"Rectangle 17","bbox":[662.4,451.2,566.4,163.2]}
+{"kind":"textbox","id":"sh/321o3y5s","slide":2,"name":"Rectangle 18","text":"< 1%\n最大回撤红线","textPreview":"< 1% | 最大回撤红线","textChars":11,"textLines":2,"bbox":[662.4,451.2,566.4,163.2]}
+{"kind":"textbox","id":"sh/21snud47","slide":2,"name":"TextBox 19","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/6dovehs7","slide":2,"name":"TextBox 20","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"notes","id":"nt/hwbqtkby","slide":2,"text":"[Speaker Notes]\n客户需求定位页，沿用 8 月版口径，突出‘年化 6% + 最大回撤 <1%’的硬约束。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 2 页。"}
+{"kind":"slide","id":"sl/ofy9wn61","slide":3,"title":"CONTENT","textShapes":10}
+{"kind":"shape","id":"sh/365sbqx0","slide":3,"name":"Rectangle 1","bbox":[0,0,1279.97,720]}
+{"kind":"textbox","id":"sh/47e9kve5","slide":3,"name":"TextBox 2","text":"CONTENT","textPreview":"CONTENT","textChars":7,"textLines":1,"bbox":[86.4,67.2,384,86.4]}
+{"kind":"textbox","id":"sh/p8nad0fq","slide":3,"name":"TextBox 3","text":"目  录","textPreview":"目  录","textChars":4,"textLines":1,"bbox":[86.4,134.4,384,76.8]}
+{"kind":"shape","id":"sh/u1crelg3","slide":3,"name":"Rectangle 4","bbox":[88.32,211.2,115.2,3.33]}
+{"kind":"textbox","id":"sh/f2ls7qxo","slide":3,"name":"TextBox 5","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[96,288,192,96]}
+{"kind":"textbox","id":"sh/g3u9gve9","slide":3,"name":"TextBox 6","text":"近期宏观","textPreview":"近期宏观","textChars":4,"textLines":1,"bbox":[297.6,292.8,768,67.2]}
+{"kind":"textbox","id":"sh/h43a90fu","slide":3,"name":"TextBox 7","text":"海外宏观 · 国内宏观 · 宏观小结","textPreview":"海外宏观 · 国内宏观 · 宏观小结","textChars":18,"textLines":1,"bbox":[297.6,369.6,864,38.4]}
+{"kind":"textbox","id":"sh/6xsra1g7","slide":3,"name":"TextBox 8","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[96,451.2,192,96]}
+{"kind":"textbox","id":"sh/7y1s36xs","slide":3,"name":"TextBox 9","text":"大类资产配置","textPreview":"大类资产配置","textChars":6,"textLines":1,"bbox":[297.6,456,768,67.2]}
+{"kind":"textbox","id":"sh/qx4valgn","slide":3,"name":"TextBox 10","text":"资产现状及展望 · 配置比例 · 产品配置 · 调仓计划","textPreview":"资产现状及展望 · 配置比例 · 产品配置 · 调仓计划","textChars":28,"textLines":1,"bbox":[297.6,532.8,864,38.4]}
+{"kind":"textbox","id":"sh/rydcjqh8","slide":3,"name":"TextBox 11","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/czmdcvyt","slide":3,"name":"TextBox 12","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"notes","id":"nt/ofy9wn61","slide":3,"text":""}
+{"kind":"slide","id":"sl/jyx0ra1s","slide":4,"title":"PART 01","textShapes":4}
+{"kind":"shape","id":"sh/jydk36x8","slide":4,"name":"Rectangle 1","bbox":[0,0,1279.97,720]}
+{"kind":"shape","id":"sh/ixk3a1w3","slide":4,"name":"Rectangle 2","bbox":[86.4,225.6,13.44,259.2]}
+{"kind":"textbox","id":"sh/50v25wfe","slide":4,"name":"TextBox 3","text":"PART 01","textPreview":"PART 01","textChars":7,"textLines":1,"bbox":[134.4,201.6,480,134.4]}
+{"kind":"textbox","id":"sh/4zmlcbet","slide":4,"name":"TextBox 4","text":"近期宏观","textPreview":"近期宏观","textChars":4,"textLines":1,"bbox":[134.4,316.8,576,134.4]}
+{"kind":"textbox","id":"sh/z29kr2x4","slide":4,"name":"TextBox 5","text":"Chapter 01  ·  Macro Review","textPreview":"Chapter 01  ·  Macro Review","textChars":27,"textLines":1,"bbox":[134.4,480,768,48]}
+{"kind":"textbox","id":"sh/y10jyxwj","slide":4,"name":"TextBox 6","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[864,249.6,336,240]}
+{"kind":"notes","id":"nt/jyx0ra1s","slide":4,"text":""}
+{"kind":"slide","id":"sl/i107q5of","slide":5,"title":"海外宏观：美联储 9 月加息预期坐实","textShapes":23}
+{"kind":"shape","id":"sh/xcn2xwja","slide":5,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/a9c321kj","slide":5,"name":"TextBox 2","text":"海外宏观：美联储 9 月加息预期坐实","textPreview":"海外宏观：美联储 9 月加息预期坐实","textChars":18,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/valkvm14","slide":5,"name":"TextBox 3","text":"杰克逊霍尔鹰派定调 + 非农超预期，加息概率升至九成以上","textPreview":"杰克逊霍尔鹰派定调 + 非农超预期，加息概率升至九成以上","textChars":28,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/kfel8bil","slide":5,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/5gn21gj6","slide":5,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/idw3610f","slide":5,"name":"Rectangle 18","bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/je5kz610","slide":5,"name":"Rectangle 19","text":"加息预期主导，风险偏好承压；人民币逆势走强，政策独立。","textPreview":"加息预期主导，风险偏好承压；人民币逆势走强，政策独立。","textChars":27,"textLines":1,"bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/sjylwbix","slide":5,"name":"TextBox 20","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/tk7m5gj2","slide":5,"name":"TextBox 21","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/hojutw7a","slide":5,"name":"圆角矩形 244","bbox":[53.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/gnat0r6p","slide":5,"name":"圆角矩形 245","bbox":[449.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/fm1crmp4","slide":5,"name":"圆角矩形 246","bbox":[845.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/ulsbyhoj","slide":5,"name":"圆角矩形 247","bbox":[53.33,392,378.67,216]}
+{"kind":"shape","id":"sh/ps3uxw76","slide":5,"name":"圆角矩形 248","bbox":[449.33,392,378.67,216]}
+{"kind":"shape","id":"sh/4rat4r6l","slide":5,"name":"圆角矩形 249","bbox":[845.33,392,378.67,216]}
+{"kind":"shape","id":"sh/3q1cvmpg","slide":5,"name":"圆角矩形 250","bbox":[74.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/2psb2hov","slide":5,"name":"圆角矩形 251","bbox":[470.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/5wzulc72","slide":5,"name":"圆角矩形 252","bbox":[866.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/kvqts76h","slide":5,"name":"圆角矩形 253","bbox":[74.67,413.33,32,5.33]}
+{"kind":"shape","id":"sh/a1or2t4f","slide":5,"name":"圆角矩形 254","bbox":[470.67,413.33,32,5.33]}
+{"kind":"shape","id":"sh/v2x8vy50","slide":5,"name":"圆角矩形 255","bbox":[866.67,413.33,32,5.33]}
+{"kind":"textbox","id":"sh/w36943m5","slide":5,"name":"矩形 256","text":"杰克逊霍尔定调","textPreview":"杰克逊霍尔定调","textChars":7,"textLines":1,"bbox":[74.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/xofqx8nq","slide":5,"name":"矩形 257","text":"官员立场","textPreview":"官员立场","textChars":4,"textLines":1,"bbox":[470.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/ipor6d4b","slide":5,"name":"矩形 258","text":"非农就业","textPreview":"非农就业","textChars":4,"textLines":1,"bbox":[866.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/jqx8zi5w","slide":5,"name":"矩形 259","text":"加息概率","textPreview":"加息概率","textChars":4,"textLines":1,"bbox":[74.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/kr698nmh","slide":5,"name":"矩形 260","text":"美债 10Y","textPreview":"美债 10Y","textChars":6,"textLines":1,"bbox":[470.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/5sfa1sn2","slide":5,"name":"矩形 261","text":"关键变量","textPreview":"关键变量","textChars":4,"textLines":1,"bbox":[866.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/etkru947","slide":5,"name":"矩形 262","text":"偏鹰","textPreview":"偏鹰","textChars":2,"textLines":1,"bbox":[74.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/zud8ne5s","slide":5,"name":"矩形 263","text":"鹰派","textPreview":"鹰派","textChars":2,"textLines":1,"bbox":[470.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/fq5oraxg","slide":5,"name":"矩形 264","text":"+16.2万","textPreview":"+16.2万","textChars":6,"textLines":1,"bbox":[866.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/epc7y5gv","slide":5,"name":"矩形 265","text":"95%","textPreview":"95%","textChars":3,"textLines":1,"bbox":[74.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/1sn6tkfm","slide":5,"name":"矩形 266","text":"5.00%","textPreview":"5.00%","textChars":5,"textLines":1,"bbox":[470.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/grep0fy1","slide":5,"name":"矩形 267","text":"8月CPI","textPreview":"8月CPI","textChars":5,"textLines":1,"bbox":[866.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/3u5ovuxs","slide":5,"name":"矩形 268","text":"通胀未实质改善则继续收紧","textPreview":"通胀未实质改善则继续收紧","textChars":12,"textLines":1,"bbox":[74.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/2tw72pg7","slide":5,"name":"矩形 269","text":"沃什鹰派定调 · 委员分歧","textPreview":"沃什鹰派定调 · 委员分歧","textChars":13,"textLines":1,"bbox":[470.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/pwn6xkfi","slide":5,"name":"矩形 270","text":"预期仅 5 万｜失业率 4.1%","textPreview":"预期仅 5 万｜失业率 4.1%","textChars":16,"textLines":1,"bbox":[866.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/ovep4fyx","slide":5,"name":"矩形 271","text":"9月加息25bp｜利率3.75–4.00%","textPreview":"9月加息25bp｜利率3.75–4.00%","textChars":21,"textLines":1,"bbox":[74.67,525.33,336,69.33]}
+{"kind":"textbox","id":"sh/bipozuxo","slide":5,"name":"矩形 272","text":"30Y 5.25%","textPreview":"30Y 5.25%","textChars":9,"textLines":1,"bbox":[470.67,525.33,336,69.33]}
+{"kind":"textbox","id":"sh/qhg76pg3","slide":5,"name":"矩形 273","text":"同比3.4%｜核心环比0.3%超预期","textPreview":"同比3.4%｜核心环比0.3%超预期","textChars":18,"textLines":1,"bbox":[866.67,525.33,336,69.33]}
+{"kind":"notes","id":"nt/i107q5of","slide":5,"text":"[Speaker Notes]\n本页是 9 月版相对 8 月版最大的叙事反转：8 月版写‘加息预期回落’，本版改写‘加息预期升温’。核心链条：杰克逊霍尔沃什鹰派定调 → 巴尔/沃勒分歧 → 8 月非农 16.2 万远超预期 → 9 月加息概率升至约 60%。落点强调中国政策与资产相对独立。\n\n[Sources]\nCME FedWatch（9/8）；汇通网《杰克逊霍尔定调》（9/1）；财联社《国际大行集体押注美联储9月加息》（9/8）；Regards of Wall Street（9 月 FOMC 专题）；美国 BLS 8 月非农。"}
+{"kind":"slide","id":"sl/x8f69ofe","slide":6,"title":"海外宏观：中东冲突升级，油价与商品高企","textShapes":20}
+{"kind":"shape","id":"sh/6h0vm5w3","slide":6,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/t4bexkfu","slide":6,"name":"TextBox 2","text":"海外宏观：中东冲突升级，油价与商品高企","textPreview":"海外宏观：中东冲突升级，油价与商品高企","textChars":19,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/s3idofe9","slide":6,"name":"TextBox 3","text":"地缘风险推升能源与商品价格，输入型再通胀成为全球主线","textPreview":"地缘风险推升能源与商品价格，输入型再通胀成为全球主线","textChars":26,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/je9wraxc","slide":6,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/id0vi5wr","slide":6,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/5gret0fi","slide":6,"name":"Rectangle 16","bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/4fidkfex","slide":6,"name":"Rectangle 17","text":"输入型涨价叠加加息，滞胀担忧升温；国内 PPI 与商品受益。","textPreview":"输入型涨价叠加加息，滞胀担忧升温；国内 PPI 与商品受益。","textChars":30,"textLines":1,"bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/vapcnqxg","slide":6,"name":"TextBox 18","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/u9gvelwv","slide":6,"name":"TextBox 19","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/ylwfqlgn","slide":6,"name":"圆角矩形 284","bbox":[53.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/z6pwzqh8","slide":6,"name":"圆角矩形 285","bbox":[449.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/k7yxsvyt","slide":6,"name":"圆角矩形 286","bbox":[845.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/l87e10ze","slide":6,"name":"圆角矩形 287","bbox":[53.33,392,378.67,216]}
+{"kind":"shape","id":"sh/m9gfu5gz","slide":6,"name":"圆角矩形 288","bbox":[449.33,392,378.67,216]}
+{"kind":"shape","id":"sh/7apw3qhk","slide":6,"name":"圆角矩形 289","bbox":[74.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/8byxwvyp","slide":6,"name":"圆角矩形 290","bbox":[470.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/9c7e50za","slide":6,"name":"圆角矩形 291","bbox":[866.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/ud0fy5gv","slide":6,"name":"圆角矩形 292","bbox":[74.67,413.33,32,5.33]}
+{"kind":"shape","id":"sh/ve9w7ahg","slide":6,"name":"圆角矩形 293","bbox":[470.67,413.33,32,5.33]}
+{"kind":"textbox","id":"sh/58bix4ji","slide":6,"name":"矩形 294","text":"地缘冲突","textPreview":"地缘冲突","textChars":4,"textLines":1,"bbox":[74.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/472hozix","slide":6,"name":"矩形 295","text":"油价 WTI","textPreview":"油价 WTI","textChars":6,"textLines":1,"bbox":[470.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/j6t0vu1s","slide":6,"name":"矩形 296","text":"黄金","textPreview":"黄金","textChars":2,"textLines":1,"bbox":[866.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/i5kzm907","slide":6,"name":"矩形 297","text":"铜 LME","textPreview":"铜 LME","textChars":5,"textLines":1,"bbox":[74.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/twvi1oju","slide":6,"name":"矩形 298","text":"农产品","textPreview":"农产品","textChars":3,"textLines":1,"bbox":[470.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/sv2hsji9","slide":6,"name":"矩形 299","text":"升级","textPreview":"升级","textChars":2,"textLines":1,"bbox":[74.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/rat0ze1o","slide":6,"name":"矩形 300","text":"105.83","textPreview":"105.83","textChars":6,"textLines":1,"bbox":[470.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/69kzq903","slide":6,"name":"矩形 301","text":"4333","textPreview":"4333","textChars":4,"textLines":1,"bbox":[866.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/10vi5ojq","slide":6,"name":"矩形 302","text":"14114","textPreview":"14114","textChars":5,"textLines":1,"bbox":[74.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/gzmhwji5","slide":6,"name":"矩形 303","text":"共振","textPreview":"共振","textChars":2,"textLines":1,"bbox":[470.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/83i9srih","slide":6,"name":"矩形 304","text":"沙特管道遭袭停运 · 美军封锁伊朗","textPreview":"沙特管道遭袭停运 · 美军封锁伊朗","textChars":17,"textLines":1,"bbox":[74.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/94ralwz2","slide":6,"name":"矩形 305","text":"布伦特108.75｜周涨约17%","textPreview":"布伦特108.75｜周涨约17%","textChars":16,"textLines":1,"bbox":[470.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/m10rq10r","slide":6,"name":"矩形 306","text":"COMEX｜周跌1.4%","textPreview":"COMEX｜周跌1.4%","textChars":12,"textLines":1,"bbox":[866.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/n29sj6hc","slide":6,"name":"矩形 307","text":"年内+11%｜高位回落","textPreview":"年内+11%｜高位回落","textChars":11,"textLines":1,"bbox":[74.67,525.33,336,69.33]}
+{"kind":"textbox","id":"sh/0zi9oril","slide":6,"name":"矩形 308","text":"食品指数新高｜小麦玉米三年高","textPreview":"食品指数新高｜小麦玉米三年高","textChars":14,"textLines":1,"bbox":[470.67,525.33,336,69.33]}
+{"kind":"notes","id":"nt/x8f69ofe","slide":6,"text":"[Speaker Notes]\n延续 8 月版‘美伊局势’页，更新为 9 月最新冲突进展与油价。强调滞胀风险，以及其对国内 PPI、商品/CTA 策略的正向传导。\n\n[Sources]\n华尔街见闻 9/9 早餐；国际金融报 9/3 要情；陆家嘴财经早餐 9/5；LME/WTI 收盘数据。"}
+{"kind":"slide","id":"sl/gnmp4jqx","slide":7,"title":"国内宏观：政策“相机抉择”，宽松有后手","textShapes":20}
+{"kind":"shape","id":"sh/0vmpof2l","slide":7,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/1wv6hk36","slide":7,"name":"TextBox 2","text":"国内宏观：政策“相机抉择”，宽松有后手","textPreview":"国内宏观：政策“相机抉择”，宽松有后手","textChars":19,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/q5knilkj","slide":7,"name":"TextBox 3","text":"政治局会议定调扩内需，总量工具待命，LPR 连续 15 个月不动","textPreview":"政治局会议定调扩内需，总量工具待命，LPR 连续 15 个月不动","textChars":32,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/rqtobql4","slide":7,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/tkjah8nm","slide":7,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/8ja9o3m1","slide":7,"name":"Rectangle 16","bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/7ihsfy5w","slide":7,"name":"Rectangle 17","text":"以稳为主、相机抉择；资金面平稳（DR007 1.37%）。","textPreview":"以稳为主、相机抉择；资金面平稳（DR007 1.37%）。","textChars":29,"textLines":1,"bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/6h8rmt4b","slide":7,"name":"TextBox 18","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/lgzqdonq","slide":7,"name":"TextBox 19","text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/kvq9kjm5","slide":7,"name":"圆角矩形 319","bbox":[53.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/juh8be5k","slide":7,"name":"圆角矩形 320","bbox":[449.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/yt8ri94z","slide":7,"name":"圆角矩形 321","bbox":[845.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/xszq94ne","slide":7,"name":"圆角矩形 322","bbox":[53.33,392,378.67,216]}
+{"kind":"shape","id":"sh/wr69gjmt","slide":7,"name":"圆角矩形 323","bbox":[449.33,392,378.67,216]}
+{"kind":"shape","id":"sh/zml87udc","slide":7,"name":"圆角矩形 324","bbox":[74.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/ylcrepwr","slide":7,"name":"圆角矩形 325","bbox":[470.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/lonq94vi","slide":7,"name":"圆角矩形 326","bbox":[866.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/knu9gzex","slide":7,"name":"圆角矩形 327","bbox":[74.67,413.33,32,5.33]}
+{"kind":"shape","id":"sh/bil83adg","slide":7,"name":"圆角矩形 328","bbox":[470.67,413.33,32,5.33]}
+{"kind":"textbox","id":"sh/qxcra5wv","slide":7,"name":"矩形 329","text":"政治局","textPreview":"政治局","textChars":3,"textLines":1,"bbox":[74.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/xk3q5kvm","slide":7,"name":"矩形 330","text":"货币政策","textPreview":"货币政策","textChars":4,"textLines":1,"bbox":[470.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/cju9cfe1","slide":7,"name":"矩形 331","text":"LPR","textPreview":"LPR","textChars":3,"textLines":1,"bbox":[866.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/3u18zad4","slide":7,"name":"矩形 332","text":"降准先行","textPreview":"降准先行","textChars":4,"textLines":1,"bbox":[74.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/2ts765wz","slide":7,"name":"矩形 333","text":"触发信号","textPreview":"触发信号","textChars":4,"textLines":1,"bbox":[470.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/szq5gbuh","slide":7,"name":"矩形 334","text":"扩内需","textPreview":"扩内需","textChars":3,"textLines":1,"bbox":[74.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/t0z69gb2","slide":7,"name":"矩形 335","text":"待命","textPreview":"待命","textChars":2,"textLines":1,"bbox":[470.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/6x8ne1cr","slide":7,"name":"矩形 336","text":"3.0/3.5%","textPreview":"3.0/3.5%","textChars":8,"textLines":1,"bbox":[866.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/ryho76tw","slide":7,"name":"矩形 337","text":"四季度","textPreview":"四季度","textChars":3,"textLines":1,"bbox":[74.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/g3q5kbut","slide":7,"name":"矩形 338","text":"利润转负","textPreview":"利润转负","textChars":4,"textLines":1,"bbox":[470.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/14z6dgbe","slide":7,"name":"矩形 339","text":"加快财政支出与债券使用","textPreview":"加快财政支出与债券使用","textChars":11,"textLines":1,"bbox":[74.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/e18nilcn","slide":7,"name":"矩形 340","text":"降准降息总量工具","textPreview":"降准降息总量工具","textChars":8,"textLines":1,"bbox":[470.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/f2hob6t8","slide":7,"name":"矩形 341","text":"连续15个月不动","textPreview":"连续15个月不动","textChars":8,"textLines":1,"bbox":[866.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/w7658ru9","slide":7,"name":"矩形 342","text":"置换式降准概率最高","textPreview":"置换式降准概率最高","textChars":9,"textLines":1,"bbox":[74.67,525.33,336,69.33]}
+{"kind":"textbox","id":"sh/h8fm1wvu","slide":7,"name":"矩形 343","text":"或美联储转宽","textPreview":"或美联储转宽","textChars":6,"textLines":1,"bbox":[470.67,525.33,336,69.33]}
+{"kind":"notes","id":"nt/gnmp4jqx","slide":7,"text":"[Speaker Notes]\n延续 8 月版‘政治局会议’页，但结论方向调整：8 月版写‘降准降息预期升温’，本版据最新信息改为‘相机抉择、宽松延后’。LPR 连续 15 个月不动是硬数据。\n\n[Sources]\n央行 8/1 下半年工作会议；7/30 政治局会议；1 年期 LPR 报价（8/20）；华创证券张瑜团队。"}
+{"kind":"slide","id":"sl/fu1gfa1s","slide":8,"title":"国内宏观：8 月物价回暖、外需强劲","textShapes":20}
+{"kind":"shape","id":"sh/14fq9w7e","slide":8,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/eho7eh8n","slide":8,"name":"TextBox 2","text":"国内宏观：8 月物价回暖、外需强劲","textPreview":"国内宏观：8 月物价回暖、外需强劲","textChars":17,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/fix87mp8","slide":8,"name":"TextBox 3","text":"CPI/PPI 双双回升，出口创单月新高，内需修复仍待发力","textPreview":"CPI/PPI 双双回升，出口创单月新高，内需修复仍待发力","textChars":29,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/o76pkr65","slide":8,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/p8fqdw7a","slide":8,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/25o7ihoz","slide":8,"name":"Rectangle 16","bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/36x8bmpk","slide":8,"name":"Rectangle 17","text":"外需强、内需弱；价格回升，利好上游与商品。","textPreview":"外需强、内需弱；价格回升，利好上游与商品。","textChars":21,"textLines":1,"bbox":[52.8,628.8,1174.08,69.12]}
+{"kind":"textbox","id":"sh/4bmp87ql","slide":8,"name":"TextBox 18","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/5cvq1s76","slide":8,"name":"TextBox 19","text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/n61sna9o","slide":8,"name":"圆角矩形 354","bbox":[53.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/m5sbe583","slide":8,"name":"圆角矩形 355","bbox":[449.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/983ap0ru","slide":8,"name":"圆角矩形 356","bbox":[845.33,157.33,378.67,216]}
+{"kind":"shape","id":"sh/87atgfq9","slide":8,"name":"圆角矩形 357","bbox":[53.33,392,378.67,216]}
+{"kind":"shape","id":"sh/z21sjq9s","slide":8,"name":"圆角矩形 358","bbox":[449.33,392,378.67,216]}
+{"kind":"shape","id":"sh/y1sbals7","slide":8,"name":"圆角矩形 359","bbox":[74.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/l4jal0ri","slide":8,"name":"圆角矩形 360","bbox":[470.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/03atcvqd","slide":8,"name":"圆角矩形 361","bbox":[866.67,178.67,32,5.33]}
+{"kind":"shape","id":"sh/byhsfq9g","slide":8,"name":"圆角矩形 362","bbox":[74.67,413.33,32,5.33]}
+{"kind":"shape","id":"sh/qd8r6lsv","slide":8,"name":"圆角矩形 363","bbox":[470.67,413.33,32,5.33]}
+{"kind":"textbox","id":"sh/6lsfa9ov","slide":8,"name":"矩形 364","text":"CPI","textPreview":"CPI","textChars":3,"textLines":1,"bbox":[74.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/rmlwje50","slide":8,"name":"矩形 365","text":"PPI","textPreview":"PPI","textChars":3,"textLines":1,"bbox":[470.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/s7uxcj6l","slide":8,"name":"矩形 366","text":"PMI","textPreview":"PMI","textChars":3,"textLines":1,"bbox":[866.67,189.33,336,26.67]}
+{"kind":"textbox","id":"sh/t83elon6","slide":8,"name":"矩形 367","text":"出口","textPreview":"出口","textChars":2,"textLines":1,"bbox":[74.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/ihsv69oj","slide":8,"name":"矩形 368","text":"内需","textPreview":"内需","textChars":2,"textLines":1,"bbox":[470.67,424,336,26.67]}
+{"kind":"textbox","id":"sh/ji1wfe54","slide":8,"name":"矩形 369","text":"0.8%","textPreview":"0.8%","textChars":4,"textLines":1,"bbox":[74.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/4jax8j6p","slide":8,"name":"矩形 370","text":"3.8%","textPreview":"3.8%","textChars":4,"textLines":1,"bbox":[470.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/5kjehona","slide":8,"name":"矩形 371","text":"49.8%","textPreview":"49.8%","textChars":5,"textLines":1,"bbox":[866.67,226.67,336,48]}
+{"kind":"textbox","id":"sh/ud8v2pon","slide":8,"name":"矩形 372","text":"+25%","textPreview":"+25%","textChars":4,"textLines":1,"bbox":[74.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/vehwbu58","slide":8,"name":"矩形 373","text":"偏弱","textPreview":"偏弱","textChars":2,"textLines":1,"bbox":[470.67,461.33,336,48]}
+{"kind":"textbox","id":"sh/xkrqxwbm","slide":8,"name":"矩形 374","text":"前值0.5%｜环比+0.4%","textPreview":"前值0.5%｜环比+0.4%","textChars":14,"textLines":1,"bbox":[74.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/wji94ruh","slide":8,"name":"矩形 375","text":"前值3.5%｜环比+0.4%","textPreview":"前值3.5%｜环比+0.4%","textChars":14,"textLines":1,"bbox":[470.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/bip8vmtw","slide":8,"name":"矩形 376","text":"新订单+2.1pct","textPreview":"新订单+2.1pct","textChars":10,"textLines":1,"bbox":[866.67,290.67,336,69.33]}
+{"kind":"textbox","id":"sh/ahg72hcb","slide":8,"name":"矩形 377","text":"顺差1190.9亿美元","textPreview":"顺差1190.9亿美元","textChars":11,"textLines":1,"bbox":[74.67,525.33,336,69.33]}
+{"kind":"textbox","id":"sh/9g7qtcbq","slide":8,"name":"矩形 378","text":"30城转负｜汽车降幅扩大","textPreview":"30城转负｜汽车降幅扩大","textChars":12,"textLines":1,"bbox":[470.67,525.33,336,69.33]}
+{"kind":"notes","id":"nt/fu1gfa1s","slide":8,"text":"[Speaker Notes]\n8 月经济数据页：CPI 0.8%、PPI 3.8%、PMI 49.8%、出口 +25%。突出‘外需强内需弱、价格回升’的结构特征，为商品/上游资产提供支撑。\n\n[Sources]\n国家统计局 8 月 CPI/PPI（9/9）；8 月 PMI（9/1）；海关总署 8 月进出口（9/8）；广发宏观高频数据。"}
+{"kind":"slide","id":"sl/udsvah03","slide":9,"title":"宏观小结","textShapes":10}
+{"kind":"shape","id":"sh/vep4zetk","slide":9,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/udgnq9sz","slide":9,"name":"TextBox 2","text":"宏观小结","textPreview":"宏观小结","textChars":4,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/5kr65obm","slide":9,"name":"TextBox 3","text":"海外紧缩 + 地缘扰动，国内稳增长有后手、资产相对独立","textPreview":"海外紧缩 + 地缘扰动，国内稳增长有后手、资产相对独立","textChars":27,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/4ji5wja1","slide":9,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/onqps7id","slide":9,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/poz61czy","slide":9,"name":"Rectangle 6","bbox":[52.8,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/2lo7qx07","slide":9,"name":"Rectangle 7","text":"海外","textPreview":"海外","textChars":2,"textLines":1,"bbox":[52.8,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/3mhoz2hs","slide":9,"name":"TextBox 8","text":"· 加息预期升温 + 中东油价，全球风险偏好承压，滞胀担忧抬头\n\n· 但美元偏弱、人民币与铜强势，体现中国资产相对优势","textPreview":"· 加息预期升温 + 中东油价，全球风险偏好承压，滞胀担忧抬头 |  | · 但美元偏弱、人民币与铜强势，体现中国资产相对优势","textChars":59,"textLines":3,"bbox":[67.2,240,282.6,149.4]}
+{"kind":"shape","id":"sh/crqpw7i9","slide":9,"name":"Rectangle 9","bbox":[449.28,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/dszq5czu","slide":9,"name":"Rectangle 10","text":"国内","textPreview":"国内","textChars":2,"textLines":1,"bbox":[449.28,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/qp87uh0j","slide":9,"name":"TextBox 11","text":"· 物价温和回暖、外需强劲，政策“相机抉择”留有后手\n\n· 内需与地产仍弱，总量宽松延后但未缺席","textPreview":"· 物价温和回暖、外需强劲，政策“相机抉择”留有后手 |  | · 内需与地产仍弱，总量宽松延后但未缺席","textChars":48,"textLines":3,"bbox":[463.68,240,353.28,121.13]}
+{"kind":"shape","id":"sh/bqho32h4","slide":9,"name":"Rectangle 12","bbox":[845.76,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/sv6pkni5","slide":9,"name":"Rectangle 13","text":"对资产的启示","textPreview":"对资产的启示","textChars":6,"textLines":1,"bbox":[845.76,172.8,382.08,52.8]}
+{"kind":"textbox","id":"sh/twf6tsjq","slide":9,"name":"TextBox 14","text":"· 权益：指数震荡筑底、结构轮动，指增承压、中性/对冲相对受益；三季度起资金从追逐弹性转向高胜率、低波策略\n\n· 固收：国内债市低位震荡，票息与稳健策略仍具配置价值\n\n· 商品/CTA：价格弹性修复 + 趋势行情，策略环境边际改善\n\n· 黄金：中长期配置价值仍在，短期受加息预期扰动","textPreview":"· 权益：指数震荡筑底、结构轮动，指增承压、中性/对冲相对受益；三季度起资金从追逐弹性转向高胜率、低波策略 |  | · 固收：国内债市低位震荡，票息与稳健策略仍具配置价值 |  | · 商品/CTA：价格弹性修复 + 趋势行情，策略环境边际改善 |  | · 黄金：中长期...","textChars":141,"textLines":7,"bbox":[860.16,240,368.64,363.47]}
+{"kind":"textbox","id":"sh/valszq18","slide":9,"name":"TextBox 15","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/a9crqlkn","slide":9,"name":"TextBox 16","text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"notes","id":"nt/udsvah03","slide":9,"text":"[Speaker Notes]\n宏观小结页：海外/国内/对资产启示三栏。核心判断——海外紧缩+地缘扰动压制风险偏好，但中国资产相对独立；国内稳增长有后手。\n\n[Sources]\n综合前述数据源。"}
+{"kind":"slide","id":"sl/m90b6t0r","slide":10,"title":"PART 02","textShapes":4}
+{"kind":"shape","id":"sh/d87uxg3m","slide":10,"name":"Rectangle 1","bbox":[0,0,1279.97,720]}
+{"kind":"shape","id":"sh/q5gb21kb","slide":10,"name":"Rectangle 2","bbox":[86.4,225.6,13.44,259.2]}
+{"kind":"textbox","id":"sh/r6pcv6lw","slide":10,"name":"TextBox 3","text":"PART 02","textPreview":"PART 02","textChars":7,"textLines":1,"bbox":[134.4,201.6,480,134.4]}
+{"kind":"textbox","id":"sh/0bit8b2d","slide":10,"name":"TextBox 4","text":"大类资产配置","textPreview":"大类资产配置","textChars":6,"textLines":1,"bbox":[134.4,316.8,672,134.4]}
+{"kind":"textbox","id":"sh/1cru1g3y","slide":10,"name":"TextBox 5","text":"Chapter 02  ·  Asset Allocation","textPreview":"Chapter 02  ·  Asset Allocation","textChars":31,"textLines":1,"bbox":[134.4,480,768,48]}
+{"kind":"textbox","id":"sh/e9gb61k7","slide":10,"name":"TextBox 6","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[864,249.6,336,240]}
+{"kind":"notes","id":"nt/m90b6t0r","slide":10,"text":""}
+{"kind":"slide","id":"sl/jetc3ut0","slide":11,"title":"大类资产现状及展望（一）固收 · 权益","textShapes":8}
+{"kind":"shape","id":"sh/cn6t83y1","slide":11,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/dofa18z6","slide":11,"name":"TextBox 2","text":"大类资产现状及展望（一）固收 · 权益","textPreview":"大类资产现状及展望（一）固收 · 权益","textChars":19,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/tsnip0ny","slide":11,"name":"TextBox 3","text":"数据截至 2026 年 9 月 8 日  ·  以「逻辑—判断—操作」闭环梳理组合核心仓位","textPreview":"数据截至 2026 年 9 月 8 日  ·  以「逻辑—判断—操作」闭环梳理组合核心仓位","textChars":45,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/87ehgv6d","slide":11,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/7650nq5s","slide":11,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/65wzelo7","slide":11,"name":"TextBox 7","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/l43ilgn2","slide":11,"name":"TextBox 8","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/k3uhcb6h","slide":11,"name":"Rectangle 25","bbox":[53.33,162.67,1173.33,48]}
+{"kind":"shape","id":"sh/j2lgjq5w","slide":11,"name":"Rectangle 26","bbox":[53.33,162.67,6.67,48]}
+{"kind":"textbox","id":"sh/y1czalob","slide":11,"name":"TextBox 27","text":"固收类　｜　维持高配 · 票息为主，不做久期博弈","textPreview":"固收类　｜　维持高配 · 票息为主，不做久期博弈","textChars":24,"textLines":1,"bbox":[74.67,162.67,1130.67,48]}
+{"kind":"textbox","id":"sh/p07ixkn6","slide":11,"name":"TextBox 28","text":"【现状】 10Y 国债 1.68% 低位徘徊；信用债票息稳定、资产荒延续；摊余成本法债基二批申报扩围，预计约1300亿增量配债需求，利好中久期信用债；美债 10Y 4.79% 长端高位。\n【驱动】 国内宽松预期仍在但利率已低，下行赔率不足；美债受加息与财政双压，更深一层：利息驱动已取代财政扩张成美债膨胀主导，联储+外资合计占比从69%降至45%，两大刚性买家退潮，长端利率中枢系统性上移。\n【展望逻辑】 利率低位 → 久期无性价比；票息最确定 → 利率债中性、信用债稳健正收益、美债承压。\n【操作】 固收维持 80%+ 高比例压舱；信用债为主、利率债中性，规避美债与长久期风险。","textPreview":"【现状】 10Y 国债 1.68% 低位徘徊；信用债票息稳定、资产荒延续；摊余成本法债基二批申报扩围，预计约1300亿增量配债需求，利好中久期信用债；美债 10Y 4.79% 长端高位。 | 【驱动】 国内宽松预期仍在但利率已低，下行赔率不足；美债受加息与财政双压，更深一层...","textChars":290,"textLines":4,"bbox":[74.67,224,1512.67,165.33]}
+{"kind":"shape","id":"sh/4zyhofml","slide":11,"name":"Rectangle 29","bbox":[53.33,408,1173.33,48]}
+{"kind":"shape","id":"sh/m58fih43","slide":11,"name":"Rectangle 30","bbox":[53.33,408,6.67,48]}
+{"kind":"textbox","id":"sh/n61wbmlo","slide":11,"name":"TextBox 31","text":"权益　｜　标配 · 结构 > 指数，中性偏积极","textPreview":"权益　｜　标配 · 结构 > 指数，中性偏积极","textChars":23,"textLines":1,"bbox":[74.67,408,1130.67,48]}
+{"kind":"textbox","id":"sh/o7axk7m9","slide":11,"name":"TextBox 32","text":"【现状】 上证 3940 震荡筑底、周期强科技弱；恒指 25300 区间震荡；成交 1.98 万亿、结构轮动活跃。\n【驱动】 人民币逆势走强 + 出口创新高 → 中国资产相对占优；但全球加息预期压制整体风险偏好。\n【展望逻辑】 指数缺增量资金 → 贝塔难有趋势；轮动活跃 → 阿尔法有空间 → 指数中性、结构有机会，中性/对冲策略相对受益。\n【操作】 权益仓位中性、不追指数；以中性/对冲策略赚结构阿尔法，控制回撤。","textPreview":"【现状】 上证 3940 震荡筑底、周期强科技弱；恒指 25300 区间震荡；成交 1.98 万亿、结构轮动活跃。 | 【驱动】 人民币逆势走强 + 出口创新高 → 中国资产相对占优；但全球加息预期压制整体风险偏好。 | 【展望逻辑】 指数缺增量资金 → 贝塔难有趋势；轮动...","textChars":208,"textLines":4,"bbox":[74.67,469.33,1130.67,165.33]}
+{"kind":"notes","id":"nt/jetc3ut0","slide":11,"text":"[Speaker Notes]\n资产现状及展望：用一张表覆盖股债商汇金。核心观点——权益结构>指数、固收票息为主、商品/CTA环境改善、黄金中长期多头、人民币偏强。\n\n[Sources]\n上证/深成/创业板收盘（9/8）；恒指（9/2）；中国 10Y 国债（9/3）；美债 10Y（9/9）；COMEX 黄金/WTI/LME 铜（9/8）；在岸人民币（9/5）。"}
+{"kind":"slide","id":"sl/8f2psfyx","slide":12,"title":"大类资产现状及展望（二）贵金属 · 商品","textShapes":8}
+{"kind":"shape","id":"sh/mhcbe9sr","slide":12,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/nilsnetc","slide":12,"name":"TextBox 2","text":"大类资产现状及展望（二）贵金属 · 商品","textPreview":"大类资产现状及展望（二）贵金属 · 商品","textChars":20,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/ojutgjah","slide":12,"name":"TextBox 3","text":"数据截至 2026 年 9 月 8 日  ·  以「逻辑—判断—操作」闭环梳理组合卫星仓位","textPreview":"数据截至 2026 年 9 月 8 日  ·  以「逻辑—判断—操作」闭环梳理组合卫星仓位","textChars":45,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/9k3apob2","slide":12,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/6dgbqdsv","slide":12,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/7epczitg","slide":12,"name":"TextBox 7","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/r6l8vaxw","slide":12,"name":"TextBox 8","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/q5c7m5wb","slide":12,"name":"Rectangle 34","bbox":[53.33,162.67,1173.33,48]}
+{"kind":"shape","id":"sh/d8nqxkf2","slide":12,"name":"Rectangle 35","bbox":[53.33,162.67,6.67,48]}
+{"kind":"textbox","id":"sh/s7epofeh","slide":12,"name":"TextBox 36","text":"贵金属　｜　中长期多头 · 回调即配置窗口","textPreview":"贵金属　｜　中长期多头 · 回调即配置窗口","textChars":21,"textLines":1,"bbox":[74.67,162.67,1130.67,48]}
+{"kind":"textbox","id":"sh/j2lorqxk","slide":12,"name":"TextBox 37","text":"【现状】 COMEX 黄金 4394 美元/盎司，高位震荡、周跌 1.2%。\n【驱动】 地缘避险 + 去美元化与央行购金构成中长期支撑；美元在全球外储占比已从71%降至约57%，去美元化方向明确；短期受加息预期压制。\n【展望逻辑】 加息是短期扰动，不改避险与美元信用对冲主线 → 短期高位震荡、中长期向上 → 回调是增配机会而非离场信号。\n【操作】 抗通胀与避险卫星仓，控制单一仓位上限，贵金属虽长周期看多但还是需要遴选对其没有多头执念的管理人，因每次短期回调都很剧烈。","textPreview":"【现状】 COMEX 黄金 4394 美元/盎司，高位震荡、周跌 1.2%。 | 【驱动】 地缘避险 + 去美元化与央行购金构成中长期支撑；美元在全球外储占比已从71%降至约57%，去美元化方向明确；短期受加息预期压制。 | 【展望逻辑】 加息是短期扰动，不改避险与美元信用...","textChars":235,"textLines":4,"bbox":[74.67,224,1130.67,137.47]}
+{"kind":"shape","id":"sh/i1c7i5wf","slide":12,"name":"Rectangle 38","bbox":[53.33,408,1173.33,48]}
+{"kind":"shape","id":"sh/5436t0fq","slide":12,"name":"Rectangle 39","bbox":[53.33,408,6.67,48]}
+{"kind":"textbox","id":"sh/43upkve5","slide":12,"name":"TextBox 40","text":"商品　｜　趋势偏强 · 用 CTA 复合趋势 + 主观策略参与","textPreview":"商品　｜　趋势偏强 · 用 CTA 复合趋势 + 主观策略参与","textChars":31,"textLines":1,"bbox":[74.67,415.9,1130.67,32.2]}
+{"kind":"textbox","id":"sh/nyp83ud4","slide":12,"name":"TextBox 41","text":"【现状】 WTI 93 美元六连涨、布伦特逼近 100；LME 铜 14708 美元历史新高、年内 +17%。\n【驱动】 油价由中东地缘主导、高波动；铜受矿端紧张与 AI 需求双驱动。\n【展望逻辑】 油价地缘主导、难预判 → 纯长周期趋势策略风险高；\n             部分品种供给约束 + 真实需求 + 逆全球化格局 → 波动率抬升，商品价格高企 → 用短周期趋势策略吃波动、部分长周期策略捕捉大行情。\n【操作】 商品通过量化 CTA 复合趋势策略参与，捕捉价格弹性修复，规避地缘单边风险，同时精选宏观能力+基本面研究强的主观管理人捕捉基本面主导行情。","textPreview":"【现状】 WTI 93 美元六连涨、布伦特逼近 100；LME 铜 14708 美元历史新高、年内 +17%。 | 【驱动】 油价由中东地缘主导、高波动；铜受矿端紧张与 AI 需求双驱动。 | 【展望逻辑】 油价地缘主导、难预判 → 纯长周期趋势策略风险高； |      ...","textChars":281,"textLines":5,"bbox":[74.67,469.33,1130.67,172.8]}
+{"kind":"notes","id":"nt/8f2psfyx","slide":12,"text":"[Speaker Notes]\n资产现状及展望：用一张表覆盖股债商汇金。核心观点——权益结构>指数、固收票息为主、商品/CTA环境改善、黄金中长期多头、人民币偏强。\n\n[Sources]\n上证/深成/创业板收盘（9/8）；恒指（9/2）；中国 10Y 国债（9/3）；美债 10Y（9/9）；COMEX 黄金/WTI/LME 铜（9/8）；在岸人民币（9/5）。"}
+{"kind":"slide","id":"sl/hgzapcr6","slide":13,"title":"为什么明年要重视商品的配置-政治博弈","textShapes":9}
+{"kind":"shape","id":"sh/50behwr2","slide":13,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/4z2d8rah","slide":13,"name":"TextBox 2","text":"为什么明年要重视商品的配置-政治博弈","textPreview":"为什么明年要重视商品的配置-政治博弈","textChars":18,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/jytcfmtw","slide":13,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/ixkv6hsb","slide":13,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/t4velwry","slide":13,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/s3mdcrad","slide":13,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/614va1sn","slide":13,"name":"AutoShape 5","text":"关键矿产争夺","textPreview":"关键矿产争夺","textChars":6,"textLines":1,"bbox":[138.67,176,506.67,32]}
+{"kind":"textbox","id":"sh/1svepgra","slide":13,"name":"AutoShape 6","text":"中美两国都将稀土、锂、钴、铜等关键矿产上升安全议题，并在全球范围内展开了激烈的争夺。","textPreview":"中美两国都将稀土、锂、钴、铜等关键矿产上升安全议题，并在全球范围内展开了激烈的争夺。","textChars":42,"textLines":1,"bbox":[138.67,218.67,437.33,88]}
+{"kind":"textbox","id":"sh/0buxcfil","slide":13,"name":"AutoShape 8","text":"供应链脱钩","textPreview":"供应链脱钩","textChars":5,"textLines":1,"bbox":[138.67,336,506.67,32]}
+{"kind":"textbox","id":"sh/lc3ylkz6","slide":13,"name":"AutoShape 9","text":"为降低依赖，中美等大国推动供应链本土化或区域化，这增加了成本，并可能导致资源错配；供给侧的扰动已经成为常态变量，而不是尾部风险；","textPreview":"为降低依赖，中美等大国推动供应链本土化或区域化，这增加了成本，并可能导致资源错配；供给侧的扰动已经成为常态变量，而不是尾部风险；","textChars":64,"textLines":1,"bbox":[138.67,378.67,437.33,88]}
+{"kind":"textbox","id":"sh/zalgjahg","slide":13,"name":"AutoShape 11","text":"地缘风险溢价","textPreview":"地缘风险溢价","textChars":6,"textLines":1,"bbox":[138.67,496,506.67,32]}
+{"kind":"textbox","id":"sh/8zexgzix","slide":13,"name":"AutoShape 12","text":"大国博弈加剧，地缘政治风险成为影响大宗商品价格的重要因素，带来持续的风险溢价。突发地缘扰动带动商品脉冲式行情冲击；","textPreview":"大国博弈加剧，地缘政治风险成为影响大宗商品价格的重要因素，带来持续的风险溢价。突发地缘扰动带动商品脉冲式行情冲击；","textChars":57,"textLines":1,"bbox":[138.67,538.67,437.33,88]}
+{"kind":"image","id":"im/2t8fqxw3","slide":13,"name":"Picture 4","bbox":[80,176,37.33,37.33]}
+{"kind":"image","id":"im/pwze1cfu","slide":13,"name":"Picture 7","bbox":[80,333.33,37.33,37.33]}
+{"kind":"image","id":"im/4vqxs7e9","slide":13,"name":"Picture 10","bbox":[80,496.33,37.33,37.33]}
+{"kind":"image","id":"im/fqxwv2xs","slide":13,"name":"图片 5","bbox":[629.27,198.2,573.87,448.93]}
+{"kind":"notes","id":"nt/hgzapcr6","slide":13,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/6lsnupw7","slide":14,"title":"近期宏观变化及资产配置 · 2026.09","textShapes":6}
+{"kind":"shape","id":"sh/idoji9kj","slide":14,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"shape","id":"sh/xcfip4jy","slide":14,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/wb61gz2d","slide":14,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/m507alwz","slide":14,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/n6to3qdk","slide":14,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/o72pcve5","slide":14,"name":"文本框 1","text":"地缘冲突：能源与供应链的脆弱性不容忽视，供应风险常态化","textPreview":"地缘冲突：能源与供应链的脆弱性不容忽视，供应风险常态化","textChars":27,"textLines":1,"bbox":[64.96,45.12,906.87,59.93]}
+{"kind":"textbox","id":"sh/e10761w3","slide":14,"name":"AutoShape 8","text":"地缘冲突频发，供应扰动影响深远且持久","textPreview":"地缘冲突频发，供应扰动影响深远且持久","textChars":18,"textLines":1,"bbox":[97.67,129.53,480,29.33]}
+{"kind":"textbox","id":"sh/z29oz6do","slide":14,"name":"AutoShape 9","text":"俄乌冲突爆发后，高度依赖俄罗斯能源的欧盟陷入能源危机，不得不高价采购高成本的美国天然气；去俄化成本高昂揭示了供应来源多元化与自主能源转型的必要性，欧盟随即加码新能源基础设置投入与REPowerEI计划；\n美伊冲突升级，霍尔木兹海峡通行受阻，对日韩能源进口影响较大，日韩重启核电布局，能源自主从可选项变为必选项；","textPreview":"俄乌冲突爆发后，高度依赖俄罗斯能源的欧盟陷入能源危机，不得不高价采购高成本的美国天然气；去俄化成本高昂揭示了供应来源多元化与自主能源转型的必要性，欧盟随即加码新能源基础设置投入与REPowerEI计划； | 美伊冲突升级，霍尔木兹海峡通行受阻，对日韩能源进口影响较大，日韩重...","textChars":155,"textLines":2,"bbox":[97.67,164.93,548,142.07]}
+{"kind":"textbox","id":"sh/14r61gve","slide":14,"name":"AutoShape 12","text":"能源供应的“安全模式”已经改变，霍尔木兹海峡战前承担约1500万桶的原油运输，极端事件下通道的脆弱性、运输通道“武器化”的现实概率已经充分暴露；\n 海湾产油国启用并扩容富查伊拉、东西输油等绕行管道，扩充原油储备与储运设施，规划新通道，安全冗余从应急措施转变为长期制度；冲突代价是永久性的：绕行运距拉长、战争险保费重定价、冗余库存与闲置产能的持有成本，都将结构性抬升成本中枢；","textPreview":"能源供应的“安全模式”已经改变，霍尔木兹海峡战前承担约1500万桶的原油运输，极端事件下通道的脆弱性、运输通道“武器化”的现实概率已经充分暴露； |  海湾产油国启用并扩容富查伊拉、东西输油等绕行管道，扩充原油储备与储运设施，规划新通道，安全冗余从应急措施转变为长期制度；冲...","textChars":187,"textLines":2,"bbox":[97.67,408.4,502,53.33]}
+{"kind":"image","id":"im/wvmdgf6l","slide":14,"name":"Picture 7","bbox":[57.67,129.53,32,32]}
+{"kind":"image","id":"im/xwvepkn6","slide":14,"name":"Picture 18","bbox":[57.67,376.4,32,32]}
+{"kind":"image","id":"im/at4ve5of","slide":14,"name":"图片 7","bbox":[694.2,123.27,488.93,298.93]}
+{"kind":"image","id":"im/vudwna50","slide":14,"name":"图片 15","bbox":[694.2,419.53,483,287]}
+{"kind":"notes","id":"nt/6lsnupw7","slide":14,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/vaxsvy10","slide":15,"title":"资源保护主义迅速抬头，正演化为全球性问题","textShapes":5}
+{"kind":"shape","id":"sh/0ra9wbah","slide":15,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"shape","id":"sh/rmh8z6tk","slide":15,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/ql8rq1sz","slide":15,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/dojq1gbq","slide":15,"name":"文本框 1","text":"资源保护主义迅速抬头，正演化为全球性问题","textPreview":"资源保护主义迅速抬头，正演化为全球性问题","textChars":20,"textLines":1,"bbox":[61.49,45.99,906.87,59.93]}
+{"kind":"textbox","id":"sh/bilsbat4","slide":15,"name":"AutoShape 8","text":"关键矿产的稀缺性、分布不均衡","textPreview":"关键矿产的稀缺性、分布不均衡","textChars":14,"textLines":1,"bbox":[92,153.33,480,29.33]}
+{"kind":"textbox","id":"sh/ahcr25sj","slide":15,"name":"AutoShape 9","text":"能源转型推动锂、钴、镍等关键矿产需求预期急速膨胀；\n资源分布天然失衡，少部分国家掌握大部分矿产供给：印尼镍矿产量占全球6-7成、刚果钴资源占全球约四分之三；\n供应集中意味着政策杠杆极高，单一资源国的政策调整足以重塑全球平衡表；","textPreview":"能源转型推动锂、钴、镍等关键矿产需求预期急速膨胀； | 资源分布天然失衡，少部分国家掌握大部分矿产供给：印尼镍矿产量占全球6-7成、刚果钴资源占全球约四分之三； | 供应集中意味着政策杠杆极高，单一资源国的政策调整足以重塑全球平衡表；","textChars":113,"textLines":3,"bbox":[92,198.33,480,53.33]}
+{"kind":"textbox","id":"sh/t4v65srm","slide":15,"name":"AutoShape 11","text":"经济格局打破，从“贸易便利化”转向“资源政治化”","textPreview":"经济格局打破，从“贸易便利化”转向“资源政治化”","textChars":24,"textLines":1,"bbox":[91.93,416.33,503.73,29.33]}
+{"kind":"textbox","id":"sh/614nux8v","slide":15,"name":"AutoShape 12","text":"资源国通过出口管制、配额、税收与产业政策配套等多元化政策工具强化国家对矿产资源的控制力：印尼镍矿出口禁令、津巴布韦锂矿出口限制；\n资源国不满足于原矿形式出口资源换取有限收入，而是希望复制产业升级路径，以资源吸引加工产业落地；\n全球贸易规则让位于资源政治，供给曲线的“政策成本”永久性上升，供给侧定价权向资源国转移；","textPreview":"资源国通过出口管制、配额、税收与产业政策配套等多元化政策工具强化国家对矿产资源的控制力：印尼镍矿出口禁令、津巴布韦锂矿出口限制； | 资源国不满足于原矿形式出口资源换取有限收入，而是希望复制产业升级路径，以资源吸引加工产业落地； | 全球贸易规则让位于资源政治，供给曲线的“...","textChars":157,"textLines":3,"bbox":[92,462.33,480,53.33]}
+{"kind":"image","id":"im/87uhsfmd","slide":15,"name":"Picture 7","bbox":[52,153.33,32,32]}
+{"kind":"image","id":"im/val0nal4","slide":15,"name":"Picture 10","bbox":[52,417.33,32,32]}
+{"kind":"image","id":"im/u9czup4j","slide":15,"name":"图片 11","bbox":[595.8,117.13,622.47,225]}
+{"kind":"image","id":"im/hc3ipk3u","slide":15,"name":"图片 12","bbox":[603.6,338.2,614.67,368.93]}
+{"kind":"notes","id":"nt/vaxsvy10","slide":15,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/gny5sjyp","slide":16,"title":"供需格局：供应约束叠加需求爆发","textShapes":13}
+{"kind":"shape","id":"sh/d4jado72","slide":16,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/s3qt4jqh","slide":16,"name":"TextBox 2","text":"供需格局：供应约束叠加需求爆发","textPreview":"供需格局：供应约束叠加需求爆发","textChars":15,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/7mxszaps","slide":16,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/6lorq587","slide":16,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/na107axg","slide":16,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/29sje5wv","slide":16,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/pwji90f6","slide":16,"name":"AutoShape 6","text":"供应端约束","textPreview":"供应端约束","textChars":5,"textLines":1,"bbox":[78.67,140.87,533.33,37.33]}
+{"kind":"textbox","id":"sh/f6103qx4","slide":16,"name":"AutoShape 8","text":"投资不足，产能有限","textPreview":"投资不足，产能有限","textChars":9,"textLines":1,"bbox":[122,202.67,480,29.33]}
+{"kind":"textbox","id":"sh/e5szalwj","slide":16,"name":"AutoShape 9","text":"过去数年全球大宗商品投资严重不足，导致新增产能受限，尤其矿类品种投资到生产周期较长；","textPreview":"过去数年全球大宗商品投资严重不足，导致新增产能受限，尤其矿类品种投资到生产周期较长；","textChars":42,"textLines":1,"bbox":[125,239.13,452.01,53.33]}
+{"kind":"textbox","id":"sh/07ahcvep","slide":16,"name":"AutoShape 11","text":"资源民族主义抬头","textPreview":"资源民族主义抬头","textChars":8,"textLines":1,"bbox":[122,311.87,480,29.33]}
+{"kind":"textbox","id":"sh/z2l0fuxo","slide":16,"name":"AutoShape 12","text":"部分国家加强战略资源出口管制，欠发达国家以资源换工业倒逼产业链本土化，短期加剧供应紧张。","textPreview":"部分国家加强战略资源出口管制，欠发达国家以资源换工业倒逼产业链本土化，短期加剧供应紧张。","textChars":44,"textLines":1,"bbox":[125,353.4,480,53.33]}
+{"kind":"shape","id":"sh/y1cjmpw3","slide":16,"name":"Connector 13","bbox":[480,292.66,266.67,1.33]}
+{"kind":"textbox","id":"sh/w76x0rul","slide":16,"name":"AutoShape 14","text":"需求端爆发","textPreview":"需求端爆发","textChars":5,"textLines":1,"bbox":[680,140.87,533.33,37.33]}
+{"kind":"textbox","id":"sh/u54fyhcf","slide":16,"name":"AutoShape 16","text":"AI算力中心建设","textPreview":"AI算力中心建设","textChars":8,"textLines":1,"bbox":[728,210.13,480,29.33]}
+{"kind":"textbox","id":"sh/v6xg7md0","slide":16,"name":"AutoShape 17","text":"拉动铜、锡、白银等金属的大量需求。","textPreview":"拉动铜、锡、白银等金属的大量需求。","textChars":17,"textLines":1,"bbox":[728,242.53,480,53.33]}
+{"kind":"textbox","id":"sh/5cfydwv2","slide":16,"name":"AutoShape 19","text":"新能源与储能发展","textPreview":"新能源与储能发展","textChars":8,"textLines":1,"bbox":[728,315,480,29.33]}
+{"kind":"textbox","id":"sh/i9of2hcb","slide":16,"name":"AutoShape 20","text":"显著推动锂、钴、镍等关键矿产需求。","textPreview":"显著推动锂、钴、镍等关键矿产需求。","textChars":17,"textLines":1,"bbox":[728,349.27,480,53.33]}
+{"kind":"shape","id":"sh/3axgbmdw","slide":16,"name":"Connector 21","bbox":[78.67,421.73,1120,1.33]}
+{"kind":"image","id":"im/5gr21ori","slide":16,"name":"Picture 7","bbox":[80,202.13,32,32]}
+{"kind":"image","id":"im/4fi1sjqx","slide":16,"name":"Picture 10","bbox":[80,315,32,32]}
+{"kind":"image","id":"im/4jqlonyt","slide":16,"name":"Picture 15","bbox":[680,206.73,32,32]}
+{"kind":"image","id":"im/pkzmxsze","slide":16,"name":"Picture 18","bbox":[680,315,32,32]}
+{"kind":"image","id":"im/2x83mdg3","slide":16,"name":"图片 11","bbox":[638.27,465,546.07,251.67]}
+{"kind":"image","id":"im/3ihkviho","slide":16,"name":"图片 12","bbox":[146,438.13,444.07,273.93]}
+{"kind":"notes","id":"nt/gny5sjyp","slide":16,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/14bup87q","slide":17,"title":"极端天气：超强厄尔尼诺","textShapes":3}
+{"kind":"shape","id":"sh/1kjyxk32","slide":17,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/ehsf25kb","slide":17,"name":"TextBox 2","text":"极端天气：超强厄尔尼诺","textPreview":"极端天气：超强厄尔尼诺","textChars":11,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/zi1gvalw","slide":17,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/cfqx0v25","slide":17,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/dgzyt03q","slide":17,"name":"Connector 3","bbox":[73.33,110.32,1120,1.33]}
+{"kind":"textbox","id":"sh/4bqxwv29","slide":17,"name":"AutoShape 8","text":"超强厄尔尼诺预期，农产供应存在较大变数\n本轮厄尔尼诺有望达成超强级，有一定概率成为有观测记录依赖最强的厄尔尼诺气候事件；\n对部分农作物重要产区东南亚、南美、澳大利亚等地区有概率造成较大天气影响；\n国内天气异常，台风异常活跃，暴雨过程落区重叠、致灾性强；\n","textPreview":"超强厄尔尼诺预期，农产供应存在较大变数 | 本轮厄尔尼诺有望达成超强级，有一定概率成为有观测记录依赖最强的厄尔尼诺气候事件； | 对部分农作物重要产区东南亚、南美、澳大利亚等地区有概率造成较大天气影响； | 国内天气异常，台风异常活跃，暴雨过程落区重叠、致灾性强； |","textChars":127,"textLines":5,"bbox":[102.47,237.67,536.13,128.33]}
+{"kind":"textbox","id":"sh/7mxgzq5g","slide":17,"name":"AutoShape 11","text":"地缘冲突推高能源与化肥成本，供给二次冲击\n中东地缘冲突持续，海峡通航受阻推高农机燃油、化肥生产、国际海运成本，能源驱动的成本推升成为新的农产品价格驱动；\n俄乌近期针对粮食出口港进行互袭，黑海粮食走廊的不确定性有明显提高；\n","textPreview":"地缘冲突推高能源与化肥成本，供给二次冲击 | 中东地缘冲突持续，海峡通航受阻推高农机燃油、化肥生产、国际海运成本，能源驱动的成本推升成为新的农产品价格驱动； | 俄乌近期针对粮食出口港进行互袭，黑海粮食走廊的不确定性有明显提高； |","textChars":111,"textLines":4,"bbox":[102.47,465,536.13,146.27]}
+{"kind":"image","id":"im/jepcnu9k","slide":17,"name":"图片 3","bbox":[698.6,112.33,534.47,309.93]}
+{"kind":"image","id":"im/kfydwzq5","slide":17,"name":"Picture 7","bbox":[63,186.13,32,32]}
+{"kind":"image","id":"im/lg7upkrq","slide":17,"name":"Picture 10","bbox":[63,439,32,32]}
+{"kind":"image","id":"im/6hgvyp8b","slide":17,"name":"图片 20","bbox":[698.6,422.27,534.47,285.73]}
+{"kind":"notes","id":"nt/14bup87q","slide":17,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/y5wne50z","slide":18,"title":"与股票相比，当前大宗商品依然处于低位","textShapes":5}
+{"kind":"shape","id":"sh/507qhoni","slide":18,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/a9wr294v","slide":18,"name":"TextBox 2","text":"与股票相比，当前大宗商品依然处于低位","textPreview":"与股票相比，当前大宗商品依然处于低位","textChars":18,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/va58be5g","slide":18,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/wve94jml","slide":18,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/xw7qdon6","slide":18,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/u50red4z","slide":18,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/exgna58f","slide":18,"name":"矩形 3","bbox":[451.77,461.21,96.11,49.96]}
+{"kind":"textbox","id":"sh/0jy5cfql","slide":18,"name":"AutoShape 8","text":"股票/商品价格比处于历史底部，但已经出现止跌盘整迹象存在向上修复的预期；","textPreview":"股票/商品价格比处于历史底部，但已经出现止跌盘整迹象存在向上修复的预期；","textChars":36,"textLines":1,"bbox":[658.86,266.16,520,38.3]}
+{"kind":"textbox","id":"sh/qtwn6583","slide":18,"name":"矩形 16","text":"周期启动后，均为跨度较长的超长周期，而非持续周期较短的脉冲式行情；","textPreview":"周期启动后，均为跨度较长的超长周期，而非持续周期较短的脉冲式行情；","textChars":33,"textLines":1,"bbox":[654.91,410.02,512,71.36]}
+{"kind":"image","id":"im/0jilknq5","slide":18,"name":"图片 2","bbox":[56.93,140.87,514.53,456.87]}
+{"kind":"image","id":"im/lkrmtsrq","slide":18,"name":"Picture 7","bbox":[622.91,257.03,32,32]}
+{"kind":"image","id":"im/id4nuh8j","slide":18,"name":"Picture 15","bbox":[623.03,413.7,32,32]}
+{"kind":"notes","id":"nt/y5wne50z","slide":18,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/nid43ytk","slide":19,"title":"明星品种带动下，市场活跃度持续位于高位","textShapes":5}
+{"kind":"shape","id":"sh/p0zytw7q","slide":19,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/69szul8j","slide":19,"name":"TextBox 2","text":"明星品种带动下，市场活跃度持续位于高位","textPreview":"明星品种带动下，市场活跃度持续位于高位","textChars":19,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/7a1g3qp4","slide":19,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/h43itkr6","slide":19,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/g3u1kfal","slide":19,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/v2l0ru9g","slide":19,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/u1cjipsv","slide":19,"name":"矩形 15","text":"期货市场成交金额自22年后逐年抬升，市场活跃度稳步上涨；","textPreview":"期货市场成交金额自22年后逐年抬升，市场活跃度稳步上涨；","textChars":28,"textLines":1,"bbox":[811.27,250.74,400.1,78.12]}
+{"kind":"textbox","id":"sh/8zu1gfap","slide":19,"name":"矩形 5","text":"25年在黄金、白银等明星贵金属品种带动下，期货市场关注度显著提高，新增资金介入推动行情幅度提升；","textPreview":"25年在黄金、白银等明星贵金属品种带动下，期货市场关注度显著提高，新增资金介入推动行情幅度提升；","textChars":48,"textLines":1,"bbox":[811.27,383.57,400.1,114.47]}
+{"kind":"shape","id":"sh/sve1sjat","slide":19,"name":"直接箭头连接符 11","bbox":[421.39,275.9,242.26,150.69]}
+{"kind":"image","id":"im/lofqx43m","slide":19,"name":"Picture 7","bbox":[773.94,260.37,37.33,37.33]}
+{"kind":"image","id":"im/kn69ozm1","slide":19,"name":"Picture 10","bbox":[773.94,390.06,37.33,37.33]}
+{"kind":"image","id":"im/jmx8vulg","slide":19,"name":"图片 10","bbox":[44.67,122.13,726.33,574.33]}
+{"kind":"notes","id":"nt/nid43ytk","slide":19,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/zyxsni5k","slide":20,"title":"市场波动率脱离底部，CTA策略运行环境改善","textShapes":5}
+{"kind":"shape","id":"sh/vi9kfyhc","slide":20,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/uh0jmt0r","slide":20,"name":"TextBox 2","text":"市场波动率脱离底部，CTA策略运行环境改善","textPreview":"市场波动率脱离底部，CTA策略运行环境改善","textChars":21,"textLines":1,"bbox":[74.88,50.49,1008,54.53]}
+{"kind":"shape","id":"sh/9gr2dozm","slide":20,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/8fy1kji1","slide":20,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/7epkbehg","slide":20,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/mdgji90v","slide":20,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/sb2lwni5","slide":20,"name":"矩形 15","text":"期货市场成交金额自22年后逐年抬升，市场活跃度稳步上涨；","textPreview":"期货市场成交金额自22年后逐年抬升，市场活跃度稳步上涨；","textChars":28,"textLines":1,"bbox":[858.87,305.88,400.1,78.12]}
+{"kind":"textbox","id":"sh/rml83qtw","slide":20,"name":"矩形 8","text":"市场波动率自2024年后逐步恢复，25、26年波动率显著提升；","textPreview":"市场波动率自2024年后逐步恢复，25、26年波动率显著提升；","textChars":31,"textLines":1,"bbox":[858.87,438.71,400.1,82.27]}
+{"kind":"image","id":"im/t8zihw3e","slide":20,"name":"图片 5","bbox":[55.87,115.33,764.93,577]}
+{"kind":"image","id":"im/snq1or2t","slide":20,"name":"Picture 7","bbox":[821.54,315.5,37.33,37.33]}
+{"kind":"image","id":"im/jix0bmlc","slide":20,"name":"Picture 10","bbox":[821.54,445.19,37.33,37.33]}
+{"kind":"notes","id":"nt/zyxsni5k","slide":20,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/m1wvqtk3","slide":21,"title":"大类资产配置比例 · 磐岳业绩展示","textShapes":20}
+{"kind":"shape","id":"sh/po3i98ja","slide":21,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/onuhg32p","slide":21,"name":"TextBox 2","text":"大类资产配置比例 · 磐岳业绩展示","textPreview":"大类资产配置比例 · 磐岳业绩展示","textChars":17,"textLines":1,"bbox":[74.88,53.63,1008,48.27]}
+{"kind":"textbox","id":"sh/3mlg7i14","slide":21,"name":"TextBox 3","text":"曲线展示区间 资金规模 5000 万  ·  【待更新至 9/8】","textPreview":"曲线展示区间 资金规模 5000 万  ·  【待更新至 9/8】","textChars":33,"textLines":1,"bbox":[74.88,109.44,1104,20.33]}
+{"kind":"shape","id":"sh/2lszedkj","slide":21,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/9knilcje","slide":21,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/8jehs72t","slide":21,"name":"TextBox 6","text":"组合配置比例","textPreview":"组合配置比例","textChars":6,"textLines":1,"bbox":[52.8,172.8,566.4,48]}
+{"kind":"shape","id":"sh/xsvihkry","slide":21,"name":"Rectangle 7","bbox":[52.8,225.6,408.13,48]}
+{"kind":"shape","id":"sh/wrmhofqd","slide":21,"name":"Rectangle 8","bbox":[461.53,225.53,58.8,48]}
+{"kind":"shape","id":"sh/bqd0fa9s","slide":21,"name":"Rectangle 9","bbox":[521,225.6,64.27,48]}
+{"kind":"shape","id":"sh/apkzm587","slide":21,"name":"Rectangle 10","bbox":[585.22,225.6,33.98,48]}
+{"kind":"textbox","id":"sh/94byd0r2","slide":21,"name":"TextBox 11","text":"固收策略 82%","textPreview":"固收策略 82%","textChars":8,"textLines":1,"bbox":[52.8,283.2,339.84,20.33]}
+{"kind":"textbox","id":"sh/o32hkvqh","slide":21,"name":"TextBox 12","text":"CTA 策略 6%","textPreview":"CTA 策略 6%","textChars":9,"textLines":1,"bbox":[401.04,283.13,147.26,20.33]}
+{"kind":"textbox","id":"sh/n2tgbq9w","slide":21,"name":"TextBox 14","text":"宏观策略 12%","textPreview":"宏观策略 12%","textChars":8,"textLines":1,"bbox":[530.87,282.8,96.07,20.33]}
+{"kind":"textbox","id":"sh/m1kzi58b","slide":21,"name":"TextBox 16","text":"业绩展示（待更新）","textPreview":"业绩展示（待更新）","textChars":9,"textLines":1,"bbox":[662.4,172.8,566.4,48]}
+{"kind":"shape","id":"sh/t0fip4r6","slide":21,"name":"Rectangle 17","bbox":[662.4,225.6,566.4,96]}
+{"kind":"textbox","id":"sh/8z6hwzql","slide":21,"name":"TextBox 18","text":"年化收益","textPreview":"年化收益","textChars":4,"textLines":1,"bbox":[684.07,259.32,172.8,57.6]}
+{"kind":"textbox","id":"sh/q5gfq1o3","slide":21,"name":"TextBox 19","text":"3.11%","textPreview":"3.11%","textChars":5,"textLines":1,"bbox":[864,233.28,326.4,40.8]}
+{"kind":"textbox","id":"sh/r69wjmpo","slide":21,"name":"TextBox 20","text":"业绩报酬后","textPreview":"业绩报酬后","textChars":5,"textLines":1,"bbox":[864,288.96,326.4,28.8]}
+{"kind":"shape","id":"sh/s7ixsr69","slide":21,"name":"Rectangle 21","bbox":[662.4,336,566.4,96]}
+{"kind":"textbox","id":"sh/d8relw7u","slide":21,"name":"TextBox 22","text":"最大回撤","textPreview":"最大回撤","textChars":4,"textLines":1,"bbox":[686.4,364.45,172.8,57.6]}
+{"kind":"textbox","id":"sh/i1gvmho7","slide":21,"name":"TextBox 23","text":"-0.23%","textPreview":"-0.23%","textChars":6,"textLines":1,"bbox":[864,343.68,326.4,40.8]}
+{"kind":"textbox","id":"sh/32pwfmpc","slide":21,"name":"TextBox 24","text":"模拟组合","textPreview":"模拟组合","textChars":4,"textLines":1,"bbox":[864,399.36,326.4,28.8]}
+{"kind":"shape","id":"sh/43yxor6x","slide":21,"name":"Rectangle 25","bbox":[662.4,446.4,566.4,96]}
+{"kind":"textbox","id":"sh/547ehw7i","slide":21,"name":"TextBox 26","text":"卡玛率","textPreview":"卡玛率","textChars":3,"textLines":1,"bbox":[686.4,475.92,172.8,24.07]}
+{"kind":"textbox","id":"sh/mx0fylob","slide":21,"name":"TextBox 27","text":"13.5","textPreview":"13.5","textChars":4,"textLines":1,"bbox":[859.2,473.28,326.4,40.8]}
+{"kind":"textbox","id":"sh/nytwrqpw","slide":21,"name":"TextBox 30","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/jilcji58","slide":21,"name":"TextBox 31","text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"textbox","id":"sh/yhcbad4n","slide":21,"name":"TextBox 6","text":"净值图","textPreview":"净值图","textChars":3,"textLines":1,"bbox":[52.8,321.6,566.4,27.87]}
+{"kind":"shape","id":"sh/lk3ul8ne","slide":21,"name":"Rectangle 25","bbox":[662.4,560.67,566.4,96]}
+{"kind":"textbox","id":"sh/kjutc3mt","slide":21,"name":"TextBox 26","text":"开始日期","textPreview":"开始日期","textChars":4,"textLines":1,"bbox":[686.4,590.85,172.8,57.6]}
+{"kind":"textbox","id":"sh/76lcni54","slide":21,"name":"TextBox 27","text":"2026.6.3","textPreview":"2026.6.3","textChars":8,"textLines":1,"bbox":[855.8,583.68,326.4,40.8]}
+{"kind":"image","id":"im/3a5gjuhk","slide":21,"name":"图片 0","bbox":[45.33,363.93,586.6,269.8]}
+{"kind":"notes","id":"nt/m1wvqtk3","slide":21,"text":"[Speaker Notes]\n配置比例页：保留 8 月版固收 60%/CTA 26%/权益 8%/宏观 6% 的比例作占位，业绩指标（年化 4.82%、最大回撤 1.19%）沿用 8 月数据并标注待更新。用户拿到最新净值后替换即可。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 12 页。"}
+{"kind":"slide","id":"sl/5onypobq","slide":22,"title":"FOF 子产品业绩展示","textShapes":4}
+{"kind":"shape","id":"sh/vqx8vadg","slide":22,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/gnq9gze5","slide":22,"name":"TextBox 2","text":"FOF 子产品业绩展示","textPreview":"FOF 子产品业绩展示","textChars":11,"textLines":1,"bbox":[74.88,53.63,1008,48.27]}
+{"kind":"shape","id":"sh/1oja94vq","slide":22,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/bilczyxs","slide":22,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/dk3u18fy","slide":22,"name":"TextBox 7","text":"【占位】上表为 2026.08 版数据，最新区间收益/净值更新后替换。","textPreview":"【占位】上表为 2026.08 版数据，最新区间收益/净值更新后替换。","textChars":35,"textLines":1,"bbox":[52.8,633.6,1174.08,38.4]}
+{"kind":"textbox","id":"sh/cjud83yd","slide":22,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/zmlc3ixo","slide":22,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"table","id":"tb/vi587yd0","slide":22,"name":"Table 6","rows":8,"cols":6,"preview":"序号 | 基金名称 | 区间收益(元) | 区间收益率 | 区间年化 | 持有成本(元)","bbox":[54.73,183.4,1174.08,470.4]}
+{"kind":"notes","id":"nt/5onypobq","slide":22,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/c7uhcr6t","slide":23,"title":"子产品 - 宏观策略区别","textShapes":43}
+{"kind":"shape","id":"sh/uxczup8b","slide":23,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/fylgnupw","slide":23,"name":"TextBox 2","text":"子产品 - 宏观策略区别","textPreview":"子产品 - 宏观策略区别","textChars":12,"textLines":1,"bbox":[74.88,53.63,1008,48.27]}
+{"kind":"shape","id":"sh/w3qxkvqd","slide":23,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/x4zyt0ry","slide":23,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"textbox","id":"sh/p0bqt072","slide":23,"name":"TextBox 7","text":"【占位】上表为 2026.08 版数据，最新区间收益/净值更新后替换。","textPreview":"【占位】上表为 2026.08 版数据，最新区间收益/净值更新后替换。","textChars":35,"textLines":1,"bbox":[52.8,633.6,1174.08,38.4]}
+{"kind":"textbox","id":"sh/oz2pkvqh","slide":23,"name":"TextBox 8","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/3yt8rq9w","slide":23,"name":"TextBox 9","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"shape","id":"sh/2xk7il8r","slide":23,"name":"矩形 3","bbox":[53.33,173.33,373.33,53.33]}
+{"kind":"shape","id":"sh/1wbqp0r6","slide":23,"name":"矩形 4","bbox":[453.33,173.33,373.33,53.33]}
+{"kind":"shape","id":"sh/gv2pwvql","slide":23,"name":"矩形 5","bbox":[853.33,173.33,373.33,53.33]}
+{"kind":"textbox","id":"sh/fut8nq90","slide":23,"name":"矩形 9","text":"桥水 Beta 型 · 全天候","textPreview":"桥水 Beta 型 · 全天候","textChars":15,"textLines":1,"bbox":[69.33,180,341.33,42.67]}
+{"kind":"textbox","id":"sh/et07ul8f","slide":23,"name":"矩形 10","text":"桥水 Pure Alpha","textPreview":"桥水 Pure Alpha","textChars":13,"textLines":1,"bbox":[469.33,180,341.33,42.67]}
+{"kind":"textbox","id":"sh/tsrqlgru","slide":23,"name":"矩形 11","text":"国内 Alpha 型","textPreview":"国内 Alpha 型","textChars":10,"textLines":1,"bbox":[869.33,180,341.33,42.67]}
+{"kind":"textbox","id":"sh/sripsbq9","slide":23,"name":"矩形 12","text":"定位","textPreview":"定位","textChars":2,"textLines":1,"bbox":[69.33,253.33,120,37.33]}
+{"kind":"textbox","id":"sh/ixgnmho7","slide":23,"name":"矩形 13","text":"风险平价 · 纯 beta","textPreview":"风险平价 · 纯 beta","textChars":13,"textLines":1,"bbox":[197.33,253.33,220,37.33]}
+{"kind":"textbox","id":"sh/jyp4vmps","slide":23,"name":"矩形 14","text":"工具","textPreview":"工具","textChars":2,"textLines":1,"bbox":[69.33,306.67,120,37.33]}
+{"kind":"textbox","id":"sh/4zy5or6d","slide":23,"name":"矩形 15","text":"股/债/商品/通胀债","textPreview":"股/债/商品/通胀债","textChars":10,"textLines":1,"bbox":[197.33,306.67,220,37.33]}
+{"kind":"textbox","id":"sh/507mxw7y","slide":23,"name":"矩形 16","text":"敞口","textPreview":"敞口","textChars":2,"textLines":1,"bbox":[69.33,360,120,37.33]}
+{"kind":"textbox","id":"sh/u9wnihob","slide":23,"name":"矩形 17","text":"纯多头指数，不选品","textPreview":"纯多头指数，不选品","textChars":9,"textLines":1,"bbox":[197.33,360,220,37.33]}
+{"kind":"textbox","id":"sh/va54r2pw","slide":23,"name":"矩形 18","text":"收益","textPreview":"收益","textChars":2,"textLines":1,"bbox":[69.33,413.33,120,37.33]}
+{"kind":"textbox","id":"sh/wby5k761","slide":23,"name":"矩形 19","text":"100% 配置 beta","textPreview":"100% 配置 beta","textChars":12,"textLines":1,"bbox":[197.33,413.33,220,37.33]}
+{"kind":"textbox","id":"sh/hc7mtc7m","slide":23,"name":"矩形 20","text":"特征","textPreview":"特征","textChars":2,"textLines":1,"bbox":[69.33,466.67,120,37.33]}
+{"kind":"textbox","id":"sh/m5wnexoz","slide":23,"name":"矩形 21","text":"低波可复制穿越周期","textPreview":"低波可复制穿越周期","textChars":9,"textLines":1,"bbox":[197.33,466.67,220,37.33]}
+{"kind":"textbox","id":"sh/7654n2pk","slide":23,"name":"矩形 22","text":"业绩","textPreview":"业绩","textChars":2,"textLines":1,"bbox":[69.33,520,120,37.33]}
+{"kind":"textbox","id":"sh/ba1kvy5c","slide":23,"name":"矩形 23","text":"年化约 7.9%","textPreview":"年化约 7.9%","textChars":8,"textLines":1,"bbox":[197.33,520,220,37.33]}
+{"kind":"textbox","id":"sh/q9sjmt4r","slide":23,"name":"矩形 24","text":"定位","textPreview":"定位","textChars":2,"textLines":1,"bbox":[469.33,253.33,120,37.33]}
+{"kind":"textbox","id":"sh/xc32x8ni","slide":23,"name":"矩形 25","text":"市场中性宏观对冲","textPreview":"市场中性宏观对冲","textChars":8,"textLines":1,"bbox":[597.33,253.33,220,37.33]}
+{"kind":"textbox","id":"sh/cba1o3mx","slide":23,"name":"矩形 26","text":"工具","textPreview":"工具","textChars":2,"textLines":1,"bbox":[469.33,306.67,120,37.33]}
+{"kind":"textbox","id":"sh/zelkzi5o","slide":23,"name":"矩形 27","text":"170+ 市场多空","textPreview":"170+ 市场多空","textChars":9,"textLines":1,"bbox":[597.33,306.67,220,37.33]}
+{"kind":"textbox","id":"sh/ydcjqd43","slide":23,"name":"矩形 28","text":"敞口","textPreview":"敞口","textChars":2,"textLines":1,"bbox":[469.33,360,120,37.33]}
+{"kind":"textbox","id":"sh/lg3218ne","slide":23,"name":"矩形 29","text":"久期/商品 beta≈0","textPreview":"久期/商品 beta≈0","textChars":12,"textLines":1,"bbox":[597.33,360,220,37.33]}
+{"kind":"textbox","id":"sh/kfuls3mt","slide":23,"name":"矩形 30","text":"收益","textPreview":"收益","textChars":2,"textLines":1,"bbox":[469.33,413.33,120,37.33]}
+{"kind":"textbox","id":"sh/fihkne54","slide":23,"name":"矩形 31","text":"宏观方向择时 alpha","textPreview":"宏观方向择时 alpha","textChars":12,"textLines":1,"bbox":[597.33,413.33,220,37.33]}
+{"kind":"textbox","id":"sh/eh8je94j","slide":23,"name":"矩形 32","text":"特征","textPreview":"特征","textChars":2,"textLines":1,"bbox":[469.33,466.67,120,37.33]}
+{"kind":"textbox","id":"sh/kbmp8by5","slide":23,"name":"矩形 33","text":"危机阿尔法(08/22)","textPreview":"危机阿尔法(08/22)","textChars":12,"textLines":1,"bbox":[597.33,466.67,220,37.33]}
+{"kind":"textbox","id":"sh/5cvq1gzq","slide":23,"name":"矩形 34","text":"业绩","textPreview":"业绩","textChars":2,"textLines":1,"bbox":[469.33,520,120,37.33]}
+{"kind":"textbox","id":"sh/i9476lgf","slide":23,"name":"矩形 35","text":"年化约 11.4%","textPreview":"年化约 11.4%","textChars":9,"textLines":1,"bbox":[597.33,520,220,37.33]}
+{"kind":"textbox","id":"sh/jad8zqhk","slide":23,"name":"矩形 36","text":"定位","textPreview":"定位","textChars":2,"textLines":1,"bbox":[869.33,253.33,120,37.33]}
+{"kind":"textbox","id":"sh/w72p4by9","slide":23,"name":"矩形 37","text":"配置beta+工具alpha","textPreview":"配置beta+工具alpha","textChars":14,"textLines":1,"bbox":[997.33,253.33,220,37.33]}
+{"kind":"textbox","id":"sh/x8vqxgzu","slide":23,"name":"矩形 38","text":"工具","textPreview":"工具","textChars":2,"textLines":1,"bbox":[869.33,306.67,120,37.33]}
+{"kind":"textbox","id":"sh/alk721g3","slide":23,"name":"矩形 39","text":"量化选股/量化CTA","textPreview":"量化选股/量化CTA","textChars":10,"textLines":1,"bbox":[997.33,306.67,220,37.33]}
+{"kind":"textbox","id":"sh/vmt8v6ho","slide":23,"name":"矩形 40","text":"敞口","textPreview":"敞口","textChars":2,"textLines":1,"bbox":[869.33,360,120,37.33]}
+{"kind":"textbox","id":"sh/g369gvyd","slide":23,"name":"矩形 41","text":"保留beta叠加增强","textPreview":"保留beta叠加增强","textChars":10,"textLines":1,"bbox":[997.33,360,220,37.33]}
+{"kind":"textbox","id":"sh/h4fq90zy","slide":23,"name":"矩形 42","text":"收益","textPreview":"收益","textChars":2,"textLines":1,"bbox":[869.33,413.33,120,37.33]}
+{"kind":"textbox","id":"sh/9wjupgbe","slide":23,"name":"矩形 43","text":"beta+工具超额","textPreview":"beta+工具超额","textChars":9,"textLines":1,"bbox":[997.33,413.33,220,37.33]}
+{"kind":"textbox","id":"sh/ovadwbut","slide":23,"name":"矩形 44","text":"特征","textPreview":"特征","textChars":2,"textLines":1,"bbox":[869.33,466.67,120,37.33]}
+{"kind":"textbox","id":"sh/nu1cn6to","slide":23,"name":"矩形 45","text":"夏普高、alpha会衰减","textPreview":"夏普高、alpha会衰减","textChars":12,"textLines":1,"bbox":[997.33,466.67,220,37.33]}
+{"kind":"textbox","id":"sh/mtsvu1c3","slide":23,"name":"矩形 46","text":"关键","textPreview":"关键","textChars":2,"textLines":1,"bbox":[869.33,520,120,37.33]}
+{"kind":"textbox","id":"sh/xk3utgbq","slide":23,"name":"矩形 47","text":"归因验证alpha真假","textPreview":"归因验证alpha真假","textChars":11,"textLines":1,"bbox":[997.33,520,220,37.33]}
+{"kind":"notes","id":"nt/c7uhcr6t","slide":23,"text":"[Speaker Notes]\n产品明细占位表：保留 8 月版 12 只产品与合计数据，亏损项标红。最新净值待用户提供后替换。\n\n[Sources]\n沿用《近期宏观及资产配置 20260821》第 13 页。"}
+{"kind":"slide","id":"sl/7qto7e10","slide":24,"title":"未来展望与调仓计划","textShapes":15}
+{"kind":"shape","id":"sh/zq9ozmxc","slide":24,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/yp0761gr","slide":24,"name":"TextBox 2","text":"未来展望与调仓计划","textPreview":"未来展望与调仓计划","textChars":9,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/9gb65gfe","slide":24,"name":"TextBox 3","text":"9 月三大变量：美国 8 月 CPI · 美联储议息 · 中东局势","textPreview":"9 月三大变量：美国 8 月 CPI · 美联储议息 · 中东局势","textChars":33,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/8v2pcbyt","slide":24,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/61c36dwb","slide":24,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/r2l4zidw","slide":24,"name":"Rectangle 6","bbox":[52.8,172.8,382.08,182.4]}
+{"kind":"shape","id":"sh/s3el83e1","slide":24,"name":"Rectangle 7","bbox":[52.8,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/t4nm18vm","slide":24,"name":"Rectangle 8","text":"9/11 美国 8 月 CPI","textPreview":"9/11 美国 8 月 CPI","textChars":15,"textLines":1,"bbox":[52.8,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/e5w3adw7","slide":24,"name":"TextBox 9","text":"已公布：同比3.4%、核心2.4%，核心环比0.3%超预期","textPreview":"已公布：同比3.4%、核心2.4%，核心环比0.3%超预期","textChars":29,"textLines":1,"bbox":[67.2,232.32,361.87,86.4]}
+{"kind":"textbox","id":"sh/fq543ids","slide":24,"name":"TextBox 10","text":"核心超预期 → 加息近确定，压制风险资产","textPreview":"核心超预期 → 加息近确定，压制风险资产","textChars":20,"textLines":1,"bbox":[67.2,318.72,353.28,38.4]}
+{"kind":"shape","id":"sh/grelcned","slide":24,"name":"Rectangle 11","bbox":[449.28,172.8,382.08,182.4]}
+{"kind":"shape","id":"sh/1snm5svy","slide":24,"name":"Rectangle 12","bbox":[449.28,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/2tw3exwj","slide":24,"name":"Rectangle 13","text":"9/16 美联储议息","textPreview":"9/16 美联储议息","textChars":10,"textLines":1,"bbox":[449.28,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/3u5472do","slide":24,"name":"TextBox 14","text":"加息25bp概率95%，今晚出结果（沃什首场FOMC）","textPreview":"加息25bp概率95%，今晚出结果（沃什首场FOMC）","textChars":27,"textLines":1,"bbox":[463.68,232.32,353.28,86.4]}
+{"kind":"textbox","id":"sh/o3mpgnel","slide":24,"name":"TextBox 15","text":"若加息落地 → 全球利率中枢上移，人民币资产相对占优","textPreview":"若加息落地 → 全球利率中枢上移，人民币资产相对占优","textChars":26,"textLines":1,"bbox":[463.68,318.72,353.28,38.4]}
+{"kind":"shape","id":"sh/94vqpsv6","slide":24,"name":"Rectangle 16","bbox":[845.76,172.8,382.08,182.4]}
+{"kind":"shape","id":"sh/m147edwv","slide":24,"name":"Rectangle 17","bbox":[845.76,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/n2d8nidg","slide":24,"name":"Rectangle 18","text":"中东局势","textPreview":"中东局势","textChars":4,"textLines":1,"bbox":[845.76,172.8,382.08,48]}
+{"kind":"textbox","id":"sh/w7m9k7ex","slide":24,"name":"TextBox 19","text":"美伊冲突持续，油价与航运成本高企","textPreview":"美伊冲突持续，油价与航运成本高企","textChars":16,"textLines":1,"bbox":[860.16,232.32,353.28,86.4]}
+{"kind":"textbox","id":"sh/x8fqtcvi","slide":24,"name":"TextBox 20","text":"能源/商品多头逻辑强化，输入型通胀延续","textPreview":"能源/商品多头逻辑强化，输入型通胀延续","textChars":19,"textLines":1,"bbox":[860.16,318.72,353.28,38.4]}
+{"kind":"textbox","id":"sh/a54rixwr","slide":24,"name":"TextBox 21","text":"调仓方向（建议）","textPreview":"调仓方向（建议）","textChars":8,"textLines":1,"bbox":[52.8,379.2,576,48]}
+{"kind":"textbox","id":"sh/b6d8r2dc","slide":24,"name":"TextBox 22","text":"· 固收：维持高比例压舱，票息与稳健策略为主，回撤控制核心\n· 商品/CTA：价格弹性修复 + 趋势行情，可适度增配趋势型 CTA\n· 权益：结构 > 指数，减配小盘指增、增配中性/对冲与低波策略\n· 黄金：保留底仓，等待加息预期落地后的配置窗口","textPreview":"· 固收：维持高比例压舱，票息与稳健策略为主，回撤控制核心 | · 商品/CTA：价格弹性修复 + 趋势行情，可适度增配趋势型 CTA | · 权益：结构 > 指数，减配小盘指增、增配中性/对冲与低波策略 | · 黄金：保留底仓，等待加息预期落地后的配置窗口","textChars":123,"textLines":4,"bbox":[52.8,427.2,1174.08,192]}
+{"kind":"textbox","id":"sh/kb69o7et","slide":24,"name":"TextBox 23","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/lwfqxcve","slide":24,"name":"TextBox 24","text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"notes","id":"nt/7qto7e10","slide":24,"text":"[Speaker Notes]\n未来展望与调仓计划：9 月核心变量为 9/11 美国 CPI、9/16 美联储议息、中东局势。调仓方向偏防御——固收压舱、CTA 适度增配、权益结构切换、黄金保留底仓。\n\n[Sources]\nCME FedWatch；财联社；路透。"}
+{"kind":"slide","id":"sl/69wfm9o7","slide":25,"title":"2027 年配置计划 · 两种方案","textShapes":9}
+{"kind":"shape","id":"sh/mdgj2hwr","slide":25,"name":"矩形 93","bbox":[53.33,48,9.33,60]}
+{"kind":"shape","id":"sh/907idwvi","slide":25,"name":"矩形 94","bbox":[53.33,106.67,210.67,3.33]}
+{"kind":"shape","id":"sh/8fy14rex","slide":25,"name":"矩形 95","bbox":[53.33,235.82,573.33,220]}
+{"kind":"shape","id":"sh/v2p0f6do","slide":25,"name":"矩形 96","bbox":[53.33,235.82,573.33,60]}
+{"kind":"shape","id":"sh/a1gj61w3","slide":25,"name":"矩形 97","bbox":[650.67,235.82,573.33,220]}
+{"kind":"shape","id":"sh/x4rihwve","slide":25,"name":"矩形 98","bbox":[650.67,235.82,573.33,60]}
+{"kind":"shape","id":"sh/w3i18ret","slide":25,"name":"矩形 99","bbox":[53.33,633.33,1173.33,60]}
+{"kind":"textbox","id":"sh/b65032x4","slide":25,"name":"矩形 100","text":"2027 年配置计划 · 两种方案","textPreview":"2027 年配置计划 · 两种方案","textChars":17,"textLines":1,"bbox":[74.67,44,933.33,66.67]}
+{"kind":"textbox","id":"sh/q5wzuxwj","slide":25,"name":"矩形 101","text":"以固收为压舱石，弹性策略增厚收益","textPreview":"以固收为压舱石，弹性策略增厚收益","textChars":16,"textLines":1,"bbox":[74.67,112,1066.67,34.67]}
+{"kind":"textbox","id":"sh/u1k325g7","slide":25,"name":"矩形 102","text":"方案一 · 稳健型","textPreview":"方案一 · 稳健型","textChars":9,"textLines":1,"bbox":[53.33,242.48,573.33,50.67]}
+{"kind":"textbox","id":"sh/f2d4baxs","slide":25,"name":"矩形 103","text":"90% 固收 + 10% 弹性策略","textPreview":"90% 固收 + 10% 弹性策略","textChars":17,"textLines":1,"bbox":[82.67,315.82,520,53.33]}
+{"kind":"textbox","id":"sh/g3ml4fyd","slide":25,"name":"矩形 104","text":"极致稳健，回撤控制优先","textPreview":"极致稳健，回撤控制优先","textChars":11,"textLines":1,"bbox":[82.67,382.48,520,42.67]}
+{"kind":"textbox","id":"sh/h4vmdkfy","slide":25,"name":"矩形 105","text":"方案二 · 均衡型","textPreview":"方案二 · 均衡型","textChars":9,"textLines":1,"bbox":[650.67,242.48,573.33,50.67]}
+{"kind":"textbox","id":"sh/6xk3y5gb","slide":25,"name":"矩形 106","text":"80% 固收 + 20% 弹性策略","textPreview":"80% 固收 + 20% 弹性策略","textChars":17,"textLines":1,"bbox":[680,315.82,520,53.33]}
+{"kind":"textbox","id":"sh/7yt47qxw","slide":25,"name":"矩形 107","text":"稳中求进，可控回撤内争取更高弹性","textPreview":"稳中求进，可控回撤内争取更高弹性","textChars":16,"textLines":1,"bbox":[680,382.48,520,42.67]}
+{"kind":"textbox","id":"sh/sz2l0vy1","slide":25,"name":"矩形 108","text":"注：收益与回撤为基于策略历史表现的参考测算，不构成收益承诺；两种方案可结合客户风险偏好切换。","textPreview":"注：收益与回撤为基于策略历史表现的参考测算，不构成收益承诺；两种方案可结合客户风险偏好切换。","textChars":46,"textLines":1,"bbox":[69.33,642.67,1146.67,45.33]}
+{"kind":"notes","id":"nt/69wfm9o7","slide":25,"text":"[Speaker Notes] 2027配置计划：给客户两种方案——方案一 90%固收+10%弹性（稳健型，回撤<1%）；方案二 80%固收+20%弹性（均衡型，回撤≤1.5%）。收益为参考测算。[Sources] 基于固收约4%、弹性策略约8%~15%的假设测算，待产品实际数据校准。"}
+{"kind":"slide","id":"sl/l0bepsfm","slide":26,"title":"弹性策略详解","textShapes":24}
+{"kind":"shape","id":"sh/poj2pcz6","slide":26,"name":"矩形 110","bbox":[53.33,48,9.33,60]}
+{"kind":"shape","id":"sh/43alg7il","slide":26,"name":"矩形 111","bbox":[53.33,106.67,210.67,3.33]}
+{"kind":"shape","id":"sh/m9kza9g3","slide":26,"name":"矩形 112","bbox":[53.33,173.33,573.33,53.33]}
+{"kind":"shape","id":"sh/nad0jexo","slide":26,"name":"矩形 113","bbox":[650.67,173.33,573.33,53.33]}
+{"kind":"shape","id":"sh/8bmhcjy9","slide":26,"name":"矩形 114","bbox":[53.33,633.33,1173.33,60]}
+{"kind":"textbox","id":"sh/9cvilofu","slide":26,"name":"矩形 115","text":"弹性策略详解","textPreview":"弹性策略详解","textChars":6,"textLines":1,"bbox":[74.67,44,666.67,66.67]}
+{"kind":"textbox","id":"sh/ad4zetgz","slide":26,"name":"矩形 116","text":"套利 + 量化CTA + 主观CTA · 以低风险、低相关策略增厚组合收益","textPreview":"套利 + 量化CTA + 主观CTA · 以低风险、低相关策略增厚组合收益","textChars":37,"textLines":1,"bbox":[74.67,112,1133.33,34.67]}
+{"kind":"textbox","id":"sh/vyd0nyxk","slide":26,"name":"矩形 117","text":"套利类策略（套利的种类）","textPreview":"套利类策略（套利的种类）","textChars":12,"textLines":1,"bbox":[53.33,180,573.33,42.67]}
+{"kind":"textbox","id":"sh/wzmhgjy5","slide":26,"name":"矩形 118","text":"量化CTA（短周期为主）","textPreview":"量化CTA（短周期为主）","textChars":12,"textLines":1,"bbox":[650.67,180,573.33,42.67]}
+{"kind":"textbox","id":"sh/x0vipofq","slide":26,"name":"矩形 119","text":"商品期货套利","textPreview":"商品期货套利","textChars":6,"textLines":1,"bbox":[69.33,240,173.33,37.33]}
+{"kind":"textbox","id":"sh/i14zitgb","slide":26,"name":"矩形 120","text":"跨期 · 跨品种（产业链）· 跨市场 · 期现","textPreview":"跨期 · 跨品种（产业链）· 跨市场 · 期现","textChars":23,"textLines":1,"bbox":[253.33,240,373.33,37.33]}
+{"kind":"textbox","id":"sh/j2x0ryxw","slide":26,"name":"矩形 121","text":"股指期货套利","textPreview":"股指期货套利","textChars":6,"textLines":1,"bbox":[69.33,288,173.33,37.33]}
+{"kind":"textbox","id":"sh/ryt0vyp0","slide":26,"name":"矩形 122","text":"期现 · 跨期 · 跨品种 · 日内套利（股指期货T+0，无需底仓）","textPreview":"期现 · 跨期 · 跨品种 · 日内套利（股指期货T+0，无需底仓）","textChars":34,"textLines":1,"bbox":[253.33,288,373.33,37.33]}
+{"kind":"textbox","id":"sh/6xkz2t8f","slide":26,"name":"矩形 123","text":"期权套利","textPreview":"期权套利","textChars":4,"textLines":1,"bbox":[69.33,336,173.33,37.33]}
+{"kind":"textbox","id":"sh/tkbix876","slide":26,"name":"矩形 124","text":"波动率 · 盒式 · 蝶式/鹰式 · 平价 · 曲面","textPreview":"波动率 · 盒式 · 蝶式/鹰式 · 平价 · 曲面","textChars":26,"textLines":1,"bbox":[253.33,336,373.33,37.33]}
+{"kind":"textbox","id":"sh/sj2h43ql","slide":26,"name":"矩形 125","text":"ETF 套利","textPreview":"ETF 套利","textChars":6,"textLines":1,"bbox":[69.33,384,173.33,37.33]}
+{"kind":"textbox","id":"sh/fmt0zypw","slide":26,"name":"矩形 126","text":"瞬时 · 延时 · 事件 · 期现基差（四类套利）","textPreview":"瞬时 · 延时 · 事件 · 期现基差（四类套利）","textChars":25,"textLines":1,"bbox":[253.33,384,373.33,37.33]}
+{"kind":"textbox","id":"sh/elkz6d8b","slide":26,"name":"矩形 129","text":"可转债套利","textPreview":"可转债套利","textChars":5,"textLines":1,"bbox":[69.33,432,173.33,37.33]}
+{"kind":"textbox","id":"sh/1ovi1872","slide":26,"name":"矩形 130","text":"定价偏差 · 转股 · 条款博弈","textPreview":"定价偏差 · 转股 · 条款博弈","textChars":16,"textLines":1,"bbox":[253.33,432,373.33,37.33]}
+{"kind":"textbox","id":"sh/gn2h836h","slide":26,"name":"矩形 143","text":"定位：套利 + 量化CTA + 主观CTA 三块共同构成弹性策略，与固收低相关，是 10%~20% 弹性仓位的核心构成。","textPreview":"定位：套利 + 量化CTA + 主观CTA 三块共同构成弹性策略，与固收低相关，是 10%~20% 弹性仓位的核心构成。","textChars":60,"textLines":1,"bbox":[69.33,642.67,1146.67,45.33]}
+{"kind":"shape","id":"sh/vq9gneps","slide":26,"name":"矩形 151","bbox":[650.67,357.33,573.33,53.33]}
+{"kind":"textbox","id":"sh/up0zu987","slide":26,"name":"矩形 152","text":"主观CTA","textPreview":"主观CTA","textChars":5,"textLines":1,"bbox":[650.67,364,573.33,42.67]}
+{"kind":"textbox","id":"sh/0ju58b2t","slide":26,"name":"矩形 153","text":"短周期为主","textPreview":"短周期为主","textChars":5,"textLines":1,"bbox":[666.67,240,160,37.33]}
+{"kind":"textbox","id":"sh/lkn6hgje","slide":26,"name":"矩形 154","text":"日内/短周期趋势，波动小、回撤可控","textPreview":"日内/短周期趋势，波动小、回撤可控","textChars":17,"textLines":1,"bbox":[842.67,240,370.67,37.33]}
+{"kind":"textbox","id":"sh/yxcn6lkn","slide":26,"name":"矩形 155","text":"中长周期","textPreview":"中长周期","textChars":4,"textLines":1,"bbox":[666.67,296,160,37.33]}
+{"kind":"textbox","id":"sh/zilof618","slide":26,"name":"矩形 156","text":"看宏观驱动，趋势明确时择时增配","textPreview":"看宏观驱动，趋势明确时择时增配","textChars":15,"textLines":1,"bbox":[842.67,296,370.67,37.33]}
+{"kind":"textbox","id":"sh/cvu54b2x","slide":26,"name":"矩形 157","text":"主观交易","textPreview":"主观交易","textChars":4,"textLines":1,"bbox":[666.67,429.33,160,37.33]}
+{"kind":"textbox","id":"sh/dw3mdgj2","slide":26,"name":"矩形 158","text":"基本面研究 + 盘感，人为主导","textPreview":"基本面研究 + 盘感，人为主导","textChars":15,"textLines":1,"bbox":[842.67,429.33,370.67,37.33]}
+{"kind":"textbox","id":"sh/qtcn21kr","slide":26,"name":"矩形 159","text":"与量化互补","textPreview":"与量化互补","textChars":5,"textLines":1,"bbox":[666.67,485.33,160,37.33]}
+{"kind":"textbox","id":"sh/rul4b61c","slide":26,"name":"矩形 160","text":"收益来源不同、相关性低","textPreview":"收益来源不同、相关性低","textChars":11,"textLines":1,"bbox":[842.67,485.33,370.67,37.33]}
+{"kind":"notes","id":"nt/l0bepsfm","slide":26,"text":"[Speaker Notes] 弹性策略详解：套利类8大分类（商品/股指/期权/ETF/债券/可转债/跨境外汇/统计套利）+期货策略4维度（逻辑/周期/标的/形式）。[Sources] 策略分类体系，内部尽调框架。"}
+{"kind":"slide","id":"sl/4vyxknqp","slide":27,"title":"关于回撤","textShapes":15}
+{"kind":"shape","id":"sh/ri9kfmp8","slide":27,"name":"Rectangle 1","bbox":[52.8,48,8.64,59.52]}
+{"kind":"textbox","id":"sh/fm507i50","slide":27,"name":"TextBox 2","text":"关于回撤","textPreview":"关于回撤","textChars":4,"textLines":1,"bbox":[74.88,44.16,1008,67.2]}
+{"kind":"textbox","id":"sh/ulwzex4f","slide":27,"name":"TextBox 3","text":"组合最大回撤 <1% 的约束下，如何控制风险","textPreview":"组合最大回撤 <1% 的约束下，如何控制风险","textChars":22,"textLines":1,"bbox":[74.88,109.44,1104,38.4]}
+{"kind":"shape","id":"sh/ho7i9sn6","slide":27,"name":"Rectangle 4","bbox":[52.8,105.6,211.2,2.93]}
+{"kind":"shape","id":"sh/gne1gnml","slide":27,"name":"Rectangle 5","bbox":[52.8,111.36,1174.08,1.2]}
+{"kind":"shape","id":"sh/3qp0b25c","slide":27,"name":"Rectangle 6","bbox":[52.8,182.4,15.36,15.36]}
+{"kind":"textbox","id":"sh/2pgjix4r","slide":27,"name":"TextBox 7","text":"约束先行","textPreview":"约束先行","textChars":4,"textLines":1,"bbox":[86.4,174.72,249.6,57.6]}
+{"kind":"textbox","id":"sh/ps7idcn2","slide":27,"name":"TextBox 8","text":"以最大回撤 <1% 为硬性红线，反推各资产仓位上限与相关性结构。","textPreview":"以最大回撤 <1% 为硬性红线，反推各资产仓位上限与相关性结构。","textChars":32,"textLines":1,"bbox":[345.6,177.6,873.6,67.2]}
+{"kind":"shape","id":"sh/4ry1k7mx","slide":27,"name":"Rectangle 9","bbox":[52.8,264,15.36,15.36]}
+{"kind":"textbox","id":"sh/jul0zy5s","slide":27,"name":"TextBox 10","text":"低相关配置","textPreview":"低相关配置","textChars":5,"textLines":1,"bbox":[86.4,256.32,249.6,57.6]}
+{"kind":"textbox","id":"sh/itcz6t4n","slide":27,"name":"TextBox 11","text":"固收、CTA、权益、宏观多策略搭配，利用低相关性对冲单一资产波动。","textPreview":"固收、CTA、权益、宏观多策略搭配，利用低相关性对冲单一资产波动。","textChars":33,"textLines":1,"bbox":[345.6,259.2,873.6,67.2]}
+{"kind":"shape","id":"sh/ozaxgz25","slide":27,"name":"Rectangle 12","bbox":[52.8,345.6,15.36,15.36]}
+{"kind":"textbox","id":"sh/90jy943q","slide":27,"name":"TextBox 13","text":"压舱石","textPreview":"压舱石","textChars":3,"textLines":1,"bbox":[86.4,337.92,249.6,57.6]}
+{"kind":"textbox","id":"sh/mxsfe9kz","slide":27,"name":"TextBox 14","text":"固收策略占比约 60%，作为组合安全垫，平滑净值波动。","textPreview":"固收策略占比约 60%，作为组合安全垫，平滑净值波动。","textChars":27,"textLines":1,"bbox":[345.6,340.8,873.6,67.2]}
+{"kind":"shape","id":"sh/ny1w7ulk","slide":27,"name":"Rectangle 15","bbox":[52.8,427.2,15.36,15.36]}
+{"kind":"textbox","id":"sh/0vqxcz29","slide":27,"name":"TextBox 16","text":"动态再平衡","textPreview":"动态再平衡","textChars":5,"textLines":1,"bbox":[86.4,419.52,249.6,57.6]}
+{"kind":"textbox","id":"sh/1wze543u","slide":27,"name":"TextBox 17","text":"按月度/触发式再平衡，防止单一策略超配放大回撤。","textPreview":"按月度/触发式再平衡，防止单一策略超配放大回撤。","textChars":24,"textLines":1,"bbox":[345.6,422.4,873.6,67.2]}
+{"kind":"shape","id":"sh/e98fapk3","slide":27,"name":"Rectangle 18","bbox":[52.8,508.8,15.36,15.36]}
+{"kind":"textbox","id":"sh/zuhw3ulo","slide":27,"name":"TextBox 19","text":"风控监测","textPreview":"风控监测","textChars":4,"textLines":1,"bbox":[86.4,501.12,249.6,57.6]}
+{"kind":"textbox","id":"sh/kruxoj2d","slide":27,"name":"TextBox 20","text":"持续跟踪组合净值、回撤、各策略相关性，设置预警阈值。","textPreview":"持续跟踪组合净值、回撤、各策略相关性，设置预警阈值。","textChars":26,"textLines":1,"bbox":[345.6,504,873.6,67.2]}
+{"kind":"shape","id":"sh/5s3yho3y","slide":27,"name":"Rectangle 21","bbox":[52.8,619.2,1174.08,59.52]}
+{"kind":"textbox","id":"sh/t8nah0bi","slide":27,"name":"Rectangle 22","text":"目标：在最大回撤 <1% 的硬约束下，追求年化 6% 的绝对收益。","textPreview":"目标：在最大回撤 <1% 的硬约束下，追求年化 6% 的绝对收益。","textChars":33,"textLines":1,"bbox":[52.8,619.2,1174.08,59.52]}
+{"kind":"textbox","id":"sh/s7etovux","slide":27,"name":"TextBox 23","text":"近期宏观变化及资产配置 · 2026.09","textPreview":"近期宏观变化及资产配置 · 2026.09","textChars":21,"textLines":1,"bbox":[52.8,677.76,768,28.8]}
+{"kind":"textbox","id":"sh/r65sfqtc","slide":27,"name":"TextBox 24","text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1132.8,677.76,96,28.8]}
+{"kind":"notes","id":"nt/4vyxknqp","slide":27,"text":"[Speaker Notes]\n回撤控制机制页：约束先行、低相关配置、固收压舱、动态再平衡、风控监测五要点。\n\n[Sources]\n内部风控框架。"}
+{"kind":"slide","id":"sl/3mdove10","slide":28,"title":"心中有信 · 未来可期","textShapes":3}
+{"kind":"shape","id":"sh/3ixc3e5g","slide":28,"name":"Rectangle 1","bbox":[0,0,1279.97,720]}
+{"kind":"shape","id":"sh/2hovu9ob","slide":28,"name":"Rectangle 2","bbox":[0,702.72,1279.97,17.28]}
+{"kind":"textbox","id":"sh/pkzu5onm","slide":28,"name":"TextBox 3","text":"心中有信 · 未来可期","textPreview":"心中有信 · 未来可期","textChars":11,"textLines":1,"bbox":[115.2,220.8,960,86.4]}
+{"kind":"shape","id":"sh/4jqdwj61","slide":28,"name":"Rectangle 4","bbox":[117.12,321.6,249.6,2.67]}
+{"kind":"textbox","id":"sh/jmdcra5c","slide":28,"name":"TextBox 5","text":"近期宏观变化及资产配置  ·  2026.09","textPreview":"近期宏观变化及资产配置  ·  2026.09","textChars":23,"textLines":1,"bbox":[115.2,355.2,960,48]}
+{"kind":"textbox","id":"sh/yl4bi5or","slide":28,"name":"TextBox 6","text":"总部地址：深圳市福田区中心三路8号卓越时代广场（二期）北座13层\n上海地址：上海市浦东新区杨高南路799号陆家嘴世纪金融广场3号楼23层\n网址：www.citicsf.com    全国热线：400 9908 826","textPreview":"总部地址：深圳市福田区中心三路8号卓越时代广场（二期）北座13层 | 上海地址：上海市浦东新区杨高南路799号陆家嘴世纪金融广场3号楼23层 | 网址：www.citicsf.com    全国热线：400 9908 826","textChars":108,"textLines":3,"bbox":[115.2,470.4,960,134.4]}
+{"kind":"notes","id":"nt/3mdove10","slide":28,"text":""}

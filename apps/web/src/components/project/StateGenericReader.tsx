@@ -36,15 +36,16 @@ export function StateGenericReader({
         </div>
         <div
           aria-label="Generic state representation"
-          className="ml-auto inline-flex rounded-md border border-[var(--stroke-default)] bg-[var(--surface-app)] p-0.5"
+          className="ml-auto inline-flex h-7 gap-[3px] rounded-[4px] bg-[var(--surface-app)] p-[1.5px]"
           role="tablist"
         >
           {(['structure', 'yaml'] as const).map((nextMode) => (
             <button
               aria-selected={mode === nextMode}
               className={cn(
-                'flex h-8 items-center gap-1.5 rounded px-3 text-[11px] font-bold capitalize text-[var(--text-tertiary)]',
-                mode === nextMode && 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
+                'flex h-full items-center gap-1.5 rounded-[4px] border border-transparent px-3 text-[11px] font-medium capitalize text-[var(--text-secondary)]',
+                mode === nextMode &&
+                  'border-[var(--stroke-divider)] bg-[var(--surface-elevated)] text-[var(--text-primary)]'
               )}
               key={nextMode}
               onClick={() => setMode(nextMode)}

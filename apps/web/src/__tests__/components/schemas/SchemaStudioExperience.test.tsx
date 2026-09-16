@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
@@ -51,6 +51,40 @@ beforeEach(() => {
 });
 it('keeps a required provider checked and locked while blocking a failed definition review', () => {
   render(<SchemaStudioExperience projectId="p" />);
+  const controls = screen.getByRole('toolbar', { name: 'Studio controls' });
+  const composition = screen.getByRole('main', { name: 'Studio composition' });
+  const sources = screen.getByRole('complementary', { name: 'Studio sources' });
+  expect(composition).toContainElement(controls);
+  expect(sources).toHaveClass('col-start-1', 'row-span-2', 'row-start-1');
+  expect(controls).toHaveClass('col-span-2', 'col-start-2', 'row-start-1');
+  expect(screen.getByRole('region', { name: 'Composed structure' })).toHaveClass(
+    'col-start-2',
+    'row-start-2'
+  );
+  expect(screen.getByRole('complementary', { name: 'Module details' })).toHaveClass(
+    'col-start-3',
+    'row-start-2'
+  );
+  expect(
+    within(controls).getByRole('button', { name: 'Advanced definition workbench' })
+  ).toBeVisible();
+  expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeVisible();
+  expect(screen.getByLabelText('Target Workspace').closest('label')).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Check schema' })).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Zoom out' }).parentElement).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();

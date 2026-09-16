@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "presentation-finalization.v1",
+  "finalSha256": "c591779a3549575b7f59dd5b383419c7237f005cc5527ad2b9fb8f1e3e033f4f",
+  "byteCount": 2855606,
+  "packageIntegrity": {
+    "chart_count": 0,
+    "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+    "finding_count": 0,
+    "findings": [],
+    "notes_parts_skipped": 24,
+    "relationship_part_count": 67,
+    "slide_count": 28,
+    "status": "pass",
+    "exitCode": 0,
+    "findingCount": 0,
+    "warnings": []
+  },
+  "presentationLayout": {
+    "finding_count": 0,
+    "findings": [],
+    "font_policy": {
+      "checked_text_script_count": 648,
+      "native_font_rendering_verified": false,
+      "observed_font_families": ["微软雅黑"],
+      "observed_font_use_counts": {
+        "微软雅黑": 648
+      },
+      "passed": true,
+      "performed": true
+    },
+    "slide_count": 28,
+    "slide_size_in": [13.3326, 7.5],
+    "warning_count": 1,
+    "warnings": [
+      {
+        "kind": "object_outside_slide_boundary",
+        "object_id": "28",
+        "object_kind": "sp",
+        "slide": 11
+      }
+    ],
+    "exitCode": 0,
+    "findingCount": 0,
+    "fontPolicy": {
+      "checked_text_script_count": 648,
+      "native_font_rendering_verified": false,
+      "observed_font_families": ["微软雅黑"],
+      "observed_font_use_counts": {
+        "微软雅黑": 648
+      },
+      "passed": true,
+      "performed": true
+    }
+  },
+  "fontSelection": {
+    "basis": "reference",
+    "approvedFamilies": ["微软雅黑"],
+    "scriptFonts": {},
+    "referenceSha256": "687c901d2873e542b2b93ce943af5c3126359ccb5702e27ca2341cd5a1295023",
+    "referenceFontsVerifiedInEncodedText": true,
+    "checked_text_script_count": 648,
+    "native_font_rendering_verified": false,
+    "observed_font_families": ["微软雅黑"],
+    "observed_font_use_counts": {
+      "微软雅黑": 648
+    },
+    "passed": true,
+    "performed": true
+  },
+  "firstPartyImport": {
+    "performed": true,
+    "passed": true,
+    "slideCount": 28,
+    "sha256": "c591779a3549575b7f59dd5b383419c7237f005cc5527ad2b9fb8f1e3e033f4f",
+    "runtimeNodeModules": "/Users/wangyaxin/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules",
+    "nodeExecutable": "/Users/wangyaxin/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+  },
+  "nativeTableArithmetic": {
+    "performed": true,
+    "checked_column_count": 0,
+    "checks": [],
+    "claim_boundary": "Displayed-value arithmetic with rounding tolerance; not source-data verification.",
+    "eligible_table_count": 0,
+    "finding_count": 0,
+    "findings": [],
+    "native_table_count": 1,
+    "passed": true,
+    "schema_version": "presentation-native-table-arithmetic.v1",
+    "skipped_tables": [
+      {
+        "reason": "no_unambiguous_bottom_total",
+        "slide": 22,
+        "table": 1
+      }
+    ],
+    "slide_count": 28,
+    "warning_count": 0,
+    "warnings": []
+  },
+  "nativeChartTitles": {
+    "performed": true,
+    "checks": [],
+    "finding_count": 0,
+    "findings": [],
+    "native_chart_count": 0,
+    "native_powerpoint_verified": false,
+    "passed": true,
+    "presentation_sha256": "c591779a3549575b7f59dd5b383419c7237f005cc5527ad2b9fb8f1e3e033f4f",
+    "schema_version": "presentation-native-chart-titles.v1",
+    "slide_count": 28,
+    "source_text_emitted": false,
+    "unresolved_linked_title_count": 0
+  },
+  "sourceDerivedPolicyFlags": [
+    "--expected-slide-size-emu",
+    "12191365,6858000",
+    "--validate-bullet-geometry",
+    "--validate-heading-fit",
+    "--cover-role",
+    "none",
+    "--expected-slide-count",
+    "28",
+    "--approved-font-family",
+    "微软雅黑"
+  ],
+  "nativeChartValidation": {
+    "detectedOwnerSlides": [],
+    "detectedChartCount": 0,
+    "targetApplication": null,
+    "sourceChartOwnersExplicitlyDeclared": false,
+    "validatorRan": false,
+    "passed": true
+  }
+}

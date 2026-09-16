@@ -1,0 +1,490 @@
+.page {
+  box-sizing: border-box;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.header {
+  display: flex;
+  min-height: 76px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+}
+
+.headingGroup,
+.canvasButton,
+.backButton,
+.filterControl,
+.searchControl,
+.meta,
+.author,
+.branch,
+.stats,
+.stat,
+.beginning {
+  display: flex;
+  align-items: center;
+}
+
+.headingGroup {
+  gap: 14px;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.canvasButton,
+.backButton {
+  height: 30px;
+  gap: 7px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  padding: 0 12px;
+  color: var(--accent-commit);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    border-color var(--motion-fast) var(--ease-out-soft),
+    background var(--motion-fast) var(--ease-out-soft);
+}
+
+.canvasButton:hover,
+.backButton:hover {
+  border-color: var(--stroke-strong);
+  background: var(--hover-bg);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 112px 1px minmax(240px, 648px);
+  align-items: center;
+  gap: 14px;
+  padding: 16px 40px 17px;
+}
+
+.filterControl,
+.searchControl {
+  position: relative;
+  height: 34px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+
+.filterControl {
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.filterControl select {
+  min-width: 0;
+  flex: 1;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filterChevron {
+  pointer-events: none;
+}
+
+.controlDivider {
+  width: 1px;
+  height: 24px;
+  background: var(--stroke-divider);
+}
+
+.searchControl {
+  gap: 9px;
+  padding: 0 12px;
+}
+
+.searchControl:focus-within,
+.filterControl:focus-within {
+  border-color: var(--accent-commit);
+  box-shadow: 0 0 0 2px var(--accent-commit-soft);
+}
+
+.searchControl input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.searchControl input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.content {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0 40px 32px;
+}
+
+.timeline {
+  width: 100%;
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 102px;
+  grid-template-columns: 116px 36px minmax(280px, 1fr) auto 30px;
+  align-items: stretch;
+  border: 0;
+  border-bottom: 1px solid var(--stroke-divider);
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-out-soft);
+}
+
+.row:hover,
+.rowActive,
+.row:focus-visible {
+  outline: none;
+  background: var(--accent-commit-soft);
+}
+
+.date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 25px 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.dateRelative {
+  color: var(--text-tertiary);
+}
+
+.rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.rail::before {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  background: var(--stroke-default);
+  content: "";
+}
+
+.dot {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  align-self: flex-start;
+  margin-top: 25px;
+  border: 2px solid var(--accent-commit);
+  border-radius: var(--radius-full);
+  background: var(--surface-panel);
+}
+
+.dotFirst {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+}
+
+.dotRoot {
+  border-color: color-mix(in srgb, var(--accent-commit) 34%, var(--surface-panel));
+  background: color-mix(in srgb, var(--accent-commit) 34%, var(--surface-panel));
+}
+
+.commit {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.message {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  min-width: 0;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.hash {
+  border-radius: var(--radius-sm);
+  background: var(--accent-commit-soft);
+  padding: 4px 8px;
+  color: var(--accent-commit);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.author,
+.branch {
+  min-width: 0;
+  gap: 7px;
+}
+
+.avatar {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--accent-commit-soft);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.metaDivider {
+  width: 1px;
+  height: 20px;
+  background: var(--stroke-divider);
+}
+
+.rootBadge {
+  border-radius: var(--radius-sm);
+  background: var(--accent-commit-soft);
+  padding: 4px 8px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.stats {
+  align-self: flex-start;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 25px 16px 0;
+  white-space: nowrap;
+}
+
+.stat {
+  gap: 8px;
+  font-size: 11px;
+}
+
+.stat strong {
+  min-width: 34px;
+  border-radius: var(--radius-full);
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.added {
+  color: var(--diff-added-text);
+}
+
+.added strong {
+  background: var(--diff-added-bg);
+}
+
+.modified {
+  color: var(--diff-modified-text);
+}
+
+.modified strong {
+  background: var(--diff-modified-bg);
+}
+
+.removed {
+  color: var(--diff-removed-text);
+}
+
+.removed strong {
+  background: var(--diff-removed-bg);
+}
+
+.chevron {
+  align-self: flex-start;
+  margin-top: 35px;
+  color: var(--accent-commit);
+}
+
+.beginning {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 116px 36px 1fr;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.beginningRail {
+  position: relative;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+}
+
+.beginningRail::before {
+  position: absolute;
+  top: 0;
+  bottom: 50%;
+  width: 1px;
+  background: var(--stroke-default);
+  content: "";
+}
+
+.beginningDot {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  align-self: center;
+  border: 2px solid color-mix(in srgb, var(--accent-commit) 48%, var(--surface-panel));
+  border-radius: var(--radius-full);
+  background: var(--surface-panel);
+}
+
+.beginningLabel {
+  padding-left: 0;
+}
+
+.feedback {
+  display: flex;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.spinner {
+  margin-right: 8px;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    padding-inline: 20px;
+  }
+
+  .controls,
+  .content {
+    padding-inline: 20px;
+  }
+
+  .row {
+    grid-template-columns: 104px 30px minmax(0, 1fr) 24px;
+  }
+
+  .stats {
+    display: none;
+  }
+
+  .beginning {
+    grid-template-columns: 104px 30px 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .header {
+    min-height: auto;
+    align-items: flex-start;
+    gap: 16px;
+    padding-block: 18px;
+  }
+
+  .headingGroup {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .backButton span {
+    display: none;
+  }
+
+  .controls {
+    grid-template-columns: 112px minmax(0, 1fr);
+    padding-top: 8px;
+  }
+
+  .controlDivider {
+    display: none;
+  }
+
+  .row {
+    min-height: 112px;
+    grid-template-columns: 26px minmax(0, 1fr) 22px;
+  }
+
+  .date {
+    display: none;
+  }
+
+  .commit {
+    padding-left: 8px;
+  }
+
+  .meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .metaDivider {
+    display: none;
+  }
+
+  .beginning {
+    grid-template-columns: 26px 1fr;
+  }
+
+  .beginning > span:first-child {
+    display: none;
+  }
+
+  .beginningLabel {
+    padding-left: 8px;
+  }
+}

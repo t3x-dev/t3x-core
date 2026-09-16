@@ -1,0 +1,82 @@
+/* Shared tree presentation only; inspector panels retain their own styles. */
+.tree {
+  --tree-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --tree-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --surface-panel: oklch(0.985 0.001 250);
+  --surface-card: #fff;
+  --text-primary: #242b35;
+  --text-secondary: #657080;
+  --text-tertiary: #939baa;
+  --stroke-divider: oklch(0 0 0 / 6%);
+  --diff-added-bg: #f0fdf4;
+  --diff-added-text: #166534;
+  --diff-removed-bg: #fff2f2;
+  --diff-removed-text: #a34250;
+  --diff-modified-bg: #fffbeb;
+  --diff-modified-text: #92400e;
+  font: 13px / 20px var(--tree-sans);
+  background: var(--surface-panel);
+}
+.tree :global(.font-sans) {
+  font-family: var(--tree-sans);
+}
+.tree :global(.font-mono) {
+  font-family: var(--tree-mono);
+}
+.tree tbody tr {
+  height: 34px;
+  background: var(--surface-panel);
+}
+.tree tbody tr[data-parent="true"] {
+  height: 36px;
+}
+.tree td {
+  vertical-align: middle;
+}
+.tree tr[data-diff-kind="added"] td {
+  background: var(--diff-added-bg);
+}
+.tree tr[data-diff-kind="removed"] td {
+  background: var(--diff-removed-bg);
+}
+.tree tr[data-diff-kind="modified"][data-diff-exact="true"] td {
+  background: var(--diff-modified-bg);
+}
+.tree tr[data-selected="true"] td {
+  background: var(--surface-card);
+}
+.tree tr[data-diff-exact="true"] td:nth-child(2) > span,
+.tree tr[data-diff-kind="added"] td:nth-child(2) > span {
+  font-weight: 600;
+}
+.tree tr[data-diff-kind="modified"]:not([data-diff-exact="true"]) td:nth-child(2) > span {
+  color: var(--text-primary);
+}
+.tree td:nth-child(2) * {
+  text-decoration: none;
+}
+.tree td:nth-child(3) > span > span:first-child > span:last-child {
+  text-transform: lowercase;
+}
+.tree td:last-child {
+  padding-right: 16px;
+  font: italic 12px / 16px var(--tree-sans);
+}
+.tree tr:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: -2px;
+}
+:global(.dark) .tree {
+  --surface-card: #171e29;
+  --surface-panel: #1b2330;
+  --text-primary: #f0f4fa;
+  --text-secondary: #b5c0d1;
+  --text-tertiary: #8d9bb0;
+  --stroke-divider: #354258;
+  --diff-added-bg: #15372c;
+  --diff-added-text: #9eddb4;
+  --diff-removed-bg: #402630;
+  --diff-removed-text: #efadb4;
+  --diff-modified-bg: #3b321e;
+  --diff-modified-text: #e9c388;
+}
