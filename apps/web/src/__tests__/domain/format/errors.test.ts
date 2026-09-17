@@ -30,6 +30,9 @@ describe('formatUserFacingError', () => {
     expect(formatUserFacingError(new TypeError('Failed to fetch'))).toBe(
       'Network request failed. Check your connection and try again.'
     );
+    expect(formatUserFacingError(new Error('fetch failed'))).toBe(
+      'Could not reach the model provider. Check the network and API endpoint, then test again.'
+    );
   });
 
   it('explains how to recover from an unverifiable local CommitV2 ref', () => {

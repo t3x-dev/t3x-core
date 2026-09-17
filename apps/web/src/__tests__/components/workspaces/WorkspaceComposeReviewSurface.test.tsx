@@ -15,6 +15,18 @@ vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
   validateWorkspaceCandidateYOps: comparisonMocks.validate,
 }));
 
+vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
+  useStudioCandidates: () => ({
+    items: [{ available: true, id: 'product-brief', kind: 'module' }],
+    loading: false,
+  }),
+}));
+
+vi.mock('@/infrastructure/schemaStudio', () => ({
+  applyStudioSelection: vi.fn(),
+  previewStudioSelection: vi.fn(),
+}));
+
 const modelSelectionMocks = vi.hoisted(() => ({
   handleModelChange: vi.fn(),
 }));
@@ -122,6 +134,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     fireEvent.click(modelSelector);
     expect(modelSelectionMocks.handleModelChange).toHaveBeenCalledWith('openai', 'gpt-5.4-mini');
+
+    expect(screen.getByRole('button', { name: 'Apply schema' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Review full draft' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide proposed draft sidebar' }));
     expect(screen.getByRole('button', { name: 'Show proposed draft sidebar' })).toBeInTheDocument();
@@ -401,6 +416,26 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+    expect(screen.getByRole('button', { name: 'Commit draft' })).toBeDisabled();
+
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={{
+          ...controller,
+          review: {
+            ...controller.review,
+            content: { relations: [], trees: [] },
+            precondition: { workspaceRevision: 1 },
+            transitionId: 'tr_review',
+          },
+        }}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Commit draft' }));
+    expect(decide).toHaveBeenCalledWith('accepted', undefined);
   });
 
   it('treats a stale validation review pane as Render', () => {
@@ -468,4 +503,142 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       { scroll: false }
     );
   });
+
+  it.each([
+    {
+      path: 'candidate/product/title',
+      schemaName: 'Product brief',
+      title: 'T3X Product Brief Demo',
+    },
+    {
+      path: 'candidate/checklist/title',
+      schemaName: 'Care checklist',
+      title: 'Daily dog care',
+    },
+    {
+      path: 'candidate/services/web/image',
+      schemaName: 'Compose services',
+      title: 'nginx:1.28-alpine',
+    },
+  ] as const)(
+    'keeps Apply, Review, and Commit on one path for $schemaName',
+    async ({ path, schemaName, title }) => {
+      const starter = getProjectWorkspaceStarterCandidate('proj_1');
+      const candidate = {
+        ...starter,
+        schemaBindings: [{ mode: 'pinned' as const, schemaName, version: '1.0.0' }],
+        yopsDraft: {
+          ...starter.yopsDraft,
+          operations: [
+            {
+              afterValue: title,
+              id: 'op_bound',
+              op: 'set',
+              path,
+              summary: title,
+            },
+          ],
+        },
+      };
+      comparisonMocks.validate.mockResolvedValue({
+        applied: 1,
+        baselineRelations: [],
+        baselineTrees: [{ children: [], key: 'candidate', slots: {} }],
+        ok: true,
+        previewRelations: [],
+        previewTrees: [
+          {
+            children: [],
+            key: 'candidate',
+            slots: { title },
+          },
+        ],
+        yops: [],
+      });
+      const decide = vi.fn().mockResolvedValue(null);
+      const reviewReady = {
+        changeProjection: null,
+        commands: null,
+        content: { relations: [], trees: [] },
+        deterministicValidation: null,
+        precondition: { workspaceRevision: 1 },
+        reviewSnapshot: null,
+        transitionId: `tr_${schemaName}`,
+        view: {
+          capabilities: {
+            accept: { disposition: 'allowed' },
+            override: { disposition: 'denied' },
+            reject: { disposition: 'allowed' },
+          },
+          checks: { replay: undefined, validation: undefined },
+          history: { observation: 'pending' },
+          mode: 'proposal',
+        },
+      };
+      const controller = {
+        busyAction: null,
+        candidate,
+        chat: {
+          error: null,
+          input: '',
+          isLoading: false,
+          isStreaming: false,
+          messages: [],
+          send: vi.fn(),
+          setInput: vi.fn(),
+          stop: vi.fn(),
+          warning: null,
+        },
+        decide,
+        decisionReason: '',
+        error: null,
+        hasCollaborationConflict: false,
+        isBusy: false,
+        materialSources: [],
+        model: {
+          availabilityError: null,
+          change: vi.fn(),
+          loading: false,
+          ready: true,
+          selectedModel: 'gpt-5.4-mini',
+          selectedProvider: 'openai',
+        },
+        notice: null,
+        prepareReview: vi.fn().mockResolvedValue(true),
+        renderedYaml: '',
+        review: reviewReady,
+        scenarios: { options: [], selectedId: candidate.id },
+        sourceBusy: false,
+        viewCommit: vi.fn(),
+      } as unknown as WorkspaceComposeReviewController;
+
+      const { rerender } = render(
+        <WorkspaceComposeReviewSurface
+          candidate={candidate}
+          controller={controller}
+          mode="compose"
+          onModeChange={vi.fn()}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Apply schema' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Review full draft' })).toBeEnabled();
+
+      rerender(
+        <WorkspaceComposeReviewSurface
+          candidate={candidate}
+          controller={controller}
+          mode="review"
+          onModeChange={vi.fn()}
+        />
+      );
+      expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Commit draft' })).toBeEnabled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+      expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Commit draft' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Commit draft' }));
+      expect(decide).toHaveBeenCalledWith('accepted', undefined);
+    }
+  );
 });

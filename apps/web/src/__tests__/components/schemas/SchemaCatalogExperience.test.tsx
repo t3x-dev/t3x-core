@@ -28,7 +28,18 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
     { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure'] },
   ],
   useSchemaIntroduction: mocks.introduction,
-  useSchemaReleaseReading: () => ({ loading: false }),
+  useSchemaReleaseReading: () => ({
+    loading: false,
+    data: {
+      artifactHash: 'sha256:abc',
+      readme: null,
+      manifest: {
+        apiVersion: 't3x.dev/yschema-module/v2',
+        canonicalName: 'team/release',
+        contribution: { nodes: { services: { required: true } } },
+      },
+    },
+  }),
 }));
 const item = {
   identity: {
@@ -106,6 +117,12 @@ describe('Schema catalog journey', () => {
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByText('Exact source'));
     expect(within(dialog).getByText('sha256:abc')).toBeVisible();
+    expect(within(dialog).getByRole('region', { name: 'Release YAML' })).toHaveTextContent(
+      'canonicalName: team/release'
+    );
+    expect(within(dialog).getByRole('region', { name: 'Release YAML' })).toHaveTextContent(
+      'services:'
+    );
     expect(within(dialog).getByRole('button', { name: 'Add to Studio' })).toBeEnabled();
     expect(
       within(dialog).queryByRole('button', { name: 'Open in Studio' })

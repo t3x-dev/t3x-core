@@ -4,7 +4,17 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
-const mocks = vi.hoisted(() => ({ data: undefined as unknown, apply: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  apply: vi.fn(),
+  data: undefined as unknown,
+  workspaces: [] as Array<{
+    id: string;
+    revision?: number;
+    status: string;
+    targetBranch: string;
+    title: string;
+  }>,
+}));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('candidate=provider'),
 }));
@@ -23,7 +33,7 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn() }),
+  useProjectWorkspaces: () => ({ refresh: vi.fn(), workspaces: mocks.workspaces }),
 }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useApplyStudioSelection: () => mocks.apply,
@@ -31,6 +41,7 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
 }));
 beforeEach(() => {
   mocks.apply.mockReset();
+  mocks.workspaces = [];
   mocks.data = {
     samples: [],
     schema: { nodes: {} },
@@ -100,4 +111,21 @@ it('does not offer the selected candidate as its own comparison', () => {
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
   expect(screen.getByText('Create a Workspace to review and apply this definition.')).toBeVisible();
+});
+
+it('selects the only draft workspace once instead of duplicating Main workspace', () => {
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 1,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  render(<SchemaStudioExperience projectId="p" />);
+  const select = screen.getByLabelText('Target Workspace');
+  expect(select.querySelectorAll('option')).toHaveLength(1);
+  expect(select).toHaveValue('workspace_branch:main');
+  expect(select).toHaveTextContent('Main workspace');
 });

@@ -186,7 +186,7 @@ export function useSchemaReleaseReading(
   ]);
   const [result, setResult] = useState<{
     key: string;
-    data?: Record<string, unknown>;
+    data?: Awaited<ReturnType<typeof fetchSchemaReleaseReading>>;
     error?: string;
   }>();
   useEffect(() => {

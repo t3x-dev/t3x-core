@@ -116,6 +116,10 @@ export function formatUserFacingError(
     return 'Network request failed. Check your connection and try again.';
   }
 
+  if (/\b(fetch failed|connect timeout)\b/i.test(message)) {
+    return 'Could not reach the model provider. Check the network and API endpoint, then test again.';
+  }
+
   if (/\b(api key not configured|no configured .*provider|provider key missing)\b/i.test(message)) {
     return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
   }

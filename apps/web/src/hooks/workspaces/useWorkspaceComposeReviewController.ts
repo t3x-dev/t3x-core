@@ -608,6 +608,7 @@ export function useWorkspaceComposeReviewController({
     },
     materialSources,
     notice,
+    persistCandidate,
     prepareReview,
     renderedYaml,
     review,

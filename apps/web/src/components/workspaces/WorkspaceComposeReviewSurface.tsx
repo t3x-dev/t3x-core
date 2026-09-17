@@ -57,7 +57,10 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { getPrimarySchemaBinding } from '@/domain/workspaces/selectors';
+import { workspaceHasSchemaBinding } from '@/domain/workspaces/studioTargets';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import { useWorkspaceDefinitionApply } from '@/hooks/workspaces/useWorkspaceDefinitionApply';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   SourceBundleItem,
@@ -102,6 +105,7 @@ interface WorkspaceComposeReviewSurfaceProps {
   mode: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
 }
 
 export function WorkspaceComposeReviewSurface({
@@ -111,6 +115,7 @@ export function WorkspaceComposeReviewSurface({
   mode,
   onBranchChange,
   onModeChange,
+  onWorkspacesRefresh,
 }: WorkspaceComposeReviewSurfaceProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -214,6 +219,7 @@ export function WorkspaceComposeReviewSurface({
               changeCount={changeCount}
               controller={controller}
               onModeChange={setSurfaceMode}
+              onWorkspacesRefresh={onWorkspacesRefresh}
             />
           )}
         </div>
@@ -313,11 +319,13 @@ function ComposeSurface({
   changeCount,
   controller,
   onModeChange,
+  onWorkspacesRefresh,
 }: {
   candidate: WorkspaceCandidate;
   changeCount: number;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
 }) {
   const [draftSidebarOpen, setDraftSidebarOpen] = useState(true);
 
@@ -339,6 +347,7 @@ function ComposeSurface({
             controller={controller}
             onModeChange={onModeChange}
             onSidebarToggle={() => setDraftSidebarOpen(false)}
+            onWorkspacesRefresh={onWorkspacesRefresh}
           />
         ) : (
           <CollapsedDraftSidebar
@@ -627,15 +636,26 @@ function ProposedDraftPanel({
   controller,
   onModeChange,
   onSidebarToggle,
+  onWorkspacesRefresh,
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   onSidebarToggle: () => void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
 }) {
   const operations = candidate.yopsDraft.operations;
   const [currentStep, setCurrentStep] = useState(0);
   const source = candidate.sourceBundle[0];
+  const schemaBound = workspaceHasSchemaBinding(candidate);
+  const definitionApply = useWorkspaceDefinitionApply({
+    candidate,
+    onApplied: onWorkspacesRefresh,
+    persistCandidate: controller.persistCandidate
+      ? (workspace) => controller.persistCandidate(workspace, 'schema.bind')
+      : undefined,
+  });
+  const canReviewDraft = schemaBound && !controller.isBusy && !definitionApply.applying;
 
   const askAiToRevise = () => {
     controller.chat.setInput('Revise the proposed actions while preserving their source evidence.');
@@ -704,7 +724,7 @@ function ProposedDraftPanel({
                       reviewPath ? `Review change ${reviewPath}` : `Preview step ${index + 1}`
                     }
                     className={composeStyles.play}
-                    disabled={controller.isBusy}
+                    disabled={!canReviewDraft}
                     onClick={() => void prepareAndOpenReview(controller, onModeChange)}
                     type="button"
                   >
@@ -727,10 +747,28 @@ function ProposedDraftPanel({
       </div>
 
       <footer className={composeStyles.panelFooter}>
+        {!schemaBound ? (
+          <>
+            <button
+              className={composeStyles.applyButton}
+              disabled={controller.isBusy || definitionApply.applying || definitionApply.loading}
+              onClick={() => void definitionApply.apply()}
+              type="button"
+            >
+              <BoxIcon aria-hidden="true" className="size-4" />
+              {definitionApply.applying ? 'Applying schema…' : 'Apply schema'}
+            </button>
+            <output className={composeStyles.applyHint}>
+              {definitionApply.error ??
+                'Apply the schema selected in Schemas to build the workspace tree. Review stays closed until that bind exists.'}
+            </output>
+          </>
+        ) : null}
         <button
           className={composeStyles.reviewButton}
-          disabled={controller.isBusy}
+          disabled={!canReviewDraft}
           onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+          title={schemaBound ? undefined : 'Apply a schema before reviewing the draft.'}
           type="button"
         >
           <ClipboardPaste aria-hidden="true" className="size-4" />
@@ -974,6 +1012,9 @@ function ReviewSurface({
                       Prepare exact review
                     </button>
                   )}
+                  <div className="mt-4">
+                    <WorkspaceDraftCommitBar controller={controller} />
+                  </div>
                 </div>
               ) : structureModel.rows.length > 0 && operations.length > 0 ? (
                 <WorkspaceReviewStructureView
@@ -1002,15 +1043,29 @@ function ReviewSurface({
                       Add source evidence in Compose, then prepare Review to inspect the structure
                       tree.
                     </p>
-                    {committedId ? (
-                      <button
-                        className="mt-4 inline-flex h-8 items-center justify-center rounded-[5px] bg-[var(--accent-commit)] px-3 text-[13px] font-semibold leading-5 text-[var(--on-accent)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--commit-hover)]"
-                        onClick={controller.viewCommit}
-                        type="button"
-                      >
-                        View in State
-                      </button>
-                    ) : null}
+                    <div className="mt-4 flex flex-col items-center gap-3">
+                      {operations.length === 0 || !structureModel.hasReplayContent ? (
+                        <button
+                          className="inline-flex h-8 items-center justify-center rounded-[5px] border border-[var(--accent-commit)] px-3 text-[13px] font-semibold leading-5 text-[var(--accent-commit)]"
+                          disabled={controller.isBusy}
+                          onClick={() => void controller.prepareReview()}
+                          type="button"
+                        >
+                          Prepare exact review
+                        </button>
+                      ) : null}
+                      {committedId ? (
+                        <button
+                          className="inline-flex h-8 items-center justify-center rounded-[5px] bg-[var(--accent-commit)] px-3 text-[13px] font-semibold leading-5 text-[var(--on-accent)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--commit-hover)]"
+                          onClick={controller.viewCommit}
+                          type="button"
+                        >
+                          View in State
+                        </button>
+                      ) : (
+                        <WorkspaceDraftCommitBar controller={controller} />
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1113,13 +1168,25 @@ function WorkspaceRenderedReview({
   onOpenChecks: () => void;
   onStructureDiff: () => void;
 }) {
+  const candidate = controller.candidate;
+  const content = buildWorkspaceReviewContent(candidate, controller.review);
+  const trees = Array.isArray(content.head.trees)
+    ? content.head.trees.flatMap((node) => {
+        const tree = asWorkspaceReviewTree(node);
+        return tree ? [tree] : [];
+      })
+    : [];
+  const checks = getReviewChecks(controller);
+  const binding = getPrimarySchemaBinding(candidate.schemaBindings);
+  const selected = selectRenderedSection(trees, candidate);
+  const selectedPath = selected?.path ?? content.rootKey;
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText('release_plan.summary.outcome');
+      void navigator.clipboard.writeText(selectedPath.replaceAll('/', '.'));
     }
   };
   const revise = () => {
-    controller.chat.setInput('Revise release_plan.summary.outcome: ');
+    controller.chat.setInput(`Revise ${selectedPath}: `);
     onModeChange('compose');
   };
 
@@ -1141,9 +1208,11 @@ function WorkspaceRenderedReview({
           <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
             <div>
               <h2 className="text-[14px] font-semibold leading-tight text-slate-900">
-                Rendered result · Release plan v3
+                Rendered result · {binding?.schemaName ?? humanizeWorkspaceKey(content.rootKey)}
               </h2>
-              <p className="mt-0.5 text-[12px] text-slate-500">Preview generated from draft v3</p>
+              <p className="mt-0.5 text-[12px] text-slate-500">
+                {candidate.summary || 'Preview generated from the current draft'}
+              </p>
             </div>
             <button
               className="flex items-center gap-1.5 text-[13px] font-medium text-blue-600 transition-colors hover:text-blue-700"
@@ -1155,103 +1224,17 @@ function WorkspaceRenderedReview({
           </div>
 
           <div className="flex-1 overflow-y-auto bg-white px-6 py-3">
-            <h1 className="text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-              Release plan
-            </h1>
-            <p className="mb-2 mt-0.5 text-[16px] text-slate-500">Internal canary rollout</p>
-
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-slate-900">Summary</h3>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                  Updated
-                </span>
-              </div>
-              <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
-                Canary to internal team at 10% with rollback readiness.
-              </div>
-            </section>
-
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Purpose</h3>
-              <p className="text-[13px] leading-5 text-slate-600">Review every rollout decision.</p>
-            </section>
-
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Rollout plan</h3>
-              <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
-                {[
-                  ['Stage', 'internal-preview'],
-                  ['Audience', 'internal-team'],
-                  ['Allocation', '10%'],
-                ].map(([label, value], index) => (
-                  <div className={cn('flex', index < 2 && 'border-b border-gray-200')} key={label}>
-                    <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
-                      {label}
-                    </div>
-                    <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
-                      {value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-slate-900">Rollback readiness</h3>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                  Updated
-                </span>
-              </div>
-              <div className="mb-0.5 flex items-center gap-2">
-                <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  <Check aria-hidden="true" className="size-3" />
-                </span>
-                <span className="text-[13px] font-bold text-emerald-700">Ready</span>
-              </div>
-              <p className="max-w-[95%] text-[12px] leading-[1.4] text-slate-600">
-                We canary to the internal team at 10% with rollback readiness in place. We will
-                monitor key metrics and can quickly roll back if issues are detected.
+            {trees.length === 0 ? (
+              <p className="text-[13px] leading-5 text-slate-500">
+                Prepare review to render the draft tree from the bound schema.
               </p>
-            </section>
-
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Requirements</h3>
-              <div className="flex items-center gap-8">
-                {['Monitoring enabled', 'On-call coverage confirmed'].map((requirement) => (
-                  <div className="flex items-center gap-2" key={requirement}>
-                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
-                      <Check aria-hidden="true" className="size-3" />
-                    </span>
-                    <span className="text-[12px] text-slate-600">{requirement}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
-              <p className="text-[13px] leading-5 text-slate-600">
-                Expand access only after the internal review is complete ...
-              </p>
-            </section>
+            ) : (
+              trees.map((tree) => <RenderedDraftTree key={tree.key} depth={0} node={tree} />)
+            )}
           </div>
 
           <footer className="flex shrink-0 items-center gap-4 border-t border-gray-100 bg-white px-4 py-3">
-            <button
-              className="flex cursor-not-allowed items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-400"
-              disabled
-              type="button"
-            >
-              <Share2 aria-hidden="true" className="size-4" /> Commit changes
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-px bg-gray-200" />
-              <span className="text-[12px] text-slate-400">Required action has not run.</span>
-            </div>
+            <WorkspaceDraftCommitBar controller={controller} />
           </footer>
         </section>
 
@@ -1262,7 +1245,9 @@ function WorkspaceRenderedReview({
           <section aria-label="Selected section" className="shrink-0 p-3">
             <h2 className="mb-2 text-[15px] font-bold text-slate-900">Selected section</h2>
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-[14px] font-bold text-slate-900">Summary · outcome</h3>
+              <h3 className="text-[14px] font-bold text-slate-900">
+                {selected?.label ?? humanizeWorkspaceKey(content.rootKey)}
+              </h3>
               <button
                 className="flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
                 onClick={copyPath}
@@ -1273,30 +1258,27 @@ function WorkspaceRenderedReview({
             </div>
             <div className="mb-2 flex items-center gap-2">
               <code className="inline-block rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1 text-[11px] leading-4 text-gray-600">
-                release_plan.summary.outcome
+                {selectedPath.replaceAll('/', '.')}
               </code>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600">
-                <MinusCircle aria-hidden="true" className="size-3" /> Modified
-              </span>
+              {selected?.changed ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600">
+                  <MinusCircle aria-hidden="true" className="size-3" /> Modified
+                </span>
+              ) : null}
             </div>
             <div className="mt-2">
               <div className="mb-1 text-[11px] text-slate-500">Source</div>
               <div className="flex items-center justify-between rounded-md border border-indigo-100/50 bg-indigo-50/40 px-3 py-1.5">
                 <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                  <FileText aria-hidden="true" className="size-4 text-indigo-500" /> Release plan
-                  v1.2
+                  <FileText aria-hidden="true" className="size-4 text-indigo-500" />
+                  {candidate.sourceBundle[0]?.title ?? binding?.schemaName ?? candidate.title}
                 </div>
-                <div className="text-[11px] text-slate-500">p. 3</div>
               </div>
             </div>
             <div className="mt-2">
-              <h4 className="mb-1 text-[13px] font-bold text-slate-900">
-                Updated for a limited internal rollout
-              </h4>
-              <p className="mb-2 text-[12px] leading-4 text-slate-600">
-                Refine rollout strategy to start with a limited internal release and ensure rollback
-                readiness.
-              </p>
+              {selected?.value ? (
+                <p className="mb-2 text-[12px] leading-4 text-slate-600">{selected.value}</p>
+              ) : null}
               <button
                 className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
                 onClick={onStructureDiff}
@@ -1313,63 +1295,65 @@ function WorkspaceRenderedReview({
               </button>
             </div>
           </section>
-          <section aria-label="Checks for draft v3" className="border-t border-gray-200 p-3">
+          <section
+            aria-label={`Checks for draft v${candidate.revision ?? 1}`}
+            className="border-t border-gray-200 p-3"
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[15px] font-bold text-slate-900">Checks for draft v3</h2>
+              <h2 className="text-[15px] font-bold text-slate-900">
+                Checks for draft v{candidate.revision ?? 1}
+              </h2>
               <span className="text-[11px] font-medium text-slate-500">Review evidence</span>
             </div>
             <div className="flex flex-col">
-              {[
-                ['Deterministic replay', 'All changes can be replayed successfully.'],
-                ['Schema validation', 'Draft conforms to Release plan v1.2 schema.'],
-              ].map(([label, detail], index) => (
+              {checks.map((check, index) => (
                 <div
                   className={cn(
                     'flex items-start gap-3 border-b border-gray-100',
                     index === 0 ? 'pb-2' : 'py-2'
                   )}
-                  key={label}
+                  key={check.label}
                 >
-                  <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                    <Check aria-hidden="true" className="size-3" />
+                  <span
+                    className={cn(
+                      'mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full',
+                      check.status === 'passed'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 text-gray-400'
+                    )}
+                  >
+                    {check.status === 'passed' ? (
+                      <Check aria-hidden="true" className="size-3" />
+                    ) : (
+                      <CircleDot aria-hidden="true" className="size-3" />
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate text-[12px] font-bold text-slate-900">{label}</h4>
-                      <span className="shrink-0 rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Passed
+                      <h4 className="truncate text-[12px] font-bold text-slate-900">
+                        {check.label}
+                      </h4>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded border px-2 py-0.5 text-[10px] font-medium',
+                          check.status === 'passed'
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                            : check.status === 'failed'
+                              ? 'border-rose-100 bg-rose-50 text-rose-700'
+                              : 'border-gray-200 bg-gray-100 text-gray-500'
+                        )}
+                      >
+                        {check.status === 'passed'
+                          ? 'Passed'
+                          : check.status === 'failed'
+                            ? 'Failed'
+                            : 'Not run'}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{detail}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{check.detail}</p>
                   </div>
                 </div>
               ))}
-
-              <div className="flex items-start gap-3 pt-2">
-                <CircleDot aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gray-400" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="truncate text-[12px] font-bold text-slate-900">T3X Action</h4>
-                    <span className="shrink-0 rounded border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                      Not run
-                    </span>
-                  </div>
-                  <p className="mb-1 mt-0.5 text-[11px] leading-4 text-slate-500">
-                    PRD export &amp; link check
-                  </p>
-                  <div className="flex justify-end">
-                    <button
-                      className="flex items-center gap-1.5 rounded border border-blue-200 px-3 py-1 text-[11px] font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50"
-                      disabled={controller.isBusy}
-                      onClick={() => void controller.prepareReview()}
-                      type="button"
-                    >
-                      <Play aria-hidden="true" className="size-3.5 fill-current" />
-                      {controller.isBusy ? 'Running…' : 'Run T3X Action'}
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
             <div className="mt-2 flex items-center gap-2 rounded-md border border-indigo-100/50 bg-indigo-50/50 px-3 py-1.5">
               <CircleHelp aria-hidden="true" className="size-4 shrink-0 text-indigo-500" />
@@ -2215,6 +2199,9 @@ function WorkspaceReviewChangeReviewPanel({
           ) : null}
         </div>
       </section>
+      <section className={diffStyles.card} aria-label="Commit draft">
+        <WorkspaceDraftCommitBar controller={controller} />
+      </section>
     </>
   );
 }
@@ -2224,6 +2211,199 @@ interface ReviewCheckView {
   label: string;
   requirement: 'required' | 'system';
   status: ReviewCheckStatus;
+}
+
+function WorkspaceDraftCommitBar({
+  controller,
+}: {
+  controller: WorkspaceComposeReviewController;
+}) {
+  const ready = Boolean(
+    controller.review.transitionId && controller.review.content && controller.review.precondition
+  );
+  const commitId =
+    committedReviewId(controller.review.view) ??
+    (controller.candidate.status === 'committed'
+      ? (controller.candidate.lastCommitHash ?? null)
+      : null);
+  const checks = getReviewChecks(controller);
+  const requiredFailed = checks.some(
+    (check) => check.requirement === 'required' && check.status === 'failed'
+  );
+  const busy = controller.busyAction?.startsWith('decision:') === true;
+
+  if (commitId) {
+    return (
+      <div className={diffStyles.commitBar}>
+        <button className={diffStyles.commitAction} onClick={controller.viewCommit} type="button">
+          <Share2 aria-hidden="true" className="size-4" /> View in State
+        </button>
+        <span className={diffStyles.commitHint}>Committed to branch history.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={diffStyles.commitBar}>
+      <button
+        aria-label="Commit draft"
+        className={diffStyles.commitAction}
+        disabled={controller.isBusy || !ready}
+        onClick={() => {
+          void controller.decide(
+            requiredFailed ? 'overridden' : 'accepted',
+            requiredFailed
+              ? controller.decisionReason?.trim() || 'Continue after review checks.'
+              : undefined
+          );
+        }}
+        type="button"
+      >
+        <Share2 aria-hidden="true" className="size-4" />
+        {busy ? 'Committing…' : requiredFailed ? 'Commit anyway' : 'Commit'}
+      </button>
+      <span className={diffStyles.commitHint}>
+        {ready
+          ? requiredFailed
+            ? 'A required check failed. Commit records an override.'
+            : 'Save the reviewed draft as committed state.'
+          : 'Prepare review before committing.'}
+      </span>
+    </div>
+  );
+}
+
+function asWorkspaceReviewTree(value: unknown): WorkspaceReviewTreeNode | null {
+  if (!value || typeof value !== 'object') return null;
+  const node = value as { children?: unknown; key?: unknown; slots?: unknown };
+  if (typeof node.key !== 'string') return null;
+  return {
+    children: Array.isArray(node.children)
+      ? node.children.flatMap((child) => {
+          const parsed = asWorkspaceReviewTree(child);
+          return parsed ? [parsed] : [];
+        })
+      : [],
+    key: node.key,
+    slots:
+      node.slots && typeof node.slots === 'object' && !Array.isArray(node.slots)
+        ? (node.slots as Record<string, unknown>)
+        : {},
+  };
+}
+
+function humanizeWorkspaceKey(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function formatRenderedValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatRenderedValue(item))
+      .filter(Boolean)
+      .join(', ');
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function RenderedDraftTree({ depth, node }: { depth: number; node: WorkspaceReviewTreeNode }) {
+  const title =
+    typeof node.slots.title === 'string' && node.slots.title.trim()
+      ? node.slots.title
+      : humanizeWorkspaceKey(node.key);
+  const slots = Object.entries(node.slots).filter(([key, value]) => {
+    return key !== 'title' && formatRenderedValue(value);
+  });
+
+  return (
+    <section className={cn(depth === 0 ? 'mb-3' : 'relative mb-2 pl-4')}>
+      {depth === 0 ? (
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-slate-900">
+          {title}
+        </h1>
+      ) : (
+        <h3 className="mb-1 text-[14px] font-bold text-slate-900">{humanizeWorkspaceKey(node.key)}</h3>
+      )}
+      {slots.length > 0 ? (
+        <div className="mb-2 flex flex-col overflow-hidden rounded-md border border-gray-200">
+          {slots.map(([key, value], index) => (
+            <div
+              className={cn('flex', index < slots.length - 1 && 'border-b border-gray-200')}
+              key={key}
+            >
+              <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
+                {humanizeWorkspaceKey(key)}
+              </div>
+              <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
+                {formatRenderedValue(value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {node.children.map((child) => (
+        <RenderedDraftTree depth={depth + 1} key={child.key} node={child} />
+      ))}
+    </section>
+  );
+}
+
+function selectRenderedSection(
+  trees: WorkspaceReviewTreeNode[],
+  candidate: WorkspaceCandidate
+): { changed: boolean; label: string; path: string; value: string } | null {
+  const operation = candidate.yopsDraft.operations[0];
+  if (operation) {
+    const path = normalizeWorkspaceReviewStructurePath(operation.path);
+    return {
+      changed: true,
+      label: path.split('/').filter(Boolean).slice(-2).map(humanizeWorkspaceKey).join(' · '),
+      path,
+      value: formatRenderedValue(operation.afterValue ?? operation.summary),
+    };
+  }
+  const root = trees[0];
+  if (!root) return null;
+  const slotted = firstSlottedReviewPath(root, root.key);
+  return {
+    changed: false,
+    label: slotted?.label ?? humanizeWorkspaceKey(root.key),
+    path: slotted?.path ?? root.key,
+    value: slotted?.value ?? formatRenderedValue(root.slots.title),
+  };
+}
+
+function firstSlottedReviewPath(
+  node: WorkspaceReviewTreeNode,
+  path: string
+): { label: string; path: string; value: string } | null {
+  for (const [key, value] of Object.entries(node.slots)) {
+    const formatted = formatRenderedValue(value);
+    if (!formatted) continue;
+    return {
+      label: `${humanizeWorkspaceKey(node.key)} · ${humanizeWorkspaceKey(key)}`,
+      path: `${path}/${key}`,
+      value: formatted,
+    };
+  }
+  for (const child of node.children) {
+    const nested = firstSlottedReviewPath(child, `${path}/${child.key}`);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 function buildWorkspaceReviewStructureModel(
@@ -3014,6 +3194,6 @@ function statementStatus(
 function committedReviewId(
   view: WorkspaceComposeReviewController['review']['view']
 ): string | null {
-  if (!view || view.history.observation !== 'committed') return null;
+  if (!view || view.history?.observation !== 'committed') return null;
   return view.history.commit.id;
 }

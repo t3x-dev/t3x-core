@@ -1,5 +1,6 @@
 'use client';
 import type { SchemaCatalogItem } from '@t3x-dev/api-client';
+import { dump } from 'js-yaml';
 import {
   ArrowRight,
   BookOpen,
@@ -177,7 +178,7 @@ export function SchemaCatalogExperience({
           if (!open) setSelected(undefined);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           {selected ? (
             <ReleaseDetail
               key={selected.release.artifactVersionId}
@@ -632,10 +633,11 @@ function ReleaseDetail({
       hash: item.release.hash,
       sourceProjectId: item.identity.ownerProjectId ?? undefined,
     },
-    item.release.kind !== 'schema' && !reference
+    true
   );
   const readme =
     typeof releaseReading.data?.readme === 'string' ? releaseReading.data.readme : undefined;
+  const yaml = releaseYaml(releaseReading.data?.manifest);
   const cover = intro.data?.document.resources.find(
     (resource) => resource.path === reference?.coverPath
   );
@@ -701,12 +703,22 @@ function ReleaseDetail({
           <StateAuthorReadme author={{ readme, resources: [] }} />
         ) : null}
         {releaseReading.loading ? (
-          <output className="block text-sm">Loading release introduction…</output>
+          <output className="block text-sm">Loading release YAML…</output>
         ) : null}
         {releaseReading.error ? (
           <p role="alert" className="text-sm text-[var(--status-error)]">
             {releaseReading.error}
           </p>
+        ) : null}
+        {yaml ? (
+          <section aria-label="Release YAML" className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
+              Release YAML
+            </h3>
+            <pre className="max-h-[28rem] overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-[11px] leading-5 text-[var(--text-primary)]">
+              <code>{yaml}</code>
+            </pre>
+          </section>
         ) : null}
         <div className="flex flex-wrap gap-3">
           <AddToStudio
@@ -741,4 +753,28 @@ function introductionHref(item: SchemaCatalogItem, projectId: string, returnTo: 
   const reference = item.presentationRef;
   if (!reference) return null;
   return `/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId })}`;
+}
+
+const RELEASE_YAML_LEAD_KEYS = [
+  'apiVersion',
+  'canonicalName',
+  'version',
+  'title',
+  'description',
+  'contribution',
+  'schema',
+  'starter',
+] as const;
+
+function releaseYaml(manifest: Record<string, unknown> | undefined): string | null {
+  if (!manifest) return null;
+  const { readme: _readme, ...rest } = manifest;
+  const ordered: Record<string, unknown> = {};
+  for (const key of RELEASE_YAML_LEAD_KEYS) {
+    if (key in rest) ordered[key] = rest[key];
+  }
+  for (const [key, value] of Object.entries(rest)) {
+    if (!(key in ordered)) ordered[key] = value;
+  }
+  return dump(ordered, { lineWidth: 100, noRefs: true, sortKeys: false }).trimEnd();
 }

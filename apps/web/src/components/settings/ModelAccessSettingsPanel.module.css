@@ -75,6 +75,33 @@
   font-weight: 700;
   line-height: 24px;
 }
+.cardHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.testAll,
+.testButton {
+  height: 28px;
+  padding: 0 10px;
+  color: #0969ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: #eaf3ff;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.testAll:disabled,
+.testButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.testButton {
+  justify-self: end;
+}
 .modelList {
   margin-top: 5px;
   overflow: hidden;
@@ -83,10 +110,10 @@
 }
 .modelRow {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 84px 62px;
+  grid-template-columns: 52px minmax(0, 1fr) 72px 84px 62px;
   min-height: 53px;
   align-items: center;
-  padding: 0 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid #dbe6f5;
 }
 .modelRow:last-child {
@@ -107,6 +134,22 @@
   color: #5870ad;
   font-size: 11px;
   line-height: 15px;
+}
+.testOk,
+.testError,
+.testPending {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+}
+.testOk {
+  color: #047857;
+}
+.testError {
+  color: #b42318;
+}
+.testPending {
+  color: #0969ff;
 }
 .anthropicMark,
 .openAiMark,

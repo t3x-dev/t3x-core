@@ -38,6 +38,13 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=workspaces'),
 }));
 
+vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
+  useStudioCandidates: () => ({
+    items: [{ available: true, id: 'product-brief', kind: 'module' }],
+    loading: false,
+  }),
+}));
+
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({
     extractCandidate: mocks.extractCandidate,

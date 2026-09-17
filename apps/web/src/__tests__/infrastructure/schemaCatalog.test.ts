@@ -60,7 +60,11 @@ describe('exact release introduction', () => {
 });
 
 it('reads an exact source without creating a Studio candidate and rejects a changed hash', async () => {
-  const release = { artifactHash: digest, readme: '# Author' };
+  const release = {
+    artifactHash: digest,
+    readme: '# Author',
+    manifest: { canonicalName: 'team/template', version: '1' },
+  };
   mocks.fetch.mockResolvedValue(release);
   expect(await fetchSchemaReleaseReading('p', 'team/template', '1', digest, 'source')).toEqual(
     release

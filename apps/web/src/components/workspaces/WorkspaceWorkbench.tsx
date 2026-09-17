@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
+import { mergeWorkspaceOverride } from '@/domain/workspaces/mergeWorkspaceOverride';
 import type {
   WorkspaceDraftCommandName,
   WorkspacePreparationOptions,
@@ -50,7 +51,7 @@ interface WorkspaceWorkbenchProps {
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
-  onWorkspacesRefresh?: () => Promise<void> | void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
   onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
 }
 
@@ -87,6 +88,18 @@ export function WorkspaceWorkbench({
     startNextIteration,
   } = useWorkspaceFlow();
   const proposalGeneration = useWorkspaceProposalGeneration();
+  const hydrateAndRefreshWorkspaces = useCallback(
+    async (workspace?: WorkspaceCandidate) => {
+      if (workspace) {
+        setWorkspaceOverrides((current) => ({
+          ...current,
+          [workspace.id]: workspace,
+        }));
+      }
+      await onWorkspacesRefresh?.();
+    },
+    [onWorkspacesRefresh]
+  );
 
   const availableCandidates = [
     ...candidates.map((candidate) =>
@@ -422,41 +435,112 @@ export function WorkspaceWorkbench({
     }
   };
 
+  const persistWorkspaceDraft = async (workspace: WorkspaceCandidate) => {
+    const result = await saveWorkspaceDraft(workspace);
+    setWorkspaceOverrides((current) => ({
+      ...current,
+      [result.workspace.id]: result.workspace,
+    }));
+    updateSelectedFlow(
+      {
+        commitHash: undefined,
+        error: undefined,
+        validationGapCount: undefined,
+        yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
+      },
+      result.workspace.id
+    );
+    return result.workspace;
+  };
+
+  const dropWorkspaceOverride = (workspaceId: string) => {
+    setWorkspaceOverrides((current) => {
+      const next = { ...current };
+      delete next[workspaceId];
+      return next;
+    });
+  };
+
+  const loadRemoteWorkspace = async (workspace: WorkspaceCandidate) => {
+    await onWorkspacesRefresh?.();
+    const refreshed = await refreshWorkspaces(workspace.projectId);
+    return refreshed.find((item) => item.id === workspace.id);
+  };
+
   const handleWorkspaceDraftCommand = async (
     workspace: WorkspaceCandidate,
     _command: WorkspaceDraftCommandName
   ): Promise<WorkspaceCandidate> => {
     updateSelectedFlow({ error: undefined, validationGapCount: undefined }, workspace.id);
     try {
-      const result = await saveWorkspaceDraft(workspace);
-      setWorkspaceOverrides((current) => ({
-        ...current,
-        [result.workspace.id]: result.workspace,
-      }));
-      updateSelectedFlow(
-        {
-          commitHash: undefined,
-          error: undefined,
-          validationGapCount: undefined,
-          yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
-        },
-        result.workspace.id
-      );
-      return result.workspace;
+      return await persistWorkspaceDraft(workspace);
     } catch (err) {
-      if (isWorkspaceRevisionConflict(err) && onWorkspacesRefresh) {
-        await onWorkspacesRefresh();
-        setWorkspaceOverrides((current) => {
-          const next = { ...current };
-          delete next[workspace.id];
-          return next;
-        });
+      if (isWorkspaceRevisionConflict(err)) {
+        const remote = await loadRemoteWorkspace(workspace);
+        if (remote?.revision !== undefined) {
+          try {
+            return await persistWorkspaceDraft({
+              ...workspace,
+              revision: remote.revision,
+              updatedAt: remote.updatedAt,
+            });
+          } catch (retryErr) {
+            dropWorkspaceOverride(workspace.id);
+            throw retryErr instanceof Error
+              ? retryErr
+              : new Error('Unable to save the Workspace draft.');
+          }
+        }
+        dropWorkspaceOverride(workspace.id);
         throw new Error(
           'Workspace changed since it was loaded. The latest draft was refreshed; review the current evidence and retry.'
         );
       }
       throw err instanceof Error ? err : new Error('Unable to save the Workspace draft.');
     }
+  };
+
+  const runPrepareDraft = async (workspace: WorkspaceCandidate) => {
+    let prepared = selectWorkspaceSourceBundle(workspace, usePinsStore.getState().pins);
+    let candidateId: string | undefined;
+    if (prepared.yopsDraft.operations.length === 0) {
+      const extracted = await extractCandidate(prepared);
+      prepared = extracted.workspace;
+      candidateId = extracted.candidate_id;
+    }
+
+    let yopsDraftId: string | undefined;
+    if (prepared.yopsDraft.operations.length === 0) {
+      updateSelectedFlow({ extracting: false, sendingToYOps: true }, workspace.id);
+      const yops = await sendToYOps(prepared);
+      prepared = yops.workspace;
+      candidateId = yops.candidate_id;
+      yopsDraftId = yops.yops_draft_id ?? yops.workspace.yopsDraft.id;
+    }
+
+    if (prepared.yopsDraft.operations.length === 0) {
+      throw new Error(
+        'No YOps operations were generated. Include at least one source turn or material, then retry.'
+      );
+    }
+
+    setWorkspaceOverrides((current) => ({
+      ...current,
+      [prepared.id]: prepared,
+    }));
+    updateSelectedFlow(
+      {
+        candidateId,
+        commitHash: undefined,
+        error: undefined,
+        extracting: false,
+        sendingToYOps: false,
+        validationGapCount: undefined,
+        yopsDraftId: yopsDraftId ?? prepared.yopsDraft.id,
+      },
+      prepared.id
+    );
+    return prepared;
   };
 
   const handlePrepareDraft = async (
@@ -475,47 +559,40 @@ export function WorkspaceWorkbench({
     );
 
     try {
-      let prepared = selectWorkspaceSourceBundle(workspace, usePinsStore.getState().pins);
-      let candidateId: string | undefined;
-      if (prepared.yopsDraft.operations.length === 0) {
-        const extracted = await extractCandidate(prepared);
-        prepared = extracted.workspace;
-        candidateId = extracted.candidate_id;
-      }
-
-      let yopsDraftId: string | undefined;
-      if (prepared.yopsDraft.operations.length === 0) {
-        updateSelectedFlow({ extracting: false, sendingToYOps: true }, workspace.id);
-        const yops = await sendToYOps(prepared);
-        prepared = yops.workspace;
-        candidateId = yops.candidate_id;
-        yopsDraftId = yops.yops_draft_id ?? yops.workspace.yopsDraft.id;
-      }
-
-      if (prepared.yopsDraft.operations.length === 0) {
-        throw new Error(
-          'No YOps operations were generated. Include at least one source turn or material, then retry.'
-        );
-      }
-
-      setWorkspaceOverrides((current) => ({
-        ...current,
-        [prepared.id]: prepared,
-      }));
-      updateSelectedFlow(
-        {
-          candidateId,
-          commitHash: undefined,
-          error: undefined,
-          extracting: false,
-          sendingToYOps: false,
-          validationGapCount: undefined,
-          yopsDraftId: yopsDraftId ?? prepared.yopsDraft.id,
-        },
-        prepared.id
-      );
-      return prepared;
+      return await runPrepareDraft(workspace);
     } catch (err) {
+      if (isWorkspaceRevisionConflict(err)) {
+        const remote = await loadRemoteWorkspace(workspace);
+        dropWorkspaceOverride(workspace.id);
+        if (remote) {
+          try {
+            updateSelectedFlow(
+              {
+                commitHash: undefined,
+                error: undefined,
+                extracting: remote.yopsDraft.operations.length === 0,
+                sendingToYOps: false,
+                validationGapCount: undefined,
+              },
+              workspace.id
+            );
+            return await runPrepareDraft(remote);
+          } catch (retryErr) {
+            updateSelectedFlow(
+              {
+                error:
+                  retryErr instanceof Error
+                    ? retryErr.message
+                    : 'Workspace draft preparation failed.',
+                extracting: false,
+                sendingToYOps: false,
+              },
+              workspace.id
+            );
+            throw retryErr;
+          }
+        }
+      }
       updateSelectedFlow(
         {
           error: err instanceof Error ? err.message : 'Workspace draft preparation failed.',
@@ -594,6 +671,7 @@ export function WorkspaceWorkbench({
             onYOpsApplied={handleYOpsApplied}
             onYOpsCommitted={handleCommitted}
             onYOpsScriptSave={handleYOpsScriptSave}
+            onWorkspacesRefresh={hydrateAndRefreshWorkspaces}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
             onSourceArtifactChange={handleSourceArtifactChange}
             onDraftCommand={handleWorkspaceDraftCommand}
@@ -635,6 +713,7 @@ function WorkspaceDetail({
   onYOpsScriptSave,
   onViewCommitInState,
   onVerifyProposal,
+  onWorkspacesRefresh,
 }: {
   activeTab: WorkspaceTabId;
   branchOptions?: string[];
@@ -672,6 +751,7 @@ function WorkspaceDetail({
   onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onVerifyProposal: () => void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
 }) {
   if (!candidate) return null;
 
@@ -714,6 +794,7 @@ function WorkspaceDetail({
           onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
           onViewCommitInState={onViewCommitInState}
+          onWorkspacesRefresh={onWorkspacesRefresh}
           onWorkflowTabChange={onWorkflowTabChange}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
           proposalReviewState={flowState?.proposalReviewState}
@@ -734,36 +815,6 @@ function hasYOpsOperations(candidate: WorkspaceCandidate | null | undefined): bo
 function getWorkspaceSourceParentCommitHash(candidate: WorkspaceCandidate): string | undefined {
   if (candidate.status !== 'draft') return undefined;
   return candidate.baseCommitHash ?? undefined;
-}
-
-function mergeWorkspaceOverride(
-  candidate: WorkspaceCandidate,
-  override?: WorkspaceCandidate
-): WorkspaceCandidate {
-  if (!override) return candidate;
-
-  const merged = {
-    ...candidate,
-    ...override,
-    outputTargets: candidate.outputTargets,
-    schemaBindings: candidate.schemaBindings,
-    sourceBundle: mergeWorkspaceSourceBundles(candidate.sourceBundle, override.sourceBundle),
-  };
-
-  if (override.status !== 'committed' && !override.lastCommitHash) {
-    delete merged.lastCommitHash;
-  }
-
-  return merged;
-}
-
-function mergeWorkspaceSourceBundles(
-  candidateSources: SourceBundleItem[],
-  overrideSources: SourceBundleItem[]
-): SourceBundleItem[] {
-  const localSources = overrideSources.filter((source) => !source.materialId);
-  const refreshedMaterials = candidateSources.filter((source) => Boolean(source.materialId));
-  return [...localSources, ...refreshedMaterials];
 }
 
 function upsertWorkspaceSourceBundle(
