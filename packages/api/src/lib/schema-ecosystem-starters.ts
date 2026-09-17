@@ -134,4 +134,46 @@ export const schemaEcosystemStarters: Starter[] = [
     },
     '# Compose services\n\nAn image-based subset of Docker Compose: named services, image, ports, environment mapping and restart policy. Export the configuration and run `docker compose config --quiet` with your installed Compose version before deployment.\n\nT3X checks the declared fields; it does not validate port syntax, image availability, interpolation or runtime behavior. Build-only services and the complete Compose specification are outside this starter.\n\nReferences: https://docs.docker.com/reference/compose-file/services/\n\nT3X-authored; Apache-2.0. Docker does not publish or endorse this starter.'
   ),
+  starter(
+    'decision-record',
+    'Decision record',
+    'Capture a decision with context and reviewable consequences.',
+    ['planning', 'work', 'ecosystem:t3x', 'decision'],
+    {
+      decision: {
+        required: true,
+        slots: {
+          title: { type: 'string', minLength: 1 },
+          context: { type: 'string', minLength: 1 },
+          choice: { type: 'string', minLength: 1 },
+          status: { type: 'string', enum: ['proposed', 'accepted', 'superseded'] },
+        },
+        requiredSlots: ['title', 'context', 'choice'],
+      },
+      consequences: {
+        required: true,
+        repeated: true,
+        slots: {
+          title: { type: 'string', minLength: 1 },
+          effect: { type: 'string', minLength: 1 },
+        },
+        requiredSlots: ['title', 'effect'],
+      },
+    },
+    {
+      decision: {
+        title: 'Pin exact schema versions in Studio',
+        context: 'Catalog browsing can suggest a family, but apply must stay exact.',
+        choice: 'Add a candidate at a named version and hash before Workspace apply.',
+        status: 'accepted',
+      },
+      consequences: {
+        replay: {
+          title: 'Replay stays deterministic',
+          effect: 'Studio apply uses the reviewed hash, not the latest catalog name.',
+        },
+      },
+    },
+    '# Decision record\n\nName the decision, write the context, and record the choice. Attach named consequences so later reviews can see what was accepted. T3X checks the declared fields; it does not prove the decision was implemented or remains current. T3X-authored; Apache-2.0.'
+  ),
 ];

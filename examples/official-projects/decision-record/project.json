@@ -1,0 +1,46 @@
+{
+  "slug": "decision-record",
+  "title": "Decision record",
+  "description": "Capture a decision with context and reviewable consequences.",
+  "license": "Apache-2.0",
+  "tags": ["planning", "work", "ecosystem:t3x", "decision"],
+  "companionSchema": {
+    "canonicalName": "t3x/decision-record",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "decision": {
+      "title": "Pin exact schema versions in Studio",
+      "context": "Catalog browsing can suggest a family, but apply must stay exact.",
+      "choice": "Add a candidate at a named version and hash before Workspace apply.",
+      "status": "accepted"
+    },
+    "consequences": {
+      "replay": {
+        "title": "Replay stays deterministic",
+        "effect": "Studio apply uses the reviewed hash, not the latest catalog name."
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Record the review consequence",
+    "value": {
+      "decision": {
+        "title": "Pin exact schema versions in Studio",
+        "context": "Catalog browsing can suggest a family, but apply must stay exact.",
+        "choice": "Add a candidate at a named version and hash before Workspace apply.",
+        "status": "accepted"
+      },
+      "consequences": {
+        "replay": {
+          "title": "Replay stays deterministic",
+          "effect": "Studio apply uses the reviewed hash, not the latest catalog name."
+        },
+        "review": {
+          "title": "Review stays visible",
+          "effect": "Rejected or superseded decisions remain in history without changing the applied hash."
+        }
+      }
+    }
+  }
+}

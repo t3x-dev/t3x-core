@@ -9,7 +9,7 @@ test('official examples retain their complete values through node conversion', a
       ...n.children.map((c) => [c.key, fromNode(c)]),
     ]);
   const projects = await loadProjects();
-  assert.equal(projects.length, 3);
+  assert.equal(projects.length, 4);
   for (const project of projects) {
     for (const value of [project.initial, project.demonstration.value]) {
       const restored = Object.fromEntries(toContent(value).trees.map((n) => [n.key, fromNode(n)]));
