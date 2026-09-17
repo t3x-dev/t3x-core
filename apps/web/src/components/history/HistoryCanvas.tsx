@@ -164,22 +164,12 @@ export function HistoryCanvas({
       <main className={styles.main}>
         <section aria-label="Commit graph canvas" className={styles.canvas}>
           <div className={styles.canvasTopLeft}>
-            <label className={styles.canvasButton}>
-              <span className={styles.branchDot} />
+            <label className={`${styles.canvasButton} ${styles.branchSelect}`}>
               <select
                 aria-label="Canvas branch filter"
+                className={styles.branchSelectInput}
                 value={selectedBranch}
                 onChange={(event) => onBranchChange(event.target.value)}
-                style={{
-                  appearance: 'none',
-                  border: 0,
-                  background: 'transparent',
-                  color: 'inherit',
-                  font: 'inherit',
-                  outline: 'none',
-                  textOverflow: 'ellipsis',
-                  width: 48,
-                }}
               >
                 <option value="all">All branches</option>
                 {branches.map((branch) => (
@@ -188,7 +178,16 @@ export function HistoryCanvas({
                   </option>
                 ))}
               </select>
-              <ChevronDown className={styles.mutedIcon} size={14} strokeWidth={2.5} />
+              <span aria-hidden="true" className={styles.branchDot} />
+              <span className={styles.branchSelectLabel}>
+                {selectedBranch === 'all' ? 'All branches' : selectedBranch}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={`${styles.mutedIcon} ${styles.branchSelectChevron}`}
+                size={14}
+                strokeWidth={2.5}
+              />
             </label>
             <span className={styles.commitCount}>{commits.length} Commits</span>
           </div>

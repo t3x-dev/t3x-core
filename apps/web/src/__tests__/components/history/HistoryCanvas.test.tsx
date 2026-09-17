@@ -27,6 +27,29 @@ const feature = commit('sha256:feature', 'Canary rollout', [root.hash], 'feature
 const merge = commit('sha256:merge', 'Merge PR #24', [main.hash, feature.hash]);
 
 describe('HistoryCanvas', () => {
+  it('lets the whole canvas branch pill change the selected branch', () => {
+    const onBranchChange = vi.fn();
+    render(
+      <HistoryCanvas
+        branches={[
+          { branch_id: 'main', name: 'main' },
+          { branch_id: 'de-v', name: 'de-v' },
+        ]}
+        commits={[{ commit: root }]}
+        selectedBranch="de-v"
+        onBack={vi.fn()}
+        onBranchChange={onBranchChange}
+        onListView={vi.fn()}
+        onViewDiff={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Canvas branch filter' }), {
+      target: { value: 'main' },
+    });
+    expect(onBranchChange).toHaveBeenCalledWith('main');
+  });
+
   it('keeps graph controls and diff navigation connected to history callbacks', () => {
     const onListView = vi.fn();
     const onViewDiff = vi.fn();
