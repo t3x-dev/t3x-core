@@ -26,7 +26,19 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "env": ["AUTH_DISABLED", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"]
+      "env": ["AUTH_DISABLED", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
+      "passThroughEnv": [
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_BASE_URL"
+      ]
     },
     "clean": {
       "cache": false
