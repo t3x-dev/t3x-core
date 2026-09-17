@@ -21,10 +21,12 @@ test('original ecosystem starters are discoverable, filterable and importable at
     await expect(page.getByRole('button', { name: 'Explore Compose services 1.0.0', exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('starters-browse.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('Apache-2.0');
+    await expect(page).toHaveURL(/schemaView=release/);
+    await expect(page.getByRole('heading', { name: 'Care checklist' })).toBeVisible();
+    await expect(page.getByText('Apache-2.0')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Author README' })).toContainText('Rename the routine');
+    await expect(page.getByRole('region', { name: 'Definition' })).toContainText('checklist');
     await page.screenshot({ path: testInfo.outputPath('starters-introduction.png'), animations: 'disabled' });
-    await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Sample preview', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).toContainText('Care checklist');

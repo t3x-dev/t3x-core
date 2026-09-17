@@ -18,15 +18,28 @@ export function AddToStudio({
   title,
   defaultProjectId,
   defaultWorkspaceId,
+  layout = 'sheet',
   onAdded,
 }: {
   source: AddStudioCandidate;
   title: string;
   defaultProjectId: string;
   defaultWorkspaceId?: string;
+  layout?: 'sheet' | 'inline';
   onAdded?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  if (layout === 'inline') {
+    return (
+      <Destination
+        source={source}
+        defaultProjectId={defaultProjectId}
+        defaultWorkspaceId={defaultWorkspaceId}
+        embedded
+        onDone={() => onAdded?.()}
+      />
+    );
+  }
   return (
     <>
       <Button onClick={() => setOpen(true)}>
@@ -70,17 +83,19 @@ function Destination({
   source,
   defaultProjectId,
   defaultWorkspaceId,
+  embedded = false,
   onDone,
 }: {
   source: AddStudioCandidate;
   defaultProjectId: string;
   defaultWorkspaceId?: string;
+  embedded?: boolean;
   onDone: () => void;
 }) {
   const { projects, error } = useProjects(100);
   const [projectId, setProjectId] = useState(defaultProjectId);
   return (
-    <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto px-6">
+    <div className={`chat-scrollbar min-h-0 flex-1 overflow-y-auto ${embedded ? '' : 'px-6'}`}>
       <label className="block text-xs font-medium text-[var(--text-secondary)]">
         Destination project
         <select
@@ -109,6 +124,7 @@ function Destination({
         projectId={projectId}
         workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
         source={source}
+        embedded={embedded}
         onDone={onDone}
       />
     </div>
@@ -118,11 +134,13 @@ function CandidateConfirmation({
   projectId,
   workspaceId,
   source,
+  embedded = false,
   onDone,
 }: {
   projectId: string;
   workspaceId?: string;
   source: AddStudioCandidate;
+  embedded?: boolean;
   onDone: () => void;
 }) {
   const studio = useStudioCandidates(projectId);
@@ -209,7 +227,13 @@ function CandidateConfirmation({
           Saved as a candidate
         </p>
       ) : null}
-      <div className="sticky bottom-0 -mx-6 mt-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-6 pb-5 pt-4">
+      <div
+        className={
+          embedded
+            ? 'mt-1 border-t border-[var(--stroke-divider)] pt-4'
+            : 'sticky bottom-0 -mx-6 mt-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-6 pb-5 pt-4'
+        }
+      >
         <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">
           Explore and compare before applying to a Workspace.
         </p>
@@ -230,13 +254,15 @@ function CandidateConfirmation({
           >
             Add & keep browsing
           </Button>
-          <Button
-            variant="ghost"
-            className="h-8 text-xs text-[var(--text-tertiary)]"
-            onClick={onDone}
-          >
-            Close
-          </Button>
+          {embedded ? null : (
+            <Button
+              variant="ghost"
+              className="h-8 text-xs text-[var(--text-tertiary)]"
+              onClick={onDone}
+            >
+              Close
+            </Button>
+          )}
         </div>
       </div>
     </div>

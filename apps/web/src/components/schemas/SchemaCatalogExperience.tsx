@@ -1,52 +1,17 @@
 'use client';
 import type { SchemaCatalogItem } from '@t3x-dev/api-client';
-import { dump } from 'js-yaml';
-import {
-  ArrowRight,
-  BookOpen,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Code2,
-  Cpu,
-  Database,
-  FileText,
-  FlaskConical,
-  Layers3,
-  Network,
-  Search,
-  Shield,
-  Sparkles,
-  Workflow,
-  X,
-  Zap,
-} from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
+import { ArrowRight, BookOpen, Check, ChevronDown, Code2, Search, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, type ReactNode, useState } from 'react';
-import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
-import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import {
-  useSchemaCatalog,
-  useSchemaCollections,
-  useSchemaIntroduction,
-  useSchemaReleaseReading,
-} from '@/hooks/schemas/useSchemaCatalog';
+import { useSchemaCatalog, useSchemaCollections } from '@/hooks/schemas/useSchemaCatalog';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
 import { ActiveSchemaBindings } from './ActiveSchemaBindings';
-import { AddToStudio } from './AddToStudio';
+import { CatalogLogo } from './CatalogLogo';
 import { ExploreDiscoverySurface } from './ExploreDiscoverySurface';
 import browseStyles from './SchemaCatalogBrowse.module.css';
+import { SchemaReleasePage } from './SchemaReleasePage';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
 
 const filterKeys = [
@@ -60,7 +25,8 @@ const filterKeys = [
   'capability',
   'collection',
 ] as const;
-type View = 'discover' | 'browse' | 'studio' | 'active';
+type View = 'discover' | 'browse' | 'studio' | 'active' | 'release';
+const releaseKeys = ['catalogName', 'catalogVersion', 'catalogHash'] as const;
 export function SchemaCatalogExperience({
   projectId,
   children,
@@ -78,7 +44,8 @@ export function SchemaCatalogExperience({
     requestedView === 'browse' ||
     requestedView === 'studio' ||
     requestedView === 'discover' ||
-    requestedView === 'active'
+    requestedView === 'active' ||
+    requestedView === 'release'
       ? requestedView
       : params.get('mode') === 'compose'
         ? 'studio'
@@ -89,20 +56,25 @@ export function SchemaCatalogExperience({
       const value = params.get(key);
       if (value) filters.set(key, value);
     }
+  if (view === 'release') {
+    const canonicalName = params.get('catalogName');
+    if (canonicalName) filters.set('canonical_name', canonicalName);
+  }
   filters.set('limit', '24');
-  const catalog = useSchemaCatalog(projectId, filters.toString(), view === 'browse');
+  const catalog = useSchemaCatalog(
+    projectId,
+    filters.toString(),
+    view === 'browse' || view === 'release'
+  );
   const collections = useSchemaCollections();
-  const [selected, setSelected] = useState<SchemaCatalogItem>();
   function navigate(nextView: View, updates: Record<string, string | undefined> = {}) {
     const next = new URLSearchParams(search?.toString() ?? '');
     next.set('schemaView', nextView);
-    for (const key of ['mode', 'module', 'version', 'catalogName', 'catalogVersion'])
-      next.delete(key);
+    for (const key of ['mode', 'module', 'version', ...releaseKeys]) next.delete(key);
     for (const [key, value] of Object.entries(updates)) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    setSelected(undefined);
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }
   function searchSubmit(event: FormEvent<HTMLFormElement>) {
@@ -110,12 +82,20 @@ export function SchemaCatalogExperience({
     navigate('browse', { q: String(new FormData(event.currentTarget).get('q') ?? '').trim() });
   }
   function openRelease(item: SchemaCatalogItem) {
-    const href = introductionHref(item, projectId, `${pathname}?${params.toString()}`);
-    if (href) router.push(href);
-    else setSelected(item);
+    navigate('release', {
+      catalogName: item.identity.canonicalName,
+      catalogVersion: item.release.version,
+      catalogHash: item.release.hash,
+    });
   }
   const items = catalog.data?.items ?? [];
-  const visibleView = view === 'active' ? 'browse' : view;
+  const selectedRelease = items.find(
+    (item) =>
+      item.identity.canonicalName === params.get('catalogName') &&
+      item.release.version === params.get('catalogVersion') &&
+      (!params.get('catalogHash') || item.release.hash === params.get('catalogHash'))
+  );
+  const visibleView = view === 'active' || view === 'release' ? 'browse' : view;
   const viewNavigation = (
     <nav aria-label="Schema views" className="flex h-[45px] shrink-0 items-center px-2">
       <SegmentedControl
@@ -136,14 +116,34 @@ export function SchemaCatalogExperience({
     <section
       className={cn(
         'min-w-0 bg-white text-[var(--text-primary)]',
-        (view === 'browse' || view === 'studio') && 'flex h-full min-h-0 flex-col overflow-hidden'
+        (view === 'browse' || view === 'studio' || view === 'release') &&
+          'flex h-full min-h-0 flex-col overflow-hidden'
       )}
       aria-label="Schema experience"
     >
-      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-white">
-        {viewNavigation}
-      </div>
-      {String(view) === 'browse' ? (
+      {view === 'release' ? null : (
+        <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-white">
+          {viewNavigation}
+        </div>
+      )}
+      {view === 'release' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <SchemaReleasePage
+            error={catalog.error}
+            item={selectedRelease}
+            loading={catalog.loading}
+            onBack={() =>
+              navigate('browse', {
+                catalogName: undefined,
+                catalogVersion: undefined,
+                catalogHash: undefined,
+              })
+            }
+            projectId={projectId}
+            returnTo={`${pathname}?${params.toString()}`}
+          />
+        </div>
+      ) : String(view) === 'browse' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <SchemaBrowse
             catalog={catalog}
@@ -172,24 +172,6 @@ export function SchemaCatalogExperience({
           onSearch={(query) => navigate('browse', { q: query || undefined })}
         />
       )}
-      <Sheet
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) setSelected(undefined);
-        }}
-      >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-          {selected ? (
-            <ReleaseDetail
-              key={selected.release.artifactVersionId}
-              item={selected}
-              projectId={projectId}
-              returnTo={`${pathname}?${params.toString()}`}
-              onAdded={() => setSelected(undefined)}
-            />
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }
@@ -383,9 +365,8 @@ function SchemaBrowse({
             <div className={browseStyles.feedback}>No schemas match these filters.</div>
           ) : null}
           <div className={browseStyles.cardGrid}>
-            {visibleItems.map((item, index) => (
+            {visibleItems.map((item) => (
               <BrowseSchemaCard
-                expanded={index === 0}
                 item={item}
                 key={item.release.artifactVersionId}
                 onOpen={() => onOpen(item)}
@@ -443,28 +424,18 @@ function BrowseCheck({
   );
 }
 
-function BrowseSchemaCard({
-  expanded,
-  item,
-  onOpen,
-}: {
-  expanded: boolean;
-  item: SchemaCatalogItem;
-  onOpen: () => void;
-}) {
+function BrowseSchemaCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
   const name = item.identity.displayName || item.identity.canonicalName;
   const tags = item.identity.tags.filter((tag) => !tag.startsWith('ecosystem:')).slice(0, 3);
-  const nodes = item.definition.nodes ?? [];
-  const featuredNode = nodes[0];
   return (
     <button
       aria-label={`Explore ${name} ${item.release.version}`}
-      className={cn(browseStyles.schemaCard, expanded && browseStyles.schemaCardExpanded)}
+      className={browseStyles.schemaCard}
       onClick={onOpen}
       type="button"
     >
       <span className={browseStyles.cardTop}>
-        <CatalogLogo item={item} large />
+        <CatalogLogo item={item} size="large" />
         <span className={browseStyles.cardIdentity}>
           <strong>{name}</strong>
           <small>{item.identity.description || 'Structured schema definition.'}</small>
@@ -490,29 +461,7 @@ function BrowseSchemaCard({
             ))}
           </span>
         </span>
-        {expanded ? <ChevronUp aria-hidden="true" className={browseStyles.expandIcon} /> : null}
       </span>
-      {expanded ? (
-        <span className={browseStyles.nodePreview}>
-          <span className={browseStyles.nodeTitle}>
-            <ChevronDown aria-hidden="true" />
-            <b>{featuredNode?.path?.split('/').at(-1) || 'definition'}</b>
-            <em>object</em>
-          </span>
-          {(featuredNode?.slots ?? []).slice(0, 2).map((slot) => (
-            <span className={browseStyles.nodeRow} key={slot}>
-              <b>{slot}</b>
-              <em>string</em>
-            </span>
-          ))}
-          {!featuredNode?.slots?.length ? (
-            <span className={browseStyles.nodeRow}>
-              <b>paths</b>
-              <em>{item.definition.pathCount} declared</em>
-            </span>
-          ) : null}
-        </span>
-      ) : null}
     </button>
   );
 }
@@ -532,249 +481,4 @@ function SchemaRelationIcon() {
       <circle cx="17" cy="16" fill="#2563eb" r="3" />
     </svg>
   );
-}
-
-const logoTones = [
-  'bg-[var(--status-info)]',
-  'bg-[var(--accent-branch)]',
-  'bg-[var(--status-success)]',
-  'bg-[var(--accent-pending)]',
-  'bg-[var(--accent-conversation)]',
-];
-const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
-
-function CatalogLogo({ item, large = false }: { item: SchemaCatalogItem; large?: boolean }) {
-  const intro = useSchemaIntroduction(item.presentationRef);
-  const avatar = intro.data?.document.resources.find(
-    (resource) => resource.path === intro.data?.document.avatarPath
-  );
-  const name = item.identity.canonicalName;
-  if (avatar) {
-    return (
-      <Image
-        src={resourceUrl(avatar)}
-        alt=""
-        width={large ? 48 : 40}
-        height={large ? 48 : 40}
-        unoptimized
-        className={cn(
-          'shrink-0 object-cover shadow-sm',
-          large ? 'size-12 rounded-lg' : 'size-10 rounded-xl'
-        )}
-      />
-    );
-  }
-  // Only unowned built-ins receive T3X artwork. Similar community names do not
-  // inherit an official identity. Other glyphs are decorative, not capabilities.
-  if (
-    !item.identity.ownerProjectId &&
-    item.identity.visibility === 'official' &&
-    starterLogos.has(name)
-  ) {
-    return (
-      <Image
-        src={`/schema-logos/${name.split('/')[1]}.png`}
-        unoptimized
-        alt=""
-        width={large ? 48 : 40}
-        height={large ? 48 : 40}
-        className={cn('shrink-0 shadow-sm', large ? 'size-12 rounded-lg' : 'size-10 rounded-xl')}
-      />
-    );
-  }
-  const hash = Array.from(name).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 0);
-  const Icon = /power|energy/.test(name)
-    ? Zap
-    : /network|api/.test(name)
-      ? Network
-      : /sensor|hardware|actuator|device/.test(name)
-        ? Cpu
-        : /evaluat|experiment|research/.test(name)
-          ? FlaskConical
-          : /security|safety|policy|guardrail/.test(name)
-            ? Shield
-            : /database|data/.test(name)
-              ? Database
-              : /agent|prompt|context/.test(name)
-                ? Sparkles
-                : /workflow|automation|rollout|delivery/.test(name)
-                  ? Workflow
-                  : /prd|requirement|plan|brief/.test(name)
-                    ? FileText
-                    : Layers3;
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center ${large ? 'size-12 rounded-lg' : 'size-10 rounded-xl'} ${logoTones[hash % logoTones.length]} text-[var(--on-status)] shadow-sm`}
-    >
-      <Icon className={large ? 'size-6' : 'size-5'} strokeWidth={1.8} />
-    </span>
-  );
-}
-
-function ReleaseDetail({
-  item,
-  projectId,
-  returnTo,
-  onAdded,
-}: {
-  item: SchemaCatalogItem;
-  projectId: string;
-  returnTo: string;
-  onAdded: () => void;
-}) {
-  const intro = useSchemaIntroduction(item.presentationRef);
-  const reference = item.presentationRef;
-  const releaseReading = useSchemaReleaseReading(
-    projectId,
-    {
-      canonicalName: item.identity.canonicalName,
-      version: item.release.version,
-      hash: item.release.hash,
-      sourceProjectId: item.identity.ownerProjectId ?? undefined,
-    },
-    true
-  );
-  const readme =
-    typeof releaseReading.data?.readme === 'string' ? releaseReading.data.readme : undefined;
-  const yaml = releaseYaml(releaseReading.data?.manifest);
-  const cover = intro.data?.document.resources.find(
-    (resource) => resource.path === reference?.coverPath
-  );
-  return (
-    <>
-      <SheetHeader>
-        <SheetTitle>{item.identity.displayName || item.identity.canonicalName}</SheetTitle>
-        <SheetDescription>
-          {item.identity.publisher} · {item.release.version}
-        </SheetDescription>
-      </SheetHeader>
-      <div className="space-y-5 px-4 pb-6">
-        <p className="text-sm text-[var(--text-secondary)]">{item.identity.description}</p>
-        {cover ? (
-          <Image
-            src={resourceUrl(cover)}
-            alt={cover.alt}
-            width={640}
-            height={360}
-            unoptimized
-            className="max-h-64 w-full rounded-lg object-cover"
-          />
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {item.identity.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded bg-[var(--status-info-muted)] px-2 py-1 text-xs text-[var(--status-info)]"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 border-y border-[var(--stroke-divider)] py-4 text-xs">
-          <dt className="text-[var(--text-tertiary)]">Release</dt>
-          <dd>
-            <span className="font-mono">{item.release.version}</span>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-[var(--text-secondary)]">
-                Exact source
-              </summary>
-              <p className="mt-2 break-all font-mono">{item.release.hash}</p>
-            </details>
-          </dd>
-          <dt className="text-[var(--text-tertiary)]">Definition</dt>
-          <dd>
-            {item.release.kind} · {item.definition.pathCount} declared paths
-          </dd>
-          <dt className="text-[var(--text-tertiary)]">License</dt>
-          <dd>{item.license ?? 'Not declared'}</dd>
-        </dl>
-        {intro.loading ? (
-          <output className="block text-sm">Loading author introduction…</output>
-        ) : null}
-        {intro.error ? (
-          <p role="alert" className="text-sm text-[var(--status-error)]">
-            {intro.error}
-          </p>
-        ) : null}
-        {intro.data ? (
-          <StateAuthorReadme author={intro.data.document} />
-        ) : readme ? (
-          <StateAuthorReadme author={{ readme, resources: [] }} />
-        ) : null}
-        {releaseReading.loading ? (
-          <output className="block text-sm">Loading release YAML…</output>
-        ) : null}
-        {releaseReading.error ? (
-          <p role="alert" className="text-sm text-[var(--status-error)]">
-            {releaseReading.error}
-          </p>
-        ) : null}
-        {yaml ? (
-          <section aria-label="Release YAML" className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
-              Release YAML
-            </h3>
-            <pre className="max-h-[28rem] overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-[11px] leading-5 text-[var(--text-primary)]">
-              <code>{yaml}</code>
-            </pre>
-          </section>
-        ) : null}
-        <div className="flex flex-wrap gap-3">
-          <AddToStudio
-            onAdded={onAdded}
-            defaultProjectId={projectId}
-            title={item.identity.displayName ?? item.identity.canonicalName}
-            source={{
-              ...(item.identity.ownerProjectId
-                ? { sourceProjectId: item.identity.ownerProjectId }
-                : {}),
-              canonicalName: item.identity.canonicalName,
-              version: item.release.version,
-              expectedHash: item.release.hash,
-            }}
-          />
-          {reference ? (
-            <Button variant="canvas-outline" asChild>
-              <Link
-                href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId }).toString()}`}
-              >
-                Project introduction
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function introductionHref(item: SchemaCatalogItem, projectId: string, returnTo: string) {
-  const reference = item.presentationRef;
-  if (!reference) return null;
-  return `/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId })}`;
-}
-
-const RELEASE_YAML_LEAD_KEYS = [
-  'apiVersion',
-  'canonicalName',
-  'version',
-  'title',
-  'description',
-  'contribution',
-  'schema',
-  'starter',
-] as const;
-
-function releaseYaml(manifest: Record<string, unknown> | undefined): string | null {
-  if (!manifest) return null;
-  const { readme: _readme, ...rest } = manifest;
-  const ordered: Record<string, unknown> = {};
-  for (const key of RELEASE_YAML_LEAD_KEYS) {
-    if (key in rest) ordered[key] = rest[key];
-  }
-  for (const [key, value] of Object.entries(rest)) {
-    if (!(key in ordered)) ordered[key] = value;
-  }
-  return dump(ordered, { lineWidth: 100, noRefs: true, sortKeys: false }).trimEnd();
 }

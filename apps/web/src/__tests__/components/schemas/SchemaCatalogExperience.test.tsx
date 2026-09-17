@@ -8,7 +8,13 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn(), error: null }),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
-  useStudioCandidates: () => ({ items: [], loading: false }),
+  useStudioCandidates: () => ({ items: [], loading: false, pending: false, add: vi.fn() }),
+}));
+vi.mock('@/hooks/projects/useProjects', () => ({
+  useProjects: () => ({ projects: [{ project_id: 'p', name: 'Project' }] }),
+}));
+vi.mock('@/hooks/projects/useProjects', () => ({
+  useProjects: () => ({ projects: [{ project_id: 'p', name: 'Current' }] }),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -32,11 +38,21 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
     loading: false,
     data: {
       artifactHash: 'sha256:abc',
-      readme: null,
+      readme: '# Release definition\n\nKeep configuration changes reviewable.',
       manifest: {
         apiVersion: 't3x.dev/yschema-module/v2',
         canonicalName: 'team/release',
-        contribution: { nodes: { services: { required: true } } },
+        contribution: {
+          nodes: {
+            services: {
+              required: true,
+              repeated: true,
+              slots: { image: { type: 'string' } },
+              requiredSlots: ['image'],
+            },
+          },
+        },
+        starter: { services: { web: { image: 'nginx:1.28-alpine' } } },
       },
     },
   }),
@@ -50,12 +66,18 @@ const item = {
     family: 'open',
     publisher: 'team',
     ownerProjectId: 'p',
+    visibility: 'team',
   },
   release: { artifactVersionId: 'v1', version: '1.2.3', kind: 'schema', hash: 'sha256:abc' },
-  definition: { pathCount: 4, provides: [], requires: [] },
+  definition: {
+    pathCount: 4,
+    provides: [],
+    requires: [],
+    nodes: [{ path: 'services', slots: ['image'] }],
+  },
   presentationRef: null,
   formats: ['yaml', 'json'],
-  license: null,
+  license: 'Apache-2.0',
 };
 beforeEach(() => {
   mocks.query = '';
@@ -110,24 +132,34 @@ describe('Schema catalog journey', () => {
       { scroll: false }
     );
   });
-  it('offers one Add to Studio action for an exact release', () => {
+  it('opens a dedicated release page instead of stacked drawers', () => {
     mocks.query = 'schemaView=browse';
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
-    const dialog = screen.getByRole('dialog');
-    fireEvent.click(within(dialog).getByText('Exact source'));
-    expect(within(dialog).getByText('sha256:abc')).toBeVisible();
-    expect(within(dialog).getByRole('region', { name: 'Release YAML' })).toHaveTextContent(
-      'canonicalName: team/release'
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/team/project/schemas?schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc',
+      { scroll: false }
     );
-    expect(within(dialog).getByRole('region', { name: 'Release YAML' })).toHaveTextContent(
-      'services:'
+  });
+  it('renders the selected release as a page with structured definition', () => {
+    mocks.query =
+      'schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
+    mount();
+    expect(screen.getByRole('heading', { name: 'Release definition' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Definition' })).toHaveTextContent('services');
+    expect(screen.getByRole('region', { name: 'Definition' })).toHaveTextContent('image');
+    expect(screen.getByRole('region', { name: 'Example' })).toHaveTextContent('nginx:1.28-alpine');
+    expect(screen.getByRole('region', { name: 'Author README' })).toHaveTextContent(
+      'Keep configuration changes reviewable'
     );
-    expect(within(dialog).getByRole('button', { name: 'Add to Studio' })).toBeEnabled();
-    expect(
-      within(dialog).queryByRole('button', { name: 'Open in Studio' })
-    ).not.toBeInTheDocument();
-    expect(mocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Exact source'));
+    expect(screen.getAllByText('sha256:abc').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Inspect source YAML'));
+    expect(screen.getByText(/canonicalName: team\/release/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
   });
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';
@@ -157,8 +189,9 @@ describe('Schema catalog journey', () => {
   });
 });
 
-it('opens a published project introduction at its pinned State revision', () => {
-  mocks.query = 'schemaView=browse';
+it('keeps a project introduction link on the release page', () => {
+  mocks.query =
+    'schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
   mocks.catalog.mockReturnValue({
     data: {
       items: [
@@ -175,8 +208,10 @@ it('opens a published project introduction at its pinned State revision', () => 
     loading: false,
   });
   mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
-  const href = new URL(mocks.push.mock.calls[0]![0], 'https://t3x.test');
+  const href = new URL(
+    screen.getByRole('link', { name: 'Project introduction' }).getAttribute('href')!,
+    'https://t3x.test'
+  );
   expect(href.pathname).toBe('/project/source');
   expect(href.searchParams.get('view')).toBe('overview');
   expect(href.searchParams.get('commit')).toBe('sha256:exact');
