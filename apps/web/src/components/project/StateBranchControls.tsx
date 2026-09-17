@@ -19,16 +19,18 @@ import { cn } from '@/utils/cn';
 interface StateBranchControlsProps {
   branch: string;
   branchOptions: string[];
+  canCreateFromSearch?: boolean;
   disabled?: boolean;
   headCommitHash: string | null;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string) => Promise<void>;
+  onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   showCreate?: boolean;
 }
 
 export function StateBranchControls({
   branch,
   branchOptions,
+  canCreateFromSearch = true,
   disabled = false,
   headCommitHash,
   onBranchChange,
@@ -51,6 +53,11 @@ export function StateBranchControls({
     if (!search) return branchOptions;
     return branchOptions.filter((option) => option.toLowerCase().includes(search));
   }, [branchOptions, query]);
+  const createCandidate = normalizeBranchName(query);
+  const canCreateFromQuery =
+    canCreateFromSearch &&
+    createCandidate.length > 0 &&
+    getBranchNameError(createCandidate, branchOptions) === null;
 
   useEffect(() => {
     if (open) {
@@ -73,15 +80,14 @@ export function StateBranchControls({
     setOpen(false);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (validationError || !normalizedName || submitting) return;
-
+  async function createNamedBranch(nextName: string) {
+    if (submitting) return;
     setSubmitError(null);
     setSubmitting(true);
     try {
-      await onCreateBranch(normalizedName);
+      await onCreateBranch(nextName, branch);
       setDialogOpen(false);
+      setOpen(false);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Could not create branch.');
     } finally {
@@ -89,8 +95,21 @@ export function StateBranchControls({
     }
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (validationError || !normalizedName) return;
+    await createNamedBranch(normalizedName);
+  }
+
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Escape') setOpen(false);
+    if (event.key === 'Escape') {
+      setOpen(false);
+      return;
+    }
+    if (event.key === 'Enter' && canCreateFromQuery) {
+      event.preventDefault();
+      void createNamedBranch(createCandidate);
+    }
   }
 
   const control = (
@@ -200,6 +219,25 @@ export function StateBranchControls({
                 className="chat-scrollbar min-h-0 flex-1 overflow-y-auto py-1"
                 role="menu"
               >
+                {canCreateFromQuery ? (
+                  <button
+                    className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:bg-[var(--hover-bg)] focus-visible:outline-none disabled:opacity-60"
+                    disabled={submitting}
+                    onClick={() => void createNamedBranch(createCandidate)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <GitBranch
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-[var(--accent-branch)]"
+                    />
+                    <span className="min-w-0 flex-1 leading-5">
+                      Create branch <span className="font-semibold">{createCandidate}</span> from{' '}
+                      <span className="font-semibold">{branch}</span>
+                    </span>
+                  </button>
+                ) : null}
+
                 {filteredBranches.map((option) => {
                   const selected = option === branch;
                   return (
@@ -237,10 +275,15 @@ export function StateBranchControls({
                   );
                 })}
 
-                {filteredBranches.length === 0 ? (
+                {filteredBranches.length === 0 && !canCreateFromQuery ? (
                   <div className="px-3 py-6 text-center text-xs text-[var(--text-tertiary)]">
                     No matching branches.
                   </div>
+                ) : null}
+                {submitError && canCreateFromQuery ? (
+                  <p className="px-3 pb-2 text-xs font-semibold text-[var(--status-warning)]" role="alert">
+                    {submitError}
+                  </p>
                 ) : null}
               </div>
 
@@ -283,7 +326,9 @@ export function StateBranchControls({
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
-              <DialogDescription>Start a new line of structured state from main.</DialogDescription>
+              <DialogDescription>
+                Start a new line of structured state from {branch}.
+              </DialogDescription>
             </DialogHeader>
 
             <div className="mt-5 grid gap-4">
@@ -309,7 +354,7 @@ export function StateBranchControls({
                   Branch source
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-                  <span className="font-mono font-bold text-[var(--text-primary)]">main</span>
+                  <span className="font-mono font-bold text-[var(--text-primary)]">{branch}</span>
                   <span>at</span>
                   <span className="font-mono text-xs">{baseLabel}</span>
                 </div>
