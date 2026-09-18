@@ -19,8 +19,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type PointerEvent, useMemo, useRef, useState } from 'react';
 import { formatDate, shortHash } from '@/domain/format/formatters';
+import { buildHistoryCanvasSvg, downloadTextFile } from '@/domain/history/historyCanvasExport';
 import type { ApiCommit, Branch } from '@/types/api';
 import styles from './HistoryCanvas.module.css';
 
@@ -108,6 +109,71 @@ export function HistoryCanvas({
   const nodes = useMemo(() => graphCommits(commits), [commits]);
   const [selectedHash, setSelectedHash] = useState(() => nodes.at(-1)?.commit.hash ?? '');
   const [zoom, setZoom] = useState(100);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select');
+  const [isPanning, setIsPanning] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
+    null
+  );
+
+  function resetView() {
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+  }
+
+  function beginPan(
+    event: {
+      clientX: number;
+      clientY: number;
+      preventDefault: () => void;
+      target: EventTarget | null;
+    },
+    currentTarget: HTMLElement,
+    pointerId?: number
+  ) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-history-chrome]')) return;
+    if (canvasTool !== 'pan' || dragRef.current) return;
+    event.preventDefault();
+    if (pointerId !== undefined) currentTarget.setPointerCapture?.(pointerId);
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
+    setIsPanning(true);
+  }
+
+  function movePan(clientX: number, clientY: number) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    setPan({
+      x: drag.panX + clientX - drag.startX,
+      y: drag.panY + clientY - drag.startY,
+    });
+  }
+
+  function endPan(currentTarget: HTMLElement, pointerId?: number) {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setIsPanning(false);
+    if (pointerId !== undefined && currentTarget.hasPointerCapture?.(pointerId)) {
+      currentTarget.releasePointerCapture?.(pointerId);
+    }
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<HTMLElement>) {
+    beginPan(event, event.currentTarget, event.pointerId);
+  }
+
+  function handleCanvasPointerMove(event: PointerEvent<HTMLElement>) {
+    movePan(event.clientX, event.clientY);
+  }
+
+  function handleCanvasPointerUp(event: PointerEvent<HTMLElement>) {
+    endPan(event.currentTarget, event.pointerId);
+  }
   const selected = nodes.find((item) => item.commit.hash === selectedHash) ?? nodes.at(-1);
   const selectedCommit = selected?.commit;
   const edges = useMemo(
@@ -134,6 +200,29 @@ export function HistoryCanvas({
       }),
     [nodes]
   );
+
+  function downloadGraph() {
+    downloadTextFile(
+      `history-${selectedBranch === 'all' ? 'all-branches' : selectedBranch}.svg`,
+      buildHistoryCanvasSvg({
+        edges,
+        nodes: nodes.map((item, index) => {
+          const position = POSITIONS[index] ?? POSITIONS[3];
+          return {
+            hash: item.commit.hash,
+            message: item.commit.message || 'Untitled commit',
+            branch: item.commit.branch || 'main',
+            left: position.left,
+            top: position.top,
+            width: position.width,
+            height: position.height,
+          };
+        }),
+      }),
+      'image/svg+xml;charset=utf-8'
+    );
+  }
+
   const parentCommits =
     selectedCommit?.parents
       .map((hash) => commits.find((item) => item.commit.hash === hash)?.commit)
@@ -162,8 +251,19 @@ export function HistoryCanvas({
       </header>
 
       <main className={styles.main}>
-        <section aria-label="Commit graph canvas" className={styles.canvas}>
-          <div className={styles.canvasTopLeft}>
+        <section
+          aria-label="Commit graph canvas"
+          className={`${styles.canvas} ${canvasTool === 'pan' ? styles.canvasPan : ''} ${isPanning ? styles.canvasPanning : ''}`}
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onPointerCancel={handleCanvasPointerUp}
+          onMouseDown={(event) => beginPan(event, event.currentTarget)}
+          onMouseMove={(event) => movePan(event.clientX, event.clientY)}
+          onMouseUp={(event) => endPan(event.currentTarget)}
+          onMouseLeave={(event) => endPan(event.currentTarget)}
+        >
+          <div className={styles.canvasTopLeft} data-history-chrome="true">
             <label className={`${styles.canvasButton} ${styles.branchSelect}`}>
               <select
                 aria-label="Canvas branch filter"
@@ -192,7 +292,7 @@ export function HistoryCanvas({
             <span className={styles.commitCount}>{commits.length} Commits</span>
           </div>
 
-          <div className={styles.canvasTopRight}>
+          <div className={styles.canvasTopRight} data-history-chrome="true">
             <div className={styles.zoomGroup}>
               <button
                 aria-label="Zoom out"
@@ -217,14 +317,18 @@ export function HistoryCanvas({
             <button
               aria-label="Fit to view"
               className={`${styles.canvasButton} ${styles.iconOnly}`}
-              onClick={() => setZoom(100)}
+              onClick={resetView}
               type="button"
             >
               <Maximize2 size={18} />
             </button>
           </div>
 
-          <div className={styles.viewport} style={{ transform: `scale(${zoom / 100})` }}>
+          <div
+            className={`${styles.viewport} ${isPanning ? styles.viewportPanning : ''}`}
+            data-history-viewport="true"
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})` }}
+          >
             {edges.length > 0 && (
               <svg aria-hidden="true" className={styles.edges} data-history-edges="true">
                 <defs>
@@ -330,22 +434,43 @@ export function HistoryCanvas({
             })}
           </div>
 
-          <div className={styles.toolDock}>
-            <button aria-label="Select tool" className={styles.toolButton} type="button">
+          <div className={styles.toolDock} data-history-chrome="true">
+            <button
+              aria-label="Select tool"
+              aria-pressed={canvasTool === 'select'}
+              className={`${styles.toolButton} ${canvasTool === 'select' ? styles.toolActive : ''}`}
+              onClick={() => setCanvasTool('select')}
+              type="button"
+            >
               <MousePointer2 size={18} strokeWidth={2.5} />
             </button>
-            <button aria-label="Pan tool" className={styles.toolButton} type="button">
+            <button
+              aria-label="Pan tool"
+              aria-pressed={canvasTool === 'pan'}
+              className={`${styles.toolButton} ${canvasTool === 'pan' ? styles.toolActive : ''}`}
+              onClick={() => setCanvasTool('pan')}
+              type="button"
+            >
               <Hand size={18} strokeWidth={2.5} />
             </button>
             <span className={styles.toolDivider} />
             <button
-              aria-label="Node view"
-              className={`${styles.toolButton} ${styles.toolActive}`}
+              aria-label="Reset canvas view"
+              className={styles.toolButton}
+              onClick={() => {
+                setCanvasTool('select');
+                resetView();
+              }}
               type="button"
             >
               <PanelsTopLeft size={18} strokeWidth={2.5} />
             </button>
-            <button aria-label="Layout view" className={styles.toolButton} type="button">
+            <button
+              aria-label="Download canvas"
+              className={styles.toolButton}
+              onClick={downloadGraph}
+              type="button"
+            >
               <Download size={18} strokeWidth={2.5} />
             </button>
           </div>
